@@ -1,0 +1,106 @@
+{
+  "dialog": {
+    "title": "Rate Agent Output",
+    "description": "Help us improve by rating the quality of the agent's work.",
+    "ratingLabel": "How would you rate this output?",
+    "positive": "Good",
+    "negative": "Needs Work",
+    "commentLabel": "Additional comments",
+    "commentPlaceholder": "Tell us what could be improved...",
+    "submitting": "Submitting...",
+    "submit": "Submit Feedback"
+  },
+  "issue": {
+    "reportTitle": "Report an Issue",
+    "reportDescription": "Provide details about the issue or suggestion to help us improve.",
+    "title": "Title",
+    "titlePlaceholder": "Brief summary of the issue...",
+    "description": "Description",
+    "descriptionPlaceholder": "Detailed description of the issue, including steps to reproduce if applicable...",
+    "severity": "Severity",
+    "submitReport": "Submit Report"
+  },
+  "severity": {
+    "low": "Suggestion",
+    "lowDesc": "Consider",
+    "medium": "Recommended",
+    "mediumDesc": "Improve quality",
+    "high": "Required",
+    "highDesc": "Should fix",
+    "critical": "Blocker",
+    "criticalDesc": "Must fix"
+  },
+  "status": {
+    "accept": "Accept",
+    "reject": "Reject",
+    "modified": "Modified",
+    "acceptTooltip": "Accept this agent output",
+    "rejectTooltip": "Reject this agent output",
+    "modifiedTooltip": "Accepted with modifications"
+  },
+  "messages": {
+    "submitted": "Feedback submitted successfully",
+    "submitError": "Failed to submit feedback: {{error}}",
+    "notAvailable": "Feedback Not Available",
+    "notAvailableDescription": "Feedback system is not yet fully configured",
+    "titleRequired": "Title is required",
+    "descriptionRequired": "Description is required"
+  },
+  "dashboard": {
+    "title": "Feedback Dashboard",
+    "description": "View feedback trends and top issues",
+    "metrics": "Metrics",
+    "trends": "Trends",
+    "topIssues": "Top Issues",
+    "recentFeedback": "Recent Feedback",
+    "satisfactionScore": "Satisfaction Score",
+    "totalFeedback": "Total Feedback",
+    "positiveRate": "Positive Rate",
+    "negativeRate": "Negative Rate",
+    "averageRating": "Average Rating",
+    "feedbackCount": "Feedback Count",
+    "noFeedback": "No feedback yet",
+    "noFeedbackDescription": "Feedback will appear here once users start submitting reviews",
+    "viewDetails": "View Details",
+    "exportData": "Export Data"
+  },
+  "improvement": {
+    "title": "Improvement Tracking",
+    "description": "See how feedback has improved the system",
+    "before": "Before",
+    "after": "After",
+    "change": "Change",
+    "improvement": "Improvement",
+    "noImprovements": "No improvements tracked yet",
+    "noImprovementsDescription": "Improvements will appear here once feedback is addressed",
+    "basedOnFeedback": "Based on {{count}} feedback reports",
+    "metric": "Metric",
+    "value": "Value",
+    "delta": "Delta",
+    "percentChange": "% Change"
+  },
+  "settings": {
+    "title": "Feedback Settings",
+    "description": "Configure feedback collection preferences",
+    "enableFeedback": "Enable Feedback Collection",
+    "enableFeedbackDescription": "Collect feedback after agent tasks complete",
+    "autoPrompt": "Auto-prompt for Feedback",
+    "autoPromptDescription": "Automatically show feedback dialog after task completion",
+    "optOut": "Opt Out of Feedback",
+    "optOutDescription": "Disable all feedback collection and prompts",
+    "anonymousFeedback": "Anonymous Feedback",
+    "anonymousFeedbackDescription": "Submit feedback without identifying information",
+    "notifyOnImprovements": "Notify on Improvements",
+    "notifyOnImprovementsDescription": "Get notified when your feedback results in improvements"
+  },
+  "analytics": {
+    "sentimentDistribution": "Sentiment Distribution",
+    "feedbackOverTime": "Feedback Over Time",
+    "issuesByType": "Issues by Type",
+    "issuesBySeverity": "Issues by Severity",
+    "resolutionRate": "Resolution Rate",
+    "responseTime": "Response Time",
+    "userEngagement": "User Engagement",
+    "mostRequestedFeatures": "Most Requested Features"
+  }
+}

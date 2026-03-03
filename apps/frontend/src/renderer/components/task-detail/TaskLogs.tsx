@@ -18,13 +18,20 @@ import {
   Info,
   Brain,
   Cpu,
-  X
+  X,
+  Lightbulb,
+  GitBranch,
+  Target,
+  TrendingUp,
+  Layers
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
-import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata } from '../../../shared/types';
+import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata, DecisionPoint, Alternative } from '../../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
 import { useVirtualizedLogs } from '../../hooks/useVirtualizedLogs';
+import { FeedbackButtons } from '../feedback/FeedbackButtons';
+import { getDecisionTypeMeta, getConfidenceMeta } from '../../../shared/constants/decision-meta';
 
 interface TaskLogsProps {
   task: Task;
@@ -80,6 +87,7 @@ const THINKING_SHORT_LABELS: Record<ThinkingLevel, string> = {
   ultrathink: 'Ultra'
 };
 
+
 // Helper to get model and thinking info for a log phase
 function getPhaseConfig(
   metadata: TaskMetadata | undefined,
@@ -114,13 +122,14 @@ function getPhaseConfig(
 const OVERSCAN = 5;
 
 // Filter types
-type LogFilterType = 'all' | 'errors' | 'tools' | 'info';
+type LogFilterType = 'all' | 'errors' | 'tools' | 'info' | 'decisions';
 
 const FILTER_LABELS: Record<LogFilterType, string> = {
   all: 'All',
   errors: 'Errors',
   tools: 'Tools',
-  info: 'Info'
+  info: 'Info',
+  decisions: 'Decisions'
 };
 
 export function TaskLogs({
@@ -149,6 +158,8 @@ export function TaskLogs({
       case 'info':
         return entry.type === 'info' || entry.type === 'success' ||
                entry.type === 'text' || entry.type === 'phase_start' || entry.type === 'phase_end';
+      case 'decisions':
+        return entry.type === 'decision';
       default:
         return true;
     }
@@ -208,6 +219,8 @@ export function TaskLogs({
             // Info filter includes: info, success, text, phase_start, phase_end
             return entry.type === 'info' || entry.type === 'success' ||
                    entry.type === 'text' || entry.type === 'phase_start' || entry.type === 'phase_end';
+          case 'decisions':
+            return entry.type === 'decision';
           default:
             return true;
         }
@@ -400,12 +413,13 @@ export function TaskLogs({
                   return (
                     <div
                       key={item.key}
+                      data-index={virtualItem.index}
+                      ref={rowVirtualizer.measureElement}
                       style={{
                         position: 'absolute',
                         top: 0,
                         left: 0,
                         width: '100%',
-                        height: `${virtualItem.size}px`,
                         transform: `translateY(${virtualItem.start}px)`,
                       }}
                     >
@@ -418,6 +432,7 @@ export function TaskLogs({
                             onToggle={createPhaseToggleHandler(item.phase)}
                             isTaskStuck={isStuck}
                             phaseConfig={getPhaseConfig(task.metadata, item.phase)}
+                            taskId={task.id}
                           />
                         </div>
                       ) : (
@@ -452,9 +467,10 @@ interface PhaseLogSectionProps {
   onToggle: () => void;
   isTaskStuck?: boolean;
   phaseConfig?: { model: string; thinking: string } | null;
+  taskId?: string;
 }
 
-function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig }: PhaseLogSectionProps) {
+function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig, taskId }: PhaseLogSectionProps) {
   const Icon = PHASE_ICONS[phase];
   const status = phaseLog?.status || 'pending';
   const hasEntries = (phaseLog?.entries.length || 0) > 0;
@@ -502,50 +518,64 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
   const isInterrupted = isTaskStuck && status === 'active';
 
   return (
-    <button
-      onClick={onToggle}
-      className={cn(
-        'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
-        'hover:bg-secondary/50',
-        status === 'active' && !isInterrupted && PHASE_COLORS[phase],
-        isInterrupted && 'border-warning/30 bg-warning/5',
-        status === 'completed' && 'border-success/30 bg-success/5',
-        status === 'failed' && 'border-destructive/30 bg-destructive/5',
-        status === 'pending' && 'border-border bg-secondary/30'
+    <div className="pb-2">
+      <button
+        onClick={onToggle}
+        className={cn(
+          'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
+          'hover:bg-secondary/50',
+          status === 'active' && !isInterrupted && PHASE_COLORS[phase],
+          isInterrupted && 'border-warning/30 bg-warning/5',
+          status === 'completed' && 'border-success/30 bg-success/5',
+          status === 'failed' && 'border-destructive/30 bg-destructive/5',
+          status === 'pending' && 'border-border bg-secondary/30'
+        )}
+      >
+        <div className="flex items-center gap-2">
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+          <Icon className={cn('h-4 w-4', isInterrupted ? 'text-warning' : status === 'active' ? PHASE_COLORS[phase].split(' ')[0] : 'text-muted-foreground')} />
+          <span className="font-medium text-sm">{PHASE_LABELS[phase]}</span>
+          {hasEntries && (
+            <span className="text-xs text-muted-foreground">
+              ({phaseLog?.entries.length} entries)
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Model and thinking level indicator */}
+          {phaseConfig && (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-0.5" title={`Model: ${phaseConfig.model}`}>
+                <Cpu className="h-3 w-3" />
+                <span>{phaseConfig.model}</span>
+              </div>
+              <span className="text-muted-foreground/50">|</span>
+              <div className="flex items-center gap-0.5" title={`Thinking: ${phaseConfig.thinking}`}>
+                <Brain className="h-3 w-3" />
+                <span>{phaseConfig.thinking}</span>
+              </div>
+            </div>
+          )}
+          {getStatusBadge()}
+        </div>
+      </button>
+      {/* Feedback buttons for completed phases (only when expanded) */}
+      {status === 'completed' && isExpanded && (
+        <div className="mt-2 ml-3">
+          <FeedbackButtons
+            taskId={taskId}
+            agentType={phase}
+            outputDescription={`${PHASE_LABELS[phase]} phase output`}
+            context={`Phase: ${PHASE_LABELS[phase]}`}
+            size="sm"
+          />
+        </div>
       )}
-    >
-      <div className="flex items-center gap-2">
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        )}
-        <Icon className={cn('h-4 w-4', isInterrupted ? 'text-warning' : status === 'active' ? PHASE_COLORS[phase].split(' ')[0] : 'text-muted-foreground')} />
-        <span className="font-medium text-sm">{PHASE_LABELS[phase]}</span>
-        {hasEntries && (
-          <span className="text-xs text-muted-foreground">
-            ({phaseLog?.entries.length} entries)
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        {/* Model and thinking level indicator */}
-        {phaseConfig && (
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-            <div className="flex items-center gap-0.5" title={`Model: ${phaseConfig.model}`}>
-              <Cpu className="h-3 w-3" />
-              <span>{phaseConfig.model}</span>
-            </div>
-            <span className="text-muted-foreground/50">|</span>
-            <div className="flex items-center gap-0.5" title={`Thinking: ${phaseConfig.thinking}`}>
-              <Brain className="h-3 w-3" />
-              <span>{phaseConfig.thinking}</span>
-            </div>
-          </div>
-        )}
-        {getStatusBadge()}
-      </div>
-    </button>
+    </div>
   );
 }
 
@@ -600,11 +630,11 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
     const { icon: Icon, label, color } = getToolInfo(entry.tool_name);
     return (
       <div className="flex flex-col min-w-0">
-        <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs min-w-0', color)}>
+        <div className={cn('flex items-center gap-2 rounded-md px-2 py-1 text-xs min-w-0 overflow-hidden', color)}>
           <Icon className="h-3 w-3 animate-pulse shrink-0" />
           <span className="font-medium shrink-0">{label}</span>
           {entry.tool_input && (
-            <span className="text-muted-foreground truncate min-w-0" title={entry.tool_input}>
+            <span className="text-muted-foreground break-words min-w-0 flex-1" title={entry.tool_input}>
               {entry.tool_input}
             </span>
           )}
@@ -619,7 +649,7 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
     return (
       <div className="flex flex-col min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs shrink-0', color, 'opacity-60')}>
+          <div className={cn('flex items-center gap-2 rounded-md px-2 py-1 text-xs shrink-0 overflow-hidden', color, 'opacity-60')}>
             <Icon className="h-3 w-3" />
             <CheckCircle2 className="h-3 w-3 text-success" />
             <span className="text-muted-foreground">Done</span>
@@ -711,6 +741,197 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
     );
   }
 
+  if (entry.type === 'decision' && entry.decision_data) {
+    const decision = entry.decision_data as unknown as DecisionPoint;
+    const typeMeta = getDecisionTypeMeta(decision.decision_type);
+    const confidenceMeta = getConfidenceMeta(decision.confidence_level);
+    const TypeIcon = typeMeta.icon;
+    const ConfidenceIcon = confidenceMeta.icon;
+
+    return (
+      <div className={cn(
+        'rounded-lg border bg-card/50',
+        decision.requires_review && 'border-amber-500/50 bg-amber-500/5'
+      )}>
+        {/* Decision Header */}
+        <button
+          onClick={onToggleExpand}
+          className="w-full px-3 py-2 flex items-start gap-2 hover:bg-accent/50 transition-colors"
+        >
+          {/* Expand/Collapse Icon */}
+          <div className="flex-shrink-0 mt-0.5">
+            {isExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+          </div>
+
+          {/* Decision Type Icon */}
+          <div className="flex-shrink-0">
+            <div className={cn('rounded p-1 border', typeMeta.color)}>
+              <TypeIcon className="h-3.5 w-3.5" />
+            </div>
+          </div>
+
+          {/* Decision Content */}
+          <div className="flex-1 text-left min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+              <span className="font-medium text-xs">{typeMeta.label}</span>
+
+              {/* Confidence Badge */}
+              <Badge variant="outline" className={cn('text-[10px] px-1 py-0', confidenceMeta.color)}>
+                <ConfidenceIcon className="mr-1 h-2.5 w-2.5" />
+                {confidenceMeta.label} ({Math.round((decision.confidence ?? 0) * 100)}%)
+              </Badge>
+
+              {/* Review Required Badge */}
+              {decision.requires_review && (
+                <Badge variant="outline" className="text-[10px] px-1 py-0 text-amber-500 bg-amber-500/10 border-amber-500/30">
+                  <AlertTriangle className="mr-1 h-2.5 w-2.5" />
+                  Review
+                </Badge>
+              )}
+            </div>
+
+            <p className="text-xs text-foreground line-clamp-2">
+              {decision.chosen_approach}
+            </p>
+
+            {/* Show hint about expandable content */}
+            {!isExpanded && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {decision.alternatives && decision.alternatives.length > 0 && (
+                  <span>• {decision.alternatives.length} alternative{decision.alternatives.length !== 1 ? 's' : ''}</span>
+                )}
+                {decision.reasoning_chain && decision.reasoning_chain.length > 0 && (
+                  <span className="ml-2">• {decision.reasoning_chain.length} reasoning step{decision.reasoning_chain.length !== 1 ? 's' : ''}</span>
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* Timestamp */}
+          <div className="flex-shrink-0 text-[10px] text-muted-foreground">
+            {formatTime(decision.timestamp)}
+          </div>
+        </button>
+
+        {/* Expanded Details */}
+        {isExpanded && (
+          <div className="px-3 pb-3 space-y-3 border-t">
+            {/* Context */}
+            {decision.context && (
+              <div className="pt-3">
+                <h4 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">
+                  Context
+                </h4>
+                <p className="text-xs text-foreground">{decision.context}</p>
+              </div>
+            )}
+
+            {/* Chosen Approach */}
+            <div>
+              <h4 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5 flex items-center">
+                <CheckCircle2 className="mr-1 h-3 w-3 text-green-500" />
+                Chosen Approach
+              </h4>
+              <p className="text-xs text-foreground">{decision.chosen_approach}</p>
+            </div>
+
+            {/* Reasoning */}
+            {decision.reasoning && (
+              <div>
+                <h4 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5 flex items-center">
+                  <Lightbulb className="mr-1 h-3 w-3 text-amber-500" />
+                  Reasoning
+                </h4>
+                <p className="text-xs text-foreground">{decision.reasoning}</p>
+              </div>
+            )}
+
+            {/* Reasoning Chain */}
+            {decision.reasoning_chain && decision.reasoning_chain.length > 0 && (
+              <div>
+                <h4 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">
+                  Reasoning Steps
+                </h4>
+                <ol className="space-y-1.5">
+                  {decision.reasoning_chain.map((step, stepIndex) => (
+                    <li key={stepIndex} className="flex gap-1.5 text-xs">
+                      <span className="flex-shrink-0 w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-medium">
+                        {stepIndex + 1}
+                      </span>
+                      <span className="flex-1 text-foreground">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {/* Alternatives */}
+            {decision.alternatives && decision.alternatives.length > 0 && (
+              <div>
+                <h4 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5 flex items-center">
+                  <GitBranch className="mr-1 h-3 w-3 text-muted-foreground" />
+                  Alternatives Considered ({decision.alternatives.length})
+                </h4>
+                <div className="space-y-2">
+                  {decision.alternatives.map((alt, altIndex) => (
+                    <DecisionAlternativeCard key={altIndex} alternative={alt} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Additional Info */}
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+              {decision.impact && (
+                <div>
+                  <h4 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">
+                    Impact
+                  </h4>
+                  <p className="text-xs text-foreground">{decision.impact}</p>
+                </div>
+              )}
+
+              {decision.reversible !== undefined && (
+                <div>
+                  <h4 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">
+                    Reversible
+                  </h4>
+                  <Badge variant="outline" className={cn(
+                    'text-[10px] px-1 py-0',
+                    decision.reversible
+                      ? 'text-green-500 bg-green-500/10 border-green-500/30'
+                      : 'text-red-500 bg-red-500/10 border-red-500/30'
+                  )}>
+                    {decision.reversible ? 'Yes' : 'No'}
+                  </Badge>
+                </div>
+              )}
+
+              {decision.dependencies && decision.dependencies.length > 0 && (
+                <div className="col-span-2">
+                  <h4 className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">
+                    Dependencies
+                  </h4>
+                  <div className="flex flex-wrap gap-1">
+                    {decision.dependencies.map((dep, depIndex) => (
+                      <Badge key={depIndex} variant="outline" className="text-[10px] px-1 py-0">
+                        {dep}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Default text entry
   return (
     <div className="flex flex-col min-w-0">
@@ -750,6 +971,84 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
           <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-words font-mono max-h-[300px] overflow-y-auto">
             {entry.detail}
           </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Decision Alternative Card Component
+function DecisionAlternativeCard({ alternative }: { alternative: Alternative }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="rounded border bg-card/30 overflow-hidden">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-2.5 py-1.5 flex items-start gap-1.5 hover:bg-accent/50 transition-colors text-left"
+      >
+        <div className="flex-shrink-0 mt-0.5">
+          {isExpanded ? (
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <X className="h-3 w-3 text-red-500 flex-shrink-0" />
+            <span className="text-xs font-medium text-foreground line-clamp-1">
+              {alternative.description}
+            </span>
+          </div>
+          {!isExpanded && (
+            <p className="text-[10px] text-muted-foreground line-clamp-1">
+              {alternative.rejected_reason}
+            </p>
+          )}
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="px-2.5 pb-2 space-y-1.5 border-t">
+          <div className="pt-1.5">
+            <h5 className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">
+              Why Considered
+            </h5>
+            <p className="text-[10px] text-foreground">{alternative.reasoning}</p>
+          </div>
+
+          <div>
+            <h5 className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">
+              Why Rejected
+            </h5>
+            <p className="text-[10px] text-foreground">{alternative.rejected_reason}</p>
+          </div>
+
+          {alternative.confidence_impact && (
+            <div>
+              <h5 className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">
+                Confidence Impact
+              </h5>
+              <p className="text-[10px] text-foreground">{alternative.confidence_impact}</p>
+            </div>
+          )}
+
+          {alternative.tradeoffs && alternative.tradeoffs.length > 0 && (
+            <div>
+              <h5 className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">
+                Tradeoffs
+              </h5>
+              <ul className="space-y-0.5">
+                {alternative.tradeoffs.map((tradeoff, idx) => (
+                  <li key={idx} className="text-[10px] text-foreground flex gap-1">
+                    <span className="text-muted-foreground">•</span>
+                    <span>{tradeoff}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

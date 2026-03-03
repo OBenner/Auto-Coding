@@ -161,6 +161,15 @@
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-focus: 0 0 0 3px rgba(165, 166, 106, 0.2);
 
+  /* Drag & Drop shadows - enhanced elevation for micro-interactions */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(165, 166, 106, 0.3);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
   /* Border radius */
   --radius: 12px;
 }
@@ -221,6 +230,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.8);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.9);
   --shadow-focus: 0 0 0 2px rgba(214, 216, 118, 0.2);
+
+  /* Drag & Drop shadows - enhanced for dark mode */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(214, 216, 118, 0.4);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -288,6 +306,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-focus: 0 0 0 3px rgba(184, 185, 120, 0.2);
+
+  /* Drag & Drop shadows - enhanced elevation for micro-interactions */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(184, 185, 120, 0.3);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -355,6 +382,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
   --shadow-focus: 0 0 0 2px rgba(230, 231, 163, 0.25);
+
+  /* Drag & Drop shadows - enhanced for dark mode */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(230, 231, 163, 0.4);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -422,6 +458,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-focus: 0 0 0 3px rgba(124, 58, 237, 0.2);
+
+  /* Drag & Drop shadows - enhanced elevation for micro-interactions */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(124, 58, 237, 0.3);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -489,6 +534,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
   --shadow-focus: 0 0 0 3px rgba(139, 92, 246, 0.3);
+
+  /* Drag & Drop shadows - enhanced for dark mode */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(139, 92, 246, 0.4);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -556,6 +610,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-focus: 0 0 0 3px rgba(2, 132, 199, 0.2);
+
+  /* Drag & Drop shadows - enhanced elevation for micro-interactions */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(2, 132, 199, 0.3);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -623,6 +686,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
   --shadow-focus: 0 0 0 3px rgba(56, 189, 248, 0.3);
+
+  /* Drag & Drop shadows - enhanced for dark mode */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(56, 189, 248, 0.4);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -690,6 +762,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-focus: 0 0 0 3px rgba(217, 119, 6, 0.2);
+
+  /* Drag & Drop shadows - enhanced elevation for micro-interactions */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(217, 119, 6, 0.3);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -757,6 +838,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
   --shadow-focus: 0 0 0 3px rgba(251, 191, 36, 0.3);
+
+  /* Drag & Drop shadows - enhanced for dark mode */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(251, 191, 36, 0.4);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -824,6 +914,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-focus: 0 0 0 3px rgba(217, 70, 239, 0.2);
+
+  /* Drag & Drop shadows - enhanced elevation for micro-interactions */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(217, 70, 239, 0.3);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -891,6 +990,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 0 40px rgba(217, 70, 239, 0.15);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 0 50px rgba(217, 70, 239, 0.2);
   --shadow-focus: 0 0 0 3px rgba(240, 171, 252, 0.4);
+
+  /* Drag & Drop shadows - enhanced for dark mode with neon glow */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 30px rgba(217, 70, 239, 0.2);
+  --shadow-drag-over: 0 0 0 2px rgba(240, 171, 252, 0.5);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -958,6 +1066,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   --shadow-focus: 0 0 0 3px rgba(22, 163, 74, 0.2);
+
+  /* Drag & Drop shadows - enhanced elevation for micro-interactions */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(22, 163, 74, 0.3);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================
@@ -1025,6 +1142,15 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
   --shadow-focus: 0 0 0 3px rgba(74, 222, 128, 0.3);
+
+  /* Drag & Drop shadows - enhanced for dark mode */
+  --shadow-drag-lift: 0 10px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-drag-over: 0 0 0 2px rgba(74, 222, 128, 0.4);
+
+  /* Transition timings for smooth micro-interactions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Base styles */
@@ -1133,6 +1259,13 @@ body {
 .focus-ring:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* Kanban ScrollArea fix: Radix UI wraps content in display:table which
+   prevents cards from shrinking to column width during auto-resize */
+.kanban-column-scroll [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  min-width: 0 !important;
 }
 
 /* Column status colors for Kanban */
@@ -1673,6 +1806,54 @@ body {
 
 [data-state="closed"].animate-out.zoom-out-98 {
   animation: zoom-out-98 0.2s ease-in;
+}
+
+/* ============================================
+   Drag & Drop Micro-Interactions
+   ============================================ */
+
+/* Smooth transitions for interactive elements */
+.transition-micro-fast {
+  transition: all var(--transition-fast);
+}
+
+.transition-micro-base {
+  transition: all var(--transition-base);
+}
+
+.transition-micro-smooth {
+  transition: all var(--transition-smooth);
+}
+
+/* Drag lift shadow utility */
+.shadow-drag-lift {
+  box-shadow: var(--shadow-drag-lift);
+}
+
+/* Drop zone highlight */
+.drop-zone-highlight {
+  box-shadow: var(--shadow-drag-over);
+  background-color: rgba(var(--primary), 0.05);
+}
+
+/* Dragging state utilities */
+.is-dragging {
+  opacity: 0.8;
+  transform: scale(1.05);
+  box-shadow: var(--shadow-drag-lift);
+  cursor: grabbing;
+}
+
+.is-drag-over {
+  box-shadow: var(--shadow-drag-over);
+}
+
+/* Smooth color transitions for hover states */
+.hover-smooth {
+  transition: background-color var(--transition-base),
+              border-color var(--transition-base),
+              color var(--transition-base),
+              box-shadow var(--transition-base);
 }
 
 /* ============================================

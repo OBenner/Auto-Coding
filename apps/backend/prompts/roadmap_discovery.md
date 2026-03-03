@@ -231,13 +231,9 @@ Based on all the information gathered, create the discovery file using the Write
 }
 ```
 
-**Use the Write tool** to create the file at the Output File path specified below, OR use bash:
+**Use the Write tool** to create the file at the Output File path specified below.
 
-```bash
-cat > /path/from/context/roadmap_discovery.json << 'EOF'
-{ ... your JSON here ... }
-EOF
-```
+**IMPORTANT**: Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows. Always use the Write tool.
 
 Verify the file was created:
 
@@ -296,20 +292,12 @@ Next phase: Feature Generation
 
 If you made a mistake in roadmap_discovery.json:
 
-```bash
-# Read current state
-cat roadmap_discovery.json
+1. Read the current file using the **Read** tool
+2. Fix the issue
+3. Use the **Write** tool to save the corrected content
+4. Read again to verify
 
-# Fix the issue
-cat > roadmap_discovery.json << 'EOF'
-{
-  [corrected JSON]
-}
-EOF
-
-# Verify
-cat roadmap_discovery.json
-```
+**IMPORTANT**: Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 ---
 

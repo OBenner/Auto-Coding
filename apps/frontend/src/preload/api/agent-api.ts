@@ -5,20 +5,26 @@
  * - Roadmap operations
  * - Ideation operations
  * - Insights operations
+ * - Analytics operations
  * - Changelog operations
  * - Linear integration
  * - GitHub integration
  * - Shell operations
+ * - Session context operations
+ * - Productivity analytics
  */
 
 import { createRoadmapAPI, RoadmapAPI } from './modules/roadmap-api';
 import { createIdeationAPI, IdeationAPI } from './modules/ideation-api';
 import { createInsightsAPI, InsightsAPI } from './modules/insights-api';
+import { createAnalyticsAPI, AnalyticsAPI } from './modules/analytics-api';
 import { createChangelogAPI, ChangelogAPI } from './modules/changelog-api';
 import { createLinearAPI, LinearAPI } from './modules/linear-api';
 import { createGitHubAPI, GitHubAPI } from './modules/github-api';
 import { createGitLabAPI, GitLabAPI } from './modules/gitlab-api';
 import { createShellAPI, ShellAPI } from './modules/shell-api';
+import { createSessionContextAPI, SessionContextAPI } from './modules/session-context-api';
+import { createProductivityAnalyticsAPI, ProductivityAnalyticsAPI } from './modules/productivity-analytics-api';
 
 /**
  * Combined Agent API interface
@@ -32,7 +38,11 @@ export interface AgentAPI extends
   LinearAPI,
   GitHubAPI,
   GitLabAPI,
-  ShellAPI {}
+  ShellAPI,
+  SessionContextAPI,
+  ProductivityAnalyticsAPI {
+  analytics: AnalyticsAPI;
+}
 
 /**
  * Creates the complete Agent API by combining all module APIs
@@ -43,11 +53,14 @@ export const createAgentAPI = (): AgentAPI => {
   const roadmapAPI = createRoadmapAPI();
   const ideationAPI = createIdeationAPI();
   const insightsAPI = createInsightsAPI();
+  const analyticsAPI = createAnalyticsAPI();
   const changelogAPI = createChangelogAPI();
   const linearAPI = createLinearAPI();
   const githubAPI = createGitHubAPI();
   const gitlabAPI = createGitLabAPI();
   const shellAPI = createShellAPI();
+  const sessionContextAPI = createSessionContextAPI();
+  const productivityAnalyticsAPI = createProductivityAnalyticsAPI();
 
   return {
     // Roadmap API
@@ -58,6 +71,9 @@ export const createAgentAPI = (): AgentAPI => {
 
     // Insights API
     ...insightsAPI,
+
+    // Analytics API
+    analytics: analyticsAPI,
 
     // Changelog API
     ...changelogAPI,
@@ -72,7 +88,13 @@ export const createAgentAPI = (): AgentAPI => {
     ...gitlabAPI,
 
     // Shell Operations API
-    ...shellAPI
+    ...shellAPI,
+
+    // Session Context API
+    ...sessionContextAPI,
+
+    // Productivity Analytics API
+    ...productivityAnalyticsAPI
   };
 };
 
@@ -81,9 +103,12 @@ export type {
   RoadmapAPI,
   IdeationAPI,
   InsightsAPI,
+  AnalyticsAPI,
   ChangelogAPI,
   LinearAPI,
   GitHubAPI,
   GitLabAPI,
-  ShellAPI
+  ShellAPI,
+  SessionContextAPI,
+  ProductivityAnalyticsAPI
 };

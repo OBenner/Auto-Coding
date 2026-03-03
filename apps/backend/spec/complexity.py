@@ -391,6 +391,11 @@ async def run_ai_complexity_assessment(
         context += f"\n**Requirements File**: {requirements_file} (read this for full details)\n"
 
     try:
+        # Remove stale assessment file from previous failed runs
+        # so the agent's Write tool doesn't require a Read first
+        if assessment_file.exists():
+            assessment_file.unlink()
+
         success, output = await run_agent_fn(
             "complexity_assessor.md",
             additional_context=context,

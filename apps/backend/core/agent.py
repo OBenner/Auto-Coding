@@ -30,7 +30,10 @@ from agents import (
     get_graphiti_context,
     # Utility functions
     get_latest_commit,
+    get_workspace_project_dirs,
     load_implementation_plan,
+    # Workspace
+    load_workspace_context,
     post_session_processing,
     # Session management
     run_agent_session,
@@ -58,6 +61,8 @@ __all__ = [
     "find_subtask_in_plan",
     "find_phase_for_subtask",
     "sync_spec_to_source",
+    "load_workspace_context",
+    "get_workspace_project_dirs",
     "AUTO_CONTINUE_DELAY_SECONDS",
     "HUMAN_INTERVENTION_FILE",
 ]

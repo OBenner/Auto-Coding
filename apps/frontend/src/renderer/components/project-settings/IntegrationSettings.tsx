@@ -26,7 +26,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '../ui/select';
-import type { ProjectEnvConfig, LinearSyncStatus, GitHubSyncStatus, Project, ProjectSettings as ProjectSettingsType } from '../../../shared/types';
+import { WebhooksSection } from './WebhooksSection';
+import type { ProjectEnvConfig, LinearSyncStatus, GitHubSyncStatus, Project, ProjectSettings as ProjectSettingsType, WebhookIntegrationStatus } from '../../../shared/types';
 
 interface IntegrationSettingsProps {
   envConfig: ProjectEnvConfig | null;
@@ -53,6 +54,14 @@ interface IntegrationSettingsProps {
   isCheckingGitHub: boolean;
   githubExpanded: boolean;
   onGitHubToggle: () => void;
+
+  // Webhooks state
+  webhooksExpanded: boolean;
+  onWebhooksToggle: () => void;
+  webhooksEnabled: boolean;
+  onWebhooksEnabledChange: (enabled: boolean) => void;
+  webhookIntegrationStatuses: WebhookIntegrationStatus[];
+  onConfigureWebhookIntegration: (integration: string) => void;
 }
 
 export function IntegrationSettings({
@@ -73,7 +82,13 @@ export function IntegrationSettings({
   gitHubConnectionStatus,
   isCheckingGitHub,
   githubExpanded,
-  onGitHubToggle
+  onGitHubToggle,
+  webhooksExpanded,
+  onWebhooksToggle,
+  webhooksEnabled,
+  onWebhooksEnabledChange,
+  webhookIntegrationStatuses,
+  onConfigureWebhookIntegration
 }: IntegrationSettingsProps) {
   // Branch selection state
   const [branches, setBranches] = useState<string[]>([]);
@@ -482,6 +497,18 @@ export function IntegrationSettings({
           </div>
         )}
       </section>
+
+      <Separator />
+
+      {/* Webhooks Integration Section */}
+      <WebhooksSection
+        isExpanded={webhooksExpanded}
+        onToggle={onWebhooksToggle}
+        webhooksEnabled={webhooksEnabled}
+        onWebhooksEnabledChange={onWebhooksEnabledChange}
+        integrationStatuses={webhookIntegrationStatuses}
+        onConfigureIntegration={onConfigureWebhookIntegration}
+      />
     </>
   );
 }

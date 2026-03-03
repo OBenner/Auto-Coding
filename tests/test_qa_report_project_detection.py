@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Setup mocks before importing auto-claude modules
-from qa_report_helpers import setup_qa_report_mocks, cleanup_qa_report_mocks
+from qa_report_helpers import cleanup_qa_report_mocks, setup_qa_report_mocks
 
 # Setup mocks
 setup_qa_report_mocks()
@@ -28,7 +28,6 @@ from qa.report import (
     check_test_discovery,
     is_no_test_project,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -59,7 +58,7 @@ class TestCheckTestDiscovery:
         """Test reading valid discovery file."""
         discovery = {
             "frameworks": [{"name": "pytest", "type": "unit"}],
-            "test_directories": ["tests/"]
+            "test_directories": ["tests/"],
         }
         discovery_file = spec_dir / "test_discovery.json"
         with open(discovery_file, "w") as f:
@@ -108,7 +107,9 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_pyproject_toml(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_pyproject_toml(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of pyproject.toml."""
         (project_dir / "pyproject.toml").write_text("[tool.pytest]")
 
@@ -130,21 +131,27 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_jest_config_ts(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_jest_config_ts(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of Jest TypeScript config."""
         (project_dir / "jest.config.ts").write_text("export default {}")
 
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_vitest_config(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_vitest_config(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of Vitest config."""
         (project_dir / "vitest.config.js").write_text("export default {}")
 
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_vitest_config_ts(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_vitest_config_ts(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of Vitest TypeScript config."""
         (project_dir / "vitest.config.ts").write_text("export default {}")
 
@@ -158,14 +165,18 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_cypress_config(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_cypress_config(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of Cypress config."""
         (project_dir / "cypress.config.js").write_text("module.exports = {}")
 
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_playwright_config(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_playwright_config(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of Playwright config."""
         (project_dir / "playwright.config.ts").write_text("export default {}")
 
@@ -190,7 +201,9 @@ class TestIsNoTestProject:
         assert result is False
 
     # Test directories and files
-    def test_project_with_test_directory(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_test_directory(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of test directory."""
         tests_dir = project_dir / "tests"
         tests_dir.mkdir()
@@ -199,7 +212,9 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_test_directory_no_test_files(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_test_directory_no_test_files(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of empty test directory."""
         tests_dir = project_dir / "tests"
         tests_dir.mkdir()
@@ -217,7 +232,9 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_test_files_js(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_test_files_js(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of .test.js files."""
         tests_dir = project_dir / "__tests__"
         tests_dir.mkdir()
@@ -226,7 +243,9 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_test_files_ts(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_test_files_ts(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of .test.ts files."""
         tests_dir = project_dir / "test"
         tests_dir.mkdir()
@@ -235,7 +254,9 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_spec_files_ts(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_spec_files_ts(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of .spec.ts files."""
         tests_dir = project_dir / "tests"
         tests_dir.mkdir()
@@ -244,7 +265,9 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_project_with_python_test_suffix(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_project_with_python_test_suffix(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test detection of _test.py files."""
         tests_dir = project_dir / "tests"
         tests_dir.mkdir()
@@ -254,7 +277,9 @@ class TestIsNoTestProject:
         assert result is False
 
     # Discovery JSON integration
-    def test_uses_discovery_json_if_available(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_uses_discovery_json_if_available(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test that discovery.json takes precedence."""
         # Project has no test files
         # But discovery.json says there are frameworks
@@ -266,7 +291,9 @@ class TestIsNoTestProject:
         result = is_no_test_project(spec_dir, project_dir)
         assert result is False
 
-    def test_empty_discovery_means_no_tests(self, spec_dir: Path, project_dir: Path) -> None:
+    def test_empty_discovery_means_no_tests(
+        self, spec_dir: Path, project_dir: Path
+    ) -> None:
         """Test that empty discovery means no tests."""
         discovery = {"frameworks": []}
         discovery_file = spec_dir / "test_discovery.json"
