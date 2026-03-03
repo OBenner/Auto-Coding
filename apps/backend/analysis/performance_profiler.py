@@ -176,7 +176,7 @@ class PerformanceProfiler:
             enable_memory: Whether to enable memory profiling
         """
         # Start wall-clock timer for accurate duration measurement
-        self._start_time = time.perf_counter()
+        self._start_time = time.monotonic()
 
         # Start CPU profiling
         self._profiler = cProfile.Profile()
@@ -194,12 +194,14 @@ class PerformanceProfiler:
         Returns:
             ProfileResult with profiling data
         """
-        # Stop wall-clock timer
-        self._end_time = time.perf_counter()
-
         # Stop CPU profiling
         if self._profiler:
             self._profiler.disable()
+
+        # Compute wall-clock duration (monotonic is immune to clock adjustments)
+        wall_duration = time.monotonic() - getattr(
+            self, "_start_time", time.monotonic()
+        )
 
         # Get function profiles
         function_profiles = self._extract_function_profiles()
@@ -216,13 +218,6 @@ class PerformanceProfiler:
 
         # Generate suggestions
         suggestions = self._generate_suggestions(bottlenecks)
-
-        # Create result (use wall-clock time for duration, not sum of top N functions)
-        wall_duration = (
-            self._end_time - self._start_time
-            if hasattr(self, "_end_time")
-            else sum(fp.total_time for fp in function_profiles)
-        )
         result = ProfileResult(
             timestamp=datetime.now(UTC).isoformat(),
             duration=round(wall_duration, 4),

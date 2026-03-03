@@ -676,12 +676,16 @@ def _get_project_root_from_spec(spec_dir: Path) -> Path:
     return spec_dir.parent.parent.parent
 
 
-def get_performance_profiler_prompt(spec_dir: Path) -> str:
+def get_performance_profiler_prompt(
+    spec_dir: Path, project_dir: Path | None = None
+) -> str:
     """
     Load the performance profiler agent prompt with spec path and key files injected.
 
     Args:
         spec_dir: Directory containing the spec and profiling results
+        project_dir: Root directory of the project. If None, auto-detected
+                     by walking up from spec_dir looking for .auto-claude/.
 
     Returns:
         The performance profiler prompt content with paths injected
@@ -696,14 +700,14 @@ def get_performance_profiler_prompt(spec_dir: Path) -> str:
 
     prompt = prompt_file.read_text(encoding="utf-8")
 
-    # Compute project root robustly by walking up to find project markers,
-    # falling back to the three-parent heuristic (.auto-claude/specs/XXX/)
-    project_root = _get_project_root_from_spec(spec_dir)
+    # Resolve project_dir: use explicit value, or walk up to find .auto-claude/
+    if project_dir is None:
+        project_dir = _get_project_root_from_spec(spec_dir)
 
     # Inject spec directory information at the beginning
     spec_context = f"""## YOUR ENVIRONMENT
 
-**Working Directory:** {project_root}
+**Working Directory:** {project_dir}
 **Spec Location:** `{spec_dir}/`
 
 **Important Files:**

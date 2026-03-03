@@ -265,6 +265,7 @@ class PluginMetadata:
         dependencies: List of other plugin names this plugin depends on
         homepage: Optional URL to plugin documentation/repository
         license: Optional license identifier (e.g., "MIT", "Apache-2.0")
+        auto_claude_version: Optional Auto Claude version requirement (e.g., ">=2.8.0")
     """
 
     name: str
@@ -276,6 +277,7 @@ class PluginMetadata:
     dependencies: list[str] = field(default_factory=list)
     homepage: str | None = None
     license: str | None = None
+    auto_claude_version: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization."""
@@ -294,6 +296,7 @@ class PluginMetadata:
             "dependencies": self.dependencies,
             "homepage": self.homepage,
             "license": self.license,
+            "auto_claude_version": self.auto_claude_version,
         }
 
     @classmethod
@@ -311,6 +314,7 @@ class PluginMetadata:
             dependencies=data.get("dependencies", []),
             homepage=data.get("homepage"),
             license=data.get("license"),
+            auto_claude_version=data.get("auto_claude_version"),
         )
 
 

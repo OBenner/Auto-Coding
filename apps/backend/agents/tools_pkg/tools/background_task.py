@@ -379,7 +379,7 @@ class BackgroundTaskManager:
                     # Capture error context for failed tasks
                     self._capture_error_context(task_id)
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Timeout occurred - don't overwrite if already cancelled
                 if task.get("status") != self.STATE_CANCELLED:
                     task["status"] = self.STATE_FAILED
@@ -395,10 +395,10 @@ class BackgroundTaskManager:
                     process.terminate()
                     try:
                         await asyncio.wait_for(process.wait(), timeout=2.0)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         process.kill()
                         await asyncio.wait_for(process.wait(), timeout=5.0)
-                except (OSError, asyncio.TimeoutError) as e:
+                except (TimeoutError, OSError) as e:
                     logger.error(f"Error terminating process for task {task_id}: {e}")
 
         except Exception as e:
@@ -581,11 +581,11 @@ class BackgroundTaskManager:
                 # Wait for graceful shutdown with timeout
                 try:
                     await asyncio.wait_for(process.wait(), timeout=2.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Force kill if graceful shutdown failed
                     process.kill()
                     await asyncio.wait_for(process.wait(), timeout=5.0)
-            except (OSError, asyncio.TimeoutError) as e:
+            except (TimeoutError, OSError) as e:
                 logger.error(f"Error cancelling task {task_id}: {e}")
                 return False
             finally:

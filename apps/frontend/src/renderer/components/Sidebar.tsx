@@ -30,7 +30,8 @@ import {
   Calendar,
   Activity,
   Database,
-  MessageSquare
+  MessageSquare,
+  Code
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -66,7 +67,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'model-usage';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -94,6 +95,7 @@ const baseNavItems: NavItem[] = [
   { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C' },
   { id: 'analytics', labelKey: 'navigation:items.analytics', icon: BarChart3, shortcut: 'Y' },
   { id: 'productivity', labelKey: 'navigation:items.productivity', icon: TrendingUp, shortcut: 'P' },
+  { id: 'patterns', labelKey: 'navigation:items.patterns', icon: Code, shortcut: 'Z' },
   { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M' },
   { id: 'plugins', labelKey: 'navigation:items.plugins', icon: Puzzle, shortcut: 'U' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },

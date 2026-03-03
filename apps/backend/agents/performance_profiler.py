@@ -105,7 +105,7 @@ async def run_performance_profiler(
     )
 
     # Generate performance profiler prompt
-    prompt = get_performance_profiler_prompt(spec_dir)
+    prompt = get_performance_profiler_prompt(spec_dir, project_dir)
 
     print_status("Running performance profiler...", "progress")
     print()
