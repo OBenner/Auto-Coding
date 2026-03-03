@@ -6,61 +6,40 @@
  */
 
 // ============================================
+// Shared Base Metrics
+// ============================================
+
+/** Common usage/cost fields shared by model and agent metrics. */
+interface BaseUsageMetrics {
+  total_usage_count: number;
+  total_tokens: number;
+  total_cost: number;
+  first_used: string | null;  // ISO 8601 datetime string
+  last_used: string | null;   // ISO 8601 datetime string
+}
+
+// ============================================
 // Model Metrics Types
 // ============================================
 
-/**
- * Metrics for a single AI model.
- * Captures usage statistics for one model across all specs.
- */
-export interface ModelMetrics {
+/** Metrics for a single AI model across all specs. */
+export interface ModelMetrics extends BaseUsageMetrics {
   model: string;
   provider: string;
-
-  // Usage metrics
-  total_usage_count: number;
   total_input_tokens: number;
   total_output_tokens: number;
-  total_tokens: number;
-
-  // Cost metrics
-  total_cost: number;
-
-  // Agent breakdown
   usage_by_agent: Record<string, number>;  // agent_type -> count
-
-  // Time period
-  first_used: string | null;  // ISO 8601 datetime string
-  last_used: string | null;  // ISO 8601 datetime string
 }
 
 // ============================================
 // Agent Metrics Types
 // ============================================
 
-/**
- * Metrics for a single agent type.
- * Captures model usage patterns for one agent across all specs.
- */
-export interface AgentMetrics {
+/** Metrics for a single agent type across all specs. */
+export interface AgentMetrics extends BaseUsageMetrics {
   agent_type: string;
-
-  // Usage metrics
-  total_usage_count: number;
-
-  // Model breakdown
   models_used: Record<string, number>;  // model_id -> count
-
-  // Preferred model (most used)
   preferred_model: string;
-
-  // Cost metrics
-  total_cost: number;
-  total_tokens: number;
-
-  // Time period
-  first_used: string | null;  // ISO 8601 datetime string
-  last_used: string | null;  // ISO 8601 datetime string
 }
 
 // ============================================
@@ -95,22 +74,18 @@ export interface ModelUsageSummary {
 // Trend Data Types
 // ============================================
 
-/**
- * Model usage trend point for time-series analysis.
- */
+/** Model usage trend point for time-series analysis. */
 export interface ModelUsageTrendPoint {
-  date: string;  // ISO 8601 datetime string
+  date: string;
   total_tokens: number;
   total_cost: number;
   usage_count: number;
   unique_models: number;
 }
 
-/**
- * Per-model trend data.
- */
+/** Per-model trend data. */
 export interface ModelTrendPoint {
-  date: string;  // ISO 8601 datetime string
+  date: string;
   model: string;
   tokens: number;
   cost: number;

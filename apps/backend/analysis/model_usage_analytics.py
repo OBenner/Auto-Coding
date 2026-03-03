@@ -27,30 +27,49 @@ from typing import Any
 # =============================================================================
 
 
+COST_PRECISION = 4  # Decimal places for cost rounding
+
+# Shared token/cost field names for serialization
+_USAGE_FIELDS = (
+    "total_usage_count",
+    "total_input_tokens",
+    "total_output_tokens",
+    "total_tokens",
+)
+
+
+def _usage_to_dict(obj: ModelMetrics | AgentMetrics) -> dict[str, Any]:
+    """Return the common usage/cost fields as a serializable dict."""
+    d: dict[str, Any] = {f: getattr(obj, f) for f in _USAGE_FIELDS}
+    d["total_cost"] = round(obj.total_cost, COST_PRECISION)
+    return d
+
+
+def _usage_from_dict(data: dict[str, Any]) -> dict[str, Any]:
+    """Extract common usage/cost kwargs from a dict."""
+    kwargs: dict[str, Any] = {f: data.get(f, 0) for f in _USAGE_FIELDS}
+    kwargs["total_cost"] = data.get("total_cost", 0.0)
+    return kwargs
+
+
+def _optional_iso(data: dict[str, Any], key: str) -> datetime | None:
+    """Parse an optional ISO datetime string from a dict."""
+    val = data.get(key)
+    return datetime.fromisoformat(val) if val else None
+
+
 @dataclass
 class ModelMetrics:
-    """
-    Metrics for a single AI model.
-
-    Captures usage statistics for one model across all specs.
-    """
+    """Metrics for a single AI model across all specs."""
 
     model: str
     provider: str = "anthropic"
-
-    # Usage metrics
-    total_usage_count: int = 0  # Number of times this model was used
+    total_usage_count: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     total_tokens: int = 0
-
-    # Cost metrics
     total_cost: float = 0.0
-
-    # Agent breakdown
-    usage_by_agent: dict[str, int] = field(default_factory=dict)  # agent_type -> count
-
-    # Time period
+    usage_by_agent: dict[str, int] = field(default_factory=dict)
     first_used: datetime | None = None
     last_used: datetime | None = None
 
@@ -59,11 +78,7 @@ class ModelMetrics:
         return {
             "model": self.model,
             "provider": self.provider,
-            "total_usage_count": self.total_usage_count,
-            "total_input_tokens": self.total_input_tokens,
-            "total_output_tokens": self.total_output_tokens,
-            "total_tokens": self.total_tokens,
-            "total_cost": round(self.total_cost, 4),
+            **_usage_to_dict(self),
             "usage_by_agent": self.usage_by_agent,
             "first_used": self.first_used.isoformat() if self.first_used else None,
             "last_used": self.last_used.isoformat() if self.last_used else None,
@@ -75,65 +90,47 @@ class ModelMetrics:
         return cls(
             model=data["model"],
             provider=data.get("provider", "anthropic"),
-            total_usage_count=data.get("total_usage_count", 0),
-            total_input_tokens=data.get("total_input_tokens", 0),
-            total_output_tokens=data.get("total_output_tokens", 0),
-            total_tokens=data.get("total_tokens", 0),
-            total_cost=data.get("total_cost", 0.0),
+            **_usage_from_dict(data),
             usage_by_agent=data.get("usage_by_agent", {}),
-            first_used=datetime.fromisoformat(data["first_used"])
-            if data.get("first_used")
-            else None,
-            last_used=datetime.fromisoformat(data["last_used"])
-            if data.get("last_used")
-            else None,
+            first_used=_optional_iso(data, "first_used"),
+            last_used=_optional_iso(data, "last_used"),
         )
 
     @property
     def average_tokens_per_use(self) -> float:
         """Calculate average tokens per usage."""
-        if self.total_usage_count == 0:
-            return 0.0
-        return self.total_tokens / self.total_usage_count
+        return (
+            self.total_tokens / self.total_usage_count
+            if self.total_usage_count
+            else 0.0
+        )
 
     @property
     def average_cost_per_use(self) -> float:
         """Calculate average cost per usage."""
-        if self.total_usage_count == 0:
-            return 0.0
-        return self.total_cost / self.total_usage_count
+        return (
+            self.total_cost / self.total_usage_count if self.total_usage_count else 0.0
+        )
 
 
 @dataclass
 class AgentMetrics:
-    """
-    Metrics for a single agent type.
-
-    Captures model usage patterns for one agent type.
-    """
+    """Metrics for a single agent type across all specs."""
 
     agent_type: str
-
-    # Usage metrics
     total_usage_count: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     total_tokens: int = 0
     total_cost: float = 0.0
-
-    # Model breakdown
-    models_used: dict[str, int] = field(default_factory=dict)  # model -> count
-    primary_model: str | None = None  # Most frequently used model
+    models_used: dict[str, int] = field(default_factory=dict)
+    primary_model: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "agent_type": self.agent_type,
-            "total_usage_count": self.total_usage_count,
-            "total_input_tokens": self.total_input_tokens,
-            "total_output_tokens": self.total_output_tokens,
-            "total_tokens": self.total_tokens,
-            "total_cost": round(self.total_cost, 4),
+            **_usage_to_dict(self),
             "models_used": self.models_used,
             "primary_model": self.primary_model,
         }
@@ -143,11 +140,7 @@ class AgentMetrics:
         """Create from dictionary."""
         return cls(
             agent_type=data["agent_type"],
-            total_usage_count=data.get("total_usage_count", 0),
-            total_input_tokens=data.get("total_input_tokens", 0),
-            total_output_tokens=data.get("total_output_tokens", 0),
-            total_tokens=data.get("total_tokens", 0),
-            total_cost=data.get("total_cost", 0.0),
+            **_usage_from_dict(data),
             models_used=data.get("models_used", {}),
             primary_model=data.get("primary_model"),
         )
@@ -189,58 +182,45 @@ class ModelUsageSummary:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
+        rnd = lambda v: round(v, COST_PRECISION)  # noqa: E731
         return {
             "period_start": self.period_start.isoformat(),
             "period_end": self.period_end.isoformat(),
             "total_specs": self.total_specs,
             "total_usage_records": self.total_usage_records,
-            "total_input_tokens": self.total_input_tokens,
-            "total_output_tokens": self.total_output_tokens,
-            "total_tokens": self.total_tokens,
-            "total_cost": round(self.total_cost, 4),
+            **{f: getattr(self, f) for f in _USAGE_FIELDS},
+            "total_cost": rnd(self.total_cost),
             "unique_models_used": self.unique_models_used,
             "unique_providers_used": self.unique_providers_used,
             "metrics_by_model": {
-                model: metrics.to_dict()
-                for model, metrics in self.metrics_by_model.items()
+                k: v.to_dict() for k, v in self.metrics_by_model.items()
             },
             "metrics_by_agent": {
-                agent: metrics.to_dict()
-                for agent, metrics in self.metrics_by_agent.items()
+                k: v.to_dict() for k, v in self.metrics_by_agent.items()
             },
-            "cost_by_model": {
-                model: round(cost, 4) for model, cost in self.cost_by_model.items()
-            },
-            "cost_by_agent": {
-                agent: round(cost, 4) for agent, cost in self.cost_by_agent.items()
-            },
+            "cost_by_model": {k: rnd(v) for k, v in self.cost_by_model.items()},
+            "cost_by_agent": {k: rnd(v) for k, v in self.cost_by_agent.items()},
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ModelUsageSummary:
         """Create from dictionary."""
-        metrics_by_model = {
-            model: ModelMetrics.from_dict(metrics)
-            for model, metrics in data.get("metrics_by_model", {}).items()
-        }
-        metrics_by_agent = {
-            agent: AgentMetrics.from_dict(metrics)
-            for agent, metrics in data.get("metrics_by_agent", {}).items()
-        }
-
         return cls(
             period_start=datetime.fromisoformat(data["period_start"]),
             period_end=datetime.fromisoformat(data["period_end"]),
             total_specs=data.get("total_specs", 0),
             total_usage_records=data.get("total_usage_records", 0),
-            total_input_tokens=data.get("total_input_tokens", 0),
-            total_output_tokens=data.get("total_output_tokens", 0),
-            total_tokens=data.get("total_tokens", 0),
-            total_cost=data.get("total_cost", 0.0),
+            **_usage_from_dict(data),
             unique_models_used=data.get("unique_models_used", 0),
             unique_providers_used=data.get("unique_providers_used", 0),
-            metrics_by_model=metrics_by_model,
-            metrics_by_agent=metrics_by_agent,
+            metrics_by_model={
+                k: ModelMetrics.from_dict(v)
+                for k, v in data.get("metrics_by_model", {}).items()
+            },
+            metrics_by_agent={
+                k: AgentMetrics.from_dict(v)
+                for k, v in data.get("metrics_by_agent", {}).items()
+            },
             cost_by_model=data.get("cost_by_model", {}),
             cost_by_agent=data.get("cost_by_agent", {}),
         )
@@ -573,7 +553,7 @@ def get_model_usage_trends(
                     "date": current_date.isoformat(),
                     "total_usage_records": len(period_records),
                     "total_tokens": period_tokens,
-                    "total_cost": round(period_cost, 4),
+                    "total_cost": round(period_cost, COST_PRECISION),
                     "unique_models": period_models,
                     "most_used_model": max(model_counts.items(), key=lambda x: x[1])[0]
                     if model_counts
@@ -604,24 +584,46 @@ def export_model_usage_data(
     elif format == "csv":
         import csv
 
+        def _write_breakdown(
+            writer: csv.writer,
+            title: str,
+            headers: list[str],
+            items: dict[str, ModelMetrics | AgentMetrics],
+            row_fn: object,
+        ) -> None:
+            """Write a sorted breakdown section to CSV."""
+            writer.writerow([f"=== {title} ==="])
+            writer.writerow(headers)
+            for _key, m in sorted(
+                items.items(), key=lambda x: x[1].total_cost, reverse=True
+            ):
+                writer.writerow(row_fn(m))  # type: ignore[operator]
+            writer.writerow([])
+
+        rnd = lambda v, p=COST_PRECISION: round(v, p)  # noqa: E731
+
         with open(output_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
 
-            # Write summary section
+            # Summary section
             writer.writerow(["=== SUMMARY ==="])
             writer.writerow(["Metric", "Value"])
-            writer.writerow(["Period Start", summary.period_start.isoformat()])
-            writer.writerow(["Period End", summary.period_end.isoformat()])
-            writer.writerow(["Total Specs", summary.total_specs])
-            writer.writerow(["Total Usage Records", summary.total_usage_records])
-            writer.writerow(["Total Tokens", summary.total_tokens])
-            writer.writerow(["Total Cost ($)", round(summary.total_cost, 4)])
-            writer.writerow(["Unique Models", summary.unique_models_used])
+            for label, value in [
+                ("Period Start", summary.period_start.isoformat()),
+                ("Period End", summary.period_end.isoformat()),
+                ("Total Specs", summary.total_specs),
+                ("Total Usage Records", summary.total_usage_records),
+                ("Total Tokens", summary.total_tokens),
+                ("Total Cost ($)", rnd(summary.total_cost)),
+                ("Unique Models", summary.unique_models_used),
+            ]:
+                writer.writerow([label, value])
             writer.writerow([])
 
-            # Write model breakdown
-            writer.writerow(["=== MODEL BREAKDOWN ==="])
-            writer.writerow(
+            # Model breakdown
+            _write_breakdown(
+                writer,
+                "MODEL BREAKDOWN",
                 [
                     "Model",
                     "Provider",
@@ -632,33 +634,25 @@ def export_model_usage_data(
                     "Cost ($)",
                     "Avg Tokens/Use",
                     "Avg Cost/Use ($)",
-                ]
+                ],
+                summary.metrics_by_model,
+                lambda m: [
+                    m.model,
+                    m.provider,
+                    m.total_usage_count,
+                    m.total_input_tokens,
+                    m.total_output_tokens,
+                    m.total_tokens,
+                    rnd(m.total_cost),
+                    round(m.average_tokens_per_use, 1),
+                    rnd(m.average_cost_per_use),
+                ],
             )
 
-            for model, metrics in sorted(
-                summary.metrics_by_model.items(),
-                key=lambda x: x[1].total_cost,
-                reverse=True,
-            ):
-                writer.writerow(
-                    [
-                        model,
-                        metrics.provider,
-                        metrics.total_usage_count,
-                        metrics.total_input_tokens,
-                        metrics.total_output_tokens,
-                        metrics.total_tokens,
-                        round(metrics.total_cost, 4),
-                        round(metrics.average_tokens_per_use, 1),
-                        round(metrics.average_cost_per_use, 4),
-                    ]
-                )
-
-            writer.writerow([])
-
-            # Write agent breakdown
-            writer.writerow(["=== AGENT BREAKDOWN ==="])
-            writer.writerow(
+            # Agent breakdown
+            _write_breakdown(
+                writer,
+                "AGENT BREAKDOWN",
                 [
                     "Agent Type",
                     "Usage Count",
@@ -668,26 +662,19 @@ def export_model_usage_data(
                     "Cost ($)",
                     "Primary Model",
                     "Models Used",
-                ]
+                ],
+                summary.metrics_by_agent,
+                lambda m: [
+                    m.agent_type,
+                    m.total_usage_count,
+                    m.total_input_tokens,
+                    m.total_output_tokens,
+                    m.total_tokens,
+                    rnd(m.total_cost),
+                    m.primary_model or "N/A",
+                    len(m.models_used),
+                ],
             )
-
-            for agent, metrics in sorted(
-                summary.metrics_by_agent.items(),
-                key=lambda x: x[1].total_cost,
-                reverse=True,
-            ):
-                writer.writerow(
-                    [
-                        agent,
-                        metrics.total_usage_count,
-                        metrics.total_input_tokens,
-                        metrics.total_output_tokens,
-                        metrics.total_tokens,
-                        round(metrics.total_cost, 4),
-                        metrics.primary_model or "N/A",
-                        len(metrics.models_used),
-                    ]
-                )
     else:
         raise ValueError(f"Unsupported export format: {format}")
 
@@ -757,28 +744,17 @@ def main() -> None:
     # Determine project directory (current working directory)
     project_dir = Path.cwd()
 
-    # Parse date filters
-    start_date = None
-    end_date = None
-    if args.start_date:
+    def _parse_date_arg(value: str | None, label: str) -> datetime | None:
+        if not value:
+            return None
         try:
-            start_date = datetime.fromisoformat(args.start_date)
+            return datetime.fromisoformat(value)
         except ValueError:
-            print(
-                f"Error: Invalid start date format: {args.start_date}",
-                file=sys.stderr,
-            )
+            print(f"Error: Invalid {label} date format: {value}", file=sys.stderr)
             sys.exit(1)
 
-    if args.end_date:
-        try:
-            end_date = datetime.fromisoformat(args.end_date)
-        except ValueError:
-            print(
-                f"Error: Invalid end date format: {args.end_date}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+    start_date = _parse_date_arg(args.start_date, "start")
+    end_date = _parse_date_arg(args.end_date, "end")
 
     # Execute requested operation
     if args.get_summary:

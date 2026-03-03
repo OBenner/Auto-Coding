@@ -233,41 +233,18 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           <div className="flex items-center gap-2">
             {/* Time Range Filter */}
             <div className="flex items-center gap-1 border border-border rounded-md p-1">
-              <Button
-                variant={timeRange === '7d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('7d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                7d
-              </Button>
-              <Button
-                variant={timeRange === '30d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('30d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                30d
-              </Button>
-              <Button
-                variant={timeRange === '90d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('90d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                90d
-              </Button>
-              <Button
-                variant={timeRange === 'all' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('all')}
-                className="h-7"
-              >
-                All
-              </Button>
+              {(['7d', '30d', '90d', 'all'] as const).map((range) => (
+                <Button
+                  key={range}
+                  variant={timeRange === range ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleTimeRangeChange(range)}
+                  className="h-7"
+                >
+                  {range !== 'all' && <Calendar className="h-3 w-3 mr-1" />}
+                  {range === 'all' ? 'All' : range}
+                </Button>
+              ))}
             </div>
 
             <Button
