@@ -9,6 +9,8 @@ A powerful, feature-rich Kanban board component for managing task workflows with
 **Category:** UI Component
 **Status:** Stable
 
+> **Source of truth:** Task types and status definitions are defined in [`apps/frontend/src/shared/types/task.ts`](../../apps/frontend/src/shared/types/task.ts) and [`apps/frontend/src/shared/constants/task.ts`](../../apps/frontend/src/shared/constants/task.ts). Type definitions in this document mirror those canonical sources.
+
 ### Purpose
 
 The KanbanBoard component provides a visual task management interface that displays tasks across six workflow stages (Backlog, Queue, In Progress, AI Review, Human Review, Done). It implements drag-and-drop task movement, automatic queue processing, multi-selection for bulk actions, and extensive column customization features including collapsing, resizing, and locking.

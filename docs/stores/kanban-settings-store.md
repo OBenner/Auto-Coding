@@ -9,6 +9,8 @@ Zustand store for managing Kanban board column preferences including width, coll
 **Category:** State Management / UI Preferences
 **Status:** Stable
 
+> **Source of truth:** Column status types are derived from [`apps/frontend/src/shared/constants/task.ts`](../../apps/frontend/src/shared/constants/task.ts) (`TASK_STATUS_COLUMNS`). Store implementation is in [`apps/frontend/src/renderer/stores/kanban-settings-store.ts`](../../apps/frontend/src/renderer/stores/kanban-settings-store.ts).
+
 ### Purpose
 
 The Kanban Settings Store manages per-project column preferences for the Kanban board view. It persists column width, collapse state, and lock state to localStorage, allowing users to customize their board layout. Preferences are scoped by project ID, enabling different layouts for different projects.
@@ -138,7 +140,7 @@ useEffect(() => {
 **Description:** Set the width of a column with automatic clamping to valid range (180-600px). Respects locked state.
 
 **Parameters:**
-- `column` (TaskStatusColumn) - Target column ('not_started', 'in_progress', 'qa_ready', etc.)
+- `column` (TaskStatusColumn) - Target column ('backlog', 'queue', 'in_progress', 'ai_review', 'human_review', 'done')
 - `width` (number) - Desired width in pixels (will be clamped to 180-600 range)
 
 **Returns:** void
@@ -180,7 +182,7 @@ setColumnWidth('in_progress', 50);   // Clamped to 180px
 const { toggleColumnCollapsed } = useKanbanSettingsStore();
 
 // Toggle on button click
-<button onClick={() => toggleColumnCollapsed('not_started')}>
+<button onClick={() => toggleColumnCollapsed('backlog')}>
   {isCollapsed ? 'Expand' : 'Collapse'}
 </button>
 ```
@@ -205,7 +207,7 @@ const { toggleColumnCollapsed } = useKanbanSettingsStore();
 const { setColumnCollapsed } = useKanbanSettingsStore();
 
 // Collapse all columns
-['not_started', 'in_progress', 'qa_ready', 'done'].forEach(col => {
+['backlog', 'queue', 'in_progress', 'ai_review', 'human_review', 'done'].forEach(col => {
   setColumnCollapsed(col, true);
 });
 
@@ -260,7 +262,7 @@ const { toggleColumnLocked } = useKanbanSettingsStore();
 const { setColumnLocked } = useKanbanSettingsStore();
 
 // Lock all columns
-['not_started', 'in_progress', 'qa_ready', 'done'].forEach(col => {
+['backlog', 'queue', 'in_progress', 'ai_review', 'human_review', 'done'].forEach(col => {
   setColumnLocked(col, true);
 });
 
@@ -344,8 +346,9 @@ useEffect(() => {
 - Serializes `columnPreferences` to JSON
 - Writes to localStorage key: `kanban-column-prefs-{projectId}`
 - Returns `false` if `columnPreferences` is null
-- Returns `false` if localStorage write fails (quota exceeded, private browsing, etc.)
-- Logs errors to console on failure
+- All `localStorage` and `JSON.parse`/`JSON.stringify` calls are wrapped in try/catch to handle quota exceeded, private browsing, or corrupted data gracefully
+- Returns `false` on any write failure and logs error to console
+- On read failure (corrupted JSON), falls back to default preferences rather than crashing
 
 #### `resetPreferences(projectId: string)`
 
@@ -436,16 +439,21 @@ type KanbanColumnPreferences = Record<TaskStatusColumn, ColumnPreferences>;
 
 /**
  * Task status column types
- * (from @/shared/constants/task)
+ * (from @/shared/constants/task - TASK_STATUS_COLUMNS)
  */
 type TaskStatusColumn =
-  | 'not_started'
+  | 'backlog'
+  | 'queue'
   | 'in_progress'
-  | 'qa_ready'
-  | 'blocked'
-  | 'qa_fixing'
-  | 'qa_passed'
+  | 'ai_review'
+  | 'human_review'
   | 'done';
+
+/**
+ * Mapping for non-column statuses:
+ * - 'pr_created' → rendered in 'done' column
+ * - 'error' → rendered in 'human_review' column
+ */
 ```
 
 ---
@@ -525,10 +533,14 @@ function ResizableColumn({ column, projectId }: Props) {
     setColumnWidth(column, newWidth);
   };
 
-  // Auto-save with debounce
+  // Auto-save with debounce (centralize debounce logic to avoid duplication across components)
   useEffect(() => {
     const timer = setTimeout(() => {
-      savePreferences(projectId);
+      try {
+        savePreferences(projectId);
+      } catch (err) {
+        console.error('Failed to save column preferences:', err);
+      }
     }, 500);
 
     return () => clearTimeout(timer);
@@ -669,8 +681,13 @@ function BulkActions({ projectId }: { projectId: string }) {
 
 ```json
 {
-  "not_started": {
+  "backlog": {
     "width": 280,
+    "isCollapsed": false,
+    "isLocked": false
+  },
+  "queue": {
+    "width": 320,
     "isCollapsed": false,
     "isLocked": false
   },
@@ -679,22 +696,12 @@ function BulkActions({ projectId }: { projectId: string }) {
     "isCollapsed": false,
     "isLocked": true
   },
-  "qa_ready": {
+  "ai_review": {
     "width": 320,
     "isCollapsed": false,
     "isLocked": false
   },
-  "blocked": {
-    "width": 180,
-    "isCollapsed": true,
-    "isLocked": false
-  },
-  "qa_fixing": {
-    "width": 320,
-    "isCollapsed": false,
-    "isLocked": false
-  },
-  "qa_passed": {
+  "human_review": {
     "width": 320,
     "isCollapsed": false,
     "isLocked": false

@@ -290,11 +290,12 @@ The keyboard shortcuts are implemented using a global `keydown` event listener:
 ```typescript
 useEffect(() => {
   const handleKeyDown = (e: KeyboardEvent) => {
-    // Skip if typing in input
+    // Skip if typing in any input-like element (includes contenteditable)
+    const target = e.target as HTMLElement;
     if (
-      e.target instanceof HTMLInputElement ||
-      e.target instanceof HTMLTextAreaElement ||
-      // ... other checks
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target?.isContentEditable
     ) {
       return;
     }
@@ -555,19 +556,21 @@ const visibleNavItems = useMemo(() => {
 
 ### Enabling GitHub/GitLab Navigation
 
-To show GitHub or GitLab navigation items, set environment variables in the project's `.auto-claude/.env` file:
+To show GitHub or GitLab navigation items, set environment variables in the project's `.auto-claude/.env` file.
+
+> **Security:** Never commit `.auto-claude/.env` to source control. Store tokens securely using environment variables, OS keychain, or CI secrets.
 
 ```bash
 # Enable GitHub items
 GITHUB_ENABLED=true
 GITHUB_OWNER=your-username
 GITHUB_REPO=your-repo
-GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
+GITHUB_TOKEN=<your-github-token>
 
 # Enable GitLab items
 GITLAB_ENABLED=true
 GITLAB_PROJECT_ID=12345
-GITLAB_TOKEN=glpat-xxxxxxxxxxxxx
+GITLAB_TOKEN=<your-gitlab-token>
 ```
 
 ---

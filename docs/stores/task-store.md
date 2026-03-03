@@ -9,6 +9,8 @@ Zustand store for managing task state, execution progress, and task lifecycle op
 **Category:** State Management
 **Status:** Stable
 
+> **Source of truth:** Task types are defined in [`apps/frontend/src/shared/types/task.ts`](../../apps/frontend/src/shared/types/task.ts) and status constants in [`apps/frontend/src/shared/constants/task.ts`](../../apps/frontend/src/shared/constants/task.ts).
+
 ### Purpose
 
 The Task Store is the central state management solution for tasks (specs) in Auto Code. It manages task data, execution progress, task status transitions, subtasks, logs, token statistics, and Kanban board ordering. It coordinates with the backend via IPC for persistence and provides a reactive state layer for the UI.
@@ -1180,20 +1182,25 @@ function TaskExecutionProgress({ taskId }: { taskId: string }) {
 #### Queue Auto-Promotion
 
 ```typescript
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTaskStore, startTask } from '@/renderer/stores/task-store';
 
 function QueueAutoPromotion() {
   const tasks = useTaskStore(state => state.tasks);
   const registerListener = useTaskStore(state => state.registerTaskStatusChangeListener);
 
+  // Use ref to access latest tasks inside listener without re-registering
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+
   useEffect(() => {
-    // Register listener for task status changes
+    // Register listener once on mount - use tasksRef for current tasks
     const unregister = registerListener((taskId, oldStatus, newStatus) => {
       // When a task moves out of in_progress, check queue
       if (oldStatus === 'in_progress' && newStatus !== 'in_progress') {
-        const queuedTasks = tasks.filter(t => t.status === 'queue');
-        const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
+        const currentTasks = tasksRef.current;
+        const queuedTasks = currentTasks.filter(t => t.status === 'queue');
+        const inProgressTasks = currentTasks.filter(t => t.status === 'in_progress');
 
         // If queue has tasks and no other tasks are running, start the first queued task
         if (queuedTasks.length > 0 && inProgressTasks.length === 0) {
@@ -1206,7 +1213,7 @@ function QueueAutoPromotion() {
 
     // Cleanup on unmount
     return unregister;
-  }, [registerListener, tasks]);
+  }, [registerListener]); // Only re-register if registerListener changes
 
   return null; // This is a logic-only component
 }

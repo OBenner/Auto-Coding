@@ -9,6 +9,8 @@ High-performance task card components optimized for Kanban board display with re
 **Category:** UI Component
 **Status:** Stable
 
+> **Source of truth:** Task types and status definitions are defined in [`apps/frontend/src/shared/types/task.ts`](../../apps/frontend/src/shared/types/task.ts) and [`apps/frontend/src/shared/constants/task.ts`](../../apps/frontend/src/shared/constants/task.ts). Type definitions in this document mirror those canonical sources.
+
 ### Purpose
 
 TaskCard is a memoized, performance-optimized component that displays task information with rich metadata, execution progress, and contextual actions. SortableTaskCard wraps TaskCard with drag-and-drop capabilities using @dnd-kit/sortable for seamless integration into the KanbanBoard.
@@ -158,8 +160,8 @@ interface Task {
   title: string;
   description?: string;
   status: TaskStatus;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
   reviewReason?: ReviewReason;
   subtasks: Subtask[];
   executionProgress?: {
@@ -177,8 +179,8 @@ interface Task {
   };
 }
 
-// Task status
-type TaskStatus = 'backlog' | 'queued' | 'in_progress' | 'ai_review' | 'human_review' | 'done';
+// Task status (from @/shared/types/task)
+type TaskStatus = 'backlog' | 'queue' | 'in_progress' | 'ai_review' | 'human_review' | 'done' | 'pr_created' | 'error';
 
 // Review reasons
 type ReviewReason = 'completed' | 'errors' | 'qa_rejected' | 'plan_review';
@@ -298,7 +300,7 @@ Automatically detects tasks that are marked as `in_progress` but have no running
 - Periodic re-check every 30 seconds while task is running
 - Re-validates when browser tab becomes visible (visibility API)
 - Skips detection for terminal phases (`complete`, `failed`) and `planning` phase
-- Uses `requestIdleCallback` for non-blocking checks when available
+- Uses `requestIdleCallback` for non-blocking checks when available (with `setTimeout` fallback for environments that don't support it, e.g., `const scheduleIdle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 0))`)
 
 **User experience:**
 ```
@@ -455,8 +457,8 @@ Full i18n support via `react-i18next`:
 
 **JSON error handling:**
 ```typescript
-// Detect JSON error marker and use i18n
-if (task.description.startsWith(JSON_ERROR_PREFIX)) {
+// Detect JSON error marker and use i18n (guard against undefined description)
+if (task.description?.startsWith(JSON_ERROR_PREFIX)) {
   const errorMessage = task.description.slice(JSON_ERROR_PREFIX.length);
   const translatedDesc = t('errors:task.jsonError.description', { error: errorMessage });
   return sanitizeMarkdownForDisplay(translatedDesc, 120);
