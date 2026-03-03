@@ -21,6 +21,7 @@ import {
 import { persistPlanStatus, updateTaskMetadataPrUrl } from './plan-file-utils';
 import { getIsolatedGitEnv, refreshGitIndex } from '../../utils/git-isolation';
 import { killProcessGracefully, getCurrentOS, OS } from '../../platform';
+import { getEditorDetectionConfig, type EditorConfig } from '../../platform/paths';
 
 // Regex pattern for validating git branch names
 const GIT_BRANCH_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
@@ -232,352 +233,8 @@ interface DetectedTools {
 
 // IDE detection paths (macOS, Windows, Linux)
 // Comprehensive detection for 50+ IDEs and editors
-const IDE_DETECTION: Partial<Record<SupportedIDE, { name: string; paths: Record<string, string[]>; commands: Record<string, string> }>> = {
-  // Microsoft/VS Code Ecosystem
-  vscode: {
-    name: 'Visual Studio Code',
-    paths: {
-      darwin: ['/Applications/Visual Studio Code.app'],
-      win32: [
-        'C:\\Program Files\\Microsoft VS Code\\Code.exe',
-        'C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe'
-      ],
-      linux: ['/usr/share/code', '/snap/bin/code', '/usr/bin/code']
-    },
-    commands: { darwin: 'code', win32: 'code.cmd', linux: 'code' }
-  },
-  visualstudio: {
-    name: 'Visual Studio',
-    paths: {
-      darwin: [],
-      win32: [
-        'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe',
-        'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\Common7\\IDE\\devenv.exe',
-        'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\devenv.exe'
-      ],
-      linux: []
-    },
-    commands: { darwin: '', win32: 'devenv', linux: '' }
-  },
-  vscodium: {
-    name: 'VSCodium',
-    paths: {
-      darwin: ['/Applications/VSCodium.app'],
-      win32: ['C:\\Program Files\\VSCodium\\VSCodium.exe', 'C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\VSCodium\\VSCodium.exe'],
-      linux: ['/usr/bin/codium', '/snap/bin/codium']
-    },
-    commands: { darwin: 'codium', win32: 'codium', linux: 'codium' }
-  },
-  // AI-Powered Editors
-  cursor: {
-    name: 'Cursor',
-    paths: {
-      darwin: ['/Applications/Cursor.app'],
-      win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\cursor\\Cursor.exe'],
-      linux: ['/usr/bin/cursor', '/opt/Cursor/cursor']
-    },
-    commands: { darwin: 'cursor', win32: 'cursor.cmd', linux: 'cursor' }
-  },
-  windsurf: {
-    name: 'Windsurf',
-    paths: {
-      darwin: ['/Applications/Windsurf.app'],
-      win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Windsurf\\Windsurf.exe'],
-      linux: ['/usr/bin/windsurf', '/opt/Windsurf/windsurf']
-    },
-    commands: { darwin: 'windsurf', win32: 'windsurf.cmd', linux: 'windsurf' }
-  },
-  zed: {
-    name: 'Zed',
-    paths: {
-      darwin: ['/Applications/Zed.app'],
-      win32: [],
-      linux: ['/usr/bin/zed', '~/.local/bin/zed']
-    },
-    commands: { darwin: 'zed', win32: '', linux: 'zed' }
-  },
-  void: {
-    name: 'Void',
-    paths: {
-      darwin: ['/Applications/Void.app'],
-      win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Void\\Void.exe'],
-      linux: ['/usr/bin/void']
-    },
-    commands: { darwin: 'void', win32: 'void', linux: 'void' }
-  },
-  // JetBrains IDEs
-  intellij: {
-    name: 'IntelliJ IDEA',
-    paths: {
-      darwin: ['/Applications/IntelliJ IDEA.app', '/Applications/IntelliJ IDEA CE.app'],
-      win32: ['C:\\Program Files\\JetBrains\\IntelliJ IDEA*\\bin\\idea64.exe'],
-      linux: ['/usr/bin/idea', '/snap/bin/intellij-idea-ultimate', '/snap/bin/intellij-idea-community']
-    },
-    commands: { darwin: 'idea', win32: 'idea64.exe', linux: 'idea' }
-  },
-  pycharm: {
-    name: 'PyCharm',
-    paths: {
-      darwin: ['/Applications/PyCharm.app', '/Applications/PyCharm CE.app'],
-      win32: ['C:\\Program Files\\JetBrains\\PyCharm*\\bin\\pycharm64.exe'],
-      linux: ['/usr/bin/pycharm', '/snap/bin/pycharm-professional', '/snap/bin/pycharm-community']
-    },
-    commands: { darwin: 'pycharm', win32: 'pycharm64.exe', linux: 'pycharm' }
-  },
-  webstorm: {
-    name: 'WebStorm',
-    paths: {
-      darwin: ['/Applications/WebStorm.app'],
-      win32: ['C:\\Program Files\\JetBrains\\WebStorm*\\bin\\webstorm64.exe'],
-      linux: ['/usr/bin/webstorm', '/snap/bin/webstorm']
-    },
-    commands: { darwin: 'webstorm', win32: 'webstorm64.exe', linux: 'webstorm' }
-  },
-  phpstorm: {
-    name: 'PhpStorm',
-    paths: {
-      darwin: ['/Applications/PhpStorm.app'],
-      win32: ['C:\\Program Files\\JetBrains\\PhpStorm*\\bin\\phpstorm64.exe'],
-      linux: ['/usr/bin/phpstorm', '/snap/bin/phpstorm']
-    },
-    commands: { darwin: 'phpstorm', win32: 'phpstorm64.exe', linux: 'phpstorm' }
-  },
-  rubymine: {
-    name: 'RubyMine',
-    paths: {
-      darwin: ['/Applications/RubyMine.app'],
-      win32: ['C:\\Program Files\\JetBrains\\RubyMine*\\bin\\rubymine64.exe'],
-      linux: ['/usr/bin/rubymine', '/snap/bin/rubymine']
-    },
-    commands: { darwin: 'rubymine', win32: 'rubymine64.exe', linux: 'rubymine' }
-  },
-  goland: {
-    name: 'GoLand',
-    paths: {
-      darwin: ['/Applications/GoLand.app'],
-      win32: ['C:\\Program Files\\JetBrains\\GoLand*\\bin\\goland64.exe'],
-      linux: ['/usr/bin/goland', '/snap/bin/goland']
-    },
-    commands: { darwin: 'goland', win32: 'goland64.exe', linux: 'goland' }
-  },
-  clion: {
-    name: 'CLion',
-    paths: {
-      darwin: ['/Applications/CLion.app'],
-      win32: ['C:\\Program Files\\JetBrains\\CLion*\\bin\\clion64.exe'],
-      linux: ['/usr/bin/clion', '/snap/bin/clion']
-    },
-    commands: { darwin: 'clion', win32: 'clion64.exe', linux: 'clion' }
-  },
-  rider: {
-    name: 'Rider',
-    paths: {
-      darwin: ['/Applications/Rider.app'],
-      win32: ['C:\\Program Files\\JetBrains\\Rider*\\bin\\rider64.exe'],
-      linux: ['/usr/bin/rider', '/snap/bin/rider']
-    },
-    commands: { darwin: 'rider', win32: 'rider64.exe', linux: 'rider' }
-  },
-  datagrip: {
-    name: 'DataGrip',
-    paths: {
-      darwin: ['/Applications/DataGrip.app'],
-      win32: ['C:\\Program Files\\JetBrains\\DataGrip*\\bin\\datagrip64.exe'],
-      linux: ['/usr/bin/datagrip', '/snap/bin/datagrip']
-    },
-    commands: { darwin: 'datagrip', win32: 'datagrip64.exe', linux: 'datagrip' }
-  },
-  fleet: {
-    name: 'Fleet',
-    paths: {
-      darwin: ['/Applications/Fleet.app'],
-      win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\JetBrains\\Toolbox\\apps\\Fleet\\ch-0\\*\\Fleet.exe'],
-      linux: ['~/.local/share/JetBrains/Toolbox/apps/Fleet/ch-0/*/fleet']
-    },
-    commands: { darwin: 'fleet', win32: 'fleet', linux: 'fleet' }
-  },
-  androidstudio: {
-    name: 'Android Studio',
-    paths: {
-      darwin: ['/Applications/Android Studio.app'],
-      win32: ['C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe'],
-      linux: ['/usr/bin/android-studio', '/snap/bin/android-studio', '/opt/android-studio/bin/studio.sh']
-    },
-    commands: { darwin: 'studio', win32: 'studio64.exe', linux: 'android-studio' }
-  },
-  rustrover: {
-    name: 'RustRover',
-    paths: {
-      darwin: ['/Applications/RustRover.app'],
-      win32: ['C:\\Program Files\\JetBrains\\RustRover*\\bin\\rustrover64.exe'],
-      linux: ['/usr/bin/rustrover', '/snap/bin/rustrover']
-    },
-    commands: { darwin: 'rustrover', win32: 'rustrover64.exe', linux: 'rustrover' }
-  },
-  // Classic Text Editors
-  sublime: {
-    name: 'Sublime Text',
-    paths: {
-      darwin: ['/Applications/Sublime Text.app'],
-      win32: ['C:\\Program Files\\Sublime Text\\subl.exe', 'C:\\Program Files\\Sublime Text 3\\subl.exe'],
-      linux: ['/usr/bin/subl', '/snap/bin/subl']
-    },
-    commands: { darwin: 'subl', win32: 'subl.exe', linux: 'subl' }
-  },
-  vim: {
-    name: 'Vim',
-    paths: {
-      darwin: ['/usr/bin/vim'],
-      win32: ['C:\\Program Files\\Vim\\vim*\\vim.exe'],
-      linux: ['/usr/bin/vim']
-    },
-    commands: { darwin: 'vim', win32: 'vim', linux: 'vim' }
-  },
-  neovim: {
-    name: 'Neovim',
-    paths: {
-      darwin: ['/usr/local/bin/nvim', '/opt/homebrew/bin/nvim'],
-      win32: ['C:\\Program Files\\Neovim\\bin\\nvim.exe'],
-      linux: ['/usr/bin/nvim', '/snap/bin/nvim']
-    },
-    commands: { darwin: 'nvim', win32: 'nvim', linux: 'nvim' }
-  },
-  emacs: {
-    name: 'Emacs',
-    paths: {
-      darwin: ['/Applications/Emacs.app', '/usr/local/bin/emacs', '/opt/homebrew/bin/emacs'],
-      win32: ['C:\\Program Files\\Emacs\\bin\\emacs.exe'],
-      linux: ['/usr/bin/emacs', '/snap/bin/emacs']
-    },
-    commands: { darwin: 'emacs', win32: 'emacs', linux: 'emacs' }
-  },
-  nano: {
-    name: 'GNU Nano',
-    paths: {
-      darwin: ['/usr/bin/nano'],
-      win32: [],
-      linux: ['/usr/bin/nano']
-    },
-    commands: { darwin: 'nano', win32: '', linux: 'nano' }
-  },
-  helix: {
-    name: 'Helix',
-    paths: {
-      darwin: ['/opt/homebrew/bin/hx', '/usr/local/bin/hx'],
-      win32: ['C:\\Program Files\\Helix\\hx.exe'],
-      linux: ['/usr/bin/hx', '~/.cargo/bin/hx']
-    },
-    commands: { darwin: 'hx', win32: 'hx', linux: 'hx' }
-  },
-  // Platform-Specific IDEs
-  xcode: {
-    name: 'Xcode',
-    paths: {
-      darwin: ['/Applications/Xcode.app'],
-      win32: [],
-      linux: []
-    },
-    commands: { darwin: 'xcode', win32: '', linux: '' }
-  },
-  eclipse: {
-    name: 'Eclipse',
-    paths: {
-      darwin: ['/Applications/Eclipse.app'],
-      win32: ['C:\\eclipse\\eclipse.exe', 'C:\\Program Files\\Eclipse\\eclipse.exe'],
-      linux: ['/usr/bin/eclipse', '/snap/bin/eclipse']
-    },
-    commands: { darwin: 'eclipse', win32: 'eclipse', linux: 'eclipse' }
-  },
-  netbeans: {
-    name: 'NetBeans',
-    paths: {
-      darwin: ['/Applications/NetBeans.app', '/Applications/Apache NetBeans.app'],
-      win32: ['C:\\Program Files\\NetBeans*\\bin\\netbeans64.exe'],
-      linux: ['/usr/bin/netbeans', '/snap/bin/netbeans']
-    },
-    commands: { darwin: 'netbeans', win32: 'netbeans64.exe', linux: 'netbeans' }
-  },
-  // macOS Editors
-  nova: {
-    name: 'Nova',
-    paths: {
-      darwin: ['/Applications/Nova.app'],
-      win32: [],
-      linux: []
-    },
-    commands: { darwin: 'nova', win32: '', linux: '' }
-  },
-  bbedit: {
-    name: 'BBEdit',
-    paths: {
-      darwin: ['/Applications/BBEdit.app'],
-      win32: [],
-      linux: []
-    },
-    commands: { darwin: 'bbedit', win32: '', linux: '' }
-  },
-  textmate: {
-    name: 'TextMate',
-    paths: {
-      darwin: ['/Applications/TextMate.app'],
-      win32: [],
-      linux: []
-    },
-    commands: { darwin: 'mate', win32: '', linux: '' }
-  },
-  // Windows Editors
-  notepadpp: {
-    name: 'Notepad++',
-    paths: {
-      darwin: [],
-      win32: ['C:\\Program Files\\Notepad++\\notepad++.exe', 'C:\\Program Files (x86)\\Notepad++\\notepad++.exe'],
-      linux: []
-    },
-    commands: { darwin: '', win32: 'notepad++', linux: '' }
-  },
-  // Linux Editors
-  kate: {
-    name: 'Kate',
-    paths: {
-      darwin: [],
-      win32: [],
-      linux: ['/usr/bin/kate', '/snap/bin/kate']
-    },
-    commands: { darwin: '', win32: '', linux: 'kate' }
-  },
-  gedit: {
-    name: 'gedit',
-    paths: {
-      darwin: [],
-      win32: [],
-      linux: ['/usr/bin/gedit', '/snap/bin/gedit']
-    },
-    commands: { darwin: '', win32: '', linux: 'gedit' }
-  },
-  geany: {
-    name: 'Geany',
-    paths: {
-      darwin: [],
-      win32: [],
-      linux: ['/usr/bin/geany']
-    },
-    commands: { darwin: '', win32: '', linux: 'geany' }
-  },
-  lapce: {
-    name: 'Lapce',
-    paths: {
-      darwin: ['/Applications/Lapce.app'],
-      win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\lapce\\Lapce.exe'],
-      linux: ['/usr/bin/lapce', '~/.cargo/bin/lapce']
-    },
-    commands: { darwin: 'lapce', win32: 'lapce', linux: 'lapce' }
-  },
-  custom: {
-    name: 'Custom IDE',
-    paths: { darwin: [], win32: [], linux: [] },
-    commands: { darwin: '', win32: '', linux: '' }
-  }
-};
+// Centralized in platform/paths module for consistent path management
+const IDE_DETECTION: Partial<Record<SupportedIDE, EditorConfig>> = getEditorDetectionConfig() as Partial<Record<SupportedIDE, EditorConfig>>;
 
 // Terminal detection paths (macOS, Windows, Linux)
 // Comprehensive detection for 30+ terminal emulators
@@ -2045,6 +1702,26 @@ export function registerWorktreeHandlers(
             const chunk = data.toString();
             stdout += chunk;
             debug('STDOUT:', chunk);
+
+            // Parse merge progress events from stdout and forward to renderer
+            // Progress lines look like: {"phase":"merging","current":3,"total":10,"file":"src/foo.ts"}
+            for (const line of chunk.split('\n')) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('{"phase":')) {
+                try {
+                  const progress = JSON.parse(trimmed);
+                  const mainWindow = BrowserWindow.getAllWindows()[0];
+                  if (mainWindow) {
+                    mainWindow.webContents.send('merge-progress', {
+                      taskId: task.id,
+                      ...progress,
+                    });
+                  }
+                } catch {
+                  // Not valid JSON progress event, ignore
+                }
+              }
+            }
           });
 
           mergeProcess.stderr.on('data', (data: Buffer) => {

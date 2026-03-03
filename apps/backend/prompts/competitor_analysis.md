@@ -224,8 +224,9 @@ Based on the analysis:
 
 Based on all research, create the competitor analysis file:
 
-```bash
-cat > competitor_analysis.json << 'EOF'
+Use the **Write** tool to create `competitor_analysis.json` with the following structure:
+
+```json
 {
   "project_context": {
     "project_name": "[from roadmap_discovery.json]",
@@ -274,8 +275,9 @@ cat > competitor_analysis.json << 'EOF'
   },
   "created_at": "[ISO timestamp]"
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 Verify the file was created:
 
@@ -383,20 +385,12 @@ If WebSearch returns limited results:
 
 If you made a mistake in competitor_analysis.json:
 
-```bash
-# Read current state
-cat competitor_analysis.json
+1. Read the current file using the **Read** tool
+2. Fix the issue
+3. Use the **Write** tool to save the corrected content
+4. Read again to verify
 
-# Fix the issue
-cat > competitor_analysis.json << 'EOF'
-{
-  [corrected JSON]
-}
-EOF
-
-# Verify
-cat competitor_analysis.json
-```
+**IMPORTANT**: Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 ---
 

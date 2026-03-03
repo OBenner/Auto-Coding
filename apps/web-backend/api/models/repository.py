@@ -5,14 +5,12 @@ SQLAlchemy ORM model for the repositories table. Handles linking users
 to their Git repositories via OAuth.
 """
 
-from datetime import datetime, UTC
-from typing import Optional
-
-from pydantic import BaseModel, Field, HttpUrl, ConfigDict
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from datetime import UTC, datetime
 
 from core.database import Base
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 
 class GitRepository(Base):
@@ -44,7 +42,12 @@ class GitRepository(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
 
     # Relationship to User
     user = relationship("User", back_populates="repositories")
@@ -65,8 +68,10 @@ class RepositoryCreateRequest(BaseModel):
     repository_name: str = Field(..., description="Repository name")
     repository_owner: str = Field(..., description="Repository owner/organization")
     access_token: str = Field(..., description="OAuth access token")
-    refresh_token: Optional[str] = Field(None, description="OAuth refresh token")
-    token_expires_at: Optional[datetime] = Field(None, description="Token expiration timestamp")
+    refresh_token: str | None = Field(None, description="OAuth refresh token")
+    token_expires_at: datetime | None = Field(
+        None, description="Token expiration timestamp"
+    )
 
 
 class RepositoryResponse(BaseModel):
@@ -87,4 +92,6 @@ class RepositoryResponse(BaseModel):
 class RepositoryListResponse(BaseModel):
     """Response model for list of repositories"""
 
-    repositories: list[RepositoryResponse] = Field(..., description="List of repositories")
+    repositories: list[RepositoryResponse] = Field(
+        ..., description="List of repositories"
+    )

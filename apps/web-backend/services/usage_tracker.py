@@ -6,12 +6,17 @@ Provides methods to record requests, track usage metrics, and retrieve usage sta
 """
 
 import logging
-from datetime import datetime, timedelta, UTC
-from typing import Dict, Optional, List
+from datetime import UTC, datetime, timedelta
+
 import redis
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 class UsageTracker:
@@ -22,7 +27,7 @@ class UsageTracker:
     and rate limiting purposes.
     """
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_client: redis.Redis | None = None):
         """
         Initialize usage tracker.
 
@@ -68,7 +73,9 @@ class UsageTracker:
 
         return f"usage:user:{user_id}:{period}:{time_key}"
 
-    def _get_endpoint_key(self, user_id: int, endpoint: str, period: str = "daily") -> str:
+    def _get_endpoint_key(
+        self, user_id: int, endpoint: str, period: str = "daily"
+    ) -> str:
         """
         Generate Redis key for endpoint-specific usage tracking.
 
@@ -95,11 +102,7 @@ class UsageTracker:
         return f"usage:endpoint:{user_id}:{safe_endpoint}:{period}:{time_key}"
 
     def record_request(
-        self,
-        user_id: int,
-        endpoint: str,
-        method: str = "GET",
-        status_code: int = 200
+        self, user_id: int, endpoint: str, method: str = "GET", status_code: int = 200
     ) -> bool:
         """
         Record an API request for usage tracking.
@@ -145,7 +148,7 @@ class UsageTracker:
                 pipe.execute()
 
             logger.debug(
-                f"Recorded request for user {user_id}: {method} {endpoint} -> {status_code}"
+                f"Recorded request for user {_sanitize_log(str(user_id))}: {method} {endpoint} -> {status_code}"
             )
 
             return True
@@ -155,11 +158,8 @@ class UsageTracker:
             return False
 
     def get_user_usage(
-        self,
-        user_id: int,
-        period: str = "daily",
-        days_back: int = 7
-    ) -> List[Dict]:
+        self, user_id: int, period: str = "daily", days_back: int = 7
+    ) -> list[dict]:
         """
         Get usage statistics for a user over time.
 
@@ -179,7 +179,7 @@ class UsageTracker:
                 if period == "hourly":
                     time_key = (now - timedelta(hours=i)).strftime("%Y-%m-%d-%H")
                 elif period == "monthly":
-                    time_key = (now - timedelta(days=i*30)).strftime("%Y-%m")
+                    time_key = (now - timedelta(days=i * 30)).strftime("%Y-%m")
                 else:  # daily
                     time_key = (now - timedelta(days=i)).strftime("%Y-%m-%d")
 
@@ -187,13 +187,17 @@ class UsageTracker:
                 data = self.redis.hgetall(key)
 
                 if data:
-                    results.append({
-                        "period": time_key,
-                        "total_requests": int(data.get("total_requests", 0)),
-                        "metrics": data
-                    })
+                    results.append(
+                        {
+                            "period": time_key,
+                            "total_requests": int(data.get("total_requests", 0)),
+                            "metrics": data,
+                        }
+                    )
 
-            logger.info(f"Retrieved usage data for user {user_id} ({len(results)} periods)")
+            logger.info(
+                f"Retrieved usage data for user {_sanitize_log(str(user_id))} ({len(results)} periods)"
+            )
 
             return results
 
@@ -202,11 +206,8 @@ class UsageTracker:
             return []
 
     def get_endpoint_stats(
-        self,
-        user_id: int,
-        endpoint: str,
-        period: str = "daily"
-    ) -> Dict:
+        self, user_id: int, endpoint: str, period: str = "daily"
+    ) -> dict:
         """
         Get usage statistics for a specific endpoint.
 
@@ -227,7 +228,7 @@ class UsageTracker:
                     "endpoint": endpoint,
                     "period": period,
                     "requests": 0,
-                    "methods": {}
+                    "methods": {},
                 }
 
             # Parse method-specific request counts
@@ -245,10 +246,12 @@ class UsageTracker:
                 "endpoint": endpoint,
                 "period": period,
                 "total_requests": total_requests,
-                "methods": methods
+                "methods": methods,
             }
 
-            logger.debug(f"Retrieved endpoint stats for {endpoint}: {total_requests} requests")
+            logger.debug(
+                f"Retrieved endpoint stats for {endpoint}: {total_requests} requests"
+            )
 
             return result
 
@@ -259,14 +262,11 @@ class UsageTracker:
                 "period": period,
                 "requests": 0,
                 "methods": {},
-                "error": str(e)
+                "error": str(e),
             }
 
     def check_rate_limit(
-        self,
-        user_id: int,
-        limit: int = 1000,
-        period: str = "hourly"
+        self, user_id: int, limit: int = 1000, period: str = "hourly"
     ) -> tuple[bool, int]:
         """
         Check if user has exceeded rate limit.
@@ -286,7 +286,7 @@ class UsageTracker:
             is_allowed = current_count < limit
 
             logger.debug(
-                f"Rate limit check for user {user_id}: "
+                f"Rate limit check for user {_sanitize_log(str(user_id))}: "
                 f"{current_count}/{limit} ({period})"
             )
 
@@ -312,7 +312,9 @@ class UsageTracker:
             user_key = self._get_user_key(user_id, period)
             self.redis.delete(user_key)
 
-            logger.info(f"Reset usage for user {user_id} ({period})")
+            logger.info(
+                f"Reset usage for user {_sanitize_log(str(user_id))} ({period})"
+            )
 
             return True
 

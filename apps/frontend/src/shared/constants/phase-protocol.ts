@@ -25,6 +25,7 @@ export const EXECUTION_PHASES = [
   'idle',
   'planning',
   'coding',
+  'test_generation',
   'qa_review',
   'qa_fixing',
   'complete',
@@ -38,6 +39,7 @@ export const EXECUTION_PHASES = [
 export const BACKEND_PHASES = [
   'planning',
   'coding',
+  'test_generation',
   'qa_review',
   'qa_fixing',
   'complete',
@@ -52,7 +54,7 @@ export type BackendPhase = (typeof BACKEND_PHASES)[number];
  * Phases that can be completed and tracked in completedPhases array.
  * Excludes 'idle', 'complete', and 'failed' which are not completable workflow phases.
  */
-export type CompletablePhase = 'planning' | 'coding' | 'qa_review' | 'qa_fixing';
+export type CompletablePhase = 'planning' | 'coding' | 'test_generation' | 'qa_review' | 'qa_fixing';
 
 /**
  * Phase ordering index for regression detection.
@@ -63,9 +65,10 @@ export const PHASE_ORDER_INDEX: Readonly<Record<ExecutionPhase, number>> = {
   idle: -1,
   planning: 0,
   coding: 1,
-  qa_review: 2,
-  qa_fixing: 3,
-  complete: 4,
+  test_generation: 2,
+  qa_review: 3,
+  qa_fixing: 4,
+  complete: 5,
   failed: 99
 } as const;
 
@@ -126,7 +129,8 @@ export function isValidExecutionPhase(value: string): value is ExecutionPhase {
  * Phase transition rules:
  * - 'idle' can transition to any phase
  * - 'planning' can transition to 'coding' (once planning is in completedPhases)
- * - 'coding' can transition to 'qa_review' (once coding is in completedPhases)
+ * - 'coding' can transition to 'test_generation' (once coding is in completedPhases)
+ * - 'test_generation' can transition to 'qa_review' (once test_generation is in completedPhases)
  * - 'qa_review' can transition to 'qa_fixing' or 'complete'
  * - 'qa_fixing' can transition to 'qa_review' or 'complete'
  * - 'complete' and 'failed' are terminal (no transitions out)
@@ -161,7 +165,8 @@ export function isValidPhaseTransition(
     idle: [],
     planning: [],
     coding: ['planning'],
-    qa_review: ['coding'],
+    test_generation: ['coding'],
+    qa_review: ['coding', 'test_generation'],
     qa_fixing: ['qa_review'],
     complete: ['qa_review', 'qa_fixing'],
     failed: []  // Can enter failed from any phase
@@ -211,7 +216,8 @@ export function getExpectedPreviousPhase(phase: ExecutionPhase): ExecutionPhase 
     idle: null,
     planning: 'idle',
     coding: 'planning',
-    qa_review: 'coding',
+    test_generation: 'coding',
+    qa_review: 'test_generation',
     qa_fixing: 'qa_review',
     complete: 'qa_review',
     failed: null  // Can fail from any phase

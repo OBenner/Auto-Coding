@@ -24,12 +24,14 @@ from core.providers.exceptions import (
     ProviderNotInstalled,
 )
 from core.providers.factory import (
+    create_agent_session,
     create_engine_provider,
     get_available_provider_names,
 )
 
 __all__ = [
     # Factory functions
+    "create_agent_session",
     "create_engine_provider",
     "get_available_provider_names",
     # Exceptions
