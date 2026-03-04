@@ -20,16 +20,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 from analysis.performance_analyzer import (
     PerformanceAnalysisResult,
     PerformanceAnalyzer,
-    PerformanceIssue,
+    ProjectPerformanceIssue,
 )
 
 
 class TestPerformanceIssue:
-    """Test PerformanceIssue dataclass."""
+    """Test ProjectPerformanceIssue dataclass."""
 
     def test_create_issue(self):
         """Test creating a performance issue."""
-        issue = PerformanceIssue(
+        issue = ProjectPerformanceIssue(
             severity="high",
             issue_type="n_plus_one",
             title="N+1 Query Detected",
@@ -247,7 +247,7 @@ for user in users:
         result = PerformanceAnalysisResult(
             files_analyzed=10,
             issues=[
-                PerformanceIssue(
+                ProjectPerformanceIssue(
                     severity="high",
                     issue_type="n_plus_one",
                     title="N+1 Query",
@@ -266,6 +266,7 @@ for user in users:
         assert "Files Analyzed: 10" in report
         assert "N+1 Query" in report
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="chmod not effective on Windows")
     def test_analyze_handles_file_read_errors_gracefully(self, tmp_path):
         """Test that file read errors are handled gracefully."""
         # Create a file but make it unreadable
