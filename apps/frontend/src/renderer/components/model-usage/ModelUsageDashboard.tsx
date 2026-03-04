@@ -137,6 +137,11 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
       } else {
         allSucceeded = false;
         console.error('Failed to load model usage trends:', trendsResult.error);
+        toast({
+          title: t('model-usage:dashboard.toast.warning'),
+          description: trendsResult.error || t('model-usage:dashboard.toast.trendsFailed'),
+          variant: 'destructive',
+        });
       }
 
       if (showRefreshToast && allSucceeded) {

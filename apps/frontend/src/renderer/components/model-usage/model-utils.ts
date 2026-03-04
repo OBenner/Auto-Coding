@@ -7,8 +7,8 @@
 
 /**
  * Parse model ID to get display name and version.
- * Handles both tier shorthands ("opus", "sonnet", "haiku") and full model IDs
- * ("claude-sonnet-4-5-20250929").
+ * Handles tier shorthands ("opus", "sonnet", "haiku"), full Claude model IDs
+ * ("claude-sonnet-4-5-20250929"), and non-Claude model IDs gracefully.
  */
 export function parseModelId(modelId: string): { name: string; version: string } {
   const tierNames: Record<string, string> = {
@@ -22,14 +22,22 @@ export function parseModelId(modelId: string): { name: string; version: string }
     return { name: tierNames[modelId], version: 'Default' };
   }
 
-  // Parse full model ID: "claude-sonnet-4-5-20250929"
-  const parts = modelId.split('-');
-  const tier = parts[1] || 'unknown';
-  const version = parts.slice(2).join('.').substring(0, 3); // e.g., "4.5"
+  // Parse full Claude model ID: "claude-sonnet-4-5-20250929"
+  // Pattern: claude-<tier>-<major>-<minor>-<date>
+  const claudeMatch = modelId.match(/^claude-(\w+)-(\d+)-(\d+)-(\d+)$/);
+  if (claudeMatch) {
+    const [, tier, major, minor] = claudeMatch;
+    return {
+      name: tierNames[tier] || tier.charAt(0).toUpperCase() + tier.slice(1),
+      version: `${major}.${minor}`,
+    };
+  }
 
+  // Fallback for non-Claude or unrecognized model IDs
+  // Return the full ID as the name with no version
   return {
-    name: tierNames[tier] || tier.charAt(0).toUpperCase() + tier.slice(1),
-    version: version || 'latest',
+    name: modelId,
+    version: '',
   };
 }
 

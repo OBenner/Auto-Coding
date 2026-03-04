@@ -218,8 +218,9 @@ export function registerModelUsageHandlers(): void {
       try {
         const analyticsDir = path.join(project.path, '.auto-claude', 'analytics');
 
-        // Sanitize inputs to prevent path traversal attacks
-        const sanitize = (v: string): string => v.replace(/[^a-zA-Z0-9._:-]/g, '_');
+        // Sanitize inputs to prevent path traversal attacks.
+        // Only allow alphanumeric, dots, and hyphens (strip colons which break Windows filenames).
+        const sanitize = (v: string): string => v.replace(/[^a-zA-Z0-9.\-]/g, '_');
         const cacheKeyParts = ['model_usage_summary'];
         if (startDate) cacheKeyParts.push(`from_${sanitize(startDate)}`);
         if (endDate) cacheKeyParts.push(`to_${sanitize(endDate)}`);
@@ -242,7 +243,6 @@ export function registerModelUsageHandlers(): void {
             } else {
               // Cache has wrong shape (possibly from older version) — regenerate
               debugError('[Model Usage] Cached summary has invalid shape, regenerating');
-              useCached = false;
               const raw = await executePythonScript(
                 project.path,
                 'apps/backend/analysis/model_usage_analytics.py',
@@ -287,10 +287,10 @@ export function registerModelUsageHandlers(): void {
   /** Get model usage trends over time */
   ipcMain.handle(
     IPC_CHANNELS.MODEL_USAGE_GET_TRENDS,
-    async (_, projectId: string, windowDays: number = 30, granularity: string = 'daily') =>
+    async (_, projectId: string, windowDays: number = 30, granularity: string = 'daily', startDate?: string, endDate?: string) =>
       runAnalyticsCommand<ModelUsageTrendPoint[]>(
         projectId,
-        ['--get-trends', '--window-days', String(windowDays), '--granularity', granularity],
+        withDateFilters(['--get-trends', '--window-days', String(windowDays), '--granularity', granularity], startDate, endDate),
         'Failed to get model usage trends'
       )
   );
@@ -377,7 +377,8 @@ export function registerModelUsageHandlers(): void {
     }
   );
 
-  // Helper to run a model lock manager command for a project
+  // Helper to run a model lock manager command for a project.
+  // Uses the canonical lock directory (.auto-claude/) consistent with MODEL_LOCK_LIST.
   async function runLockCommand(
     projectId: string,
     commandArgs: string[],
@@ -387,11 +388,12 @@ export function registerModelUsageHandlers(): void {
     if ('success' in result) return result;
 
     try {
-      const specDir = path.join(result.project!.path, '.auto-claude', 'specs', projectId);
+      // Use the same .auto-claude directory as the list handler for consistency
+      const autoClaudeDir = path.join(result.project!.path, '.auto-claude');
       await executePythonScript(
         result.project!.path,
         'apps/backend/scripts/model_locks_manager.py',
-        [...commandArgs.slice(0, 1), specDir, ...commandArgs.slice(1)],
+        [...commandArgs.slice(0, 1), autoClaudeDir, ...commandArgs.slice(1)],
         false
       );
       return { success: true, data: { success: true } };

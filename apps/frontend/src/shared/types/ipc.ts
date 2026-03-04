@@ -68,7 +68,8 @@ import type {
   ModelUsageSummary,
   ModelUsageTrendPoint,
   ModelUsageExportOptions,
-  ModelUsageFilter
+  ModelUsageFilter,
+  ModelLockConfig
 } from './model-usage';
 import type {
   TerminalCreateOptions,
@@ -968,6 +969,14 @@ export interface ElectronAPI {
   getModelUsageSummary: (projectId: string, filter?: ModelUsageFilter) => Promise<IPCResult<ModelUsageSummary>>;
   getModelUsageTrends: (projectId: string, filter?: ModelUsageFilter) => Promise<IPCResult<ModelUsageTrendPoint[]>>;
   exportModelUsageAnalytics: (projectId: string, options: ModelUsageExportOptions) => Promise<IPCResult<string>>;
+
+  // Model lock operations
+  listModelLocks: (projectId: string) => Promise<IPCResult<ModelLockConfig>>;
+  lockPhaseModel: (projectId: string, phase: string, modelId: string) => Promise<IPCResult<{ success: boolean }>>;
+  lockAgentModel: (projectId: string, agentType: string, modelId: string) => Promise<IPCResult<{ success: boolean }>>;
+  unlockPhaseModel: (projectId: string, phase: string) => Promise<IPCResult<{ success: boolean }>>;
+  unlockAgentModel: (projectId: string, agentType: string) => Promise<IPCResult<{ success: boolean }>>;
+  clearModelLocks: (projectId: string) => Promise<IPCResult<{ success: boolean }>>;
 
   // Template library operations
   listTemplates: (projectId: string, options?: { category?: TemplateCategory | 'all'; tags?: string[] }) => Promise<IPCResult<TemplateInfo[]>>;

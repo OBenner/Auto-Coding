@@ -87,6 +87,17 @@ export function AgentModelDisplay({ agentModels = {}, lockedModels = {} }: Agent
     }));
   }, [agentModels, lockedModels]);
 
+  // Empty state - show before card rendering when no config available
+  if (Object.keys(agentModels).length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <Cpu className="h-12 w-12 mb-3 opacity-50" />
+        <p className="text-sm font-medium">No agent model configuration available</p>
+        <p className="text-xs">Agent models will be configured based on your profile settings</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {agentGroups.map((group) => (
@@ -120,11 +131,13 @@ export function AgentModelDisplay({ agentModels = {}, lockedModels = {} }: Agent
                       </div>
 
                       {/* Version Badge */}
-                      <div>
-                        <Badge variant="outline" className="text-xs">
-                          v{modelInfo.version}
-                        </Badge>
-                      </div>
+                      {modelInfo.version && (
+                        <div>
+                          <Badge variant="outline" className="text-xs">
+                            v{modelInfo.version}
+                          </Badge>
+                        </div>
+                      )}
 
                       {/* Model ID (truncated) */}
                       <p className="text-[10px] text-muted-foreground truncate" title={agent.modelId}>
@@ -138,15 +151,6 @@ export function AgentModelDisplay({ agentModels = {}, lockedModels = {} }: Agent
           </div>
         </div>
       ))}
-
-      {/* Empty State */}
-      {Object.keys(agentModels).length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <Cpu className="h-12 w-12 mb-3 opacity-50" />
-          <p className="text-sm font-medium">No agent model configuration available</p>
-          <p className="text-xs">Agent models will be configured based on your profile settings</p>
-        </div>
-      )}
     </div>
   );
 }

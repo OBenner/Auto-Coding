@@ -505,8 +505,8 @@ def get_phase_model(
     if is_phase_model_locked(spec_dir, phase):
         locks = load_model_locks(spec_dir)
         locked_model = locks["phaseModels"][phase]
-        # Return the locked model ID as-is (already resolved when locked)
-        return locked_model
+        # Resolve in case the lock stores a shorthand
+        return resolve_model_id(locked_model)
 
     # Load task metadata
     metadata = load_task_metadata(spec_dir)
@@ -536,8 +536,8 @@ def get_agent_model(
 
     Priority:
     1. CLI argument (if provided)
-    2. Environment variable AGENT_MODEL_<agent_type> (if set)
-    3. Model lock (if agent type is locked)
+    2. Model lock (if agent type is locked -- cannot be bypassed by env vars)
+    3. Environment variable AGENT_MODEL_<agent_type> (if set)
     4. Agent-specific config from task_metadata.json agentModels (if present)
     5. AGENT_DEFAULT_MODELS (if agent_type exists)
     6. Fallback to "sonnet"
@@ -554,18 +554,19 @@ def get_agent_model(
     if cli_model:
         return resolve_model_id(cli_model)
 
+    # Check for model lock (user explicitly locked this agent type)
+    # Locks take priority over environment variables to prevent bypassing
+    if is_agent_model_locked(spec_dir, agent_type):
+        locks = load_model_locks(spec_dir)
+        locked_model = locks["agentModels"][agent_type]
+        # Resolve in case the lock stores a shorthand
+        return resolve_model_id(locked_model)
+
     # Check for environment variable override (runtime configuration)
     env_var_name = f"AGENT_MODEL_{agent_type.upper()}"
     env_model = os.environ.get(env_var_name)
     if env_model:
         return resolve_model_id(env_model)
-
-    # Check for model lock (user explicitly locked this agent type)
-    if is_agent_model_locked(spec_dir, agent_type):
-        locks = load_model_locks(spec_dir)
-        locked_model = locks["agentModels"][agent_type]
-        # Return the locked model ID as-is (already resolved when locked)
-        return locked_model
 
     # Load task metadata
     metadata = load_task_metadata(spec_dir)

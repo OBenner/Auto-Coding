@@ -129,7 +129,9 @@ export function ModelUsageCard({ agent, showRank = false, rank }: ModelUsageCard
                 .sort(([, a], [, b]) => b - a)
                 .slice(0, 3)
                 .map(([model, count]) => {
-                  const percentage = ((count / agent.total_usage_count) * 100).toFixed(1);
+                  const percentage = agent.total_usage_count > 0
+                    ? ((count / agent.total_usage_count) * 100).toFixed(1)
+                    : '0.0';
                   return (
                     <div key={model} className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground truncate flex-1 mr-2" title={model}>

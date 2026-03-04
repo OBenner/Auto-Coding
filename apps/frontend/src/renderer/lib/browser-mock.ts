@@ -668,9 +668,17 @@ const browserMockAPI: ElectronAPI = {
   exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' }),
 
   // Model Usage Analytics
-  getModelUsageSummary: async () => ({ success: true as const, data: { period_start: '', period_end: '', total_usage_count: 0, total_tokens: 0, total_cost: 0, models: [], agents: [], top_models_by_usage: [], top_models_by_cost: [] } }),
+  getModelUsageSummary: async () => ({ success: true as const, data: { period_start: '1970-01-01T00:00:00.000Z', period_end: new Date().toISOString(), total_usage_count: 0, total_tokens: 0, total_cost: 0, models: [], agents: [], top_models_by_usage: [], top_models_by_cost: [] } }),
   getModelUsageTrends: async () => ({ success: true as const, data: [] }),
-  exportModelUsageAnalytics: async () => ({ success: true as const, data: '' }),
+  exportModelUsageAnalytics: async () => ({ success: true as const, data: '/mock/export/model-usage' }),
+
+  // Model Lock operations
+  listModelLocks: async () => ({ success: true as const, data: { phaseModels: {}, agentModels: {} } }),
+  lockPhaseModel: async () => ({ success: true as const, data: { success: true } }),
+  lockAgentModel: async () => ({ success: true as const, data: { success: true } }),
+  unlockPhaseModel: async () => ({ success: true as const, data: { success: true } }),
+  unlockAgentModel: async () => ({ success: true as const, data: { success: true } }),
+  clearModelLocks: async () => ({ success: true as const, data: { success: true } }),
 
   // Agent performance analytics (nested API)
   analytics: {

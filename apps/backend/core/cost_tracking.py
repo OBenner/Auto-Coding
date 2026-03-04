@@ -325,7 +325,7 @@ class UsageRecord:
     output_tokens: int
     cost: float
     timestamp: str
-    provider: str = "anthropic"  # Provider name (e.g., "anthropic", "openai")
+    provider: str = "unknown"  # Provider name (e.g., "anthropic", "openai", "unknown")
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -359,7 +359,7 @@ class UsageRecord:
                         datetime.now(UTC).isoformat(),
                     )
                 ),
-                provider=str(data.get("provider", "anthropic")),
+                provider=str(data.get("provider", "unknown")),
             )
         except (TypeError, ValueError) as exc:
             logger.warning("Failed to deserialize UsageRecord from %r: %s", data, exc)
@@ -487,7 +487,7 @@ class CostTracker:
         model: str,
         input_tokens: int,
         output_tokens: int,
-        provider: str = "anthropic",
+        provider: str = "unknown",
     ) -> float:
         """
         Log usage for an agent session.
@@ -497,7 +497,7 @@ class CostTracker:
             model: Model identifier
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
-            provider: Model provider (e.g., "anthropic", "openai")
+            provider: Model provider (e.g., "anthropic", "openai", "unknown")
 
         Returns:
             Cost of this operation in dollars

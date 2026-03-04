@@ -419,7 +419,7 @@
       "integrationDescription": "Configurer la mémoire persistante inter-sessions pour les agents",
       "syncDescription": "Configurer la mémoire persistante"
     },
-    "modelUsage": {
+    "model-usage": {
       "title": "Utilisation des Modèles",
       "description": "Configuration et verrous des modèles",
       "integrationTitle": "Utilisation des Modèles",

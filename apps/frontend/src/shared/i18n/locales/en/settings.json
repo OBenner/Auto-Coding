@@ -419,7 +419,7 @@
       "integrationDescription": "Configure persistent cross-session memory for agents",
       "syncDescription": "Configure persistent memory"
     },
-    "modelUsage": {
+    "model-usage": {
       "title": "Model Usage",
       "description": "Model configuration and locks",
       "integrationTitle": "Model Usage",

@@ -276,7 +276,8 @@ export function compareCosts(
  * @param models - Array of model identifiers
  * @param estimatedInputTokens - Estimated input tokens
  * @param estimatedOutputTokens - Estimated output tokens
- * @returns Model identifier of the cheapest option
+ * @returns Model identifier of the cheapest option, or `undefined` if the
+ *          input array is empty (callers should handle this case).
  *
  * @example
  * ```ts
@@ -292,8 +293,8 @@ export function getCheapestModel(
   models: string[],
   estimatedInputTokens: number,
   estimatedOutputTokens: number
-): string {
-  if (models.length === 0) return '';
+): string | undefined {
+  if (models.length === 0) return undefined;
   const comparison = compareCosts(models, estimatedInputTokens, estimatedOutputTokens);
   return comparison[0]?.model ?? models[0];
 }

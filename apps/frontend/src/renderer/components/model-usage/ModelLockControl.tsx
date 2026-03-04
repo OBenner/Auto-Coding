@@ -79,7 +79,7 @@ export function ModelLockControl({
     setError(null);
 
     try {
-      const electronAPI = (window as any).electronAPI;
+      const { electronAPI } = window;
       if (!electronAPI) {
         throw new Error('Electron API not available');
       }
@@ -96,7 +96,7 @@ export function ModelLockControl({
       if (result?.success) {
         onLockChange?.(agentType, checked);
       } else {
-        setError(result?.error || t('model-usage:errors.lockOperationFailed'));
+        setError(result?.error || t('model-usage:errors.lockOperationFailed', 'Failed to update model lock'));
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -125,12 +125,12 @@ export function ModelLockControl({
           <TooltipContent>
             <p>
               {isLocked
-                ? t('model-usage:unlockModel', { agent: displayLabel })
-                : t('model-usage:lockModel', { agent: displayLabel })}
+                ? t('model-usage:lock.unlockModel', { agent: displayLabel })
+                : t('model-usage:lock.lockModel', { agent: displayLabel })}
             </p>
             {isLocked && (
               <p className="text-xs text-muted-foreground mt-1">
-                {t('model-usage:lockedTo', { model: modelId })}
+                {t('model-usage:lock.lockedTo', { model: modelId })}
               </p>
             )}
           </TooltipContent>
@@ -151,7 +151,7 @@ export function ModelLockControl({
           </Label>
           {isLocked && (
             <p className="text-xs text-muted-foreground">
-              {t('model-usage:lockedTo', { model: modelId })}
+              {t('model-usage:lock.lockedTo', { model: modelId })}
             </p>
           )}
           {error && (

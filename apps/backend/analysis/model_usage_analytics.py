@@ -68,7 +68,7 @@ class ModelMetrics:
     """Metrics for a single AI model across all specs."""
 
     model: str
-    provider: str = "anthropic"
+    provider: str = "unknown"
     total_usage_count: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
@@ -94,7 +94,7 @@ class ModelMetrics:
         """Create from dictionary."""
         return cls(
             model=data["model"],
-            provider=data.get("provider", "anthropic"),
+            provider=data.get("provider", "unknown"),
             **_usage_from_dict(data),
             usage_by_agent=data.get("usage_by_agent", {}),
             first_used=_optional_iso(data, "first_used"),
@@ -368,7 +368,7 @@ def aggregate_model_usage(
 
             # Extract record data (coerce types for safety)
             model = record_dict.get("model", "unknown")
-            provider = record_dict.get("provider", "anthropic")
+            provider = record_dict.get("provider", "unknown")
             agent_type = record_dict.get("agent_type", "unknown")
             input_tokens = _safe_int(record_dict.get("input_tokens", 0))
             output_tokens = _safe_int(record_dict.get("output_tokens", 0))

@@ -12,13 +12,15 @@
     "lockFailed": "Échec du verrouillage du modèle",
     "fetchLocksFailed": "Échec de la récupération des verrous de modèle"
   },
-  "lockModel": "Verrouiller {{agent}} à ce modèle",
-  "unlockModel": "Déverrouiller le modèle {{agent}}",
-  "lockedTo": "Verrouillé à {{model}}",
-  "modelLocked": "Modèle Verrouillé",
-  "modelUnlocked": "Modèle Déverrouillé",
-  "lockTooltip": "Empêcher les mises à niveau automatiques du modèle pour cet agent",
-  "unlockTooltip": "Autoriser les mises à niveau automatiques du modèle pour cet agent",
+  "lock": {
+    "lockModel": "Verrouiller {{agent}} à ce modèle",
+    "unlockModel": "Déverrouiller le modèle {{agent}}",
+    "lockedTo": "Verrouillé à {{model}}",
+    "modelLocked": "Modèle Verrouillé",
+    "modelUnlocked": "Modèle Déverrouillé",
+    "lockTooltip": "Empêcher les mises à niveau automatiques du modèle pour cet agent",
+    "unlockTooltip": "Autoriser les mises à niveau automatiques du modèle pour cet agent"
+  },
   "changeConfirmation": {
     "title": "Confirmer le Changement de Modèle",
     "description": "Vous êtes sur le point de changer le modèle pour <strong>{{agent}}</strong>.",
@@ -61,6 +63,7 @@
       "refreshedDescription": "Les données analytiques d'utilisation des modèles ont été mises à jour.",
       "warning": "Avertissement",
       "summaryFailed": "Échec du chargement du résumé d'utilisation des modèles.",
+      "trendsFailed": "Échec du chargement des tendances d'utilisation des modèles.",
       "exportSuccess": "Exportation réussie",
       "exportSuccessDescription": "Analytiques d'utilisation des modèles exportées vers {{path}}",
       "exportFailed": "Échec de l'exportation",

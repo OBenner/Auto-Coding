@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Cpu, Lock, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -24,12 +24,7 @@ export function ModelUsageSettings({ project }: ModelUsageSettingsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch model locks on component mount
-  useEffect(() => {
-    loadModelLocks();
-  }, [project.id]);
-
-  const loadModelLocks = async () => {
+  const loadModelLocks = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -51,7 +46,12 @@ export function ModelUsageSettings({ project }: ModelUsageSettingsProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [project.id, t]);
+
+  // Fetch model locks on component mount
+  useEffect(() => {
+    loadModelLocks();
+  }, [loadModelLocks]);
 
   // Get default agent models from constants (this could be enhanced to fetch from backend)
   const agentModels: Record<string, string> = {

@@ -13,8 +13,7 @@
       "apps/frontend/src/main/ipc-handlers/index.ts",
       "apps/frontend/src/renderer/App.tsx",
       "apps/frontend/src/renderer/pages/ProjectSettings.tsx",
-      "apps/frontend/src/shared/i18n/locales/en/settings.json",
-      "apps/frontend/src/shared/i18n/locales/en/model-usage.json"
+      "apps/frontend/src/shared/i18n/locales/en/settings.json"
     ]
   },
   "files_to_create": {
@@ -36,6 +35,7 @@
       "apps/frontend/src/renderer/components/model-usage/AgentModelDisplay.tsx",
       "apps/frontend/src/renderer/components/model-usage/ModelLockControl.tsx",
       "apps/frontend/src/renderer/components/model-usage/ModelChangeConfirmationDialog.tsx",
+      "apps/frontend/src/shared/i18n/locales/en/model-usage.json",
       "apps/frontend/src/shared/i18n/locales/fr/model-usage.json"
     ],
     "root": [

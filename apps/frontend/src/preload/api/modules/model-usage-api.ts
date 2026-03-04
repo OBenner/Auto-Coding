@@ -39,7 +39,9 @@ export const createModelUsageAPI = (): ModelUsageAPI => ({
   getModelUsageTrends: (projectId: string, filter?: ModelUsageFilter): Promise<IPCResult<ModelUsageTrendPoint[]>> => {
     const windowDays = filter?.window_days || 30;
     const granularity = filter?.granularity || 'daily';
-    return invokeIpc(IPC_CHANNELS.MODEL_USAGE_GET_TRENDS, projectId, windowDays, granularity);
+    const startDate = filter?.start_date;
+    const endDate = filter?.end_date;
+    return invokeIpc(IPC_CHANNELS.MODEL_USAGE_GET_TRENDS, projectId, windowDays, granularity, startDate, endDate);
   },
 
   exportModelUsageAnalytics: (projectId: string, options: ModelUsageExportOptions): Promise<IPCResult<string>> => {

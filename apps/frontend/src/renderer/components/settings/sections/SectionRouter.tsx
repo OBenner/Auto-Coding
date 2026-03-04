@@ -198,13 +198,13 @@ export function SectionRouter({
     case 'model-usage':
       return (
         <SettingsSection
-          title={t('projectSections.modelUsage.integrationTitle')}
-          description={t('projectSections.modelUsage.integrationDescription')}
+          title={t('projectSections.model-usage.integrationTitle')}
+          description={t('projectSections.model-usage.integrationDescription')}
         >
           <InitializationGuard
             initialized={!!project.autoBuildPath}
-            title={t('projectSections.modelUsage.integrationTitle')}
-            description={t('projectSections.modelUsage.syncDescription')}
+            title={t('projectSections.model-usage.integrationTitle')}
+            description={t('projectSections.model-usage.syncDescription')}
           >
             <ModelUsageSettings project={project} />
           </InitializationGuard>
