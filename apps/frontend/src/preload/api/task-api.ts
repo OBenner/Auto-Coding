@@ -52,7 +52,7 @@ export interface TaskAPI {
   updateTaskStatus: (
     taskId: string,
     status: TaskStatus,
-    options?: { forceCleanup?: boolean }
+    options?: { forceCleanup?: boolean; keepWorktree?: boolean }
   ) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
   recoverStuckTask: (
     taskId: string,
@@ -96,6 +96,11 @@ export interface TaskAPI {
 
   // Task Token Stats
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>>;
+
+  // Task Spec File Reading (for task overview display)
+  getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
+  getQAEscalation: (taskId: string) => Promise<IPCResult<import('../../shared/types').QAEscalation | null>>;
 
   // Merge Analytics
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
@@ -153,7 +158,7 @@ export const createTaskAPI = (): TaskAPI => ({
   updateTaskStatus: (
     taskId: string,
     status: TaskStatus,
-    options?: { forceCleanup?: boolean }
+    options?: { forceCleanup?: boolean; keepWorktree?: boolean }
   ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE_STATUS, taskId, status, options),
 
@@ -343,6 +348,16 @@ export const createTaskAPI = (): TaskAPI => ({
   // Task Token Stats
   getTokenStats: (projectPath: string, specId: string): Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_TOKEN_STATS_GET, projectPath, specId),
+
+  // Task Spec File Reading
+  getImplementationPlan: (taskId: string): Promise<IPCResult<ImplementationPlan | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_IMPLEMENTATION_PLAN_GET, taskId),
+
+  getQAReport: (taskId: string): Promise<IPCResult<string | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_QA_REPORT_GET, taskId),
+
+  getQAEscalation: (taskId: string): Promise<IPCResult<import('../../shared/types').QAEscalation | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_QA_ESCALATION_GET, taskId),
 
   // Merge Analytics
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter): Promise<IPCResult<MergeOperationRecord[]>> =>

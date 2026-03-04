@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Sparkles, FileCode, Square } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -50,7 +50,10 @@ export function GenerationProgressScreen({
   onStop
 }: GenerationProgressScreenProps) {
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsViewportRef = useRef<HTMLDivElement | null>(null);
+  const scrollHandlerRef = useRef<(() => void) | null>(null);
   const [showLogs, setShowLogs] = useState(false);
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
 
   /**
@@ -69,12 +72,32 @@ export function GenerationProgressScreen({
     }
   };
 
-  // Auto-scroll to bottom when logs update
+  // Track scroll position on logs viewport via callback ref
+  const handleLogsViewportRef = useCallback((el: HTMLDivElement | null) => {
+    if (logsViewportRef.current && scrollHandlerRef.current) {
+      logsViewportRef.current.removeEventListener('scroll', scrollHandlerRef.current);
+    }
+    logsViewportRef.current = el;
+    if (el) {
+      const onScroll = () => {
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        setIsUserScrolledUp((prev) => {
+          const next = !isNearBottom;
+          return prev === next ? prev : next;
+        });
+      };
+      scrollHandlerRef.current = onScroll;
+      el.addEventListener('scroll', onScroll, { passive: true });
+      onScroll(); // Initialize state from current scroll position
+    }
+  }, []);
+
+  // Smart auto-scroll: only scroll to bottom when logs update if user is near bottom
   useEffect(() => {
-    if (logsEndRef.current && showLogs) {
+    if (logsEndRef.current && showLogs && !isUserScrolledUp) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [showLogs]);
+  }, [logs, showLogs, isUserScrolledUp]);
 
   const getStreamingIdeasByType = (type: IdeationType): Idea[] => {
     if (!session) return [];
@@ -160,7 +183,7 @@ export function GenerationProgressScreen({
       {/* Logs Panel (collapsible) */}
       {showLogs && logs.length > 0 && (
         <div className="shrink-0 border-b border-border p-4 bg-muted/20">
-          <ScrollArea className="h-32 rounded-md border border-border bg-muted/30">
+          <ScrollArea className="h-32 rounded-md border border-border bg-muted/30" onViewportRef={handleLogsViewportRef}>
             <div className="p-3 space-y-1 font-mono text-xs">
               {logs.map((log, index) => (
                 /* biome-ignore lint/suspicious/noArrayIndexKey: Log lines don't have unique IDs */

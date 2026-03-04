@@ -1,5 +1,5 @@
 import { ipcMain, app, shell } from 'electron';
-import { existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
 import { IPC_CHANNELS } from '../../../shared/constants';

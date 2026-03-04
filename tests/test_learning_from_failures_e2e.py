@@ -10,17 +10,18 @@ Tests the complete flow:
 """
 
 import json
-import pytest
 import sys
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Store original modules for cleanup
 _original_modules = {}
 _mocked_module_names = [
-    'claude_code_sdk',
-    'claude_code_sdk.types',
-    'claude_agent_sdk',
-    'claude_agent_sdk.types',
+    "claude_code_sdk",
+    "claude_code_sdk.types",
+    "claude_agent_sdk",
+    "claude_agent_sdk.types",
 ]
 
 for name in _mocked_module_names:
@@ -33,16 +34,27 @@ mock_agent_sdk.ClaudeSDKClient = MagicMock()
 mock_agent_sdk.ClaudeAgentOptions = MagicMock()
 mock_agent_types = MagicMock()
 mock_agent_types.HookMatcher = MagicMock()
-sys.modules['claude_agent_sdk'] = mock_agent_sdk
-sys.modules['claude_agent_sdk.types'] = mock_agent_types
-sys.modules['claude_code_sdk'] = mock_agent_sdk
-sys.modules['claude_code_sdk.types'] = mock_agent_types
+sys.modules["claude_agent_sdk"] = mock_agent_sdk
+sys.modules["claude_agent_sdk.types"] = mock_agent_types
+sys.modules["claude_code_sdk"] = mock_agent_sdk
+sys.modules["claude_code_sdk.types"] = mock_agent_types
 
 # Now we can import modules
 from analysis.failure_analyzer import analyze_failure, format_for_graphiti
-from analysis.metrics_tracker import get_success_rate, get_improvement_trends, get_detailed_metrics
-from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_ROOT_CAUSE, EPISODE_TYPE_USER_CORRECTION
-from qa.report import get_learning_metrics, initialize_learning_metrics, increment_learning_metric
+from analysis.metrics_tracker import (
+    get_detailed_metrics,
+    get_improvement_trends,
+    get_success_rate,
+)
+from integrations.graphiti.queries_pkg.schema import (
+    EPISODE_TYPE_ROOT_CAUSE,
+    EPISODE_TYPE_USER_CORRECTION,
+)
+from qa.report import (
+    get_learning_metrics,
+    increment_learning_metric,
+    initialize_learning_metrics,
+)
 
 
 # Cleanup fixture
@@ -77,21 +89,17 @@ def temp_spec_dir(tmp_path):
                         "type": "syntax_error",
                         "file": "src/main.py",
                         "message": "SyntaxError: invalid syntax on line 42",
-                        "occurrence_count": 1
+                        "occurrence_count": 1,
                     }
-                ]
+                ],
             },
-            {
-                "iteration": 2,
-                "status": "approved",
-                "timestamp": "2024-01-20T11:00:00Z"
-            }
+            {"iteration": 2, "status": "approved", "timestamp": "2024-01-20T11:00:00Z"},
         ],
         "learning_metrics": {
             "root_causes_identified": 0,
             "user_corrections_applied": 0,
-            "patterns_applied": 0
-        }
+            "patterns_applied": 0,
+        },
     }
 
     plan_file = spec_dir / "implementation_plan.json"
@@ -124,7 +132,9 @@ def temp_project_dir(tmp_path):
 class TestFailurAnalysisE2E:
     """End-to-end tests for failure analysis flow."""
 
-    def test_failure_analyzer_extracts_root_cause(self, temp_spec_dir, temp_project_dir):
+    def test_failure_analyzer_extracts_root_cause(
+        self, temp_spec_dir, temp_project_dir
+    ):
         """Test that failure analyzer can extract root causes from failed builds."""
 
         # Simulate a failed QA iteration with issues
@@ -133,7 +143,7 @@ class TestFailurAnalysisE2E:
                 "type": "syntax_error",
                 "file": "src/main.py",
                 "message": "SyntaxError: invalid syntax on line 42 - missing closing parenthesis",
-                "occurrence_count": 1
+                "occurrence_count": 1,
             }
         ]
 
@@ -144,10 +154,12 @@ class TestFailurAnalysisE2E:
             failure_type="qa_rejection",
             failure_context={
                 "issues": issues,
-                "errors": ["SyntaxError: invalid syntax on line 42 - missing closing parenthesis"],
+                "errors": [
+                    "SyntaxError: invalid syntax on line 42 - missing closing parenthesis"
+                ],
                 "is_recurring": False,
                 "qa_iteration": 1,
-            }
+            },
         )
 
         # Verify root cause was extracted
@@ -159,12 +171,23 @@ class TestFailurAnalysisE2E:
         assert "confidence" in root_cause, "Root cause should contain confidence"
 
         # Verify category detection
-        assert root_cause["category"] in ["syntax_error", "missing_dependency", "logic_error", "test_failure", "timeout", "unknown"]
+        assert root_cause["category"] in [
+            "syntax_error",
+            "missing_dependency",
+            "logic_error",
+            "test_failure",
+            "timeout",
+            "unknown",
+        ]
 
         # For syntax errors, category should be detected
-        assert root_cause["category"] == "syntax_error", "Should detect syntax error category"
+        assert root_cause["category"] == "syntax_error", (
+            "Should detect syntax error category"
+        )
 
-    def test_format_for_graphiti_creates_valid_structure(self, temp_spec_dir, temp_project_dir):
+    def test_format_for_graphiti_creates_valid_structure(
+        self, temp_spec_dir, temp_project_dir
+    ):
         """Test that root causes are formatted correctly for Graphiti storage."""
 
         issues = [
@@ -172,7 +195,7 @@ class TestFailurAnalysisE2E:
                 "type": "logic_error",
                 "file": "src/auth.py",
                 "message": "TypeError: 'NoneType' object is not subscriptable",
-                "occurrence_count": 2
+                "occurrence_count": 2,
             }
         ]
 
@@ -185,7 +208,7 @@ class TestFailurAnalysisE2E:
                 "issues": issues,
                 "is_recurring": True,
                 "qa_iteration": 2,
-            }
+            },
         )
 
         # Format for Graphiti
@@ -256,11 +279,16 @@ class TestFailurAnalysisE2E:
         valid_trends = ["improving", "stable", "declining", "insufficient_data"]
         assert trends["trend"] in valid_trends
 
-        # success_rate_trend is a float (positive = improving)
-        assert isinstance(trends["success_rate_trend"], float)
+        # success_rate_trend is numeric (positive = improving)
+        assert isinstance(trends["success_rate_trend"], (int, float))
 
         # recurring_issues_trend can be "reducing", "stable", "increasing", or "unknown"
-        assert trends["recurring_issues_trend"] in ["reducing", "stable", "increasing", "unknown"]
+        assert trends["recurring_issues_trend"] in [
+            "reducing",
+            "stable",
+            "increasing",
+            "unknown",
+        ]
 
     def test_detailed_metrics_include_learning_data(self, temp_spec_dir):
         """Test that detailed metrics include all learning data."""
@@ -384,7 +412,9 @@ def verify_token():
         is_user_correction, correction_details = check_user_correction(temp_spec_dir)
 
         # Verify detection
-        assert is_user_correction is True, "User correction should be detected (no marker)"
+        assert is_user_correction is True, (
+            "User correction should be detected (no marker)"
+        )
         assert correction_details is not None, "Correction details should be captured"
         assert correction_details.get("detected_at") is not None
         assert correction_details.get("modified_at") is not None
@@ -412,33 +442,42 @@ def verify_token():
         mock_memory = MagicMock()
 
         # Mock the context retrieval to return our user correction as a learned pattern
-        mock_memory.get_context_for_session = MagicMock(return_value={
-            "patterns": [
-                {
-                    "pattern": "Always validate JWT tokens with signature verification, not just existence check",
-                    "applies_to": "authentication, security",
-                    "source": "user_correction",
-                    "severity": "critical",
-                    "example": "Use jwt.decode(token, SECRET_KEY, algorithms=['HS256']) with proper error handling",
-                }
-            ],
-            "gotchas": [
-                {
-                    "gotcha": "Checking only token existence without validation is a security vulnerability",
-                    "solution": "Always verify JWT signature AND expiration",
-                    "category": "security",
-                    "source": "user_correction",
-                }
-            ],
-            "context_items": [],
-        })
+        mock_memory.get_context_for_session = MagicMock(
+            return_value={
+                "patterns": [
+                    {
+                        "pattern": "Always validate JWT tokens with signature verification, not just existence check",
+                        "applies_to": "authentication, security",
+                        "source": "user_correction",
+                        "severity": "critical",
+                        "example": "Use jwt.decode(token, SECRET_KEY, algorithms=['HS256']) with proper error handling",
+                    }
+                ],
+                "gotchas": [
+                    {
+                        "gotcha": "Checking only token existence without validation is a security vulnerability",
+                        "solution": "Always verify JWT signature AND expiration",
+                        "category": "security",
+                        "source": "user_correction",
+                    }
+                ],
+                "context_items": [],
+            }
+        )
 
         # Use new_callable=MagicMock to avoid AsyncMock (original is async)
-        with patch('memory.graphiti_helpers.get_graphiti_memory', new_callable=MagicMock, return_value=mock_memory):
+        with patch(
+            "memory.graphiti_helpers.get_graphiti_memory",
+            new_callable=MagicMock,
+            return_value=mock_memory,
+        ):
             # Retrieve context for new session
             from memory.graphiti_helpers import get_graphiti_memory
+
             memory = get_graphiti_memory(temp_spec_dir, temp_project_dir)
-            context = memory.get_context_for_session("Implementing authentication in new feature")
+            context = memory.get_context_for_session(
+                "Implementing authentication in new feature"
+            )
 
             # Verify the user correction appears as a learned pattern
             assert "patterns" in context
@@ -446,10 +485,11 @@ def verify_token():
 
             # Find the JWT validation pattern
             jwt_pattern = next(
-                (p for p in context["patterns"] if "JWT" in p.get("pattern", "")),
-                None
+                (p for p in context["patterns"] if "JWT" in p.get("pattern", "")), None
             )
-            assert jwt_pattern is not None, "User correction should appear as learned pattern"
+            assert jwt_pattern is not None, (
+                "User correction should appear as learned pattern"
+            )
             assert jwt_pattern["source"] == "user_correction"
             assert jwt_pattern["severity"] == "critical"
 
@@ -457,9 +497,11 @@ def verify_token():
             assert "gotchas" in context
             security_gotcha = next(
                 (g for g in context["gotchas"] if "security" in g.get("category", "")),
-                None
+                None,
             )
-            assert security_gotcha is not None, "Security gotcha from user correction should be stored"
+            assert security_gotcha is not None, (
+                "Security gotcha from user correction should be stored"
+            )
             assert security_gotcha["source"] == "user_correction"
 
 
@@ -481,7 +523,7 @@ class TestGraphitiIntegration:
                 "type": "test_failure",
                 "file": "tests/test_auth.py",
                 "message": "AssertionError: Expected 200, got 401",
-                "occurrence_count": 1
+                "occurrence_count": 1,
             }
         ]
 
@@ -493,7 +535,7 @@ class TestGraphitiIntegration:
                 "issues": issues,
                 "is_recurring": False,
                 "test_suite": "integration",
-            }
+            },
         )
 
         formatted = format_for_graphiti(result)
@@ -503,7 +545,10 @@ class TestGraphitiIntegration:
 
         # Verify content is descriptive
         assert len(formatted["content"]) > 0
-        assert "root cause" in formatted["content"].lower() or "failure" in formatted["content"].lower()
+        assert (
+            "root cause" in formatted["content"].lower()
+            or "failure" in formatted["content"].lower()
+        )
 
         # Verify metadata contains necessary info
         metadata = formatted["metadata"]
@@ -531,7 +576,7 @@ class TestEndToEndFlow:
                 "type": "logic_error",
                 "file": "src/service.py",
                 "message": "AttributeError: 'NoneType' object has no attribute 'id'",
-                "occurrence_count": 3
+                "occurrence_count": 3,
             }
         ]
 
@@ -544,14 +589,21 @@ class TestEndToEndFlow:
                 "issues": issues,
                 "is_recurring": True,
                 "qa_iteration": 3,
-            }
+            },
         )
 
         # Verify analysis
         assert analysis_result is not None
         assert "root_cause" in analysis_result
         root_cause = analysis_result["root_cause"]
-        assert root_cause["category"] in ["logic_error", "syntax_error", "missing_dependency", "test_failure", "timeout", "unknown"]
+        assert root_cause["category"] in [
+            "logic_error",
+            "syntax_error",
+            "missing_dependency",
+            "test_failure",
+            "timeout",
+            "unknown",
+        ]
 
         # Step 3: Format for Graphiti
         graphiti_episode = format_for_graphiti(analysis_result)
@@ -606,11 +658,15 @@ class TestEndToEndFlow:
             {"iteration": 7, "status": "approved", "timestamp": "2024-01-20T13:00:00Z"},
             {"iteration": 8, "status": "rejected", "timestamp": "2024-01-20T13:30:00Z"},
             {"iteration": 9, "status": "approved", "timestamp": "2024-01-20T14:00:00Z"},
-            {"iteration": 10, "status": "approved", "timestamp": "2024-01-20T14:30:00Z"},
+            {
+                "iteration": 10,
+                "status": "approved",
+                "timestamp": "2024-01-20T14:30:00Z",
+            },
         ]
 
         # Save updated plan
-        with open(plan_file, 'w') as f:
+        with open(plan_file, "w") as f:
             json.dump(plan, f, indent=2)
 
         # Get trends
@@ -620,7 +676,12 @@ class TestEndToEndFlow:
         # First half: 2/5 = 40%
         # Second half: 4/5 = 80%
         # Difference = 0.4, which is > 0.1 = improving
-        assert trends["success_rate_trend"] > 0.1  # positive float means improving
+        # success_rate_trend should always be numeric (float); guard against unexpected types
+        srt = trends["success_rate_trend"]
+        assert isinstance(srt, (int, float)), (
+            f"success_rate_trend should be numeric, got {type(srt).__name__}: {srt!r}"
+        )
+        assert srt > 0.1  # positive float means improving
         assert trends["trend"] == "improving"
 
 

@@ -12,6 +12,8 @@ The client factory now uses AGENT_CONFIGS from agents/tools_pkg/models.py as the
 single source of truth for phase-aware tool and MCP server configuration.
 """
 
+from __future__ import annotations
+
 import copy
 import json
 import logging
@@ -19,7 +21,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.platform import (
     is_windows,
@@ -27,6 +29,19 @@ from core.platform import (
 )
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Windows System Prompt Limits
+# =============================================================================
+# Windows CreateProcessW has a 32,768 character limit for the entire command line.
+# When CLAUDE.md is very large and passed as --system-prompt, the command can exceed
+# this limit, causing ERROR_FILE_NOT_FOUND. We cap CLAUDE.md content to stay safe.
+# 20,000 chars leaves ~12KB headroom for CLI overhead (model, tools, MCP config, etc.)
+WINDOWS_MAX_SYSTEM_PROMPT_CHARS = 20000
+WINDOWS_TRUNCATION_MESSAGE = (
+    "\n\n[... CLAUDE.md truncated due to Windows command-line length limit ...]"
+)
+CLAUDE_MD_HEADER = "\n\n# Project Instructions (from CLAUDE.md)\n\n"
 
 # =============================================================================
 # Project Index Cache
@@ -125,6 +140,9 @@ def invalidate_project_cache(project_dir: Path | None = None) -> None:
                 logger.debug(f"Invalidated project index cache for {project_dir}")
 
 
+if TYPE_CHECKING:
+    from agents.templates.models import AgentTemplate
+
 from agents.tools_pkg import (
     CONTEXT7_TOOLS,
     ELECTRON_TOOLS,
@@ -143,6 +161,8 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
+from core.providers.config import get_provider_config
+from enterprise.data_residency import get_data_residency_config
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
@@ -407,15 +427,97 @@ def is_electron_mcp_enabled() -> bool:
     Check if Electron MCP server integration is enabled.
 
     Requires ELECTRON_MCP_ENABLED to be set to 'true'.
-    When enabled, QA agents can use Puppeteer MCP tools to connect to Electron apps
-    via Chrome DevTools Protocol on the configured debug port.
+    When enabled, QA agents can use MCP tools to connect to Electron apps.
     """
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
 
 
+_VALID_ELECTRON_MCP_MODES: tuple[str, ...] = ("cdp", "embedded")
+_VALID_ELECTRON_MCP_LOG_LEVELS: tuple[str, ...] = ("debug", "info", "warn", "error")
+
+
+def get_electron_mcp_mode() -> str:
+    """
+    Get the Electron MCP server mode.
+
+    Returns:
+        "embedded" - MCP server runs inside Electron process (stdio transport)
+        "cdp" - External CDP-based server (electron-mcp-server package)
+
+    Default: "cdp" for backward compatibility
+    """
+    mode = os.environ.get("ELECTRON_MCP_MODE", "cdp").lower()
+
+    if mode not in _VALID_ELECTRON_MCP_MODES:
+        logger.warning(
+            "Invalid ELECTRON_MCP_MODE '%s'. Valid values: %s. Using default: cdp",
+            mode,
+            ", ".join(_VALID_ELECTRON_MCP_MODES),
+        )
+        return "cdp"
+
+    return mode
+
+
 def get_electron_debug_port() -> int:
-    """Get the Electron remote debugging port (default: 9222)."""
-    return int(os.environ.get("ELECTRON_DEBUG_PORT", "9222"))
+    """
+    Get the Electron remote debugging port (default: 9222).
+
+    Returns:
+        Port number for Chrome DevTools Protocol
+
+    Raises:
+        ValueError: If port is not a valid number or out of range
+    """
+    port_str = os.environ.get("ELECTRON_DEBUG_PORT", "9222")
+
+    try:
+        port = int(port_str)
+    except ValueError:
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: '{port_str}'. Must be a number."
+        )
+
+    if not (1024 <= port <= 65535):
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: {port}. Must be between 1024 and 65535."
+        )
+
+    return port
+
+
+def get_electron_mcp_log_level() -> str:
+    """
+    Get the Electron MCP server log level.
+
+    Returns:
+        Log level: "debug", "info", "warn", or "error"
+
+    Default: "info"
+    """
+    level = os.environ.get("ELECTRON_MCP_LOG_LEVEL", "info").lower()
+
+    if level not in _VALID_ELECTRON_MCP_LOG_LEVELS:
+        logger.warning(
+            "Invalid ELECTRON_MCP_LOG_LEVEL '%s'. Valid values: %s. Using default: info",
+            level,
+            ", ".join(_VALID_ELECTRON_MCP_LOG_LEVELS),
+        )
+        return "info"
+
+    return level
+
+
+def is_actor_critic_mcp_enabled() -> bool:
+    """
+    Check if Actor-Critic MCP server integration is enabled and available.
+
+    Delegates to actor_critic_config.is_actor_critic_enabled() which checks
+    both the ACTOR_CRITIC_MCP_ENABLED env var AND npx availability.
+    """
+    from core.actor_critic_config import is_actor_critic_enabled
+
+    return is_actor_critic_enabled()
 
 
 def should_use_claude_md() -> bool:
@@ -558,15 +660,21 @@ def load_preferences(
         # Get preference profile from Graphiti memory
         memory = get_graphiti_memory(spec_dir, project_dir)
 
-        # Run async operation in sync context
+        # Run async operation in sync context.
+        # If a loop is already running (e.g. inside Ideation async process),
+        # delegate to a worker thread that owns its own event loop.
         import asyncio
+        import concurrent.futures
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            profile_data = loop.run_until_complete(memory.get_preference_profile())
-        finally:
-            loop.close()
+            asyncio.get_running_loop()
+            # Already inside an async context — run in a separate thread
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, memory.get_preference_profile())
+                profile_data = future.result(timeout=30)
+        except RuntimeError:
+            # No running loop — safe to create one
+            profile_data = asyncio.run(memory.get_preference_profile())
 
         if not profile_data:
             logger.debug("No preference profile found, using defaults")
@@ -614,6 +722,8 @@ def create_client(
     max_thinking_tokens: int | None = None,
     output_format: dict | None = None,
     agents: dict | None = None,
+    session_config: Any | None = None,
+    custom_template: AgentTemplate | None = None,
 ) -> ClaudeSDKClient:
     """
     Create a Claude Agent SDK client with multi-layered security.
@@ -621,6 +731,10 @@ def create_client(
     Uses AGENT_CONFIGS for phase-aware tool and MCP server configuration.
     Only starts MCP servers that the agent actually needs, reducing context
     window bloat and startup latency.
+
+    **NOTE:** This function creates Claude-specific clients only. For other
+    AI providers (OpenAI, Google Gemini, Ollama, etc.), use the provider factory:
+    `create_engine_provider()` from `core.providers.factory`.
 
     Args:
         project_dir: Root directory for the project (working directory)
@@ -640,12 +754,19 @@ def create_client(
                Format: {"agent-name": {"description": "...", "prompt": "...",
                         "tools": [...], "model": "inherit"}}
                See: https://platform.claude.com/docs/en/agent-sdk/subagents
+        session_config: Optional SessionConfig with provider/model overrides.
+                       If provided, checks for provider override before using defaults.
+                       Used for runtime provider selection (e.g., --provider zhipuai).
+        custom_template: Optional custom agent template with user-defined prompts,
+                        tools, and MCP server configuration. When provided, overrides
+                        default agent_type configuration from AGENT_CONFIGS.
 
     Returns:
         Configured ClaudeSDKClient
 
     Raises:
-        ValueError: If agent_type is not found in AGENT_CONFIGS
+        ValueError: If agent_type is not found in AGENT_CONFIGS or if custom_template
+                   validation fails
 
     Security layers (defense in depth):
     1. Sandbox - OS-level bash command isolation prevents filesystem escape
@@ -654,6 +775,28 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
+    # Check configured AI provider and log it
+    provider_config = get_provider_config()
+    configured_provider = provider_config.provider
+    provider_summary = provider_config.get_provider_summary()
+
+    # Log provider information
+    logger.info(f"AI Engine Provider: {provider_summary}")
+    print(f"AI Engine Provider: {provider_summary}")
+
+    # Warn if non-Claude provider is configured
+    if configured_provider != "claude":
+        logger.warning(
+            f"Non-Claude provider configured ({configured_provider}), but create_client() "
+            f"only supports Claude Agent SDK. For {configured_provider}, use create_engine_provider() "
+            f"from core.providers.factory instead."
+        )
+        print(
+            f"⚠️  Note: create_client() is Claude-specific. "
+            f"Configured provider is '{configured_provider}'. "
+            f"Proceeding with Claude Agent SDK."
+        )
+
     # Get OAuth token - Claude CLI handles token lifecycle internally
     oauth_token = require_auth_token()
 
@@ -665,8 +808,45 @@ def create_client(
     # Ensure SDK can access it via its expected env var
     os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
 
+    # Check for provider override from SessionConfig
+    # This enables runtime provider selection (e.g., --provider zhipuai)
+    # When provider override is present, the caller should use the provider
+    # abstraction layer instead of this Claude SDK client
+    if session_config is not None:
+        if hasattr(session_config, "provider") and session_config.provider:
+            if session_config.provider != "claude":
+                raise ValueError(
+                    f"SessionConfig provider override detected: {session_config.provider}. "
+                    f"create_client() only creates Claude SDK clients. "
+                    f"For alternative providers, use create_engine_provider() instead."
+                )
+
+    # Apply model override from SessionConfig if present
+    if (
+        session_config is not None
+        and hasattr(session_config, "model")
+        and session_config.model
+    ):
+        if session_config.model != model:
+            logger.info(
+                f"SessionConfig model override: {session_config.model} "
+                f"(parameter model: {model})"
+            )
+            model = session_config.model
+
     # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
     sdk_env = get_sdk_env_vars()
+
+    # Configure data residency (regional API endpoints)
+    data_residency_config = get_data_residency_config()
+    regional_endpoint = data_residency_config.get_endpoint()
+
+    # Override ANTHROPIC_BASE_URL if custom regional endpoint is configured
+    if data_residency_config.custom_endpoint:
+        sdk_env["ANTHROPIC_BASE_URL"] = regional_endpoint
+        logger.info(
+            f"Data residency: Using custom endpoint for region {data_residency_config.region}: {regional_endpoint}"
+        )
 
     # Debug: Log git-bash path detection on Windows
     if "CLAUDE_CODE_GIT_BASH_PATH" in sdk_env:
@@ -689,25 +869,62 @@ def create_client(
     # Load per-project MCP configuration from .auto-claude/.env
     mcp_config = load_project_mcp_config(project_dir)
 
-    # Get allowed tools using phase-aware configuration
-    # This respects AGENT_CONFIGS and only includes tools the agent needs
-    # Also respects per-project MCP configuration
-    allowed_tools_list = get_allowed_tools(
-        agent_type,
-        project_capabilities,
-        linear_enabled,
-        mcp_config,
-    )
+    # Handle custom template configuration
+    # Custom templates override AGENT_CONFIGS for tools, MCP servers, and thinking level
+    if custom_template:
+        # Validate custom template before using it
+        from agents.templates.validator import validate_template
 
-    # Get required MCP servers for this agent type
-    # This is the key optimization - only start servers the agent needs
-    # Now also respects per-project MCP configuration
-    required_servers = get_required_mcp_servers(
-        agent_type,
-        project_capabilities,
-        linear_enabled,
-        mcp_config,
-    )
+        is_valid, errors = validate_template(custom_template)
+        if not is_valid:
+            raise ValueError(f"Custom template validation failed: {'; '.join(errors)}")
+
+        # Use template's tool configuration
+        allowed_tools_list = list(custom_template.tools or [])
+
+        # Use template's MCP server configuration
+        mcp_servers_raw = custom_template.mcp_servers or []
+        required_servers = list(mcp_servers_raw)
+
+        # Override max_thinking_tokens based on template's thinking level if not explicitly set
+        if max_thinking_tokens is None:
+            thinking_level_tokens = {
+                "none": None,
+                "low": 2000,
+                "medium": 5000,
+                "high": 10000,
+                "ultrathink": 16000,
+            }
+            max_thinking_tokens = thinking_level_tokens.get(
+                custom_template.thinking_level, None
+            )
+
+        logger.info(
+            f"Using custom template '{custom_template.name}' "
+            f"(tools: {len(allowed_tools_list)}, "
+            f"MCP servers: {len(required_servers)}, "
+            f"thinking: {custom_template.thinking_level})"
+        )
+    else:
+        # Get allowed tools using phase-aware configuration
+        # This respects AGENT_CONFIGS and only includes tools the agent needs
+        # Also respects per-project MCP configuration
+        allowed_tools_list = get_allowed_tools(
+            agent_type,
+            project_capabilities,
+            linear_enabled,
+            mcp_config,
+        )
+
+        # Get required MCP servers for this agent type
+        # This is the key optimization - only start servers the agent needs
+        # Now also respects per-project MCP configuration
+        required_servers = get_required_mcp_servers(
+            agent_type,
+            project_capabilities,
+            linear_enabled,
+            mcp_config,
+        )
 
     # Check if Graphiti MCP is enabled (already filtered by get_required_mcp_servers)
     graphiti_mcp_enabled = "graphiti" in required_servers
@@ -835,20 +1052,34 @@ def create_client(
     else:
         print("   - Extended thinking: disabled")
 
+    # Display data residency configuration
+    if data_residency_config.custom_endpoint:
+        print(
+            f"   - Data residency: {data_residency_config.region} "
+            f"(endpoint: {regional_endpoint})"
+        )
+        if data_residency_config.requires_gdpr_compliance:
+            frameworks = ", ".join(data_residency_config.compliance_frameworks)
+            print(f"   - Compliance: {frameworks}")
+    else:
+        print(f"   - Data residency: {data_residency_config.region} (default endpoint)")
+
     # Build list of MCP servers for display based on required_servers
     mcp_servers_list = []
     if "context7" in required_servers:
         mcp_servers_list.append("context7 (documentation)")
     if "electron" in required_servers:
-        mcp_servers_list.append(
-            f"electron (desktop automation, port {get_electron_debug_port()})"
-        )
+        electron_mode = get_electron_mcp_mode()
+        mode_label = "embedded" if electron_mode == "embedded" else "CDP"
+        mcp_servers_list.append(f"electron (desktop automation, {mode_label} mode)")
     if "puppeteer" in required_servers:
         mcp_servers_list.append("puppeteer (browser automation)")
     if "linear" in required_servers:
         mcp_servers_list.append("linear (project management)")
     if graphiti_mcp_enabled:
         mcp_servers_list.append("graphiti-memory (knowledge graph)")
+    if "actor-critic-thinking" in required_servers:
+        mcp_servers_list.append("actor-critic-thinking (dual-perspective analysis)")
     if "auto-claude" in required_servers and auto_claude_tools_enabled:
         mcp_servers_list.append(f"auto-claude ({agent_type} tools)")
     if mcp_servers_list:
@@ -878,11 +1109,29 @@ def create_client(
 
     if "electron" in required_servers:
         # Electron MCP for desktop apps
-        # Electron app must be started with --remote-debugging-port=<port>
-        mcp_servers["electron"] = {
-            "command": "npm",
-            "args": ["exec", "electron-mcp-server"],
-        }
+        # Two modes supported:
+        # 1. CDP mode (default): Uses external electron-mcp-server package
+        # 2. Embedded mode: Spawns Electron app with MCP server inside
+        electron_mode = get_electron_mcp_mode()
+
+        if electron_mode == "embedded":
+            # Embedded mode: MCP server runs inside Electron process
+            # Electron app starts with MCP server enabled, communicates via stdio
+            mcp_servers["electron"] = {
+                "command": "npm",
+                "args": ["start"],
+                "env": {
+                    "ELECTRON_MCP_ENABLED": "true",
+                    "ELECTRON_MCP_LOG_LEVEL": get_electron_mcp_log_level(),
+                },
+            }
+        else:
+            # CDP mode: External electron-mcp-server package
+            # Electron app must be started with --remote-debugging-port=<port>
+            mcp_servers["electron"] = {
+                "command": "npm",
+                "args": ["exec", "electron-mcp-server"],
+            }
 
     if "puppeteer" in required_servers:
         # Puppeteer for web frontends (not Electron)
@@ -903,6 +1152,13 @@ def create_client(
         mcp_servers["graphiti-memory"] = {
             "type": "http",
             "url": get_graphiti_mcp_url(),
+        }
+
+    # Actor-Critic Thinking MCP server for dual-perspective analysis
+    if "actor-critic-thinking" in required_servers:
+        mcp_servers["actor-critic-thinking"] = {
+            "command": "npx",
+            "args": ["-y", "mcp-server-actor-critic-thinking"],
         }
 
     # Add custom auto-claude MCP server if required and available
@@ -947,12 +1203,62 @@ def create_client(
         f"and build-progress.txt updates."
     )
 
+    # Include custom template prompt if provided
+    if custom_template and custom_template.custom_prompt:
+        base_prompt = (
+            f"{base_prompt}\n\n"
+            f"# Custom Agent Instructions (from template: {custom_template.name})\n\n"
+            f"{custom_template.custom_prompt}"
+        )
+        logger.info(
+            "Custom template enabled: name=%s category=%s",
+            custom_template.name,
+            custom_template.category,
+        )
+
     # Include CLAUDE.md if enabled and present
     if should_use_claude_md():
         claude_md_content = load_claude_md(project_dir)
         if claude_md_content:
-            base_prompt = f"{base_prompt}\n\n# Project Instructions (from CLAUDE.md)\n\n{claude_md_content}"
-            print("   - CLAUDE.md: included in system prompt")
+            # On Windows, the SDK passes system_prompt as a --system-prompt CLI argument.
+            # Windows CreateProcessW has a 32,768 character limit for the entire command line.
+            # When CLAUDE.md is very large, the command can exceed this limit, causing Windows
+            # to return ERROR_FILE_NOT_FOUND which the SDK misreports as "Claude Code not found".
+            # Cap CLAUDE.md content to keep total command line under the limit. (#1661)
+            was_truncated = False
+            if is_windows():
+                max_claude_md_chars = (
+                    WINDOWS_MAX_SYSTEM_PROMPT_CHARS
+                    - len(base_prompt)
+                    - len(WINDOWS_TRUNCATION_MESSAGE)
+                    - len(CLAUDE_MD_HEADER)
+                )
+                if max_claude_md_chars <= 0:
+                    # Base prompt alone already exceeds the limit; replace
+                    # CLAUDE.md entirely with the truncation notice.
+                    claude_md_content = WINDOWS_TRUNCATION_MESSAGE
+                    was_truncated = True
+                    logger.warning(
+                        "CLAUDE.md omitted: base prompt (%d chars) exceeds "
+                        "Windows command-line budget (%d chars)",
+                        len(base_prompt),
+                        WINDOWS_MAX_SYSTEM_PROMPT_CHARS,
+                    )
+                    print(
+                        "   - CLAUDE.md: omitted (base prompt exceeds Windows command-line limit)"
+                    )
+                elif len(claude_md_content) > max_claude_md_chars:
+                    claude_md_content = (
+                        claude_md_content[:max_claude_md_chars]
+                        + WINDOWS_TRUNCATION_MESSAGE
+                    )
+                    print(
+                        "   - CLAUDE.md: truncated (exceeded Windows command-line limit)"
+                    )
+                    was_truncated = True
+            base_prompt = f"{base_prompt}{CLAUDE_MD_HEADER}{claude_md_content}"
+            if not was_truncated:
+                print("   - CLAUDE.md: included in system prompt")
         else:
             print("   - CLAUDE.md: not found in project root")
     else:

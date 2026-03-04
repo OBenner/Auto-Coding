@@ -1,6 +1,7 @@
 import { app } from 'electron';
-import { existsSync, Dirent, promises as fsPromises } from 'fs';
+import { Dirent, promises as fsPromises } from 'fs';
 import path from 'path';
+import { atomicWriteFile } from './fs-utils';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
 import { DEFAULT_PROJECT_SETTINGS, AUTO_BUILD_PATHS, getSpecsDir, JSON_ERROR_PREFIX, JSON_ERROR_TITLE_SUFFIX } from '../shared/constants';
@@ -127,7 +128,7 @@ export class ProjectStore {
     this.writeInProgress = true;
     try {
       const content = JSON.stringify(this.data, null, 2);
-      await fsPromises.writeFile(this.storePath, content);
+      await atomicWriteFile(this.storePath, content);
 
       // Reset failure counter on success
       this.consecutiveFailures = 0;
@@ -225,6 +226,36 @@ export class ProjectStore {
    */
   getProjects(): Project[] {
     return this.data.projects;
+  }
+
+  /**
+   * Get all projects that belong to a workspace
+   */
+  getProjectsByWorkspace(workspaceName: string): Project[] {
+    return this.data.projects.filter(p => p.workspaceName === workspaceName);
+  }
+
+  /**
+   * Get the workspace name for a project (if any)
+   */
+  getWorkspaceForProject(projectId: string): string | undefined {
+    const project = this.data.projects.find(p => p.id === projectId);
+    return project?.workspaceName;
+  }
+
+  /**
+   * Associate a project with a workspace (or remove association if workspaceName is undefined)
+   */
+  setProjectWorkspace(projectId: string, workspaceName: string | undefined): Project | undefined {
+    const project = this.data.projects.find(p => p.id === projectId);
+    if (!project) {
+      return undefined;
+    }
+
+    project.workspaceName = workspaceName;
+    project.updatedAt = new Date();
+    this.saveAsync();
+    return project;
   }
 
   /**

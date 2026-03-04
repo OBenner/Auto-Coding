@@ -1702,6 +1702,26 @@ export function registerWorktreeHandlers(
             const chunk = data.toString();
             stdout += chunk;
             debug('STDOUT:', chunk);
+
+            // Parse merge progress events from stdout and forward to renderer
+            // Progress lines look like: {"phase":"merging","current":3,"total":10,"file":"src/foo.ts"}
+            for (const line of chunk.split('\n')) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('{"phase":')) {
+                try {
+                  const progress = JSON.parse(trimmed);
+                  const mainWindow = BrowserWindow.getAllWindows()[0];
+                  if (mainWindow) {
+                    mainWindow.webContents.send('merge-progress', {
+                      taskId: task.id,
+                      ...progress,
+                    });
+                  }
+                } catch {
+                  // Not valid JSON progress event, ignore
+                }
+              }
+            }
           });
 
           mergeProcess.stderr.on('data', (data: Buffer) => {

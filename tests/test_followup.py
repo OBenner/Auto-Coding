@@ -13,9 +13,9 @@ from pathlib import Path
 from implementation_plan import (
     ImplementationPlan,
     Phase,
+    PhaseType,
     Subtask,
     SubtaskStatus,
-    PhaseType,
     WorkflowType,
 )
 
@@ -182,7 +182,11 @@ class TestResetForFollowup:
                 Phase(
                     phase=1,
                     name="Phase 1",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )
@@ -203,7 +207,11 @@ class TestResetForFollowup:
                 Phase(
                     phase=1,
                     name="Phase 1",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )
@@ -224,7 +232,11 @@ class TestResetForFollowup:
                 Phase(
                     phase=1,
                     name="Phase 1",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )
@@ -246,8 +258,16 @@ class TestResetForFollowup:
                     phase=1,
                     name="Phase 1",
                     subtasks=[
-                        Subtask(id="c1", description="Task 1", status=SubtaskStatus.COMPLETED),
-                        Subtask(id="c2", description="Task 2", status=SubtaskStatus.COMPLETED),
+                        Subtask(
+                            id="c1",
+                            description="Task 1",
+                            status=SubtaskStatus.COMPLETED,
+                        ),
+                        Subtask(
+                            id="c2",
+                            description="Task 2",
+                            status=SubtaskStatus.COMPLETED,
+                        ),
                     ],
                 ),
             ],
@@ -269,8 +289,14 @@ class TestResetForFollowup:
                     phase=1,
                     name="Phase 1",
                     subtasks=[
-                        Subtask(id="c1", description="Task 1", status=SubtaskStatus.COMPLETED),
-                        Subtask(id="c2", description="Task 2", status=SubtaskStatus.PENDING),
+                        Subtask(
+                            id="c1",
+                            description="Task 1",
+                            status=SubtaskStatus.COMPLETED,
+                        ),
+                        Subtask(
+                            id="c2", description="Task 2", status=SubtaskStatus.PENDING
+                        ),
                     ],
                 ),
             ],
@@ -290,7 +316,11 @@ class TestResetForFollowup:
                 Phase(
                     phase=1,
                     name="Phase 1",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.PENDING)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.PENDING
+                        )
+                    ],
                 ),
             ],
         )
@@ -310,7 +340,11 @@ class TestResetForFollowup:
                 Phase(
                     phase=1,
                     name="Phase 1",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )
@@ -330,7 +364,11 @@ class TestResetForFollowup:
                 Phase(
                     phase=1,
                     name="Phase 1",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )
@@ -381,13 +419,21 @@ class TestExistingChunksPreserved:
                 phase=1,
                 name="Phase 1",
                 depends_on=[],
-                subtasks=[Subtask(id="c1", description="Task 1", status=SubtaskStatus.COMPLETED)],
+                subtasks=[
+                    Subtask(
+                        id="c1", description="Task 1", status=SubtaskStatus.COMPLETED
+                    )
+                ],
             ),
             Phase(
                 phase=2,
                 name="Phase 2",
                 depends_on=[1],
-                subtasks=[Subtask(id="c2", description="Task 2", status=SubtaskStatus.COMPLETED)],
+                subtasks=[
+                    Subtask(
+                        id="c2", description="Task 2", status=SubtaskStatus.COMPLETED
+                    )
+                ],
             ),
         ]
 
@@ -396,7 +442,9 @@ class TestExistingChunksPreserved:
             phases=original_phases,
         )
 
-        plan.add_followup_phase("Follow-Up", [Subtask(id="f1", description="Follow-up")])
+        plan.add_followup_phase(
+            "Follow-Up", [Subtask(id="f1", description="Follow-up")]
+        )
 
         # Original phases should be unchanged
         assert plan.phases[0].name == "Phase 1"
@@ -417,7 +465,11 @@ class TestFollowupPlanSaveLoad:
                 Phase(
                     phase=1,
                     name="Original",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )
@@ -448,7 +500,11 @@ class TestFollowupPlanSaveLoad:
                 Phase(
                     phase=1,
                     name="Original",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )
@@ -484,7 +540,11 @@ class TestFollowupProgressCalculation:
                 Phase(
                     phase=1,
                     name="Original",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )
@@ -513,7 +573,11 @@ class TestFollowupProgressCalculation:
                 Phase(
                     phase=1,
                     name="Original",
-                    subtasks=[Subtask(id="c1", description="Task", status=SubtaskStatus.COMPLETED)],
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
                 ),
             ],
         )

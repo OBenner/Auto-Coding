@@ -30,6 +30,9 @@ export interface RecentAction {
   projectId?: string;
 }
 
+// GPU acceleration mode for terminal WebGL rendering
+export type GpuAcceleration = 'auto' | 'on' | 'off';
+
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
 
@@ -297,6 +300,10 @@ export interface AppSettings {
   graphitiMcpUrl?: string;
   // Onboarding wizard completion state
   onboardingCompleted?: boolean;
+  // Selected AI provider (anthropic, openrouter, groq, etc.)
+  selectedProviderId?: string;
+  // Fallback model ID to use if primary model unavailable
+  fallbackModelId?: string;
   // Selected agent profile for preset model/thinking configurations
   selectedAgentProfile?: string;
   // Custom phase configuration for Auto profile (overrides defaults)
@@ -343,6 +350,14 @@ export interface AppSettings {
   keyboardShortcuts?: Record<KeyboardShortcutAction, KeyCombination>;
   // Recent actions for quick actions menu (persisted between sessions)
   recentActions?: RecentAction[];
+  /**
+   * Whether feedback collection is enabled.
+   * Defaults to `true` (opt-out model: feedback is collected unless the user disables it).
+   * When `undefined`, callers should treat it as `true`.
+   */
+  feedbackEnabled?: boolean;
+  /** GPU acceleration mode for terminal WebGL rendering */
+  gpuAcceleration?: GpuAcceleration;
 }
 
 // Auto-Code Source Environment Configuration (for auto-claude repo .env)
@@ -362,48 +377,40 @@ export interface SourceEnvCheckResult {
   error?: string;
 }
 
+// Provider Settings for Multi-Model Support (used by ProviderSettingsSection)
+export interface ProviderSettings {
+  provider?: AIEngineProvider;
+  openaiApiKey?: string;
+  googleApiKey?: string;
+  openrouterApiKey?: string;
+  plannerModel?: string;
+  coderModel?: string;
+  qaModel?: string;
+}
+
 // ============================================
 // Keyboard Shortcuts Types
 // ============================================
 
-/**
- * Keyboard shortcut action identifiers
- * Maps to specific commands in the application
- */
 export type KeyboardShortcutAction =
-  | 'commandPalette'      // Open command palette
-  | 'quickActions'        // Open quick actions menu
-  | 'createTask'          // Create new task
-  | 'batchQA'             // Batch QA operation
-  | 'batchStatusUpdate';  // Batch status update
+  | 'commandPalette'
+  | 'quickActions'
+  | 'createTask'
+  | 'batchQA'
+  | 'batchStatusUpdate';
 
-/**
- * Keyboard key combination format
- * Examples: "Cmd+K", "Ctrl+K", "Cmd+Shift+P"
- */
 export type KeyCombination = string;
 
-/**
- * Keyboard shortcut definition
- * Maps an action to its key combination
- */
 export interface KeyboardShortcut {
   action: KeyboardShortcutAction;
   keyCombination: KeyCombination;
   description: string;
 }
 
-/**
- * Map of all keyboard shortcuts by action ID
- */
 export interface KeyboardShortcuts {
   shortcuts: Record<KeyboardShortcutAction, KeyCombination>;
 }
 
-/**
- * Default keyboard shortcuts
- * Can be customized by users in settings
- */
 export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombination> = {
   commandPalette: 'Cmd+K',
   quickActions: 'Cmd+.',
@@ -411,3 +418,40 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombi
   batchQA: 'Cmd+Shift+Q',
   batchStatusUpdate: 'Cmd+Shift+S'
 };
+
+// ============================================
+// AI Provider Configuration (Backend .env sync)
+// ============================================
+
+export type AIEngineProvider = 'claude' | 'openai' | 'google' | 'litellm' | 'openrouter' | 'zhipuai' | 'ollama';
+
+export interface AIProviderConfig {
+  provider: AIEngineProvider;
+  anthropicApiKey?: string;
+  claudeModel?: string;
+  openaiApiKey?: string;
+  openaiModel?: string;
+  openaiBaseUrl?: string;
+  googleApiKey?: string;
+  googleModel?: string;
+  litellmModel?: string;
+  litellmApiBase?: string;
+  litellmApiKey?: string;
+  openrouterApiKey?: string;
+  openrouterModel?: string;
+  openrouterBaseUrl?: string;
+  zhipuaiApiKey?: string;
+  zhipuaiModel?: string;
+  ollamaModel?: string;
+  ollamaBaseUrl?: string;
+  // Per-agent model overrides
+  plannerModel?: string;
+  coderModel?: string;
+  qaModel?: string;
+}
+
+export interface ProviderConfigValidation {
+  isValid: boolean;
+  errors: string[];
+  availableProviders: AIEngineProvider[];
+}

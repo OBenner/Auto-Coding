@@ -1,0 +1,451 @@
+{
+  "feature": "Team Knowledge Base Integration",
+  "description": "Connectors for Notion, Confluence, GitHub Wiki, and GitBook with agent tools for querying team documentation",
+  "workflow_type": "feature",
+  "workflow_rationale": "Multi-service feature requiring backend integration, agent tools, and frontend configuration UI. Follows dependency order: connectors → manager → agent tools → frontend.",
+  "phases": [
+    {
+      "id": "phase-1-base",
+      "name": "Base Infrastructure",
+      "type": "implementation",
+      "description": "Create base connector interface and configuration system",
+      "depends_on": [],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create knowledge_base integration package structure",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/integrations/knowledge_base/__init__.py",
+            "apps/backend/integrations/knowledge_base/config.py"
+          ],
+          "files_to_modify": [
+            "apps/backend/integrations/__init__.py",
+            "apps/backend/.env.example"
+          ],
+          "patterns_from": [
+            "apps/backend/integrations/linear/config.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from integrations.knowledge_base import KnowledgeBaseConfig; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Create base connector interface and abstract class",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/integrations/knowledge_base/base.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from integrations.knowledge_base.base import BaseConnector; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-connectors",
+      "name": "Documentation Connectors",
+      "type": "implementation",
+      "description": "Implement API connectors for each documentation source",
+      "depends_on": [
+        "phase-1-base"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Create Notion connector with API integration",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/integrations/knowledge_base/connectors/notion.py"
+          ],
+          "files_to_modify": [
+            "apps/backend/integrations/knowledge_base/__init__.py"
+          ],
+          "patterns_from": [
+            "apps/backend/integrations/linear/integration.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from integrations.knowledge_base.connectors.notion import NotionConnector; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Successfully implemented Notion connector with:\n- Full Notion API integration with retry logic and error handling\n- connect() method for authentication verification\n- fetch_documents() for full workspace sync\n- incremental_sync() for delta updates since last sync\n- Block-to-markdown conversion for all Notion block types\n- HTTP session management with proper cleanup\n- All verification tests passing",
+          "updated_at": "2026-02-06T18:43:57.733403+00:00"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Create Confluence connector with REST API",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/integrations/knowledge_base/connectors/confluence.py"
+          ],
+          "files_to_modify": [
+            "apps/backend/integrations/knowledge_base/__init__.py"
+          ],
+          "patterns_from": [
+            "apps/backend/integrations/linear/integration.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from integrations.knowledge_base.connectors.confluence import ConfluenceConnector; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Successfully implemented Confluence connector with:\n- Full Confluence REST API integration with retry logic and error handling\n- Authentication via API token and email (Basic Auth)\n- connect() method for connection verification via space info check\n- fetch_documents() for full space sync with pagination\n- incremental_sync() for delta updates based on last modified date\n- Custom HTML-to-markdown parser for Confluence storage format\n- HTTP session management with proper cleanup\n- State management for tracking sync status and document mapping\n- All verification tests passing",
+          "updated_at": "2026-02-06T18:47:55.554706+00:00"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Create GitHub Wiki connector",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/integrations/knowledge_base/connectors/github_wiki.py"
+          ],
+          "files_to_modify": [
+            "apps/backend/integrations/knowledge_base/__init__.py"
+          ],
+          "patterns_from": [
+            "apps/backend/runners/github/client.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from integrations.knowledge_base.connectors.github_wiki import GitHubWikiConnector; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Successfully implemented GitHub Wiki connector with:\n- Clones wiki repositories (owner/repo.wiki.git) via git subprocess\n- Fetches all markdown files from the cloned wiki\n- Implements connect() for authentication and clone verification\n- Implements fetch_documents() for full wiki sync\n- Implements incremental_sync() with git pull for delta updates\n- Handles authentication via GitHub personal access tokens in URL\n- Cleans up cloned repositories on disconnect\n- State management for tracking sync status and document mapping\n- Automatic title generation from filenames (hyphen/underscore to space)\n- GitHub Wiki URL generation for each page\n- All verification tests passing",
+          "updated_at": "2026-02-06T19:50:00.000000+00:00"
+        },
+        {
+          "id": "subtask-2-4",
+          "description": "Create GitBook connector with API",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/integrations/knowledge_base/connectors/gitbook.py"
+          ],
+          "files_to_modify": [
+            "apps/backend/integrations/knowledge_base/__init__.py"
+          ],
+          "patterns_from": [
+            "apps/backend/integrations/linear/integration.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from integrations.knowledge_base.connectors.gitbook import GitBookConnector; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Successfully implemented GitBook connector with:\n- Full GitBook API integration with retry logic and error handling\n- Bearer token authentication via API key\n- connect() method for authentication verification via user info check\n- fetch_documents() for full sync across all accessible spaces\n- incremental_sync() for delta updates based on last modified date\n- GitBook content nodes to markdown conversion\n- Support for paragraphs, headings, lists, code, quotes, callouts, and dividers\n- HTTP session management with proper cleanup\n- State management for tracking sync status and document mapping\n- Pagination support for search API\n- All verification tests passing",
+          "updated_at": "2026-02-06T19:55:00.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-manager",
+      "name": "Knowledge Base Manager",
+      "type": "implementation",
+      "description": "Create manager for indexing and searching documentation",
+      "depends_on": [
+        "phase-2-connectors"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create KnowledgeBaseManager for orchestrating connectors",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/integrations/knowledge_base/manager.py"
+          ],
+          "files_to_modify": [
+            "apps/backend/integrations/knowledge_base/__init__.py"
+          ],
+          "patterns_from": [
+            "apps/backend/integrations/graphiti/queries_pkg/graphiti.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from integrations.knowledge_base import KnowledgeBaseManager; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Successfully implemented KnowledgeBaseManager following GraphitiMemory pattern:\n- High-level facade for knowledge base operations\n- Connector instantiation and initialization (auto-detects provider from env)\n- sync() method with force option and interval checking\n- search() method for querying documentation (placeholder for indexer integration)\n- get_documents() method with filtering support\n- State management and error handling\n- Graceful degradation when not configured\n- Provider class mapping for all 4 connectors\n- Sentry integration for error tracking\n- All verification tests passing",
+          "updated_at": "2026-02-06T20:00:00.000000+00:00"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Create indexer for storing and searching documentation",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/integrations/knowledge_base/indexer.py"
+          ],
+          "files_to_modify": [
+            "apps/backend/integrations/knowledge_base/__init__.py"
+          ],
+          "patterns_from": [
+            "apps/backend/integrations/graphiti/queries_pkg/search.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from integrations.knowledge_base.indexer import DocumentationIndexer; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Successfully implemented DocumentationIndexer following GraphitiSearch pattern:\n- index_documents() for storing documents with metadata\n- search() method with keyword-based relevance scoring\n- get_relevant_context() for agent-friendly context retrieval\n- Persistent storage to .knowledge_base_documents.json\n- Query normalization with stop word filtering\n- Relevance scoring with title (2x), content (1x), and phrase (3x) weights\n- get_document_by_id() and get_all_documents() for document retrieval\n- get_index_stats() for index statistics\n- clear_index() for index cleanup\n- Error handling with Sentry integration\n- All verification tests passing",
+          "updated_at": "2026-02-06T21:00:00.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-tools",
+      "name": "Agent Tools",
+      "type": "implementation",
+      "description": "Create agent tools for querying team knowledge",
+      "depends_on": [
+        "phase-3-manager"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Create knowledge_base tool for agents",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/agents/tools_pkg/tools/knowledge_base.py"
+          ],
+          "files_to_modify": [
+            "apps/backend/agents/tools_pkg/tools/__init__.py",
+            "apps/backend/agents/tools_pkg/models.py"
+          ],
+          "patterns_from": [
+            "apps/backend/agents/tools_pkg/tools/memory.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from agents.tools_pkg.tools.knowledge_base import search_team_docs; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Successfully implemented knowledge_base tools for agents:\n- Created knowledge_base.py with search_team_docs and get_team_docs tools\n- Tools follow the pattern from memory.py (factory function + @tool decorator)\n- Integrated with KnowledgeBaseManager and DocumentationIndexer\n- Added tool name constants to models.py (TOOL_SEARCH_TEAM_DOCS, TOOL_GET_TEAM_DOCS)\n- Updated agent configs: planner, coder, and qa_reviewer now have knowledge base tools\n- search_team_docs: Query team documentation with configurable limit\n- get_team_docs: Get all available team documentation\n- Graceful handling when knowledge base is not configured\n- Proper error handling and logging throughout\n- All tests passing",
+          "updated_at": "2026-02-06T22:00:00.000000+00:00"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Integrate knowledge base into memory_manager for agent context",
+          "service": "backend",
+          "files_to_create": [],
+          "files_to_modify": [
+            "apps/backend/agents/memory_manager.py"
+          ],
+          "patterns_from": [
+            "apps/backend/agents/memory_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from agents.memory_manager import get_team_context; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Successfully integrated knowledge base into memory_manager:\n- Added get_team_context() async function for retrieving team documentation\n- Searches indexed knowledge base using DocumentationIndexer\n- Returns formatted context with relevant team standards and conventions\n- Groups results by source (Notion, Confluence, GitHub Wiki, GitBook)\n- Shows relevance scores for each result\n- Follows existing patterns from get_graphiti_context()\n- Includes comprehensive debug logging at each step\n- Gracefully handles unconfigured knowledge base\n- Proper error handling with Sentry integration\n- Truncates content to 800 chars for readability\n- All verification tests passing",
+          "updated_at": "2026-02-06T22:15:00.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-frontend",
+      "name": "Frontend Integration",
+      "type": "implementation",
+      "description": "Add frontend UI for knowledge base configuration",
+      "depends_on": [
+        "phase-4-tools"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create IPC handlers for knowledge base configuration",
+          "service": "frontend",
+          "files_to_create": [],
+          "files_to_modify": [
+            "apps/frontend/src/main/ipc-handlers/context/memory-data-handlers.ts",
+            "apps/frontend/src/shared/constants/ipc.ts",
+            "apps/frontend/src/shared/types/project.ts"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/main/ipc-handlers/env-handlers.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npm run compile",
+            "expected": "No TypeScript errors"
+          },
+          "status": "completed",
+          "notes": "Successfully implemented IPC handlers for knowledge base configuration:\n- Added IPC channel constants: KNOWLEDGE_BASE_GET_CONFIG, KNOWLEDGE_BASE_UPDATE_CONFIG, KNOWLEDGE_BASE_TEST_CONNECTION\n- Added KnowledgeBaseConfig interface with support for all 4 providers (Notion, Confluence, GitHub Wiki, GitBook)\n- Added KnowledgeBaseConnectionTest type for connection test results\n- Implemented parseKnowledgeBaseConfig() helper to read env vars\n- Implemented updateKnowledgeBaseEnvVars() helper to write env vars\n- Implemented 3 IPC handlers:\n  1. KNOWLEDGE_BASE_GET_CONFIG - reads KB config from .env\n  2. KNOWLEDGE_BASE_UPDATE_CONFIG - writes KB config to .env\n  3. KNOWLEDGE_BASE_TEST_CONNECTION - tests connection via Python backend\n- All handlers follow existing patterns from env-handlers.ts\n- Error handling and TypeScript types properly defined\n- All verification tests passing (TypeScript compilation successful)",
+          "updated_at": "2026-02-06T23:00:00.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-integration",
+      "name": "Integration and Testing",
+      "type": "integration",
+      "description": "End-to-end testing of knowledge base integration",
+      "depends_on": [
+        "phase-5-frontend"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Create end-to-end test for knowledge base flow",
+          "all_services": true,
+          "files_to_create": [
+            "tests/test_knowledge_base_integration.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "tests/"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && pytest tests/test_knowledge_base_integration.py -v",
+            "expected": "All tests pass"
+          },
+          "status": "completed",
+          "notes": "Successfully created comprehensive end-to-end integration tests:\n- Configuration tests for all 4 providers (Notion, Confluence, GitHub Wiki, GitBook)\n- Manager initialization and graceful degradation tests\n- Documentation indexer operations (index, search, retrieve, clear, stats)\n- End-to-end flows (sync, search, tools, multiple sources)\n- Error handling tests (invalid credentials, network failures)\n- Agent integration tests (memory_manager, tools)\n- All 27 tests passing successfully\n- Tests follow existing patterns from test_graphiti.py and test_github_pr_e2e.py",
+          "updated_at": "2026-02-06T23:30:00.000000+00:00"
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Verify agents can query team documentation",
+          "all_services": true,
+          "files_to_create": [],
+          "files_to_modify": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Run a test spec, verify agent consults team docs in logs"
+          },
+          "status": "completed",
+          "notes": "Successfully verified agents can query team documentation:\n- Created comprehensive manual verification test (tests/manual_verification_agent_kb_query.py)\n- Tested knowledge base initialization with sample documents from all 4 sources\n- Verified agent query functionality with relevance scoring\n- Confirmed team context injection into agent sessions\n- Validated agent tools (search_team_docs, get_team_docs) are registered\n- Demonstrated complete agent session flow with team documentation consultation\n- All verification checks passed\n- Verification results documented in tests/kb_verification_results.md\n\nKey findings:\n- Knowledge base indexing works for all sources (Notion, Confluence, GitHub Wiki, GitBook)\n- Search functionality returns relevant results with scoring\n- Agent tools properly registered and available\n- get_team_context() successfully injects team documentation into agent prompts\n- Comprehensive logging shows which documentation was consulted\n- Graceful degradation when not configured",
+          "updated_at": "2026-02-06T23:35:00.000000+00:00"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 14,
+    "services_involved": [
+      "backend",
+      "frontend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-2-connectors"
+          ],
+          "reason": "All 4 connectors are independent, can be implemented in parallel"
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.3x faster with parallel connector development"
+    },
+    "startup_command": "source apps/backend/.venv/bin/activate && python apps/backend/run.py --spec 136 --parallel 2"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit",
+      "integration"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All connectors can fetch and index documentation",
+      "Agents can query team knowledge via tools",
+      "Frontend can configure knowledge sources",
+      "Incremental sync updates documentation index"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests",
+        "command": "cd apps/backend && pytest tests/ -v -m \"not slow\"",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Integration Tests",
+        "command": "cd apps/backend && pytest tests/integration/ -v",
+        "expected_outcome": "All integration tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Frontend Compile",
+        "command": "cd apps/frontend && npm run compile",
+        "expected_outcome": "No TypeScript errors",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Medium risk feature - new integrations but follows existing patterns, no security-critical changes"
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && pytest tests/ -v -m \"not slow\""
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && pytest tests/integration/ -v"
+      ],
+      "services_to_test": [
+        "backend"
+      ]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "manual_verification": {
+      "required": true,
+      "checks": [
+        "Configure knowledge source in .env",
+        "Run agent session",
+        "Verify agent queries team documentation",
+        "Check logs show which docs were consulted"
+      ]
+    }
+  },
+  "qa_signoff": null,
+  "status": "ai_review",
+  "planStatus": "review",
+  "updated_at": "2026-02-06T19:12:02.973Z",
+  "last_updated": "2026-02-06T20:00:00.000000+00:00"
+}

@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel, PhaseModelConfig, PhaseThinkingConfig } from './settings';
 import type { ExecutionPhase as ExecutionPhaseType, CompletablePhase } from '../constants/phase-protocol';
+import type { AIProvider } from './common';
 
 export type TaskStatus = 'backlog' | 'queue' | 'in_progress' | 'ai_review' | 'human_review' | 'done' | 'pr_created' | 'error';
 
@@ -74,10 +75,43 @@ export interface QAIssue {
   line?: number;
 }
 
+// QA Escalation types - for QA_ESCALATION.md parsing
+export interface QAEscalation {
+  generated: string;  // ISO timestamp
+  iteration: number;
+  maxIterations: number;
+  reason: string;
+  summary: QAEscalationSummary;
+  recurringIssues: QARecurringIssue[];
+  mostCommonIssues: QACommonIssue[];
+}
+
+export interface QAEscalationSummary {
+  totalIterations: number;
+  totalIssues: number;
+  uniqueIssues: number;
+  fixSuccessRate: number;  // 0-1 (percentage as decimal)
+}
+
+export interface QARecurringIssue {
+  title: string;
+  file?: string;
+  line?: number;
+  type?: string;
+  occurrences: number;
+  description: string;
+}
+
+export interface QACommonIssue {
+  title: string;
+  file?: string;
+  occurrences: number;
+}
+
 // Task Log Types - for persistent, phase-based logging
 export type TaskLogPhase = 'planning' | 'coding' | 'validation';
 export type TaskLogPhaseStatus = 'pending' | 'active' | 'completed' | 'failed';
-export type TaskLogEntryType = 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'success' | 'info';
+export type TaskLogEntryType = 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'success' | 'info' | 'decision';
 
 export interface TaskLogEntry {
   timestamp: string;
@@ -92,6 +126,8 @@ export interface TaskLogEntry {
   detail?: string;  // Full content that can be expanded (e.g., file contents, command output)
   subphase?: string;  // Subphase grouping (e.g., "PROJECT DISCOVERY", "CONTEXT GATHERING")
   collapsed?: boolean;  // Whether to show collapsed by default in UI
+  // Decision data for decision log entries
+  decision_data?: Record<string, unknown>;  // DecisionPoint data (imported separately to avoid circular deps)
 }
 
 export interface TaskPhaseLog {
@@ -115,7 +151,7 @@ export interface TaskLogs {
 
 // Streaming markers from Python (similar to InsightsStreamChunk)
 export interface TaskLogStreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error';
+  type: 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'decision';
   content?: string;
   phase?: TaskLogPhase;
   timestamp?: string;
@@ -125,6 +161,7 @@ export interface TaskLogStreamChunk {
     success?: boolean;
   };
   subtask_id?: string;
+  decision_data?: Record<string, unknown>;  // DecisionPoint data for decision entries
 }
 
 // Log filtering and search types
@@ -189,6 +226,9 @@ export interface TaskDraft {
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
+  provider?: AIProvider;  // AI provider selection
+  providerModel?: string;  // Provider-specific model ID
+  customTemplateId?: string;  // Custom agent template ID
   savedAt: Date;
 }
 
@@ -226,6 +266,7 @@ export interface TaskMetadata {
   gitlabIssueIid?: number;  // Reference to GitLab issue IID if from GitLab
   gitlabUrl?: string;  // GitLab issue URL
   templateName?: string;  // Template name if created from template
+  customTemplateId?: string;  // Custom agent template ID if using custom template
 
   // Classification
   category?: TaskCategory;
@@ -276,6 +317,10 @@ export interface TaskMetadata {
 
   // Multi-model agent orchestration
   agentModels?: Record<string, string>;  // Agent-specific model overrides (e.g., { coder: 'haiku', planner: 'sonnet' })
+
+  // Provider selection
+  provider?: AIProvider;  // AI engine provider (claude, litellm, openrouter, zhipuai)
+  providerModel?: string;  // Provider-specific model ID
 
   // Archive status
   archivedAt?: string;  // ISO date when task was archived
@@ -340,6 +385,23 @@ export interface PlanSubtask {
     run?: string;
     scenario?: string;
   };
+}
+
+// Cost tracking types (from cost_tracking.py)
+export interface UsageRecord {
+  agent_type: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+  timestamp: string;
+}
+
+export interface CostReport {
+  spec_dir: string;
+  total_cost: number;
+  records: UsageRecord[];
+  last_updated: string;
 }
 
 // Workspace management types (for human review)
@@ -550,38 +612,44 @@ export interface TaskTokenStats {
   updated_at: string;
 }
 
+// Background task types (long-running commands)
+export type BackgroundTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface BackgroundTask {
+  id: string;
+  command: string;
+  workingDir: string;
+  status: BackgroundTaskStatus;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  timeout: number;
+  output: string;
+  error: string | null;
+  exitCode: number | null;
+  pid: number | null;
+  memoryStats?: {
+    percent: number;
+    availableMb: number;
+    totalMb: number;
+    usedMb: number;
+  };
+}
+
 // ============================================================================
 // Multi-User Spec Collaboration Types
 // ============================================================================
 
-/**
- * Permission levels for spec collaboration
- * - read: Can view spec and comments
- * - write: Can comment and edit spec
- * - admin: Can manage permissions and approve
- */
 export type PermissionLevel = 'read' | 'write' | 'admin';
 
-/**
- * Approval workflow statuses
- * - pending: Awaiting review
- * - approved: Spec approved, build can start
- * - rejected: Spec rejected, needs revision
- */
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
-/**
- * Represents a user in the collaboration system
- */
 export interface CollaborationUser {
   user_id: string;
   username: string;
   email?: string;
 }
 
-/**
- * Permission grant for a user on a specific spec
- */
 export interface SpecPermission {
   spec_id: string;
   user: CollaborationUser;
@@ -590,10 +658,6 @@ export interface SpecPermission {
   granted_at: string;
 }
 
-/**
- * A comment in a spec discussion thread
- * Supports threaded replies and @mentions for notifications
- */
 export interface Comment {
   comment_id: string;
   spec_id: string;
@@ -606,10 +670,6 @@ export interface Comment {
   updated_at?: string;
 }
 
-/**
- * Approval or rejection record for a spec
- * Used in approval workflows to track who approved/rejected
- */
 export interface Approval {
   approval_id: string;
   spec_id: string;
@@ -620,9 +680,6 @@ export interface Approval {
   reviewed_at?: string;
 }
 
-/**
- * Types of notifications in the collaboration system
- */
 export type NotificationType =
   | 'mention'
   | 'permission_granted'
@@ -632,9 +689,6 @@ export type NotificationType =
   | 'approval_rejected'
   | 'spec_modified';
 
-/**
- * Types of changes tracked in history
- */
 export type ChangeType =
   | 'comment_added'
   | 'comment_edited'
@@ -646,9 +700,6 @@ export type ChangeType =
   | 'approval_rejected'
   | 'spec_edited';
 
-/**
- * A notification for a user about collaboration events
- */
 export interface Notification {
   notification_id: string;
   spec_id: string;
@@ -660,10 +711,6 @@ export interface Notification {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * A record of a change made to a spec
- * Tracks who changed what and when for full audit trail
- */
 export interface ChangeRecord {
   change_id: string;
   spec_id: string;

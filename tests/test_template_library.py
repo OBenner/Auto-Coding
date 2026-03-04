@@ -6,6 +6,7 @@ Tests for TemplateLibrary operations including search, filter, and template mana
 """
 
 import pytest
+
 from apps.backend.spec.templates.library import TemplateLibrary, suggest_templates
 from apps.backend.spec.templates.registry import Template
 
@@ -231,7 +232,9 @@ class TestSuggestTemplates:
 
         assert len(suggestions) > 0
         assert all(isinstance(s, dict) for s in suggestions)
-        assert all("name" in s and "reason" in s and "relevance" in s for s in suggestions)
+        assert all(
+            "name" in s and "reason" in s and "relevance" in s for s in suggestions
+        )
 
         # Should suggest crud_api for API-related task
         template_names = [s["name"] for s in suggestions]

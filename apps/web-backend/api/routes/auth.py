@@ -5,12 +5,10 @@ Provides endpoints for token verification and authentication management.
 """
 
 import logging
-from typing import Dict
-
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel
 
 from core.security import require_auth
+from fastapi import APIRouter, Depends, status
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +21,7 @@ class TokenResponse(BaseModel):
 
     valid: bool
     message: str
-    claims: Dict = {}
+    claims: dict = {}
 
 
 @router.post("/verify", response_model=TokenResponse, status_code=status.HTTP_200_OK)

@@ -3,7 +3,8 @@ Authentication helpers for Auto Code.
 
 Provides centralized authentication token resolution with fallback support
 for multiple environment variables, and SDK environment variable passthrough
-for custom API endpoints.
+for custom API endpoints. Also supports enterprise SSO/SAML authentication
+with audit logging.
 """
 
 import json
@@ -11,6 +12,7 @@ import logging
 import os
 import shutil
 import subprocess
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.platform import (
@@ -20,6 +22,26 @@ from core.platform import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Import enterprise modules if available
+try:
+    from enterprise.audit import (
+        ActorType,
+        AuditAction,
+        AuditContext,
+        EnterpriseAuditLogger,
+    )
+    from enterprise.sso import (
+        SAMLConfig,
+        SAMLProvider,
+        SAMLProviderType,
+        SAMLUser,
+    )
+
+    ENTERPRISE_AVAILABLE = True
+except ImportError:
+    ENTERPRISE_AVAILABLE = False
+    logger.debug("Enterprise SSO modules not available")
 
 # Optional import for Linux secret-service support
 # secretstorage provides access to the Freedesktop.org Secret Service API via DBus
@@ -956,6 +978,19 @@ def _trigger_login_windows() -> bool:
         return False
 
 
+def emit_rate_limit_marker(reset_time: str | None = None) -> None:
+    """Print a structured marker that the frontend can detect for rate-limit handling.
+
+    The frontend ``rate-limit-detector.ts`` scans process output for rate-limit
+    patterns.  This function prints a canonical marker line so the detection is
+    reliable regardless of the upstream error format.
+    """
+    parts = ["[RATE_LIMITED]"]
+    if reset_time:
+        parts.append(f"reset_time={reset_time}")
+    print(" ".join(parts), flush=True)
+
+
 def ensure_authenticated() -> str:
     """
     Ensure the user is authenticated, prompting for login if needed.
@@ -991,3 +1026,412 @@ def ensure_authenticated() -> str:
         "  3. Press Enter to open browser\n"
         "  4. Complete OAuth login in browser"
     )
+
+
+# ============================================================================
+# Enterprise SSO/SAML Authentication
+# ============================================================================
+# These functions integrate SSO authentication with audit logging.
+# Requires enterprise modules (enterprise.sso, enterprise.audit).
+
+
+def is_sso_enabled() -> bool:
+    """
+    Check if SSO authentication is enabled via environment variables.
+
+    SSO is considered enabled if required configuration variables are present:
+    - SSO_ENABLED=true (explicit enable flag)
+    - SAML_IDP_ENTITY_ID (identity provider entity ID)
+    - SAML_IDP_SSO_URL (SSO endpoint URL)
+    - SAML_IDP_X509_CERT (X.509 certificate for signature verification)
+
+    Returns:
+        True if SSO is configured and enabled, False otherwise
+    """
+    if not ENTERPRISE_AVAILABLE:
+        return False
+
+    # Check explicit enable flag
+    # Accept both ENTERPRISE_SSO_ENABLED (preferred) and SSO_ENABLED
+    sso_flag = os.environ.get("ENTERPRISE_SSO_ENABLED") or os.environ.get(
+        "SSO_ENABLED", ""
+    )
+    if sso_flag.lower() != "true":
+        return False
+
+    # Check required configuration
+    required_vars = [
+        "SAML_IDP_ENTITY_ID",
+        "SAML_IDP_SSO_URL",
+        "SAML_IDP_X509_CERT",
+    ]
+
+    for var in required_vars:
+        if not os.environ.get(var):
+            logger.warning(f"SSO enabled but missing required config: {var}")
+            return False
+
+    return True
+
+
+def get_sso_config() -> "SAMLConfig":
+    """
+    Get SAML configuration from environment variables.
+
+    Reads SSO configuration from environment and creates a SAMLConfig instance.
+    This follows the pattern from core/auth.py for configuration resolution.
+
+    Environment variables:
+    - SAML_IDP_ENTITY_ID: Identity provider entity ID (required)
+    - SAML_IDP_SSO_URL: SSO endpoint URL (required)
+    - SAML_IDP_X509_CERT: Base64-encoded X.509 certificate (required)
+    - SAML_IDP_LOGOUT_URL: Logout endpoint URL (optional)
+    - SAML_SP_ENTITY_ID: Service provider entity ID (optional, default: auto-claude-sp)
+    - SAML_SP_ACS_URL: Assertion Consumer Service URL (optional)
+    - SAML_SP_SLO_URL: Single Logout Service URL (optional)
+    - SAML_PROVIDER_TYPE: Provider type (okta, azure_ad, google_workspace, etc.)
+    - SAML_SESSION_LIFETIME_HOURS: Session lifetime in hours (default: 8)
+    - SAML_ALLOW_JIT_PROVISIONING: Allow JIT user provisioning (default: true)
+
+    Returns:
+        SAMLConfig instance with configuration from environment
+
+    Raises:
+        ValueError: If required configuration is missing or invalid
+        RuntimeError: If enterprise SSO modules are not available
+    """
+    if not ENTERPRISE_AVAILABLE:
+        raise RuntimeError(
+            "Enterprise SSO modules are not available.\n\n"
+            "To enable SSO authentication:\n"
+            "  1. Ensure enterprise modules are installed\n"
+            "  2. Verify apps/backend/enterprise/sso.py exists\n"
+            "  3. Set required environment variables (SAML_IDP_ENTITY_ID, etc.)"
+        )
+
+    if not is_sso_enabled():
+        raise ValueError(
+            "SSO is not enabled or configured.\n\n"
+            "To enable SSO:\n"
+            "  1. Set SSO_ENABLED=true\n"
+            "  2. Set SAML_IDP_ENTITY_ID=<your-idp-entity-id>\n"
+            "  3. Set SAML_IDP_SSO_URL=<your-sso-url>\n"
+            "  4. Set SAML_IDP_X509_CERT=<base64-encoded-cert>"
+        )
+
+    # Get required configuration
+    idp_entity_id = os.environ.get("SAML_IDP_ENTITY_ID", "")
+    idp_sso_url = os.environ.get("SAML_IDP_SSO_URL", "")
+    idp_x509_cert = os.environ.get("SAML_IDP_X509_CERT", "")
+
+    # Validate required fields
+    if not idp_entity_id or not idp_sso_url or not idp_x509_cert:
+        missing = []
+        if not idp_entity_id:
+            missing.append("SAML_IDP_ENTITY_ID")
+        if not idp_sso_url:
+            missing.append("SAML_IDP_SSO_URL")
+        if not idp_x509_cert:
+            missing.append("SAML_IDP_X509_CERT")
+
+        raise ValueError(
+            f"Missing required SAML configuration: {', '.join(missing)}\n\n"
+            "Required environment variables:\n"
+            "  - SAML_IDP_ENTITY_ID: Identity provider entity ID\n"
+            "  - SAML_IDP_SSO_URL: SSO endpoint URL\n"
+            "  - SAML_IDP_X509_CERT: Base64-encoded X.509 certificate"
+        )
+
+    # Get optional configuration with defaults
+    idp_logout_url = os.environ.get("SAML_IDP_LOGOUT_URL")
+    sp_entity_id = os.environ.get("SAML_SP_ENTITY_ID", "auto-claude-sp")
+    sp_acs_url = os.environ.get("SAML_SP_ACS_URL", "https://localhost:8080/saml/acs")
+    sp_slo_url = os.environ.get("SAML_SP_SLO_URL")
+
+    # Parse provider type
+    # Accept both ENTERPRISE_SSO_PROVIDER_TYPE (preferred) and SAML_PROVIDER_TYPE
+    provider_type_str = (
+        os.environ.get("ENTERPRISE_SSO_PROVIDER_TYPE")
+        or os.environ.get("SAML_PROVIDER_TYPE", "generic")
+    ).lower()
+    try:
+        provider_type = SAMLProviderType(provider_type_str)
+    except ValueError:
+        logger.warning(
+            f"Invalid SAML_PROVIDER_TYPE: {provider_type_str}, using generic"
+        )
+        provider_type = SAMLProviderType.GENERIC
+
+    # Parse session lifetime
+    try:
+        session_lifetime_hours = int(os.environ.get("SAML_SESSION_LIFETIME_HOURS", "8"))
+    except ValueError:
+        logger.warning("Invalid SAML_SESSION_LIFETIME_HOURS, using default: 8")
+        session_lifetime_hours = 8
+
+    # Parse JIT provisioning flag
+    allow_jit_provisioning = (
+        os.environ.get("SAML_ALLOW_JIT_PROVISIONING", "true").lower() == "true"
+    )
+
+    # Create configuration
+    config = SAMLConfig(
+        idp_entity_id=idp_entity_id,
+        idp_sso_url=idp_sso_url,
+        idp_x509_cert=idp_x509_cert,
+        idp_logout_url=idp_logout_url,
+        sp_entity_id=sp_entity_id,
+        sp_acs_url=sp_acs_url,
+        sp_slo_url=sp_slo_url,
+        provider_type=provider_type,
+        session_lifetime_hours=session_lifetime_hours,
+        allow_jit_provisioning=allow_jit_provisioning,
+    )
+
+    logger.info(
+        f"Loaded SSO configuration: provider={provider_type.value}, "
+        f"entity_id={sp_entity_id}, session_lifetime={session_lifetime_hours}h"
+    )
+
+    return config
+
+
+def _get_audit_logger() -> "EnterpriseAuditLogger | None":
+    """
+    Get or create enterprise audit logger instance.
+
+    Creates an audit logger for recording SSO authentication events.
+    Follows the pattern from enterprise/audit.py for logger creation.
+
+    Returns:
+        EnterpriseAuditLogger instance if available, None otherwise
+    """
+    if not ENTERPRISE_AVAILABLE:
+        return None
+
+    try:
+        # Create audit logger with default log directory
+        # The logger will create .auto-claude/enterprise/audit/ directory
+        from pathlib import Path
+
+        # Use current directory as project root
+        project_dir = Path.cwd()
+        audit_dir = project_dir / ".auto-claude" / "enterprise" / "audit"
+        audit_dir.mkdir(parents=True, exist_ok=True)
+
+        logger_instance = EnterpriseAuditLogger(log_dir=audit_dir)
+        return logger_instance
+
+    except Exception as e:
+        logger.warning(f"Failed to create audit logger: {e}")
+        return None
+
+
+def authenticate_with_sso(
+    saml_response: str,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+    organization_id: str | None = None,
+) -> "SAMLUser":
+    """
+    Authenticate user with SSO/SAML and create audit trail.
+
+    This function integrates SSO authentication with audit logging, following
+    the patterns from enterprise/sso.py and enterprise/audit.py.
+
+    The authentication flow:
+    1. Log SSO_LOGIN_STARTED audit event
+    2. Validate SAML response and extract user identity
+    3. Create or update user session
+    4. Log SSO_LOGIN_COMPLETED or SSO_LOGIN_FAILED audit event
+
+    Args:
+        saml_response: Base64-encoded SAML response from identity provider
+        ip_address: Client IP address for audit logging (optional)
+        user_agent: Client user agent string for audit logging (optional)
+        organization_id: Organization ID for multi-tenant setups (optional)
+
+    Returns:
+        SAMLUser instance with user identity and session information
+
+    Raises:
+        ValueError: If SSO is not enabled or SAML validation fails
+        RuntimeError: If enterprise SSO modules are not available
+
+    Example:
+        >>> # After receiving SAML response from IdP
+        >>> user = authenticate_with_sso(
+        ...     saml_response=saml_response_from_idp,
+        ...     ip_address="192.168.1.100",
+        ...     user_agent="Auto-Claude/1.0"
+        ... )
+        >>> print(f"Authenticated: {user.email}")
+    """
+    if not ENTERPRISE_AVAILABLE:
+        raise RuntimeError(
+            "Enterprise SSO modules are not available.\n\n"
+            "To enable SSO authentication:\n"
+            "  1. Ensure enterprise modules are installed\n"
+            "  2. Verify apps/backend/enterprise/sso.py exists\n"
+            "  3. Set required environment variables"
+        )
+
+    # Get audit logger
+    audit_logger = _get_audit_logger()
+
+    # Create audit context for this operation
+    correlation_id = f"sso-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+    audit_context = None
+
+    if audit_logger and ENTERPRISE_AVAILABLE:
+        audit_context = AuditContext(
+            correlation_id=correlation_id,
+            actor_type=ActorType.USER,
+            organization_id=organization_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        # Log SSO login started
+        audit_logger.log(
+            context=audit_context,
+            action=AuditAction.SSO_LOGIN_STARTED,
+            details={
+                "provider_type": os.environ.get("SAML_PROVIDER_TYPE", "generic"),
+                "sp_entity_id": os.environ.get("SAML_SP_ENTITY_ID", "auto-claude-sp"),
+            },
+        )
+
+    try:
+        # Get SSO configuration
+        config = get_sso_config()
+
+        # Create SAML provider
+        provider = SAMLProvider(config)
+
+        # Validate SAML response and extract user identity
+        # This will raise ValueError if validation fails
+        user = provider.validate_response(saml_response)
+
+        # Update audit context with user info
+        if audit_context:
+            audit_context.actor_id = user.user_id
+            audit_context.user_email = user.email
+            audit_context.user_role = user.role
+            if organization_id:
+                audit_context.organization_id = organization_id
+
+        # Log SAML assertion verified
+        if audit_logger and audit_context:
+            audit_logger.log(
+                context=audit_context,
+                action=AuditAction.SAML_ASSERTION_VERIFIED,
+                details={
+                    "user_id": user.user_id,
+                    "email": user.email,
+                    "session_index": user.session_index,
+                    "assertion_expires_at": (
+                        user.assertion_expires_at.isoformat()
+                        if user.assertion_expires_at
+                        else None
+                    ),
+                },
+            )
+
+        # Log SSO login completed
+        if audit_logger and audit_context:
+            audit_logger.log(
+                context=audit_context,
+                action=AuditAction.SSO_LOGIN_COMPLETED,
+                result="success",
+                details={
+                    "user_id": user.user_id,
+                    "email": user.email,
+                    "role": user.role,
+                    "groups": user.groups,
+                    "jit_provisioned": (
+                        config.allow_jit_provisioning
+                        and not user.attributes.get("existing_user")
+                    ),
+                },
+            )
+
+        logger.info(
+            f"SSO authentication successful: user={user.email}, "
+            f"role={user.role}, correlation_id={correlation_id}"
+        )
+
+        return user
+
+    except Exception as e:
+        # Log SSO login failed
+        if audit_logger and audit_context:
+            audit_logger.log(
+                context=audit_context,
+                action=AuditAction.SSO_LOGIN_FAILED,
+                result="failure",
+                error=str(e),
+                details={
+                    "error_type": type(e).__name__,
+                },
+            )
+
+        logger.error(f"SSO authentication failed: {e}, correlation_id={correlation_id}")
+
+        # Log SAML assertion rejected if it's a validation error
+        if isinstance(e, ValueError) and audit_logger and audit_context:
+            audit_logger.log(
+                context=audit_context,
+                action=AuditAction.SAML_ASSERTION_REJECTED,
+                result="failure",
+                error=str(e),
+            )
+
+        # Re-raise the exception
+        raise
+
+
+def get_sso_user(session_id: str) -> "SAMLUser | None":
+    """
+    Get current SSO user from active session.
+
+    Retrieves the authenticated user identity for an active SSO session.
+    Returns None if session is not found or has expired.
+
+    Args:
+        session_id: Session ID from SSO authentication
+
+    Returns:
+        SAMLUser instance if session is active, None otherwise
+
+    Example:
+        >>> user = get_sso_user(session_id="abc123")
+        >>> if user:
+        ...     print(f"Active user: {user.email}")
+        ... else:
+        ...     print("Session expired or not found")
+    """
+    if not ENTERPRISE_AVAILABLE:
+        return None
+
+    if not is_sso_enabled():
+        return None
+
+    try:
+        # Get SSO configuration
+        config = get_sso_config()
+
+        # Create SAML provider
+        provider = SAMLProvider(config)
+
+        # Get session from provider
+        session = provider.get_session(session_id)
+
+        if session and not session.is_expired():
+            return session.user
+
+        return None
+
+    except Exception as e:
+        logger.warning(f"Failed to get SSO user from session: {e}")
+        return None

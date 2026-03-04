@@ -1,0 +1,166 @@
+{
+  "title": "Sécurité",
+  "description": "Gérer les paramètres de sécurité, les autorisations et les journaux d'audit",
+  "levels": {
+    "title": "Niveau de sécurité",
+    "paranoid": {
+      "name": "Paranoïaque",
+      "description": "Sécurité maximale avec autorisations minimales. Seules les commandes essentielles sont autorisées."
+    },
+    "standard": {
+      "name": "Standard",
+      "description": "Sécurité équilibrée avec restrictions raisonnables. Recommandé pour la plupart des utilisateurs."
+    },
+    "permissive": {
+      "name": "Permissif",
+      "description": "Restrictions minimales avec autorisations étendues. À utiliser avec prudence."
+    },
+    "maxCommands": "Max {{count}} commandes",
+    "filesystemRestricted": "Système de fichiers : Restreint",
+    "filesystemOpen": "Système de fichiers : Ouvert",
+    "apiRestricted": "API : Restreint",
+    "apiOpen": "API : Ouvert"
+  },
+  "status": {
+    "active": "Actif"
+  },
+  "profile": {
+    "title": "Profil de sécurité",
+    "totalCommands": "Total des commandes autorisées",
+    "filesystemAccess": "Accès au système de fichiers",
+    "apiAccess": "Accès API",
+    "restricted": "Restreint",
+    "fullAccess": "Accès complet"
+  },
+  "allowlist": {
+    "title": "Liste de blanchiment des commandes",
+    "description": "Contrôler les commandes que Auto-Claude peut exécuter dans la liste de blanchiment",
+    "stats": {
+      "total": "{{count}} au total",
+      "allowed": "{{count}} autorisées",
+      "blocked": "{{count}} bloquées"
+    },
+    "searchPlaceholder": "Rechercher des commandes dans la liste de blanchiment...",
+    "addButton": "Ajouter une commande",
+    "empty": "Aucune commande dans la liste de blanchiment. Ajoutez des commandes pour commencer.",
+    "noMatching": "Aucune commande ne correspond à votre recherche dans la liste de blanchiment",
+    "addedOn": "Ajoutée le {{date}}",
+    "filters": {
+      "all": "Toutes",
+      "allowed": "Autorisées",
+      "blocked": "Bloquées"
+    },
+    "addDialog": {
+      "title": "Ajouter une commande à la liste de blanchiment",
+      "description": "Ajouter une nouvelle commande à la liste de blanchiment de sécurité. Vous pouvez spécifier si elle est autorisée par défaut dans la liste de blanchiment.",
+      "commandLabel": "Commande",
+      "commandPlaceholder": "ex: npm, git, python3",
+      "labelLabel": "Libellé (Optionnel)",
+      "labelPlaceholder": "ex: Gestionnaire de paquets",
+      "allowedLabel": "Autorisée par défaut",
+      "allowedHint": "Si coché, la commande sera autorisée dans la liste de blanchiment. Si décoché, elle sera bloquée sauf si explicitement autorisée."
+    },
+    "status": {
+      "allowed": "Autorisée",
+      "blocked": "Bloquée",
+      "allowedHint": "Cette commande est actuellement autorisée à s'exécuter",
+      "blockedHint": "Cette commande est actuellement bloquée de s'exécuter dans la liste de blanchiment"
+    },
+    "actions": {
+      "allow": "Autoriser la commande",
+      "block": "Bloquer la commande",
+      "remove": "Retirer de la liste de blanchiment"
+    },
+    "removeDialog": {
+      "title": "Retirer la commande ?",
+      "description": "Êtes-vous sûr de vouloir retirer \"{{command}}\" de la liste de blanchiment ?",
+      "warning": "Cette action ne peut pas être annulée.",
+      "warningHint": "La commande sera retirée de la liste de blanchiment et reviendra à son comportement de sécurité par défaut."
+    },
+    "tipTitle": "Liste de blanchiment des commandes",
+    "tipDescription": "Gérer les commandes qu'Auto-Claude est autorisé à exécuter. Les commandes bloquées dans la liste de blanchiment seront empêchées de s'exécuter pour des raisons de sécurité."
+  },
+  "actions": {
+    "export": "Exporter la configuration",
+    "exporting": "Exportation..."
+  },
+  "audit": {
+    "title": "Journal d'audit",
+    "totalEvents": "Total des événements enregistrés",
+    "recentEvents": "Événements récents",
+    "noEvents": "Aucun événement de sécurité enregistré pour le moment",
+    "searchPlaceholder": "Rechercher par message, commande, chemin de fichier...",
+    "noMatchingEvents": "Aucun événement de sécurité correspondant",
+    "eventDetails": "Détails de l'événement",
+    "filters": {
+      "all": "Tous",
+      "category": "Catégorie",
+      "severity": "Gravité",
+      "status": "Statut",
+      "allowed": "Autorisé",
+      "blocked": "Bloqué"
+    },
+    "categories": {
+      "command_execution": "Commande",
+      "filesystem_access": "Système de fichiers",
+      "api_call": "Appel API",
+      "permission_change": "Permission",
+      "sandbox_violation": "Bac à sable",
+      "profile_loaded": "Profil",
+      "profile_exported": "Exportation",
+      "risk_detected": "Risque"
+    },
+    "severities": {
+      "info": "Info",
+      "warning": "Avertissement",
+      "critical": "Critique"
+    },
+    "status": {
+      "allowed": "Autorisé",
+      "blocked": "Bloqué"
+    }
+  },
+  "warnings": {
+    "permissiveLevel": "Le passage en mode Permissif autorisera un accès étendu au système. Cela peut exposer votre système à des risques de sécurité. Continuer ?",
+    "riskyConfigTitle": "Configuration de sécurité risquée",
+    "riskyConfigDescription": "Vos paramètres de sécurité actuels autorisent un accès étendu aux ressources système. Envisagez de passer en mode Standard ou Paranoïaque pour une meilleure sécurité.",
+    "dialogTitle": "Confirmer le changement de sécurité",
+    "confirmRisk": "Confirmer le risque",
+    "paranoidEnabled": "Niveau de sécurité paranoïaque activé - seules les commandes essentielles sont autorisées",
+    "paranoidDisabled": "Niveau de sécurité paranoïaque désactivé - retour aux paramètres de sécurité standard"
+  },
+  "toast": {
+    "loadProfileFailed": "Échec du chargement du profil de sécurité",
+    "saveProfileFailed": "Échec de l'enregistrement du profil de sécurité",
+    "levelApplied": "Niveau de sécurité appliqué",
+    "levelApplied.paranoid": "Niveau de sécurité Paranoïaque appliqué",
+    "levelApplied.standard": "Niveau de sécurité Standard appliqué",
+    "levelApplied.permissive": "Niveau de sécurité Permissif appliqué",
+    "exportSuccess": "Configuration exportée",
+    "exportSuccessDescription": "La configuration de sécurité a été téléchargée avec succès",
+    "exportFailed": "Échec de l'exportation de la configuration",
+    "logsRefreshed": "Journaux d'audit actualisés",
+    "logsRefreshedDescription": "Les journaux d'événements de sécurité ont été mis à jour",
+    "allowlistUpdated": "Liste de blanchiment des commandes mise à jour avec succès",
+    "allowlistUpdateFailed": "Échec de la mise à jour de la liste de blanchiment des commandes",
+    "commandAllowed": "Commande autorisée dans la liste de blanchiment",
+    "commandBlocked": "Commande bloquée dans la liste de blanchiment",
+    "commandRemoved": "Commande retirée de la liste de blanchiment",
+    "commandAdded": "Commande ajoutée à la liste de blanchiment"
+  },
+  "categories": {
+    "command_execution": "Commande",
+    "filesystem_access": "Système de fichiers",
+    "api_call": "Appel API",
+    "permission_change": "Permission",
+    "sandbox_violation": "Bac à sable",
+    "profile_loaded": "Profil",
+    "profile_exported": "Exportation",
+    "risk_detected": "Risque"
+  },
+  "severities": {
+    "info": "Info",
+    "warning": "Avertissement",
+    "critical": "Critique"
+  }
+}

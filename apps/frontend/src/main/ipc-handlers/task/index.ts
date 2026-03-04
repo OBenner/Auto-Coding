@@ -6,6 +6,8 @@
  * - Execution management (start, stop, review, status, recovery)
  * - Worktree operations (status, diff, merge, discard, list)
  * - Logs management (get, watch, unwatch)
+ * - Background tasks (long-running command execution and status queries)
+ * - Spec file reading (implementation plan, QA report, QA escalation)
  * - Export operations (export as ZIP)
  */
 
@@ -17,6 +19,8 @@ import { registerTaskExecutionHandlers } from './execution-handlers';
 import { registerWorktreeHandlers } from './worktree-handlers';
 import { registerTaskLogsHandlers } from './logs-handlers';
 import { registerTaskArchiveHandlers } from './archive-handlers';
+import { registerBackgroundTaskHandlers } from './background-task-handlers';
+import { registerSpecFileHandlers } from './spec-file-handlers';
 import { registerTaskExportHandlers } from './export-handlers';
 
 /**
@@ -41,6 +45,12 @@ export function registerTaskHandlers(
 
   // Register archive handlers (archive, unarchive)
   registerTaskArchiveHandlers();
+
+  // Register background task handlers (start, cancel, status, output, list)
+  registerBackgroundTaskHandlers(agentManager, getMainWindow);
+
+  // Register spec file handlers (implementation plan, QA report, QA escalation)
+  registerSpecFileHandlers();
 
   // Register export handlers (export as ZIP)
   registerTaskExportHandlers();

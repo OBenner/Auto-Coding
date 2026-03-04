@@ -23,7 +23,10 @@ class RequirementsPhaseMixin:
 
     async def phase_historical_context(self) -> PhaseResult:
         """Retrieve historical context from Graphiti knowledge graph (if enabled)."""
-        from integrations.graphiti.providers_pkg import get_graph_hints, is_graphiti_enabled
+        from integrations.graphiti.providers_pkg import (
+            get_graph_hints,
+            is_graphiti_enabled,
+        )
 
         hints_file = self.spec_dir / "graph_hints.json"
 
@@ -201,6 +204,10 @@ class RequirementsPhaseMixin:
 
         errors = []
         for attempt in range(MAX_RETRIES):
+            # Clean up stale research file before retry so Write tool works
+            if attempt > 0 and research_file.exists():
+                research_file.unlink()
+
             self.ui.print_status(
                 f"Running research agent (attempt {attempt + 1})...", "progress"
             )

@@ -18,14 +18,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-
 # Add auto-claude directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from merge import (
     ChangeType,
-    SemanticChange,
     FileAnalysis,
+    SemanticChange,
     TaskSnapshot,
 )
 from merge.types import compute_content_hash, sanitize_path_for_storage
@@ -264,4 +263,6 @@ class TestTaskSnapshot:
         assert restored.task_intent == original.task_intent
         assert restored.started_at == original.started_at
         assert len(restored.semantic_changes) == len(original.semantic_changes)
-        assert restored.semantic_changes[0].target == original.semantic_changes[0].target
+        assert (
+            restored.semantic_changes[0].target == original.semantic_changes[0].target
+        )

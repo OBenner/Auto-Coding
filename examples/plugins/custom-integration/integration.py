@@ -19,7 +19,6 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from apps.backend.plugins.base import PluginMetadata
 from apps.backend.plugins.sdk.integration import IntegrationContext, IntegrationPlugin
@@ -68,7 +67,9 @@ class MockTaskManagerClient:
         """Check if the client can access the service."""
         return self.tasks_file.exists()
 
-    def create_task(self, title: str, description: str, status: str = "pending") -> dict:
+    def create_task(
+        self, title: str, description: str, status: str = "pending"
+    ) -> dict:
         """Create a new task."""
         tasks = self._load_tasks()
         task_id = len(tasks) + 1
@@ -85,14 +86,14 @@ class MockTaskManagerClient:
         logger.info(f"Created task #{task_id}: {title}")
         return task
 
-    def list_tasks(self, status: Optional[str] = None) -> list[dict]:
+    def list_tasks(self, status: str | None = None) -> list[dict]:
         """List all tasks, optionally filtered by status."""
         tasks = self._load_tasks()
         if status:
             tasks = [t for t in tasks if t.get("status") == status]
         return tasks
 
-    def update_task(self, task_id: int, status: str) -> Optional[dict]:
+    def update_task(self, task_id: int, status: str) -> dict | None:
         """Update a task's status."""
         tasks = self._load_tasks()
         for task in tasks:
@@ -104,7 +105,7 @@ class MockTaskManagerClient:
                 return task
         return None
 
-    def get_task(self, task_id: int) -> Optional[dict]:
+    def get_task(self, task_id: int) -> dict | None:
         """Get a task by ID."""
         tasks = self._load_tasks()
         for task in tasks:
@@ -130,7 +131,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
     def __init__(self, metadata: PluginMetadata):
         """Initialize the custom integration plugin."""
         super().__init__(metadata)
-        self.client: Optional[MockTaskManagerClient] = None
+        self.client: MockTaskManagerClient | None = None
         logger.debug("CustomIntegrationPlugin initialized")
 
     def on_load(self) -> None:
@@ -228,7 +229,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
             self.save_state(context)
             return json.dumps(task, indent=2)
 
-        def list_tasks(status: Optional[str] = None) -> str:
+        def list_tasks(status: str | None = None) -> str:
             """
             List all tasks from the external TaskManager.
 
@@ -300,9 +301,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
             True if TaskManager is connected and available
         """
         return (
-            self.is_enabled
-            and self.client is not None
-            and self.client.is_connected()
+            self.is_enabled and self.client is not None and self.client.is_connected()
         )
 
     def sync_data(self, context: IntegrationContext) -> None:
@@ -372,9 +371,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
         if not self.is_available():
             return
 
-        logger.info(
-            f"custom-integration: Subtask {subtask_id} updated to {status}"
-        )
+        logger.info(f"custom-integration: Subtask {subtask_id} updated to {status}")
 
         # Update task in external system
         task_mapping = context.get_state("task_mapping", {})
@@ -393,9 +390,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
         if not self.is_available():
             return
 
-        logger.info(
-            f"custom-integration: Build started for spec '{context.spec_name}'"
-        )
+        logger.info(f"custom-integration: Build started for spec '{context.spec_name}'")
 
         # Create a "build started" task
         if self.client:

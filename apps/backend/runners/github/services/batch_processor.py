@@ -7,15 +7,14 @@ Handles batch processing of similar issues.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 try:
     from ..models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
     from .io_utils import safe_print
 except (ImportError, ValueError, SystemError):
-    from models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
-    from services.io_utils import safe_print
+    from runners.github.models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
+    from runners.github.services.io_utils import safe_print
 
 
 class BatchProcessor:

@@ -120,7 +120,10 @@ async def test_graphiti_status():
     print("\n=== Testing Graphiti Status ===")
 
     try:
-        from integrations.graphiti.config import get_graphiti_status, is_graphiti_enabled
+        from integrations.graphiti.config import (
+            get_graphiti_status,
+            is_graphiti_enabled,
+        )
 
         enabled = is_graphiti_enabled()
         status = get_graphiti_status()
