@@ -6,13 +6,13 @@ based on feedback and success patterns.
 
 ## Architecture
 
-```
+```text
 Frontend (Settings UI)          Backend (Agent Runtime)
 ┌─────────────────────┐        ┌─────────────────────────┐
 │ AgentPreferences.tsx │───────>│ preferences.py          │
 │ (OptionButtonGroup)  │  IPC   │ (PreferenceProfile)     │
 │                      │        │ (app_settings_to_profile)│
-│ settings-store.ts    │        │ (modify_prompt_for_prefs)│
+│ settings-store.ts    │        │ (modify_prompt_for_preferences)│
 │ (migration + persist)│        │                         │
 └─────────────────────┘        └────────────┬────────────┘
                                             │
@@ -67,7 +67,7 @@ Frontend (Settings UI)          Backend (Agent Runtime)
 
 ## Safety
 
-- **Enum validation**: `_safe_enum()` catches `ValueError` from invalid frontend values
+- **Enum validation**: `_safe_enum()` catches `ValueError`/`TypeError` from invalid frontend values
 - **Type coercion**: `feedback-api.ts` coerces values to strings before `.trim()`
 - **Env guard**: Feedback handler checks `pythonEnvManager.isEnvReady()` before spawning
 - **Subprocess timeout**: 30s timeout with SIGTERM → SIGKILL fallback

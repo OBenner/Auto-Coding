@@ -382,9 +382,17 @@ export async function loadSettings(): Promise<void> {
       }
       if (migratedSettings.agentVerbosity !== result.data.agentVerbosity) {
         migrationUpdates.agentVerbosity = migratedSettings.agentVerbosity;
+      }
+      if (migratedSettings.agentRiskTolerance !== result.data.agentRiskTolerance) {
         migrationUpdates.agentRiskTolerance = migratedSettings.agentRiskTolerance;
+      }
+      if (migratedSettings.agentProjectType !== result.data.agentProjectType) {
         migrationUpdates.agentProjectType = migratedSettings.agentProjectType;
+      }
+      if (migratedSettings.agentCodingStyle !== result.data.agentCodingStyle) {
         migrationUpdates.agentCodingStyle = migratedSettings.agentCodingStyle;
+      }
+      if (migratedSettings.agentUserInstructions !== result.data.agentUserInstructions) {
         migrationUpdates.agentUserInstructions = migratedSettings.agentUserInstructions;
       }
       if (Object.keys(migrationUpdates).length > 0) {

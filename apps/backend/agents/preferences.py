@@ -512,7 +512,7 @@ def _safe_enum(enum_cls: type[Enum], value: str, default: Enum) -> Enum:
     """Safely convert a string to an enum, returning default on invalid value."""
     try:
         return enum_cls(value)
-    except ValueError:
+    except (ValueError, TypeError):
         return default
 
 

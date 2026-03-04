@@ -730,7 +730,14 @@ describe('settings-store', () => {
       expect(state.settings.onboardingCompleted).toBe(true);
       // Both onboarding and agent preference migrations are persisted
       expect(window.electronAPI.saveSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ onboardingCompleted: true })
+        expect.objectContaining({
+          onboardingCompleted: true,
+          agentVerbosity: 'normal',
+          agentRiskTolerance: 'balanced',
+          agentProjectType: 'established',
+          agentCodingStyle: {},
+          agentUserInstructions: [],
+        })
       );
     });
 
@@ -753,7 +760,14 @@ describe('settings-store', () => {
       expect(state.settings.onboardingCompleted).toBe(false);
       // Both onboarding and agent preference migrations are persisted
       expect(window.electronAPI.saveSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ onboardingCompleted: false })
+        expect.objectContaining({
+          onboardingCompleted: false,
+          agentVerbosity: 'normal',
+          agentRiskTolerance: 'balanced',
+          agentProjectType: 'established',
+          agentCodingStyle: {},
+          agentUserInstructions: [],
+        })
       );
     });
 
