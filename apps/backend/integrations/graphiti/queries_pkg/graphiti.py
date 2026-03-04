@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from core.sentry import capture_exception
-from graphiti_config import GraphitiConfig, GraphitiState
+from integrations.graphiti.config import GraphitiConfig, GraphitiState
 
 from .client import GraphitiClient
 from .code_relationships import CodeRelationshipQueries
@@ -229,6 +229,11 @@ class GraphitiMemory:
             self._code_relationships = None
 
     @property
+    def client(self) -> "GraphitiClient | None":
+        """Get the underlying GraphitiClient (must be initialized first)."""
+        return self._client
+
+    @property
     def code_relationships(self) -> CodeRelationshipQueries | None:
         """
         Get the code relationship queries module.
@@ -295,13 +300,24 @@ class GraphitiMemory:
             )
             return False
 
-    async def save_pattern(self, pattern: str) -> bool:
-        """Save a code pattern to the knowledge graph."""
+    async def save_pattern(
+        self, pattern: str, category_metadata: dict | None = None
+    ) -> bool:
+        """
+        Save a code pattern to the knowledge graph.
+
+        Args:
+            pattern: Description of the code pattern
+            category_metadata: Optional dict with category, confidence, reasoning
+
+        Returns:
+            True if saved successfully
+        """
         if not await self._ensure_initialized():
             return False
 
         try:
-            result = await self._queries.add_pattern(pattern)
+            result = await self._queries.add_pattern(pattern, category_metadata)
 
             if result and self.state:
                 self.state.episode_count += 1
@@ -468,6 +484,120 @@ class GraphitiMemory:
                 e,
                 component="graphiti",
                 operation="save_structured_insights",
+            )
+            return False
+
+    async def save_preference_profile(self, profile_data: dict) -> bool:
+        """
+        Save or update a preference profile to the knowledge graph.
+
+        Args:
+            profile_data: PreferenceProfile dictionary from PreferenceProfile.to_dict()
+
+        Returns:
+            True if saved successfully
+        """
+        if not await self._ensure_initialized():
+            return False
+
+        try:
+            result = await self._queries.save_preference_profile(profile_data)
+
+            if result and self.state:
+                self.state.episode_count += 1
+                self.state.save(self.spec_dir)
+
+            return result
+        except Exception as e:
+            logger.warning(f"Failed to save preference profile: {e}")
+            self._record_error(f"save_preference_profile failed: {e}")
+            capture_exception(
+                e,
+                component="graphiti",
+                operation="save_preference_profile",
+            )
+            return False
+
+    async def get_preference_profile(self) -> dict | None:
+        """
+        Get the most recent preference profile from the knowledge graph.
+
+        Returns:
+            PreferenceProfile dictionary or None if not found
+        """
+        if not await self._ensure_initialized():
+            return None
+
+        try:
+            return await self._queries.get_preference_profile()
+        except Exception as e:
+            logger.warning(f"Failed to get preference profile: {e}")
+            self._record_error(f"get_preference_profile failed: {e}")
+            capture_exception(
+                e,
+                component="graphiti",
+                operation="get_preference_profile",
+            )
+            return None
+
+    async def add_feedback_to_profile(
+        self,
+        feedback_type: str,
+        task_description: str,
+        agent_type: str,
+        context: dict,
+        rating: int | None = None,
+    ) -> bool:
+        """
+        Add user feedback to the preference profile and save it.
+
+        This is a convenience method that:
+        1. Retrieves the current profile (or creates a new one)
+        2. Adds the feedback record
+        3. Saves the updated profile back to storage
+
+        Args:
+            feedback_type: Type of feedback (FeedbackType enum or string)
+            task_description: Description of the task that was evaluated
+            agent_type: Agent that produced the output
+            context: Additional context about the feedback
+            rating: Optional rating (1-5 for stars, 0/1 for thumbs)
+
+        Returns:
+            True if feedback was added and saved successfully
+        """
+        if not await self._ensure_initialized():
+            return False
+
+        try:
+            from agents.preferences import PreferenceProfile
+
+            # Get existing profile or create new one
+            profile_dict = await self.get_preference_profile()
+            if profile_dict:
+                profile = PreferenceProfile.from_dict(profile_dict)
+            else:
+                profile = PreferenceProfile()
+
+            # Add the feedback (this also updates learned adjustments)
+            profile.add_feedback(
+                feedback_type=feedback_type,
+                task_description=task_description,
+                agent_type=agent_type,
+                context=context,
+                rating=rating,
+            )
+
+            # Save updated profile
+            return await self.save_preference_profile(profile.to_dict())
+
+        except Exception as e:
+            logger.warning(f"Failed to add feedback to profile: {e}")
+            self._record_error(f"add_feedback_to_profile failed: {e}")
+            capture_exception(
+                e,
+                component="graphiti",
+                operation="add_feedback_to_profile",
             )
             return False
 

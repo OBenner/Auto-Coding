@@ -7,10 +7,16 @@ Handles session memory storage using dual-layer approach:
 - FALLBACK: File-based memory - zero dependencies, always available
 """
 
+import json
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from core.sentry import capture_exception
+
+if TYPE_CHECKING:
+    from agents.session_context import SessionContext
+
 from debug import (
     debug,
     debug_detailed,
@@ -20,14 +26,76 @@ from debug import (
     debug_warning,
     is_debug_enabled,
 )
-from graphiti_config import get_graphiti_status, is_graphiti_enabled
+from integrations.graphiti.config import get_graphiti_status, is_graphiti_enabled
 
 # Import from parent memory package
 # Now safe since this module is named memory_manager (not memory)
 from memory import save_session_insights as save_file_based_memory
 from memory.graphiti_helpers import get_graphiti_memory
+from memory.patterns import (
+    save_detected_patterns_from_errors,
+    save_detected_patterns_from_naming,
+    save_detected_patterns_from_organization,
+)
 
 logger = logging.getLogger(__name__)
+
+
+async def get_session_context(
+    spec_dir: Path,
+    project_dir: Path,
+) -> "SessionContext | None":
+    """
+    Get SessionContext instance for managing conversation history in Graphiti.
+
+    This provides access to session context storage and retrieval for:
+    - Persisting conversation history across restarts
+    - Tracking code references
+    - Optimizing context window
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+
+    Returns:
+        SessionContext instance or None if initialization fails
+    """
+    try:
+        from agents.session_context import SessionContext
+
+        # Create SessionContext instance
+        session_context = SessionContext(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+        )
+
+        # Initialize Graphiti connection
+        if await session_context.initialize():
+            debug_success(
+                "memory",
+                "SessionContext initialized",
+                spec_dir=str(spec_dir),
+            )
+            return session_context
+        else:
+            debug_warning(
+                "memory",
+                "SessionContext initialization failed - Graphiti not available",
+            )
+            return None
+
+    except Exception as e:
+        debug_error(
+            "memory",
+            f"Failed to create SessionContext: {e}",
+        )
+        logger.warning(f"Failed to create SessionContext: {e}")
+        capture_exception(
+            e,
+            operation="get_session_context",
+            spec_dir=str(spec_dir),
+        )
+        return None
 
 
 def debug_memory_system_status() -> None:
@@ -81,6 +149,87 @@ def debug_memory_system_status() -> None:
             "Graphiti disabled, using file-based memory only",
             note="Set GRAPHITI_ENABLED=true to enable Graphiti",
         )
+
+
+async def learn_patterns(
+    spec_dir: Path,
+    project_dir: Path,
+    modified_files: list[Path],
+    pattern_types: list[str] | None = None,
+) -> int:
+    """
+    Learn patterns from modified files during an agent session.
+
+    This monitors code changes during agent sessions, extracts patterns
+    (API usage, error handling, state management, etc.), and stores them
+    in Graphiti for future reference.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        modified_files: List of files modified during the session
+        pattern_types: Optional list of pattern types to extract
+                      Defaults to ["api", "error", "state", "import"]
+
+    Returns:
+        Number of patterns learned and stored
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Learning patterns from agent session",
+            modified_files_count=len(modified_files),
+            pattern_types=pattern_types,
+        )
+
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping pattern learning")
+        return 0
+
+    if not modified_files:
+        if is_debug_enabled():
+            debug("memory", "No modified files to learn from")
+        return 0
+
+    try:
+        # Import here to avoid circular dependency
+        from integrations.graphiti.pattern_learner import PatternLearner
+
+        # Create pattern learner instance
+        learner = PatternLearner(spec_dir, project_dir)
+
+        # Learn patterns from session
+        pattern_count = await learner.learn_from_session(
+            modified_files=modified_files,
+            pattern_types=pattern_types,
+        )
+
+        if is_debug_enabled():
+            debug_success(
+                "memory",
+                "Pattern learning complete",
+                patterns_learned=pattern_count,
+                files_analyzed=len(modified_files),
+            )
+
+        return pattern_count
+
+    except Exception as e:
+        logger.warning(f"Failed to learn patterns: {e}")
+        if is_debug_enabled():
+            debug_error(
+                "memory",
+                "Pattern learning failed",
+                error=str(e),
+                files=len(modified_files),
+            )
+        capture_exception(
+            e,
+            operation="learn_patterns",
+            modified_files_count=len(modified_files),
+        )
+        return 0
 
 
 async def get_pattern_suggestions(
@@ -228,6 +377,256 @@ async def get_pattern_suggestions(
             spec_dir=str(spec_dir),
             project_dir=str(project_dir),
             operation="get_pattern_suggestions",
+        )
+        return None
+    finally:
+        # Close memory connection if we opened it
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
+async def get_failure_patterns(
+    spec_dir: Path,
+    project_dir: Path,
+    query: str,
+    failure_types: list[str] | None = None,
+    num_results: int = 5,
+    min_score: float = 0.5,
+) -> str | None:
+    """
+    Retrieve failure patterns from Graphiti for the current task.
+
+    This searches the knowledge graph for relevant root cause analyses
+    from past failures, returning categorized patterns with recommendations.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        query: Task description or error message to search for
+        failure_types: Optional list of failure types to filter by
+                       ("qa_rejection", "build_error", "test_failure")
+        num_results: Maximum number of patterns to return (default: 5)
+        min_score: Minimum relevance score 0.0-1.0 (default: 0.5)
+
+    Returns:
+        Formatted failure pattern suggestions string or None if unavailable
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Retrieving failure patterns",
+            query=query[:100],
+            failure_types=failure_types,
+            num_results=num_results,
+        )
+
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping failure pattern retrieval")
+        return None
+
+    memory = None
+    try:
+        # Get GraphitiMemory instance
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "GraphitiMemory not available for failure patterns"
+                )
+            return None
+
+        # Import schema constants
+        from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_ROOT_CAUSE
+
+        if is_debug_enabled():
+            debug_detailed(
+                "memory",
+                "Searching for failure patterns",
+                query=query[:200],
+                group_id=memory.group_id,
+                failure_types=failure_types,
+            )
+
+        # Search for root cause episodes
+        search_query = f"root cause failure {query}"
+        client = memory.client
+        if client is None:
+            if is_debug_enabled():
+                debug_warning("memory", "No client available on memory instance")
+            return None
+        results = await client.graphiti.search(
+            query=search_query,
+            group_ids=[memory.group_id],
+            num_results=num_results * 2,  # Get extra results for filtering
+        )
+
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Failure pattern search complete",
+                raw_results=len(results) if results else 0,
+            )
+
+        if not results:
+            if is_debug_enabled():
+                debug("memory", "No failure patterns found")
+            return None
+
+        # Parse and filter results
+        failure_patterns = []
+        for result in results:
+            content = (
+                getattr(result, "content", None)
+                or getattr(result, "fact", None)
+                or (result.get("content") if isinstance(result, dict) else None)
+            )
+            score = getattr(result, "score", None)
+            if score is None and isinstance(result, dict):
+                score = result.get("score", 0.0)
+            if score is None:
+                score = 0.0
+
+            if score < min_score:
+                continue
+
+            if content:
+                try:
+                    data = json.loads(content) if isinstance(content, str) else content
+
+                    # Ensure data is a dict
+                    if not isinstance(data, dict):
+                        continue
+
+                    # Verify it's a root cause episode
+                    if data.get("type") != EPISODE_TYPE_ROOT_CAUSE:
+                        continue
+
+                    # Filter by failure type if specified
+                    if failure_types and data.get("failure_type") not in failure_types:
+                        continue
+
+                    # Extract failure pattern data
+                    pattern = {
+                        "failure_type": data.get("failure_type", "unknown"),
+                        "category": data.get("category", "unknown"),
+                        "description": data.get("description", ""),
+                        "affected_files": data.get("affected_files", []),
+                        "confidence": data.get("confidence", 0.0),
+                        "recommendations": data.get("recommendations", []),
+                        "is_recurring": data.get("is_recurring", False),
+                        "score": score,
+                        "spec_id": data.get("spec_id", ""),
+                    }
+
+                    failure_patterns.append(pattern)
+
+                    if len(failure_patterns) >= num_results:
+                        break
+
+                except (json.JSONDecodeError, AttributeError, KeyError) as e:
+                    if is_debug_enabled():
+                        debug_warning(
+                            "memory",
+                            "Failed to parse failure pattern result",
+                            error=str(e),
+                        )
+                    continue
+
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Failure pattern parsing complete",
+                patterns_found=len(failure_patterns),
+            )
+
+        if not failure_patterns:
+            if is_debug_enabled():
+                debug("memory", "No relevant failure patterns after filtering")
+            return None
+
+        # Format the failure patterns
+        sections = ["## Failure Pattern Analysis\n"]
+        sections.append("_Similar failures from past builds (learn from history):_\n")
+
+        # Group patterns by failure type and category
+        by_type: dict[str, list[dict]] = {}
+        for pattern in failure_patterns:
+            failure_type = pattern.get("failure_type", "unknown")
+            if failure_type not in by_type:
+                by_type[failure_type] = []
+            by_type[failure_type].append(pattern)
+
+        # Format each failure type
+        for failure_type, type_patterns in by_type.items():
+            sections.append(f"### {failure_type.replace('_', ' ').title()}\n")
+
+            # Group by category within type
+            by_category: dict[str, list[dict]] = {}
+            for p in type_patterns:
+                category = p.get("category", "uncategorized")
+                if category not in by_category:
+                    by_category[category] = []
+                by_category[category].append(p)
+
+            for category, category_patterns in by_category.items():
+                sections.append(f"#### {category.replace('_', ' ').title()}\n")
+                for p in category_patterns:
+                    description = p.get("description", "")
+                    confidence = p.get("confidence", 0.0)
+                    score = p.get("score", 0.0)
+                    recommendations = p.get("recommendations", [])
+                    is_recurring = p.get("is_recurring", False)
+                    affected_files = p.get("affected_files", [])
+                    spec_id = p.get("spec_id", "")
+
+                    sections.append(f"- **Root Cause**: {description}\n")
+
+                    if affected_files:
+                        files_str = ", ".join(affected_files[:3])
+                        if len(affected_files) > 3:
+                            files_str += f" (+{len(affected_files) - 3} more)"
+                        sections.append(f"  _Affected Files_: {files_str}\n")
+
+                    if recommendations:
+                        sections.append("  _Recommendations_:\n")
+                        for rec in recommendations[:3]:  # Limit to top 3
+                            sections.append(f"    • {rec}\n")
+
+                    sections.append(
+                        f"  _Confidence_: {confidence:.2f} | _Relevance_: {score:.2f}"
+                    )
+                    if is_recurring:
+                        sections.append(" | ⚠️ _RECURRING ISSUE_")
+                    if spec_id:
+                        sections.append(f" | _From_: {spec_id}")
+                    sections.append("\n")
+
+        formatted = "".join(sections)
+
+        if is_debug_enabled():
+            debug_success(
+                "memory",
+                "Failure patterns formatted",
+                types=len(by_type),
+                total_patterns=len(failure_patterns),
+            )
+
+        return formatted
+
+    except Exception as e:
+        if is_debug_enabled():
+            debug_error("memory", "Failed to get failure patterns", error=str(e))
+        logger.warning(f"Failed to get failure patterns: {e}")
+        capture_exception(
+            e,
+            query_summary=query[:100] if query else "",
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+            operation="get_failure_patterns",
         )
         return None
     finally:
@@ -403,7 +802,7 @@ async def get_graphiti_context(
         if memory is not None:
             try:
                 await memory.close()
-            except Exception as e:
+            except Exception:
                 logger.debug(
                     "Failed to close Graphiti memory connection", exc_info=True
                 )
@@ -627,6 +1026,531 @@ async def save_session_memory(
         return False, "none"
 
 
+async def get_team_context(
+    spec_dir: Path,
+    project_dir: Path,
+    subtask: dict,
+) -> str | None:
+    """
+    Retrieve relevant context from team knowledge base for the current subtask.
+
+    This searches the indexed documentation (Notion, Confluence, GitHub Wiki, GitBook)
+    for content relevant to the subtask's task description, returning team standards,
+    conventions, and best practices.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        subtask: The current subtask being worked on
+
+    Returns:
+        Formatted context string or None if unavailable
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Retrieving team knowledge base context for subtask",
+            subtask_id=subtask.get("id", "unknown"),
+            subtask_desc=subtask.get("description", "")[:100],
+        )
+
+    manager = None
+    try:
+        # Import here to avoid circular imports
+        from integrations.knowledge_base import KnowledgeBaseManager
+        from integrations.knowledge_base.indexer import DocumentationIndexer
+
+        # Initialize manager
+        manager = KnowledgeBaseManager(spec_dir, project_dir)
+
+        if not manager.is_enabled:
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Team knowledge base not configured",
+                    note="Configure NOTION_TOKEN, CONFLUENCE_API_TOKEN, GITHUB_TOKEN, or GITBOOK_API_KEY in .env",
+                )
+            return None
+
+        # Initialize if needed
+        if not await manager.initialize():
+            if is_debug_enabled():
+                debug_warning("memory", "Failed to initialize team knowledge base")
+            return None
+
+        # Build search query from subtask description
+        subtask_desc = subtask.get("description", "")
+        subtask_id = subtask.get("id", "")
+        query = f"{subtask_desc} {subtask_id}".strip()
+
+        if not query:
+            if is_debug_enabled():
+                debug_warning("memory", "Empty query, skipping team context retrieval")
+            return None
+
+        if is_debug_enabled():
+            debug_detailed(
+                "memory",
+                "Searching team knowledge base",
+                query=query[:200],
+            )
+
+        # Create indexer and search
+        indexer = DocumentationIndexer(spec_dir, project_dir, manager.state)
+        context_items = await indexer.get_relevant_context(
+            query=query, num_results=5, min_score=0.3
+        )
+
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Team knowledge base search complete",
+                results_found=len(context_items) if context_items else 0,
+            )
+
+        if not context_items:
+            if is_debug_enabled():
+                debug("memory", "No relevant team documentation found")
+            return None
+
+        # Format the context
+        sections = ["## Team Knowledge Base\n"]
+        sections.append("_Relevant team documentation and standards:_\n")
+
+        # Group by source
+        by_source: dict[str, list[dict]] = {}
+        for item in context_items:
+            source = item.get("source", "unknown")
+            if source not in by_source:
+                by_source[source] = []
+            by_source[source].append(item)
+
+        # Format each source
+        for source, items in by_source.items():
+            sections.append(
+                f"### {source.replace('-', ' ').replace('_', ' ').title()}\n"
+            )
+            for item in items:
+                content = item.get("content", "")
+                title = item.get("title", "")
+                url = item.get("url", "")
+                score = item.get("score", 0.0)
+
+                sections.append(f"- **{title}** (relevance: {score:.2f})\n")
+                if url:
+                    sections.append(f"  _Source_: {url}\n")
+                # Truncate content for readability
+                max_content_length = 800
+                if len(content) > max_content_length:
+                    content = content[:max_content_length] + "..."
+                sections.append(f"  {content}\n")
+
+        if is_debug_enabled():
+            debug_success(
+                "memory",
+                "Team knowledge base context formatted",
+                total_sources=len(by_source),
+                total_items=len(context_items),
+            )
+
+        return "\n".join(sections)
+
+    except Exception as e:
+        logger.warning(f"Failed to get team knowledge base context: {e}")
+        if is_debug_enabled():
+            debug_error(
+                "memory", "Team knowledge base context retrieval failed", error=str(e)
+            )
+        capture_exception(
+            e,
+            operation="get_team_context",
+            subtask_id=subtask.get("id", "unknown"),
+            subtask_desc=subtask.get("description", "")[:200],
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return None
+    finally:
+        # Always close the manager connection
+        if manager is not None:
+            try:
+                await manager.close()
+            except Exception:
+                pass
+
+
+async def save_feedback(
+    spec_dir: Path,
+    project_dir: Path,
+    feedback_type: str,
+    task_description: str,
+    agent_type: str,
+    context: dict | None = None,
+    rating: int | None = None,
+) -> bool:
+    """
+    Save user feedback (accept/reject/modify) to memory and update preferences.
+
+    This is the primary feedback collection function that tracks all user
+    interactions with agent outputs and updates the preference profile to
+    enable adaptive behavior.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        feedback_type: Type of feedback ("accepted", "rejected", "modified")
+        task_description: Description of the task that was evaluated
+        agent_type: Type of agent that produced the output (planner, coder, qa_reviewer, etc.)
+        context: Optional additional context about the feedback
+                 For "modified": should include what was changed
+                 For "rejected": should include why it was rejected
+        rating: Optional rating (1-5 for stars, or 0/1 for thumbs down/up)
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping feedback save")
+        return False
+
+    memory = None
+    try:
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning("memory", "GraphitiMemory not available for feedback")
+            return False
+
+        if is_debug_enabled():
+            debug_data = {
+                "feedback_type": feedback_type,
+                "agent_type": agent_type,
+                "task": task_description[:100],
+            }
+            if rating is not None:
+                debug_data["rating"] = rating
+            debug(
+                "memory",
+                "Saving user feedback",
+                **debug_data,
+            )
+
+        # Save feedback to preference profile via Graphiti
+        from agents.preferences import FeedbackType
+
+        # Validate feedback type
+        try:
+            feedback_enum = FeedbackType(feedback_type)
+        except ValueError:
+            logger.warning(f"Invalid feedback type: {feedback_type}")
+            if is_debug_enabled():
+                debug_error(
+                    "memory", "Invalid feedback type", feedback_type=feedback_type
+                )
+            return False
+
+        # Store feedback in Graphiti as an episode
+        episode_data = {
+            "episode_type": "user_feedback",
+            "feedback_type": feedback_type,
+            "task_description": task_description,
+            "agent_type": agent_type,
+            "context": context or {},
+        }
+        if rating is not None:
+            episode_data["rating"] = rating
+
+        # Build insights based on feedback type
+        insights = {
+            "what_failed": [],
+            "what_worked": [],
+            "discoveries": {},
+            "recommendations_for_next_session": [],
+            "subtasks_completed": [],
+            "_user_feedback": episode_data,
+        }
+
+        if feedback_enum == FeedbackType.ACCEPTED:
+            insights["what_worked"].append(
+                f"{agent_type} output accepted for: {task_description[:200]}"
+            )
+            insights["recommendations_for_next_session"].append(
+                f"Continue current approach for {agent_type} tasks"
+            )
+        elif feedback_enum == FeedbackType.REJECTED:
+            reason = (
+                context.get("reason", "No reason provided")
+                if context
+                else "No reason provided"
+            )
+            insights["what_failed"].append(
+                f"{agent_type} output rejected: {task_description[:200]}"
+            )
+            insights["discoveries"]["gotchas_encountered"] = [
+                {
+                    "gotcha": f"User rejected {agent_type} approach",
+                    "solution": reason[:500],
+                    "source": "user_feedback",
+                }
+            ]
+            insights["recommendations_for_next_session"].append(
+                f"Adjust {agent_type} approach: {reason[:300]}"
+            )
+        elif feedback_enum == FeedbackType.MODIFIED:
+            modifications = (
+                context.get("modifications", "User made changes")
+                if context
+                else "User made changes"
+            )
+            reason = context.get("reason", "") if context else ""
+            insights["what_worked"].append(
+                f"{agent_type} output partially accepted (with modifications)"
+            )
+            insights["what_failed"].append(
+                f"Required modification: {modifications[:200]}"
+            )
+            if reason:
+                insights["discoveries"]["patterns"] = [
+                    {
+                        "pattern": f"User prefers different approach for {task_description[:100]}",
+                        "reason": reason[:300],
+                        "source": "user_feedback",
+                    }
+                ]
+            insights["recommendations_for_next_session"].append(
+                f"Apply learned modifications: {modifications[:300]}"
+            )
+
+        # Save to Graphiti
+        result = await memory.save_session_insights(
+            session_num=0,  # Feedback is session-independent
+            insights=insights,
+        )
+
+        # Also update preference profile directly
+        profile_kwargs = {
+            "feedback_type": feedback_enum,
+            "task_description": task_description,
+            "agent_type": agent_type,
+            "context": context or {},
+        }
+        if rating is not None:
+            profile_kwargs["rating"] = rating
+        profile_result = await memory.add_feedback_to_profile(**profile_kwargs)
+
+        if result and profile_result:
+            logger.info(f"User feedback saved: {feedback_type} for {agent_type} task")
+            if is_debug_enabled():
+                debug_success(
+                    "memory",
+                    "Feedback saved successfully",
+                    feedback_type=feedback_type,
+                    profile_updated=profile_result,
+                )
+        return bool(result and profile_result)
+
+    except Exception as e:
+        logger.warning(f"Failed to save user feedback: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Feedback save failed", error=str(e))
+        capture_exception(
+            e,
+            operation="save_feedback",
+            feedback_type=feedback_type,
+            agent_type=agent_type,
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
+async def track_improvement(
+    spec_dir: Path,
+    project_dir: Path,
+    improvement_description: str,
+    feedback_ids: list[str] | None = None,
+    before_metrics: dict | None = None,
+    after_metrics: dict | None = None,
+    agent_type: str | None = None,
+    context: dict | None = None,
+) -> bool:
+    """
+    Track an improvement made in response to user feedback.
+
+    This function records when user feedback has led to a measurable improvement
+    in agent behavior, code quality, or user satisfaction. This creates a feedback
+    loop showing how user input directly influences the system.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        improvement_description: Description of what was improved
+        feedback_ids: Optional list of feedback IDs that triggered this improvement
+        before_metrics: Optional metrics before the improvement
+                       (e.g., {"success_rate": 0.6, "avg_rating": 3.2})
+        after_metrics: Optional metrics after the improvement
+                      (e.g., {"success_rate": 0.85, "avg_rating": 4.1})
+        agent_type: Optional agent type that was improved (planner, coder, etc.)
+        context: Optional additional context about the improvement
+
+    Returns:
+        True if tracked successfully, False otherwise
+
+    Example:
+        >>> await track_improvement(
+        ...     spec_dir=Path(".auto-claude/specs/001"),
+        ...     project_dir=Path("."),
+        ...     improvement_description="Improved error handling based on user feedback",
+        ...     feedback_ids=["feedback_123", "feedback_456"],
+        ...     before_metrics={"error_rate": 0.15},
+        ...     after_metrics={"error_rate": 0.03},
+        ...     agent_type="coder"
+        ... )
+    """
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping improvement tracking")
+        return False
+
+    memory = None
+    try:
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "GraphitiMemory not available for improvement tracking"
+                )
+            return False
+
+        if is_debug_enabled():
+            debug_data = {
+                "improvement": improvement_description[:100],
+            }
+            if feedback_ids:
+                debug_data["feedback_count"] = len(feedback_ids)
+            if agent_type:
+                debug_data["agent_type"] = agent_type
+            debug(
+                "memory",
+                "Tracking improvement",
+                **debug_data,
+            )
+
+        # Import episode type
+        from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_IMPROVEMENT
+
+        # Calculate improvement delta if metrics provided
+        improvement_delta = {}
+        if before_metrics and after_metrics:
+            for key in set(before_metrics.keys()) | set(after_metrics.keys()):
+                before_val = before_metrics.get(key)
+                after_val = after_metrics.get(key)
+                if before_val is not None and after_val is not None:
+                    if isinstance(before_val, (int, float)) and isinstance(
+                        after_val, (int, float)
+                    ):
+                        delta = after_val - before_val
+                        percent_change = (
+                            round(((delta / before_val) * 100), 2)
+                            if before_val != 0
+                            else None
+                        )
+                        improvement_delta[key] = {
+                            "before": before_val,
+                            "after": after_val,
+                            "delta": delta,
+                            "percent_change": percent_change,
+                        }
+
+        # Store improvement in Graphiti as an episode
+        episode_data = {
+            "episode_type": EPISODE_TYPE_IMPROVEMENT,
+            "improvement_description": improvement_description,
+            "feedback_ids": feedback_ids or [],
+            "before_metrics": before_metrics or {},
+            "after_metrics": after_metrics or {},
+            "improvement_delta": improvement_delta,
+            "context": context or {},
+        }
+        if agent_type:
+            episode_data["agent_type"] = agent_type
+
+        # Build insights that show how feedback led to improvement
+        insights = {
+            "what_worked": [
+                f"User feedback led to improvement: {improvement_description[:200]}"
+            ],
+            "discoveries": {
+                "improvements": [
+                    {
+                        "description": improvement_description,
+                        "feedback_count": len(feedback_ids) if feedback_ids else 0,
+                        "metrics_delta": improvement_delta,
+                        "source": "user_feedback_loop",
+                    }
+                ]
+            },
+            "recommendations_for_next_session": [],
+            "_improvement": episode_data,
+        }
+
+        # Add specific recommendations based on metrics
+        if improvement_delta:
+            for metric, delta_data in improvement_delta.items():
+                if delta_data["delta"] > 0:  # Improvement
+                    insights["recommendations_for_next_session"].append(
+                        f"Continue approach that improved {metric} by {delta_data['percent_change']:.1f}%"
+                    )
+
+        # Save to Graphiti
+        result = await memory.save_session_insights(
+            session_num=0,  # Improvements are session-independent
+            insights=insights,
+        )
+
+        if result:
+            logger.info(
+                f"Improvement tracked: {improvement_description[:100]} "
+                f"(based on {len(feedback_ids) if feedback_ids else 0} feedback items)"
+            )
+            if is_debug_enabled():
+                debug_success(
+                    "memory",
+                    "Improvement tracked successfully",
+                    improvement=improvement_description[:100],
+                    feedback_count=len(feedback_ids) if feedback_ids else 0,
+                    metrics_improved=list(improvement_delta.keys()),
+                )
+
+        return bool(result)
+
+    except Exception as e:
+        logger.warning(f"Failed to track improvement: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Improvement tracking failed", error=str(e))
+        capture_exception(
+            e,
+            operation="track_improvement",
+            improvement=improvement_description[:100],
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
 async def save_user_correction(
     spec_dir: Path,
     project_dir: Path,
@@ -636,6 +1560,9 @@ async def save_user_correction(
 ) -> bool:
     """
     Save a user correction to Graphiti memory.
+
+    DEPRECATED: Use save_feedback() instead for new code.
+    This is kept for backward compatibility with QA_FIX_REQUEST.md workflow.
 
     Called when the user manually edits QA_FIX_REQUEST.md to provide
     better guidance than the QA agent generated.
@@ -739,3 +1666,134 @@ async def save_session_to_graphiti(
         discoveries,
     )
     return result
+
+
+async def detect_and_save_codebase_patterns(
+    spec_dir: Path, project_dir: Path
+) -> dict[str, int]:
+    """
+    Detect and save codebase patterns using pattern detectors.
+
+    This function runs the three pattern detectors (naming, error handling, organization)
+    on the project directory and saves all detected patterns to memory.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+
+    Returns:
+        Dictionary with counts of patterns saved by category:
+        {
+            "naming": 5,
+            "error-handling": 3,
+            "code-organization": 4
+        }
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Detecting and saving codebase patterns",
+            project_dir=str(project_dir),
+        )
+
+    pattern_counts = {
+        "naming": 0,
+        "error-handling": 0,
+        "code-organization": 0,
+    }
+
+    try:
+        # Import detectors
+        from analysis.analyzers.error_pattern_detector import ErrorPatternDetector
+        from analysis.analyzers.naming_detector import NamingDetector
+        from analysis.analyzers.organization_detector import OrganizationDetector
+
+        # Detect primary language for naming analysis
+        detected_language = "python"  # default
+        try:
+            from project.stack_detector import StackDetector
+
+            stack = StackDetector(project_dir)
+            stack.detect_languages()
+            langs = stack.stack.languages
+            if langs:
+                detected_language = langs[0]
+        except Exception:
+            pass  # Fall back to "python"
+
+        # Detect naming conventions
+        try:
+            naming_detector = NamingDetector(
+                project_dir, {"language": detected_language}
+            )
+            naming_conventions = naming_detector.detect_naming_conventions()
+            save_detected_patterns_from_naming(spec_dir, naming_conventions)
+            pattern_counts["naming"] = sum(1 for v in naming_conventions.values() if v)
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Naming conventions detected",
+                    count=pattern_counts["naming"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect naming conventions: {e}")
+            if is_debug_enabled():
+                debug_warning("memory", "Naming detection failed", error=str(e))
+
+        # Detect error handling patterns
+        try:
+            error_detector = ErrorPatternDetector(project_dir)
+            error_patterns = error_detector.detect_error_patterns()
+            save_detected_patterns_from_errors(spec_dir, error_patterns)
+            pattern_counts["error-handling"] = sum(
+                1 for v in error_patterns.values() if v
+            )
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Error patterns detected",
+                    count=pattern_counts["error-handling"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect error patterns: {e}")
+            if is_debug_enabled():
+                debug_warning("memory", "Error pattern detection failed", error=str(e))
+
+        # Detect organization patterns
+        try:
+            org_detector = OrganizationDetector(project_dir)
+            org_patterns = org_detector.detect_organization_patterns()
+            save_detected_patterns_from_organization(spec_dir, org_patterns)
+            pattern_counts["code-organization"] = sum(
+                1 for v in org_patterns.values() if v
+            )
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Organization patterns detected",
+                    count=pattern_counts["code-organization"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect organization patterns: {e}")
+            if is_debug_enabled():
+                debug_warning("memory", "Organization detection failed", error=str(e))
+
+        total_patterns = sum(pattern_counts.values())
+        if is_debug_enabled():
+            debug_success(
+                "memory", "Pattern detection complete", total_patterns=total_patterns
+            )
+        logger.info(f"Detected and saved {total_patterns} codebase patterns")
+
+    except Exception as e:
+        logger.warning(f"Pattern detection failed: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Pattern detection failed", error=str(e))
+        capture_exception(
+            e,
+            operation="detect_and_save_codebase_patterns",
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+
+    return pattern_counts

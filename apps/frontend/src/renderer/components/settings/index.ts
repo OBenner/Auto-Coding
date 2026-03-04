@@ -8,5 +8,6 @@ export { ThemeSettings } from './ThemeSettings';
 export { ThemeSelector } from './ThemeSelector';
 export { GeneralSettings } from './GeneralSettings';
 export { AdvancedSettings } from './AdvancedSettings';
+export { ProviderSettingsSection } from './ProviderSettingsSection';
 export { SettingsSection } from './SettingsSection';
 export { useSettings } from './hooks/useSettings';

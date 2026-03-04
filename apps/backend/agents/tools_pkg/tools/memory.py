@@ -28,6 +28,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_CODEBASE_MAP_FILENAME = "codebase_map.json"
+
 
 async def _save_to_graphiti_async(
     spec_dir: Path,
@@ -79,7 +81,7 @@ async def _save_to_graphiti_async(
             # Always close the memory connection (swallow exceptions to avoid overriding)
             try:
                 await memory.close()
-            except Exception as e:
+            except Exception:
                 logger.debug(
                     "Failed to close Graphiti memory connection", exc_info=True
                 )
@@ -164,7 +166,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
         memory_dir = spec_dir / "memory"
         memory_dir.mkdir(exist_ok=True)
 
-        codebase_map_file = memory_dir / "codebase_map.json"
+        codebase_map_file = memory_dir / _CODEBASE_MAP_FILENAME
         saved_to_graphiti = False
 
         try:
@@ -276,6 +278,83 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
     tools.append(record_gotcha)
 
     # -------------------------------------------------------------------------
+    # Tool: record_feedback
+    # -------------------------------------------------------------------------
+    @tool(
+        "record_feedback",
+        "Record user feedback (accept/reject/modify) for agent outputs. Use this to track user preferences and enable adaptive behavior.",
+        {
+            "feedback_type": str,
+            "task_description": str,
+            "agent_type": str,
+            "context": str,
+        },
+    )
+    async def record_feedback(args: dict[str, Any]) -> dict[str, Any]:
+        """Record user feedback to preference profile (Graphiti)."""
+        feedback_type = args["feedback_type"]
+        task_description = args["task_description"]
+        agent_type = args["agent_type"]
+        context_str = args.get("context", "{}")
+
+        # Validate feedback_type
+        valid_feedback_types = ["accepted", "rejected", "modified"]
+        if feedback_type not in valid_feedback_types:
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Error: Invalid feedback type '{feedback_type}'. Must be one of: {valid_feedback_types}",
+                    }
+                ]
+            }
+
+        try:
+            # Parse context JSON if provided
+            try:
+                context = json.loads(context_str) if context_str else {}
+            except json.JSONDecodeError:
+                context = {"raw": context_str} if context_str else {}
+
+            # Call save_feedback from memory_manager
+            from agents.memory_manager import save_feedback
+
+            result = await save_feedback(
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                feedback_type=feedback_type,
+                task_description=task_description,
+                agent_type=agent_type,
+                context=context,
+            )
+
+            if result:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Recorded {feedback_type} feedback for {agent_type} task (preferences updated)",
+                        }
+                    ]
+                }
+            else:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Recorded {feedback_type} feedback for {agent_type} task (Graphiti not available, using fallback)",
+                        }
+                    ]
+                }
+
+        except Exception as e:
+            return {
+                "content": [{"type": "text", "text": f"Error recording feedback: {e}"}]
+            }
+
+    tools.append(record_feedback)
+
+    # -------------------------------------------------------------------------
     # Tool: get_session_context
     # -------------------------------------------------------------------------
     @tool(
@@ -300,7 +379,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
         result_parts = []
 
         # Load codebase map
-        codebase_map_file = memory_dir / "codebase_map.json"
+        codebase_map_file = memory_dir / _CODEBASE_MAP_FILENAME
         if codebase_map_file.exists():
             try:
                 with open(codebase_map_file, encoding="utf-8") as f:
@@ -312,8 +391,8 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     for path, info in list(discoveries.items())[:20]:  # Limit to 20
                         desc = info.get("description", "No description")
                         result_parts.append(f"- `{path}`: {desc}")
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError, KeyError, TypeError):
+                logger.debug("Failed to load codebase map", exc_info=True)
 
         # Load gotchas
         gotchas_file = memory_dir / "gotchas.md"
@@ -326,8 +405,8 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     result_parts.append(
                         content[-1000:] if len(content) > 1000 else content
                     )
-            except Exception:
-                pass
+            except OSError:
+                logger.debug("Failed to load gotchas file", exc_info=True)
 
         # Load patterns
         patterns_file = memory_dir / "patterns.md"
@@ -339,8 +418,8 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     result_parts.append(
                         content[-1000:] if len(content) > 1000 else content
                     )
-            except Exception:
-                pass
+            except OSError:
+                logger.debug("Failed to load patterns file", exc_info=True)
 
         if not result_parts:
             return {
@@ -352,5 +431,95 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
         return {"content": [{"type": "text", "text": "\n".join(result_parts)}]}
 
     tools.append(get_session_context)
+
+    # -------------------------------------------------------------------------
+    # Tool: list_discoveries
+    # -------------------------------------------------------------------------
+    @tool(
+        "list_discoveries",
+        "List all codebase discoveries from session memory. Optionally filter by category.",
+        {"category": str},
+    )
+    async def list_discoveries(args: dict[str, Any]) -> dict[str, Any]:
+        """List all discoveries, optionally filtered by category."""
+        category_filter = args.get("category")
+
+        memory_dir = spec_dir / "memory"
+        codebase_map_file = memory_dir / _CODEBASE_MAP_FILENAME
+
+        if not codebase_map_file.exists():
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "No discoveries found. Use record_discovery to add codebase discoveries.",
+                    }
+                ]
+            }
+
+        try:
+            raw = await asyncio.to_thread(codebase_map_file.read_text, encoding="utf-8")
+            codebase_map = json.loads(raw)
+
+            discoveries = codebase_map.get("discovered_files", {})
+
+            if not discoveries:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "No discoveries recorded yet.",
+                        }
+                    ]
+                }
+
+            # Filter by category if specified
+            if category_filter:
+                filtered_discoveries = {
+                    path: info
+                    for path, info in discoveries.items()
+                    if info.get("category") == category_filter
+                }
+                if not filtered_discoveries:
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"No discoveries found in category '{category_filter}'.",
+                            }
+                        ]
+                    }
+                discoveries = filtered_discoveries
+
+            # Build formatted output
+            result_parts = []
+            if category_filter:
+                result_parts.append(f"## Discoveries (category: {category_filter})\n")
+            else:
+                result_parts.append(f"## All Discoveries ({len(discoveries)} total)\n")
+
+            # Group by category
+            by_category: dict[str, list] = {}
+            for path, info in discoveries.items():
+                cat = info.get("category", "general")
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append((path, info))
+
+            # Output grouped by category
+            for cat in sorted(by_category.keys()):
+                result_parts.append(f"\n### {cat.title()}")
+                for path, info in by_category[cat]:
+                    desc = info.get("description", "No description")
+                    result_parts.append(f"- `{path}`: {desc}")
+
+            return {"content": [{"type": "text", "text": "\n".join(result_parts)}]}
+
+        except Exception as e:
+            return {
+                "content": [{"type": "text", "text": f"Error listing discoveries: {e}"}]
+            }
+
+    tools.append(list_discoveries)
 
     return tools

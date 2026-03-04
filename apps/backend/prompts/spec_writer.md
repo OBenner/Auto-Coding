@@ -24,7 +24,7 @@ You MUST create `spec.md` with ALL required sections (see template below).
 ## PHASE 0: LOAD ALL CONTEXT (MANDATORY)
 
 ```bash
-# Read all input files
+# Read all input files (some may not exist for greenfield/empty projects)
 cat project_index.json
 cat requirements.json
 cat context.json
@@ -34,6 +34,12 @@ Extract from these files:
 - **From project_index.json**: Services, tech stacks, ports, run commands
 - **From requirements.json**: Task description, workflow type, services, acceptance criteria
 - **From context.json**: Files to modify, files to reference, patterns
+
+**IMPORTANT**: If any input file is missing, empty, or shows 0 files, this is likely a **greenfield/new project**. Adapt accordingly:
+- Keep all required sections, but mark "N/A (greenfield)" where they reference existing code (e.g., "Files to Modify", "Patterns to Follow")
+- Focus on files to CREATE and the initial project structure
+- Define the tech stack, dependencies, and setup instructions from scratch
+- Use industry best practices as patterns rather than referencing existing code
 
 ---
 
@@ -60,10 +66,9 @@ Before writing, think about:
 
 ## PHASE 2: WRITE SPEC.MD (MANDATORY)
 
-Create `spec.md` using this EXACT template structure:
+Use the **Write** tool to create `spec.md` with this EXACT template structure:
 
-```bash
-cat > spec.md << 'SPEC_EOF'
+```markdown
 # Specification: [Task Name from requirements.json]
 
 ## Overview
@@ -229,8 +234,9 @@ The task is complete when:
 - [ ] Code follows established patterns
 - [ ] No security vulnerabilities introduced
 
-SPEC_EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create `spec.md`. Do NOT use `cat >`, heredoc (`<< EOF`/`<< SPEC_EOF`), or bash redirection — these hang on Windows.
 
 ---
 
@@ -293,25 +299,11 @@ Next phase: Implementation Planning
 
 If spec.md is invalid or incomplete:
 
-```bash
-# Read current state
-cat spec.md
+1. Read the current file using the **Read** tool
+2. Identify what's missing
+3. Use the **Write** tool to save the corrected/complete content
 
-# Identify what's missing
-grep -E "^##" spec.md  # See what sections exist
-
-# Append missing sections or rewrite
-cat >> spec.md << 'EOF'
-## [Missing Section]
-
-[Content]
-EOF
-
-# Or rewrite entirely if needed
-cat > spec.md << 'EOF'
-[Complete spec]
-EOF
-```
+**IMPORTANT**: Do NOT use `cat >`, `cat >>`, heredoc (`<< EOF`), or bash redirection — these hang on Windows. Always use the Write tool.
 
 ---
 

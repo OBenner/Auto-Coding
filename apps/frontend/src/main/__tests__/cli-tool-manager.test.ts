@@ -160,14 +160,18 @@ vi.mock('../utils/homebrew-python', () => ({
 }));
 
 // Mock platform/paths utility (where cli-tool-manager imports windows-specific functions from)
-vi.mock('../platform/paths', () => ({
-  findWindowsExecutableViaWhere: vi.fn(() => null),
-  findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
-  isSecurePath: vi.fn(() => true),
-  getWindowsExecutablePaths: vi.fn(() => []),
-  getWindowsExecutablePathsAsync: vi.fn(() => Promise.resolve([])),
-  WINDOWS_GIT_PATHS: {}
-}));
+vi.mock('../platform/paths', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../platform/paths')>();
+  return {
+    ...actual,
+    WINDOWS_GIT_PATHS: { toolName: 'Git', executable: 'git.exe', patterns: [] },
+    findWindowsExecutableViaWhere: vi.fn(() => null),
+    findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
+    isSecurePath: vi.fn(() => true),
+    getWindowsExecutablePaths: vi.fn(() => []),
+    getWindowsExecutablePathsAsync: vi.fn(() => Promise.resolve([])),
+  };
+});
 
 describe('cli-tool-manager - Claude CLI NVM detection', () => {
   beforeEach(() => {
@@ -633,7 +637,7 @@ describe('cli-tool-manager - Claude CLI Windows where.exe detection', () => {
     expect(result.found).toBe(true);
     expect(result.path).toContain('nvm4w');
     expect(result.path).toContain('claude.cmd');
-    expect(result.source).toBe('system-path');
+    expect(result.source).toBe('windows-where');
     expect(result.message).toContain('Using Windows Claude CLI');
   });
 

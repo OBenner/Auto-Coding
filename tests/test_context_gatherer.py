@@ -9,10 +9,10 @@ Tests the context gathering logic, specifically:
 """
 
 import sys
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
 import tempfile
+from datetime import datetime
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -25,7 +25,7 @@ if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
 from context_gatherer import AI_BOT_PATTERNS, FollowupContextGatherer
-from models import PRReviewResult, FollowupReviewContext
+from models import FollowupReviewContext, PRReviewResult
 
 
 class TestAIReviewsInclusion:
@@ -101,7 +101,10 @@ class TestAIReviewsInclusion:
         }
 
         # Mock PR files changed since
-        mock_gh_client.get_pr_files_changed_since.return_value = ([], [])  # (files, commits)
+        mock_gh_client.get_pr_files_changed_since.return_value = (
+            [],
+            [],
+        )  # (files, commits)
 
         # Mock comments since review - includes an AI bot comment
         mock_gh_client.get_comments_since.return_value = {
@@ -214,9 +217,24 @@ class TestAIReviewsInclusion:
         }
         # 2 AI reviews, 1 contributor review
         mock_gh_client.get_reviews_since.return_value = [
-            {"id": 1, "user": {"login": "coderabbitai[bot]"}, "body": "AI 1", "state": "COMMENTED"},
-            {"id": 2, "user": {"login": "copilot[bot]"}, "body": "AI 2", "state": "COMMENTED"},
-            {"id": 3, "user": {"login": "developer"}, "body": "Human", "state": "APPROVED"},
+            {
+                "id": 1,
+                "user": {"login": "coderabbitai[bot]"},
+                "body": "AI 1",
+                "state": "COMMENTED",
+            },
+            {
+                "id": 2,
+                "user": {"login": "copilot[bot]"},
+                "body": "AI 2",
+                "state": "COMMENTED",
+            },
+            {
+                "id": 3,
+                "user": {"login": "developer"},
+                "body": "Human",
+                "state": "APPROVED",
+            },
         ]
 
         with tempfile.TemporaryDirectory() as tmpdir:

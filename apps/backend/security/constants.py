@@ -14,3 +14,4 @@ PROJECT_DIR_ENV_VAR = "AUTO_CLAUDE_PROJECT_DIR"
 # These are the files that control which commands are allowed to run.
 ALLOWLIST_FILENAME = ".auto-claude-allowlist"
 PROFILE_FILENAME = ".auto-claude-security.json"
+AUDIT_LOG_FILENAME = ".auto-claude-audit.json"

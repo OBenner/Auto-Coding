@@ -1,0 +1,26 @@
+# Bandit Security Configuration for Auto-Claude Web Backend
+# See: https://bandit.readthedocs.io/en/latest/config.html
+
+[bandit]
+# Directories to exclude from scanning
+exclude_dirs = tests,.pytest_cache,migrations,__pycache__,.venv
+
+# Targets to scan
+targets = api,core,services
+
+# Severity level to report (HIGH, MEDIUM, LOW)
+# We focus on HIGH and MEDIUM severity issues
+severity = MEDIUM
+
+# Confidence level to report (HIGH, MEDIUM, LOW)
+confidence = MEDIUM
+
+# Skipped tests (with justification):
+# B106 - hardcoded_password_funcarg: False positives for OAuth2 token_type="bearer"
+#        This is a standard OAuth2 token type identifier, not a password.
+# B110 - try_except_pass: Used in cleanup handlers where silencing errors is intentional
+# B604 - any_other_function_with_shell_equals_true: Terminal feature requires shell=True
+#        for PTY spawning. Access is controlled by JWT authentication.
+
+# Note: Individual exclusions are handled via inline # nosec comments
+# to maintain visibility of security decisions in the code.

@@ -3,19 +3,24 @@
  * Tests FileWatcher triggers on plan changes
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'fs';
 import path from 'path';
+import os from 'os';
 import { EventEmitter } from 'events';
 
-// Test directories
-const TEST_DIR = '/tmp/file-watcher-test';
+// Test directories - use mkdtempSync for secure temp directory creation
+const TEST_DIR = mkdtempSync(path.join(os.tmpdir(), 'file-watcher-test-'));
 const TEST_SPEC_DIR = path.join(TEST_DIR, 'test-spec');
 
 // Mock chokidar watcher
 const mockWatcher = Object.assign(new EventEmitter(), {
   close: vi.fn(() => Promise.resolve()),
   add: vi.fn(),
-  unwatch: vi.fn()
+  unwatch: vi.fn(),
+  removeListener: vi.fn(function(this: EventEmitter, event: string, fn: (...args: unknown[]) => void) {
+    EventEmitter.prototype.removeListener.call(this, event, fn);
+    return this;
+  })
 });
 
 vi.mock('chokidar', () => ({
@@ -49,6 +54,19 @@ function createTestPlan(overrides: Record<string, unknown> = {}): object {
   };
 }
 
+/** Helper: create a plan file and return the path */
+function writePlan(dir: string, overrides: Record<string, unknown> = {}): string {
+  const planPath = path.join(dir, 'implementation_plan.json');
+  writeFileSync(planPath, JSON.stringify(createTestPlan(overrides)));
+  return planPath;
+}
+
+/** Helper: create a FileWatcher with optional debounce */
+async function createWatcher(debounceDelay?: number) {
+  const { FileWatcher } = await import('../../main/file-watcher');
+  return debounceDelay !== undefined ? new FileWatcher(debounceDelay) : new FileWatcher();
+}
+
 // Setup test directories
 function setupTestDirs(): void {
   mkdirSync(TEST_SPEC_DIR, { recursive: true });
@@ -77,8 +95,7 @@ describe('File Watcher Integration', () => {
 
   describe('FileWatcher', () => {
     it('should emit error when plan file does not exist', async () => {
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       const errorHandler = vi.fn();
       watcher.on('error', errorHandler);
@@ -92,13 +109,10 @@ describe('File Watcher Integration', () => {
     });
 
     it('should start watching existing plan file', async () => {
-      // Create plan file first
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      const planPath = writePlan(TEST_SPEC_DIR);
 
       const chokidar = await import('chokidar');
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       await watcher.watch('task-1', TEST_SPEC_DIR);
 
@@ -116,12 +130,9 @@ describe('File Watcher Integration', () => {
     });
 
     it('should emit initial progress after starting watch', async () => {
-      const plan = createTestPlan();
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(plan));
+      writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       const progressHandler = vi.fn();
       watcher.on('progress', progressHandler);
@@ -134,11 +145,10 @@ describe('File Watcher Integration', () => {
     });
 
     it('should emit progress on file change', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      vi.useFakeTimers();
+      const planPath = writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       const progressHandler = vi.fn();
       watcher.on('progress', progressHandler);
@@ -164,8 +174,8 @@ describe('File Watcher Integration', () => {
       // Simulate file change event
       mockWatcher.emit('change', planPath);
 
-      // Wait for debounce period (default 300ms)
-      await new Promise(resolve => setTimeout(resolve, 350));
+      // Advance past debounce period (default 300ms)
+      await vi.advanceTimersByTimeAsync(350);
 
       expect(progressHandler).toHaveBeenCalledWith('task-1', expect.objectContaining({
         phases: expect.arrayContaining([
@@ -176,14 +186,14 @@ describe('File Watcher Integration', () => {
           })
         ])
       }));
+
+      vi.useRealTimers();
     });
 
     it('should handle file parse errors gracefully', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      const planPath = writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       const progressHandler = vi.fn();
       const errorHandler = vi.fn();
@@ -204,11 +214,9 @@ describe('File Watcher Integration', () => {
     });
 
     it('should forward watcher errors', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       const errorHandler = vi.fn();
       watcher.on('error', errorHandler);
@@ -222,11 +230,9 @@ describe('File Watcher Integration', () => {
     });
 
     it('should stop watching task when unwatched', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       await watcher.watch('task-1', TEST_SPEC_DIR);
       expect(watcher.isWatching('task-1')).toBe(true);
@@ -238,11 +244,9 @@ describe('File Watcher Integration', () => {
     });
 
     it('should stop watching when same task is watched again', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       await watcher.watch('task-1', TEST_SPEC_DIR);
       await watcher.watch('task-1', TEST_SPEC_DIR);
@@ -252,16 +256,13 @@ describe('File Watcher Integration', () => {
     });
 
     it('should track multiple watched tasks', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      writePlan(TEST_SPEC_DIR);
 
       const spec2Dir = path.join(TEST_DIR, 'test-spec-2');
       mkdirSync(spec2Dir, { recursive: true });
-      const plan2Path = path.join(spec2Dir, 'implementation_plan.json');
-      writeFileSync(plan2Path, JSON.stringify(createTestPlan({ feature: 'Feature 2' })));
+      writePlan(spec2Dir, { feature: 'Feature 2' });
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       await watcher.watch('task-1', TEST_SPEC_DIR);
       await watcher.watch('task-2', spec2Dir);
@@ -271,11 +272,9 @@ describe('File Watcher Integration', () => {
     });
 
     it('should unwatchAll and clear all watchers', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       await watcher.watch('task-1', TEST_SPEC_DIR);
       await watcher.unwatchAll();
@@ -284,12 +283,9 @@ describe('File Watcher Integration', () => {
     });
 
     it('should get current plan for watched task', async () => {
-      const plan = createTestPlan();
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(plan));
+      writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       await watcher.watch('task-1', TEST_SPEC_DIR);
 
@@ -301,8 +297,7 @@ describe('File Watcher Integration', () => {
     });
 
     it('should return null for non-watched task', async () => {
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
+      const watcher = await createWatcher();
 
       const currentPlan = watcher.getCurrentPlan('nonexistent');
 
@@ -310,19 +305,17 @@ describe('File Watcher Integration', () => {
     });
 
     it('should stop watching multiple tasks', async () => {
-      const plan1Path = path.join(TEST_SPEC_DIR, 'task1', 'implementation_plan.json');
-      const plan2Path = path.join(TEST_SPEC_DIR, 'task2', 'implementation_plan.json');
+      const task1Dir = path.join(TEST_SPEC_DIR, 'task1');
+      const task2Dir = path.join(TEST_SPEC_DIR, 'task2');
+      mkdirSync(task1Dir, { recursive: true });
+      mkdirSync(task2Dir, { recursive: true });
+      writePlan(task1Dir);
+      writePlan(task2Dir);
 
-      mkdirSync(path.join(TEST_SPEC_DIR, 'task1'), { recursive: true });
-      mkdirSync(path.join(TEST_SPEC_DIR, 'task2'), { recursive: true });
-      writeFileSync(plan1Path, JSON.stringify(createTestPlan()));
-      writeFileSync(plan2Path, JSON.stringify(createTestPlan()));
+      const watcher = await createWatcher();
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher();
-
-      await watcher.watch('task-1', path.join(TEST_SPEC_DIR, 'task1'));
-      await watcher.watch('task-2', path.join(TEST_SPEC_DIR, 'task2'));
+      await watcher.watch('task-1', task1Dir);
+      await watcher.watch('task-2', task2Dir);
 
       expect(watcher.isWatching('task-1')).toBe(true);
       expect(watcher.isWatching('task-2')).toBe(true);
@@ -335,12 +328,18 @@ describe('File Watcher Integration', () => {
   });
 
   describe('FileWatcher - Debounce Behavior', () => {
-    it('should debounce rapid file changes', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher(100); // Short debounce for testing
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should debounce rapid file changes', async () => {
+      const planPath = writePlan(TEST_SPEC_DIR);
+
+      const watcher = await createWatcher(100);
 
       const progressHandler = vi.fn();
       watcher.on('progress', progressHandler);
@@ -350,26 +349,23 @@ describe('File Watcher Integration', () => {
 
       // Simulate 5 rapid changes
       for (let i = 1; i <= 5; i++) {
-        const updatedPlan = createTestPlan({
+        writeFileSync(planPath, JSON.stringify(createTestPlan({
           updated_at: new Date(Date.now() + i).toISOString()
-        });
-        writeFileSync(planPath, JSON.stringify(updatedPlan));
+        })));
         mockWatcher.emit('change', planPath);
       }
 
-      // Wait for debounce period
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Advance past debounce period
+      await vi.advanceTimersByTimeAsync(150);
 
       // Should only emit once after debounce
       expect(progressHandler).toHaveBeenCalledTimes(1);
     });
 
     it('should emit latest state after debounce period', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      const planPath = writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher(100);
+      const watcher = await createWatcher(100);
 
       const progressHandler = vi.fn();
       watcher.on('progress', progressHandler);
@@ -378,39 +374,25 @@ describe('File Watcher Integration', () => {
       progressHandler.mockClear();
 
       // First change
-      const plan1 = createTestPlan({
-        phases: [
-          {
-            phase: 1,
-            name: 'Phase 1',
-            type: 'implementation',
-            subtasks: [
-              { id: 'subtask-1', description: 'Task 1', status: 'in_progress' }
-            ]
-          }
-        ]
-      });
-      writeFileSync(planPath, JSON.stringify(plan1));
+      writeFileSync(planPath, JSON.stringify(createTestPlan({
+        phases: [{
+          phase: 1, name: 'Phase 1', type: 'implementation',
+          subtasks: [{ id: 'subtask-1', description: 'Task 1', status: 'in_progress' }]
+        }]
+      })));
       mockWatcher.emit('change', planPath);
 
       // Second change (should override first)
-      const plan2 = createTestPlan({
-        phases: [
-          {
-            phase: 1,
-            name: 'Phase 1',
-            type: 'implementation',
-            subtasks: [
-              { id: 'subtask-1', description: 'Task 1', status: 'completed' }
-            ]
-          }
-        ]
-      });
-      writeFileSync(planPath, JSON.stringify(plan2));
+      writeFileSync(planPath, JSON.stringify(createTestPlan({
+        phases: [{
+          phase: 1, name: 'Phase 1', type: 'implementation',
+          subtasks: [{ id: 'subtask-1', description: 'Task 1', status: 'completed' }]
+        }]
+      })));
       mockWatcher.emit('change', planPath);
 
-      // Wait for debounce
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Advance past debounce
+      await vi.advanceTimersByTimeAsync(150);
 
       // Should emit only the latest state
       expect(progressHandler).toHaveBeenCalledTimes(1);
@@ -426,11 +408,9 @@ describe('File Watcher Integration', () => {
     });
 
     it('should respect custom debounce delay', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      const planPath = writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher(200); // Custom delay
+      const watcher = await createWatcher(200);
 
       const progressHandler = vi.fn();
       watcher.on('progress', progressHandler);
@@ -442,20 +422,18 @@ describe('File Watcher Integration', () => {
       mockWatcher.emit('change', planPath);
 
       // Check before debounce period
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
       expect(progressHandler).not.toHaveBeenCalled();
 
-      // Wait for full debounce period
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Advance past full debounce period
+      await vi.advanceTimersByTimeAsync(150);
       expect(progressHandler).toHaveBeenCalledTimes(1);
     });
 
     it('should clear pending debounce on unwatch', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      const planPath = writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher(200);
+      const watcher = await createWatcher(200);
 
       const progressHandler = vi.fn();
       watcher.on('progress', progressHandler);
@@ -470,30 +448,28 @@ describe('File Watcher Integration', () => {
       // Unwatch before debounce period expires
       await watcher.unwatch('task-1');
 
-      // Wait past debounce period
-      await new Promise(resolve => setTimeout(resolve, 250));
+      // Advance past debounce period
+      await vi.advanceTimersByTimeAsync(250);
 
       // Should not emit because unwatch cleared the timeout
       expect(progressHandler).not.toHaveBeenCalled();
     });
 
     it('should clear all pending debounces on unwatchAll', async () => {
-      const plan1Path = path.join(TEST_SPEC_DIR, 'task1', 'implementation_plan.json');
-      const plan2Path = path.join(TEST_SPEC_DIR, 'task2', 'implementation_plan.json');
+      const task1Dir = path.join(TEST_SPEC_DIR, 'task1');
+      const task2Dir = path.join(TEST_SPEC_DIR, 'task2');
+      mkdirSync(task1Dir, { recursive: true });
+      mkdirSync(task2Dir, { recursive: true });
+      const plan1Path = writePlan(task1Dir);
+      const plan2Path = writePlan(task2Dir);
 
-      mkdirSync(path.join(TEST_SPEC_DIR, 'task1'), { recursive: true });
-      mkdirSync(path.join(TEST_SPEC_DIR, 'task2'), { recursive: true });
-      writeFileSync(plan1Path, JSON.stringify(createTestPlan()));
-      writeFileSync(plan2Path, JSON.stringify(createTestPlan()));
-
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher(200);
+      const watcher = await createWatcher(200);
 
       const progressHandler = vi.fn();
       watcher.on('progress', progressHandler);
 
-      await watcher.watch('task-1', path.join(TEST_SPEC_DIR, 'task1'));
-      await watcher.watch('task-2', path.join(TEST_SPEC_DIR, 'task2'));
+      await watcher.watch('task-1', task1Dir);
+      await watcher.watch('task-2', task2Dir);
       progressHandler.mockClear();
 
       // Trigger changes on both tasks
@@ -505,19 +481,17 @@ describe('File Watcher Integration', () => {
       // Unwatch all before debounce period expires
       await watcher.unwatchAll();
 
-      // Wait past debounce period
-      await new Promise(resolve => setTimeout(resolve, 250));
+      // Advance past debounce period
+      await vi.advanceTimersByTimeAsync(250);
 
       // Should not emit for either task
       expect(progressHandler).not.toHaveBeenCalled();
     });
 
     it('should handle consecutive debounce windows separately', async () => {
-      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
-      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+      const planPath = writePlan(TEST_SPEC_DIR);
 
-      const { FileWatcher } = await import('../../main/file-watcher');
-      const watcher = new FileWatcher(100);
+      const watcher = await createWatcher(100);
 
       const progressHandler = vi.fn();
       watcher.on('progress', progressHandler);
@@ -529,8 +503,8 @@ describe('File Watcher Integration', () => {
       writeFileSync(planPath, JSON.stringify(createTestPlan({ feature: 'Update 1' })));
       mockWatcher.emit('change', planPath);
 
-      // Wait for first debounce to complete
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Advance past first debounce
+      await vi.advanceTimersByTimeAsync(150);
       expect(progressHandler).toHaveBeenCalledTimes(1);
       progressHandler.mockClear();
 
@@ -538,8 +512,8 @@ describe('File Watcher Integration', () => {
       writeFileSync(planPath, JSON.stringify(createTestPlan({ feature: 'Update 2' })));
       mockWatcher.emit('change', planPath);
 
-      // Wait for second debounce to complete
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Advance past second debounce
+      await vi.advanceTimersByTimeAsync(150);
       expect(progressHandler).toHaveBeenCalledTimes(1);
     });
   });

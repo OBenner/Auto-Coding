@@ -4,7 +4,9 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { terminalBufferManager } from '../../lib/terminal-buffer-manager';
-import { registerOutputCallback, unregisterOutputCallback } from '../../stores/terminal-store';
+import { registerOutputCallback, unregisterOutputCallback, useTerminalStore } from '../../stores/terminal-store';
+import { useSettingsStore } from '../../stores/settings-store';
+import type { WebGLContextManagerType } from '../../lib/webgl-context-manager';
 
 // Type augmentation for navigator.userAgentData (modern User-Agent Client Hints API)
 interface NavigatorUAData {
@@ -40,6 +42,8 @@ export function useXterm({ terminalId, onCommandEnter, onResize, onDimensionsRea
   const commandBufferRef = useRef<string>('');
   const isDisposedRef = useRef<boolean>(false);
   const dimensionsReadyCalledRef = useRef<boolean>(false);
+  // Lazily-loaded WebGL context manager — only populated when gpuAcceleration !== 'off'
+  const webglManagerRef = useRef<WebGLContextManagerType | null>(null);
   const [dimensions, setDimensions] = useState<{ cols: number; rows: number }>({ cols: 80, rows: 24 });
 
   // Initialize xterm.js UI
@@ -94,6 +98,29 @@ export function useXterm({ terminalId, onCommandEnter, onResize, onDimensionsRea
     xterm.loadAddon(serializeAddon);
 
     xterm.open(terminalRef.current);
+
+    // WebGL acceleration: lazily load the WebGL module and acquire a context.
+    // The dynamic import() ensures NO GPU code (WebGL2 probing, context creation)
+    // runs unless the user has explicitly enabled GPU acceleration.
+    // This prevents GPU process instability on systems where WebGL2 is problematic
+    // (e.g., Apple Silicon Macs with certain macOS / Electron combinations).
+    const gpuAcceleration = useSettingsStore.getState().settings.gpuAcceleration ?? 'off';
+    console.warn(`[useXterm] WebGL check for ${terminalId}: gpuAcceleration=${gpuAcceleration}`);
+    if (gpuAcceleration !== 'off') {
+      import('../../lib/webgl-context-manager')
+        .then(({ webglContextManager }) => {
+          // Guard: terminal may have been disposed while the import was resolving
+          if (isDisposedRef.current) return;
+          webglManagerRef.current = webglContextManager;
+          webglContextManager.register(terminalId, xterm);
+          webglContextManager.acquire(terminalId);
+          console.warn(`[useXterm] WebGL acquired for ${terminalId}`);
+        })
+        .catch((error) => {
+          // WebGL is a progressive enhancement — terminal works fine without it
+          console.warn(`[useXterm] WebGL initialization failed for ${terminalId}, falling back to canvas renderer:`, error);
+        });
+    }
 
     // Platform detection for copy/paste shortcuts
     // macOS uses system Cmd+V, no custom handler needed
@@ -257,8 +284,24 @@ export function useXterm({ terminalId, onCommandEnter, onResize, onDimensionsRea
     // This now includes ANSI codes for proper formatting/colors/prompt
     const bufferedOutput = terminalBufferManager.get(terminalId);
     if (bufferedOutput && bufferedOutput.length > 0) {
-      xterm.write(bufferedOutput);
-      // Clear buffer after replay to avoid duplicate output
+      // For Claude-mode terminals that are NOT being restored for the first time
+      // (i.e., project switch remount), skip buffer replay.
+      // Reason: the buffer contains serialized state + accumulated raw PTY output
+      // from the TUI during the unmount period. This concatenation creates garbled
+      // display. The forced SIGWINCH (from pty-manager) will make Claude Code redraw
+      // its full TUI properly.
+      // For initial restore (isRestored=true), we DO replay to show the saved state
+      // as a loading preview while claude --continue starts.
+      const terminal = useTerminalStore.getState().terminals.find(t => t.id === terminalId);
+      const isClaudeActive = terminal?.isClaudeMode || terminal?.pendingClaudeResume;
+      const isInitialRestore = terminal?.isRestored === true;
+
+      if (isClaudeActive && !isInitialRestore) {
+        // Skip buffer replay for Claude-mode terminal on project switch remount
+      } else {
+        xterm.write(bufferedOutput);
+      }
+      // Clear buffer after replay (or skip) to avoid duplicate output
       terminalBufferManager.clear(terminalId);
     }
 
@@ -412,6 +455,16 @@ export function useXterm({ terminalId, onCommandEnter, onResize, onDimensionsRea
     // Serialize buffer before disposing to preserve ANSI formatting
     serializeBuffer();
 
+    // Release WebGL context before disposing addons and xterm (only if WebGL was loaded)
+    if (webglManagerRef.current) {
+      try {
+        webglManagerRef.current.unregister(terminalId);
+      } catch (error) {
+        console.warn(`[useXterm] WebGL cleanup failed for ${terminalId}:`, error);
+      }
+      webglManagerRef.current = null;
+    }
+
     if (xtermRef.current) {
       xtermRef.current.dispose();
       xtermRef.current = null;
@@ -421,7 +474,7 @@ export function useXterm({ terminalId, onCommandEnter, onResize, onDimensionsRea
       serializeAddonRef.current = null;
     }
     fitAddonRef.current = null;
-  }, [serializeBuffer]);
+  }, [serializeBuffer, terminalId]);
 
   return {
     terminalRef,

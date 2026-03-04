@@ -269,8 +269,9 @@ Example milestones:
 
 **You MUST create this file. The orchestrator will fail if you don't.**
 
-```bash
-cat > roadmap.json << 'EOF'
+Use the **Write** tool to create `roadmap.json` with the following structure:
+
+```json
 {
   "id": "roadmap-[TIMESTAMP]",
   "project_name": "[from discovery]",
@@ -329,8 +330,9 @@ cat > roadmap.json << 'EOF'
     "competitor_analysis_used": false
   }
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 **Note**: Set `competitor_analysis_used: true` in metadata if competitor_analysis.json was incorporated.
 
