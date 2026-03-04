@@ -196,7 +196,7 @@ def log_security_event(
     if rule_id is not None:
         entry["ruleId"] = rule_id
     if context is not None:
-        entry["context"] = json.dumps(context)
+        entry["context"] = context
     if agent_type is not None:
         entry["agentType"] = agent_type
     if session_id is not None:

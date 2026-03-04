@@ -36,6 +36,19 @@ function getAuditLogPath(): string {
 }
 
 /**
+ * Create a fresh default security profile
+ */
+function createDefaultProfile(): SecurityProfile {
+  return {
+    level: 'standard',
+    commandAllowlist: [],
+    filesystemRestricted: false,
+    apiRestricted: false,
+    updatedAt: Date.now()
+  };
+}
+
+/**
  * Register all security-related IPC handlers
  */
 export function registerSecurityHandlers(): void {
@@ -55,14 +68,7 @@ export function registerSecurityHandlers(): void {
           return { success: true, data: profile };
         } catch {
           // File doesn't exist or can't be read - return default profile
-          const defaultProfile: SecurityProfile = {
-            level: 'standard',
-            commandAllowlist: [],
-            filesystemRestricted: false,
-            apiRestricted: false,
-            updatedAt: Date.now()
-          };
-          return { success: true, data: defaultProfile };
+          return { success: true, data: createDefaultProfile() };
         }
       } catch (error) {
         return {
@@ -88,14 +94,7 @@ export function registerSecurityHandlers(): void {
           const data = await fs.readFile(profilePath, 'utf-8');
           existingProfile = JSON.parse(data) as SecurityProfile;
         } catch {
-          // Create default profile
-          existingProfile = {
-            level: 'standard',
-            commandAllowlist: [],
-            filesystemRestricted: false,
-            apiRestricted: false,
-            updatedAt: Date.now()
-          };
+          existingProfile = createDefaultProfile();
         }
 
         // Merge with new data
@@ -126,6 +125,7 @@ export function registerSecurityHandlers(): void {
     async (_event, options?: { limit?: number; offset?: number }): Promise<IPCResult<{
       logs: SecurityAuditLog[];
       total: number;
+      hasMore: boolean;
     }>> => {
       try {
         const auditLogPath = getAuditLogPath();
@@ -144,7 +144,8 @@ export function registerSecurityHandlers(): void {
             success: true,
             data: {
               logs: paginatedLogs,
-              total: allLogs.length
+              total: allLogs.length,
+              hasMore: offset + limit < allLogs.length
             }
           };
         } catch {
@@ -153,7 +154,8 @@ export function registerSecurityHandlers(): void {
             success: true,
             data: {
               logs: [],
-              total: 0
+              total: 0,
+              hasMore: false
             }
           };
         }
@@ -189,6 +191,12 @@ export function registerSecurityHandlers(): void {
           return { success: false, error: 'Export cancelled' };
         }
 
+        // Validate export file path to prevent path traversal
+        const resolvedPath = path.resolve(result.filePath);
+        if (!resolvedPath.endsWith('.json')) {
+          return { success: false, error: 'Export file must have .json extension' };
+        }
+
         // Load security profile
         const profilePath = getSecurityProfilePath();
         let profile: SecurityProfile;
@@ -196,13 +204,7 @@ export function registerSecurityHandlers(): void {
           const data = await fs.readFile(profilePath, 'utf-8');
           profile = JSON.parse(data) as SecurityProfile;
         } catch {
-          profile = {
-            level: 'standard',
-            commandAllowlist: [],
-            filesystemRestricted: false,
-            apiRestricted: false,
-            updatedAt: Date.now()
-          };
+          profile = createDefaultProfile();
         }
 
         // Optionally include audit logs
@@ -227,10 +229,10 @@ export function registerSecurityHandlers(): void {
           auditLogs: auditLogs.length > 0 ? auditLogs : undefined
         };
 
-        // Write to export file
-        await fs.writeFile(result.filePath, JSON.stringify(exportData, null, 2), 'utf-8');
+        // Write to validated export file path
+        await fs.writeFile(resolvedPath, JSON.stringify(exportData, null, 2), 'utf-8');
 
-        return { success: true, data: { filePath: result.filePath } };
+        return { success: true, data: { filePath: resolvedPath } };
       } catch (error) {
         return {
           success: false,
@@ -247,14 +249,7 @@ export function registerSecurityHandlers(): void {
     IPC_CHANNELS.SECURITY_RESET_TO_DEFAULT,
     async (): Promise<IPCResult<SecurityProfile>> => {
       try {
-        const defaultProfile: SecurityProfile = {
-          level: 'standard',
-          commandAllowlist: [],
-          filesystemRestricted: false,
-          apiRestricted: false,
-          updatedAt: Date.now()
-        };
-
+        const defaultProfile = createDefaultProfile();
         const profilePath = getSecurityProfilePath();
         await fs.writeFile(profilePath, JSON.stringify(defaultProfile, null, 2), 'utf-8');
 
