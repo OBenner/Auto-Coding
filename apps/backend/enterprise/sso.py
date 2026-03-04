@@ -39,8 +39,8 @@ from urllib.parse import urlencode
 logger = logging.getLogger(__name__)
 
 # SAML XML Schema attribute URIs (OASIS standard namespace identifiers, not HTTP connections)
-_CLAIMS_NS = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims"  # noqa: S105
-_CLAIMS_GROUP_NS = "http://schemas.xmlsoap.org/claims"  # noqa: S105
+_CLAIMS_NS = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims"  # NOSONAR - SAML namespace URI, not an HTTP connection
+_CLAIMS_GROUP_NS = "http://schemas.xmlsoap.org/claims"  # NOSONAR - SAML namespace URI, not an HTTP connection
 
 
 class SAMLProviderType(str, Enum):
@@ -83,7 +83,7 @@ class SAMLConfig:
 
     # Service Provider metadata
     sp_entity_id: str = "auto-claude-sp"
-    sp_acs_url: str = "http://localhost:8080/saml/acs"  # Assertion Consumer Service
+    sp_acs_url: str = "https://localhost:8080/saml/acs"  # Assertion Consumer Service
     sp_slo_url: str | None = None  # Single Logout Service
 
     # Protocol settings
@@ -210,7 +210,7 @@ class SAMLProvider:
             idp_sso_url="https://idp.example.com/sso",
             idp_x509_cert="MIICertificateData...",
             sp_entity_id="auto-claude-sp",
-            sp_acs_url="http://localhost:8080/saml/acs",
+            sp_acs_url="https://localhost:8080/saml/acs",
             provider_type=SAMLProviderType.OKTA,
         )
 
@@ -849,8 +849,8 @@ def map_saml_attributes(
 
     Example:
         attribute_map = {
-            "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
-            "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+            "email": "{claims_ns}/emailaddress",
+            "first_name": "{claims_ns}/givenname",
         }
         mapped = map_saml_attributes(assertion, attribute_map)
         # mapped = {"email": "user@example.com", "first_name": "John"}
@@ -1024,7 +1024,7 @@ def load_saml_config(config_path: Path | str) -> SAMLConfig:
             idp_x509_cert=data["idp_x509_cert"],
             idp_logout_url=data.get("idp_logout_url"),
             sp_entity_id=data.get("sp_entity_id", "auto-claude-sp"),
-            sp_acs_url=data.get("sp_acs_url", "http://localhost:8080/saml/acs"),
+            sp_acs_url=data.get("sp_acs_url", "https://localhost:8080/saml/acs"),
             sp_slo_url=data.get("sp_slo_url"),
             provider_type=SAMLProviderType(data.get("provider_type", "generic")),
             binding=SAMLBindingType(
