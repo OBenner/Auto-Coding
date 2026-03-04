@@ -61,11 +61,25 @@ def validate_migration_checkpoint(
         }
 
     # Check for checkpoint metadata files
+    # Support both checkpoints.json (CheckpointManager) and legacy commit files
+    checkpoints_json = checkpoint_dir / "checkpoints.json"
     commit_files = list(checkpoint_dir.glob("checkpoint-*-commit.txt"))
-    if not commit_files:
-        issues.append("No checkpoint commit file found")
-    else:
-        # Read the most recent checkpoint
+
+    if checkpoints_json.exists():
+        try:
+            with open(checkpoints_json, encoding="utf-8") as f:
+                data = json.load(f)
+                checkpoints = data.get("checkpoints", [])
+                if checkpoints:
+                    latest = checkpoints[-1]
+                    checkpoint_info["commit"] = latest.get("commit_hash", "")
+                    checkpoint_info["checkpoint_file"] = "checkpoints.json"
+                else:
+                    issues.append("No checkpoints found in checkpoints.json")
+        except (json.JSONDecodeError, OSError) as e:
+            issues.append(f"Failed to read checkpoints.json: {e}")
+    elif commit_files:
+        # Legacy format: checkpoint-*-commit.txt
         latest_commit_file = sorted(commit_files)[-1]
         try:
             with open(latest_commit_file, encoding="utf-8") as f:
@@ -74,6 +88,8 @@ def validate_migration_checkpoint(
                 checkpoint_info["checkpoint_file"] = latest_commit_file.name
         except Exception as e:
             issues.append(f"Failed to read checkpoint commit file: {e}")
+    else:
+        issues.append("No checkpoint metadata found")
 
     # Check for rollback scripts
     rollback_dir = checkpoint_dir / "rollback"
@@ -275,8 +291,18 @@ Begin by loading context (Phase 0 in your prompt).
 
         checkpoints_created = 0
         if checkpoint_dir.exists():
-            commit_files = list(checkpoint_dir.glob("checkpoint-*-commit.txt"))
-            checkpoints_created = len(commit_files)
+            # Check checkpoints.json first, fall back to legacy commit files
+            cj = checkpoint_dir / "checkpoints.json"
+            if cj.exists():
+                try:
+                    with open(cj, encoding="utf-8") as f:
+                        cj_data = json.load(f)
+                    checkpoints_created = len(cj_data.get("checkpoints", []))
+                except (json.JSONDecodeError, OSError):
+                    pass
+            if checkpoints_created == 0:
+                commit_files = list(checkpoint_dir.glob("checkpoint-*-commit.txt"))
+                checkpoints_created = len(commit_files)
 
             # Validate the checkpoint structure
             validation = validate_migration_checkpoint(checkpoint_dir, project_dir)
