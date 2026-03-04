@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -422,8 +422,8 @@ class IssueTracker:
             List of IssueTrend objects
         """
         # Get issues for different time periods
-        issues_7 = self.get_issues(days=7, category=category, severity=severity)
-        issues_30 = self.get_issues(days=30, category=category, severity=severity)
+        _issues_7 = self.get_issues(days=7, category=category, severity=severity)
+        _issues_30 = self.get_issues(days=30, category=category, severity=severity)
         issues_90 = self.get_issues(days=90, category=category, severity=severity)
 
         # Group by category and severity
@@ -515,7 +515,7 @@ class IssueTracker:
         self,
         days: int = 30,
         limit: int = 10,
-    ) -> list[tuple[str, int]]:
+    ) -> list[dict[str, Any]]:
         """
         Get top issue categories by frequency.
 
@@ -524,7 +524,7 @@ class IssueTracker:
             limit: Maximum number of categories to return
 
         Returns:
-            List of (category, count) tuples
+            List of dicts with 'category' and 'count' keys
         """
         issues = self.get_issues(days=days)
 
@@ -538,7 +538,10 @@ class IssueTracker:
             category_counts.items(), key=lambda x: x[1], reverse=True
         )
 
-        return sorted_categories[:limit]
+        return [
+            {"category": cat, "count": count}
+            for cat, count in sorted_categories[:limit]
+        ]
 
     def _load_issues(self) -> None:
         """Load issues from storage."""
@@ -546,7 +549,7 @@ class IssueTracker:
             return
 
         try:
-            with open(self._issues_file, "r", encoding="utf-8") as f:
+            with open(self._issues_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             self._issues = [
@@ -703,31 +706,43 @@ def main() -> None:
             print(f"  Unresolved: {summary.unresolved_count}")
 
             if summary.by_type:
-                print(f"\nBy Type:")
+                print("\nBy Type:")
                 for issue_type, count in summary.by_type.items():
                     print(f"  {issue_type}: {count}")
 
             if summary.by_category:
-                print(f"\nTop Categories:")
+                print("\nTop Categories:")
                 for cat, count in list(summary.by_category.items())[:5]:
                     print(f"  {cat}: {count}")
 
     elif args.trends:
-        trends = tracker.get_trends(days=args.days, category=args.type, severity=args.severity)
+        trends = tracker.get_trends(
+            days=args.days, category=args.type, severity=args.severity
+        )
 
         if args.json:
             print(json.dumps([t.__dict__ for t in trends], indent=2))
         else:
             print(f"Issue Trends (Last {args.days} days):")
             for trend in trends[:10]:
-                direction_icon = "↑" if trend.trend_direction == "increasing" else "↓" if trend.trend_direction == "decreasing" else "→"
+                direction_icon = (
+                    "↑"
+                    if trend.trend_direction == "increasing"
+                    else "↓"
+                    if trend.trend_direction == "decreasing"
+                    else "→"
+                )
                 print(f"  {trend.category} [{trend.severity}] {direction_icon}")
-                print(f"    7d: {trend.count_7_days} | 30d: {trend.count_30_days} | 90d: {trend.count_90_days}")
+                print(
+                    f"    7d: {trend.count_7_days} | 30d: {trend.count_30_days} | 90d: {trend.count_90_days}"
+                )
                 if trend.change_percentage != 0:
                     print(f"    Change: {trend.change_percentage:+.1f}%")
     else:
         # List recent issues
-        issues = tracker.get_issues(days=args.days, type=args.type, severity=args.severity, limit=20)
+        issues = tracker.get_issues(
+            days=args.days, issue_type=args.type, severity=args.severity, limit=20
+        )
 
         if args.json:
             print(json.dumps([i.__dict__ for i in issues], indent=2))

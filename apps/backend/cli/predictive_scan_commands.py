@@ -8,6 +8,7 @@ CLI commands for predictive issue scanning (run scan, check status, CI/CD blocki
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -20,7 +21,6 @@ if str(_PARENT_DIR) not in sys.path:
 from cli.utils import print_banner
 from ui import (
     Icons,
-    divider,
     icon,
     info,
     muted,
@@ -31,8 +31,9 @@ from ui import (
 
 # Try to import predictive scanner components
 try:
-    from analysis.predictive_scanner import PredictiveScanner, PredictiveScanResult
     from analysis.issue_tracker import IssueTracker
+    from analysis.predictive_scanner import PredictiveScanner, PredictiveScanResult
+
     PREDICTIVE_SCAN_AVAILABLE = True
 except ImportError:
     PREDICTIVE_SCAN_AVAILABLE = False
@@ -98,7 +99,7 @@ def handle_predictive_scan_command(
 
         # Output results
         if output_json:
-            print(json.dumps(result.to_dict(), indent=2))
+            print(json.dumps(dataclasses.asdict(result), indent=2))
         else:
             _print_scan_result(result)
 
@@ -148,7 +149,7 @@ def handle_predictive_scan_status_command(
         summary = tracker.get_summary()
         print(f"  Total Issues: {summary.total_issues}")
         print(f"  Resolved: {summary.resolved_count}")
-        print(f"  Active: {summary.active_count}")
+        print(f"  Active: {summary.unresolved_count}")
         print()
 
         # Get trends
@@ -176,7 +177,7 @@ def handle_predictive_scan_status_command(
         effectiveness = tracker.calculate_prevention_effectiveness()
         print(f"  Prevention Rate: {effectiveness.prevention_rate:.1f}%")
         print(f"  Issues Prevented: {effectiveness.issues_prevented}")
-        print(f"  Issues Detected: {effectiveness.total_detected}")
+        print(f"  Issues Detected: {effectiveness.issues_found}")
         print()
 
         # Get top categories
@@ -234,9 +235,7 @@ def handle_predictive_scan_check_command(
             blocking_severities = ["critical"]
 
         blocking_issues = [
-            issue
-            for issue in result.issues
-            if issue.severity in blocking_severities
+            issue for issue in result.issues if issue.severity in blocking_severities
         ]
 
         if blocking_issues:
@@ -261,9 +260,7 @@ def handle_predictive_scan_check_command(
             return 1
 
         # Safe to deploy
-        print(
-            success(f"{icon(Icons.SUCCESS)} No blocking issues - safe to deploy")
-        )
+        print(success(f"{icon(Icons.SUCCESS)} No blocking issues - safe to deploy"))
         return 0
 
     except Exception as e:
@@ -320,7 +317,7 @@ def _print_scan_result(result: PredictiveScanResult) -> None:
             if issue.description:
                 print(muted(f"     {issue.description}"))
             if issue.auto_fix:
-                print(success(f"     Auto-fix available"))
+                print(success("     Auto-fix available"))
             print()
 
         if len(result.issues) > 10:
@@ -343,12 +340,7 @@ def _print_scan_result(result: PredictiveScanResult) -> None:
             )
         )
     else:
-        print(
-            success(
-                f"{icon(Icons.SUCCESS)} Deployment SAFE - "
-                f"no blocking issues"
-            )
-        )
+        print(success(f"{icon(Icons.SUCCESS)} Deployment SAFE - no blocking issues"))
     print()
 
     # Print errors if any
@@ -464,7 +456,9 @@ Examples:
     # Validate project_dir exists
     if not args.project_dir.exists():
         print(
-            warning(f"{icon(Icons.WARNING)} Project directory not found: {args.project_dir}")
+            warning(
+                f"{icon(Icons.WARNING)} Project directory not found: {args.project_dir}"
+            )
         )
         sys.exit(2)
 
@@ -493,7 +487,9 @@ Examples:
 
         if not args.spec_dir.exists():
             print(
-                warning(f"{icon(Icons.WARNING)} Spec directory not found: {args.spec_dir}")
+                warning(
+                    f"{icon(Icons.WARNING)} Spec directory not found: {args.spec_dir}"
+                )
             )
             sys.exit(2)
 

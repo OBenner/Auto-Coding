@@ -1,8 +1,8 @@
 """
-Auto Code CLI - Main Entry Point
-=================================
+Auto-Code CLI - Main Entry Point
+==================================
 
-Command-line interface for the Auto Code autonomous coding framework.
+Command-line interface for the Auto-Code autonomous coding framework.
 """
 
 import argparse
@@ -41,6 +41,7 @@ from .scheduler_commands import (
     handle_schedule_status_command,
     handle_schedule_stop_command,
 )
+from .security_commands import handle_security_audit_command
 from .spec_commands import print_specs_list
 from .utils import (
     DEFAULT_MODEL,
@@ -65,7 +66,7 @@ from .workspace_commands import (
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Auto Code Framework - Autonomous multi-session coding agent",
+        description="Auto-Code Framework - Autonomous multi-session coding agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -131,13 +132,33 @@ Environment Variables:
         "--model",
         type=str,
         default=None,
-        help=f"Claude model to use (default: {DEFAULT_MODEL})",
+        help=f"Model to use (default: {DEFAULT_MODEL})",
+    )
+
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        choices=["claude", "litellm", "openrouter", "zhipuai"],
+        help="AI provider to use (default: from env or claude)",
     )
 
     parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose output",
+    )
+
+    parser.add_argument(
+        "--ci",
+        action="store_true",
+        help="Enable CI/CD pipeline mode (non-interactive, structured output)",
+    )
+
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Enable JSON output mode for structured machine-readable output",
     )
 
     # Workspace options
@@ -262,6 +283,15 @@ Environment Variables:
         "--force",
         action="store_true",
         help="Skip approval check and start build anyway (for debugging)",
+    )
+
+    # Task restart
+    parser.add_argument(
+        "--restart-from",
+        type=str,
+        default=None,
+        metavar="SUBTASK_ID",
+        help="Restart build from a specific subtask ID (preserves provider/model config)",
     )
 
     # Base branch for worktree creation
@@ -483,6 +513,20 @@ Environment Variables:
         help="Fail CI/CD check on high severity (default: critical only)",
     )
 
+    # Security audit commands
+    parser.add_argument(
+        "--security-audit",
+        action="store_true",
+        help="Run comprehensive security audit on the project",
+    )
+    parser.add_argument(
+        "--security-output-format",
+        type=str,
+        default="both",
+        choices=["json", "markdown", "both"],
+        help="Output format for security audit report (default: both)",
+    )
+
     return parser.parse_args()
 
 
@@ -516,6 +560,10 @@ def _run_cli() -> None:
     # Parse arguments
     args = parse_args()
 
+    # Wire --ci flag into CI mode env var so is_ci_mode() picks it up
+    if args.ci:
+        os.environ["AUTO_CLAUDE_CI"] = "1"
+
     # Import debug functions after environment setup
     from debug import debug, debug_error, debug_section, debug_success
 
@@ -529,6 +577,9 @@ def _run_cli() -> None:
     # Get model from CLI arg or env var (None if not explicitly set)
     # This allows get_phase_model() to fall back to task_metadata.json
     model = args.model or os.environ.get("AUTO_BUILD_MODEL")
+
+    # Get provider from CLI arg (default: from env or claude)
+    provider = args.provider
 
     # Handle --list command
     if args.list:
@@ -641,11 +692,7 @@ def _run_cli() -> None:
 
     if args.predictive_status:
         if not args.spec:
-            print(
-                warning(
-                    f"{icon(Icons.WARNING)} --spec required for --predictive-status"
-                )
-            )
+            print("Warning: --spec required for --predictive-status")
             sys.exit(1)
 
         spec_dir = find_spec(project_dir, args.spec)
@@ -680,6 +727,27 @@ def _run_cli() -> None:
             fail_on_high=args.scan_fail_on_high,
         )
         sys.exit(exit_code)
+
+    # Handle security audit command
+    if args.security_audit:
+        # Security audit can run with or without a spec
+        spec_dir = None
+        if args.spec:
+            spec_dir = find_spec(project_dir, args.spec)
+            if not spec_dir:
+                print_banner()
+                print(f"\nError: Spec '{args.spec}' not found")
+                print("\nAvailable specs:")
+                print_specs_list(project_dir)
+                sys.exit(1)
+
+        handle_security_audit_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            output_format=args.security_output_format,
+            verbose=args.verbose,
+        )
+        return
 
     # Require --spec if not listing
     if not args.spec:
@@ -794,6 +862,7 @@ def _run_cli() -> None:
         project_dir=project_dir,
         spec_dir=spec_dir,
         model=model,
+        provider=provider,
         max_iterations=args.max_iterations,
         verbose=args.verbose,
         force_isolated=args.isolated,
@@ -802,6 +871,8 @@ def _run_cli() -> None:
         skip_qa=args.skip_qa,
         force_bypass_approval=args.force,
         base_branch=args.base_branch,
+        json_mode=args.json,
+        restart_from=args.restart_from,
     )
 
 

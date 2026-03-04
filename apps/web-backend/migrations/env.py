@@ -7,14 +7,12 @@ and database connection.
 
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from core.config import settings
 
 # Import the Base from database.py to get metadata
 from core.database import Base
-from core.config import settings
+from sqlalchemy import engine_from_config, pool
 
 # Import all models to ensure they're registered with Base.metadata
 
@@ -23,7 +21,7 @@ from core.config import settings
 config = context.config
 
 # Set the database URL from settings
-config.set_main_option('sqlalchemy.url', settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -78,9 +76,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

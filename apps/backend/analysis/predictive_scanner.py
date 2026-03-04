@@ -28,7 +28,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -36,8 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Check for Claude SDK availability
 try:
-    import claude_agent_sdk  # noqa: F401
-
+    __import__("claude_agent_sdk")
     SDK_AVAILABLE = True
 except ImportError:
     SDK_AVAILABLE = False
@@ -196,11 +196,15 @@ class PredictiveScanner:
 
         # Initialize detectors
         self._bug_detector = BugDetector() if BugDetector else None
-        self._performance_analyzer = PerformanceAnalyzer() if PerformanceAnalyzer else None
+        self._performance_analyzer = (
+            PerformanceAnalyzer() if PerformanceAnalyzer else None
+        )
         self._code_smell_detector = CodeSmellDetector() if CodeSmellDetector else None
 
         # Initialize issue tracker
-        self._issue_tracker = IssueTracker(spec_dir) if (IssueTracker and spec_dir) else None
+        self._issue_tracker = (
+            IssueTracker(spec_dir) if (IssueTracker and spec_dir) else None
+        )
 
     def scan(
         self,
@@ -372,7 +376,9 @@ class PredictiveScanner:
                             severity=issue_dict.get("severity", "medium"),
                             category=issue_dict.get("issue_type", "unknown"),
                             source="performance_analyzer",
-                            title=issue_dict.get("message", "Unknown performance issue"),
+                            title=issue_dict.get(
+                                "message", "Unknown performance issue"
+                            ),
                             description=issue_dict.get("message", ""),
                             file=str(file_path),
                             line=issue_dict.get("lineno"),
@@ -480,7 +486,7 @@ class PredictiveScanner:
                 )
                 summary.prevention_rate = effectiveness.prevention_rate
             except Exception:
-                pass
+                pass  # Intentionally suppress - fallback to default prevention rate
 
         return summary
 
@@ -597,7 +603,7 @@ class PredictiveScanner:
                     }
                     for t in trends
                 ],
-                "summary": self._issue_tracker.get_summary(),
+                "summary": asdict(self._issue_tracker.get_summary()),
             }
         except Exception as e:
             logger.warning(f"Failed to get historical trends: {e}")
@@ -613,7 +619,7 @@ class PredictiveScanner:
             issue_records = []
             for issue in result.issues:
                 record = {
-                    "timestamp": result.summary.get("timestamp", ""),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "issue_type": issue.issue_type,
                     "severity": issue.severity,
                     "source": issue.source,
@@ -626,7 +632,13 @@ class PredictiveScanner:
                 }
                 issue_records.append(record)
 
-            self._issue_tracker.record_issues(issue_records)
+            # Group by (issue_type, source) since record_issues requires these
+            grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+            for record in issue_records:
+                key = (record["issue_type"], record["source"])
+                grouped.setdefault(key, []).append(record)
+            for (issue_type, source), records in grouped.items():
+                self._issue_tracker.record_issues(records, issue_type, source)
         except Exception as e:
             logger.warning(f"Failed to record scan results: {e}")
 
@@ -723,7 +735,9 @@ async def _run_analysis_async(issues: list[PredictiveIssue]) -> None:
                 msg_type = type(msg).__name__
                 if msg_type == "AssistantMessage" and hasattr(msg, "content"):
                     for block in msg.content:
-                        if type(block).__name__ == "TextBlock" and hasattr(block, "text"):
+                        if type(block).__name__ == "TextBlock" and hasattr(
+                            block, "text"
+                        ):
                             if block.text:
                                 response_text += block.text
 
@@ -786,7 +800,7 @@ def _parse_analysis_response(response_text: str) -> dict[str, Any] | None:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        logger.warning(f"Failed to parse LLM analysis JSON")
+        logger.warning("Failed to parse LLM analysis JSON")
         return None
 
 
@@ -854,7 +868,9 @@ async def _generate_fixes_async(issues: list[PredictiveIssue]) -> None:
                     msg_type = type(msg).__name__
                     if msg_type == "AssistantMessage" and hasattr(msg, "content"):
                         for block in msg.content:
-                            if type(block).__name__ == "TextBlock" and hasattr(block, "text"):
+                            if type(block).__name__ == "TextBlock" and hasattr(
+                                block, "text"
+                            ):
                                 if block.text:
                                     response_text += block.text
 
@@ -867,7 +883,9 @@ async def _generate_fixes_async(issues: list[PredictiveIssue]) -> None:
                         )
 
         except Exception as e:
-            logger.warning(f"Auto-fix generation failed for {issue.file}:{issue.line}: {e}")
+            logger.warning(
+                f"Auto-fix generation failed for {issue.file}:{issue.line}: {e}"
+            )
 
 
 def _build_fix_prompt(issue: PredictiveIssue) -> str:
@@ -902,7 +920,7 @@ Code Snippet:
 ```
 {issue.code_snippet}
 ```
-Current Suggestion: {issue.suggestion or 'None'}
+Current Suggestion: {issue.suggestion or "None"}
 """
 
     return f"""{base_prompt}
@@ -1077,7 +1095,7 @@ def main() -> None:
         print(f"Scan Duration: {result.scan_duration:.2f}s")
 
         if result.summary.top_categories:
-            print(f"\nTop Categories:")
+            print("\nTop Categories:")
             for cat in result.summary.top_categories[:5]:
                 print(f"  - {cat['category']}: {cat['count']}")
 
@@ -1088,9 +1106,13 @@ def main() -> None:
                 if issue.file:
                     print(f"    File: {issue.file}:{issue.line or ''}")
                 if issue.llm_analysis:
-                    print(f"    Priority: {issue.llm_analysis.get('priority', 'unknown')}")
+                    print(
+                        f"    Priority: {issue.llm_analysis.get('priority', 'unknown')}"
+                    )
                 if issue.auto_fix:
-                    print(f"    Auto-fix available: {issue.auto_fix.get('description', 'N/A')}")
+                    print(
+                        f"    Auto-fix available: {issue.auto_fix.get('description', 'N/A')}"
+                    )
 
         if result.scan_errors:
             print(f"\nScan Errors ({len(result.scan_errors)}):")

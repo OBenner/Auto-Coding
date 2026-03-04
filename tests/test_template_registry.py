@@ -6,6 +6,7 @@ Tests for Template base class and TemplateRegistry singleton.
 """
 
 import pytest
+
 from apps.backend.spec.templates.registry import Template, TemplateRegistry
 
 

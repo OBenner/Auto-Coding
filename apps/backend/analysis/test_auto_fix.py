@@ -3,7 +3,6 @@
 Test script for auto-fix generation functionality.
 """
 
-import asyncio
 import sys
 from pathlib import Path
 
@@ -40,7 +39,7 @@ def test_auto_fix_generation():
     print(f"\nIssue: {sample_issue.title}")
     print(f"Category: {sample_issue.category}")
     print(f"File: {sample_issue.file}:{sample_issue.line}")
-    print(f"\nCode Snippet:")
+    print("\nCode Snippet:")
     print("-" * 60)
     print(sample_issue.code_snippet)
     print("-" * 60)
@@ -53,30 +52,30 @@ def test_auto_fix_generation():
         print(f"\nFix Type: {auto_fix.get('fix_type')}")
         print(f"Description: {auto_fix.get('description')}")
         print(f"Scope: {auto_fix.get('scope')}")
-        print(f"Confidence: {auto_fix.get('confidence'):.2%}")
+        print(f"Confidence: {auto_fix.get('confidence', 0):.2%}")
 
-        print(f"\nOriginal Code:")
+        print("\nOriginal Code:")
         print("-" * 60)
-        print(auto_fix.get('original_code'))
-        print("-" * 60)
-
-        print(f"\nFixed Code:")
-        print("-" * 60)
-        print(auto_fix.get('fixed_code'))
+        print(auto_fix.get("original_code"))
         print("-" * 60)
 
-        if auto_fix.get('risks'):
-            print(f"\nRisks:")
-            for risk in auto_fix.get('risks', []):
+        print("\nFixed Code:")
+        print("-" * 60)
+        print(auto_fix.get("fixed_code"))
+        print("-" * 60)
+
+        if auto_fix.get("risks"):
+            print("\nRisks:")
+            for risk in auto_fix.get("risks", []):
                 print(f"  - {risk}")
 
-        if auto_fix.get('testing_advice'):
-            print(f"\nTesting Advice:")
+        if auto_fix.get("testing_advice"):
+            print("\nTesting Advice:")
             print(f"  {auto_fix.get('testing_advice')}")
 
-        if auto_fix.get('alternate_fixes'):
-            print(f"\nAlternate Fixes:")
-            for alt in auto_fix.get('alternate_fixes', []):
+        if auto_fix.get("alternate_fixes"):
+            print("\nAlternate Fixes:")
+            for alt in auto_fix.get("alternate_fixes", []):
                 print(f"  - Approach: {alt.get('approach')}")
                 print(f"    When to use: {alt.get('when_to_use')}")
 

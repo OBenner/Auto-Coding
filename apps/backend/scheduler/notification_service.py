@@ -217,6 +217,7 @@ def is_desktop_available() -> bool:
     if is_windows():
         # Windows: Check if toast notification is available (Windows 10+)
         try:
+            # Optional: subprocess is checked at runtime for availability
             import subprocess  # noqa: F401
 
             return True

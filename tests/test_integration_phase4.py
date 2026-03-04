@@ -23,20 +23,18 @@ import importlib.util
 
 # Load file_lock first (models.py depends on it)
 file_lock_spec = importlib.util.spec_from_file_location(
-    "file_lock",
-    backend_path / "runners" / "github" / "file_lock.py"
+    "file_lock", backend_path / "runners" / "github" / "file_lock.py"
 )
 file_lock_module = importlib.util.module_from_spec(file_lock_spec)
-sys.modules['file_lock'] = file_lock_module
+sys.modules["file_lock"] = file_lock_module
 file_lock_spec.loader.exec_module(file_lock_module)
 
 # Load models next
 models_spec = importlib.util.spec_from_file_location(
-    "models",
-    backend_path / "runners" / "github" / "models.py"
+    "models", backend_path / "runners" / "github" / "models.py"
 )
 models_module = importlib.util.module_from_spec(models_spec)
-sys.modules['models'] = models_module
+sys.modules["models"] = models_module
 models_spec.loader.exec_module(models_module)
 PRReviewFinding = models_module.PRReviewFinding
 PRReviewResult = models_module.PRReviewResult
@@ -46,28 +44,27 @@ ReviewCategory = models_module.ReviewCategory
 # Load services module dependencies for parallel_orchestrator_reviewer
 category_utils_spec = importlib.util.spec_from_file_location(
     "category_utils",
-    backend_path / "runners" / "github" / "services" / "category_utils.py"
+    backend_path / "runners" / "github" / "services" / "category_utils.py",
 )
 category_utils_module = importlib.util.module_from_spec(category_utils_spec)
-sys.modules['services.category_utils'] = category_utils_module
+sys.modules["services.category_utils"] = category_utils_module
 category_utils_spec.loader.exec_module(category_utils_module)
 
 # Load io_utils
 io_utils_spec = importlib.util.spec_from_file_location(
-    "io_utils",
-    backend_path / "runners" / "github" / "services" / "io_utils.py"
+    "io_utils", backend_path / "runners" / "github" / "services" / "io_utils.py"
 )
 io_utils_module = importlib.util.module_from_spec(io_utils_spec)
-sys.modules['services.io_utils'] = io_utils_module
+sys.modules["services.io_utils"] = io_utils_module
 io_utils_spec.loader.exec_module(io_utils_module)
 
 # Load pydantic_models
 pydantic_models_spec = importlib.util.spec_from_file_location(
     "pydantic_models",
-    backend_path / "runners" / "github" / "services" / "pydantic_models.py"
+    backend_path / "runners" / "github" / "services" / "pydantic_models.py",
 )
 pydantic_models_module = importlib.util.module_from_spec(pydantic_models_spec)
-sys.modules['services.pydantic_models'] = pydantic_models_module
+sys.modules["services.pydantic_models"] = pydantic_models_module
 pydantic_models_spec.loader.exec_module(pydantic_models_module)
 AgentAgreement = pydantic_models_module.AgentAgreement
 
@@ -75,19 +72,23 @@ AgentAgreement = pydantic_models_module.AgentAgreement
 # Load parallel_orchestrator_reviewer (contains ConfidenceTier, validation functions)
 orchestrator_spec = importlib.util.spec_from_file_location(
     "parallel_orchestrator_reviewer",
-    backend_path / "runners" / "github" / "services" / "parallel_orchestrator_reviewer.py"
+    backend_path
+    / "runners"
+    / "github"
+    / "services"
+    / "parallel_orchestrator_reviewer.py",
 )
 orchestrator_module = importlib.util.module_from_spec(orchestrator_spec)
 # Mock dependencies that aren't needed for unit testing
 # IMPORTANT: Save and restore ALL mocked modules to avoid polluting sys.modules for other tests
 _modules_to_mock = [
-    'context_gatherer',
-    'core.client',
-    'gh_client',
-    'phase_config',
-    'services.pr_worktree_manager',
-    'services.sdk_utils',
-    'claude_agent_sdk',
+    "context_gatherer",
+    "core.client",
+    "gh_client",
+    "phase_config",
+    "services.pr_worktree_manager",
+    "services.sdk_utils",
+    "claude_agent_sdk",
 ]
 _original_modules = {name: sys.modules.get(name) for name in _modules_to_mock}
 for name in _modules_to_mock:
@@ -107,6 +108,7 @@ _is_finding_in_scope = orchestrator_module._is_finding_in_scope
 # =============================================================================
 # Phase 1 Tests: Confidence Routing, Evidence Validation, Scope Filtering
 # =============================================================================
+
 
 class TestConfidenceTierRouting:
     """Test confidence tier routing logic (Phase 1)."""
@@ -165,6 +167,7 @@ class TestEvidenceValidation:
     @pytest.fixture
     def make_finding(self):
         """Factory fixture to create PRReviewFinding instances."""
+
         def _make_finding(evidence: str | None = None, **kwargs):
             defaults = {
                 "id": "TEST001",
@@ -178,6 +181,7 @@ class TestEvidenceValidation:
             }
             defaults.update(kwargs)
             return PRReviewFinding(**defaults)
+
         return _make_finding
 
     def test_valid_evidence_with_code_syntax(self, make_finding):
@@ -247,7 +251,10 @@ class TestEvidenceValidation:
             finding = make_finding(evidence=pattern)
             is_valid, reason = _validate_finding_evidence(finding)
             assert not is_valid, f"Should reject: {pattern}"
-            assert "description pattern" in reason.lower() or "lacks code" in reason.lower()
+            assert (
+                "description pattern" in reason.lower()
+                or "lacks code" in reason.lower()
+            )
 
     def test_evidence_with_various_syntax_chars(self, make_finding):
         """Test various code syntax characters are recognized."""
@@ -278,6 +285,7 @@ class TestScopeFiltering:
     @pytest.fixture
     def make_finding(self):
         """Factory fixture to create PRReviewFinding instances."""
+
         def _make_finding(file: str = "src/test.py", line: int = 10, **kwargs):
             defaults = {
                 "id": "TEST001",
@@ -290,6 +298,7 @@ class TestScopeFiltering:
             }
             defaults.update(kwargs)
             return PRReviewFinding(**defaults)
+
         return _make_finding
 
     def test_finding_in_changed_files_passes(self, make_finding):
@@ -304,9 +313,7 @@ class TestScopeFiltering:
         """Finding for a file NOT in changed_files should be filtered."""
         changed_files = ["src/auth.py", "src/utils.py"]
         finding = make_finding(
-            file="src/database.py",
-            line=10,
-            description="This code has a bug"
+            file="src/database.py", line=10, description="This code has a bug"
         )
 
         is_valid, reason = _is_finding_in_scope(finding, changed_files)
@@ -336,7 +343,7 @@ class TestScopeFiltering:
         finding = make_finding(
             file="src/utils.py",
             line=10,
-            description="This change breaks the helper function in utils.py"
+            description="This change breaks the helper function in utils.py",
         )
         is_valid, _ = _is_finding_in_scope(finding, changed_files)
         assert is_valid
@@ -345,7 +352,7 @@ class TestScopeFiltering:
         finding = make_finding(
             file="src/config.py",
             line=5,
-            description="Changes in auth.py affects config loading"
+            description="Changes in auth.py affects config loading",
         )
         is_valid, _ = _is_finding_in_scope(finding, changed_files)
         assert is_valid
@@ -354,7 +361,7 @@ class TestScopeFiltering:
         finding = make_finding(
             file="src/database.py",
             line=20,
-            description="database.py depends on modified auth module"
+            description="database.py depends on modified auth module",
         )
         is_valid, _ = _is_finding_in_scope(finding, changed_files)
         assert is_valid
@@ -388,15 +395,14 @@ github_dir = backend_path / "runners" / "github"
 # Load context_gatherer module directly using spec loader
 # This avoids the complex package import chain
 _cg_spec = importlib.util.spec_from_file_location(
-    "context_gatherer_isolated",
-    github_dir / "context_gatherer.py"
+    "context_gatherer_isolated", github_dir / "context_gatherer.py"
 )
 _cg_module = importlib.util.module_from_spec(_cg_spec)
 # Set up minimal module environment
-sys.modules['context_gatherer_isolated'] = _cg_module
+sys.modules["context_gatherer_isolated"] = _cg_module
 # Mock only the gh_client dependency
 _mock_gh = MagicMock()
-sys.modules['gh_client'] = _mock_gh
+sys.modules["gh_client"] = _mock_gh
 _cg_spec.loader.exec_module(_cg_module)
 PRContextGathererIsolated = _cg_module.PRContextGatherer
 
@@ -418,7 +424,9 @@ class TestImportDetection:
         (src_dir / "config.ts").write_text("export const config = { debug: true };")
 
         # Create index.ts that re-exports
-        (src_dir / "index.ts").write_text("export * from './utils';\nexport { config } from './config';")
+        (src_dir / "index.ts").write_text(
+            "export * from './utils';\nexport { config } from './config';"
+        )
 
         # Create shared directory
         shared_dir = src_dir / "shared"
@@ -426,7 +434,9 @@ class TestImportDetection:
         (shared_dir / "types.ts").write_text("export type User = { id: string };")
 
         # Create Python module
-        (src_dir / "python_module.py").write_text("from .helpers import util_func\nimport os")
+        (src_dir / "python_module.py").write_text(
+            "from .helpers import util_func\nimport os"
+        )
         (src_dir / "helpers.py").write_text("def util_func(): pass")
         (src_dir / "__init__.py").write_text("")
 
@@ -435,19 +445,19 @@ class TestImportDetection:
     def test_path_alias_detection(self, temp_project):
         """Path alias imports (@/utils) should be detected and resolved."""
         import json
+
         # Create tsconfig.json with path aliases
         tsconfig = {
             "compilerOptions": {
-                "paths": {
-                    "@/*": ["src/*"],
-                    "@shared/*": ["src/shared/*"]
-                }
+                "paths": {"@/*": ["src/*"], "@shared/*": ["src/shared/*"]}
             }
         }
         (temp_project / "tsconfig.json").write_text(json.dumps(tsconfig))
 
         # Create the target file that the alias points to
-        (temp_project / "src" / "utils.ts").write_text("export const helper = () => {};")
+        (temp_project / "src" / "utils.ts").write_text(
+            "export const helper = () => {};"
+        )
 
         # Test file with alias import
         test_content = "import { helper } from '@/utils';"
@@ -462,7 +472,9 @@ class TestImportDetection:
         assert isinstance(imports, set)
         # Normalize paths for cross-platform comparison (Windows uses backslashes)
         normalized_imports = {p.replace("\\", "/") for p in imports}
-        assert "src/utils.ts" in normalized_imports, f"Expected 'src/utils.ts' in imports, got: {imports}"
+        assert "src/utils.ts" in normalized_imports, (
+            f"Expected 'src/utils.ts' in imports, got: {imports}"
+        )
 
     def test_commonjs_require_detection(self, temp_project):
         """CommonJS require('./utils') should be detected."""
@@ -546,9 +558,7 @@ class TestReverseDepDetection:
         )
 
         # Create a file that does NOT import formatter
-        (src_dir / "standalone.ts").write_text(
-            "export const standalone = () => {};"
-        )
+        (src_dir / "standalone.ts").write_text("export const standalone = () => {};")
 
         return tmp_path
 
@@ -620,6 +630,7 @@ class TestCrossValidation:
     @pytest.fixture
     def make_finding(self):
         """Factory fixture to create PRReviewFinding instances."""
+
         def _make_finding(
             id: str = "TEST001",
             file: str = "src/test.py",
@@ -628,7 +639,7 @@ class TestCrossValidation:
             severity: ReviewSeverity = ReviewSeverity.HIGH,
             confidence: float = 0.7,
             source_agents: list = None,
-            **kwargs
+            **kwargs,
         ):
             return PRReviewFinding(
                 id=id,
@@ -640,8 +651,11 @@ class TestCrossValidation:
                 line=line,
                 confidence=confidence,
                 source_agents=source_agents or [],
-                **{k: v for k, v in kwargs.items() if k not in ["title", "description"]}
+                **{
+                    k: v for k, v in kwargs.items() if k not in ["title", "description"]
+                },
             )
+
         return _make_finding
 
     @pytest.fixture
@@ -649,18 +663,13 @@ class TestCrossValidation:
         """Create a mock ParallelOrchestratorReviewer instance."""
         from models import GitHubRunnerConfig
 
-        config = GitHubRunnerConfig(
-            token="test-token",
-            repo="test/repo"
-        )
+        config = GitHubRunnerConfig(token="test-token", repo="test/repo")
         # Create minimal directory structure
         github_dir = tmp_path / ".auto-claude" / "github"
         github_dir.mkdir(parents=True)
 
         reviewer = ParallelOrchestratorReviewer(
-            project_dir=tmp_path,
-            github_dir=github_dir,
-            config=config
+            project_dir=tmp_path, github_dir=github_dir, config=config
         )
         return reviewer
 
@@ -674,7 +683,7 @@ class TestCrossValidation:
             category=ReviewCategory.SECURITY,
             confidence=0.7,
             source_agents=["security-reviewer"],
-            description="SQL injection risk"
+            description="SQL injection risk",
         )
         finding2 = make_finding(
             id="F2",
@@ -683,10 +692,12 @@ class TestCrossValidation:
             category=ReviewCategory.SECURITY,
             confidence=0.6,
             source_agents=["quality-reviewer"],
-            description="Input not sanitized"
+            description="Input not sanitized",
         )
 
-        validated, agreement = mock_reviewer._cross_validate_findings([finding1, finding2])
+        validated, agreement = mock_reviewer._cross_validate_findings(
+            [finding1, finding2]
+        )
 
         # Should merge into one finding
         assert len(validated) == 1
@@ -723,8 +734,12 @@ class TestCrossValidation:
 
     def test_merged_finding_has_cross_validated_true(self, make_finding, mock_reviewer):
         """Merged multi-agent findings should have cross_validated=True."""
-        finding1 = make_finding(id="F1", file="src/test.py", line=5, source_agents=["agent1"])
-        finding2 = make_finding(id="F2", file="src/test.py", line=5, source_agents=["agent2"])
+        finding1 = make_finding(
+            id="F1", file="src/test.py", line=5, source_agents=["agent1"]
+        )
+        finding2 = make_finding(
+            id="F2", file="src/test.py", line=5, source_agents=["agent2"]
+        )
 
         validated, _ = mock_reviewer._cross_validate_findings([finding1, finding2])
 
@@ -836,12 +851,14 @@ class TestCrossValidation:
 # Integration Verification Tests: Full Pipeline Tests
 # =============================================================================
 
+
 class TestIntegrationPipeline:
     """Test complete pipeline integration of Phase 1-3 features."""
 
     @pytest.fixture
     def make_finding(self):
         """Factory fixture to create PRReviewFinding instances."""
+
         def _make_finding(
             id: str = "TEST001",
             file: str = "src/test.py",
@@ -851,7 +868,7 @@ class TestIntegrationPipeline:
             confidence: float = 0.7,
             evidence: str = "const x = getValue()",
             source_agents: list = None,
-            **kwargs
+            **kwargs,
         ):
             return PRReviewFinding(
                 id=id,
@@ -864,8 +881,11 @@ class TestIntegrationPipeline:
                 confidence=confidence,
                 evidence=evidence,
                 source_agents=source_agents or [],
-                **{k: v for k, v in kwargs.items() if k not in ["title", "description"]}
+                **{
+                    k: v for k, v in kwargs.items() if k not in ["title", "description"]
+                },
             )
+
         return _make_finding
 
     @pytest.fixture
@@ -873,17 +893,12 @@ class TestIntegrationPipeline:
         """Create a mock ParallelOrchestratorReviewer instance."""
         from models import GitHubRunnerConfig
 
-        config = GitHubRunnerConfig(
-            token="test-token",
-            repo="test/repo"
-        )
+        config = GitHubRunnerConfig(token="test-token", repo="test/repo")
         github_dir = tmp_path / ".auto-claude" / "github"
         github_dir.mkdir(parents=True)
 
         reviewer = ParallelOrchestratorReviewer(
-            project_dir=tmp_path,
-            github_dir=github_dir,
-            config=config
+            project_dir=tmp_path, github_dir=github_dir, config=config
         )
         return reviewer
 
@@ -962,7 +977,9 @@ class TestIntegrationPipeline:
         # Note: The code uses primary finding's confidence, sorted by severity (CRITICAL first)
         assert validated[0].confidence == pytest.approx(0.85, rel=0.01)
         assert ConfidenceTier.get_tier(validated[0].confidence) == ConfidenceTier.HIGH
-        assert validated[0].severity == ReviewSeverity.CRITICAL  # Highest severity preserved
+        assert (
+            validated[0].severity == ReviewSeverity.CRITICAL
+        )  # Highest severity preserved
 
     def test_pipeline_invalid_evidence_rejected(self, make_finding):
         """Test that findings with invalid evidence are rejected regardless of confidence."""
@@ -1072,12 +1089,19 @@ class TestIntegrationPipeline:
         validated, agreement = mock_reviewer._cross_validate_findings(findings)
 
         # SEC001 and SEC002 should be merged (same file, line, category)
-        security_findings = [f for f in validated if f.category == ReviewCategory.SECURITY
-                           and f.file == "src/auth.py" and f.line == 42]
+        security_findings = [
+            f
+            for f in validated
+            if f.category == ReviewCategory.SECURITY
+            and f.file == "src/auth.py"
+            and f.line == 42
+        ]
         assert len(security_findings) == 1
         # Cross-validated finding should have boosted confidence
         assert security_findings[0].cross_validated is True
-        assert security_findings[0].confidence >= 0.85  # Boosted from max(0.85, 0.75) + 0.15
+        assert (
+            security_findings[0].confidence >= 0.85
+        )  # Boosted from max(0.85, 0.75) + 0.15
 
         # Step 2: Validate evidence for each finding
         valid_evidence_findings = []
@@ -1087,8 +1111,11 @@ class TestIntegrationPipeline:
                 valid_evidence_findings.append(f)
 
         # PROSE001 should be filtered out (if present in validated)
-        prose_findings = [f for f in valid_evidence_findings
-                         if f.evidence and "refactored" in f.evidence]
+        prose_findings = [
+            f
+            for f in valid_evidence_findings
+            if f.evidence and "refactored" in f.evidence
+        ]
         assert len(prose_findings) == 0
 
         # Step 3: Filter by scope
@@ -1099,7 +1126,9 @@ class TestIntegrationPipeline:
                 in_scope_findings.append(f)
 
         # OUT001 should be filtered out (src/database.py not in changed_files)
-        database_findings = [f for f in in_scope_findings if f.file == "src/database.py"]
+        database_findings = [
+            f for f in in_scope_findings if f.file == "src/database.py"
+        ]
         assert len(database_findings) == 0
 
     def test_pipeline_empty_findings_handled(self, mock_reviewer):
@@ -1108,7 +1137,9 @@ class TestIntegrationPipeline:
 
         assert len(validated) == 0
         assert len(agreement.agreed_findings) == 0
-        assert len(agreement.conflicting_findings) == 0  # Note: uses conflicting_findings, not disputed
+        assert (
+            len(agreement.conflicting_findings) == 0
+        )  # Note: uses conflicting_findings, not disputed
 
     def test_pipeline_confidence_tier_determines_routing(self, make_finding):
         """Test that confidence tier determines review routing behavior."""
@@ -1128,4 +1159,6 @@ class TestIntegrationPipeline:
         for confidence, expected_tier, expected_routing in test_cases:
             finding = make_finding(confidence=confidence)
             tier = ConfidenceTier.get_tier(finding.confidence)
-            assert tier == expected_tier, f"Confidence {confidence} should be {expected_tier}"
+            assert tier == expected_tier, (
+                f"Confidence {confidence} should be {expected_tier}"
+            )

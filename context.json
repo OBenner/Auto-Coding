@@ -1,96 +1,43 @@
 {
   "files_to_modify": {
-    "frontend": [
-      "apps/frontend/src/renderer/App.tsx",
-      "apps/frontend/src/renderer/components/KanbanBoard.tsx",
-      "apps/frontend/src/renderer/components/GitHubIssues.tsx",
-      "apps/frontend/src/renderer/components/GitLabIssues.tsx",
-      "apps/frontend/src/renderer/components/settings/AppSettings.tsx",
-      "apps/frontend/src/renderer/stores/settings-store.ts",
-      "apps/frontend/src/preload/api/task-api.ts",
-      "apps/frontend/src/main/ipc-handlers/task/execution-handlers.ts",
-      "apps/frontend/src/shared/i18n/locales/en/common.json",
-      "apps/frontend/src/shared/i18n/locales/en/dialogs.json",
-      "apps/frontend/src/shared/i18n/locales/en/tasks.json",
-      "apps/frontend/src/shared/i18n/locales/fr/common.json",
-      "apps/frontend/src/shared/i18n/locales/fr/dialogs.json",
-      "apps/frontend/src/shared/i18n/locales/fr/tasks.json",
-      "package.json"
+    "backend": [
+      "apps/backend/cli/main.py",
+      "apps/backend/cli/build_commands.py",
+      "apps/backend/cli/utils.py"
     ]
   },
   "files_to_create": {
-    "frontend": [
-      "apps/frontend/src/renderer/stores/keyboard-shortcuts-store.ts",
-      "apps/frontend/src/renderer/stores/quick-actions-store.ts",
-      "apps/frontend/src/renderer/components/CommandPalette.tsx",
-      "apps/frontend/src/renderer/components/BatchQADialog.tsx",
-      "apps/frontend/src/renderer/components/BatchStatusUpdateDialog.tsx",
-      "apps/frontend/src/renderer/components/QuickActionsMenu.tsx",
-      "apps/frontend/src/renderer/components/settings/KeyboardShortcutsSettings.tsx",
-      "apps/frontend/src/shared/i18n/locales/en/quickActions.json",
-      "apps/frontend/src/shared/i18n/locales/fr/quickActions.json"
+    "backend": [
+      "apps/backend/cli/exit_codes.py",
+      "apps/backend/cli/json_output.py",
+      "apps/backend/cli/artifacts.py",
+      "tests/test_cli_exit_codes.py",
+      "tests/test_json_output.py",
+      "tests/test_artifacts.py"
+    ],
+    "root": [
+      ".github/workflows/auto-claude-build.yml",
+      "guides/ci-cd-integration.md"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/renderer/components/BulkPRDialog.tsx",
-    "apps/frontend/src/renderer/components/github-issues/components/BatchReviewWizard.tsx",
-    "apps/frontend/src/renderer/components/ui/combobox.tsx",
-    "apps/frontend/src/renderer/components/ui/dialog.tsx",
-    "apps/frontend/src/renderer/components/ui/dropdown-menu.tsx",
-    "apps/frontend/src/renderer/stores/task-store.ts",
-    "apps/frontend/src/renderer/components/settings/AccountSettings.tsx",
-    "apps/frontend/src/shared/i18n/locales/en/tasks.json",
-    "apps/frontend/src/shared/i18n/locales/fr/tasks.json"
+    "apps/backend/cli/workspace_commands.py",
+    "apps/backend/ui/status.py",
+    "apps/backend/agents/utils.py",
+    ".github/workflows/ci.yml"
   ],
   "patterns": {
-    "batch_dialog_pattern": "Multi-step dialog with progress tracking, using BulkPRDialog as pattern. Steps: options -> creating -> results. Use ScrollArea for lists, Progress for tracking, Badge for status.",
-    "keyboard_shortcut_pattern": "App.tsx has keyboard listener pattern (lines 375-411). Use useEffect with addEventListener 'keydown', check e.ctrlKey/e.metaKey + e.key, skip if in input fields.",
-    "dialog_system": "Use shadcn/ui Dialog components (Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter). All dialogs have onOpenChange callback for state management.",
-    "i18n_pattern": "Use react-i18next with namespaces. Import useTranslation, const { t } = useTranslation(['namespace', 'common']). All user-facing text must use translation keys, not hardcoded strings.",
-    "store_pattern": "Zustand stores follow pattern: create() with state interface + actions. Use slice pattern for updates to avoid re-renders. Stores persist to filesystem via settings-store.",
-    "ipc_pattern": "IPC handlers in main/ipc-handlers/, preload API in preload/api/. Task operations: getTasks, startTask, updateTaskStatus, submitReview all follow same pattern."
+    "cli_argument_pattern": "All CLI flags are added to argparse.ArgumentParser in cli/main.py with proper help text and examples",
+    "exit_code_pattern": "Use sys.exit() with specific codes - currently using 0 (success), 1 (error), 130 (Ctrl+C)",
+    "json_output_pattern": "JSON output already used in workspace_commands.py: print(json.dumps(result))",
+    "env_var_pattern": "Environment variables read via os.getenv() in utils.py - e.g., DEFAULT_BRANCH, AUTO_BUILD_MODEL",
+    "artifact_pattern": "Status and build data tracked in ui/status.py with BuildState enum and StatusManager"
   },
   "existing_implementations": {
-    "description": "Found existing batch operations and keyboard shortcut patterns in codebase",
-    "batch_operations": {
-      "BulkPRDialog": "apps/frontend/src/renderer/components/BulkPRDialog.tsx - Creates PRs for multiple tasks with progress tracking",
-      "BatchReviewWizard": "apps/frontend/src/renderer/components/github-issues/components/BatchReviewWizard.tsx - Multi-step wizard for issue batching"
-    },
-    "keyboard_shortcuts": {
-      "location": "apps/frontend/src/renderer/App.tsx lines 375-411",
-      "pattern": "useEffect with keydown listener, Cmd/Ctrl+T for add project",
-      "note": "Checks if target is input field to avoid interfering with typing"
-    },
-    "command_palette": {
-      "status": "Not implemented yet",
-      "recommended_package": "cmdk",
-      "integration_point": "App.tsx with Cmd/Ctrl+K trigger"
-    },
-    "task_api": {
-      "location": "apps/frontend/src/preload/api/task-api.ts",
-      "relevant_methods": ["startTask", "updateTaskStatus", "submitReview", "getTasks"],
-      "note": "All return Promise<IPCResult<T>> with success/error properties"
-    },
-    "ui_components": {
-      "shadcn_ui": "26 components in apps/frontend/src/renderer/components/ui/",
-      "available": ["dialog", "dropdown-menu", "combobox", "checkbox", "badge", "progress", "scroll-area"],
-      "note": "All components follow consistent API and styling patterns"
-    }
-  },
-  "tech_stack": {
-    "frontend": {
-      "framework": "Electron + React + TypeScript",
-      "state_management": "Zustand",
-      "ui_library": "shadcn/ui (Radix UI primitives)",
-      "i18n": "react-i18next",
-      "testing": "Vitest + Testing Library",
-      "build": "Vite"
-    },
-    "component_conventions": {
-      "naming": "PascalCase for components, camelCase for utilities",
-      "structure": "Co-locate components with hooks and stores",
-      "styling": "Tailwind CSS with cn() utility for class merging",
-      "types": "Shared types in apps/frontend/src/shared/types/"
-    }
+    "cli_structure": "CLI entry point is apps/backend/run.py which imports cli.main. argparse used for argument parsing in cli/main.py",
+    "exit_codes": "Current exit codes: 0 (success), 1 (various errors), 130 (KeyboardInterrupt). No specific codes for build/QA failure",
+    "json_output": "JSON output pattern exists in workspace_commands.py for --merge-preview and --create-pr commands",
+    "build_states": "BuildState enum in ui/status.py: IDLE, PLANNING, BUILDING, QA, COMPLETE, PAUSED, ERROR",
+    "github_actions": "Existing CI workflow: .github/workflows/ci.yml with cross-platform testing (Linux, Windows, macOS)"
   }
 }

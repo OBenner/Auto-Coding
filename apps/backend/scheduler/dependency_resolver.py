@@ -152,9 +152,8 @@ class DependencyGraph:
 
         # Start DFS from any unvisited node
         for node in unvisited:
-            if node not in visited:
-                if dfs(node, []):
-                    return cycle
+            if node not in visited and dfs(node, []):
+                return cycle
 
         # Fallback: return first unvisited nodes
         return list(unvisited)[:3]

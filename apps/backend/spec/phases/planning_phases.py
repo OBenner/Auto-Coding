@@ -69,6 +69,10 @@ class PlanningPhaseMixin:
         # Fall back to agent
         self.ui.print_status("Falling back to planner agent...", "progress")
         for attempt in range(MAX_RETRIES):
+            # Clean up invalid plan before retry so Write tool works
+            if attempt > 0 and plan_file.exists():
+                plan_file.unlink()
+
             self.ui.print_status(
                 f"Running planner agent (attempt {attempt + 1})...", "progress"
             )

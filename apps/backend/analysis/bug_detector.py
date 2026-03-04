@@ -32,7 +32,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -143,7 +142,9 @@ class BugDetector:
         result = self._detect_from_source(source, str(path))
         return self._result_to_dict(result)
 
-    def detect_from_source(self, source: str, file_path: str = "<string>") -> dict[str, Any]:
+    def detect_from_source(
+        self, source: str, file_path: str = "<string>"
+    ) -> dict[str, Any]:
         """
         Detect bugs in Python source code string.
 
@@ -202,10 +203,18 @@ class BugDetector:
 
         # Count issues by severity
         result.total_issues = len(result.issues)
-        result.critical_count = sum(1 for i in result.issues if i.severity == self.SEVERITY_CRITICAL)
-        result.high_count = sum(1 for i in result.issues if i.severity == self.SEVERITY_HIGH)
-        result.medium_count = sum(1 for i in result.issues if i.severity == self.SEVERITY_MEDIUM)
-        result.low_count = sum(1 for i in result.issues if i.severity == self.SEVERITY_LOW)
+        result.critical_count = sum(
+            1 for i in result.issues if i.severity == self.SEVERITY_CRITICAL
+        )
+        result.high_count = sum(
+            1 for i in result.issues if i.severity == self.SEVERITY_HIGH
+        )
+        result.medium_count = sum(
+            1 for i in result.issues if i.severity == self.SEVERITY_MEDIUM
+        )
+        result.low_count = sum(
+            1 for i in result.issues if i.severity == self.SEVERITY_LOW
+        )
 
         return result
 
@@ -228,13 +237,13 @@ class BugDetector:
                 if self._is_validation_condition(node.test):
                     # All lines in this if block are safe
                     for body_node in ast.walk(node):
-                        if hasattr(body_node, 'lineno'):
+                        if hasattr(body_node, "lineno"):
                             safe_lines.add(body_node.lineno)
 
             # Operations within try blocks are considered safe
             if isinstance(node, ast.Try):
                 for body_node in ast.walk(node):
-                    if hasattr(body_node, 'lineno'):
+                    if hasattr(body_node, "lineno"):
                         safe_lines.add(body_node.lineno)
 
         return safe_lines
@@ -249,7 +258,7 @@ class BugDetector:
         Returns:
             True if this is a validation condition
         """
-        code = ast.unparse(node) if hasattr(node, 'lineno') else ""
+        code = ast.unparse(node) if hasattr(node, "lineno") else ""
 
         # Check for None checks
         if "is not None" in code or "is None" in code:
@@ -289,7 +298,7 @@ class BugDetector:
                     BugReport(
                         bug_type="nonetype_error",
                         severity=self.SEVERITY_HIGH,
-                        message=f"Potential NoneType error: attribute access without None check",
+                        message="Potential NoneType error: attribute access without None check",
                         lineno=node.lineno,
                         code_snippet=code,
                         suggestion=f"Add None check before accessing: if {ast.unparse(node.value)} is not None",
@@ -307,7 +316,7 @@ class BugDetector:
                         BugReport(
                             bug_type="nonetype_error",
                             severity=self.SEVERITY_HIGH,
-                            message=f"Potential NoneType error: method call without None check",
+                            message="Potential NoneType error: method call without None check",
                             lineno=node.lineno,
                             code_snippet=code,
                             suggestion=f"Add None check before calling: if {ast.unparse(node.func.value)} is not None",
@@ -339,12 +348,16 @@ class BugDetector:
 
                 # Extract index value if it's a constant or unary operation
                 index_value = None
-                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                if isinstance(node.slice, ast.Constant) and isinstance(
+                    node.slice.value, int
+                ):
                     index_value = node.slice.value
                 elif isinstance(node.slice, ast.UnaryOp):
                     # Handle negative indices like -5
                     if isinstance(node.slice.op, ast.USub):
-                        if isinstance(node.slice.operand, ast.Constant) and isinstance(node.slice.operand.value, int):
+                        if isinstance(node.slice.operand, ast.Constant) and isinstance(
+                            node.slice.operand.value, int
+                        ):
                             index_value = -node.slice.operand.value
 
                 # Check if index is a numeric literal
@@ -352,7 +365,11 @@ class BugDetector:
                     # Determine severity based on index value
                     if index_value < 0:
                         # Negative indices (except -1) are high risk
-                        severity = self.SEVERITY_HIGH if index_value < -1 else self.SEVERITY_LOW
+                        severity = (
+                            self.SEVERITY_HIGH
+                            if index_value < -1
+                            else self.SEVERITY_LOW
+                        )
                         confidence = 0.7
                         msg = f"Potential IndexError: negative index {index_value} may be out of bounds"
                     elif index_value > 10:
@@ -379,14 +396,16 @@ class BugDetector:
                     )
 
                 # Check for variable-based indexing without validation
-                elif isinstance(node.slice, (ast.Name, ast.Attribute, ast.BinOp, ast.UnaryOp)):
+                elif isinstance(
+                    node.slice, (ast.Name, ast.Attribute, ast.BinOp, ast.UnaryOp)
+                ):
                     # Variable or expression as index - could be out of bounds
                     if not isinstance(node.slice, ast.Slice):  # Not a slice operation
                         issues.append(
                             BugReport(
                                 bug_type="index_error",
                                 severity=self.SEVERITY_LOW,
-                                message=f"Potential IndexError: variable index without bounds check",
+                                message="Potential IndexError: variable index without bounds check",
                                 lineno=node.lineno,
                                 code_snippet=code,
                                 suggestion=f"Add bounds check: if len({ast.unparse(node.value)}) > index",
@@ -424,7 +443,7 @@ class BugDetector:
                             BugReport(
                                 bug_type="key_error",
                                 severity=self.SEVERITY_MEDIUM,
-                                message=f"Potential KeyError: dictionary key access without .get() or 'in' check",
+                                message="Potential KeyError: dictionary key access without .get() or 'in' check",
                                 lineno=node.lineno,
                                 code_snippet=code,
                                 suggestion=f"Use .get() method or check key existence: if '{node.slice.value}' in dict",
@@ -437,10 +456,10 @@ class BugDetector:
                         BugReport(
                             bug_type="key_error",
                             severity=self.SEVERITY_LOW,
-                            message=f"Potential KeyError: dictionary key access without .get() or 'in' check",
+                            message="Potential KeyError: dictionary key access without .get() or 'in' check",
                             lineno=node.lineno,
                             code_snippet=code,
-                            suggestion=f"Use .get() method or check key existence: if key in dict",
+                            suggestion="Use .get() method or check key existence: if key in dict",
                             confidence=0.4,
                         )
                     )
@@ -475,7 +494,7 @@ class BugDetector:
                                 BugReport(
                                     bug_type="division_by_zero",
                                     severity=self.SEVERITY_CRITICAL,
-                                    message=f"Division by zero: dividing by constant 0",
+                                    message="Division by zero: dividing by constant 0",
                                     lineno=node.lineno,
                                     code_snippet=code,
                                     suggestion="Remove division by zero or add validation",
@@ -488,7 +507,7 @@ class BugDetector:
                             BugReport(
                                 bug_type="division_by_zero",
                                 severity=self.SEVERITY_LOW,
-                                message=f"Potential division by zero: no zero check on divisor",
+                                message="Potential division by zero: no zero check on divisor",
                                 lineno=node.lineno,
                                 code_snippet=code,
                                 suggestion=f"Add check: if {ast.unparse(node.right)} != 0",
@@ -523,7 +542,7 @@ class BugDetector:
                             BugReport(
                                 bug_type="unsafe_conversion",
                                 severity=self.SEVERITY_LOW,
-                                message=f"Unsafe int() conversion without try/except",
+                                message="Unsafe int() conversion without try/except",
                                 lineno=node.lineno,
                                 code_snippet=code,
                                 suggestion="Wrap in try/except ValueError for safe conversion",

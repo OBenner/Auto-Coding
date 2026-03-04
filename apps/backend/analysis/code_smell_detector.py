@@ -35,7 +35,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -415,7 +414,7 @@ class CodeSmellDetector:
                     lineno=node.lineno,
                     code_snippet=self._get_code_snippet(source, node.lineno),
                     suggestion=(
-                        f"Consider reducing parameters or using a parameter object."
+                        "Consider reducing parameters or using a parameter object."
                     ),
                     metrics={"parameter_count": param_count},
                 )
@@ -798,9 +797,9 @@ if __name__ == "__main__":
                 ]
 
                 if anti_patterns or args.verbose:
-                    print(f"\n{'='*60}")
+                    print(f"\n{'=' * 60}")
                     print(f"File: {file}")
-                    print(f"{'='*60}")
+                    print(f"{'=' * 60}")
 
                 for issue in anti_patterns:
                     total_issues += 1
@@ -816,9 +815,9 @@ if __name__ == "__main__":
             else:
                 # Show all code smells
                 if result["issues"] or args.verbose:
-                    print(f"\n{'='*60}")
+                    print(f"\n{'=' * 60}")
                     print(f"File: {file}")
-                    print(f"{'='*60}")
+                    print(f"{'=' * 60}")
                     print(f"Total issues: {result['total_issues']}")
                     print(f"  Critical: {result['critical_count']}")
                     print(f"  High: {result['high_count']}")
@@ -836,9 +835,9 @@ if __name__ == "__main__":
             print(f"Error analyzing {file}: {e}", file=sys.stderr)
 
     # Print summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     if args.detect_anti_patterns:
         print(f"Detection complete. Found {total_issues} anti-pattern(s).")
     else:
         print(f"Analysis complete. Found {total_issues} issue(s).")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")

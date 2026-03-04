@@ -190,7 +190,9 @@ def create_predictive_scan_tools(spec_dir: Path, project_dir: Path) -> list:
 
             # Parse file patterns
             try:
-                file_patterns = json.loads(file_patterns_str) if file_patterns_str else None
+                file_patterns = (
+                    json.loads(file_patterns_str) if file_patterns_str else None
+                )
             except json.JSONDecodeError:
                 file_patterns = None
 
@@ -297,8 +299,8 @@ Prevention Effectiveness:
 -------------------------
 Prevention Rate: {effectiveness.prevention_rate:.1%}
 Issues Prevented: {effectiveness.issues_prevented}
-Total Issues Found: {effectiveness.total_issues_found}
-Calculated over: {effectiveness.time_period_days} days
+Total Issues Found: {effectiveness.issues_found}
+Period: {effectiveness.period_start} to {effectiveness.period_end}
 
 Top Categories:
 ---------------
@@ -316,11 +318,23 @@ Top Categories:
             if trends:
                 output += "\nTrends:\n-------\n"
                 for trend in trends[:10]:  # Show top 10 trends
-                    direction_icon = "📈" if trend.trend_direction == "up" else "📉" if trend.trend_direction == "down" else "➡"
-                    output += f"\n  {direction_icon} {trend.category} ({trend.severity})\n"
+                    direction_icon = (
+                        "📈"
+                        if trend.trend_direction == "increasing"
+                        else "📉"
+                        if trend.trend_direction == "decreasing"
+                        else "➡"
+                    )
+                    output += (
+                        f"\n  {direction_icon} {trend.category} ({trend.severity})\n"
+                    )
                     output += f"     Last 7 days: {trend.count_7_days} | Last 30 days: {trend.count_30_days}\n"
                     if trend.change_percentage is not None:
-                        change_str = f"+{trend.change_percentage:.1f}%" if trend.change_percentage > 0 else f"{trend.change_percentage:.1f}%"
+                        change_str = (
+                            f"+{trend.change_percentage:.1f}%"
+                            if trend.change_percentage > 0
+                            else f"{trend.change_percentage:.1f}%"
+                        )
                         output += f"     Change: {change_str}\n"
 
             return {
@@ -388,7 +402,9 @@ Low: {result.summary.low_count}
 """
 
             if has_critical:
-                output += "⚠️  CRITICAL ISSUES FOUND - Review required before deployment!\n\n"
+                output += (
+                    "⚠️  CRITICAL ISSUES FOUND - Review required before deployment!\n\n"
+                )
                 # Show critical issues
                 critical_issues = [i for i in result.issues if i.severity == "critical"]
                 if critical_issues:

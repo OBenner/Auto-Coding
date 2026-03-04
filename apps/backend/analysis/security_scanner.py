@@ -42,7 +42,7 @@ except ImportError:
 
 # Import predictive scanner
 try:
-    from analysis.predictive_scanner import PredictiveScanner, PredictiveScanResult
+    from analysis.predictive_scanner import PredictiveScanner
 
     HAS_PREDICTIVE_SCANNER = True
 except ImportError:
@@ -186,10 +186,12 @@ class SecurityScanner:
 
         # Also check predictive scan for critical issues
         if result.predictive_scan:
-            predictive_has_critical = result.predictive_scan.get(
-                "summary", {}
-            ).get("has_critical_issues", False)
-            result.has_critical_issues = result.has_critical_issues or predictive_has_critical
+            predictive_has_critical = result.predictive_scan.get("summary", {}).get(
+                "has_critical_issues", False
+            )
+            result.has_critical_issues = (
+                result.has_critical_issues or predictive_has_critical
+            )
 
         # Any secrets always block, critical vulnerabilities block
         result.should_block_qa = len(result.secrets) > 0 or any(
@@ -198,9 +200,9 @@ class SecurityScanner:
 
         # Also block on critical predictive issues
         if result.predictive_scan:
-            predictive_should_block = result.predictive_scan.get(
-                "summary", {}
-            ).get("should_block_deployment", False)
+            predictive_should_block = result.predictive_scan.get("summary", {}).get(
+                "should_block_deployment", False
+            )
             result.should_block_qa = result.should_block_qa or predictive_should_block
 
         # Save results if spec_dir provided
@@ -303,6 +305,7 @@ class SecurityScanner:
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=120,
             )
 
@@ -361,6 +364,7 @@ class SecurityScanner:
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=120,
             )
 
@@ -415,6 +419,7 @@ class SecurityScanner:
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=120,
             )
 
@@ -620,7 +625,9 @@ def scan_for_security_issues(
         SecurityScanResult with all findings
     """
     scanner = SecurityScanner(spec_dir)
-    return scanner.scan(project_dir, spec_dir, changed_files, run_predictive_scan=run_predictive_scan)
+    return scanner.scan(
+        project_dir, spec_dir, changed_files, run_predictive_scan=run_predictive_scan
+    )
 
 
 def has_security_issues(project_dir: Path, include_predictive: bool = False) -> bool:
@@ -684,7 +691,9 @@ def main() -> None:
         "--secrets-only", action="store_true", help="Only scan for secrets"
     )
     parser.add_argument(
-        "--predictive", action="store_true", help="Include predictive bug/performance/code smell scans"
+        "--predictive",
+        action="store_true",
+        help="Include predictive bug/performance/code smell scans",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
@@ -705,7 +714,9 @@ def main() -> None:
         print(f"Secrets Found: {len(result.secrets)}")
         print(f"Vulnerabilities: {len(result.vulnerabilities)}")
         if result.predictive_scan:
-            predictive_issues = result.predictive_scan.get("summary", {}).get("total_issues", 0)
+            predictive_issues = result.predictive_scan.get("summary", {}).get(
+                "total_issues", 0
+            )
             print(f"Predictive Issues: {predictive_issues}")
         print(f"Has Critical Issues: {result.has_critical_issues}")
         print(f"Should Block QA: {result.should_block_qa}")
@@ -728,7 +739,7 @@ def main() -> None:
 
         if result.predictive_scan:
             predictive_summary = result.predictive_scan.get("summary", {})
-            print(f"\nPredictive Scan Results:")
+            print("\nPredictive Scan Results:")
             print(f"  Total Issues: {predictive_summary.get('total_issues', 0)}")
             print(f"  Critical: {predictive_summary.get('critical_count', 0)}")
             print(f"  High: {predictive_summary.get('high_count', 0)}")
@@ -738,7 +749,7 @@ def main() -> None:
             # Show top predictive issues
             predictive_issues = result.predictive_scan.get("issues", [])
             if predictive_issues:
-                print(f"\n  Top Issues:")
+                print("\n  Top Issues:")
                 for issue in predictive_issues[:10]:
                     severity = issue.get("severity", "unknown").upper()
                     category = issue.get("category", "unknown")

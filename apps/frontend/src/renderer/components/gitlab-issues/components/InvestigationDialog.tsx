@@ -189,7 +189,7 @@ export function InvestigationDialog({
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{investigationStatus.message}</span>
+                <span className="text-muted-foreground">{t(investigationStatus.message)}</span>
                 <span className="text-foreground">{investigationStatus.progress}%</span>
               </div>
               <Progress value={investigationStatus.progress} className="h-2" />

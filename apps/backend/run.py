@@ -9,8 +9,16 @@ Uses subtask-based implementation plans with phase dependencies.
 Key Features:
 - Safe workspace isolation (builds in separate workspace by default)
 - Parallel execution with Git worktrees
-- Smart recovery from interruptions
+- Smart recovery from interruptions with automatic retry strategies
+- Recovery metrics tracking - monitors recovery success rate and attempt statistics
 - Linear integration for project management
+
+Recovery System:
+The framework tracks and reports recovery metrics for all build attempts:
+- Recovery success rate: percentage of subtasks that recovered after failures
+- Total recovery attempts: cumulative count of retry operations
+- Circular fix detection: identifies when agents repeat the same failed approach
+- Real-time metrics display in progress summaries
 
 Usage:
     python auto-code/run.py --spec 001-initial-app
