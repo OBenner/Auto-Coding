@@ -11,6 +11,7 @@ export * from './task';
 export * from './terminal';
 export * from './agent';
 export * from './settings';
+export * from './security';
 export * from './changelog';
 export * from './insights';
 export * from './roadmap';

@@ -41,6 +41,10 @@
       "title": "Comptes",
       "description": "Comptes Claude & endpoints API"
     },
+    "security": {
+      "title": "Sécurité",
+      "description": "Paramètres de sécurité et autorisations"
+    },
     "providers": {
       "title": "Fournisseurs IA",
       "description": "Configurer les fournisseurs de modèles IA"

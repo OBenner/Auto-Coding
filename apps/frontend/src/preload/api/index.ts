@@ -25,6 +25,7 @@ import { createSessionReplayAPI } from './modules/session-replay-api';
 import { ContextViewerAPI, createContextViewerAPI } from './modules/context-viewer-api';
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
 import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
+import { SecurityAPI, createSecurityAPI } from './security-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -45,7 +46,10 @@ export interface ElectronAPI extends
   ScreenshotAPI,
   PluginAPI,
   ContextViewerAPI,
-  FeedbackAPI {
+  FeedbackAPI,
+  SecurityAPI {
+  /** Security API (nested access for security store) */
+  security: SecurityAPI;
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
@@ -57,29 +61,34 @@ export interface ElectronAPI extends
   scheduler: SchedulerAPI;
 }
 
-export const createElectronAPI = (): ElectronAPI => ({
-  ...createProjectAPI(),
-  ...createTerminalAPI(),
-  ...createTaskAPI(),
-  ...createSettingsAPI(),
-  ...createFileAPI(),
-  ...createTemplateAPI(),
-  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
-  ...createAppUpdateAPI(),
-  ...createDebugAPI(),
-  ...createClaudeCodeAPI(),
-  ...createMcpAPI(),
-  ...createProfileAPI(),
-  ...createScreenshotAPI(),
-  ...createPluginAPI(),
-  ...createContextViewerAPI(),
-  ...createFeedbackAPI(),
-  github: createGitHubAPI(),
-  queue: createQueueAPI(),  // Queue routing for rate limit recovery
-  pattern: createPatternAPI(),
-  sessionReplay: createSessionReplayAPI(),
-  scheduler: createSchedulerAPI()
-});
+export const createElectronAPI = (): ElectronAPI => {
+  const securityAPI = createSecurityAPI();
+  return {
+    ...createProjectAPI(),
+    ...createTerminalAPI(),
+    ...createTaskAPI(),
+    ...createSettingsAPI(),
+    ...createFileAPI(),
+    ...createTemplateAPI(),
+    ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
+    ...createAppUpdateAPI(),
+    ...createDebugAPI(),
+    ...createClaudeCodeAPI(),
+    ...createMcpAPI(),
+    ...createProfileAPI(),
+    ...createScreenshotAPI(),
+    ...createPluginAPI(),
+    ...createContextViewerAPI(),
+    ...createFeedbackAPI(),
+    ...securityAPI,
+    security: securityAPI,
+    github: createGitHubAPI(),
+    queue: createQueueAPI(),  // Queue routing for rate limit recovery
+    pattern: createPatternAPI(),
+    sessionReplay: createSessionReplayAPI(),
+    scheduler: createSchedulerAPI()
+  };
+};
 
 // Export individual API creators for potential use in tests or specialized contexts
 // Note: IdeationAPI, InsightsAPI, AnalyticsAPI, and GitLabAPI are included in AgentAPI
@@ -104,7 +113,8 @@ export {
   createSessionReplayAPI,
   createContextViewerAPI,
   createSchedulerAPI,
-  createFeedbackAPI
+  createFeedbackAPI,
+  createSecurityAPI
 };
 
 export type {
@@ -132,5 +142,6 @@ export type {
   SessionReplayAPI,
   ContextViewerAPI,
   SchedulerAPI,
-  FeedbackAPI
+  FeedbackAPI,
+  SecurityAPI
 };
