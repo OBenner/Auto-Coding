@@ -250,16 +250,16 @@ class TestWebhookDelivery:
         self, temp_spec_dir: Path, webhook_config_slack: WebhookConfig
     ):
         """Test that webhook delivery includes signature."""
-        received_signature = None
-        received_payload = None
+        received_signatures: list[str] = []
+        received_payloads: list[dict] = []
         delivery_dir = temp_spec_dir / ".webhooks" / "deliveries"
         delivery_dir.mkdir(parents=True, exist_ok=True)
 
         async def mock_post(self, url, *, headers, json, **kwargs):
-            nonlocal received_signature, received_payload
             await asyncio.sleep(0)
-            received_signature = headers.get("X-Auto-Clause-Signature")
-            received_payload = json
+            sig = headers.get("X-Auto-Clause-Signature", "")
+            received_signatures.append(sig)
+            received_payloads.append(json)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
         with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
@@ -271,9 +271,9 @@ class TestWebhookDelivery:
             )
 
         # Verify signature was sent
-        assert received_signature is not None
-        assert received_signature.startswith("v1=")
-        assert received_payload is not None
+        assert len(received_signatures) == 1
+        assert received_signatures[0].startswith("v1=")
+        assert len(received_payloads) == 1
 
     @pytest.mark.asyncio
     async def test_webhook_retry_on_5xx_error(
@@ -582,12 +582,11 @@ class TestWebhookDispatcher:
         config_dir = temp_spec_dir / ".webhooks" / "configs"
         webhook_config_slack.save(config_dir)
 
-        received_payload = None
+        received_payloads: list[dict] = []
 
         async def mock_post(self, url, *, headers, json, **kwargs):
-            nonlocal received_payload
             await asyncio.sleep(0)
-            received_payload = json
+            received_payloads.append(json)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
         with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
@@ -598,12 +597,11 @@ class TestWebhookDispatcher:
 
         # Verify test webhook was sent
         assert result["success"] is True
-        assert received_payload is not None
-        payload: dict = received_payload
+        assert len(received_payloads) == 1
         # The test webhook uses SPEC_CREATED as the event type
         # and adds a "test" flag to the payload
-        assert payload["event"] == "spec_created"
-        assert payload["test"] is True
+        assert received_payloads[0]["event"] == "spec_created"
+        assert received_payloads[0]["test"] is True
 
 
 # =============================================================================
@@ -725,14 +723,13 @@ class TestWebhookE2E:
         config_dir = temp_spec_dir / ".webhooks" / "configs"
         webhook_config_generic.save(config_dir)
 
-        received_signature = None
-        received_payload = None
+        received_signatures: list[str] = []
+        received_payloads: list[dict] = []
 
         async def mock_post(self, url, *, headers, json, **kwargs):
-            nonlocal received_signature, received_payload
             await asyncio.sleep(0)
-            received_signature = headers.get("X-Auto-Clause-Signature")
-            received_payload = json
+            received_signatures.append(headers.get("X-Auto-Clause-Signature", ""))
+            received_payloads.append(json)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
         # Step 2: Send event
@@ -744,20 +741,20 @@ class TestWebhookE2E:
             )
 
         # Step 3: Verify signature was sent
-        assert received_signature is not None
-        assert received_signature.startswith("v1=")
-        assert received_payload is not None
+        assert len(received_signatures) == 1
+        assert received_signatures[0].startswith("v1=")
+        assert len(received_payloads) == 1
 
         # Step 4: Verify signature can be validated
         is_valid = verify_signature(
-            received_payload, received_signature, webhook_config_generic.secret
+            received_payloads[0], received_signatures[0], webhook_config_generic.secret
         )
         assert is_valid is True
 
         # Verify tampered payload fails validation
-        tampered_payload = {**received_payload, "status": "tampered"}
+        tampered_payload = {**received_payloads[0], "status": "tampered"}
         is_valid_tampered = verify_signature(
-            tampered_payload, received_signature, webhook_config_generic.secret
+            tampered_payload, received_signatures[0], webhook_config_generic.secret
         )
         assert is_valid_tampered is False
 
@@ -779,12 +776,11 @@ class TestWebhookTemplates:
         config_dir = temp_spec_dir / ".webhooks" / "configs"
         webhook_config_slack.save(config_dir)
 
-        received_payload = None
+        received_payloads: list[dict] = []
 
         async def mock_post(self, url, *, headers, json, **kwargs):
-            nonlocal received_payload
             await asyncio.sleep(0)
-            received_payload = json
+            received_payloads.append(json)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
         with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
@@ -795,12 +791,11 @@ class TestWebhookTemplates:
             )
 
         # Verify payload contains standard webhook fields
-        assert received_payload is not None
-        payload: dict = received_payload
-        assert payload["event"] == "build_started"
-        assert "timestamp" in payload
-        assert "spec" in payload
-        assert payload["spec"]["id"] == "slack-test-001"
+        assert len(received_payloads) == 1
+        assert received_payloads[0]["event"] == "build_started"
+        assert "timestamp" in received_payloads[0]
+        assert "spec" in received_payloads[0]
+        assert received_payloads[0]["spec"]["id"] == "slack-test-001"
 
     @pytest.mark.asyncio
     async def test_discord_template_rendering(
@@ -811,12 +806,11 @@ class TestWebhookTemplates:
         config_dir = temp_spec_dir / ".webhooks" / "configs"
         webhook_config_discord.save(config_dir)
 
-        received_payload = None
+        received_payloads: list[dict] = []
 
         async def mock_post(self, url, *, headers, json, **kwargs):
-            nonlocal received_payload
             await asyncio.sleep(0)
-            received_payload = json
+            received_payloads.append(json)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
         with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
@@ -827,12 +821,11 @@ class TestWebhookTemplates:
             )
 
         # Verify payload contains standard webhook fields
-        assert received_payload is not None
-        payload: dict = received_payload
-        assert payload["event"] == "spec_created"
-        assert "timestamp" in payload
-        assert "spec" in payload
-        assert payload["spec"]["id"] == "discord-test-001"
+        assert len(received_payloads) == 1
+        assert received_payloads[0]["event"] == "spec_created"
+        assert "timestamp" in received_payloads[0]
+        assert "spec" in received_payloads[0]
+        assert received_payloads[0]["spec"]["id"] == "discord-test-001"
 
 
 # =============================================================================
