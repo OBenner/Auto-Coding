@@ -418,6 +418,13 @@
       "integrationTitle": "Mémoire",
       "integrationDescription": "Configurer la mémoire persistante inter-sessions pour les agents",
       "syncDescription": "Configurer la mémoire persistante"
+    },
+    "modelUsage": {
+      "title": "Utilisation des Modèles",
+      "description": "Configuration et verrous des modèles",
+      "integrationTitle": "Utilisation des Modèles",
+      "integrationDescription": "Voir et gérer l'utilisation des modèles IA et verrouiller des versions de modèle spécifiques",
+      "syncDescription": "Configurer les paramètres des modèles"
     }
   },
   "provider": {

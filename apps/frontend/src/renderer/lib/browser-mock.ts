@@ -667,6 +667,14 @@ const browserMockAPI: ElectronAPI = {
   }),
   exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' }),
 
+<<<<<<< Updated upstream
+=======
+  // Model Usage Analytics
+  getModelUsageSummary: async () => ({ success: true as const, data: { period_start: '', period_end: '', total_usage_count: 0, total_tokens: 0, total_cost: 0, models: [], agents: [], top_models_by_usage: [], top_models_by_cost: [] } }),
+  getModelUsageTrends: async () => ({ success: true as const, data: [] }),
+  exportModelUsageAnalytics: async () => ({ success: true as const, data: '' }),
+
+>>>>>>> Stashed changes
   // Agent performance analytics (nested API)
   analytics: {
     getSummary: async () => ({
