@@ -598,7 +598,8 @@ class TestWebhookDispatcher:
 
         # Verify test webhook was sent
         assert result["success"] is True
-        assert received_payload is not None
+        if received_payload is None:
+            pytest.fail("received_payload was not set by mock")
         # The test webhook uses SPEC_CREATED as the event type
         # and adds a "test" flag to the payload
         assert received_payload["event"] == "spec_created"
@@ -794,7 +795,8 @@ class TestWebhookTemplates:
             )
 
         # Verify payload contains standard webhook fields
-        assert received_payload is not None
+        if received_payload is None:
+            pytest.fail("received_payload was not set by mock")
         assert received_payload["event"] == "build_started"
         assert "timestamp" in received_payload
         assert "spec" in received_payload
@@ -825,7 +827,8 @@ class TestWebhookTemplates:
             )
 
         # Verify payload contains standard webhook fields
-        assert received_payload is not None
+        if received_payload is None:
+            pytest.fail("received_payload was not set by mock")
         assert received_payload["event"] == "spec_created"
         assert "timestamp" in received_payload
         assert "spec" in received_payload

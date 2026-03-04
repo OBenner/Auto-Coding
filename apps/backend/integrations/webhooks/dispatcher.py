@@ -105,21 +105,13 @@ class WebhookDispatcher:
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                if blocking:
-                    # Already in async context with blocking - create a task
-                    # that the caller can await via dispatch_event_async()
-                    task = asyncio.create_task(self._dispatch_async(event, data or {}))
-                    _background_tasks.add(task)
-                    task.add_done_callback(_background_tasks.discard)
-                    # For sync callers, we can't await here; use
-                    # dispatch_event_async() for async blocking calls
-                    return None
-                else:
-                    # Fire-and-forget background task
-                    task = asyncio.create_task(self._dispatch_async(event, data or {}))
-                    _background_tasks.add(task)
-                    task.add_done_callback(_background_tasks.discard)
-                    return None
+                # Already in async context - create background task.
+                # Cannot await here from sync method; use
+                # dispatch_event_async() for awaitable delivery.
+                task = asyncio.create_task(self._dispatch_async(event, data or {}))
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
+                return None
             else:
                 # Not in async context - run in new loop
                 if blocking:
