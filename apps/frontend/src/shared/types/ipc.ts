@@ -65,6 +65,13 @@ import type {
   FailureMetrics
 } from './productivity-analytics';
 import type {
+  ModelUsageSummary,
+  ModelUsageTrendPoint,
+  ModelUsageExportOptions,
+  ModelUsageFilter,
+  ModelLockConfig
+} from './model-usage';
+import type {
   TerminalCreateOptions,
   TerminalSession,
   TerminalRestoreResult,
@@ -957,6 +964,19 @@ export interface ElectronAPI {
   getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
   getFailureMetrics: (projectId: string) => Promise<IPCResult<FailureMetrics>>;
   exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<string>>;
+
+  // Model usage analytics operations
+  getModelUsageSummary: (projectId: string, filter?: ModelUsageFilter) => Promise<IPCResult<ModelUsageSummary>>;
+  getModelUsageTrends: (projectId: string, filter?: ModelUsageFilter) => Promise<IPCResult<ModelUsageTrendPoint[]>>;
+  exportModelUsageAnalytics: (projectId: string, options: ModelUsageExportOptions) => Promise<IPCResult<string>>;
+
+  // Model lock operations
+  listModelLocks: (projectId: string) => Promise<IPCResult<ModelLockConfig>>;
+  lockPhaseModel: (projectId: string, phase: string, modelId: string) => Promise<IPCResult<{ success: boolean }>>;
+  lockAgentModel: (projectId: string, agentType: string, modelId: string) => Promise<IPCResult<{ success: boolean }>>;
+  unlockPhaseModel: (projectId: string, phase: string) => Promise<IPCResult<{ success: boolean }>>;
+  unlockAgentModel: (projectId: string, agentType: string) => Promise<IPCResult<{ success: boolean }>>;
+  clearModelLocks: (projectId: string) => Promise<IPCResult<{ success: boolean }>>;
 
   // Template library operations
   listTemplates: (projectId: string, options?: { category?: TemplateCategory | 'all'; tags?: string[] }) => Promise<IPCResult<TemplateInfo[]>>;

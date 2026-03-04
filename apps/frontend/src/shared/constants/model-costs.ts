@@ -35,182 +35,62 @@ export type CostEstimate = {
 };
 
 // ============================================
+// SHARED PRICING TIERS (reused across model variants)
+// ============================================
+
+/** Helper to define a pricing tier for a provider. */
+const tier = (input: number, output: number, provider: ModelPricing['provider']): ModelPricing => ({ input, output, provider });
+
+// Anthropic tiers
+const OPUS_PRICING = tier(15.00, 75.00, 'anthropic');
+const SONNET_PRICING = tier(3.00, 15.00, 'anthropic');
+const HAIKU_PRICING = tier(0.80, 4.00, 'anthropic');
+
+// Ollama: all models run locally at zero cost
+const OLLAMA_FREE = tier(0.00, 0.00, 'ollama');
+
+// ============================================
 // MODEL PRICING DATABASE (per 1M tokens)
 // ============================================
 export const MODEL_PRICING: Record<string, ModelPricing> = {
-  // ==================== ANTHROPIC (CLAUDE) ====================
-  // Claude 4.5 Opus - Most capable model
-  'claude-opus-4-5-20251101': {
-    input: 15.00,
-    output: 75.00,
-    provider: 'anthropic',
-  },
-  // Claude 4.5 Sonnet - Balanced performance and cost
-  'claude-sonnet-4-5-20250929': {
-    input: 3.00,
-    output: 15.00,
-    provider: 'anthropic',
-  },
-  // Claude 4.5 Haiku - Fast and cost-effective
-  'claude-haiku-4-5-20251001': {
-    input: 0.80,
-    output: 4.00,
-    provider: 'anthropic',
-  },
-  // Extended thinking variants (same pricing as base models)
-  'claude-sonnet-4-5-20250929-thinking': {
-    input: 3.00,
-    output: 15.00,
-    provider: 'anthropic',
-  },
-  'claude-opus-4-5-20251101-thinking': {
-    input: 15.00,
-    output: 75.00,
-    provider: 'anthropic',
-  },
-  // Legacy Claude models
-  'claude-3-5-sonnet-20241022': {
-    input: 3.00,
-    output: 15.00,
-    provider: 'anthropic',
-  },
-  'claude-3-5-haiku-20241022': {
-    input: 0.80,
-    output: 4.00,
-    provider: 'anthropic',
-  },
-  'claude-3-opus-20240229': {
-    input: 15.00,
-    output: 75.00,
-    provider: 'anthropic',
-  },
+  // Anthropic Claude
+  'claude-opus-4-5-20251101': OPUS_PRICING,
+  'claude-opus-4-5-20251101-thinking': OPUS_PRICING,
+  'claude-3-opus-20240229': OPUS_PRICING,
+  'claude-sonnet-4-5-20250929': SONNET_PRICING,
+  'claude-sonnet-4-5-20250929-thinking': SONNET_PRICING,
+  'claude-3-5-sonnet-20241022': SONNET_PRICING,
+  'claude-haiku-4-5-20251001': HAIKU_PRICING,
+  'claude-3-5-haiku-20241022': HAIKU_PRICING,
 
-  // ==================== OPENAI ====================
-  // GPT-4o - Latest GPT-4 optimized model
-  'gpt-4o': {
-    input: 2.50,
-    output: 10.00,
-    provider: 'openai',
-  },
-  // GPT-4o Mini - Cost-effective variant
-  'gpt-4o-mini': {
-    input: 0.15,
-    output: 0.60,
-    provider: 'openai',
-  },
-  // GPT-4 Turbo - High performance
-  'gpt-4-turbo': {
-    input: 10.00,
-    output: 30.00,
-    provider: 'openai',
-  },
-  // GPT-4 - Original GPT-4
-  'gpt-4': {
-    input: 30.00,
-    output: 60.00,
-    provider: 'openai',
-  },
-  // GPT-3.5 Turbo - Fast and affordable
-  'gpt-3.5-turbo': {
-    input: 0.50,
-    output: 1.50,
-    provider: 'openai',
-  },
-  // o1 - Advanced reasoning model
-  'o1': {
-    input: 15.00,
-    output: 60.00,
-    provider: 'openai',
-  },
-  // o1-mini - Smaller reasoning model
-  'o1-mini': {
-    input: 3.00,
-    output: 12.00,
-    provider: 'openai',
-  },
-  // o3-mini - Latest mini reasoning model
-  'o3-mini': {
-    input: 3.00,
-    output: 12.00,
-    provider: 'openai',
-  },
+  // OpenAI
+  'gpt-4o': tier(2.50, 10.00, 'openai'),
+  'gpt-4o-mini': tier(0.15, 0.60, 'openai'),
+  'gpt-4-turbo': tier(10.00, 30.00, 'openai'),
+  'gpt-4': tier(30.00, 60.00, 'openai'),
+  'gpt-3.5-turbo': tier(0.50, 1.50, 'openai'),
+  'o1': tier(15.00, 60.00, 'openai'),
+  'o1-mini': tier(3.00, 12.00, 'openai'),
+  'o3-mini': tier(3.00, 12.00, 'openai'),
 
-  // ==================== GOOGLE GEMINI ====================
-  // Gemini 2.0 Flash - Latest fast model
-  'gemini-2.0-flash': {
-    input: 0.10,
-    output: 0.40,
-    provider: 'google',
-  },
-  // Gemini 2.0 Flash Thinking - Advanced reasoning
-  'gemini-2.0-flash-thinking': {
-    input: 0.10,
-    output: 0.40,
-    provider: 'google',
-  },
-  // Gemini 1.5 Pro - High capability
-  'gemini-1.5-pro': {
-    input: 0.15,
-    output: 0.60,
-    provider: 'google',
-  },
-  // Gemini 1.5 Flash - Balanced performance
-  'gemini-1.5-flash': {
-    input: 0.075,
-    output: 0.30,
-    provider: 'google',
-  },
+  // Google Gemini
+  'gemini-2.0-flash': tier(0.10, 0.40, 'google'),
+  'gemini-2.0-flash-thinking': tier(0.10, 0.40, 'google'),
+  'gemini-1.5-pro': tier(0.15, 0.60, 'google'),
+  'gemini-1.5-flash': tier(0.075, 0.30, 'google'),
 
-  // ==================== OLLAMA (LOCAL) ====================
-  // All Ollama models are free (local execution)
-  'llama2': {
-    input: 0.00,
-    output: 0.00,
-    provider: 'ollama',
-  },
-  'llama3': {
-    input: 0.00,
-    output: 0.00,
-    provider: 'ollama',
-  },
-  'mistral': {
-    input: 0.00,
-    output: 0.00,
-    provider: 'ollama',
-  },
-  'codellama': {
-    input: 0.00,
-    output: 0.00,
-    provider: 'ollama',
-  },
-  'phi': {
-    input: 0.00,
-    output: 0.00,
-    provider: 'ollama',
-  },
-  'gemma': {
-    input: 0.00,
-    output: 0.00,
-    provider: 'ollama',
-  },
-  'qwen': {
-    input: 0.00,
-    output: 0.00,
-    provider: 'ollama',
-  },
-  'deepseek-coder': {
-    input: 0.00,
-    output: 0.00,
-    provider: 'ollama',
-  },
+  // Ollama (local, free)
+  'llama2': OLLAMA_FREE,
+  'llama3': OLLAMA_FREE,
+  'mistral': OLLAMA_FREE,
+  'codellama': OLLAMA_FREE,
+  'phi': OLLAMA_FREE,
+  'gemma': OLLAMA_FREE,
+  'qwen': OLLAMA_FREE,
+  'deepseek-coder': OLLAMA_FREE,
 
-  // ==================== FALLBACK ====================
-  // Default pricing for unknown models (use Sonnet pricing)
-  'default': {
-    input: 3.00,
-    output: 15.00,
-    provider: 'unknown',
-  },
+  // Fallback (Sonnet pricing for unknown models)
+  'default': tier(3.00, 15.00, 'unknown'),
 };
 
 // ============================================
@@ -340,20 +220,19 @@ export function estimateSessionCost(
   estimatedOutputTokens: number
 ): CostEstimate {
   const pricing = getModelPricing(model);
-  const cost = calculateCost(model, estimatedInputTokens, estimatedOutputTokens);
-
   const inputCost = (estimatedInputTokens / 1_000_000) * pricing.input;
   const outputCost = (estimatedOutputTokens / 1_000_000) * pricing.output;
+  const totalCost = inputCost + outputCost;
 
   return {
     model,
     provider: pricing.provider,
-    estimatedCost: cost,
+    estimatedCost: totalCost,
     inputTokens: estimatedInputTokens,
     outputTokens: estimatedOutputTokens,
     inputCost,
     outputCost,
-    formatted: formatCost(cost),
+    formatted: formatCost(totalCost),
     pricing: {
       inputPerMillion: pricing.input,
       outputPerMillion: pricing.output,
@@ -397,7 +276,8 @@ export function compareCosts(
  * @param models - Array of model identifiers
  * @param estimatedInputTokens - Estimated input tokens
  * @param estimatedOutputTokens - Estimated output tokens
- * @returns Model identifier of the cheapest option
+ * @returns Model identifier of the cheapest option, or `undefined` if the
+ *          input array is empty (callers should handle this case).
  *
  * @example
  * ```ts
@@ -413,7 +293,8 @@ export function getCheapestModel(
   models: string[],
   estimatedInputTokens: number,
   estimatedOutputTokens: number
-): string {
+): string | undefined {
+  if (models.length === 0) return undefined;
   const comparison = compareCosts(models, estimatedInputTokens, estimatedOutputTokens);
   return comparison[0]?.model ?? models[0];
 }
