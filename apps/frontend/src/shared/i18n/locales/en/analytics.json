@@ -43,10 +43,16 @@
   },
 
   "trends": {
-    "title": "Performance Trends",
+    "title": "Trends Over Time",
     "description": "Historical performance data over time",
     "tasks": "tasks",
-    "noData": "No trend data available"
+    "noData": "No trend data available",
+    "loading": "Loading trends...",
+    "empty": "No trend data available",
+    "emptySubtext": "Complete more tasks to see trends over time",
+    "completedSpecs": "Completed Specs",
+    "timeSaved": "Time Saved (hours)",
+    "successRate": "Success Rate (%)"
   },
 
   "qa": {

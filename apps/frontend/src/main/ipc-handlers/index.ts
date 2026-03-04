@@ -41,6 +41,7 @@ import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
 import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerAnalyticsHandlers } from './analytics-handlers';
+import { registerModelUsageHandlers } from './model-usage-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
 import { registerWebhookHandlers } from './webhooks-handlers';
@@ -157,6 +158,9 @@ export function setupIpcHandlers(
   // Productivity analytics handlers
   registerAnalyticsHandlers();
 
+  // Model usage analytics and lock handlers
+  registerModelUsageHandlers();
+
   // Token statistics handlers
   registerTokenStatsHandlers();
 
@@ -212,6 +216,7 @@ export {
   registerScreenshotHandlers,
   registerMergeAnalyticsHandlers,
   registerAnalyticsHandlers,
+  registerModelUsageHandlers,
   registerTokenStatsHandlers,
   registerTemplateHandlers,
   registerWebhookHandlers,
