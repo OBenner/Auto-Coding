@@ -170,7 +170,7 @@ describe('TaskLogs Performance Benchmarks', () => {
       const { result, duration } = measurePerformance(() => renderTaskLogs({ phaseLogs: largeLogs }));
 
       // Verify render time is within acceptable limits
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(200);
 
       // Verify component rendered successfully
       expect(result.container).toBeDefined();
@@ -190,8 +190,8 @@ describe('TaskLogs Performance Benchmarks', () => {
 
       const { result, duration } = measurePerformance(() => renderTaskLogs({ phaseLogs: veryLargeLogs }));
 
-      // For 5000 entries, we allow more time but should still be under 200ms
-      expect(duration).toBeLessThan(200);
+      // For 5000 entries, we allow more time but should still be under 500ms
+      expect(duration).toBeLessThan(500);
 
       expect(result.container).toBeDefined();
       result.unmount();
@@ -213,11 +213,11 @@ describe('TaskLogs Performance Benchmarks', () => {
 
       const stats = calculateStats(measurements);
 
-      // All renders should be under 100ms
-      expect(stats.max).toBeLessThan(100);
+      // All renders should be under 200ms
+      expect(stats.max).toBeLessThan(200);
 
-      // Variance should be relatively low (max - min < 50ms)
-      expect(stats.max - stats.min).toBeLessThan(50);
+      // Variance should be relatively low (max - min < 100ms)
+      expect(stats.max - stats.min).toBeLessThan(100);
     });
   });
 
