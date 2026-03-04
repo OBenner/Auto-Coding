@@ -635,3 +635,87 @@ export interface BackgroundTask {
     usedMb: number;
   };
 }
+
+// ============================================================================
+// Multi-User Spec Collaboration Types
+// ============================================================================
+
+export type PermissionLevel = 'read' | 'write' | 'admin';
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface CollaborationUser {
+  user_id: string;
+  username: string;
+  email?: string;
+}
+
+export interface SpecPermission {
+  spec_id: string;
+  user: CollaborationUser;
+  level: PermissionLevel;
+  granted_by: string;
+  granted_at: string;
+}
+
+export interface Comment {
+  comment_id: string;
+  spec_id: string;
+  author: CollaborationUser;
+  content: string;
+  created_at: string;
+  parent_id?: string;
+  mentions: string[];
+  resolved: boolean;
+  updated_at?: string;
+}
+
+export interface Approval {
+  approval_id: string;
+  spec_id: string;
+  approver: CollaborationUser;
+  status: ApprovalStatus;
+  reason?: string;
+  created_at: string;
+  reviewed_at?: string;
+}
+
+export type NotificationType =
+  | 'mention'
+  | 'permission_granted'
+  | 'permission_revoked'
+  | 'approval_requested'
+  | 'approval_approved'
+  | 'approval_rejected'
+  | 'spec_modified';
+
+export type ChangeType =
+  | 'comment_added'
+  | 'comment_edited'
+  | 'comment_resolved'
+  | 'permission_granted'
+  | 'permission_revoked'
+  | 'approval_requested'
+  | 'approval_approved'
+  | 'approval_rejected'
+  | 'spec_edited';
+
+export interface Notification {
+  notification_id: string;
+  spec_id: string;
+  notification_type: NotificationType;
+  target_user: string;
+  actor_user: string;
+  created_at: string;
+  read: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ChangeRecord {
+  change_id: string;
+  spec_id: string;
+  change_type: ChangeType;
+  actor_user: string;
+  created_at: string;
+  details?: Record<string, unknown>;
+}

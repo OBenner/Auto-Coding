@@ -1,4 +1,7 @@
 {
+  "tabs": {
+    "collaboration": "Collaboration"
+  },
   "refreshTasks": "Refresh Tasks",
   "status": {
     "backlog": "Backlog",
@@ -117,7 +120,13 @@
     "columnLocked": "Column width is locked",
     "expandAll": "Expand all columns",
     "dragDisabledAutoSort": "Drag-and-drop disabled when auto-sort is active",
+    "searchTasks": "Search tasks...",
     "searchPlaceholder": "Search tasks...",
+    "allStatuses": "All statuses",
+    "category": "Category",
+    "allCategories": "All categories",
+    "priority": "Priority",
+    "allPriorities": "All priorities",
     "clearFilters": "Clear Filters"
   },
   "queue": {

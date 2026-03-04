@@ -1,4 +1,7 @@
 {
+  "tabs": {
+    "collaboration": "Collaboration"
+  },
   "refreshTasks": "Actualiser les tâches",
   "status": {
     "backlog": "Backlog",
@@ -117,7 +120,13 @@
     "columnLocked": "La largeur de la colonne est verrouillée",
     "expandAll": "Développer toutes les colonnes",
     "dragDisabledAutoSort": "Glisser-déposer désactivé lorsque le tri automatique est actif",
+    "searchTasks": "Rechercher des tâches...",
     "searchPlaceholder": "Rechercher des tâches...",
+    "allStatuses": "Tous les statuts",
+    "category": "Catégorie",
+    "allCategories": "Toutes les catégories",
+    "priority": "Priorité",
+    "allPriorities": "Toutes les priorités",
     "clearFilters": "Effacer les filtres"
   },
   "queue": {
