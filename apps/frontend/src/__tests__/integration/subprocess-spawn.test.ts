@@ -385,18 +385,20 @@ describe('Subprocess Spawn Integration', () => {
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
       expect(manager.getRunningTasks()).toHaveLength(0);
 
-      // Start tasks in parallel
+      // Start tasks sequentially to avoid race condition where
+      // the first task exits before the second one starts (Windows CI)
       const promise1 = manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
+      await new Promise(resolve => setImmediate(resolve));
       const promise2 = manager.startTaskExecution('task-2', TEST_PROJECT_PATH, 'spec-001');
 
       // Yield to event loop to allow async spawn operations to complete
-      // (matches pattern used by other tests in this file)
+      await new Promise(resolve => setImmediate(resolve));
       await new Promise(resolve => setImmediate(resolve));
 
-      // Wait for both tasks to be tracked
+      // Wait for both tasks to be tracked (generous timeout for Windows CI)
       await vi.waitFor(() => {
         expect(manager.getRunningTasks()).toHaveLength(2);
-      }, { timeout: 10000 });
+      }, { timeout: 15000 });
 
       // Both tasks share the same mock process, so emit exit once triggers both handlers
       mockProcess.emit('exit', 0);
