@@ -10,7 +10,13 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from .config import KnowledgeBaseConfig, KnowledgeBaseState
+from .config import (
+    SYNC_STATUS_FAILED,
+    SYNC_STATUS_PARTIAL,
+    SYNC_STATUS_SUCCESS,
+    KnowledgeBaseConfig,
+    KnowledgeBaseState,
+)
 
 
 class BaseConnector(ABC):
@@ -156,6 +162,51 @@ class BaseConnector(ABC):
             created_at=datetime.now().isoformat(),
         )
         self._save_state()
+
+    def _update_full_sync_state(
+        self, documents: list[dict[str, Any]], errors: list[str]
+    ) -> None:
+        """Update state after a full sync operation."""
+        from datetime import datetime
+
+        if not self.state or not self.state.initialized:
+            self._initialize_state()
+
+        self.state.total_docs = len(documents)
+        self.state.indexed_docs = len(documents)
+        self.state.failed_docs = len(errors)
+        self.state.last_sync = datetime.now().isoformat()
+        self.state.sync_status = (
+            SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+        )
+        self.state.error_message = "; ".join(errors[:5])
+
+    def _update_incremental_sync_state(self, result: dict[str, Any]) -> None:
+        """Update state after an incremental sync operation."""
+        from datetime import datetime
+
+        self.state.total_docs = len(self.state.doc_mapping)
+        self.state.indexed_docs = len(self.state.doc_mapping)
+        self.state.failed_docs = result["failed"]
+        self.state.last_sync = datetime.now().isoformat()
+        self.state.sync_status = (
+            SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+        )
+        self.state.error_message = "; ".join(result["errors"][:5])
+        self._save_state()
+        result["success"] = result["failed"] == 0
+
+    def _handle_sync_error(
+        self, result: dict[str, Any], error: Exception
+    ) -> dict[str, Any]:
+        """Handle sync failure and update state."""
+        result["success"] = False
+        result["errors"].append(str(error))
+        if self.state:
+            self.state.sync_status = SYNC_STATUS_FAILED
+            self.state.error_message = str(error)
+            self._save_state()
+        return result
 
     def get_sync_summary(self) -> dict[str, Any]:
         """

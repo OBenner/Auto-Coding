@@ -29,8 +29,6 @@ import requests
 from ..base import BaseConnector
 from ..config import (
     SYNC_STATUS_FAILED,
-    SYNC_STATUS_PARTIAL,
-    SYNC_STATUS_SUCCESS,
     KnowledgeBaseConfig,
 )
 
@@ -151,17 +149,7 @@ class NotionConnector(BaseConnector):
                     errors.append(f"Failed to fetch page {page.get('id')}: {e}")
 
             # Update state
-            if not self.state or not self.state.initialized:
-                self._initialize_state()
-
-            self.state.total_docs = len(documents)
-            self.state.indexed_docs = len(documents)
-            self.state.failed_docs = len(errors)
-            self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = (
-                SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
-            )
-            self.state.error_message = "; ".join(errors[:5])  # First 5 errors
+            self._update_full_sync_state(documents, errors)
             self._save_state()
 
         except Exception as e:
@@ -256,26 +244,10 @@ class NotionConnector(BaseConnector):
                     )
 
             # Update state
-            self.state.total_docs = len(self.state.doc_mapping)
-            self.state.indexed_docs = len(self.state.doc_mapping)
-            self.state.failed_docs = result["failed"]
-            self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = (
-                SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
-            )
-            self.state.error_message = "; ".join(result["errors"][:5])
-            self._save_state()
-
-            result["success"] = result["failed"] == 0
+            self._update_incremental_sync_state(result)
 
         except Exception as e:
-            result["success"] = False
-            result["errors"].append(str(e))
-
-            if self.state:
-                self.state.sync_status = SYNC_STATUS_FAILED
-                self.state.error_message = str(e)
-                self._save_state()
+            self._handle_sync_error(result, e)
 
         return result
 
