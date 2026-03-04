@@ -371,32 +371,108 @@ class PermissionDeniedError(Exception):
         role: Role | None = None,
         permission: Permission | None = None,
     ):
-        """
-        Initialize permission denied error.
-
-        Args:
-            message: Error message
-            role: Role that was denied (optional)
-            permission: Permission that was required (optional)
-        """
         super().__init__(message)
         self.role = role
         self.permission = permission
+
+
+def _resolve_role(role: str | Role | None, user_id: str | None, context: str) -> Role:
+    """
+    Convert role string to Role enum, raising PermissionDeniedError on failure.
+
+    Args:
+        role: Role string or enum (None raises error)
+        user_id: User identifier for logging
+        context: Context description (e.g. "permission check", "role check")
+
+    Returns:
+        Validated Role enum
+
+    Raises:
+        PermissionDeniedError: If role is None or invalid
+    """
+    if role is None:
+        error_msg = f"Missing 'role' parameter for {context}"
+        logger.error(error_msg)
+        raise PermissionDeniedError(error_msg)
+
+    if isinstance(role, str):
+        try:
+            return Role(role)
+        except ValueError:
+            error_msg = f"Invalid role: {role}"
+            logger.warning(
+                f"{context.capitalize()} failed for user {user_id}: {error_msg}"
+            )
+            raise PermissionDeniedError(error_msg, role=None)
+
+    return role
+
+
+def _enforce_permission(
+    role: str | Role | None,
+    permission_enum: Permission,
+    user_id: str | None,
+    func_name: str,
+) -> None:
+    """
+    Validate role and check permission, raising on denial.
+
+    Args:
+        role: User role (string or enum)
+        permission_enum: Required permission
+        user_id: User identifier for logging
+        func_name: Function name for logging
+    """
+    resolved = _resolve_role(role, user_id, "permission check")
+    is_allowed, reason = check_permission(resolved, permission_enum, user_id, func_name)
+    if not is_allowed:
+        raise PermissionDeniedError(reason, role=resolved, permission=permission_enum)
+
+
+def _enforce_role(
+    role: str | Role | None,
+    required_role_enum: Role,
+    user_id: str | None,
+    func_name: str,
+) -> None:
+    """
+    Validate role and check hierarchy level, raising on denial.
+
+    Args:
+        role: User role (string or enum)
+        required_role_enum: Minimum required role
+        user_id: User identifier for logging
+        func_name: Function name for logging
+    """
+    resolved = _resolve_role(role, user_id, "role check")
+    hierarchy = get_role_hierarchy()
+    user_level = hierarchy.get(resolved, 0)
+    required_level = hierarchy.get(required_role_enum, 0)
+
+    if user_level < required_level:
+        reason = (
+            f"Role {resolved.value} (level {user_level}) does not meet "
+            f"requirement {required_role_enum.value} (level {required_level})"
+        )
+        logger.warning(f"Role check failed: user={user_id}, {reason}")
+        raise PermissionDeniedError(reason, role=resolved)
+
+    logger.info(
+        f"Role check passed: user={user_id}, role={resolved.value}, "
+        f"required={required_role_enum.value}, function={func_name}"
+    )
 
 
 def require_permission(permission: Permission | str, user_id_param: str = "user_id"):
     """
     Decorator that checks if user has required permission before executing function.
 
-    This decorator works with both sync and async functions. It extracts the user's
-    role from kwargs and checks if they have the required permission.
+    Works with both sync and async functions. Extracts user's role from kwargs.
 
     Args:
         permission: Required permission (Permission enum or string)
         user_id_param: Name of parameter containing user_id (default: "user_id")
-
-    Returns:
-        Decorated function that checks permission before execution
 
     Raises:
         PermissionDeniedError: If user lacks required permission
@@ -404,18 +480,11 @@ def require_permission(permission: Permission | str, user_id_param: str = "user_
     Example:
         @require_permission(Permission.SPEC_CREATE)
         def create_spec(user_id: str, role: Role, spec_data: dict):
-            # Only executes if user has SPEC_CREATE permission
-            pass
-
-        @require_permission("build_run", user_id_param="current_user")
-        async def run_build(current_user: str, role: Role, spec_id: str):
-            # Async function example
             pass
     """
     import functools
     import inspect
 
-    # Convert string to Permission enum if needed
     if isinstance(permission, str):
         try:
             permission_enum = Permission(permission)
@@ -425,91 +494,31 @@ def require_permission(permission: Permission | str, user_id_param: str = "user_
         permission_enum = permission
 
     def decorator(func):
-        # Determine if function is async
-        is_async = inspect.iscoroutinefunction(func)
-
-        if is_async:
+        if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
-                # Extract user_id and role from kwargs
-                user_id = kwargs.get(user_id_param)
-                role = kwargs.get("role")
-
-                # Validate required parameters
-                if role is None:
-                    error_msg = "Missing 'role' parameter for permission check"
-                    logger.error(f"{error_msg} in function {func.__name__}")
-                    raise PermissionDeniedError(error_msg)
-
-                # Convert string role to enum if needed
-                if isinstance(role, str):
-                    try:
-                        role = Role(role)
-                    except ValueError:
-                        error_msg = f"Invalid role: {role}"
-                        logger.warning(
-                            f"Permission denied for user {user_id}: {error_msg}"
-                        )
-                        raise PermissionDeniedError(
-                            error_msg, role=None, permission=permission_enum
-                        )
-
-                # Check permission
-                is_allowed, reason = check_permission(
-                    role, permission_enum, user_id, func.__name__
+                _enforce_permission(
+                    kwargs.get("role"),
+                    permission_enum,
+                    kwargs.get(user_id_param),
+                    func.__name__,
                 )
-
-                if not is_allowed:
-                    raise PermissionDeniedError(
-                        reason, role=role, permission=permission_enum
-                    )
-
-                # Execute function
                 return await func(*args, **kwargs)
 
             return async_wrapper
-        else:
 
-            @functools.wraps(func)
-            def sync_wrapper(*args, **kwargs):
-                # Extract user_id and role from kwargs
-                user_id = kwargs.get(user_id_param)
-                role = kwargs.get("role")
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            _enforce_permission(
+                kwargs.get("role"),
+                permission_enum,
+                kwargs.get(user_id_param),
+                func.__name__,
+            )
+            return func(*args, **kwargs)
 
-                # Validate required parameters
-                if role is None:
-                    error_msg = "Missing 'role' parameter for permission check"
-                    logger.error(f"{error_msg} in function {func.__name__}")
-                    raise PermissionDeniedError(error_msg)
-
-                # Convert string role to enum if needed
-                if isinstance(role, str):
-                    try:
-                        role = Role(role)
-                    except ValueError:
-                        error_msg = f"Invalid role: {role}"
-                        logger.warning(
-                            f"Permission denied for user {user_id}: {error_msg}"
-                        )
-                        raise PermissionDeniedError(
-                            error_msg, role=None, permission=permission_enum
-                        )
-
-                # Check permission
-                is_allowed, reason = check_permission(
-                    role, permission_enum, user_id, func.__name__
-                )
-
-                if not is_allowed:
-                    raise PermissionDeniedError(
-                        reason, role=role, permission=permission_enum
-                    )
-
-                # Execute function
-                return func(*args, **kwargs)
-
-            return sync_wrapper
+        return sync_wrapper
 
     return decorator
 
@@ -518,15 +527,11 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
     """
     Decorator that checks if user has required role before executing function.
 
-    This decorator works with both sync and async functions. It checks if the
-    user's role matches or exceeds the required role in the hierarchy.
+    Works with both sync and async functions. Checks role hierarchy.
 
     Args:
         required_role: Required role (Role enum or string)
         user_id_param: Name of parameter containing user_id (default: "user_id")
-
-    Returns:
-        Decorated function that checks role before execution
 
     Raises:
         PermissionDeniedError: If user lacks required role
@@ -534,18 +539,11 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
     Example:
         @require_role(Role.DEVELOPER)
         def developer_only_operation(user_id: str, role: Role):
-            # Only DEVELOPER, ADMIN can execute
-            pass
-
-        @require_role("admin")
-        async def admin_only_operation(user_id: str, role: Role):
-            # Only ADMIN can execute
             pass
     """
     import functools
     import inspect
 
-    # Convert string to Role enum if needed
     if isinstance(required_role, str):
         try:
             required_role_enum = Role(required_role)
@@ -555,103 +553,31 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
         required_role_enum = required_role
 
     def decorator(func):
-        # Determine if function is async
-        is_async = inspect.iscoroutinefunction(func)
-
-        if is_async:
+        if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
-                # Extract user_id and role from kwargs
-                user_id = kwargs.get(user_id_param)
-                role = kwargs.get("role")
-
-                # Validate required parameters
-                if role is None:
-                    error_msg = "Missing 'role' parameter for role check"
-                    logger.error(f"{error_msg} in function {func.__name__}")
-                    raise PermissionDeniedError(error_msg)
-
-                # Convert string role to enum if needed
-                if isinstance(role, str):
-                    try:
-                        role = Role(role)
-                    except ValueError:
-                        error_msg = f"Invalid role: {role}"
-                        logger.warning(
-                            f"Role check failed for user {user_id}: {error_msg}"
-                        )
-                        raise PermissionDeniedError(error_msg, role=None)
-
-                # Check if role meets requirement (same or higher in hierarchy)
-                hierarchy = get_role_hierarchy()
-                user_level = hierarchy.get(role, 0)
-                required_level = hierarchy.get(required_role_enum, 0)
-
-                if user_level < required_level:
-                    reason = (
-                        f"Role {role.value} (level {user_level}) does not meet "
-                        f"requirement {required_role_enum.value} (level {required_level})"
-                    )
-                    logger.warning(f"Role check failed: user={user_id}, {reason}")
-                    raise PermissionDeniedError(reason, role=role)
-
-                logger.info(
-                    f"Role check passed: user={user_id}, role={role.value}, "
-                    f"required={required_role_enum.value}, function={func.__name__}"
+                _enforce_role(
+                    kwargs.get("role"),
+                    required_role_enum,
+                    kwargs.get(user_id_param),
+                    func.__name__,
                 )
-
-                # Execute function
                 return await func(*args, **kwargs)
 
             return async_wrapper
-        else:
 
-            @functools.wraps(func)
-            def sync_wrapper(*args, **kwargs):
-                # Extract user_id and role from kwargs
-                user_id = kwargs.get(user_id_param)
-                role = kwargs.get("role")
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            _enforce_role(
+                kwargs.get("role"),
+                required_role_enum,
+                kwargs.get(user_id_param),
+                func.__name__,
+            )
+            return func(*args, **kwargs)
 
-                # Validate required parameters
-                if role is None:
-                    error_msg = "Missing 'role' parameter for role check"
-                    logger.error(f"{error_msg} in function {func.__name__}")
-                    raise PermissionDeniedError(error_msg)
-
-                # Convert string role to enum if needed
-                if isinstance(role, str):
-                    try:
-                        role = Role(role)
-                    except ValueError:
-                        error_msg = f"Invalid role: {role}"
-                        logger.warning(
-                            f"Role check failed for user {user_id}: {error_msg}"
-                        )
-                        raise PermissionDeniedError(error_msg, role=None)
-
-                # Check if role meets requirement (same or higher in hierarchy)
-                hierarchy = get_role_hierarchy()
-                user_level = hierarchy.get(role, 0)
-                required_level = hierarchy.get(required_role_enum, 0)
-
-                if user_level < required_level:
-                    reason = (
-                        f"Role {role.value} (level {user_level}) does not meet "
-                        f"requirement {required_role_enum.value} (level {required_level})"
-                    )
-                    logger.warning(f"Role check failed: user={user_id}, {reason}")
-                    raise PermissionDeniedError(reason, role=role)
-
-                logger.info(
-                    f"Role check passed: user={user_id}, role={role.value}, "
-                    f"required={required_role_enum.value}, function={func.__name__}"
-                )
-
-                # Execute function
-                return func(*args, **kwargs)
-
-            return sync_wrapper
+        return sync_wrapper
 
     return decorator
 
@@ -716,22 +642,22 @@ async def permission_check_hook(
             "reason": "Missing required field: permission",
         }
 
-    # Convert strings to enums if needed
-    if isinstance(role, str):
-        try:
+    # Convert strings to enums
+    try:
+        if isinstance(role, str):
             role = Role(role)
-        except ValueError:
-            reason = f"Invalid role: {role}"
-            logger.warning(f"Permission hook blocked operation {operation}: {reason}")
-            return {"decision": "block", "reason": reason}
+    except ValueError:
+        reason = f"Invalid role: {role}"
+        logger.warning(f"Permission hook blocked operation {operation}: {reason}")
+        return {"decision": "block", "reason": reason}
 
-    if isinstance(permission, str):
-        try:
+    try:
+        if isinstance(permission, str):
             permission = Permission(permission)
-        except ValueError:
-            reason = f"Invalid permission: {permission}"
-            logger.warning(f"Permission hook blocked operation {operation}: {reason}")
-            return {"decision": "block", "reason": reason}
+    except ValueError:
+        reason = f"Invalid permission: {permission}"
+        logger.warning(f"Permission hook blocked operation {operation}: {reason}")
+        return {"decision": "block", "reason": reason}
 
     # Check permission
     is_allowed, reason = check_permission(role, permission, user_id, resource)

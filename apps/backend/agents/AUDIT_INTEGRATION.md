@@ -90,7 +90,8 @@ Unknown agent types default to generic `AGENT_SESSION_*` actions.
 ## Audit Log Location
 
 Audit logs are stored in:
-```
+
+```text
 .auto-claude/enterprise/audit/audit_YYYY-MM-DD.jsonl
 ```
 

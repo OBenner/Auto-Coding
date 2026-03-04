@@ -506,37 +506,8 @@ class SAMLProvider:
 
     def _extract_user_from_assertion(self, assertion: SAMLAssertion) -> SAMLUser:
         """Extract user identity from SAML assertion using attribute mapping."""
-
-        # Get mapped attribute values
-        def get_attr(key: str) -> Any:
-            saml_attr = self.config.attribute_map.get(key)
-            if saml_attr:
-                return assertion.attributes.get(saml_attr)
-            return None
-
-        email = get_attr("email") or assertion.subject
-        first_name = get_attr("first_name")
-        last_name = get_attr("last_name")
-        display_name = get_attr("display_name")
-        role = get_attr("role")
-        groups = get_attr("groups")
-
-        # Normalize groups to list
-        if groups and not isinstance(groups, list):
-            groups = [groups]
-
-        return SAMLUser(
-            user_id=assertion.subject,
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            display_name=display_name,
-            role=role,
-            groups=groups or [],
-            organization_id=self.config.organization_id,
-            session_index=assertion.session_index,
-            assertion_expires_at=assertion.not_on_or_after,
-            attributes=assertion.attributes,
+        return _build_saml_user(
+            assertion, self.config.attribute_map, self.config.organization_id
         )
 
     def create_session(
@@ -728,31 +699,18 @@ def is_valid_saml_token_format(token: str | None) -> bool:
     """
     Check if a token is in valid SAML response format.
 
-    SAML responses are base64-encoded XML documents.
-    This function performs basic format validation.
-
     Args:
         token: Token string to check (can be None)
 
     Returns:
         True if token appears to be valid base64-encoded SAML response
     """
-    if not token or not isinstance(token, str):
+    if not token:
         return False
-
-    # SAML responses should be reasonably sized (at least 100 chars when base64-encoded)
-    if len(token) < 100:
-        return False
-
-    # Check if it's valid base64
     try:
-        decoded = base64.b64decode(token)
-        # Check if decoded data looks like XML
-        decoded_str = decoded.decode("utf-8")
-        return decoded_str.strip().startswith(
-            "<?xml"
-        ) or decoded_str.strip().startswith("<")
-    except Exception:
+        validate_saml_token_format(token)
+        return True
+    except (ValueError, TypeError):
         return False
 
 
@@ -830,6 +788,34 @@ def validate_saml_token_format(token: str) -> None:
     logger.debug("SAML token format validation passed")
 
 
+def _build_saml_user(
+    assertion: SAMLAssertion,
+    attribute_map: dict[str, str],
+    organization_id: str | None = None,
+) -> SAMLUser:
+    """Build SAMLUser from assertion attributes using the given mapping."""
+    mapped = map_saml_attributes(assertion, attribute_map)
+
+    email = mapped.get("email") or assertion.subject
+    groups = mapped.get("groups")
+    if groups and not isinstance(groups, list):
+        groups = [groups]
+
+    return SAMLUser(
+        user_id=assertion.subject,
+        email=email,
+        first_name=mapped.get("first_name"),
+        last_name=mapped.get("last_name"),
+        display_name=mapped.get("display_name"),
+        role=mapped.get("role"),
+        groups=groups or [],
+        organization_id=organization_id,
+        session_index=assertion.session_index,
+        assertion_expires_at=assertion.not_on_or_after,
+        attributes=assertion.attributes,
+    )
+
+
 def map_saml_attributes(
     assertion: SAMLAssertion,
     attribute_map: dict[str, str],
@@ -873,10 +859,7 @@ def create_user_from_saml(
     """
     Create SAMLUser from assertion using attribute mapping.
 
-    This is a convenience function that handles the common pattern of:
-    1. Mapping SAML attributes to application attributes
-    2. Extracting user identity fields
-    3. Creating a SAMLUser object
+    Convenience function that maps SAML attributes and creates a SAMLUser.
 
     Args:
         assertion: Parsed and validated SAML assertion
@@ -889,12 +872,9 @@ def create_user_from_saml(
     Raises:
         ValueError: If required attributes (email) are missing
     """
-    # Map attributes
-    mapped = map_saml_attributes(assertion, attribute_map)
+    user = _build_saml_user(assertion, attribute_map, organization_id)
 
-    # Extract user identity
-    email = mapped.get("email") or assertion.subject
-    if not email:
+    if not user.email:
         raise ValueError(
             "Unable to extract email from SAML assertion.\n\n"
             "The SAML assertion must contain an email address either:\n"
@@ -902,30 +882,6 @@ def create_user_from_saml(
             "  - As a mapped attribute\n\n"
             "Check your SAML attribute mapping configuration."
         )
-
-    first_name = mapped.get("first_name")
-    last_name = mapped.get("last_name")
-    display_name = mapped.get("display_name")
-    role = mapped.get("role")
-    groups = mapped.get("groups")
-
-    # Normalize groups to list
-    if groups and not isinstance(groups, list):
-        groups = [groups]
-
-    user = SAMLUser(
-        user_id=assertion.subject,
-        email=email,
-        first_name=first_name,
-        last_name=last_name,
-        display_name=display_name,
-        role=role,
-        groups=groups or [],
-        organization_id=organization_id,
-        session_index=assertion.session_index,
-        assertion_expires_at=assertion.not_on_or_after,
-        attributes=assertion.attributes,
-    )
 
     logger.info(f"Created SAMLUser from assertion: {user.email} (ID: {user.user_id})")
     return user

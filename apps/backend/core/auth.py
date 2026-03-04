@@ -1052,7 +1052,11 @@ def is_sso_enabled() -> bool:
         return False
 
     # Check explicit enable flag
-    if os.environ.get("SSO_ENABLED", "").lower() != "true":
+    # Accept both ENTERPRISE_SSO_ENABLED (preferred) and SSO_ENABLED
+    sso_flag = os.environ.get("ENTERPRISE_SSO_ENABLED") or os.environ.get(
+        "SSO_ENABLED", ""
+    )
+    if sso_flag.lower() != "true":
         return False
 
     # Check required configuration
@@ -1141,11 +1145,15 @@ def get_sso_config() -> "SAMLConfig":
     # Get optional configuration with defaults
     idp_logout_url = os.environ.get("SAML_IDP_LOGOUT_URL")
     sp_entity_id = os.environ.get("SAML_SP_ENTITY_ID", "auto-claude-sp")
-    sp_acs_url = os.environ.get("SAML_SP_ACS_URL", "http://localhost:8080/saml/acs")
+    sp_acs_url = os.environ.get("SAML_SP_ACS_URL", "https://localhost:8080/saml/acs")
     sp_slo_url = os.environ.get("SAML_SP_SLO_URL")
 
     # Parse provider type
-    provider_type_str = os.environ.get("SAML_PROVIDER_TYPE", "generic").lower()
+    # Accept both ENTERPRISE_SSO_PROVIDER_TYPE (preferred) and SAML_PROVIDER_TYPE
+    provider_type_str = (
+        os.environ.get("ENTERPRISE_SSO_PROVIDER_TYPE")
+        or os.environ.get("SAML_PROVIDER_TYPE", "generic")
+    ).lower()
     try:
         provider_type = SAMLProviderType(provider_type_str)
     except ValueError:
