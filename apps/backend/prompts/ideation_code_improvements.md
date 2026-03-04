@@ -357,8 +357,9 @@ Aim for a mix:
 
 **You MUST create code_improvements_ideas.json with your ideas.**
 
-```bash
-cat > code_improvements_ideas.json << 'EOF'
+Use the **Write** tool to create `code_improvements_ideas.json` with the following structure:
+
+```json
 {
   "code_improvements": [
     {
@@ -377,8 +378,9 @@ cat > code_improvements_ideas.json << 'EOF'
     }
   ]
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 Verify:
 ```bash

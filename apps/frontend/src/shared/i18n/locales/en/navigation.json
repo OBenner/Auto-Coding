@@ -10,8 +10,13 @@
     "roadmap": "Roadmap",
     "ideation": "Ideation",
     "changelog": "Changelog",
+    "scheduler": "Scheduler",
     "context": "Context",
     "webhooks": "Webhooks",
+    "patterns": "Patterns",
+    "analytics": "Analytics",
+    "productivity": "Productivity",
+    "sessionContext": "Session Context",
     "githubIssues": "GitHub Issues",
     "githubPRs": "GitHub PRs",
     "gitlabIssues": "GitLab Issues",
@@ -19,7 +24,10 @@
     "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "MCP Overview",
-    "mergeAnalytics": "Merge Analytics"
+    "mergeAnalytics": "Merge Analytics",
+    "sessions": "Session Replay",
+    "feedback": "Feedback",
+    "modelUsage": "Model Usage"
   },
   "actions": {
     "settings": "Settings",

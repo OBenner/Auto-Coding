@@ -11,6 +11,9 @@ import re
 class KeywordExtractor:
     """Extracts and filters keywords from task descriptions."""
 
+    # Compiled regex pattern for extracting words
+    WORD_PATTERN = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b")
+
     # Common words to filter out
     STOPWORDS = {
         "a",
@@ -87,7 +90,7 @@ class KeywordExtractor:
             List of extracted keywords
         """
         # Tokenize and filter
-        words = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", task.lower())
+        words = cls.WORD_PATTERN.findall(task.lower())
         keywords = [w for w in words if w not in cls.STOPWORDS and len(w) > 2]
 
         # Deduplicate while preserving order

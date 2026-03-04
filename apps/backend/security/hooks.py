@@ -12,6 +12,13 @@ from typing import Any
 
 from project_analyzer import BASE_COMMANDS, SecurityProfile, is_command_allowed
 
+from .audit_logger import (
+    CATEGORY_COMMAND_EXECUTION,
+    SEVERITY_CRITICAL,
+    SEVERITY_INFO,
+    SEVERITY_WARNING,
+    log_security_event,
+)
 from .parser import extract_commands, get_command_for_validation, split_command_segments
 from .profile import get_security_profile
 from .validator import VALIDATORS
@@ -96,6 +103,16 @@ async def bash_security_hook(
 
     if not commands:
         # Could not parse - fail safe by blocking
+        log_security_event(
+            project_dir=Path(cwd),
+            category=CATEGORY_COMMAND_EXECUTION,
+            message=f"Could not parse command for security validation: {command}",
+            severity=SEVERITY_CRITICAL,
+            allowed=False,
+            command=command[:500],  # Truncate long commands
+            agent_type=_extract_agent_type(context),
+            session_id=_extract_session_id(context),
+        )
         return {
             "decision": "block",
             "reason": f"Could not parse command for security validation: {command}",
@@ -104,15 +121,23 @@ async def bash_security_hook(
     # Split into segments for per-command validation
     segments = split_command_segments(command)
 
-    # Get all allowed commands
-    allowed = profile.get_all_allowed_commands()
-
     # Check each command against the allowlist
     for cmd in commands:
         # Check if command is allowed
         is_allowed, reason = is_command_allowed(cmd, profile)
 
         if not is_allowed:
+            log_security_event(
+                project_dir=Path(cwd),
+                category=CATEGORY_COMMAND_EXECUTION,
+                message=f"Command blocked by allowlist: {cmd}",
+                severity=SEVERITY_WARNING,
+                allowed=False,
+                command=cmd,
+                agent_type=_extract_agent_type(context),
+                session_id=_extract_session_id(context),
+                context={"reason": reason},
+            )
             return {
                 "decision": "block",
                 "reason": reason,
@@ -125,10 +150,34 @@ async def bash_security_hook(
                 cmd_segment = command
 
             validator = VALIDATORS[cmd]
-            allowed, reason = validator(cmd_segment)
-            if not allowed:
-                return {"decision": "block", "reason": reason}
+            validation_ok, validation_reason = validator(cmd_segment)
+            if not validation_ok:
+                log_security_event(
+                    project_dir=Path(cwd),
+                    category=CATEGORY_COMMAND_EXECUTION,
+                    message=f"Command blocked by validator: {cmd}",
+                    severity=SEVERITY_WARNING,
+                    allowed=False,
+                    command=cmd_segment[:500],  # Truncate long commands
+                    agent_type=_extract_agent_type(context),
+                    session_id=_extract_session_id(context),
+                    context={"reason": validation_reason},
+                )
+                return {"decision": "block", "reason": validation_reason}
 
+    # All commands passed validation - log the successful execution
+    log_security_event(
+        project_dir=Path(cwd),
+        category=CATEGORY_COMMAND_EXECUTION,
+        message=f"Command validated successfully: {commands[0]}"
+        if len(commands) == 1
+        else f"Commands validated successfully: {', '.join(commands)}",
+        severity=SEVERITY_INFO,
+        allowed=True,
+        command=command[:500],  # Truncate long commands
+        agent_type=_extract_agent_type(context),
+        session_id=_extract_session_id(context),
+    )
     return {}
 
 
@@ -168,8 +217,72 @@ def validate_command(
                 cmd_segment = command
 
             validator = VALIDATORS[cmd]
-            allowed, reason = validator(cmd_segment)
-            if not allowed:
-                return False, reason
+            validation_ok, validation_reason = validator(cmd_segment)
+            if not validation_ok:
+                return False, validation_reason
 
     return True, ""
+
+
+def _extract_agent_type(context: Any | None) -> str | None:
+    """
+    Extract agent type from context for audit logging.
+
+    Args:
+        context: Optional context object from SDK
+
+    Returns:
+        Agent type string if available, None otherwise
+    """
+    if not context:
+        return None
+
+    # Try common attribute names
+    if hasattr(context, "agent_type"):
+        return str(context.agent_type)
+    if hasattr(context, "agentType"):
+        return str(context.agentType)
+    if hasattr(context, "type"):
+        return str(context.type)
+
+    # Try dict-like access
+    try:
+        if isinstance(context, dict):
+            return context.get("agent_type") or context.get("agentType")
+    except (TypeError, AttributeError):
+        # context may not support dict operations despite isinstance check
+        pass
+
+    return None
+
+
+def _extract_session_id(context: Any | None) -> str | None:
+    """
+    Extract session ID from context for audit logging.
+
+    Args:
+        context: Optional context object from SDK
+
+    Returns:
+        Session ID string if available, None otherwise
+    """
+    if not context:
+        return None
+
+    # Try common attribute names
+    if hasattr(context, "session_id"):
+        return str(context.session_id)
+    if hasattr(context, "sessionId"):
+        return str(context.sessionId)
+    if hasattr(context, "session"):
+        return str(context.session)
+
+    # Try dict-like access
+    try:
+        if isinstance(context, dict):
+            return context.get("session_id") or context.get("sessionId")
+    except (TypeError, AttributeError):
+        # context may not support dict operations despite isinstance check
+        pass
+
+    return None

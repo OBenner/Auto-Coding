@@ -114,7 +114,7 @@ export function estimateLogItemHeight(item: FlattenedLogItem): number {
     return ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
   }
 
-  let baseHeight: number = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
+  let baseHeight: number;
 
   // Adjust base height by entry type
   switch (entry.type) {
@@ -129,8 +129,17 @@ export function estimateLogItemHeight(item: FlattenedLogItem): number {
     case 'info':
       baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
       break;
-    default:
-      baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
+    default: {
+      // Estimate height based on content length (text wraps ~80 chars per line)
+      const contentLength = entry.content?.length ?? 0;
+      if (contentLength > 200) {
+        const estimatedLines = Math.ceil(contentLength / 80);
+        baseHeight = Math.max(ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE, estimatedLines * 18 + 12);
+      } else {
+        baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
+      }
+      break;
+    }
   }
 
   // Add detail section height if expanded

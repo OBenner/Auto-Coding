@@ -15,13 +15,11 @@ Covers:
 import sys
 from pathlib import Path
 
-import pytest
-
 # Add auto-claude directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from workspace import ParallelMergeTask, ParallelMergeResult
 from core.workspace import _run_parallel_merges
+from workspace import ParallelMergeResult, ParallelMergeTask
 
 
 class TestParallelMergeDataclasses:
@@ -105,6 +103,7 @@ class TestParallelMergeRunner:
     def test_run_parallel_merges_empty_list(self, tmp_path):
         """Running with empty task list returns empty results."""
         import asyncio
+
         results = asyncio.run(_run_parallel_merges([], tmp_path))
         assert results == []
 

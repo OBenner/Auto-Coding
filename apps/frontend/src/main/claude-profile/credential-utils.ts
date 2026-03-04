@@ -21,6 +21,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { homedir, userInfo } from 'os';
 import { join } from 'path';
 import { isMacOS, isWindows, isLinux, getCurrentOS } from '../platform';
+import { getPowerShellExecutablePath } from '../platform/paths';
 
 /**
  * Create a safe fingerprint of a token for debug logging.
@@ -910,14 +911,11 @@ function getCredentialsFromWindowsCredentialManager(configDir?: string, forceRef
 
 /**
  * Find PowerShell executable path on Windows
+ * Uses centralized platform paths from platform/paths module
  */
 function findPowerShellPath(): string | null {
-  // Prefer PowerShell 7+ (pwsh) over Windows PowerShell
-  const candidatePaths = [
-    join(process.env.ProgramFiles || 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe'),
-    join(homedir(), 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'pwsh.exe'),
-    join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-  ];
+  // Get PowerShell paths from platform module (prefers PowerShell 7+ over Windows PowerShell)
+  const candidatePaths = getPowerShellExecutablePath();
 
   for (const candidate of candidatePaths) {
     if (existsSync(candidate)) {

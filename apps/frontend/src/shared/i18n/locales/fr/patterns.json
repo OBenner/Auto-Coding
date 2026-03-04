@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "Modèles appris",
+    "description": "Examiner et gérer les modèles de code appris lors des sessions d'agents",
+    "refresh": "Actualiser",
+    "errorTitle": "Erreur lors du chargement des modèles",
+    "retry": "Réessayer"
+  },
+  "component": {
+    "title": "Examen des modèles",
+    "description": "Examinez les modèles de code appris et marquez-les comme standards d'équipe ou obsolètes.",
+    "categories": "Catégories",
+    "patterns": "Modèles",
+    "loading": "Chargement des modèles...",
+    "empty": "Aucun modèle appris pour le moment",
+    "emptyDescription": "Les modèles sont extraits lors des sessions de génération de code par l'agent et stockés dans la mémoire Graphiti.",
+    "emptyFilter": "Aucun modèle dans cette catégorie",
+    "showAll": "Afficher tous les modèles"
+  },
+  "actions": {
+    "approve": "Approuver comme standard d'équipe",
+    "deprecate": "Marquer comme obsolète"
+  },
+  "filters": {
+    "all": "tous"
+  },
+  "metadata": {
+    "spec": "Spec",
+    "pattern": "modèle",
+    "patterns": "modèles"
+  },
+  "legend": {
+    "title": "À propos de la confiance des modèles :",
+    "high": "Confiance élevée (90%+) : Modèle utilisé fréquemment et de manière cohérente",
+    "medium": "Confiance moyenne (70-90%) : Modèle utilisé modérément, peut nécessiter une révision",
+    "low": "Confiance faible (<70%) : Modèle utilisé rarement, vérifier avant d'approuver",
+    "approved": "Les modèles approuvés sont marqués comme standards d'équipe (confiance : 100%)",
+    "deprecated": "Les modèles obsolètes sont marqués à éviter (confiance : 0%)"
+  }
+}

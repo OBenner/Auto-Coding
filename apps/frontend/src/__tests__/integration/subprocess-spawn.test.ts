@@ -385,14 +385,20 @@ describe('Subprocess Spawn Integration', () => {
       manager.configure(undefined, AUTO_CLAUDE_SOURCE);
       expect(manager.getRunningTasks()).toHaveLength(0);
 
-      // Start tasks in parallel
+      // Start tasks sequentially to avoid race condition where
+      // the first task exits before the second one starts (Windows CI)
       const promise1 = manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
+      await new Promise(resolve => setImmediate(resolve));
       const promise2 = manager.startTaskExecution('task-2', TEST_PROJECT_PATH, 'spec-001');
 
-      // Wait for both tasks to be tracked (spawn happens after async operations)
+      // Yield to event loop to allow async spawn operations to complete
+      await new Promise(resolve => setImmediate(resolve));
+      await new Promise(resolve => setImmediate(resolve));
+
+      // Wait for both tasks to be tracked (generous timeout for Windows CI)
       await vi.waitFor(() => {
         expect(manager.getRunningTasks()).toHaveLength(2);
-      }, { timeout: 5000 });
+      }, { timeout: 15000 });
 
       // Both tasks share the same mock process, so emit exit once triggers both handlers
       mockProcess.emit('exit', 0);
@@ -403,7 +409,7 @@ describe('Subprocess Spawn Integration', () => {
 
       // Tasks should be removed from tracking after exit
       expect(manager.getRunningTasks()).toHaveLength(0);
-    }, 15000);
+    }, 30000);  // Increase timeout for Windows CI (dynamic imports are slow)
 
     it('should use configured Python path', async () => {
       const { spawn } = await import('child_process');

@@ -80,6 +80,7 @@ class ExecutionPhase(str, Enum):
 
     PLANNING = "planning"
     CODING = "coding"
+    TEST_GENERATION = "test_generation"
     QA_REVIEW = "qa_review"
     QA_FIXING = "qa_fixing"
     COMPLETE = "complete"

@@ -115,12 +115,14 @@ class WebhookConfig:
     template: str = WebhookTemplate.GENERIC
     enabled: bool = True
     headers: dict[str, str] = field(default_factory=dict)
-    retry_config: dict[str, Any] = field(default_factory=lambda: {
-        "max_retries": 3,
-        "initial_delay": 1.0,  # seconds
-        "max_delay": 60.0,  # seconds
-        "backoff_multiplier": 2.0,
-    })
+    retry_config: dict[str, Any] = field(
+        default_factory=lambda: {
+            "max_retries": 3,
+            "initial_delay": 1.0,  # seconds
+            "max_delay": 60.0,  # seconds
+            "backoff_multiplier": 2.0,
+        }
+    )
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 

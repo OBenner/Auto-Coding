@@ -1,0 +1,20 @@
+{
+  "title": "Actions Rapides",
+  "recentActions": "Actions Récentes",
+  "clearHistory": "Effacer l'historique",
+  "noRecentActions": "Aucune action récente",
+  "noRecentActionsHint": "Vos actions récentes apparaîtront ici pour un accès rapide",
+  "searchPlaceholder": "Rechercher des commandes...",
+  "noCommandsFound": "Aucune commande trouvée",
+  "recent": "Récent",
+  "navigate": "pour naviguer",
+  "select": "pour sélectionner",
+  "close": "pour fermer",
+  "actionTypes": {
+    "batch_qa": "QA par lot ({{count}} tâches)",
+    "batch_status_update": "Mettre à jour vers {{status}} ({{count}} tâches)",
+    "create_task": "Créer une tâche",
+    "start_task": "Démarrer la tâche",
+    "stop_task": "Arrêter la tâche"
+  }
+}

@@ -21,6 +21,14 @@
       "title": "Outils de développement",
       "description": "Préférences IDE et terminal"
     },
+    "provider": {
+      "title": "Fournisseur IA",
+      "description": "Sélectionnez votre fournisseur IA et vos modèles"
+    },
+    "cost": {
+      "title": "Comparaison des coûts",
+      "description": "Comparer les prix des modèles entre fournisseurs"
+    },
     "agent": {
       "title": "Paramètres de l'agent",
       "description": "Modèle par défaut et framework"
@@ -33,6 +41,14 @@
       "title": "Comptes",
       "description": "Comptes Claude & endpoints API"
     },
+    "security": {
+      "title": "Sécurité",
+      "description": "Paramètres de sécurité et autorisations"
+    },
+    "providers": {
+      "title": "Fournisseurs IA",
+      "description": "Configurer les fournisseurs de modèles IA"
+    },
     "updates": {
       "title": "Mises à jour",
       "description": "Mises à jour Auto-Coding"
@@ -41,9 +57,21 @@
       "title": "Notifications",
       "description": "Préférences d'alertes"
     },
+    "feedback": {
+      "title": "Retours",
+      "description": "Paramètres de collecte de retours"
+    },
     "debug": {
       "title": "Debug & Logs",
       "description": "Outils de dépannage"
+    },
+    "keyboardShortcuts": {
+      "title": "Raccourcis clavier",
+      "description": "Personnaliser les raccourcis clavier pour les actions courantes"
+    },
+    "envConfig": {
+      "title": "Config. d'environnement",
+      "description": "Configurer l'authentification Claude et les tokens d'environnement"
     }
   },
   "apiProfiles": {
@@ -52,10 +80,12 @@
     "addButton": "Ajouter un profil",
     "presets": {
       "anthropic": "Anthropic",
+      "openai": "OpenAI",
       "openrouter": "OpenRouter",
       "groq": "Groq",
       "glmGlobal": "GLM (Global)",
-      "glmChina": "GLM (China)"
+      "glmChina": "GLM (China)",
+      "ollama": "Ollama (Local)"
     },
     "fields": {
       "name": "Nom",
@@ -168,6 +198,33 @@
     "noResults": "Aucun modèle ne correspond à votre recherche",
     "discoveryNotAvailable": "Découverte de modèles indisponible. Saisissez le nom du modèle manuellement."
   },
+  "costComparison": {
+    "title": "Comparaison des coûts",
+    "description": "Comparer les prix entre les modèles et fournisseurs IA",
+    "providers": {
+      "anthropic": "Anthropic (Claude)",
+      "openai": "OpenAI",
+      "google": "Google Gemini",
+      "ollama": "Ollama (Local)"
+    },
+    "input": "Entrée",
+    "output": "Sortie",
+    "model": "modèle",
+    "models": "modèles",
+    "free": "GRATUIT",
+    "cheapest": "Moins cher",
+    "localFree": "Local",
+    "infoTitle": "Informations sur les prix",
+    "infoDescription": "Tous les prix indiqués sont par million de tokens (USD). Les modèles locaux via Ollama sont gratuits.",
+    "notesTitle": "Notes importantes",
+    "note1": "Les prix sont par million de tokens et peuvent varier selon le fournisseur",
+    "note2": "Les modèles locaux (Ollama) s'exécutent sur votre machine et n'ont pas de coûts d'API",
+    "note3": "Les coûts réels dépendent de l'utilisation des tokens d'entrée et de sortie",
+    "modelNames": {
+      "claude": "Claude {{family}} {{size}}",
+      "gemini": "Gemini {{name}}"
+    }
+  },
   "language": {
     "label": "Langue de l'interface",
     "description": "Sélectionnez la langue de l'interface de l'application"
@@ -180,6 +237,14 @@
     "default": "Par défaut",
     "comfortable": "Confortable",
     "large": "Grand"
+  },
+  "gpuAcceleration": {
+    "label": "Accélération GPU",
+    "description": "Utiliser WebGL pour le rendu des terminaux (expérimental, plus rapide avec plusieurs terminaux)",
+    "auto": "Auto (utiliser WebGL si supporté)",
+    "on": "Toujours activé",
+    "off": "Désactivé (par défaut)",
+    "helperText": "Les modifications s'appliquent uniquement aux nouveaux terminaux"
   },
   "general": {
     "otherAgentSettings": "Autres paramètres de l'agent",
@@ -215,6 +280,7 @@
     "sourceHomebrew": "Homebrew",
     "sourceNvm": "NVM",
     "sourceSystemPath": "PATH système",
+    "sourceWindowsWhere": "Windows Where",
     "sourceBundled": "Intégré",
     "sourceFallback": "Valeur par défaut",
     "notDetected": "Non détecté",
@@ -307,6 +373,12 @@
     "sound": "Son",
     "soundDescription": "Jouer un son avec les notifications"
   },
+  "feedback": {
+    "title": "Paramètres de retour",
+    "description": "Configurer les préférences de collecte de retours",
+    "enableFeedback": "Activer la collecte de retours",
+    "enableFeedbackDescription": "Collecter les retours après la fin des tâches de l'agent pour aider à améliorer le système"
+  },
   "actions": {
     "save": "Enregistrer les paramètres",
     "rerunWizard": "Relancer l'assistant",
@@ -350,7 +422,35 @@
       "integrationTitle": "Mémoire",
       "integrationDescription": "Configurer la mémoire persistante inter-sessions pour les agents",
       "syncDescription": "Configurer la mémoire persistante"
+    },
+    "model-usage": {
+      "title": "Utilisation des Modèles",
+      "description": "Configuration et verrous des modèles",
+      "integrationTitle": "Utilisation des Modèles",
+      "integrationDescription": "Voir et gérer l'utilisation des modèles IA et verrouiller des versions de modèle spécifiques",
+      "syncDescription": "Configurer les paramètres des modèles"
     }
+  },
+  "provider": {
+    "title": "Fournisseur IA",
+    "description": "Sélectionnez votre fournisseur IA et les modèles disponibles",
+    "selectProvider": "Sélectionner le fournisseur",
+    "selectProviderPlaceholder": "Choisir un fournisseur IA",
+    "availableProviders": "Fournisseurs disponibles",
+    "selectedProvider": "Fournisseur sélectionné",
+    "name": "Nom",
+    "endpoint": "Point de terminaison",
+    "model": "modèle",
+    "models": "modèles",
+    "modelsAvailable": "Modèles disponibles",
+    "autoDiscovery": "Découverte automatique",
+    "showModels": "Afficher les modèles disponibles",
+    "hideModels": "Masquer les modèles",
+    "fallbackModel": "Modèle de secours",
+    "fallbackModelDescription": "Modèle à utiliser si le modèle principal n'est pas disponible",
+    "selectFallbackModel": "Sélectionner le modèle de secours",
+    "noFallback": "Pas de secours (utiliser le défaut du fournisseur)",
+    "fallbackInfo": "Si votre modèle principal devient indisponible, le système basculera automatiquement vers ce modèle."
   },
   "agentProfile": {
     "label": "Profil d'agent",
@@ -637,6 +737,52 @@
       "openrouter": {
         "name": "OpenRouter",
         "description": "Routage multi-modèles cloud avec plus de 400 modèles"
+      },
+      "zhipuai": {
+        "name": "ZhipuAI (GLM)",
+        "description": "Modèles GLM de Zhipu AI (glm-4, glm-4-flash)"
+      }
+    },
+    "apiKeys": {
+      "title": "Clés API",
+      "openai": {
+        "label": "Clé API OpenAI",
+        "placeholder": "sk-...",
+        "description": "Requise pour GPT-4 et autres modèles OpenAI"
+      },
+      "google": {
+        "label": "Clé API Google AI",
+        "placeholder": "AI...",
+        "description": "Requise pour les modèles Gemini"
+      },
+      "openrouter": {
+        "label": "Clé API OpenRouter",
+        "placeholder": "sk-or-...",
+        "description": "Requise pour le routage multi-modèles OpenRouter"
+      },
+      "zhipuai": {
+        "label": "Clé API ZhipuAI",
+        "placeholder": "Entrez votre clé API ZhipuAI",
+        "description": "Requise pour les modèles GLM (glm-4, glm-4-flash)"
+      }
+    },
+    "models": {
+      "title": "Sélection du modèle",
+      "description": "Configurez les modèles à utiliser pour chaque type d'agent",
+      "planner": {
+        "label": "Modèle Planificateur",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour créer les plans d'implémentation"
+      },
+      "coder": {
+        "label": "Modèle Codeur",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour implémenter le code"
+      },
+      "qa": {
+        "label": "Modèle QA",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour l'assurance qualité et la validation"
       }
     },
     "configuration": {
@@ -772,6 +918,185 @@
       "createAnthropicKey": "Créer une clé API Anthropic",
       "openai": "Ceci ressemble à une API OpenAI. Vous aurez besoin d'une clé API.",
       "createOpenaiKey": "Créer une clé API OpenAI"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Raccourcis clavier",
+    "description": "Personnaliser les raccourcis clavier pour les actions courantes",
+    "infoBanner": "Cliquez sur un raccourci pour enregistrer une nouvelle combinaison de touches. Appuyez sur Échap pour annuler l'enregistrement.",
+    "unsavedChanges": "Vous avez des modifications non enregistrées",
+    "actions": {
+      "change": "Modifier",
+      "resetToDefaults": "Réinitialiser par défaut",
+      "save": "Enregistrer les modifications",
+      "saving": "Enregistrement...",
+      "commandPalette": {
+        "label": "Ouvrir la palette de commandes",
+        "description": "Rechercher et exécuter des commandes rapidement"
+      },
+      "quickActions": {
+        "label": "Actions rapides",
+        "description": "Accéder aux actions récentes et aux tâches rapides"
+      },
+      "createTask": {
+        "label": "Créer une nouvelle tâche",
+        "description": "Créer une nouvelle tâche ou spec"
+      },
+      "batchQA": {
+        "label": "QA par lot",
+        "description": "Exécuter la QA sur plusieurs tâches à la fois"
+      },
+      "batchStatusUpdate": {
+        "label": "Mise à jour de statut par lot",
+        "description": "Mettre à jour le statut de plusieurs tâches"
+      }
+    },
+    "recording": {
+      "pressKeys": "Appuyez sur les touches...",
+      "cancel": "Annuler"
+    },
+    "toast": {
+      "resetTitle": "Raccourcis réinitialisés",
+      "resetDescription": "Tous les raccourcis clavier ont été réinitialisés aux valeurs par défaut",
+      "savedTitle": "Raccourcis enregistrés",
+      "savedDescription": "Vos raccourcis clavier ont été enregistrés avec succès",
+      "saveFailedTitle": "Échec de l'enregistrement",
+      "saveFailedDescription": "Échec de l'enregistrement des raccourcis clavier. Veuillez réessayer."
+    }
+  },
+  "webhooks": {
+    "title": "Webhooks et intégrations",
+    "enableWebhooks": "Activer les Webhooks",
+    "enableDescription": "Déclencher des builds à partir d'événements externes et envoyer des notifications",
+    "integrationOverviewTitle": "Intégrations Webhook",
+    "integrationOverviewDescription": "Configurez les webhooks sortants pour envoyer des notifications de build à Slack, Discord, Teams ou Jira. Configurez les webhooks entrants pour déclencher des builds depuis GitHub ou GitLab.",
+    "integrationsConfigured": "{{count}} intégration configurée",
+    "integrationsConfigured_plural": "{{count}} intégrations configurées",
+    "outgoingTitle": "Notifications sortantes",
+    "outgoingDescription": "Envoyer les mises à jour de statut de build aux services externes",
+    "incomingTitle": "Webhooks entrants",
+    "incomingDescription": "Déclencher des builds à partir d'événements externes",
+    "logsHint": "Consultez les journaux détaillés de livraison des webhooks et les informations de dépannage dans le visualiseur de journaux.",
+    "status": {
+      "connected": "Connecté",
+      "notConfigured": "Non configuré",
+      "active": "Actif",
+      "configError": "Erreur de configuration",
+      "enabled": "Activé"
+    },
+    "actions": {
+      "configure": "Configurer",
+      "setup": "Installer",
+      "configureAriaLabel": "Configurer l'intégration {{integration}}"
+    },
+    "integrations": {
+      "slack": "Slack",
+      "discord": "Discord",
+      "teams": "Microsoft Teams",
+      "jira": "Jira",
+      "github": "GitHub",
+      "gitlab": "GitLab",
+      "generic": "Webhook générique"
+    },
+    "logs": {
+      "title": "Journaux de livraison des webhooks",
+      "filterByStatus": "Filtrer par statut",
+      "filterByEvent": "Filtrer par événement",
+      "allStatuses": "Tous les statuts",
+      "allEvents": "Tous les événements",
+      "loading": "Chargement des journaux...",
+      "empty": "Aucun journal de webhook",
+      "emptyDescription": "Les journaux de livraison des webhooks apparaîtront ici une fois les webhooks déclenchés",
+      "noMatch": "Aucun journal ne correspond aux filtres sélectionnés",
+      "clearFilters": "Effacer les filtres",
+      "attempt": "Tentative {{current}}/{{max}}",
+      "request": "Requête",
+      "response": "Réponse",
+      "eventData": "Données de l'événement",
+      "url": "URL :",
+      "headers": "En-têtes :",
+      "body": "Corps :",
+      "statusLabel": "Statut :",
+      "id": "ID :",
+      "webhookId": "ID du webhook :",
+      "completed": "Terminé :",
+      "statusBadge": {
+        "success": "Succès",
+        "failed": "Échoué",
+        "retrying": "Nouvelle tentative",
+        "pending": "En attente"
+      },
+      "timeAgo": {
+        "justNow": "À l'instant",
+        "minutesAgo": "il y a {{count}}m",
+        "hoursAgo": "il y a {{count}}h",
+        "daysAgo": "il y a {{count}}j"
+      },
+      "duration": {
+        "unavailable": "N/D"
+      }
+    },
+    "events": {
+      "build_started": "Build démarré",
+      "build_completed": "Build terminé",
+      "build_failed": "Build échoué",
+      "subtask_started": "Sous-tâche démarrée",
+      "subtask_completed": "Sous-tâche terminée",
+      "subtask_failed": "Sous-tâche échouée",
+      "pr_opened": "PR ouverte",
+      "pr_merged": "PR fusionnée",
+      "pr_closed": "PR fermée",
+      "custom": "Personnalisé"
+    }
+  },
+  "agentPreferences": {
+    "title": "Préférences de comportement de l'agent",
+    "description": "Configurez comment les agents adaptent leur comportement à vos préférences",
+    "verbosity": {
+      "label": "Verbosité des réponses",
+      "description": "Contrôlez le niveau de détail des explications de l'agent",
+      "minimal": "Très bref",
+      "concise": "Court",
+      "normal": "Standard",
+      "detailed": "Détaillé",
+      "verbose": "Très détaillé"
+    },
+    "riskTolerance": {
+      "label": "Tolérance au risque",
+      "description": "À quel point les agents doivent être prudents lors de modifications",
+      "cautious": "Sécurité d'abord",
+      "balanced": "Modéré",
+      "aggressive": "Agir vite"
+    },
+    "projectType": {
+      "label": "Type de projet",
+      "description": "Niveau de maturité du projet affectant les décisions de risque",
+      "greenfield": "Nouveau projet",
+      "established": "Stable",
+      "legacy": "Ancienne base de code"
+    },
+    "codingStyle": {
+      "label": "Préférences de style de code",
+      "description": "Apprendre et correspondre automatiquement aux conventions du projet",
+      "indentation": "Indentation",
+      "quoteStyle": "Style de guillemets",
+      "namingConvention": "Convention de nommage",
+      "commentDensity": "Densité des commentaires",
+      "typeHints": "Utiliser les annotations de type",
+      "typeHintsDescription": "Ajouter des annotations de type au code",
+      "auto": "Détection auto",
+      "spaces": "Espaces",
+      "tabs": "Tabulations",
+      "single": "Guillemets simples",
+      "double": "Guillemets doubles",
+      "minimal": "Minimal",
+      "normalComments": "Normal",
+      "verbose": "Verbeux"
+    },
+    "userInstructions": {
+      "label": "Instructions personnalisées",
+      "description": "Ajoutez des préférences explicites comme 'être plus prudent' ou 'utiliser TypeScript'",
+      "placeholder": "ex : 'être plus prudent' ou 'préférer le style fonctionnel'"
     }
   }
 }
