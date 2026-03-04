@@ -31,21 +31,23 @@ import {
   Send,
   User,
   Loader2,
-  AlertCircle,
   AtSign,
   ChevronDown,
   ChevronUp,
-  MoreVertical,
-  Trash2,
-  Edit3
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
-import { Input } from '../ui/input';
 import { cn } from '../../lib/utils';
 import type { Comment, CollaborationUser } from '../../../shared/types';
+import {
+  CollaborationLoadingState,
+  CollaborationErrorState,
+  CollaborationSectionHeader,
+  CollaborationEmptyState,
+  formatTimestamp,
+} from './shared';
 
 /**
  * Props for CommentThread
@@ -81,25 +83,6 @@ interface MentionSuggestion {
  */
 interface CommentWithReplies extends Comment {
   replies?: CommentWithReplies[];
-}
-
-/**
- * Format timestamp for display
- */
-function formatTimestamp(timestamp: string, t: (key: string, params?: any) => string): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return t('collaboration:comments.justNow');
-  if (diffMins < 60) return t('collaboration:comments.minutesAgo', { mins: diffMins });
-  if (diffHours < 24) return t('collaboration:comments.hoursAgo', { hours: diffHours });
-  if (diffDays < 7) return t('collaboration:comments.daysAgo', { days: diffDays });
-
-  return date.toLocaleDateString();
 }
 
 /**
@@ -656,17 +639,11 @@ export function CommentThread({
   return (
     <div className={cn('space-y-4', className)}>
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-primary" />
-            {t('collaboration:comments.title')}
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t('collaboration:comments.description')}
-          </p>
-        </div>
-        {comments.length > 0 && (
+      <CollaborationSectionHeader
+        icon={<MessageSquare className="h-5 w-5 text-primary" />}
+        title={t('collaboration:comments.title')}
+        description={t('collaboration:comments.description')}
+        badge={comments.length > 0 ? (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
               {totalComments} {totalComments === 1 ? t('collaboration:comments.comment') : t('collaboration:comments.comments')}
@@ -677,34 +654,17 @@ export function CommentThread({
               </Badge>
             )}
           </div>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* Loading State */}
       {isLoading && (
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>{t('collaboration:comments.loading')}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <CollaborationLoadingState message={t('collaboration:comments.loading')} />
       )}
 
       {/* Error State */}
       {error && (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium">{t('collaboration:comments.error')}</p>
-                <p className="text-sm mt-1">{error}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <CollaborationErrorState title={t('collaboration:common.error')} detail={error} />
       )}
 
       {/* New Comment Input */}
@@ -744,17 +704,11 @@ export function CommentThread({
 
       {/* Empty State */}
       {!isLoading && !error && comments.length === 0 && (
-        <Card>
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-              <MessageCircle className="h-12 w-12 opacity-20" />
-              <div>
-                <p className="font-medium text-foreground">{t('collaboration:comments.noComments')}</p>
-                <p className="text-sm mt-1">{t('collaboration:comments.startDiscussion')}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <CollaborationEmptyState
+          icon={<MessageCircle className="h-12 w-12 opacity-20" />}
+          title={t('collaboration:comments.noComments')}
+          subtitle={t('collaboration:comments.startDiscussion')}
+        />
       )}
     </div>
   );

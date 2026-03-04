@@ -33,7 +33,6 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  AlertCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '../ui/card';
 import { Button } from '../ui/button';
@@ -41,6 +40,12 @@ import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { cn } from '../../lib/utils';
 import type { SpecPermission, PermissionLevel, CollaborationUser } from '../../../shared/types';
+import {
+  CollaborationLoadingState,
+  CollaborationErrorState,
+  CollaborationSectionHeader,
+  CollaborationEmptyState,
+} from './shared';
 
 /**
  * Props for PermissionsPanel
@@ -462,17 +467,11 @@ export function PermissionsPanel({
   return (
     <div className={cn('space-y-4', className)}>
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />
-            {t('collaboration:permissions.title')}
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t('collaboration:permissions.description')}
-          </p>
-        </div>
-        {permissions.length > 0 && (
+      <CollaborationSectionHeader
+        icon={<Shield className="h-5 w-5 text-primary" />}
+        title={t('collaboration:permissions.title')}
+        description={t('collaboration:permissions.description')}
+        badge={permissions.length > 0 ? (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
               {permissionCounts.read} {t('collaboration:permissions.readBadge')}
@@ -484,34 +483,17 @@ export function PermissionsPanel({
               {permissionCounts.admin} {t('collaboration:permissions.adminBadge')}
             </Badge>
           </div>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* Loading State */}
       {isLoading && (
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>{t('collaboration:permissions.loading')}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <CollaborationLoadingState message={t('collaboration:permissions.loading')} />
       )}
 
       {/* Error State */}
       {error && (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium">{t('collaboration:permissions.error')}</p>
-                <p className="text-sm mt-1">{error}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <CollaborationErrorState title={t('collaboration:permissions.error')} detail={error} />
       )}
 
       {/* Add User Form */}
@@ -536,15 +518,11 @@ export function PermissionsPanel({
 
       {/* Empty State */}
       {!isLoading && permissions.length === 0 && !error && (
-        <Card>
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-              <Shield className="h-10 w-10 opacity-20" />
-              <p className="text-sm">{t('collaboration:permissions.noMembers')}</p>
-              <p className="text-xs">{t('collaboration:permissions.addMembersPrompt')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <CollaborationEmptyState
+          icon={<Shield className="h-10 w-10 opacity-20" />}
+          title={t('collaboration:permissions.noMembers')}
+          subtitle={t('collaboration:permissions.addMembersPrompt')}
+        />
       )}
     </div>
   );

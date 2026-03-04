@@ -31,7 +31,6 @@ import {
   XCircle,
   Clock,
   ShieldCheck,
-  AlertCircle,
   Send,
   Loader2,
   ChevronDown,
@@ -45,6 +44,12 @@ import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { cn } from '../../lib/utils';
 import type { Approval, ApprovalStatus, CollaborationUser } from '../../../shared/types';
+import {
+  CollaborationLoadingState,
+  CollaborationErrorState,
+  CollaborationSectionHeader,
+  formatTimestamp,
+} from './shared';
 
 /**
  * Props for ApprovalWorkflow
@@ -113,25 +118,6 @@ function getStatusInfo(status: ApprovalStatus, t: (key: string, params?: any) =>
 }
 
 /**
- * Format timestamp for display
- */
-function formatTimestamp(timestamp: string): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return date.toLocaleDateString();
-}
-
-/**
  * Approval History Item Component
  */
 interface ApprovalHistoryItemProps {
@@ -170,7 +156,7 @@ function ApprovalHistoryItem({ approval, isExpanded, onToggleExpand }: ApprovalH
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {formatTimestamp(approval.created_at)}
+              {formatTimestamp(approval.created_at, t)}
             </p>
           </div>
         </div>
@@ -192,7 +178,7 @@ function ApprovalHistoryItem({ approval, isExpanded, onToggleExpand }: ApprovalH
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <FileText className="h-3 w-3" />
-                <span className="font-medium">Reason:</span>
+                <span className="font-medium">{t('collaboration:common.reason')}</span>
               </div>
               <p className="text-sm text-foreground bg-muted/50 rounded-md p-2">
                 {approval.reason}
@@ -359,8 +345,7 @@ export function ApprovalWorkflow({
       // setApprovalHistory(prev => [newApproval, ...prev]);
       // onApprovalRequested?.(newApproval);
 
-      // Placeholder: Mock request
-      console.log('Requesting approval for spec:', specId);
+      // Placeholder: No-op until IPC handler is connected
     } catch (err) {
       console.error('Failed to request approval:', err);
       setError(err instanceof Error ? err.message : 'Failed to request approval');
@@ -388,8 +373,7 @@ export function ApprovalWorkflow({
       // setShowActionForm(null);
       // onApprovalApproved?.(approvedApproval);
 
-      // Placeholder: Mock approve
-      console.log('Approving spec:', specId, 'with reason:', reason);
+      // Placeholder: No-op until IPC handler is connected
       setShowActionForm(null);
     } catch (err) {
       console.error('Failed to approve spec:', err);
@@ -418,8 +402,7 @@ export function ApprovalWorkflow({
       // setShowActionForm(null);
       // onApprovalRejected?.(rejectedApproval);
 
-      // Placeholder: Mock reject
-      console.log('Rejecting spec:', specId, 'with reason:', reason);
+      // Placeholder: No-op until IPC handler is connected
       setShowActionForm(null);
     } catch (err) {
       console.error('Failed to reject spec:', err);
@@ -432,17 +415,11 @@ export function ApprovalWorkflow({
   return (
     <div className={cn('space-y-4', className)}>
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" />
-            {t('collaboration:approvals.title')}
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t('collaboration:approvals.description')}
-          </p>
-        </div>
-        {currentApproval && (
+      <CollaborationSectionHeader
+        icon={<ShieldCheck className="h-5 w-5 text-primary" />}
+        title={t('collaboration:approvals.title')}
+        description={t('collaboration:approvals.description')}
+        badge={currentApproval ? (
           <Badge
             variant="outline"
             className={cn('text-sm', statusInfo.bgColorClass, statusInfo.colorClass)}
@@ -450,34 +427,17 @@ export function ApprovalWorkflow({
             {statusInfo.icon}
             <span className="ml-1">{statusInfo.label}</span>
           </Badge>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* Loading State */}
       {isLoading && (
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>{t('collaboration:approvals.loading')}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <CollaborationLoadingState message={t('collaboration:approvals.loading')} />
       )}
 
       {/* Error State */}
       {error && (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium">{t('collaboration:approvals.error')}</p>
-                <p className="text-sm mt-1">{error}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <CollaborationErrorState title={t('collaboration:approvals.error')} detail={error} />
       )}
 
       {/* Status & Actions */}
