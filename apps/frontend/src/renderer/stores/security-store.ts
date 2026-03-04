@@ -252,7 +252,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       isCustom: true
     };
 
-    const updatedPermissions = [...store.profile.filesystemPermissions, newRule];
+    const updatedPermissions = [...(store.profile.filesystemPermissions || []), newRule];
     return await store.saveProfile({ filesystemPermissions: updatedPermissions });
   },
 
@@ -263,7 +263,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       return false;
     }
 
-    const updatedPermissions = store.profile.filesystemPermissions.filter(
+    const updatedPermissions = (store.profile.filesystemPermissions || []).filter(
       (rule) => rule.path !== path
     );
     return await store.saveProfile({ filesystemPermissions: updatedPermissions });
@@ -279,7 +279,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       return false;
     }
 
-    const updatedPermissions = store.profile.filesystemPermissions.map((rule) =>
+    const updatedPermissions = (store.profile.filesystemPermissions || []).map((rule) =>
       rule.path === path ? { ...rule, level } : rule
     );
     return await store.saveProfile({ filesystemPermissions: updatedPermissions });
@@ -303,7 +303,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       allowedOperations
     };
 
-    const updatedRestrictions = [...store.profile.apiRestrictions, newRule];
+    const updatedRestrictions = [...(store.profile.apiRestrictions || []), newRule];
     return await store.saveProfile({ apiRestrictions: updatedRestrictions });
   },
 
@@ -314,7 +314,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       return false;
     }
 
-    const updatedRestrictions = store.profile.apiRestrictions.filter(
+    const updatedRestrictions = (store.profile.apiRestrictions || []).filter(
       (rule) => rule.endpoint !== endpoint
     );
     return await store.saveProfile({ apiRestrictions: updatedRestrictions });
@@ -330,7 +330,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       return false;
     }
 
-    const updatedRestrictions = store.profile.apiRestrictions.map((rule) =>
+    const updatedRestrictions = (store.profile.apiRestrictions || []).map((rule) =>
       rule.endpoint === endpoint ? { ...rule, ...updates } : rule
     );
     return await store.saveProfile({ apiRestrictions: updatedRestrictions });

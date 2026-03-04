@@ -8,7 +8,7 @@ Tracks command execution, filesystem access, API calls, and permission changes.
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -179,7 +179,7 @@ def log_security_event(
     # Create audit log entry
     entry: dict[str, Any] = {
         "id": str(uuid.uuid4()),
-        "timestamp": int(datetime.now(timezone.utc).timestamp()),
+        "timestamp": int(datetime.now(UTC).timestamp()),
         "category": category,
         "severity": severity,
         "message": message,
@@ -310,7 +310,7 @@ def export_audit_logs(
 
     return {
         "version": 1,
-        "exportedAt": int(datetime.now(timezone.utc).timestamp()),
+        "exportedAt": int(datetime.now(UTC).timestamp()),
         "projectPath": str(project_dir),
         "entryCount": len(logs),
         "logs": logs,

@@ -130,7 +130,7 @@ export function SecuritySettings({ isOpen }: SecuritySettingsProps) {
   const loadSecurityProfile = useCallback(async () => {
     setIsLoadingProfile(true);
     try {
-      const result = await window.electronAPI.getSecurityProfile?.();
+      const result = await window.electronAPI.getProfile?.();
       if (result?.success && result.data) {
         setSecurityProfile(result.data);
         const detectedLevel = detectSecurityLevel(result.data);
@@ -154,10 +154,10 @@ export function SecuritySettings({ isOpen }: SecuritySettingsProps) {
   const loadAuditLogs = useCallback(async () => {
     setIsLoadingLogs(true);
     try {
-      const result = await window.electronAPI.getSecurityAuditLogs?.();
+      const result = await window.electronAPI.getAuditLogs?.();
       if (result?.success && result.data) {
         setAuditLogs(result.data.logs || []);
-        setLogCount(result.data.totalCount || 0);
+        setLogCount(result.data.total || 0);
       }
     } catch (err) {
       console.warn('[SecuritySettings] Failed to load audit logs:', err);
@@ -212,7 +212,7 @@ export function SecuritySettings({ isOpen }: SecuritySettingsProps) {
         commandAllowlist: securityProfile.commandAllowlist.slice(0, preset.allowlistSize)
       };
 
-      const result = await window.electronAPI.updateSecurityProfile?.(updatedProfile);
+      const result = await window.electronAPI.saveProfile?.(updatedProfile);
       if (result?.success) {
         setSecurityProfile(updatedProfile);
         setCurrentLevel(preset.level);
@@ -245,7 +245,7 @@ export function SecuritySettings({ isOpen }: SecuritySettingsProps) {
   const exportSecurityConfig = async () => {
     setIsExporting(true);
     try {
-      const result = await window.electronAPI.exportSecurityConfig?.();
+      const result = await window.electronAPI.exportConfig?.();
       if (result?.success) {
         toast({
           title: t('toast.exportSuccess'),
@@ -440,11 +440,11 @@ export function SecuritySettings({ isOpen }: SecuritySettingsProps) {
                   <div key={log.id} className="text-xs flex items-center justify-between py-2 border-t border-border/50">
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${
-                        log.severity === 'high' ? 'bg-destructive' :
-                        log.severity === 'medium' ? 'bg-warning' :
+                        log.severity === 'critical' ? 'bg-destructive' :
+                        log.severity === 'warning' ? 'bg-warning' :
                         'bg-success'
                       }`} />
-                      <span className="text-foreground">{log.operation}</span>
+                      <span className="text-foreground">{log.message}</span>
                     </div>
                     <span className="text-muted-foreground">{new Date(log.timestamp).toLocaleString()}</span>
                   </div>

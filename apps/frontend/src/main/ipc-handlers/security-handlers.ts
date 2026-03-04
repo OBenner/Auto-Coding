@@ -125,7 +125,7 @@ export function registerSecurityHandlers(): void {
     IPC_CHANNELS.SECURITY_GET_AUDIT_LOGS,
     async (_event, options?: { limit?: number; offset?: number }): Promise<IPCResult<{
       logs: SecurityAuditLog[];
-      totalCount: number;
+      total: number;
     }>> => {
       try {
         const auditLogPath = getAuditLogPath();
@@ -144,7 +144,7 @@ export function registerSecurityHandlers(): void {
             success: true,
             data: {
               logs: paginatedLogs,
-              totalCount: allLogs.length
+              total: allLogs.length
             }
           };
         } catch {
@@ -153,7 +153,7 @@ export function registerSecurityHandlers(): void {
             success: true,
             data: {
               logs: [],
-              totalCount: 0
+              total: 0
             }
           };
         }

@@ -81,34 +81,47 @@ export interface APIRestrictionRule {
 
 /**
  * Security Profile - main security configuration
+ *
+ * Most fields are optional to support both simplified profiles
+ * (from IPC handlers) and full detailed profiles.
  */
 export interface SecurityProfile {
   /** Profile version (for migrations) */
-  version: number;
+  version?: number;
   /** Current security level preset */
   level: SecurityLevel;
   /** Command allowlist (allowed commands for agents) */
   commandAllowlist: CommandAllowlistEntry[];
   /** Filesystem permission rules */
-  filesystemPermissions: FilesystemPermissionRule[];
+  filesystemPermissions?: FilesystemPermissionRule[];
   /** Overall filesystem access level */
-  filesystemAccessLevel: FilesystemPermissionLevel;
+  filesystemAccessLevel?: FilesystemPermissionLevel;
   /** Whether OS-level sandbox is enabled */
-  sandboxEnabled: boolean;
+  sandboxEnabled?: boolean;
   /** Sandbox level (affects which operations are blocked) */
-  sandboxLevel: 'full' | 'partial' | 'none';
+  sandboxLevel?: 'full' | 'partial' | 'none';
   /** API restriction rules */
-  apiRestrictions: APIRestrictionRule[];
+  apiRestrictions?: APIRestrictionRule[];
   /** Whether API restrictions are enforced */
-  apiRestrictionsEnabled: boolean;
+  apiRestrictionsEnabled?: boolean;
   /** Whether to warn about risky operations */
-  warnOnRiskyOperations: boolean;
+  warnOnRiskyOperations?: boolean;
   /** Whether to require confirmation for destructive operations */
-  requireConfirmationForDestructive: boolean;
+  requireConfirmationForDestructive?: boolean;
   /** Custom security notes or warnings */
   notes?: string;
   /** Last time this profile was modified */
-  lastModified: number; // Unix timestamp
+  lastModified?: number; // Unix timestamp
+
+  // Convenience fields used by simplified IPC handlers
+  /** Whether filesystem access is restricted */
+  filesystemRestricted?: boolean;
+  /** Whether API access is restricted */
+  apiRestricted?: boolean;
+  /** Last update timestamp (alternative to lastModified) */
+  updatedAt?: number;
+  /** Security level name (alternative to level for display) */
+  securityLevel?: SecurityLevel;
 }
 
 // ============================================
@@ -165,6 +178,14 @@ export interface SecurityAuditLog {
   agentType?: string; // 'planner' | 'coder' | 'qa_reviewer' | 'qa_fixer'
   /** Session ID for correlation */
   sessionId?: string;
+
+  // Extended fields for detailed log views
+  /** Operation name/description */
+  operation?: string;
+  /** Structured event details */
+  details?: Record<string, unknown>;
+  /** Event metadata (e.g., security level changes) */
+  metadata?: Record<string, unknown>;
 }
 
 // ============================================
@@ -193,6 +214,10 @@ export interface SecurityExport {
     projectPath?: string;
     /** Export reason (manual, compliance, backup) */
     reason?: string;
+    /** Export format identifier */
+    format?: string;
+    /** Export source identifier */
+    source?: string;
   };
 }
 

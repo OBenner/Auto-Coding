@@ -467,6 +467,16 @@ const browserMockAPI: ElectronAPI = {
     onBuildFailed: () => () => {}
   },
 
+  // Security API
+  security: {
+    getProfile: async () => ({ success: true as const, data: { level: 'standard' as const, commandAllowlist: [] } }),
+    saveProfile: async () => ({ success: true as const, data: { level: 'standard' as const, commandAllowlist: [] } }),
+    resetToDefault: async () => ({ success: true as const, data: { level: 'standard' as const, commandAllowlist: [] } }),
+    getAuditLogs: async () => ({ success: true as const, data: { logs: [], total: 0, hasMore: false } }),
+    exportConfig: async () => ({ success: true as const, data: { version: '1.0.0', exportedAt: Date.now(), profile: { level: 'standard' as const, commandAllowlist: [] }, metadata: { appVersion: '1.0.0' } } }),
+    validateCommand: async () => ({ success: true as const, data: { allowed: true } }),
+  },
+
   // Claude Code Operations
   checkClaudeCodeVersion: async () => ({
     success: true,

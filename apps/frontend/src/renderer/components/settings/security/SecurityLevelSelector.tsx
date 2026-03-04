@@ -22,7 +22,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../ui/select';
+} from '../../ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,8 +32,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '../ui/alert-dialog';
-import { cn } from '../../lib/utils';
+} from '../../ui/alert-dialog';
+import { cn } from '../../../lib/utils';
 import type { SecurityLevel } from '@shared/types/security';
 
 interface SecurityLevelSelectorProps {

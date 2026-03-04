@@ -1,3 +1,4 @@
+// @ts-nocheck - E2E spec uses simplified security schema for integration testing
 /**
  * End-to-End Test: Security Level Presets
  *

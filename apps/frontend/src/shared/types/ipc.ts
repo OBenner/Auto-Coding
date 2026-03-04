@@ -1005,6 +1005,34 @@ export interface ElectronAPI {
   sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
   // Scheduler API for build scheduling and queue management
   scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
+
+  // Security API (nested access for security store, flat access for components)
+  security: import('../../preload/api/security-api').SecurityAPI;
+  getProfile?: () => Promise<IPCResult<import('./security').SecurityProfile>>;
+  saveProfile?: (profile: Partial<import('./security').SecurityProfile>) => Promise<IPCResult<import('./security').SecurityProfile>>;
+  resetToDefault?: () => Promise<IPCResult<import('./security').SecurityProfile>>;
+  getAuditLogs?: (options?: {
+    limit?: number;
+    offset?: number;
+    category?: string;
+    severity?: string;
+    startDate?: number;
+    endDate?: number;
+  }) => Promise<IPCResult<{
+    logs: import('./security').SecurityAuditLog[];
+    total: number;
+    hasMore: boolean;
+  }>>;
+  exportConfig?: (options?: {
+    includeAuditLogs?: boolean;
+    auditLogLimit?: number;
+    reason?: string;
+  }) => Promise<IPCResult<import('./security').SecurityExport>>;
+  validateCommand?: (command: string) => Promise<IPCResult<{
+    allowed: boolean;
+    reason?: string;
+    ruleId?: string;
+  }>>;
 }
 
 declare global {

@@ -16,18 +16,17 @@
 import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '../ui/button';
-import { Label } from '../ui/label';
+import { Button } from '../../ui/button';
+import { Label } from '../../ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../ui/select';
-import { useSettingsStore } from '../../stores/settings-store';
-import { useSecurityStore } from '../../stores/security-store';
-import { useToast } from '../../hooks/use-toast';
+} from '../../ui/select';
+import { useSecurityStore } from '../../../stores/security-store';
+import { useToast } from '../../../hooks/use-toast';
 import type { SecurityExport } from '@shared/types/security';
 
 interface SecurityExportProps {
@@ -56,7 +55,6 @@ const AUDIT_LOG_LIMITS = [
  */
 export function SecurityExport({ className }: SecurityExportProps) {
   const { t } = useTranslation(['security', 'common']);
-  const { project } = useSettingsStore();
   const {
     exportConfig,
     isExporting,
@@ -74,7 +72,7 @@ export function SecurityExport({ className }: SecurityExportProps) {
     try {
       // Create filename with timestamp
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-      const projectName = project?.name || 'auto-claude';
+      const projectName = 'auto-claude';
       const filename = `${projectName}-security-config-${timestamp}.json`;
 
       // Create JSON blob
