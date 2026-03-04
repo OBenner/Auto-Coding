@@ -598,12 +598,12 @@ class TestWebhookDispatcher:
 
         # Verify test webhook was sent
         assert result["success"] is True
-        if received_payload is None:
-            pytest.fail("received_payload was not set by mock")
+        assert received_payload is not None
+        payload: dict = received_payload
         # The test webhook uses SPEC_CREATED as the event type
         # and adds a "test" flag to the payload
-        assert received_payload["event"] == "spec_created"
-        assert received_payload["test"] is True
+        assert payload["event"] == "spec_created"
+        assert payload["test"] is True
 
 
 # =============================================================================
@@ -795,12 +795,12 @@ class TestWebhookTemplates:
             )
 
         # Verify payload contains standard webhook fields
-        if received_payload is None:
-            pytest.fail("received_payload was not set by mock")
-        assert received_payload["event"] == "build_started"
-        assert "timestamp" in received_payload
-        assert "spec" in received_payload
-        assert received_payload["spec"]["id"] == "slack-test-001"
+        assert received_payload is not None
+        payload: dict = received_payload
+        assert payload["event"] == "build_started"
+        assert "timestamp" in payload
+        assert "spec" in payload
+        assert payload["spec"]["id"] == "slack-test-001"
 
     @pytest.mark.asyncio
     async def test_discord_template_rendering(
@@ -827,12 +827,12 @@ class TestWebhookTemplates:
             )
 
         # Verify payload contains standard webhook fields
-        if received_payload is None:
-            pytest.fail("received_payload was not set by mock")
-        assert received_payload["event"] == "spec_created"
-        assert "timestamp" in received_payload
-        assert "spec" in received_payload
-        assert received_payload["spec"]["id"] == "discord-test-001"
+        assert received_payload is not None
+        payload: dict = received_payload
+        assert payload["event"] == "spec_created"
+        assert "timestamp" in payload
+        assert "spec" in payload
+        assert payload["spec"]["id"] == "discord-test-001"
 
 
 # =============================================================================
