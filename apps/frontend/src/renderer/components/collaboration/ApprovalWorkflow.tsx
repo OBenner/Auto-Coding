@@ -134,7 +134,10 @@ function ApprovalHistoryItem({ approval, isExpanded, onToggleExpand }: ApprovalH
     <div className="border-b border-border last:border-0 pb-3 last:pb-0">
       <div
         className="flex items-start justify-between gap-3 cursor-pointer hover:bg-muted/50 rounded-lg p-2 -mx-2 transition-colors"
+        role="button"
+        tabIndex={0}
         onClick={onToggleExpand}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleExpand(); } }}
       >
         <div className="flex items-start gap-3 flex-1">
           {/* Status Icon */}
