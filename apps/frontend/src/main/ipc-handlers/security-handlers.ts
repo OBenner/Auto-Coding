@@ -19,8 +19,6 @@ import path from 'path';
 
 const SECURITY_PROFILE_FILE = '.auto-claude-security.json';
 const AUDIT_LOG_FILE = '.auto-claude-audit.json';
-const ALLOWLIST_FILE = '.auto-claude-allowlist';
-
 /**
  * Get security profile file path for current project
  */
@@ -35,13 +33,6 @@ function getSecurityProfilePath(): string {
  */
 function getAuditLogPath(): string {
   return path.join(app.getPath('userData'), AUDIT_LOG_FILE);
-}
-
-/**
- * Get allowlist file path for current project
- */
-function getAllowlistPath(): string {
-  return path.join(app.getPath('userData'), ALLOWLIST_FILE);
 }
 
 /**
@@ -62,7 +53,7 @@ export function registerSecurityHandlers(): void {
           const data = await fs.readFile(profilePath, 'utf-8');
           const profile = JSON.parse(data) as SecurityProfile;
           return { success: true, data: profile };
-        } catch (err) {
+        } catch {
           // File doesn't exist or can't be read - return default profile
           const defaultProfile: SecurityProfile = {
             level: 'standard',

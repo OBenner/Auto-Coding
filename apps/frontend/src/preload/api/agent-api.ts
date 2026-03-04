@@ -5,6 +5,7 @@
  * - Roadmap operations
  * - Ideation operations
  * - Insights operations
+ * - Analytics operations
  * - Changelog operations
  * - Linear integration
  * - GitHub integration
@@ -16,6 +17,7 @@
 import { createRoadmapAPI, RoadmapAPI } from './modules/roadmap-api';
 import { createIdeationAPI, IdeationAPI } from './modules/ideation-api';
 import { createInsightsAPI, InsightsAPI } from './modules/insights-api';
+import { createAnalyticsAPI, AnalyticsAPI } from './modules/analytics-api';
 import { createChangelogAPI, ChangelogAPI } from './modules/changelog-api';
 import { createLinearAPI, LinearAPI } from './modules/linear-api';
 import { createGitHubAPI, GitHubAPI } from './modules/github-api';
@@ -38,7 +40,9 @@ export interface AgentAPI extends
   GitLabAPI,
   ShellAPI,
   SessionContextAPI,
-  ProductivityAnalyticsAPI {}
+  ProductivityAnalyticsAPI {
+  analytics: AnalyticsAPI;
+}
 
 /**
  * Creates the complete Agent API by combining all module APIs
@@ -49,6 +53,7 @@ export const createAgentAPI = (): AgentAPI => {
   const roadmapAPI = createRoadmapAPI();
   const ideationAPI = createIdeationAPI();
   const insightsAPI = createInsightsAPI();
+  const analyticsAPI = createAnalyticsAPI();
   const changelogAPI = createChangelogAPI();
   const linearAPI = createLinearAPI();
   const githubAPI = createGitHubAPI();
@@ -66,6 +71,9 @@ export const createAgentAPI = (): AgentAPI => {
 
     // Insights API
     ...insightsAPI,
+
+    // Analytics API
+    analytics: analyticsAPI,
 
     // Changelog API
     ...changelogAPI,
@@ -95,6 +103,7 @@ export type {
   RoadmapAPI,
   IdeationAPI,
   InsightsAPI,
+  AnalyticsAPI,
   ChangelogAPI,
   LinearAPI,
   GitHubAPI,

@@ -15,11 +15,24 @@ from typing import Any
 from .constants import AUDIT_LOG_FILENAME
 
 __all__ = [
-    "log_security_event",
-    "get_audit_logs",
+    "CATEGORIES",
+    "CATEGORY_API_CALL",
+    "CATEGORY_COMMAND_EXECUTION",
+    "CATEGORY_FILESYSTEM_ACCESS",
+    "CATEGORY_PERMISSION_CHANGE",
+    "CATEGORY_PROFILE_EXPORTED",
+    "CATEGORY_PROFILE_LOADED",
+    "CATEGORY_RISK_DETECTED",
+    "CATEGORY_SANDBOX_VIOLATION",
+    "SEVERITIES",
+    "SEVERITY_CRITICAL",
+    "SEVERITY_INFO",
+    "SEVERITY_WARNING",
     "clear_audit_logs",
     "export_audit_logs",
     "get_audit_log_path",
+    "get_audit_logs",
+    "log_security_event",
 ]
 
 
@@ -30,20 +43,37 @@ __all__ = [
 # Maximum number of audit log entries to keep per project
 MAX_AUDIT_LOG_ENTRIES = 1000
 
-# Audit log entry categories
-CATEGORY_COMMAND_EXECUTION = "command_execution"
-CATEGORY_FILESYSTEM_ACCESS = "filesystem_access"
-CATEGORY_API_CALL = "api_call"
-CATEGORY_PERMISSION_CHANGE = "permission_change"
-CATEGORY_SANDBOX_VIOLATION = "sandbox_violation"
-CATEGORY_PROFILE_LOADED = "profile_loaded"
-CATEGORY_PROFILE_EXPORTED = "profile_exported"
-CATEGORY_RISK_DETECTED = "risk_detected"
+# Audit log entry categories - exported for use by hooks and other modules
+CATEGORIES = {
+    "command_execution": "command_execution",
+    "filesystem_access": "filesystem_access",
+    "api_call": "api_call",
+    "permission_change": "permission_change",
+    "sandbox_violation": "sandbox_violation",
+    "profile_loaded": "profile_loaded",
+    "profile_exported": "profile_exported",
+    "risk_detected": "risk_detected",
+}
 
-# Severity levels
-SEVERITY_INFO = "info"
-SEVERITY_WARNING = "warning"
-SEVERITY_CRITICAL = "critical"
+CATEGORY_COMMAND_EXECUTION = CATEGORIES["command_execution"]
+CATEGORY_FILESYSTEM_ACCESS = CATEGORIES["filesystem_access"]
+CATEGORY_API_CALL = CATEGORIES["api_call"]
+CATEGORY_PERMISSION_CHANGE = CATEGORIES["permission_change"]
+CATEGORY_SANDBOX_VIOLATION = CATEGORIES["sandbox_violation"]
+CATEGORY_PROFILE_LOADED = CATEGORIES["profile_loaded"]
+CATEGORY_PROFILE_EXPORTED = CATEGORIES["profile_exported"]
+CATEGORY_RISK_DETECTED = CATEGORIES["risk_detected"]
+
+# Severity levels - exported for use by hooks and other modules
+SEVERITIES = {
+    "info": "info",
+    "warning": "warning",
+    "critical": "critical",
+}
+
+SEVERITY_INFO = SEVERITIES["info"]
+SEVERITY_WARNING = SEVERITIES["warning"]
+SEVERITY_CRITICAL = SEVERITIES["critical"]
 
 
 # =============================================================================
@@ -80,7 +110,7 @@ def _load_audit_logs(project_dir: Path) -> list[dict[str, Any]]:
         return []
 
     try:
-        with open(audit_log_path, "r", encoding="utf-8") as f:
+        with open(audit_log_path, encoding="utf-8") as f:
             data = json.load(f)
             return data.get("logs", [])
     except (json.JSONDecodeError, OSError, KeyError):

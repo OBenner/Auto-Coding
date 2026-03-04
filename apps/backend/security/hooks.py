@@ -55,15 +55,6 @@ async def bash_security_hook(
 
     # Check if tool_input is None (malformed tool call)
     if tool_input is None:
-        log_security_event(
-            project_dir=Path(cwd),
-            category=CATEGORY_COMMAND_EXECUTION,
-            message="Bash tool_input is None - malformed tool call from SDK",
-            severity=SEVERITY_CRITICAL,
-            allowed=False,
-            agent_type=_extract_agent_type(context),
-            session_id=_extract_session_id(context),
-        )
         return {
             "decision": "block",
             "reason": "Bash tool_input is None - malformed tool call from SDK",
@@ -71,15 +62,6 @@ async def bash_security_hook(
 
     # Check if tool_input is a dict
     if not isinstance(tool_input, dict):
-        log_security_event(
-            project_dir=Path(cwd),
-            category=CATEGORY_COMMAND_EXECUTION,
-            message=f"Bash tool_input must be dict, got {type(tool_input).__name__}",
-            severity=SEVERITY_CRITICAL,
-            allowed=False,
-            agent_type=_extract_agent_type(context),
-            session_id=_extract_session_id(context),
-        )
         return {
             "decision": "block",
             "reason": f"Bash tool_input must be dict, got {type(tool_input).__name__}",
@@ -267,7 +249,8 @@ def _extract_agent_type(context: Any | None) -> str | None:
     try:
         if isinstance(context, dict):
             return context.get("agent_type") or context.get("agentType")
-    except Exception:
+    except (TypeError, AttributeError):
+        # context may not support dict operations despite isinstance check
         pass
 
     return None
@@ -298,7 +281,8 @@ def _extract_session_id(context: Any | None) -> str | None:
     try:
         if isinstance(context, dict):
             return context.get("session_id") or context.get("sessionId")
-    except Exception:
+    except (TypeError, AttributeError):
+        # context may not support dict operations despite isinstance check
         pass
 
     return None

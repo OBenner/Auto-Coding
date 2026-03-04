@@ -46,7 +46,9 @@ import type {
   TaskMetadata,
   TaskLogs,
   TaskLogStreamChunk,
-  ImageAttachment
+  ImageAttachment,
+  BackgroundTask,
+  BackgroundTaskStatus
 } from './task';
 import type {
   MergeOperationRecord,
@@ -59,7 +61,8 @@ import type {
   ProductivitySummary,
   ProductivityTrendPoint,
   ProductivityAnalyticsFilter,
-  ProductivityAnalyticsExportOptions
+  ProductivityAnalyticsExportOptions,
+  FailureMetrics
 } from './productivity-analytics';
 import type {
   TerminalCreateOptions,
@@ -85,7 +88,7 @@ import type {
   AllProfilesUsage,
   TerminalProfileChangedEvent
 } from './agent';
-import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult } from './settings';
+import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult, AIProviderConfig, ProviderConfigValidation } from './settings';
 import type { AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent } from './app-update';
 import type {
   ChangelogTask,
@@ -120,6 +123,7 @@ import type {
   InsightsModelConfig
 } from './insights';
 import type {
+  CompetitorAnalysis,
   Roadmap,
   RoadmapFeatureStatus,
   RoadmapGenerationStatus,
@@ -152,6 +156,7 @@ import type {
 } from './integrations';
 import type { APIProfile, ProfilesFile, TestConnectionResult, DiscoverModelsResult } from './profile';
 import type { TemplateInfo, TemplateCategory, GeneratedSpec } from './template';
+import type { FeedbackSummary, ImprovementData } from '../../preload/api/feedback-api';
 
 // Electron API exposed via contextBridge
 // Tab state interface (persisted in main process)
@@ -183,7 +188,7 @@ export interface ElectronAPI {
   startTask: (taskId: string, options?: TaskStartOptions) => void;
   stopTask: (taskId: string) => void;
   submitReview: (taskId: string, approved: boolean, feedback?: string, images?: ImageAttachment[]) => Promise<IPCResult>;
-  updateTaskStatus: (taskId: string, status: TaskStatus, options?: { forceCleanup?: boolean }) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
+  updateTaskStatus: (taskId: string, status: TaskStatus, options?: { forceCleanup?: boolean; keepWorktree?: boolean }) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
   recoverStuckTask: (taskId: string, options?: TaskRecoveryOptions) => Promise<IPCResult<TaskRecoveryResult>>;
   checkTaskRunning: (taskId: string) => Promise<IPCResult<boolean>>;
   batchRunQA: (taskId: string) => Promise<IPCResult<{ success: boolean; issues?: Array<{ message: string; file?: string }> }>>;
@@ -205,6 +210,15 @@ export interface ElectronAPI {
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+  exportTask: (projectId: string, taskId: string) => Promise<IPCResult<string>>;
+
+  // Background task operations (long-running commands)
+  backgroundTaskStart: (command: string, workingDir: string, timeout?: number) => Promise<IPCResult<{ taskId: string }>>;
+  backgroundTaskCancel: (taskId: string) => Promise<IPCResult<{ cancelled: boolean }>>;
+  backgroundTaskGetStatus: (taskId: string) => Promise<IPCResult<BackgroundTask>>;
+  backgroundTaskGetOutput: (taskId: string) => Promise<IPCResult<{ output: string }>>;
+  backgroundTaskListRunning: () => Promise<IPCResult<BackgroundTask[]>>;
+  backgroundTaskListByStatus: (status: BackgroundTaskStatus) => Promise<IPCResult<BackgroundTask[]>>;
 
   // Merge analytics operations
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
@@ -218,6 +232,11 @@ export interface ElectronAPI {
   onTaskLog: (callback: (taskId: string, log: string) => void) => () => void;
   onTaskStatusChange: (callback: (taskId: string, status: TaskStatus) => void) => () => void;
   onTaskExecutionProgress: (callback: (taskId: string, progress: ExecutionProgress) => void) => () => void;
+
+  // Background task event listeners
+  onBackgroundTaskProgress?: (callback: (taskId: string, output: string) => void) => () => void;
+  onBackgroundTaskComplete?: (callback: (taskId: string) => void) => () => void;
+  onBackgroundTaskError?: (callback: (taskId: string, error: string) => void) => () => void;
 
   // Terminal operations
   createTerminal: (options: TerminalCreateOptions) => Promise<IPCResult>;
@@ -357,6 +376,11 @@ export interface ElectronAPI {
   getSettings: () => Promise<IPCResult<AppSettings>>;
   saveSettings: (settings: Partial<AppSettings>) => Promise<IPCResult>;
 
+  // AI Provider Configuration (backend .env sync)
+  getProviderConfig: () => Promise<IPCResult<AIProviderConfig>>;
+  updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
+  validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
+
   // Sentry error reporting
   notifySentryStateChanged: (enabled: boolean) => void;
   getSentryDsn: () => Promise<string>;
@@ -391,6 +415,7 @@ export interface ElectronAPI {
   getRoadmap: (projectId: string) => Promise<IPCResult<Roadmap | null>>;
   getRoadmapStatus: (projectId: string) => Promise<IPCResult<{ isRunning: boolean }>>;
   saveRoadmap: (projectId: string, roadmap: Roadmap) => Promise<IPCResult>;
+  saveCompetitorAnalysis: (projectId: string, competitorAnalysis: CompetitorAnalysis) => Promise<IPCResult>;
   generateRoadmap: (projectId: string, enableCompetitorAnalysis?: boolean, refreshCompetitorAnalysis?: boolean) => void;
   refreshRoadmap: (projectId: string, enableCompetitorAnalysis?: boolean, refreshCompetitorAnalysis?: boolean) => void;
   stopRoadmap: (projectId: string) => Promise<IPCResult>;
@@ -747,7 +772,7 @@ export interface ElectronAPI {
 
   // Insights operations
   getInsightsSession: (projectId: string) => Promise<IPCResult<InsightsSession | null>>;
-  sendInsightsMessage: (projectId: string, message: string, modelConfig?: InsightsModelConfig) => void;
+  sendInsightsMessage: (projectId: string, message: string, modelConfig?: InsightsModelConfig, images?: ImageAttachment[]) => void;
   clearInsightsSession: (projectId: string) => Promise<IPCResult>;
   createTaskFromInsights: (
     projectId: string,
@@ -755,10 +780,14 @@ export interface ElectronAPI {
     description: string,
     metadata?: TaskMetadata
   ) => Promise<IPCResult<Task>>;
-  listInsightsSessions: (projectId: string) => Promise<IPCResult<InsightsSessionSummary[]>>;
+  listInsightsSessions: (projectId: string, includeArchived?: boolean) => Promise<IPCResult<InsightsSessionSummary[]>>;
   newInsightsSession: (projectId: string) => Promise<IPCResult<InsightsSession>>;
   switchInsightsSession: (projectId: string, sessionId: string) => Promise<IPCResult<InsightsSession | null>>;
   deleteInsightsSession: (projectId: string, sessionId: string) => Promise<IPCResult>;
+  deleteInsightsSessions: (projectId: string, sessionIds: string[]) => Promise<IPCResult<{ deletedIds: string[]; failedIds: string[] }>>;
+  archiveInsightsSession: (projectId: string, sessionId: string) => Promise<IPCResult>;
+  archiveInsightsSessions: (projectId: string, sessionIds: string[]) => Promise<IPCResult<{ archivedIds: string[]; failedIds: string[] }>>;
+  unarchiveInsightsSession: (projectId: string, sessionId: string) => Promise<IPCResult>;
   renameInsightsSession: (projectId: string, sessionId: string, newTitle: string) => Promise<IPCResult>;
   updateInsightsModelConfig: (projectId: string, sessionId: string, modelConfig: InsightsModelConfig) => Promise<IPCResult>;
 
@@ -772,6 +801,14 @@ export interface ElectronAPI {
   onInsightsError: (
     callback: (projectId: string, error: string) => void
   ) => () => void;
+
+  // Analytics operations
+  analytics: {
+    getSummary: (projectId: string) => Promise<IPCResult<import('./analytics').MetricsSummary>>;
+    getAgentStats: (projectId: string) => Promise<IPCResult<Record<string, import('./analytics').AgentStats>>>;
+    getTrends: (projectId: string, days?: number) => Promise<IPCResult<import('./analytics').TrendDataPoint[]>>;
+    getReport: (projectId: string) => Promise<IPCResult<import('./analytics').AnalyticsReport>>;
+  };
 
   // Task logs operations
   getTaskLogs: (projectId: string, specId: string) => Promise<IPCResult<TaskLogs | null>>;
@@ -896,6 +933,11 @@ export interface ElectronAPI {
   // Token statistics
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('./task').TaskTokenStats | null>>;
 
+  // Task spec file reading (for task overview display)
+  getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
+  getQAEscalation: (taskId: string) => Promise<IPCResult<import('./task').QAEscalation | null>>;
+
   // Plugin management
   listPlugins: (options?: { pluginType?: string; enabledOnly?: boolean }) => Promise<IPCResult<import('../../main/plugins/types').PluginInfo[]>>;
   enablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
@@ -903,9 +945,17 @@ export interface ElectronAPI {
   installPlugin: (source: { type: string; path?: string; marketplace_id?: string }) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
   uninstallPlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
 
+  // Context Viewer API
+  getContextStats: (projectId: string, specId?: string) => Promise<IPCResult<any>>;
+  getTokenBreakdown: (projectId: string, specId?: string) => Promise<IPCResult<any>>;
+  getPrioritizationScores: (projectId: string, task?: string) => Promise<IPCResult<any>>;
+  getOptimizationReport: (projectId: string, specId: string) => Promise<IPCResult<any>>;
+  exportContextSnapshot: (projectId: string, specId: string) => Promise<IPCResult<any>>;
+
   // Productivity analytics operations
   getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
   getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
+  getFailureMetrics: (projectId: string) => Promise<IPCResult<FailureMetrics>>;
   exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<string>>;
 
   // Template library operations
@@ -922,6 +972,15 @@ export interface ElectronAPI {
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
 
+  // Custom agent template operations (user-created templates)
+  listCustomTemplates: () => Promise<IPCResult<import('./template').CustomTemplate[]>>;
+  saveCustomTemplate: (template: Omit<import('./template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  updateCustomTemplate: (template: import('./template').CustomTemplate) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  deleteCustomTemplate: (templateId: string) => Promise<IPCResult>;
+  exportCustomTemplate: (templateId: string) => Promise<IPCResult<string>>; // Returns JSON string
+  importCustomTemplate: (jsonData: string) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  testCustomTemplate: (templateId: string, testInput: string) => Promise<IPCResult<GeneratedSpec>>;
+
   // Feedback submission (adaptive agent learning)
   submitFeedback?: (request: {
     feedbackType: 'accepted' | 'rejected' | 'modified';
@@ -929,10 +988,21 @@ export interface ElectronAPI {
     agentType?: string;
     taskDescription?: string;
     context?: string;
-  }) => Promise<IPCResult<{ recorded: boolean }>>;
+  }) => Promise<IPCResult<{ recorded: boolean; reason?: string }>>;
+
+
+  // Feedback analytics operations
+  getFeedbackSummary?: (projectId: string, days: number) => Promise<IPCResult<FeedbackSummary>>;
+  exportFeedbackData?: (projectId: string, format: 'json' | 'csv', days: number) => Promise<IPCResult<string>>;
+  getImprovements?: (projectId: string, days: number) => Promise<IPCResult<ImprovementData[]>>;
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+
+  // Pattern learning API (codebase patterns)
+  pattern: import('../../preload/api/modules/pattern-api').PatternAPI;
+  // Session Replay API for learning and review
+  sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
   // Scheduler API for build scheduling and queue management
   scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
 }

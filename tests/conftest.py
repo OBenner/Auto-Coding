@@ -12,8 +12,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 from unittest.mock import MagicMock
 
 import pytest
@@ -24,6 +24,7 @@ import pytest
 # These SDK modules may not be installed, so we mock them before any imports
 # that might trigger loading code that depends on them.
 
+
 def _create_sdk_mock():
     """Create a comprehensive mock for SDK modules."""
     mock = MagicMock()
@@ -32,15 +33,16 @@ def _create_sdk_mock():
     mock.HookMatcher = MagicMock
     return mock
 
+
 # Pre-mock claude_agent_sdk if not installed
-if 'claude_agent_sdk' not in sys.modules:
-    sys.modules['claude_agent_sdk'] = _create_sdk_mock()
-    sys.modules['claude_agent_sdk.types'] = MagicMock()
+if "claude_agent_sdk" not in sys.modules:
+    sys.modules["claude_agent_sdk"] = _create_sdk_mock()
+    sys.modules["claude_agent_sdk.types"] = MagicMock()
 
 # Pre-mock claude_code_sdk if not installed
-if 'claude_code_sdk' not in sys.modules:
-    sys.modules['claude_code_sdk'] = _create_sdk_mock()
-    sys.modules['claude_code_sdk.types'] = MagicMock()
+if "claude_code_sdk" not in sys.modules:
+    sys.modules["claude_code_sdk"] = _create_sdk_mock()
+    sys.modules["claude_code_sdk.types"] = MagicMock()
 
 # Add apps/backend directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
@@ -53,19 +55,51 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 # List of modules that might be mocked by test files
 # These need to be cleaned up between test modules to prevent leakage
 _POTENTIALLY_MOCKED_MODULES = [
-    'claude_code_sdk',
-    'claude_code_sdk.types',
-    'claude_agent_sdk',
-    'claude_agent_sdk.types',
-    'ui',
-    'progress',
-    'task_logger',
-    'linear_updater',
-    'client',
-    'init',
-    'review',
-    'validate_spec',
-    'graphiti_providers',
+    "claude_code_sdk",
+    "claude_code_sdk.types",
+    "claude_agent_sdk",
+    "claude_agent_sdk.types",
+    "agents",
+    "agents.code_reviewer",
+    "agents.memory_manager",
+    "agents.session",
+    "agents.coder",
+    "agents.planner",
+    "agents.e2e_generator",
+    "agents.test_generator",
+    "agents.documentation_generator",
+    "agents.utils",
+    "agents.base",
+    "core.client",
+    "core.model_fallback",
+    "ui",
+    "progress",
+    "task_logger",
+    "linear_updater",
+    "client",
+    "init",
+    "review",
+    "validate_spec",
+    "graphiti_providers",
+    # Additional modules mocked by test_qa_fixer / test_qa_reviewer
+    "core.error_utils",
+    "debug",
+    "prompts_pkg",
+    "prompts_pkg.project_context",
+    "phase_config",
+    "phase_event",
+    "security.tool_input_validator",
+    "security.constants",
+    "services.recovery",
+    "analysis.coverage_analyzer",
+    "analysis.code_analyzer",
+    "analysis.coverage_reporter",
+    "analysis.failure_analyzer",
+    "analysis.ts_analyzer",
+    "spec.coverage_config",
+    "integrations",
+    "integrations.graphiti",
+    "integrations.graphiti.memory",
 ]
 
 # Store original module references at import time (before any mocking)
@@ -101,18 +135,95 @@ def pytest_runtest_setup(item):
 
     # Map of which test modules mock which specific modules
     # Each test module should only preserve the mocks it installed
+    _qa_report_mocks = {
+        "claude_agent_sdk",
+        "ui",
+        "progress",
+        "task_logger",
+        "linear_updater",
+        "client",
+    }
+    _qa_common_mocks = {
+        "claude_agent_sdk",
+        "claude_agent_sdk.types",
+        "ui",
+        "progress",
+        "task_logger",
+        "linear_updater",
+        "client",
+        "core.error_utils",
+        "core.client",
+        "core.model_fallback",
+        "agents",
+        "agents.memory_manager",
+        "agents.session",
+        "agents.e2e_generator",
+        "agents.test_generator",
+        "agents.coder",
+        "agents.planner",
+        "agents.code_reviewer",
+        "agents.documentation_generator",
+        "agents.utils",
+        "agents.base",
+        "debug",
+        "phase_config",
+        "phase_event",
+        "security.tool_input_validator",
+        "security.constants",
+        "services.recovery",
+        "analysis.coverage_analyzer",
+        "analysis.code_analyzer",
+        "analysis.coverage_reporter",
+        "analysis.failure_analyzer",
+        "analysis.ts_analyzer",
+        "spec.coverage_config",
+        "integrations",
+        "integrations.graphiti",
+        "integrations.graphiti.memory",
+    }
     module_mocks = {
-        'test_qa_criteria': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_iteration': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_recurring': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_project_detection': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_manual_plan': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_config': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_loop': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'claude_agent_sdk.types'},
-        'test_spec_pipeline': {'claude_code_sdk', 'claude_code_sdk.types', 'init', 'client', 'review', 'task_logger', 'ui', 'validate_spec'},
-        'test_spec_complexity': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'claude_agent_sdk.types'},
-        'test_spec_phases': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'graphiti_providers', 'validate_spec', 'client'},
+        "test_qa_criteria": _qa_report_mocks,
+        "test_qa_report": _qa_report_mocks,
+        "test_qa_report_iteration": _qa_report_mocks,
+        "test_qa_report_recurring": _qa_report_mocks,
+        "test_qa_report_project_detection": _qa_report_mocks,
+        "test_qa_report_manual_plan": _qa_report_mocks,
+        "test_qa_report_config": _qa_report_mocks,
+        "test_qa_loop": {
+            "claude_code_sdk",
+            "claude_code_sdk.types",
+            "claude_agent_sdk",
+            "claude_agent_sdk.types",
+        },
+        "test_spec_pipeline": {
+            "claude_code_sdk",
+            "claude_code_sdk.types",
+            "init",
+            "client",
+            "review",
+            "task_logger",
+            "ui",
+            "validate_spec",
+        },
+        "test_spec_complexity": {
+            "claude_code_sdk",
+            "claude_code_sdk.types",
+            "claude_agent_sdk",
+            "claude_agent_sdk.types",
+        },
+        "test_spec_phases": {
+            "claude_code_sdk",
+            "claude_code_sdk.types",
+            "claude_agent_sdk",
+            "graphiti_providers",
+            "validate_spec",
+            "client",
+        },
+        "test_qa_tools": {"claude_agent_sdk"},
+        "test_statistics_tool": {"claude_agent_sdk"},
+        "test_qa_fixer": _qa_common_mocks | {"prompts_pkg"},
+        "test_qa_reviewer": _qa_common_mocks
+        | {"prompts_pkg", "prompts_pkg.project_context"},
     }
 
     # Get the mocks that the current test module needs to preserve
@@ -132,23 +243,34 @@ def pytest_runtest_setup(item):
                     sys.modules[name] = _original_module_state[name]
                 else:
                     del sys.modules[name]
+                # Also clean parent package attribute for dotted names
+                # (e.g. agents.code_reviewer leaves a MagicMock on agents.code_reviewer attr)
+                if "." in name:
+                    parent, attr = name.rsplit(".", 1)
+                    parent_mod = sys.modules.get(parent)
+                    if (
+                        parent_mod
+                        and hasattr(parent_mod, attr)
+                        and isinstance(getattr(parent_mod, attr), MagicMock)
+                    ):
+                        delattr(parent_mod, attr)
                 cleaned_up = True
 
     # If we cleaned up mocks, we need to reload modules that might have cached
     # references to the mocked versions
-    if cleaned_up and module_name in ('test_qa_loop', 'test_review'):
+    if cleaned_up and module_name in ("test_qa_loop", "test_review"):
         # Reload progress first
-        if 'progress' in sys.modules:
-            importlib.reload(sys.modules['progress'])
+        if "progress" in sys.modules:
+            importlib.reload(sys.modules["progress"])
         # Reload the entire qa module chain which imports progress
-        for qa_module in ['qa.criteria', 'qa.report', 'qa.loop', 'qa']:
+        for qa_module in ["qa.criteria", "qa.report", "qa.loop", "qa"]:
             if qa_module in sys.modules:
                 try:
                     importlib.reload(sys.modules[qa_module])
                 except Exception:
                     pass  # Some modules may fail to reload due to circular imports
         # Reload review module chain
-        for review_module in ['review.state', 'review.formatters', 'review']:
+        for review_module in ["review.state", "review.formatters", "review"]:
             if review_module in sys.modules:
                 try:
                     importlib.reload(sys.modules[review_module])
@@ -160,6 +282,7 @@ def pytest_runtest_setup(item):
 # =============================================================================
 # DIRECTORY FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
@@ -211,11 +334,13 @@ def temp_git_repo(temp_dir: Path) -> Generator[Path, None, None]:
         subprocess.run(["git", "init"], cwd=temp_dir, capture_output=True, check=True)
         subprocess.run(
             ["git", "config", "user.email", "test@example.com"],
-            cwd=temp_dir, capture_output=True
+            cwd=temp_dir,
+            capture_output=True,
         )
         subprocess.run(
             ["git", "config", "user.name", "Test User"],
-            cwd=temp_dir, capture_output=True
+            cwd=temp_dir,
+            capture_output=True,
         )
 
         # Create initial commit
@@ -223,12 +348,13 @@ def temp_git_repo(temp_dir: Path) -> Generator[Path, None, None]:
         test_file.write_text("# Test Project\n")
         subprocess.run(["git", "add", "."], cwd=temp_dir, capture_output=True)
         subprocess.run(
-            ["git", "commit", "-m", "Initial commit"],
-            cwd=temp_dir, capture_output=True
+            ["git", "commit", "-m", "Initial commit"], cwd=temp_dir, capture_output=True
         )
 
         # Ensure branch is named 'main' (some git configs default to 'master')
-        subprocess.run(["git", "branch", "-M", "main"], cwd=temp_dir, capture_output=True)
+        subprocess.run(
+            ["git", "branch", "-M", "main"], cwd=temp_dir, capture_output=True
+        )
 
         yield temp_dir
     finally:
@@ -260,10 +386,10 @@ from tests.review_fixtures import (  # noqa: E402, F401
     review_spec_dir,
 )
 
-
 # =============================================================================
 # PROJECT STRUCTURE FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def python_project(temp_git_repo: Path) -> Path:
@@ -298,7 +424,8 @@ line-length = 100
     subprocess.run(["git", "add", "."], cwd=temp_git_repo, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "Add Python project structure"],
-        cwd=temp_git_repo, capture_output=True
+        cwd=temp_git_repo,
+        capture_output=True,
     )
 
     return temp_git_repo
@@ -339,7 +466,8 @@ def node_project(temp_git_repo: Path) -> Path:
     subprocess.run(["git", "add", "."], cwd=temp_git_repo, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "Add Node.js project structure"],
-        cwd=temp_git_repo, capture_output=True
+        cwd=temp_git_repo,
+        capture_output=True,
     )
 
     return temp_git_repo
@@ -379,7 +507,8 @@ CMD ["python", "main.py"]
     subprocess.run(["git", "add", "."], cwd=temp_git_repo, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "Add Docker configuration"],
-        cwd=temp_git_repo, capture_output=True
+        cwd=temp_git_repo,
+        capture_output=True,
     )
 
     return temp_git_repo
@@ -388,6 +517,7 @@ CMD ["python", "main.py"]
 # =============================================================================
 # IMPLEMENTATION PLAN FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def sample_implementation_plan() -> dict:
@@ -470,6 +600,7 @@ def implementation_plan_file(spec_dir: Path, sample_implementation_plan: dict) -
 # SPEC FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def sample_spec() -> str:
     """Return a sample spec content."""
@@ -503,6 +634,7 @@ def spec_file(spec_dir: Path, sample_spec: str) -> Path:
 # =============================================================================
 # QA FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def qa_signoff_approved() -> dict:
@@ -549,7 +681,7 @@ def spec_with_plan(spec_dir: Path) -> Path:
         "qa_signoff": {
             "status": "pending",
             "qa_session": 0,
-        }
+        },
     }
     plan_file = spec_dir / "implementation_plan.json"
     with open(plan_file, "w") as f:
@@ -561,41 +693,48 @@ def spec_with_plan(spec_dir: Path) -> Path:
 # HELPER FUNCTIONS
 # =============================================================================
 
+
 @pytest.fixture
 def make_commit(temp_git_repo: Path):
     """Factory fixture to create commits."""
+
     def _make_commit(filename: str, content: str, message: str) -> str:
         filepath = temp_git_repo / filename
         filepath.parent.mkdir(parents=True, exist_ok=True)
         filepath.write_text(content)
         subprocess.run(["git", "add", "."], cwd=temp_git_repo, capture_output=True)
         subprocess.run(
-            ["git", "commit", "-m", message],
-            cwd=temp_git_repo, capture_output=True
+            ["git", "commit", "-m", message], cwd=temp_git_repo, capture_output=True
         )
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            cwd=temp_git_repo, capture_output=True, text=True
+            cwd=temp_git_repo,
+            capture_output=True,
+            text=True,
         )
         return result.stdout.strip()
+
     return _make_commit
 
 
 @pytest.fixture
 def stage_files(temp_git_repo: Path):
     """Factory fixture to stage files without committing."""
+
     def _stage_files(files: dict[str, str]) -> None:
         for filename, content in files.items():
             filepath = temp_git_repo / filename
             filepath.parent.mkdir(parents=True, exist_ok=True)
             filepath.write_text(content)
         subprocess.run(["git", "add", "."], cwd=temp_git_repo, capture_output=True)
+
     return _stage_files
 
 
 # =============================================================================
 # PHASE TESTING FIXTURES - Mock functions for spec/phases.py testing
 # =============================================================================
+
 
 @pytest.fixture
 def mock_run_agent_fn():
@@ -610,6 +749,7 @@ def mock_run_agent_fn():
             result = await agent_fn("prompt.md")
             assert result == (True, "Done")
     """
+
     def _create_mock(
         success: bool = True,
         output: str = "Agent completed successfully",
@@ -710,8 +850,8 @@ def mock_spec_validator():
             result = validator.validate_spec_document()
             assert result.valid
     """
-    from unittest.mock import MagicMock
     from dataclasses import dataclass
+    from unittest.mock import MagicMock
 
     @dataclass
     class MockValidationResult:
@@ -781,6 +921,7 @@ def mock_spec_validator():
 # =============================================================================
 # SAMPLE DATA FIXTURES - Sample JSON data for phase testing
 # =============================================================================
+
 
 @pytest.fixture
 def sample_requirements_json() -> dict:
@@ -1013,10 +1154,16 @@ def populated_spec_dir(
     Useful for testing phases that depend on earlier phase outputs.
     """
     # Write all JSON files
-    (spec_dir / "requirements.json").write_text(json.dumps(sample_requirements_json, indent=2))
-    (spec_dir / "complexity_assessment.json").write_text(json.dumps(sample_complexity_assessment, indent=2))
+    (spec_dir / "requirements.json").write_text(
+        json.dumps(sample_requirements_json, indent=2)
+    )
+    (spec_dir / "complexity_assessment.json").write_text(
+        json.dumps(sample_complexity_assessment, indent=2)
+    )
     (spec_dir / "context.json").write_text(json.dumps(sample_context_json, indent=2))
-    (spec_dir / "project_index.json").write_text(json.dumps(sample_project_index, indent=2))
+    (spec_dir / "project_index.json").write_text(
+        json.dumps(sample_project_index, indent=2)
+    )
 
     # Write sample spec.md
     spec_content = """# User Authentication with OAuth2
@@ -1047,11 +1194,11 @@ Add Google OAuth2 authentication to the application.
 # Removing these imports drops coverage from ~12% to ~4% (CodeQL: intentional)
 try:
     from merge import (  # noqa: F401
-        SemanticAnalyzer,
-        ConflictDetector,
-        AutoMerger,
-        FileEvolutionTracker,
         AIResolver,
+        AutoMerger,
+        ConflictDetector,
+        FileEvolutionTracker,
+        SemanticAnalyzer,
     )
 
     __all__ = [
@@ -1073,6 +1220,7 @@ except ImportError:
 def semantic_analyzer():
     """Create a SemanticAnalyzer instance."""
     from merge import SemanticAnalyzer
+
     return SemanticAnalyzer()
 
 
@@ -1080,6 +1228,7 @@ def semantic_analyzer():
 def conflict_detector():
     """Create a ConflictDetector instance."""
     from merge import ConflictDetector
+
     return ConflictDetector()
 
 
@@ -1087,6 +1236,7 @@ def conflict_detector():
 def auto_merger():
     """Create an AutoMerger instance."""
     from merge import AutoMerger
+
     return AutoMerger()
 
 
@@ -1094,6 +1244,7 @@ def auto_merger():
 def file_tracker(temp_git_repo: Path):
     """Create a FileEvolutionTracker instance."""
     from merge import FileEvolutionTracker
+
     return FileEvolutionTracker(temp_git_repo)
 
 
@@ -1101,6 +1252,7 @@ def file_tracker(temp_git_repo: Path):
 def ai_resolver():
     """Create an AIResolver without AI function (for unit tests)."""
     from merge import AIResolver
+
     return AIResolver()
 
 
@@ -1115,6 +1267,7 @@ def mock_ai_resolver():
         code += "const other = useOther();\n"
         code += "return <div>Merged</div>;"
         return code
+
     return AIResolver(ai_call_fn=mock_ai_call)
 
 
@@ -1127,7 +1280,7 @@ def temp_project(temp_git_repo: Path):
     - src/App.tsx (React component)
     - src/utils.py (Python module)
     """
-    from tests.test_fixtures import SAMPLE_REACT_COMPONENT, SAMPLE_PYTHON_MODULE
+    from tests.test_fixtures import SAMPLE_PYTHON_MODULE, SAMPLE_REACT_COMPONENT
 
     # Create src directory
     src_dir = temp_git_repo / "src"
@@ -1145,7 +1298,8 @@ def temp_project(temp_git_repo: Path):
     subprocess.run(["git", "add", "."], cwd=temp_git_repo, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "Add source files"],
-        cwd=temp_git_repo, capture_output=True
+        cwd=temp_git_repo,
+        capture_output=True,
     )
 
     return temp_git_repo

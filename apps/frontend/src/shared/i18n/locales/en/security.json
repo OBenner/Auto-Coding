@@ -132,12 +132,10 @@
   "toast": {
     "loadProfileFailed": "Failed to load security profile",
     "saveProfileFailed": "Failed to save security profile",
-    "levelApplied": {
-      "paranoid": "Paranoid security level applied",
-      "standard": "Standard security level applied",
-      "permissive": "Permissive security level applied"
-    },
     "levelApplied": "Security level applied",
+    "levelApplied.paranoid": "Paranoid security level applied",
+    "levelApplied.standard": "Standard security level applied",
+    "levelApplied.permissive": "Permissive security level applied",
     "exportSuccess": "Configuration exported",
     "exportSuccessDescription": "Security configuration downloaded successfully",
     "exportFailed": "Failed to export configuration",

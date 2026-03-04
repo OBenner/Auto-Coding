@@ -41,6 +41,14 @@ from project_analyzer import (
     needs_validation,
 )
 
+# Audit logging
+from .audit_logger import (
+    clear_audit_logs,
+    export_audit_logs,
+    get_audit_log_path,
+    get_audit_logs,
+    log_security_event,
+)
 from .hooks import bash_security_hook, validate_command
 
 # Command parsing utilities
@@ -60,15 +68,6 @@ from .profile import (
 from .tool_input_validator import (
     get_safe_tool_input,
     validate_tool_input,
-)
-
-# Audit logging
-from .audit_logger import (
-    clear_audit_logs,
-    export_audit_logs,
-    get_audit_log_path,
-    get_audit_logs,
-    log_security_event,
 )
 
 # Validators (for advanced usage)

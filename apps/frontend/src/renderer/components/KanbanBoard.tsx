@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewState } from '../contexts/ViewStateContext';
+import { useTaskFiltering } from '../hooks/useTaskFiltering';
 import {
   DndContext,
   DragOverlay,
@@ -19,10 +20,11 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
-import { Plus, Inbox, Loader2, Eye, CheckCircle2, Archive, RefreshCw, GitPullRequest, X, Settings, ListPlus, ChevronLeft, ChevronRight, ChevronsRight, Lock, Unlock } from 'lucide-react';
+import { Plus, Inbox, Loader2, Eye, CheckCircle2, Archive, RefreshCw, GitPullRequest, X, Settings, ListPlus, ChevronLeft, ChevronRight, ChevronsRight, Lock, Unlock, Search } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { TaskCard } from './TaskCard';
 import { SortableTaskCard } from './SortableTaskCard';
@@ -36,8 +38,7 @@ import { useKanbanSettingsStore, COLLAPSED_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, M
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
-import { BatchQADialog } from './BatchQADialog';
-import { BatchStatusUpdateDialog } from './BatchStatusUpdateDialog';
+import { KanbanFilters } from './KanbanFilters';
 import type { Task, TaskStatus, TaskOrderState } from '../../shared/types';
 
 // Type guard for valid drop column targets - preserves literal type from TASK_STATUS_COLUMNS
@@ -98,6 +99,8 @@ interface DroppableColumnProps {
   onToggleLocked?: () => void;
   // Loading state
   isLoading?: boolean;
+  // Drag disabled when auto-sort is active
+  isDragDisabled?: boolean;
 }
 
 /**
@@ -141,7 +144,8 @@ function droppableColumnPropsAreEqual(
     isCollapsed: prevProps.isCollapsed,
     columnWidth: prevProps.columnWidth,
     isResizing: prevProps.isResizing,
-    isLocked: prevProps.isLocked
+    isLocked: prevProps.isLocked,
+    isDragDisabled: prevProps.isDragDisabled
   };
 
   const nextSimpleProps = {
@@ -153,7 +157,8 @@ function droppableColumnPropsAreEqual(
     isCollapsed: nextProps.isCollapsed,
     columnWidth: nextProps.columnWidth,
     isResizing: nextProps.isResizing,
-    isLocked: nextProps.isLocked
+    isLocked: nextProps.isLocked,
+    isDragDisabled: nextProps.isDragDisabled
   };
 
   if (!shallowEqual(simpleProps, nextSimpleProps)) return false;
@@ -244,7 +249,7 @@ const getEmptyStateContent = (status: TaskStatus, t: (key: string) => string): {
   }
 };
 
-const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskClick, onStatusChange, isOver, onAddClick, onArchiveAll, onQueueSettings, onQueueAll, maxParallelTasks, archivedCount, showArchived, onToggleArchived, selectedTaskIds, onSelectAll, onDeselectAll, onToggleSelect, isCollapsed, onToggleCollapsed, columnWidth, isResizing, onResizeStart, onResizeEnd, isLocked, onToggleLocked, isLoading }: DroppableColumnProps) {
+const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskClick, onStatusChange, isOver, onAddClick, onArchiveAll, onQueueSettings, onQueueAll, maxParallelTasks, archivedCount, showArchived, onToggleArchived, selectedTaskIds, onSelectAll, onDeselectAll, onToggleSelect, isCollapsed, onToggleCollapsed, columnWidth, isResizing, onResizeStart, onResizeEnd, isLocked, onToggleLocked, isLoading, isDragDisabled }: DroppableColumnProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const { setNodeRef } = useDroppable({
     id: status
@@ -324,9 +329,10 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
         isSelectable={isSelectable}
         isSelected={isSelectable ? selectedTaskIds?.has(task.id) : undefined}
         onToggleSelect={onToggleSelectHandlers.current?.get(task.id)}
+        isDragDisabled={isDragDisabled}
       />
     ));
-  }, [tasks, selectedTaskIds]);
+  }, [tasks, selectedTaskIds, isDragDisabled]);
 
   const getColumnBorderColor = (): string => {
     switch (status) {
@@ -673,6 +679,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   // Kanban settings store for column preferences (collapse state, width, lock state)
   const columnPreferences = useKanbanSettingsStore((state) => state.columnPreferences);
+  const filters = useKanbanSettingsStore((state) => state.filters);
   const loadKanbanPreferences = useKanbanSettingsStore((state) => state.loadPreferences);
   const saveKanbanPreferences = useKanbanSettingsStore((state) => state.savePreferences);
   const toggleColumnCollapsed = useKanbanSettingsStore((state) => state.toggleColumnCollapsed);
@@ -706,12 +713,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Bulk PR dialog state
   const [bulkPRDialogOpen, setBulkPRDialogOpen] = useState(false);
 
-  // Batch QA dialog state
-  const [batchQADialogOpen, setBatchQADialogOpen] = useState(false);
-
-  // Batch status update dialog state
-  const [batchStatusUpdateDialogOpen, setBatchStatusUpdateDialogOpen] = useState(false);
-
   // Worktree cleanup dialog state
   const [worktreeCleanupDialog, setWorktreeCleanupDialog] = useState<{
     open: boolean;
@@ -744,12 +745,17 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   }, [columnPreferences]);
 
   // Filter tasks based on archive status
-  const filteredTasks = useMemo(() => {
+  const tasksFilteredByArchive = useMemo(() => {
     if (showArchived) {
       return tasks; // Show all tasks including archived
     }
     return tasks.filter((t) => !t.metadata?.archivedAt);
   }, [tasks, showArchived]);
+
+  // Apply task filtering hook for search and advanced filtering
+  const { filteredTasks, filterState, hasActiveFilters, setSearchQuery, clearFilters } = useTaskFiltering(
+    tasksFilteredByArchive
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -765,7 +771,23 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Get task order from store for custom ordering
   const taskOrder = useTaskStore((state) => state.taskOrder);
 
+  // Check if auto-sort is active (drag-and-drop should be disabled)
+  const isAutoSortActive = useMemo(() => {
+    const sortBy = filters?.sortBy ?? 'manual';
+    return sortBy !== 'manual';
+  }, [filters?.sortBy]);
+
   const tasksByStatus = useMemo(() => {
+    // Apply search filter (case-insensitive)
+    const searchQuery = filters?.searchQuery?.trim().toLowerCase() ?? '';
+    const searchFilteredTasks = searchQuery
+      ? filteredTasks.filter((task) => {
+          const title = (task.title ?? '').toLowerCase();
+          const description = (task.description ?? '').toLowerCase();
+          return title.includes(searchQuery) || description.includes(searchQuery);
+        })
+      : filteredTasks;
+
     // Note: pr_created tasks are shown in the 'done' column since they're essentially complete
     // Note: error tasks are shown in the 'human_review' column since they need human attention
     const grouped: Record<typeof TASK_STATUS_COLUMNS[number], Task[]> = {
@@ -777,7 +799,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       done: []
     };
 
-    filteredTasks.forEach((task) => {
+    searchFilteredTasks.forEach((task) => {
       // Map pr_created tasks to the done column, error tasks to human_review
       const targetColumn = getVisualColumn(task.status);
       if (grouped[targetColumn]) {
@@ -785,13 +807,15 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       }
     });
 
-    // Sort tasks within each column
+    // Sort tasks within each column based on sortBy filter
     Object.keys(grouped).forEach((status) => {
       const statusKey = status as typeof TASK_STATUS_COLUMNS[number];
       const columnTasks = grouped[statusKey];
       const columnOrder = taskOrder?.[statusKey];
+      const sortBy = filters?.sortBy ?? 'manual';
 
-      if (columnOrder && columnOrder.length > 0) {
+      // Manual sort: use drag-drop order
+      if (sortBy === 'manual' && columnOrder && columnOrder.length > 0) {
         // Custom order exists: sort by order index
         // 1. Create a set of current task IDs for fast lookup (filters stale IDs)
         const currentTaskIds = new Set(columnTasks.map(t => t.id));
@@ -819,17 +843,49 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         // 5. Prepend new tasks at top, then ordered tasks
         grouped[statusKey] = [...newTasks, ...orderedTasks];
       } else {
-        // No custom order: fallback to createdAt sort (newest first)
+        // Auto-sort mode: sort by selected criteria
+        const sortOrder = filters?.sortOrder ?? 'desc';
+        const multiplier = sortOrder === 'asc' ? -1 : 1;
+
         grouped[statusKey].sort((a, b) => {
-          const dateA = new Date(a.createdAt).getTime();
-          const dateB = new Date(b.createdAt).getTime();
-          return dateB - dateA;
+          let comparison = 0;
+
+          switch (sortBy) {
+            case 'priority': {
+              // Priority order: urgent > high > medium > low (no priority treated as lowest)
+              const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
+              const aPriority = priorityOrder[a.metadata?.priority ?? 'low'] ?? 0;
+              const bPriority = priorityOrder[b.metadata?.priority ?? 'low'] ?? 0;
+              comparison = (bPriority - aPriority) * multiplier; // Apply multiplier
+              break;
+            }
+            case 'created': {
+              const dateA = new Date(a.createdAt).getTime();
+              const dateB = new Date(b.createdAt).getTime();
+              comparison = (dateB - dateA) * multiplier; // Apply multiplier
+              break;
+            }
+            case 'updated': {
+              const dateA = new Date(a.updatedAt).getTime();
+              const dateB = new Date(b.updatedAt).getTime();
+              comparison = (dateB - dateA) * multiplier; // Apply multiplier
+              break;
+            }
+            default: {
+              // Fallback to createdAt for manual mode without custom order
+              const dateA = new Date(a.createdAt).getTime();
+              const dateB = new Date(b.createdAt).getTime();
+              comparison = dateB - dateA;
+            }
+          }
+
+          return comparison;
         });
       }
     });
 
     return grouped;
-  }, [filteredTasks, taskOrder]);
+  }, [filteredTasks, taskOrder, filters]);
 
   // Prune stale IDs when tasks move out of human_review column
   useEffect(() => {
@@ -875,32 +931,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     }
   }, [selectedTaskIds.size]);
 
-  // Handle opening the batch QA dialog
-  const handleOpenBatchQADialog = useCallback(() => {
-    if (selectedTaskIds.size > 0) {
-      setBatchQADialogOpen(true);
-    }
-  }, [selectedTaskIds.size]);
-
-  // Handle opening the batch status update dialog
-  const handleOpenBatchStatusUpdateDialog = useCallback(() => {
-    if (selectedTaskIds.size > 0) {
-      setBatchStatusUpdateDialogOpen(true);
-    }
-  }, [selectedTaskIds.size]);
-
   // Handle bulk PR dialog completion - clear selection
   const handleBulkPRComplete = useCallback(() => {
-    deselectAllTasks();
-  }, [deselectAllTasks]);
-
-  // Handle batch QA dialog completion - clear selection
-  const handleBatchQAComplete = useCallback(() => {
-    deselectAllTasks();
-  }, [deselectAllTasks]);
-
-  // Handle batch status update dialog completion - clear selection
-  const handleBatchStatusUpdateComplete = useCallback(() => {
     deselectAllTasks();
   }, [deselectAllTasks]);
 
@@ -1448,71 +1480,75 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   return (
     <div className="flex h-full flex-col">
-      {/* Kanban header with batch operations, refresh button and expand all */}
-      {(onRefresh || collapsedColumnCount >= 3 || selectedTaskIds.size > 0) && (
-        <div className="flex items-center justify-between px-6 pt-4 pb-2">
-          <div className="flex items-center gap-2">
-            {/* Batch operation buttons - appear when tasks are selected */}
-            {selectedTaskIds.size > 0 && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenBatchQADialog}
-                  className="gap-2 text-muted-foreground hover:text-foreground"
-                  aria-label={t('ariaLabels.batchQA')}
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  {t('kanban.batchQA')}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenBatchStatusUpdateDialog}
-                  className="gap-2 text-muted-foreground hover:text-foreground"
-                  aria-label={t('ariaLabels.batchStatusUpdate')}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  {t('kanban.batchStatusUpdate')}
-                </Button>
-              </>
-            )}
-            {/* Expand All button - appears when 3+ columns are collapsed */}
-            {collapsedColumnCount >= 3 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExpandAll}
-                className="gap-2 text-muted-foreground hover:text-foreground"
-              >
-                <ChevronsRight className="h-4 w-4" />
-                {t('tasks:kanban.expandAll')}
-              </Button>
-            )}
+      {/* Kanban filters (sort mode, sort order, clear) */}
+      <KanbanFilters projectId={projectId} />
+
+      {/* Kanban header with search, filters, refresh button and expand all */}
+      <div className="px-6 pt-4 pb-2 space-y-2">
+        {/* Search and filters */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={t('tasks:kanban.searchPlaceholder')}
+              value={filterState.searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
           </div>
-          <div className="flex items-center gap-2">
-            {onRefresh && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="gap-2 text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-                {isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
-              </Button>
-            )}
-          </div>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+              {t('tasks:kanban.clearFilters')}
+            </Button>
+          )}
         </div>
-      )}
+        {/* Action buttons row */}
+        {(onRefresh || collapsedColumnCount >= 3) && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Expand All button - appears when 3+ columns are collapsed */}
+              {collapsedColumnCount >= 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExpandAll}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                  {t('tasks:kanban.expandAll')}
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {onRefresh && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                  {isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
       {/* Kanban columns */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
+        onDragStart={isAutoSortActive ? undefined : handleDragStart}
+        onDragOver={isAutoSortActive ? undefined : handleDragOver}
+        onDragEnd={isAutoSortActive ? undefined : handleDragEnd}
       >
         <div className="flex flex-1 gap-4 overflow-x-auto p-6">
           {TASK_STATUS_COLUMNS.map((status) => (
@@ -1549,6 +1585,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               isLocked={columnPreferences?.[status]?.isLocked}
               onToggleLocked={() => handleToggleColumnLocked(status)}
               isLoading={isRefreshing}
+              isDragDisabled={isAutoSortActive}
             />
           ))}
         </div>
@@ -1631,22 +1668,6 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         tasks={selectedTasks}
         onOpenChange={setBulkPRDialogOpen}
         onComplete={handleBulkPRComplete}
-      />
-
-      {/* Batch QA dialog */}
-      <BatchQADialog
-        open={batchQADialogOpen}
-        tasks={selectedTasks}
-        onOpenChange={setBatchQADialogOpen}
-        onComplete={handleBatchQAComplete}
-      />
-
-      {/* Batch status update dialog */}
-      <BatchStatusUpdateDialog
-        open={batchStatusUpdateDialogOpen}
-        tasks={selectedTasks}
-        onOpenChange={setBatchStatusUpdateDialogOpen}
-        onComplete={handleBatchStatusUpdateComplete}
       />
     </div>
   );

@@ -24,10 +24,8 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
-import { Switch } from '../ui/switch';
 import { SettingsSection } from './SettingsSection';
 import { useToast } from '../../hooks/use-toast';
-import { useSettingsStore } from '../../stores/settings-store';
 import type { AppSettings } from '../../../shared/types';
 import type { SecurityProfile, SecurityAuditLog, SecurityLevel } from '../../../shared/types/security';
 
@@ -81,7 +79,7 @@ interface SecuritySettingsProps {
 /**
  * Main security settings component
  */
-export function SecuritySettings({ settings, onSettingsChange, isOpen }: SecuritySettingsProps) {
+export function SecuritySettings({ isOpen }: SecuritySettingsProps) {
   const { t } = useTranslation('security');
   const { t: tCommon } = useTranslation('common');
   const { toast } = useToast();
@@ -110,27 +108,31 @@ export function SecuritySettings({ settings, onSettingsChange, isOpen }: Securit
   }>({
     show: false,
     message: '',
-    onConfirm: () => {}
+    onConfirm: () => { /* no-op */ }
   });
 
-  // Load security profile when section opens
-  useEffect(() => {
-    if (isOpen) {
-      loadSecurityProfile();
-      loadAuditLogs();
+  /**
+   * Detect security level based on profile settings
+   */
+  const detectSecurityLevel = useCallback((profile: SecurityProfile): SecurityLevel => {
+    if (profile.filesystemRestricted && profile.apiRestricted && profile.commandAllowlist.length <= 15) {
+      return 'paranoid';
     }
-  }, [isOpen]);
+    if (!profile.filesystemRestricted && !profile.apiRestricted && profile.commandAllowlist.length > 75) {
+      return 'permissive';
+    }
+    return 'standard';
+  }, []);
 
   /**
    * Load security profile from backend
    */
-  const loadSecurityProfile = async () => {
+  const loadSecurityProfile = useCallback(async () => {
     setIsLoadingProfile(true);
     try {
       const result = await window.electronAPI.getSecurityProfile?.();
       if (result?.success && result.data) {
         setSecurityProfile(result.data);
-        // Determine current level based on profile settings
         const detectedLevel = detectSecurityLevel(result.data);
         setCurrentLevel(detectedLevel);
       }
@@ -144,12 +146,12 @@ export function SecuritySettings({ settings, onSettingsChange, isOpen }: Securit
     } finally {
       setIsLoadingProfile(false);
     }
-  };
+  }, [t, tCommon, toast, detectSecurityLevel]);
 
   /**
    * Load audit logs from backend
    */
-  const loadAuditLogs = async () => {
+  const loadAuditLogs = useCallback(async () => {
     setIsLoadingLogs(true);
     try {
       const result = await window.electronAPI.getSecurityAuditLogs?.();
@@ -162,20 +164,15 @@ export function SecuritySettings({ settings, onSettingsChange, isOpen }: Securit
     } finally {
       setIsLoadingLogs(false);
     }
-  };
+  }, []);
 
-  /**
-   * Detect security level based on profile settings
-   */
-  const detectSecurityLevel = (profile: SecurityProfile): SecurityLevel => {
-    if (profile.filesystemRestricted && profile.apiRestricted && profile.commandAllowlist.length <= 15) {
-      return 'paranoid';
+  // Load security profile when section opens
+  useEffect(() => {
+    if (isOpen) {
+      loadSecurityProfile();
+      loadAuditLogs();
     }
-    if (!profile.filesystemRestricted && !profile.apiRestricted && profile.commandAllowlist.length > 75) {
-      return 'permissive';
-    }
-    return 'standard';
-  };
+  }, [isOpen, loadSecurityProfile, loadAuditLogs]);
 
   /**
    * Apply security level preset
@@ -190,7 +187,7 @@ export function SecuritySettings({ settings, onSettingsChange, isOpen }: Securit
         show: true,
         message: t('warnings.permissiveLevel'),
         onConfirm: () => {
-          setWarningDialog({ show: false, message: '', onConfirm: () => {} });
+          setWarningDialog({ show: false, message: '', onConfirm: () => { /* no-op */ } });
           applyLevelPreset(preset);
         }
       });
@@ -304,14 +301,16 @@ export function SecuritySettings({ settings, onSettingsChange, isOpen }: Securit
           ) : (
             <div className="space-y-3">
               {SECURITY_LEVEL_PRESETS.map((preset) => (
-                <div
+                <button
+                  type="button"
                   key={preset.level}
-                  className={`p-4 rounded-lg border transition-all cursor-pointer ${
+                  className={`w-full text-left p-4 rounded-lg border transition-all cursor-pointer ${
                     currentLevel === preset.level
                       ? 'border-primary bg-primary/5'
                       : 'border-border hover:bg-accent/50'
                   }`}
-                  onClick={() => currentLevel !== preset.level && !isSavingProfile && applySecurityLevel(preset.level)}
+                  disabled={currentLevel === preset.level || isSavingProfile}
+                  onClick={() => applySecurityLevel(preset.level)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -346,7 +345,7 @@ export function SecuritySettings({ settings, onSettingsChange, isOpen }: Securit
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground shrink-0" />
                     ) : null}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -487,7 +486,7 @@ export function SecuritySettings({ settings, onSettingsChange, isOpen }: Securit
             <div className="flex justify-end gap-3">
               <Button
                 variant="outline"
-                onClick={() => setWarningDialog({ show: false, message: '', onConfirm: () => {} })}
+                onClick={() => setWarningDialog({ show: false, message: '', onConfirm: () => { /* no-op */ } })}
               >
                 {tCommon('buttons.cancel')}
               </Button>

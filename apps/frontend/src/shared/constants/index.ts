@@ -33,5 +33,8 @@ export * from './github';
 // API profile presets
 export * from './api-profiles';
 
+// Insights provider constants
+export * from './insights-providers';
+
 // Configuration and paths
 export * from './config';

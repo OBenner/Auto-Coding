@@ -32,7 +32,6 @@ import {
   Settings as SettingsIcon,
   Download,
   RefreshCw,
-  ChevronDown,
   ChevronRight,
   Clock,
   Bot,
@@ -433,10 +432,11 @@ export function AuditLogViewer({
               const { Icon: SeverityIcon, color: severityColor, bgColor } = getSeverityIcon(log.severity);
 
               return (
-                <div
+                <button
+                  type="button"
                   key={log.id}
                   className={cn(
-                    'group flex items-start gap-3 p-3 rounded-md border border-transparent',
+                    'w-full text-left group flex items-start gap-3 p-3 rounded-md border border-transparent',
                     'hover:bg-muted/50 hover:border-border transition-colors cursor-pointer',
                     !log.allowed && 'bg-orange-50/30 hover:bg-orange-50/50'
                   )}
@@ -511,7 +511,7 @@ export function AuditLogViewer({
 
                   {/* Expand indicator */}
                   <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
+                </button>
               );
             })}
           </div>

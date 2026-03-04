@@ -1,0 +1,13 @@
+{
+  "name": "team-webhook",
+  "version": "1.0.0",
+  "author": "Auto-Coding Team",
+  "description": "Integration plugin that sends build notifications and progress updates to a team webhook (Slack, Discord, Microsoft Teams, or any webhook endpoint)",
+  "plugin_type": "integration",
+  "required_permissions": [
+    "network_access"
+  ],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/main/examples/plugins/team-webhook",
+  "license": "MIT"
+}

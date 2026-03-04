@@ -23,6 +23,49 @@ class RouteDetector(BaseAnalyzer):
     # Directories to exclude from route detection
     EXCLUDED_DIRS = {"node_modules", ".venv", "venv", "__pycache__", ".git"}
 
+    # Compiled regex patterns for route detection (cached for performance)
+    # FastAPI patterns
+    _FASTAPI_DECORATOR_PATTERN = re.compile(
+        r'@(?:app|router)\.(get|post|put|delete|patch)\(["\']([^"\']+)["\']',
+        re.MULTILINE,
+    )
+    _FASTAPI_API_ROUTE_PATTERN = re.compile(
+        r'@(?:app|router)\.api_route\(["\']([^"\']+)["\'],\s*methods\s*=\s*\[([^\]]+)\]',
+        re.MULTILINE,
+    )
+
+    # Flask patterns
+    _FLASK_ROUTE_PATTERN = re.compile(
+        r'@(?:app|bp|blueprint)\.route\(["\']([^"\']+)["\'](?:[^)]*methods\s*=\s*\[([^\]]+)\])?',
+        re.MULTILINE,
+    )
+
+    # Django patterns
+    _DJANGO_PATH_PATTERN = re.compile(r'path\(["\']([^"\']+)["\']')
+    _DJANGO_RE_PATH_PATTERN = re.compile(r're_path\([r]?["\']([^"\']+)["\']')
+
+    # Express patterns
+    _EXPRESS_ROUTE_PATTERN = re.compile(
+        r'(?:app|router)\.(get|post|put|delete|patch|use)\(["\']([^"\']+)["\']'
+    )
+
+    # Next.js patterns
+    _NEXTJS_BRACKET_PATTERN = re.compile(r"\[([^\]]+)\]")
+    _NEXTJS_EXPORT_METHOD_PATTERN = re.compile(
+        r"export\s+(?:async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH)"
+    )
+
+    # Go patterns
+    _GO_ROUTE_PATTERN = re.compile(
+        r'(?:r|e|app|router)\.(GET|POST|PUT|DELETE|PATCH|Get|Post|Put|Delete|Patch)\(["\']([^"\']+)["\']'
+    )
+
+    # Rust patterns
+    _RUST_ROUTE_PATTERN = re.compile(
+        r'\.route\(["\']([^"\']+)["\'],\s*(get|post|put|delete|patch)'
+    )
+    _RUST_WEB_PATTERN = re.compile(r"web::(get|post|put|delete|patch)\(\)")
+
     def __init__(self, path: Path):
         super().__init__(path)
 
@@ -72,18 +115,12 @@ class RouteDetector(BaseAnalyzer):
 
             # Pattern: @app.get("/path") or @router.post("/path", dependencies=[...])
             patterns = [
-                (
-                    r'@(?:app|router)\.(get|post|put|delete|patch)\(["\']([^"\']+)["\']',
-                    "decorator",
-                ),
-                (
-                    r'@(?:app|router)\.api_route\(["\']([^"\']+)["\'][^)]*methods\s*=\s*\[([^\]]+)\]',
-                    "api_route",
-                ),
+                (self._FASTAPI_DECORATOR_PATTERN, "decorator"),
+                (self._FASTAPI_API_ROUTE_PATTERN, "api_route"),
             ]
 
             for pattern, pattern_type in patterns:
-                matches = re.finditer(pattern, content, re.MULTILINE)
+                matches = pattern.finditer(content)
                 for match in matches:
                     if pattern_type == "decorator":
                         method = match.group(1).upper()
@@ -135,8 +172,7 @@ class RouteDetector(BaseAnalyzer):
                 continue
 
             # Pattern: @app.route("/path", methods=["GET", "POST"])
-            pattern = r'@(?:app|bp|blueprint)\.route\(["\']([^"\']+)["\'](?:[^)]*methods\s*=\s*\[([^\]]+)\])?'
-            matches = re.finditer(pattern, content, re.MULTILINE)
+            matches = self._FLASK_ROUTE_PATTERN.finditer(content)
 
             for match in matches:
                 path = match.group(1)
@@ -185,12 +221,12 @@ class RouteDetector(BaseAnalyzer):
 
             # Pattern: path('users/<int:id>/', views.user_detail)
             patterns = [
-                r'path\(["\']([^"\']+)["\']',
-                r're_path\([r]?["\']([^"\']+)["\']',
+                self._DJANGO_PATH_PATTERN,
+                self._DJANGO_RE_PATH_PATTERN,
             ]
 
             for pattern in patterns:
-                matches = re.finditer(pattern, content)
+                matches = pattern.finditer(content)
                 for match in matches:
                     path = match.group(1)
 
@@ -223,10 +259,7 @@ class RouteDetector(BaseAnalyzer):
                 continue
 
             # Pattern: app.get('/path', handler) or router.post('/path', middleware, handler)
-            pattern = (
-                r'(?:app|router)\.(get|post|put|delete|patch|use)\(["\']([^"\']+)["\']'
-            )
-            matches = re.finditer(pattern, content)
+            matches = self._EXPRESS_ROUTE_PATTERN.finditer(content)
 
             for match in matches:
                 method = match.group(1).upper()
@@ -280,15 +313,12 @@ class RouteDetector(BaseAnalyzer):
                 route_path = "/" + str(relative_path).replace("\\", "/")
 
                 # Convert [id] to :id
-                route_path = re.sub(r"\[([^\]]+)\]", r":\1", route_path)
+                route_path = self._NEXTJS_BRACKET_PATTERN.sub(r":\1", route_path)
 
                 try:
                     content = route_file.read_text(encoding="utf-8")
                     # Detect exported methods: export async function GET(request)
-                    methods = re.findall(
-                        r"export\s+(?:async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH)",
-                        content,
-                    )
+                    methods = self._NEXTJS_EXPORT_METHOD_PATTERN.findall(content)
 
                     if methods:
                         routes.append(
@@ -322,7 +352,7 @@ class RouteDetector(BaseAnalyzer):
                 )
 
                 # Convert [id] to :id
-                route_path = re.sub(r"\[([^\]]+)\]", r":\1", route_path)
+                route_path = self._NEXTJS_BRACKET_PATTERN.sub(r":\1", route_path)
 
                 routes.append(
                     {
@@ -356,8 +386,7 @@ class RouteDetector(BaseAnalyzer):
             # Echo: e.POST("/path", handler)
             # Chi: r.Get("/path", handler)
             # Fiber: app.Get("/path", handler)
-            pattern = r'(?:r|e|app|router)\.(GET|POST|PUT|DELETE|PATCH|Get|Post|Put|Delete|Patch)\(["\']([^"\']+)["\']'
-            matches = re.finditer(pattern, content)
+            matches = self._GO_ROUTE_PATTERN.finditer(content)
 
             for match in matches:
                 method = match.group(1).upper()
@@ -391,12 +420,12 @@ class RouteDetector(BaseAnalyzer):
             # Axum: .route("/path", get(handler))
             # Actix: web::get().to(handler)
             patterns = [
-                r'\.route\(["\']([^"\']+)["\'],\s*(get|post|put|delete|patch)',
-                r"web::(get|post|put|delete|patch)\(\)",
+                self._RUST_ROUTE_PATTERN,
+                self._RUST_WEB_PATTERN,
             ]
 
             for pattern in patterns:
-                matches = re.finditer(pattern, content)
+                matches = pattern.finditer(content)
                 for match in matches:
                     if len(match.groups()) == 2:
                         path = match.group(1)

@@ -132,12 +132,10 @@
   "toast": {
     "loadProfileFailed": "Échec du chargement du profil de sécurité",
     "saveProfileFailed": "Échec de l'enregistrement du profil de sécurité",
-    "levelApplied": {
-      "paranoid": "Niveau de sécurité Paranoïaque appliqué",
-      "standard": "Niveau de sécurité Standard appliqué",
-      "permissive": "Niveau de sécurité Permissif appliqué"
-    },
     "levelApplied": "Niveau de sécurité appliqué",
+    "levelApplied.paranoid": "Niveau de sécurité Paranoïaque appliqué",
+    "levelApplied.standard": "Niveau de sécurité Standard appliqué",
+    "levelApplied.permissive": "Niveau de sécurité Permissif appliqué",
     "exportSuccess": "Configuration exportée",
     "exportSuccessDescription": "La configuration de sécurité a été téléchargée avec succès",
     "exportFailed": "Échec de l'exportation de la configuration",
