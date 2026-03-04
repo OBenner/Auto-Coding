@@ -186,42 +186,40 @@ export function setupIpcHandlers(
 }
 
 // Re-export all individual registration functions for potential custom usage
-export {
-  registerProjectHandlers,
-  registerWorkspaceHandlers,
-  registerTaskHandlers,
-  registerTerminalHandlers,
-  registerTerminalWorktreeIpcHandlers,
-  registerAgenteventsHandlers,
-  registerSettingsHandlers,
-  registerFileHandlers,
-  registerRoadmapHandlers,
-  registerContextHandlers,
-  registerEnvHandlers,
-  registerLinearHandlers,
-  registerGithubHandlers,
-  registerGitlabHandlers,
-  registerIdeationHandlers,
-  registerChangelogHandlers,
-  registerInsightsHandlers,
-  registerAgentAnalyticsHandlers,
-  registerMemoryHandlers,
-  registerSessionContextHandlers,
-  registerAppUpdateHandlers,
-  registerDebugHandlers,
-  registerClaudeCodeHandlers,
-  registerMcpHandlers,
-  registerProfileHandlers,
-  registerSecurityHandlers,
-  registerScreenshotHandlers,
-  registerMergeAnalyticsHandlers,
-  registerAnalyticsHandlers,
-  registerModelUsageHandlers,
-  registerTokenStatsHandlers,
-  registerTemplateHandlers,
-  registerWebhookHandlers,
-  registerPatternHandlers,
-  registerSessionReplayHandlers,
-  registerFeedbackHandlers,
-  registerSchedulerHandlers
-};
+export { registerProjectHandlers } from './project-handlers';
+export { registerWorkspaceHandlers } from './workspace-handlers';
+export { registerTaskHandlers } from './task-handlers';
+export { registerTerminalHandlers } from './terminal-handlers';
+export { registerTerminalWorktreeIpcHandlers } from './terminal';
+export { registerAgenteventsHandlers } from './agent-events-handlers';
+export { registerSettingsHandlers } from './settings-handlers';
+export { registerFileHandlers } from './file-handlers';
+export { registerRoadmapHandlers } from './roadmap-handlers';
+export { registerContextHandlers } from './context-handlers';
+export { registerEnvHandlers } from './env-handlers';
+export { registerLinearHandlers } from './linear-handlers';
+export { registerGithubHandlers } from './github-handlers';
+export { registerGitlabHandlers } from './gitlab-handlers';
+export { registerIdeationHandlers } from './ideation-handlers';
+export { registerChangelogHandlers } from './changelog-handlers';
+export { registerInsightsHandlers } from './insights-handlers';
+export { registerAgentAnalyticsHandlers } from './agent-analytics-handlers';
+export { registerMemoryHandlers } from './memory-handlers';
+export { registerSessionContextHandlers } from './session-context-handlers';
+export { registerAppUpdateHandlers } from './app-update-handlers';
+export { registerDebugHandlers } from './debug-handlers';
+export { registerClaudeCodeHandlers } from './claude-code-handlers';
+export { registerMcpHandlers } from './mcp-handlers';
+export { registerProfileHandlers } from './profile-handlers';
+export { registerSecurityHandlers } from './security-handlers';
+export { registerScreenshotHandlers } from './screenshot-handlers';
+export { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
+export { registerAnalyticsHandlers } from './analytics-handlers';
+export { registerModelUsageHandlers } from './model-usage-handlers';
+export { registerTokenStatsHandlers } from './token-stats-handler';
+export { registerTemplateHandlers } from './template-handlers';
+export { registerWebhookHandlers } from './webhook-handlers';
+export { registerPatternHandlers } from './pattern-handlers';
+export { registerSessionReplayHandlers } from './session-replay-handlers';
+export { registerFeedbackHandlers } from './feedback-handlers';
+export { registerSchedulerHandlers } from './scheduler-handlers';

@@ -22,22 +22,17 @@ Delivery Flow:
 from __future__ import annotations
 
 import asyncio
-import hmac
 import hashlib
+import hmac
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-# Import models
-from integrations.webhooks.models import (
-    WebhookConfig,
-    WebhookDelivery,
-    WebhookDeliveryStatus,
-    generate_delivery_id,
-)
+logger = logging.getLogger(__name__)
 
 # Import configuration
 from integrations.webhooks.config import (
@@ -45,6 +40,14 @@ from integrations.webhooks.config import (
     MAX_TIMEOUT,
     SIGNATURE_HEADER,
     SIGNATURE_VERSION,
+)
+
+# Import models
+from integrations.webhooks.models import (
+    WebhookConfig,
+    WebhookDelivery,
+    WebhookDeliveryStatus,
+    generate_delivery_id,
 )
 
 # Default retry configuration
@@ -83,6 +86,29 @@ class WebhookPermanentError(WebhookDeliveryError):
     pass
 
 
+def _sanitize_payload_for_logging(payload: dict[str, Any]) -> dict[str, str | int]:
+    """
+    Create a minimal summary of a payload for delivery records.
+
+    Full payloads may contain sensitive data and should not be persisted
+    in delivery logs. This returns only the event type and a size indicator.
+
+    Args:
+        payload: Original webhook payload
+
+    Returns:
+        Sanitized summary dict safe for logging/persistence
+    """
+    summary: dict[str, str | int] = {
+        "event": payload.get("event", payload.get("event_type", "unknown")),
+        "payload_keys": len(payload),
+    }
+    # Include timestamp if present
+    if "timestamp" in payload:
+        summary["timestamp"] = payload["timestamp"]
+    return summary
+
+
 def generate_signature(payload: dict[str, Any], secret: str) -> str:
     """
     Generate HMAC-SHA256 signature for webhook payload.
@@ -107,9 +133,7 @@ def generate_signature(payload: dict[str, Any], secret: str) -> str:
     return f"{SIGNATURE_VERSION}={signature}"
 
 
-def verify_signature(
-    payload: dict[str, Any], signature: str, secret: str
-) -> bool:
+def verify_signature(payload: dict[str, Any], signature: str, secret: str) -> bool:
     """
     Verify webhook signature.
 
@@ -189,7 +213,7 @@ async def send_webhook_http(
             # Return status code and body
             return response.status_code, response_body
 
-    except asyncio.TimeoutError as e:
+    except TimeoutError as e:
         raise WebhookTimeoutError(f"Request timed out after {timeout}s") from e
 
     except httpx.ConnectError as e:
@@ -247,7 +271,16 @@ class WebhookDeliverySystem:
             webhook_id=webhook.webhook_id,
             event=event,
             status=WebhookDeliveryStatus.SENDING,
-            payload=payload,
+            # Store only a sanitized summary -- full payloads may contain
+            # sensitive data and should not be persisted in delivery records.
+            payload=_sanitize_payload_for_logging(payload),
+        )
+
+        logger.info(
+            "Starting delivery %s for webhook %s, event=%s",
+            delivery.delivery_id,
+            webhook.webhook_id,
+            event,
         )
 
         # Save initial delivery record
@@ -255,7 +288,9 @@ class WebhookDeliverySystem:
 
         # Attempt delivery with retries
         attempt = 0
-        max_retries = webhook.retry_config.get("max_retries", DEFAULT_RETRY_CONFIG["max_retries"])
+        max_retries = webhook.retry_config.get(
+            "max_retries", DEFAULT_RETRY_CONFIG["max_retries"]
+        )
 
         while attempt <= max_retries:
             delivery.attempt_number = attempt + 1
@@ -277,14 +312,32 @@ class WebhookDeliverySystem:
 
                 # Calculate duration
                 end_time = datetime.now(UTC)
-                delivery.duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                delivery.duration_ms = int(
+                    (end_time - start_time).total_seconds() * 1000
+                )
 
-                # Success
+                # Treat 5xx as retriable server errors
+                if status_code >= 500:
+                    raise WebhookDeliveryError(
+                        f"Server error: {status_code}",
+                        status_code=status_code,
+                    )
+
+                # Success -- truncate response body to avoid persisting
+                # sensitive data; keep only enough for debugging.
                 delivery.status = WebhookDeliveryStatus.SUCCESS
                 delivery.response_status_code = status_code
-                delivery.response_body = response_body
+                delivery.response_body = response_body[:256] if response_body else None
                 delivery.completed_at = datetime.now(UTC).isoformat()
                 delivery.save(self.delivery_dir)
+
+                logger.info(
+                    "Delivery %s succeeded for webhook %s, event=%s, status_code=%s",
+                    delivery.delivery_id,
+                    webhook.webhook_id,
+                    event,
+                    status_code,
+                )
 
                 return delivery
 
@@ -297,14 +350,16 @@ class WebhookDeliverySystem:
                 delivery.save(self.delivery_dir)
                 return delivery
 
-            except (WebhookTimeoutError, WebhookConnectionError, WebhookDeliveryError) as e:
+            except WebhookDeliveryError as e:
                 # Temporary failure - may retry
                 attempt += 1
 
                 if attempt > max_retries:
                     # Exhausted retries
                     delivery.status = WebhookDeliveryStatus.PERMANENT_FAILURE
-                    delivery.error_message = f"Failed after {max_retries} retries: {str(e)}"
+                    delivery.error_message = (
+                        f"Failed after {max_retries} retries: {str(e)}"
+                    )
                     delivery.completed_at = datetime.now(UTC).isoformat()
                     delivery.save(self.delivery_dir)
                     return delivery
@@ -318,6 +373,16 @@ class WebhookDeliverySystem:
                 next_retry = datetime.now(UTC) + timedelta(seconds=retry_delay)
                 delivery.next_retry_at = next_retry.isoformat()
                 delivery.save(self.delivery_dir)
+
+                logger.warning(
+                    "Delivery %s failed for webhook %s, event=%s, "
+                    "attempt=%d, retrying in %.1fs",
+                    delivery.delivery_id,
+                    webhook.webhook_id,
+                    event,
+                    attempt,
+                    retry_delay,
+                )
 
                 # Wait before retry (for synchronous delivery)
                 # For production, use a background task queue
@@ -356,10 +421,7 @@ class WebhookDeliverySystem:
             return []
 
         # Deliver to all webhooks in parallel
-        tasks = [
-            self.deliver(webhook, event, payload)
-            for webhook in active_webhooks
-        ]
+        tasks = [self.deliver(webhook, event, payload) for webhook in active_webhooks]
 
         return await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -412,7 +474,7 @@ class WebhookDeliverySystem:
         """
         return WebhookDelivery.load_pending(self.delivery_dir)
 
-    async def retry_pending(self) -> list[WebhookDelivery]:
+    def retry_pending(self) -> list[WebhookDelivery]:
         """
         Retry all pending deliveries.
 
@@ -442,14 +504,19 @@ class WebhookDeliverySystem:
         deliveries = self.get_delivery_history(webhook_id, limit=10000)
 
         total = len(deliveries)
-        success = sum(1 for d in deliveries if d.status == WebhookDeliveryStatus.SUCCESS)
-        failed = sum(1 for d in deliveries if d.status == WebhookDeliveryStatus.PERMANENT_FAILURE)
+        success = sum(
+            1 for d in deliveries if d.status == WebhookDeliveryStatus.SUCCESS
+        )
+        failed = sum(
+            1 for d in deliveries if d.status == WebhookDeliveryStatus.PERMANENT_FAILURE
+        )
         pending = sum(1 for d in deliveries if d.status == WebhookDeliveryStatus.FAILED)
 
         # Calculate average duration for successful deliveries
         successful_deliveries = [d for d in deliveries if d.duration_ms is not None]
         avg_duration = (
-            sum(d.duration_ms for d in successful_deliveries) / len(successful_deliveries)
+            sum(d.duration_ms for d in successful_deliveries)
+            / len(successful_deliveries)
             if successful_deliveries
             else 0
         )

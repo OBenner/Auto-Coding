@@ -379,9 +379,9 @@ const browserMockAPI: ElectronAPI = {
       headers: {},
       retry_config: {
         max_retries: 3,
-        initial_delay: 1.0,
-        max_delay: 60.0,
-        backoff_multiplier: 2.0
+        initial_delay: 1,
+        max_delay: 60,
+        backoff_multiplier: 2
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -416,9 +416,9 @@ const browserMockAPI: ElectronAPI = {
       headers: {},
       retry_config: {
         max_retries: 3,
-        initial_delay: 1.0,
-        max_delay: 60.0,
-        backoff_multiplier: 2.0
+        initial_delay: 1,
+        max_delay: 60,
+        backoff_multiplier: 2
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()

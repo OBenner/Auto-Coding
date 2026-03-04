@@ -22,8 +22,8 @@ Security Features:
 
 from __future__ import annotations
 
-import hmac
 import hashlib
+import hmac
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -200,7 +200,9 @@ def verify_webhook_timestamp(
             webhook_time = datetime.fromtimestamp(timestamp, tz=UTC)
         else:
             if raise_on_error:
-                raise InvalidSignatureError(f"Invalid timestamp type: {type(timestamp)}")
+                raise InvalidSignatureError(
+                    f"Invalid timestamp type: {type(timestamp)}"
+                )
             return False
 
         # Get current time
@@ -322,13 +324,12 @@ def validate_webhook_payload(
         return False
 
     # Verify timestamp (optional)
-    if timestamp is not None:
-        if not verify_webhook_timestamp(
-            timestamp,
-            max_age_seconds=max_age_seconds,
-            raise_on_error=raise_on_error,
-        ):
-            return False
+    if timestamp is not None and not verify_webhook_timestamp(
+        timestamp,
+        max_age_seconds=max_age_seconds,
+        raise_on_error=raise_on_error,
+    ):
+        return False
 
     return True
 

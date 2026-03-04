@@ -18,7 +18,11 @@ from core.resource_tracker import get_global_tracker
 
 PHASE_MARKER_PREFIX = "__EXEC_PHASE__:"
 _DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
-_WEBHOOKS_ENABLED = os.environ.get("WEBHOOKS_ENABLED", "").lower() in ("1", "true", "yes")
+_WEBHOOKS_ENABLED = os.environ.get("WEBHOOKS_ENABLED", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Lazy import webhook dispatcher to avoid import errors if not available
 _webhook_dispatcher = None
@@ -153,6 +157,88 @@ def emit_phase(
     _dispatch_webhook_for_phase_transition(phase_value, message)
 
 
+def _determine_webhook_event(
+    phase: str,
+    previous_phase: str | None,
+    message: str,
+) -> tuple[str | None, dict[str, Any]]:
+    """
+    Determine which webhook event to dispatch based on phase transition.
+
+    Args:
+        phase: Current execution phase
+        previous_phase: Previous execution phase
+        message: Phase message for webhook payload
+
+    Returns:
+        Tuple of (webhook_event name or None, webhook_data dict)
+    """
+    webhook_data: dict[str, Any] = {
+        "phase": phase,
+        "message": message,
+    }
+
+    # Build started: Planning -> Coding (first time)
+    if phase == ExecutionPhase.CODING and previous_phase in (
+        None,
+        ExecutionPhase.PLANNING,
+    ):
+        webhook_data["build_started_at"] = message
+        return "build_started", webhook_data
+
+    # Build completed: Any phase -> Complete
+    if phase == ExecutionPhase.COMPLETE:
+        webhook_data["success"] = True
+        if previous_phase == ExecutionPhase.QA_REVIEW:
+            _dispatch_qa_event(passed=True, message=message)
+        return "build_completed", webhook_data
+
+    # Build failed: Any phase -> Failed
+    if phase == ExecutionPhase.FAILED:
+        webhook_data["success"] = False
+        if previous_phase == ExecutionPhase.QA_FIXING:
+            _dispatch_qa_event(passed=False, message=message)
+        return "build_failed", webhook_data
+
+    return None, webhook_data
+
+
+def _enrich_and_send(
+    dispatcher: Any,
+    webhook_event: str,
+    webhook_data: dict[str, Any],
+    phase: str,
+) -> None:
+    """
+    Enrich webhook data with spec/project info and dispatch.
+
+    Args:
+        dispatcher: Webhook dispatcher instance
+        webhook_event: Event name to dispatch
+        webhook_data: Event data dict
+        phase: Current execution phase (for debug logging)
+    """
+    if _webhook_spec_dir:
+        webhook_data["spec_id"] = _webhook_spec_dir.name
+    if _webhook_project_dir:
+        webhook_data["project_dir"] = str(_webhook_project_dir)
+
+    dispatcher.dispatch_event(webhook_event, webhook_data, blocking=False)
+
+    _debug_log(f"dispatched {webhook_event} for phase {phase}")
+
+
+def _debug_log(message: str) -> None:
+    """Write a debug message to stderr if debug mode is enabled."""
+    if not _DEBUG:
+        return
+    try:
+        sys.stderr.write(f"[phase_event] {message}\n")
+        sys.stderr.flush()
+    except (OSError, UnicodeEncodeError):
+        pass
+
+
 def _dispatch_webhook_for_phase_transition(
     phase: str,
     message: str,
@@ -161,11 +247,11 @@ def _dispatch_webhook_for_phase_transition(
     Dispatch webhook events for key lifecycle phase transitions.
 
     Tracks phase transitions and dispatches appropriate webhook events:
-    - Planning → Coding: "build_started"
-    - Any → Complete: "build_completed"
-    - Any → Failed: "build_failed"
-    - QA Review → Complete: "qa_passed"
-    - QA Fixing → Failed: "qa_failed"
+    - Planning -> Coding: "build_started"
+    - Any -> Complete: "build_completed"
+    - Any -> Failed: "build_failed"
+    - QA Review -> Complete: "qa_passed"
+    - QA Fixing -> Failed: "qa_failed"
 
     Args:
         phase: Current execution phase
@@ -175,67 +261,22 @@ def _dispatch_webhook_for_phase_transition(
 
     dispatcher = _get_webhook_dispatcher()
     if not dispatcher:
-        return  # Webhooks not enabled or not available
+        return
 
-    # Track phase transitions
     previous_phase = _last_phase
     _last_phase = phase
 
-    # Determine which webhook event to dispatch based on phase transition
-    webhook_event = None
-    webhook_data: dict[str, Any] = {
-        "phase": phase,
-        "message": message,
-    }
+    webhook_event, webhook_data = _determine_webhook_event(
+        phase, previous_phase, message
+    )
 
-    # Build started: Planning → Coding (first time)
-    if phase == ExecutionPhase.CODING and previous_phase in (None, ExecutionPhase.PLANNING):
-        webhook_event = "build_started"
-        webhook_data["build_started_at"] = message
+    if not webhook_event:
+        return
 
-    # Build completed: Any phase → Complete
-    elif phase == ExecutionPhase.COMPLETE:
-        webhook_event = "build_completed"
-        webhook_data["success"] = True
-        # If coming from QA review, also dispatch QA passed
-        if previous_phase == ExecutionPhase.QA_REVIEW:
-            _dispatch_qa_event(passed=True, message=message)
-
-    # Build failed: Any phase → Failed
-    elif phase == ExecutionPhase.FAILED:
-        webhook_event = "build_failed"
-        webhook_data["success"] = False
-        # If coming from QA fixing, also dispatch QA failed
-        if previous_phase == ExecutionPhase.QA_FIXING:
-            _dispatch_qa_event(passed=False, message=message)
-
-    # Dispatch the webhook event if applicable
-    if webhook_event:
-        try:
-            # Add spec_id and project_dir if available
-            if _webhook_spec_dir:
-                webhook_data["spec_id"] = _webhook_spec_dir.name
-            if _webhook_project_dir:
-                webhook_data["project_dir"] = str(_webhook_project_dir)
-
-            dispatcher.dispatch_event(webhook_event, webhook_data, blocking=False)
-
-            if _DEBUG:
-                try:
-                    sys.stderr.write(
-                        f"[phase_event] dispatched {webhook_event} for phase {phase}\n"
-                    )
-                    sys.stderr.flush()
-                except (OSError, UnicodeEncodeError):
-                    pass
-        except (OSError, ValueError, RuntimeError) as e:
-            # Silently fail on webhook dispatch errors
-            if _DEBUG:
-                try:
-                    sys.stderr.write(f"[phase_event] webhook dispatch failed: {e}\n")
-                    sys.stderr.flush()
-                except (OSError, UnicodeEncodeError):
-                    pass
+    try:
+        _enrich_and_send(dispatcher, webhook_event, webhook_data, phase)
+    except (OSError, ValueError, RuntimeError) as e:
+        _debug_log(f"webhook dispatch failed: {e}")
 
 
 def _dispatch_qa_event(passed: bool, message: str) -> None:
@@ -263,14 +304,6 @@ def _dispatch_qa_event(passed: bool, message: str) -> None:
             webhook_data["project_dir"] = str(_webhook_project_dir)
 
         dispatcher.dispatch_event(webhook_event, webhook_data, blocking=False)
-
-        if _DEBUG:
-            try:
-                sys.stderr.write(
-                    f"[phase_event] dispatched {webhook_event} (passed={passed})\n"
-                )
-                sys.stderr.flush()
-            except (OSError, UnicodeEncodeError):
-                pass
+        _debug_log(f"dispatched {webhook_event} (passed={passed})")
     except (OSError, ValueError, RuntimeError):
         pass  # Silently fail on webhook dispatch errors

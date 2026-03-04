@@ -13,6 +13,8 @@ This module defines the core data structures for the webhook system:
 from __future__ import annotations
 
 import json
+import os
+import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -71,6 +73,7 @@ class WebhookDeliveryStatus(str, Enum):
     SENDING = "sending"  # Currently being sent
     SUCCESS = "success"  # Successfully delivered
     FAILED = "failed"  # Failed to deliver (will retry)
+    RETRYING = "retrying"  # Retrying after failure
     PERMANENT_FAILURE = "permanent_failure"  # Failed after all retries
     TIMEOUT = "timeout"  # Request timed out
 
@@ -97,7 +100,11 @@ class WebhookConfig:
         webhook_id: Unique identifier for this webhook
         name: Human-readable name
         url: Webhook URL to send events to
-        secret: Optional secret for signature verification (HMAC-SHA256)
+        secret: Optional secret for signature verification (HMAC-SHA256).
+            SECURITY NOTE: This field is stored in plain text in the dataclass.
+            In production deployments, secrets should be encrypted at rest
+            (e.g., using a secrets manager or encrypted config storage).
+            Use _redact_secret() when displaying or logging this value.
         events: List of event types to subscribe to
         template: Payload template to use
         enabled: Whether this webhook is active
@@ -140,13 +147,31 @@ class WebhookConfig:
             return False
         return event.value in self.events or "*" in self.events
 
+    def _redact_secret(self) -> str:
+        """
+        Return a masked version of the secret for logging/display.
+
+        Returns:
+            Redacted secret string, or "(none)" if no secret is set.
+        """
+        if not self.secret:
+            return "(none)"
+        if len(self.secret) <= 4:
+            return "****"
+        return self.secret[:2] + "*" * (len(self.secret) - 4) + self.secret[-2:]
+
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
+        """Convert to dictionary for JSON serialization.
+
+        Note: Includes the secret field for persistence. Callers that use
+        this for logging or display should use _redact_secret() instead
+        of exposing the raw secret value.
+        """
         return {
             "webhook_id": self.webhook_id,
             "name": self.name,
             "url": self.url,
-            "secret": self.secret,  # Include for completeness (secure in storage)
+            "secret": self.secret,
             "events": self.events,
             "template": self.template,
             "enabled": self.enabled,
@@ -175,7 +200,12 @@ class WebhookConfig:
 
     def save(self, config_dir: Path) -> None:
         """
-        Save webhook configuration to disk.
+        Save webhook configuration to disk with restrictive permissions.
+
+        On Unix systems, config files are written with mode 0o600
+        (owner read/write only) since they may contain secrets.
+        On Windows, file permissions are managed by the OS/ACL system;
+        ensure the containing directory has appropriate access controls.
 
         Args:
             config_dir: Directory to save configuration in
@@ -183,6 +213,14 @@ class WebhookConfig:
         config_file = config_dir / f"{self.webhook_id}.json"
         with open(config_file, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
+        # Restrict file permissions to owner-only on Unix.
+        # On Windows, os.chmod only affects the read-only flag;
+        # use directory-level ACLs to protect config files.
+        if sys.platform != "win32":
+            try:
+                os.chmod(config_file, 0o600)
+            except OSError:
+                pass
 
     @classmethod
     def load(cls, config_dir: Path, webhook_id: str) -> WebhookConfig | None:

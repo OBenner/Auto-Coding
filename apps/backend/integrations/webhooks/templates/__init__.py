@@ -41,8 +41,7 @@ def _load_templates_module() -> Any:
 
     # Load the module using importlib to avoid naming conflicts
     spec = importlib.util.spec_from_file_location(
-        "integrations.webhooks.templates_module",
-        templates_module_path
+        "integrations.webhooks.templates_module", templates_module_path
     )
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load templates module from {templates_module_path}")

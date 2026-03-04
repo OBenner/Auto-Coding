@@ -717,6 +717,17 @@ export const IPC_CHANNELS = {
   WEBHOOK_GET_EVENT_TYPES: 'webhook:getEventTypes',
   WEBHOOK_GET_TEMPLATES: 'webhook:getTemplates',
 
+  // Webhook config operations (develop-side integration)
+  WEBHOOK_GET_CONFIGS: 'webhook:getConfigs',
+  WEBHOOK_GET_CONFIG: 'webhook:getConfig',
+  WEBHOOK_SAVE_CONFIG: 'webhook:saveConfig',
+  WEBHOOK_DELETE_CONFIG: 'webhook:deleteConfig',
+  WEBHOOK_TEST_CONNECTION: 'webhook:testConnection',
+  WEBHOOK_GET_LOGS: 'webhook:getLogs',
+  WEBHOOK_GET_INTEGRATION_STATUS: 'webhook:getIntegrationStatus',
+  WEBHOOK_ENABLE_CONFIG: 'webhook:enableConfig',
+  WEBHOOK_DISABLE_CONFIG: 'webhook:disableConfig',
+
   // Pattern operations (codebase pattern learning)
   PATTERN_LIST: 'pattern:list',
   PATTERN_GET_CATEGORIES: 'pattern:getCategories',

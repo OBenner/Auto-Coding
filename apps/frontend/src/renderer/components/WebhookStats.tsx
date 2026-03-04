@@ -9,7 +9,7 @@ interface WebhookStatsProps {
   error: string | null;
 }
 
-export function WebhookStats({ stats, loading, error }: WebhookStatsProps) {
+export function WebhookStats({ stats, loading, error }: Readonly<WebhookStatsProps>) {
   const { t } = useTranslation(['webhooks', 'common']);
 
   // Loading state

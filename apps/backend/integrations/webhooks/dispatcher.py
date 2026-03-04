@@ -29,7 +29,6 @@ from pathlib import Path
 from typing import Any
 
 # Import models and delivery
-from integrations.webhooks.config import get_event_title
 from integrations.webhooks.delivery import (
     WebhookDeliverySystem,
 )
@@ -40,6 +39,9 @@ from integrations.webhooks.models import (
 
 # Debug mode for verbose logging
 _DEBUG = os.environ.get("DEBUG_WEBHOOKS", "").lower() in ("1", "true", "yes")
+
+# Set to prevent garbage collection of background asyncio tasks
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _log_debug(message: str) -> None:
@@ -103,9 +105,21 @@ class WebhookDispatcher:
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # Already in async context - create task
-                asyncio.create_task(self._dispatch_async(event, data or {}))
-                return None
+                if blocking:
+                    # Already in async context with blocking - create a task
+                    # that the caller can await via dispatch_event_async()
+                    task = asyncio.create_task(self._dispatch_async(event, data or {}))
+                    _background_tasks.add(task)
+                    task.add_done_callback(_background_tasks.discard)
+                    # For sync callers, we can't await here; use
+                    # dispatch_event_async() for async blocking calls
+                    return None
+                else:
+                    # Fire-and-forget background task
+                    task = asyncio.create_task(self._dispatch_async(event, data or {}))
+                    _background_tasks.add(task)
+                    task.add_done_callback(_background_tasks.discard)
+                    return None
             else:
                 # Not in async context - run in new loop
                 if blocking:
@@ -117,6 +131,26 @@ class WebhookDispatcher:
         except (RuntimeError, OSError) as e:
             _log_debug(f"Failed to dispatch event: {e}")
             return None
+
+    async def dispatch_event_async(
+        self,
+        event: WebhookEvent | str,
+        data: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        """
+        Dispatch a webhook event asynchronously (awaitable).
+
+        Use this method when calling from async code and you need to
+        wait for delivery to complete.
+
+        Args:
+            event: Event type to dispatch
+            data: Event-specific data
+
+        Returns:
+            List of delivery results
+        """
+        return await self._dispatch_async(event, data or {})
 
     async def _dispatch_async(
         self,
@@ -136,9 +170,7 @@ class WebhookDispatcher:
         try:
             # Normalize event
             event_obj = (
-                WebhookEvent.from_string(event)
-                if isinstance(event, str)
-                else event
+                WebhookEvent.from_string(event) if isinstance(event, str) else event
             )
             event_str = event_obj.value
         except (ValueError, AttributeError):
@@ -158,9 +190,7 @@ class WebhookDispatcher:
             _log_debug(f"No webhooks configured for event: {event_str}")
             return []
 
-        _log_debug(
-            f"Dispatching {event_str} to {len(webhooks)} webhook(s)"
-        )
+        _log_debug(f"Dispatching {event_str} to {len(webhooks)} webhook(s)")
 
         # Build payload for each webhook
         # For now, use generic payload (template system comes in phase-3)
@@ -172,27 +202,25 @@ class WebhookDispatcher:
         # Deliver webhooks in parallel
         delivery_system = WebhookDeliverySystem(self.delivery_dir)
 
-        results = []
-        for webhook, payload in zip(webhooks, payloads):
+        async def _deliver_one(
+            webhook: WebhookConfig, payload: dict[str, Any]
+        ) -> Any | None:
             try:
                 delivery = await delivery_system.deliver(
                     webhook,
                     event_str,
                     payload,
                 )
-                results.append(delivery)
-
-                _log_debug(
-                    f"Webhook {webhook.webhook_id}: "
-                    f"{delivery.status.value}"
-                )
+                _log_debug(f"Webhook {webhook.webhook_id}: {delivery.status.value}")
+                return delivery
             except Exception as e:
-                _log_debug(
-                    f"Webhook {webhook.webhook_id} failed: {e}"
-                )
-                # Continue with other webhooks
+                _log_debug(f"Webhook {webhook.webhook_id} failed: {e}")
+                return None
 
-        return results
+        raw_results = await asyncio.gather(
+            *[_deliver_one(w, p) for w, p in zip(webhooks, payloads)]
+        )
+        return [r for r in raw_results if r is not None]
 
     def _build_payload(
         self,
@@ -303,9 +331,9 @@ class WebhookDispatcher:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # Already in async context
-                result = asyncio.create_task(
-                    self._test_webhook_async(webhook, test_data)
-                )
+                task = asyncio.create_task(self._test_webhook_async(webhook, test_data))
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
                 return {
                     "success": True,
                     "message": "Test webhook sent",
@@ -313,9 +341,7 @@ class WebhookDispatcher:
                 }
             else:
                 # Run in new loop
-                delivery = asyncio.run(
-                    self._test_webhook_async(webhook, test_data)
-                )
+                delivery = asyncio.run(self._test_webhook_async(webhook, test_data))
 
                 return {
                     "success": delivery.status.value == "success",
@@ -332,6 +358,42 @@ class WebhookDispatcher:
                 "error": str(e),
                 "webhook_id": webhook_id,
             }
+
+    async def test_webhook_async(self, webhook_id: str) -> dict[str, Any]:
+        """
+        Send a test event to a webhook (awaitable version).
+
+        Use this method from async contexts instead of test_webhook().
+
+        Args:
+            webhook_id: ID of webhook to test
+
+        Returns:
+            Test result dictionary
+        """
+        try:
+            webhook = WebhookConfig.load(self.config_dir, webhook_id)
+            if not webhook:
+                return {"success": False, "error": "Webhook not found"}
+
+            test_data = {
+                "spec_id": self.spec_dir.name,
+                "spec_title": "Test Webhook",
+                "test": True,
+                "message": "This is a test webhook event",
+            }
+
+            delivery = await self._test_webhook_async(webhook, test_data)
+            return {
+                "success": delivery.status.value == "success",
+                "message": "Test webhook delivered",
+                "webhook_id": webhook_id,
+                "status": delivery.status.value,
+                "response_code": delivery.response_status_code,
+                "error": delivery.error_message,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e), "webhook_id": webhook_id}
 
     async def _test_webhook_async(
         self,
@@ -371,9 +433,7 @@ class WebhookDispatcher:
         """
         try:
             delivery_system = WebhookDeliverySystem(self.delivery_dir)
-            deliveries = delivery_system.get_delivery_history(
-                webhook_id, event, limit
-            )
+            deliveries = delivery_system.get_delivery_history(webhook_id, event, limit)
             return [d.to_dict() for d in deliveries]
         except (OSError, ValueError):
             return []
@@ -408,7 +468,9 @@ class WebhookDispatcher:
 # Convenience functions for quick dispatch
 
 
-def get_dispatcher(spec_dir: Path, project_dir: Path | None = None) -> WebhookDispatcher:
+def get_dispatcher(
+    spec_dir: Path, project_dir: Path | None = None
+) -> WebhookDispatcher:
     """
     Get or create a webhook dispatcher for a spec.
 
@@ -520,11 +582,7 @@ def dispatch_build_completed(
         success: Whether build succeeded
         **extra_data: Additional event data
     """
-    event = (
-        WebhookEvent.BUILD_COMPLETED
-        if success
-        else WebhookEvent.BUILD_FAILED
-    )
+    event = WebhookEvent.BUILD_COMPLETED if success else WebhookEvent.BUILD_FAILED
     data = {
         "spec_id": spec_id,
         "success": success,
@@ -550,11 +608,7 @@ def dispatch_qa_result(
         passed: Whether QA passed
         **extra_data: Additional event data
     """
-    event = (
-        WebhookEvent.QA_PASSED
-        if passed
-        else WebhookEvent.QA_FAILED
-    )
+    event = WebhookEvent.QA_PASSED if passed else WebhookEvent.QA_FAILED
     data = {
         "spec_id": spec_id,
         **extra_data,

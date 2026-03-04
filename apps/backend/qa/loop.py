@@ -24,6 +24,9 @@ from analysis.ts_analyzer import TypeScriptAnalyzer
 from core.client import create_client
 from debug import debug, debug_error, debug_section, debug_success, debug_warning
 from integrations.graphiti.memory import is_graphiti_enabled
+
+# Webhook integration
+from integrations.webhooks.dispatcher import dispatch_qa_result
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -41,9 +44,6 @@ from task_logger import (
     LogPhase,
     get_task_logger,
 )
-
-# Webhook integration
-from integrations.webhooks.dispatcher import dispatch_qa_result
 
 from .criteria import (
     get_qa_iteration_count,
@@ -968,10 +968,15 @@ async def run_qa_validation_loop(
                         recurring_issues_count=len(recurring_issues),
                         recurring_threshold=RECURRING_ISSUE_THRESHOLD,
                     )
-                    debug("qa_loop", "Dispatched qa_failed webhook event (recurring issues)")
+                    debug(
+                        "qa_loop",
+                        "Dispatched qa_failed webhook event (recurring issues)",
+                    )
                 except Exception as e:
                     # Don't fail QA if webhook dispatch fails
-                    debug_warning("qa_loop", f"Failed to dispatch qa_failed webhook: {e}")
+                    debug_warning(
+                        "qa_loop", f"Failed to dispatch qa_failed webhook: {e}"
+                    )
 
                 # Create escalation file
                 await escalate_to_human(spec_dir, recurring_issues, qa_iteration)
@@ -1161,7 +1166,9 @@ async def run_qa_validation_loop(
                     debug("qa_loop", "Dispatched qa_failed webhook event (fixer stuck)")
                 except Exception as e:
                     # Don't fail QA if webhook dispatch fails
-                    debug_warning("qa_loop", f"Failed to dispatch qa_failed webhook: {e}")
+                    debug_warning(
+                        "qa_loop", f"Failed to dispatch qa_failed webhook: {e}"
+                    )
 
                 # End validation phase as failed
                 if task_logger:

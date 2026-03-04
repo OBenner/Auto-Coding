@@ -22,15 +22,12 @@ Usage:
 
 from __future__ import annotations
 
-import json
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
-
 # Import models and template system
 # Note: Import from templates.py module, not templates package
 import importlib.util
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from integrations.webhooks.config import format_event_description, get_event_title
 from integrations.webhooks.models import WebhookConfig, WebhookEvent
@@ -49,8 +46,7 @@ def _load_templates_module():
 
     # Load the module using importlib to avoid naming conflicts
     spec = importlib.util.spec_from_file_location(
-        "integrations.webhooks.templates_module",
-        templates_module_path
+        "integrations.webhooks.templates_module", templates_module_path
     )
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load templates module from {templates_module_path}")
@@ -102,9 +98,7 @@ class PayloadBuilder:
             ValueError: If template not found or rendering fails
         """
         # Build template context
-        context = self._build_context(
-            webhook, event, data, spec_dir, project_dir
-        )
+        context = self._build_context(webhook, event, data, spec_dir, project_dir)
 
         # Render template
         template_name = webhook.template
@@ -115,7 +109,7 @@ class PayloadBuilder:
                 strict=False,  # Don't fail on missing variables
             )
             return payload
-        except (ValueError, KeyError, TypeError) as e:
+        except (ValueError, KeyError, TypeError):
             # Fallback to generic payload if template rendering fails
             return self._build_generic_payload(context, webhook)
 
@@ -176,8 +170,9 @@ class PayloadBuilder:
             context["project_directory"] = ""
 
         # Add event-specific data as JSON
-        event_data = {k: v for k, v in data.items()
-                     if k not in ("spec_id", "spec_title")}
+        event_data = {
+            k: v for k, v in data.items() if k not in ("spec_id", "spec_title")
+        }
         context["data_json"] = event_data
 
         # Merge all additional data

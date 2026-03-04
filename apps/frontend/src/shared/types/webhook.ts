@@ -27,6 +27,7 @@ export type WebhookDeliveryStatus =
   | 'sending'
   | 'success'
   | 'failed'
+  | 'retrying'
   | 'permanent_failure'
   | 'timeout';
 

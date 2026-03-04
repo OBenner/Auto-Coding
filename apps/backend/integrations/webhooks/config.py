@@ -7,7 +7,6 @@ Provides webhook management for agent lifecycle events.
 """
 
 import json
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -150,7 +149,7 @@ class WebhookConfig:
 class WebhookState:
     """State of webhook configuration for an auto-claude spec."""
 
-    webhooks: list[WebhookConfig] = None
+    webhooks: list[WebhookConfig] | None = None
     version: str = "1.0"
     created_at: str | None = None
     updated_at: str | None = None
@@ -281,7 +280,7 @@ class WebhookDelivery:
 class WebhookDeliveryLog:
     """Log of webhook deliveries for a spec."""
 
-    deliveries: list[WebhookDelivery] = None
+    deliveries: list[WebhookDelivery] | None = None
 
     def __post_init__(self):
         if self.deliveries is None:
@@ -339,9 +338,7 @@ class WebhookDeliveryLog:
         ]
         return webhook_deliveries[-limit:]
 
-    def get_failed_deliveries(
-        self, since: str | None = None
-    ) -> list[WebhookDelivery]:
+    def get_failed_deliveries(self, since: str | None = None) -> list[WebhookDelivery]:
         """Get failed deliveries since a timestamp."""
         failed = [d for d in self.deliveries if d.status == STATUS_FAILED]
 

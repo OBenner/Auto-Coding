@@ -36,6 +36,12 @@ import re
 from string import Formatter
 from typing import Any
 
+# Template placeholder constants to avoid duplication
+_PH_TIMESTAMP = "{timestamp}"
+_PH_SPEC_ID = "{spec_id}"
+_PH_EVENT_TITLE = "{event_title}"
+_PH_DESCRIPTION = "{description}"
+
 
 class TemplateEngine:
     """
@@ -52,9 +58,9 @@ class TemplateEngine:
     BUILTIN_TEMPLATES: dict[str, dict[str, Any]] = {
         "generic": {
             "event": "{event}",
-            "timestamp": "{timestamp}",
+            "timestamp": _PH_TIMESTAMP,
             "spec": {
-                "id": "{spec_id}",
+                "id": _PH_SPEC_ID,
                 "title": "{spec_title}",
                 "directory": "{spec_directory}",
             },
@@ -74,7 +80,7 @@ class TemplateEngine:
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": "{event_title}",
+                        "text": _PH_EVENT_TITLE,
                         "emoji": True,
                     },
                 },
@@ -95,7 +101,7 @@ class TemplateEngine:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "{description}",
+                        "text": _PH_DESCRIPTION,
                     },
                 },
                 {
@@ -103,7 +109,7 @@ class TemplateEngine:
                     "elements": [
                         {
                             "type": "mrkdwn",
-                            "text": "Timestamp: {timestamp}",
+                            "text": f"Timestamp: {_PH_TIMESTAMP}",
                         },
                     ],
                 },
@@ -113,13 +119,13 @@ class TemplateEngine:
             "content": "",
             "embeds": [
                 {
-                    "title": "{event_title}",
-                    "description": "{description}",
+                    "title": _PH_EVENT_TITLE,
+                    "description": _PH_DESCRIPTION,
                     "color": 5814783,  # Blue
                     "fields": [
                         {
                             "name": "Spec ID",
-                            "value": "{spec_id}",
+                            "value": _PH_SPEC_ID,
                             "inline": True,
                         },
                         {
@@ -133,7 +139,7 @@ class TemplateEngine:
                             "inline": False,
                         },
                     ],
-                    "timestamp": "{timestamp}",
+                    "timestamp": _PH_TIMESTAMP,
                     "footer": {
                         "text": "Auto-Claude Webhook",
                     },
@@ -152,13 +158,13 @@ class TemplateEngine:
                         "body": [
                             {
                                 "type": "TextBlock",
-                                "text": "{event_title}",
+                                "text": _PH_EVENT_TITLE,
                                 "weight": "Bolder",
                                 "size": "Large",
                             },
                             {
                                 "type": "TextBlock",
-                                "text": "{description}",
+                                "text": _PH_DESCRIPTION,
                                 "wrap": True,
                             },
                             {
@@ -166,7 +172,7 @@ class TemplateEngine:
                                 "facts": [
                                     {
                                         "title": "Spec ID",
-                                        "value": "{spec_id}",
+                                        "value": _PH_SPEC_ID,
                                     },
                                     {
                                         "title": "Status",
@@ -174,19 +180,19 @@ class TemplateEngine:
                                     },
                                     {
                                         "title": "Timestamp",
-                                        "value": "{timestamp}",
+                                        "value": _PH_TIMESTAMP,
                                     },
                                 ],
                             },
                         ],
-                        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                        "$schema": "https://adaptivecards.io/schemas/adaptive-card.json",
                         "version": "1.4",
                     },
                 }
             ],
         },
         "jira": {
-            "body": "{description}\n\n---\n*Event: {event}*\n*Spec: {spec_id}*\n*Timestamp: {timestamp}*",
+            "body": f"{_PH_DESCRIPTION}\n\n---\n*Event: {{event}}*\n*Spec: {_PH_SPEC_ID}*\n*Timestamp: {_PH_TIMESTAMP}*",
         },
     }
 
@@ -218,8 +224,7 @@ class TemplateEngine:
         # Validate template has at least one placeholder
         if not self._extract_placeholders(template):
             raise ValueError(
-                "Template must contain at least one placeholder "
-                "(e.g., '{event}')"
+                "Template must contain at least one placeholder (e.g., '{event}')"
             )
 
         self._custom_templates[name] = template
@@ -284,9 +289,7 @@ class TemplateEngine:
         elif isinstance(template, dict):
             template_dict = template
         else:
-            raise ValueError(
-                "Template must be a string (name) or dictionary"
-            )
+            raise ValueError("Template must be a string (name) or dictionary")
 
         # Render template
         try:
@@ -317,13 +320,12 @@ class TemplateEngine:
         placeholders = self._extract_placeholders(template)
         if not placeholders:
             errors.append(
-                "Template must contain at least one placeholder "
-                "(e.g., '{event}')"
+                "Template must contain at least one placeholder (e.g., '{event}')"
             )
 
         # Check for invalid placeholder syntax
         for placeholder in placeholders:
-            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", placeholder):
+            if not re.match(r"^[a-zA-Z_]\w*$", placeholder):
                 errors.append(
                     f"Invalid placeholder name: {{{placeholder}}}. "
                     "Must be a valid Python identifier"
@@ -380,10 +382,7 @@ class TemplateEngine:
                 for key, value in data.items()
             }
         elif isinstance(data, list):
-            return [
-                self._render_dict(item, context, strict)
-                for item in data
-            ]
+            return [self._render_dict(item, context, strict) for item in data]
         elif isinstance(data, str):
             return self._render_string(data, context, strict)
         else:
@@ -415,30 +414,10 @@ class TemplateEngine:
             return template
 
         # Build replacement dict with defaults
-        replacement: dict[str, Any] = {}
-        missing = []
-
-        for placeholder in placeholders:
-            if placeholder in context:
-                value = context[placeholder]
-                # Convert complex values to JSON
-                if placeholder == "data_json" and isinstance(value, dict):
-                    import json
-                    value = json.dumps(value)
-                elif not isinstance(value, (str, int, float, bool)):
-                    import json
-                    value = json.dumps(value)
-                replacement[placeholder] = value
-            elif strict:
-                missing.append(placeholder)
-            else:
-                # Leave placeholder as-is
-                replacement[placeholder] = f"{{{placeholder}}}"
+        replacement, missing = self._resolve_placeholders(placeholders, context, strict)
 
         if strict and missing:
-            raise ValueError(
-                f"Missing required variables: {', '.join(missing)}"
-            )
+            raise ValueError(f"Missing required variables: {', '.join(missing)}")
 
         try:
             return template.format(**replacement)
@@ -447,6 +426,43 @@ class TemplateEngine:
                 raise ValueError(f"Template formatting error: {e}") from e
             # Return original template on error
             return template
+
+    @staticmethod
+    def _resolve_placeholders(
+        placeholders: list[str],
+        context: dict[str, Any],
+        strict: bool,
+    ) -> tuple[dict[str, Any], list[str]]:
+        """
+        Resolve placeholder values from context.
+
+        Args:
+            placeholders: List of placeholder names to resolve
+            context: Variables for substitution
+            strict: Whether to track missing variables
+
+        Returns:
+            Tuple of (replacement dict, list of missing placeholder names)
+        """
+        import json
+
+        replacement: dict[str, Any] = {}
+        missing: list[str] = []
+
+        for placeholder in placeholders:
+            if placeholder in context:
+                value = context[placeholder]
+                # Convert complex values to JSON
+                if not isinstance(value, (str, int, float, bool)):
+                    value = json.dumps(value)
+                replacement[placeholder] = value
+            elif strict:
+                missing.append(placeholder)
+            else:
+                # Leave placeholder as-is
+                replacement[placeholder] = f"{{{placeholder}}}"
+
+        return replacement, missing
 
     def _extract_placeholders(
         self,
@@ -470,9 +486,7 @@ class TemplateEngine:
             for item in data:
                 placeholders.update(self._extract_placeholders(item))
         elif isinstance(data, str):
-            placeholders.update(
-                self._extract_placeholders_from_string(data)
-            )
+            placeholders.update(self._extract_placeholders_from_string(data))
 
         return list(placeholders)
 

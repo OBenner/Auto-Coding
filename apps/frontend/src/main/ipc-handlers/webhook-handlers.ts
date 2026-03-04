@@ -6,9 +6,10 @@
  */
 
 import { ipcMain } from 'electron';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -46,7 +47,7 @@ function getWebhookDeliveryDir(specId: string): string {
  * Generate a unique webhook ID
  */
 function generateWebhookId(): string {
-  return `wh_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  return `wh_${Date.now()}_${randomUUID().replace(/-/g, '').substring(0, 8)}`;
 }
 
 /**
@@ -174,8 +175,7 @@ export function registerWebhookHandlers(): void {
         const webhooks: WebhookConfig[] = [];
 
         // Read all JSON files in the config directory
-        const fs = require('fs');
-        const configFiles = fs.readdirSync(configDir).filter((f: string) => f.endsWith('.json'));
+        const configFiles = readdirSync(configDir).filter((f: string) => f.endsWith('.json'));
 
         for (const filename of configFiles) {
           try {
@@ -183,8 +183,8 @@ export function registerWebhookHandlers(): void {
             const content = readFileSync(filePath, 'utf-8');
             const data = JSON.parse(content);
             webhooks.push(data as WebhookConfig);
-          } catch (error) {
-            // Skip invalid files
+          } catch {
+            // Intentionally ignored: skip malformed config files
             continue;
           }
         }
@@ -354,7 +354,7 @@ export function registerWebhookHandlers(): void {
         }
 
         // Validate events if changed
-        if (updates.events && updates.events.length === 0) {
+        if (updates.events?.length === 0) {
           return {
             success: false,
             error: 'At least one event must be selected',
@@ -425,12 +425,12 @@ export function registerWebhookHandlers(): void {
           };
         }
 
-        // Load webhook configuration
+        // Validate webhook configuration is parseable before testing
         const content = readFileSync(configPath, 'utf-8');
-        const webhook = JSON.parse(content) as WebhookConfig;
+        JSON.parse(content);
 
         // Send test webhook using Python backend
-        const { spawn } = require('child_process');
+        const { spawn } = require('node:child_process');
         const specDir = path.resolve(process.cwd(), '.auto-claude', 'specs', specId);
 
         return new Promise((resolve) => {
@@ -476,7 +476,8 @@ print(json.dumps(result))
                 success: true,
                 data: result as WebhookTestResult,
               });
-            } catch (error) {
+            } catch {
+              // Intentionally ignored: parse error details not needed, stdout is logged
               resolve({
                 success: false,
                 error: `Failed to parse test result: ${stdout}`,
@@ -518,8 +519,7 @@ print(json.dumps(result))
         const deliveries: WebhookDelivery[] = [];
 
         // Read all delivery files
-        const fs = require('fs');
-        const files = fs.readdirSync(deliveryDir).filter((f: string) => f.endsWith('.json'));
+        const files = readdirSync(deliveryDir).filter((f: string) => f.endsWith('.json'));
 
         for (const filename of files.slice(0, limit)) {
           try {
@@ -538,8 +538,8 @@ print(json.dumps(result))
             }
 
             deliveries.push(delivery);
-          } catch (error) {
-            // Skip invalid files
+          } catch {
+            // Intentionally ignored: skip malformed delivery files
             continue;
           }
         }
@@ -585,8 +585,7 @@ print(json.dumps(result))
         const deliveries: WebhookDelivery[] = [];
 
         // Read all delivery files
-        const fs = require('fs');
-        const files = fs.readdirSync(deliveryDir).filter((f: string) => f.endsWith('.json'));
+        const files = readdirSync(deliveryDir).filter((f: string) => f.endsWith('.json'));
 
         for (const filename of files) {
           try {
@@ -600,8 +599,8 @@ print(json.dumps(result))
             }
 
             deliveries.push(delivery);
-          } catch (error) {
-            // Skip invalid files
+          } catch {
+            // Intentionally ignored: skip malformed delivery files
             continue;
           }
         }

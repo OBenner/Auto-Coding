@@ -11,7 +11,6 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
-  Clock,
   AlertCircle
 } from 'lucide-react';
 import { Button } from './ui/button';
@@ -30,7 +29,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle
 } from './ui/card';
@@ -51,8 +49,6 @@ import type {
   WebhookConfig,
   WebhookEventType,
   WebhookTemplate,
-  WebhookEventTypeMeta,
-  WebhookTemplateMeta,
   WebhookRetryConfig
 } from '../../shared/types/webhook';
 
@@ -81,13 +77,13 @@ const emptyForm: WebhookForm = {
   headers: {},
   retry_config: {
     max_retries: 3,
-    initial_delay: 1.0,
-    max_delay: 60.0,
-    backoff_multiplier: 2.0
+    initial_delay: 1,
+    max_delay: 60,
+    backoff_multiplier: 2
   }
 };
 
-export function WebhooksPage({ projectId }: WebhooksPageProps) {
+export function WebhooksPage({ projectId }: Readonly<WebhooksPageProps>) {
   const { t } = useTranslation(['webhooks', 'common']);
 
   // Store state
@@ -178,14 +174,14 @@ export function WebhooksPage({ projectId }: WebhooksPageProps) {
       errors.name = t('webhooks:errors.nameRequired');
     }
 
-    if (!formData.url.trim()) {
-      errors.url = t('webhooks:errors.urlRequired');
-    } else {
+    if (formData.url.trim()) {
       try {
         new URL(formData.url);
       } catch {
         errors.url = t('webhooks:errors.urlInvalid');
       }
+    } else {
+      errors.url = t('webhooks:errors.urlRequired');
     }
 
     if (formData.events.length === 0) {

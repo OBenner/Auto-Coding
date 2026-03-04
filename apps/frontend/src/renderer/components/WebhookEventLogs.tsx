@@ -17,7 +17,7 @@ interface WebhookEventLogsProps {
   onRetry?: (deliveryId: string) => void;
 }
 
-export function WebhookEventLogs({ deliveries, loading, error, onRetry }: WebhookEventLogsProps) {
+export function WebhookEventLogs({ deliveries, loading, error, onRetry }: Readonly<WebhookEventLogsProps>) {
   const { t } = useTranslation(['webhooks', 'common']);
 
   // Get status icon and variant
