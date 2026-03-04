@@ -24,8 +24,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "apps" / "backend"))
 
 from migrations.checkpoints import CheckpointManager, CheckpointStatus
-from migrations.planner import MigrationPlanner, MigrationComplexity, MigrationType
-
+from migrations.planner import MigrationComplexity, MigrationPlanner, MigrationType
 
 # =============================================================================
 # TEST FIXTURES
@@ -46,12 +45,12 @@ def migration_env(tmp_path):
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
         cwd=project_dir,
-        capture_output=True
+        capture_output=True,
     )
     subprocess.run(
         ["git", "config", "user.email", "test@example.com"],
         cwd=project_dir,
-        capture_output=True
+        capture_output=True,
     )
 
     # Create initial commit
@@ -59,9 +58,7 @@ def migration_env(tmp_path):
     readme.write_text("# Test Project")
     subprocess.run(["git", "add", "."], cwd=project_dir, capture_output=True)
     subprocess.run(
-        ["git", "commit", "-m", "Initial commit"],
-        cwd=project_dir,
-        capture_output=True
+        ["git", "commit", "-m", "Initial commit"], cwd=project_dir, capture_output=True
     )
 
     # Create spec files
@@ -72,7 +69,7 @@ def migration_env(tmp_path):
     plan_data = {
         "feature": "Migration Test",
         "workflow_type": "migration",
-        "phases": []
+        "phases": [],
     }
     plan_file.write_text(json.dumps(plan_data, indent=2))
 
@@ -93,12 +90,12 @@ def sample_project_files(tmp_path):
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
         cwd=project_dir,
-        capture_output=True
+        capture_output=True,
     )
     subprocess.run(
         ["git", "config", "user.email", "test@example.com"],
         cwd=project_dir,
-        capture_output=True
+        capture_output=True,
     )
 
     # Create React class component that needs migration
@@ -129,20 +126,23 @@ export default MyComponent;
 
     # Create package.json
     package_json = project_dir / "package.json"
-    package_json.write_text(json.dumps({
-        "name": "test-react-app",
-        "version": "1.0.0",
-        "dependencies": {
-            "react": "^16.8.0"
-        }
-    }, indent=2))
+    package_json.write_text(
+        json.dumps(
+            {
+                "name": "test-react-app",
+                "version": "1.0.0",
+                "dependencies": {"react": "^16.8.0"},
+            },
+            indent=2,
+        )
+    )
 
     # Initial commit
     subprocess.run(["git", "add", "."], cwd=project_dir, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "Initial React project"],
         cwd=project_dir,
-        capture_output=True
+        capture_output=True,
     )
 
     yield project_dir
@@ -184,7 +184,7 @@ class TestCheckpointManagerIntegration:
         checkpoint = manager.create_checkpoint(
             phase_id="phase-1",
             name="Initial migration checkpoint",
-            notes="Created baseline checkpoint"
+            notes="Created baseline checkpoint",
         )
 
         assert checkpoint is not None
@@ -204,8 +204,7 @@ class TestCheckpointManagerIntegration:
 
         # Create checkpoint
         checkpoint = manager.create_checkpoint(
-            phase_id="phase-1",
-            name="Test checkpoint"
+            phase_id="phase-1", name="Test checkpoint"
         )
 
         # Verify rollback script exists
@@ -221,7 +220,7 @@ class TestCheckpointManagerIntegration:
 
     @pytest.mark.skipif(
         platform.system() == "Windows",
-        reason="Unix executable permissions not supported on Windows"
+        reason="Unix executable permissions not supported on Windows",
     )
     def test_rollback_script_is_executable(self, migration_env):
         """Test that rollback scripts are executable (Unix only)."""
@@ -229,8 +228,7 @@ class TestCheckpointManagerIntegration:
         manager = CheckpointManager(project_dir, spec_dir)
 
         checkpoint = manager.create_checkpoint(
-            phase_id="phase-1",
-            name="Test checkpoint"
+            phase_id="phase-1", name="Test checkpoint"
         )
 
         rollback_scripts = list(manager.rollback_scripts_dir.glob("*.sh"))
@@ -245,10 +243,7 @@ class TestCheckpointManagerIntegration:
         manager = CheckpointManager(project_dir, spec_dir)
 
         # Create multiple checkpoints
-        checkpoint1 = manager.create_checkpoint(
-            phase_id="phase-1",
-            name="Checkpoint 1"
-        )
+        checkpoint1 = manager.create_checkpoint(phase_id="phase-1", name="Checkpoint 1")
 
         # Make a change to create different commits
         test_file = project_dir / "test1.txt"
@@ -257,13 +252,10 @@ class TestCheckpointManagerIntegration:
         subprocess.run(
             ["git", "commit", "-m", "Test change 1"],
             cwd=project_dir,
-            capture_output=True
+            capture_output=True,
         )
 
-        checkpoint2 = manager.create_checkpoint(
-            phase_id="phase-2",
-            name="Checkpoint 2"
-        )
+        checkpoint2 = manager.create_checkpoint(phase_id="phase-2", name="Checkpoint 2")
 
         # Verify both checkpoints exist
         data = manager._load_checkpoints()
@@ -277,8 +269,7 @@ class TestCheckpointManagerIntegration:
 
         # Create initial checkpoint
         checkpoint1 = manager.create_checkpoint(
-            phase_id="phase-1",
-            name="Before changes"
+            phase_id="phase-1", name="Before changes"
         )
 
         # Make changes
@@ -288,7 +279,7 @@ class TestCheckpointManagerIntegration:
         subprocess.run(
             ["git", "commit", "-m", "Changes to roll back"],
             cwd=project_dir,
-            capture_output=True
+            capture_output=True,
         )
 
         # Verify file exists
@@ -336,8 +327,7 @@ class TestMigrationPlannerIntegration:
         planner = MigrationPlanner(project_dir)
 
         plan = planner.create_plan(
-            migration_type=MigrationType.REACT_CLASS_TO_HOOKS,
-            target_version="^18.0.0"
+            migration_type=MigrationType.REACT_CLASS_TO_HOOKS, target_version="^18.0.0"
         )
 
         assert "phases" in plan
@@ -351,8 +341,7 @@ class TestMigrationPlannerIntegration:
         planner = MigrationPlanner(project_dir)
 
         plan = planner.create_plan(
-            migration_type=MigrationType.REACT_CLASS_TO_HOOKS,
-            target_version="^18.0.0"
+            migration_type=MigrationType.REACT_CLASS_TO_HOOKS, target_version="^18.0.0"
         )
 
         # Plan should have overall rollback strategy
@@ -367,11 +356,15 @@ class TestMigrationPlannerIntegration:
 class TestMigrationWorkflowEndToEnd:
     """End-to-end tests for complete migration workflow."""
 
-    @patch('agents.migration_assistant.get_phase_thinking_budget')
-    @patch('agents.migration_assistant.get_phase_model')
-    @patch('agents.migration_assistant.create_client')
+    @patch("agents.migration_assistant.get_phase_thinking_budget")
+    @patch("agents.migration_assistant.get_phase_model")
+    @patch("agents.migration_assistant.create_client")
     async def test_migration_assistant_initialization_with_context(
-        self, mock_create_client, mock_get_phase_model, mock_get_phase_thinking_budget, migration_env
+        self,
+        mock_create_client,
+        mock_get_phase_model,
+        mock_get_phase_thinking_budget,
+        migration_env,
     ):
         """Test that migration assistant initializes with proper context."""
         from agents.migration_assistant import run_migration_assistant
@@ -392,14 +385,14 @@ class TestMigrationWorkflowEndToEnd:
         migration_context = {
             "from": "React 16",
             "to": "React 18",
-            "type": "framework_upgrade"
+            "type": "framework_upgrade",
         }
 
         result = await run_migration_assistant(
             project_dir=project_dir,
             spec_dir=spec_dir,
             migration_context=migration_context,
-            model="claude-sonnet-4"
+            model="claude-sonnet-4",
         )
 
         # Verify client was created with correct params
@@ -414,11 +407,15 @@ class TestMigrationWorkflowEndToEnd:
         session_call = mock_client.create_agent_session.call_args
         assert "migration-assistant-session" in str(session_call)
 
-    @patch('agents.migration_assistant.get_phase_thinking_budget')
-    @patch('agents.migration_assistant.get_phase_model')
-    @patch('agents.migration_assistant.create_client')
+    @patch("agents.migration_assistant.get_phase_thinking_budget")
+    @patch("agents.migration_assistant.get_phase_model")
+    @patch("agents.migration_assistant.create_client")
     async def test_migration_creates_checkpoints(
-        self, mock_create_client, mock_get_phase_model, mock_get_phase_thinking_budget, migration_env
+        self,
+        mock_create_client,
+        mock_get_phase_model,
+        mock_get_phase_thinking_budget,
+        migration_env,
     ):
         """Test that migration workflow creates checkpoints."""
         from agents.migration_assistant import run_migration_assistant
@@ -456,19 +453,22 @@ class TestMigrationWorkflowEndToEnd:
         migration_plan.write_text("# Migration Plan\n\nPhase 1: Setup")
 
         result = await run_migration_assistant(
-            project_dir=project_dir,
-            spec_dir=spec_dir
+            project_dir=project_dir, spec_dir=spec_dir
         )
 
         assert result["success"]
         assert result["checkpoints_created"] == 1
         assert result["migration_plan_path"] is not None
 
-    @patch('agents.migration_assistant.get_phase_thinking_budget')
-    @patch('agents.migration_assistant.get_phase_model')
-    @patch('agents.migration_assistant.create_client')
+    @patch("agents.migration_assistant.get_phase_thinking_budget")
+    @patch("agents.migration_assistant.get_phase_model")
+    @patch("agents.migration_assistant.create_client")
     async def test_migration_handles_failures(
-        self, mock_create_client, mock_get_phase_model, mock_get_phase_thinking_budget, migration_env
+        self,
+        mock_create_client,
+        mock_get_phase_model,
+        mock_get_phase_thinking_budget,
+        migration_env,
     ):
         """Test that migration workflow handles failures gracefully."""
         from agents.migration_assistant import run_migration_assistant
@@ -489,8 +489,7 @@ class TestMigrationWorkflowEndToEnd:
         mock_create_client.return_value = mock_client
 
         result = await run_migration_assistant(
-            project_dir=project_dir,
-            spec_dir=spec_dir
+            project_dir=project_dir, spec_dir=spec_dir
         )
 
         assert not result["success"]
@@ -514,9 +513,10 @@ class TestMigrationCLIIntegration:
         assert hasattr(migration_commands, "handle_migration_command")
         assert hasattr(migration_commands, "handle_migration_status_command")
 
-    @patch('cli.migration_commands.asyncio.run')
+    @patch("cli.migration_commands.validate_environment", return_value=True)
+    @patch("cli.migration_commands.asyncio.run")
     def test_handle_migration_command(
-        self, mock_asyncio_run, migration_env
+        self, mock_asyncio_run, mock_validate_env, migration_env
     ):
         """Test handling migration CLI command."""
         from cli.migration_commands import handle_migration_command
@@ -526,14 +526,12 @@ class TestMigrationCLIIntegration:
         mock_asyncio_run.return_value = {
             "success": True,
             "checkpoints_created": 2,
-            "migration_plan_path": "migration_plan.md"
+            "migration_plan_path": "migration_plan.md",
         }
 
         # CLI command returns None (prints output)
         result = handle_migration_command(
-            project_dir=project_dir,
-            spec_dir=spec_dir,
-            model="claude-sonnet-4"
+            project_dir=project_dir, spec_dir=spec_dir, model="claude-sonnet-4"
         )
 
         assert result is None
@@ -547,15 +545,11 @@ class TestMigrationCLIIntegration:
 
         # Create checkpoint structure
         manager = CheckpointManager(project_dir, spec_dir)
-        manager.create_checkpoint(
-            phase_id="phase-1",
-            name="Test checkpoint"
-        )
+        manager.create_checkpoint(phase_id="phase-1", name="Test checkpoint")
 
         # CLI command returns None (prints output), just verify it doesn't crash
         result = handle_migration_status_command(
-            project_dir=project_dir,
-            spec_dir=spec_dir
+            project_dir=project_dir, spec_dir=spec_dir
         )
 
         # Command should complete without errors
@@ -569,8 +563,7 @@ class TestMigrationCLIIntegration:
 
         # CLI command returns None (prints output), just verify it doesn't crash
         result = handle_migration_status_command(
-            project_dir=project_dir,
-            spec_dir=spec_dir
+            project_dir=project_dir, spec_dir=spec_dir
         )
 
         # Command should complete without errors
@@ -594,15 +587,11 @@ class TestMigrationValidationAndErrors:
         # Create complete checkpoint
         manager = CheckpointManager(project_dir, spec_dir)
         checkpoint = manager.create_checkpoint(
-            phase_id="phase-1",
-            name="Complete checkpoint"
+            phase_id="phase-1", name="Complete checkpoint"
         )
 
         # Validate checkpoint
-        validation = validate_migration_checkpoint(
-            manager.checkpoints_dir,
-            project_dir
-        )
+        validation = validate_migration_checkpoint(manager.checkpoints_dir, project_dir)
 
         # On Windows, executable permission check fails (st_mode & 0o100 is always False)
         # So we expect validation to fail with an executable issue
@@ -652,12 +641,9 @@ class TestMigrationValidationAndErrors:
 
         # Attempt to create checkpoint should handle error
         try:
-            checkpoint = manager.create_checkpoint(
-                phase_id="phase-1",
-                name="Test"
-            )
+            checkpoint = manager.create_checkpoint(phase_id="phase-1", name="Test")
             # If it succeeds, it should return None or handle gracefully
-            assert checkpoint is None or hasattr(checkpoint, 'commit_hash')
+            assert checkpoint is None or hasattr(checkpoint, "commit_hash")
         except Exception as e:
             # Should raise a meaningful error
             assert "git" in str(e).lower() or "commit" in str(e).lower()
