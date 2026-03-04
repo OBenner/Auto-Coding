@@ -524,9 +524,9 @@ class ConfluenceConnector(BaseConnector):
                 self.in_heading = False
                 self.heading_level = 0
                 self.in_list = False
-                self.list_type = None  # 'ul' or 'ol'
+                self.list_type_stack = []  # Stack of 'ul'/'ol' for nesting
                 self.list_depth = 0
-                self.list_counter = []
+                self.list_counter_stack = []  # Stack of counters for nested ol
                 self.in_code_block = False
                 self.in_link = False
                 self.link_url = ""
@@ -566,10 +566,11 @@ class ConfluenceConnector(BaseConnector):
 
                 elif tag in ("ul", "ol"):
                     self.in_list = True
-                    self.list_type = "ol" if tag == "ol" else "ul"
+                    list_type = "ol" if tag == "ol" else "ul"
+                    self.list_type_stack.append(list_type)
                     self.list_depth += 1
-                    if self.list_type == "ol":
-                        self.list_counter.append(1)
+                    if list_type == "ol":
+                        self.list_counter_stack.append(1)
 
                 elif tag == "li":
                     # List item marker added in handle_data
@@ -627,10 +628,12 @@ class ConfluenceConnector(BaseConnector):
                     self.link_url = ""
 
                 elif tag in ("ul", "ol"):
-                    self.in_list = False
+                    if self.list_type_stack:
+                        exiting_type = self.list_type_stack.pop()
+                        if exiting_type == "ol" and self.list_counter_stack:
+                            self.list_counter_stack.pop()
                     self.list_depth -= 1
-                    if self.list_type == "ol":
-                        self.list_counter.pop()
+                    self.in_list = self.list_depth > 0
                     self.output.append("\n")
 
                 elif tag == "li":
@@ -675,13 +678,20 @@ class ConfluenceConnector(BaseConnector):
                     self.output.append(f"> {data}\n")
                 elif self.in_list:
                     indent = "  " * (self.list_depth - 1)
-                    if self.list_type == "ul":
+                    current_type = (
+                        self.list_type_stack[-1] if self.list_type_stack else "ul"
+                    )
+                    if current_type == "ul":
                         self.output.append(f"{indent}- {data}")
                     else:  # ol
-                        count = self.list_counter[-1] if self.list_counter else 1
+                        count = (
+                            self.list_counter_stack[-1]
+                            if self.list_counter_stack
+                            else 1
+                        )
                         self.output.append(f"{indent}{count}. {data}")
-                        if self.list_counter:
-                            self.list_counter[-1] += 1
+                        if self.list_counter_stack:
+                            self.list_counter_stack[-1] += 1
                 elif data.strip():
                     self.output.append(data)
 

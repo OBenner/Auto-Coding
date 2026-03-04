@@ -169,7 +169,8 @@ class GitHubWikiConnector(BaseConnector):
             # Update state
             self._update_full_sync_state(documents, errors)
 
-            # Build doc_mapping
+            # Rebuild doc_mapping (clear stale entries from deleted pages)
+            self.state.doc_mapping = {}
             for doc in documents:
                 self.state.doc_mapping[doc["id"]] = {
                     "title": doc["title"],
@@ -222,9 +223,12 @@ class GitHubWikiConnector(BaseConnector):
         }
 
         try:
-            # Pull latest changes
+            # Pull latest changes — abort if pull fails to avoid stale data
             if not self._pull_wiki():
-                logger.warning("Git pull failed, proceeding with stale wiki data")
+                result["success"] = False
+                result["errors"].append("Git pull failed, aborting incremental sync")
+                self._handle_sync_error(result, RuntimeError("Git pull failed"))
+                return result
 
             # Get last sync time
             last_sync = self.state.last_sync

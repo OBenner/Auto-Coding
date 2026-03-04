@@ -74,6 +74,17 @@ class DocumentationIndexer:
             - errors: list of error messages
         """
         try:
+            # Load existing index to merge with new documents
+            if not self._index_loaded:
+                try:
+                    self._load_index()
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to load existing index, starting fresh: {e}"
+                    )
+                    self._documents = {}
+                    self._index_loaded = True
+
             indexed_count = 0
             failed_count = 0
             errors = []
@@ -303,7 +314,7 @@ class DocumentationIndexer:
 
             documents = list(self._documents.values())
 
-            if limit and len(documents) > limit:
+            if limit is not None:
                 documents = documents[:limit]
 
             return documents

@@ -7,6 +7,7 @@ All connectors (Notion, Confluence, GitHub Wiki, GitBook) must inherit from this
 """
 
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -146,6 +147,12 @@ class BaseConnector(ABC):
             self.state.last_sync = None
             self.state.doc_mapping = {}
             self.state.provider = self.config.provider
+            self.state.total_docs = 0
+            self.state.indexed_docs = 0
+            self.state.failed_docs = 0
+            self.state.sync_status = "idle"
+            self.state.error_message = ""
+            self._save_state()
 
     def _save_state(self) -> None:
         """Save knowledge base state to spec directory."""
@@ -154,12 +161,10 @@ class BaseConnector(ABC):
 
     def _initialize_state(self) -> None:
         """Initialize a new knowledge base state for this spec."""
-        from datetime import datetime
-
         self.state = KnowledgeBaseState(
             initialized=True,
             provider=self.config.provider,
-            created_at=datetime.now().isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         self._save_state()
 
@@ -167,15 +172,13 @@ class BaseConnector(ABC):
         self, documents: list[dict[str, Any]], errors: list[str]
     ) -> None:
         """Update state after a full sync operation."""
-        from datetime import datetime
-
         if not self.state or not self.state.initialized:
             self._initialize_state()
 
         self.state.total_docs = len(documents)
         self.state.indexed_docs = len(documents)
         self.state.failed_docs = len(errors)
-        self.state.last_sync = datetime.now().isoformat()
+        self.state.last_sync = datetime.now(UTC).isoformat()
         self.state.sync_status = (
             SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
         )
@@ -183,12 +186,10 @@ class BaseConnector(ABC):
 
     def _update_incremental_sync_state(self, result: dict[str, Any]) -> None:
         """Update state after an incremental sync operation."""
-        from datetime import datetime
-
         self.state.total_docs = len(self.state.doc_mapping)
         self.state.indexed_docs = len(self.state.doc_mapping)
         self.state.failed_docs = result["failed"]
-        self.state.last_sync = datetime.now().isoformat()
+        self.state.last_sync = datetime.now(UTC).isoformat()
         self.state.sync_status = (
             SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
         )

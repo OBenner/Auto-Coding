@@ -67,8 +67,9 @@ def create_knowledge_base_tools(spec_dir: Path, project_dir: Path) -> list:
                         {
                             "type": "text",
                             "text": "Team knowledge base is not configured. "
-                            "To enable team documentation search, configure NOTION_TOKEN, "
-                            "CONFLUENCE_API_TOKEN, GITHUB_TOKEN, or GITBOOK_API_KEY in .env",
+                            "To enable team documentation search, configure "
+                            "KNOWLEDGE_BASE_NOTION_API_KEY, KNOWLEDGE_BASE_CONFLUENCE_API_KEY, "
+                            "KNOWLEDGE_BASE_GITHUB_WIKI_API_KEY, or KNOWLEDGE_BASE_GITBOOK_API_KEY in .env",
                         }
                     ]
                 }
@@ -167,8 +168,9 @@ def create_knowledge_base_tools(spec_dir: Path, project_dir: Path) -> list:
                         {
                             "type": "text",
                             "text": "Team knowledge base is not configured. "
-                            "To enable team documentation access, configure NOTION_TOKEN, "
-                            "CONFLUENCE_API_TOKEN, GITHUB_TOKEN, or GITBOOK_API_KEY in .env",
+                            "To enable team documentation access, configure "
+                            "KNOWLEDGE_BASE_NOTION_API_KEY, KNOWLEDGE_BASE_CONFLUENCE_API_KEY, "
+                            "KNOWLEDGE_BASE_GITHUB_WIKI_API_KEY, or KNOWLEDGE_BASE_GITBOOK_API_KEY in .env",
                         }
                     ]
                 }

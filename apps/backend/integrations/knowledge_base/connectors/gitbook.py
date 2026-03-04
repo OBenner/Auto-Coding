@@ -146,6 +146,17 @@ class GitBookConnector(BaseConnector):
 
             # Update state
             self._update_full_sync_state(documents, errors)
+
+            # Build doc_mapping for incremental sync
+            self.state.doc_mapping = {}
+            for doc in documents:
+                self.state.doc_mapping[doc["id"]] = {
+                    "title": doc["title"],
+                    "url": doc["url"],
+                    "updated_at": doc["metadata"].get("updated_at", ""),
+                    "source": "GitBook",
+                }
+
             self._save_state()
 
         except Exception as e:

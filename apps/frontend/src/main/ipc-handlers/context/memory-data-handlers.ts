@@ -563,9 +563,9 @@ asyncio.run(main())
     }
 
     // GitHub Wiki
-    if (envVars['KNOWLEDGE_BASE_GITHUB_WIKI_TOKEN']) {
+    if (envVars['KNOWLEDGE_BASE_GITHUB_WIKI_API_KEY']) {
       config.githubWikiEnabled = true;
-      config.githubWikiToken = envVars['KNOWLEDGE_BASE_GITHUB_WIKI_TOKEN'];
+      config.githubWikiToken = envVars['KNOWLEDGE_BASE_GITHUB_WIKI_API_KEY'];
     }
     if (envVars['KNOWLEDGE_BASE_GITHUB_WIKI_REPOSITORY']) {
       config.githubWikiRepository = envVars['KNOWLEDGE_BASE_GITHUB_WIKI_REPOSITORY'];
@@ -628,7 +628,7 @@ asyncio.run(main())
 
     // GitHub Wiki
     if (config.githubWikiToken !== undefined) {
-      envVars['KNOWLEDGE_BASE_GITHUB_WIKI_TOKEN'] = config.githubWikiToken;
+      envVars['KNOWLEDGE_BASE_GITHUB_WIKI_API_KEY'] = config.githubWikiToken;
     }
     if (config.githubWikiRepository !== undefined) {
       envVars['KNOWLEDGE_BASE_GITHUB_WIKI_REPOSITORY'] = config.githubWikiRepository;
@@ -710,9 +710,24 @@ asyncio.run(main())
         // Update with knowledge base configuration
         const updatedVars = updateKnowledgeBaseEnvVars(existingVars, config);
 
-        // Generate .env content (reuse generateEnvContent from env-handlers pattern)
+        // Generate .env content with safe value serialization
+        const serializeEnvValue = (value: string): string => {
+          if (
+            value.includes(' ') ||
+            value.includes('#') ||
+            value.includes('=') ||
+            value.includes('"') ||
+            value.includes('\n') ||
+            value.startsWith(' ') ||
+            value.endsWith(' ')
+          ) {
+            return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+          }
+          return value;
+        };
+
         const content = Object.entries(updatedVars)
-          .map(([key, value]) => `${key}=${value}`)
+          .map(([key, value]) => `${key}=${serializeEnvValue(value)}`)
           .join('\n');
 
         // Write to file
@@ -757,15 +772,17 @@ from pathlib import Path
 sys.path.insert(0, '${backendPath.replace(/\\/g, '\\\\')}')
 
 async def main():
-    from integrations.knowledge_base import get_knowledge_base_manager
+    from integrations.knowledge_base.manager import KnowledgeBaseManager
 
     provider = ${JSON.stringify(provider)}
     project_dir = Path('${project.path.replace(/\\/g, '\\\\')}')
+    spec_dir = project_dir / '.auto-claude' / 'specs' / '_connection_test'
+    spec_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get manager (auto-detects provider from env)
-    manager = get_knowledge_base_manager(str(project_dir))
+    # Create manager (auto-detects provider from env)
+    manager = KnowledgeBaseManager(spec_dir, project_dir)
 
-    if not manager or not manager.connector:
+    if not manager.is_enabled:
         print(json.dumps({
             "success": False,
             "provider": provider,
@@ -773,21 +790,19 @@ async def main():
         }))
         return
 
-    # Test connection
+    # Test connection via manager's public API
     try:
-        await manager.connector.connect()
-        # Try fetching a small batch of documents to verify access
-        docs = await manager.connector.fetch_documents(limit=1)
+        connected = await manager.initialize()
+        if not connected:
+            print(json.dumps({
+                "success": False,
+                "provider": provider,
+                "message": f"Failed to connect to {provider}"
+            }))
+            return
 
-        details = {}
-        if provider == "notion" and docs:
-            details["workspaceName"] = "Notion Workspace"
-        elif provider == "confluence" and docs:
-            details["spaceName"] = manager.connector.config.space_key
-        elif provider == "github_wiki":
-            details["repository"] = manager.connector.config.repository
-        elif provider == "gitbook":
-            details["docsFound"] = len(docs) if docs else 0
+        status = manager.get_status_summary()
+        details = {"provider": status.get("provider", provider)}
 
         print(json.dumps({
             "success": True,
@@ -802,6 +817,8 @@ async def main():
             "message": f"Connection failed: {str(e)}",
             "error": str(e)
         }))
+    finally:
+        await manager.close()
 
 asyncio.run(main())
           `.trim()

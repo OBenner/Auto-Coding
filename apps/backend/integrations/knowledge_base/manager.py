@@ -11,6 +11,7 @@ Provides a high-level interface that:
 - Handles error recovery and graceful degradation
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -118,8 +119,9 @@ class KnowledgeBaseManager:
             # Instantiate connector
             self._connector = connector_class(self.config, self.spec_dir)
 
-            # Connect to the knowledge base
-            if not self._connector.connect():
+            # Connect to the knowledge base (offload blocking I/O)
+            connected = await asyncio.to_thread(self._connector.connect)
+            if not connected:
                 logger.error(f"Failed to connect to {self.config.provider}")
                 return False
 
@@ -202,7 +204,7 @@ class KnowledgeBaseManager:
 
             # Perform sync (full if forced or no prior sync)
             if force or not self.state or not self.state.last_sync:
-                documents = self._connector.fetch_documents()
+                documents = await asyncio.to_thread(self._connector.fetch_documents)
                 result = {
                     "success": True,
                     "added": len(documents),
@@ -210,8 +212,24 @@ class KnowledgeBaseManager:
                     "failed": 0,
                     "errors": [],
                 }
+
+                # Index fetched documents for search
+                try:
+                    from integrations.knowledge_base.indexer import (
+                        DocumentationIndexer,
+                    )
+
+                    indexer = DocumentationIndexer(
+                        self.spec_dir, self.project_dir, self.state
+                    )
+                    index_result = await indexer.index_documents(documents)
+                    if not index_result.get("success"):
+                        result["errors"].extend(index_result.get("errors", []))
+                except Exception as e:
+                    logger.warning(f"Failed to index documents after sync: {e}")
+                    result["errors"].append(f"Indexing failed: {e}")
             else:
-                result = self._connector.incremental_sync()
+                result = await asyncio.to_thread(self._connector.incremental_sync)
 
             # Update state
             if self.state:
@@ -286,6 +304,11 @@ class KnowledgeBaseManager:
 
             indexer = DocumentationIndexer(self.spec_dir, self.project_dir, self.state)
             results = await indexer.search(query=query, limit=limit)
+
+            # Apply filters if provided
+            if filters and results:
+                results = self._apply_filters(results, filters)
+
             return results
 
         except Exception as e:
@@ -319,8 +342,8 @@ class KnowledgeBaseManager:
             return []
 
         try:
-            # Fetch documents from connector
-            documents = self._connector.fetch_documents()
+            # Fetch documents from connector (offload blocking I/O)
+            documents = await asyncio.to_thread(self._connector.fetch_documents)
 
             # Apply limit
             if limit and len(documents) > limit:

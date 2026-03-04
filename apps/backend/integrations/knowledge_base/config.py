@@ -7,10 +7,13 @@ Supports Notion, Confluence, GitHub Wiki, and GitBook.
 """
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Knowledge Base Providers
 PROVIDER_NOTION = "notion"
@@ -87,13 +90,21 @@ class KnowledgeBaseConfig:
             try:
                 config.sync_interval = max(int(sync_interval_str), MIN_SYNC_INTERVAL)
             except ValueError:
-                pass
+                logger.warning(
+                    "Invalid KNOWLEDGE_BASE_SYNC_INTERVAL value '%s', "
+                    "using default %ds",
+                    sync_interval_str,
+                    DEFAULT_SYNC_INTERVAL,
+                )
 
         if max_docs_str := os.environ.get("KNOWLEDGE_BASE_MAX_DOCS"):
             try:
                 config.max_docs = int(max_docs_str)
             except ValueError:
-                pass
+                logger.warning(
+                    "Invalid KNOWLEDGE_BASE_MAX_DOCS value '%s', using default",
+                    max_docs_str,
+                )
 
         return config
 
@@ -104,7 +115,7 @@ class KnowledgeBaseConfig:
 
         # Provider-specific validation
         if self.provider == PROVIDER_NOTION:
-            return bool(self.workspace_id)
+            return True  # workspace_id is optional for Notion
         elif self.provider == PROVIDER_CONFLUENCE:
             return bool(self.space_key)
         elif self.provider == PROVIDER_GITHUB_WIKI:
