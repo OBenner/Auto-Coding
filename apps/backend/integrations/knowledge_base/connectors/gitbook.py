@@ -211,12 +211,24 @@ class GitBookConnector(BaseConnector):
                     space_pages = self._fetch_space_pages(space)
 
                     # Filter pages modified since last sync
-                    updated_pages = [
-                        p
-                        for p in space_pages
-                        if p.get("updatedAt")
-                        and (last_sync is None or p["updatedAt"] > last_sync)
-                    ]
+                    if last_sync is None:
+                        updated_pages = space_pages
+                    else:
+                        updated_pages = []
+                        for p in space_pages:
+                            updated_at = p.get("updatedAt")
+                            if not updated_at:
+                                continue
+                            try:
+                                if datetime.fromisoformat(
+                                    updated_at.replace("Z", "+00:00")
+                                ) > datetime.fromisoformat(
+                                    last_sync.replace("Z", "+00:00")
+                                ):
+                                    updated_pages.append(p)
+                            except (ValueError, TypeError):
+                                # Include page if we can't parse timestamps
+                                updated_pages.append(p)
 
                     # Process each updated page
                     for page in updated_pages:
@@ -248,6 +260,8 @@ class GitBookConnector(BaseConnector):
 
                 except Exception as e:
                     space_id = space.get("id", "unknown")
+                    result["failed"] += 1
+                    result["success"] = False
                     result["errors"].append(f"Failed to sync space {space_id}: {e}")
 
             # Update state

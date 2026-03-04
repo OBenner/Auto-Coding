@@ -174,6 +174,19 @@ class ConfluenceConnector(BaseConnector):
                 SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
             )
             self.state.error_message = "; ".join(errors[:5])  # First 5 errors
+
+            # Populate doc_mapping for incremental sync
+            self.state.doc_mapping = {
+                doc["id"]: {
+                    "title": doc.get("title", ""),
+                    "url": doc.get("url", ""),
+                    "last_modified": doc.get("metadata", {}).get("last_modified", ""),
+                    "source": "Confluence",
+                }
+                for doc in documents
+                if doc.get("id")
+            }
+
             self._save_state()
 
         except Exception as e:
@@ -409,17 +422,22 @@ class ConfluenceConnector(BaseConnector):
 
         return pages
 
-    def _is_page_modified_after(self, page: dict[str, Any], timestamp: str) -> bool:
+    def _is_page_modified_after(
+        self, page: dict[str, Any], timestamp: str | None
+    ) -> bool:
         """
         Check if a page was modified after the given timestamp.
 
         Args:
             page: Page object from Confluence API
-            timestamp: ISO format timestamp string
+            timestamp: ISO format timestamp string, or None
 
         Returns:
             True if page was modified after timestamp
         """
+        if timestamp is None:
+            return True
+
         try:
             # Try to get last modified from history
             history = page.get("history", {})
@@ -429,10 +447,10 @@ class ConfluenceConnector(BaseConnector):
                 modified_time = datetime.fromisoformat(
                     last_modified.replace("Z", "+00:00")
                 )
-                sync_time = datetime.fromisoformat(timestamp)
+                sync_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                 return modified_time > sync_time
 
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError, TypeError):
             logger.debug(
                 "Could not parse modification time for page %s", page.get("id")
             )

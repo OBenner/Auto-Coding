@@ -8,8 +8,8 @@ Supports Notion, Confluence, GitHub Wiki, and GitBook.
 
 import json
 import os
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Knowledge Base Providers
@@ -128,11 +128,7 @@ class KnowledgeBaseState:
     failed_docs: int = 0
     error_message: str = ""
     created_at: str | None = None
-    doc_mapping: dict = None  # doc_id -> doc metadata mapping
-
-    def __post_init__(self):
-        if self.doc_mapping is None:
-            self.doc_mapping = {}
+    doc_mapping: dict = field(default_factory=dict)  # doc_id -> doc metadata mapping
 
     def to_dict(self) -> dict:
         return {
@@ -200,7 +196,10 @@ class KnowledgeBaseState:
 
         try:
             last_sync_time = datetime.fromisoformat(self.last_sync)
-            elapsed = (datetime.now() - last_sync_time).total_seconds()
+            # Ensure timezone-aware comparison
+            if last_sync_time.tzinfo is None:
+                last_sync_time = last_sync_time.replace(tzinfo=UTC)
+            elapsed = (datetime.now(UTC) - last_sync_time).total_seconds()
             return elapsed >= interval_seconds
         except (ValueError, OSError):
             return True

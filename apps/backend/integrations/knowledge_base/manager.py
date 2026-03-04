@@ -19,6 +19,7 @@ from core.sentry import capture_exception
 from integrations.knowledge_base.base import BaseConnector
 from integrations.knowledge_base.config import (
     SYNC_STATUS_FAILED,
+    SYNC_STATUS_PARTIAL,
     SYNC_STATUS_RUNNING,
     SYNC_STATUS_SUCCESS,
     KnowledgeBaseConfig,
@@ -120,7 +121,6 @@ class KnowledgeBaseManager:
             # Connect to the knowledge base
             if not self._connector.connect():
                 logger.error(f"Failed to connect to {self.config.provider}")
-                self._available = False
                 return False
 
             # Initialize state if needed
@@ -143,7 +143,6 @@ class KnowledgeBaseManager:
                 provider=self.config.provider if self.config else None,
                 spec_dir=str(self.spec_dir),
             )
-            self._available = False
             return False
 
     async def close(self) -> None:
@@ -201,16 +200,29 @@ class KnowledgeBaseManager:
                 self.state.sync_status = SYNC_STATUS_RUNNING
                 self.state.save(self.spec_dir)
 
-            # Perform sync
-            result = self._connector.incremental_sync()
+            # Perform sync (full if forced or no prior sync)
+            if force or not self.state or not self.state.last_sync:
+                documents = self._connector.fetch_documents()
+                result = {
+                    "success": True,
+                    "added": len(documents),
+                    "updated": 0,
+                    "failed": 0,
+                    "errors": [],
+                }
+            else:
+                result = self._connector.incremental_sync()
 
             # Update state
-            if self.state and result.get("success"):
-                self.state.sync_status = (
-                    SYNC_STATUS_SUCCESS
-                    if result.get("failed", 0) == 0
-                    else SYNC_STATUS_FAILED
-                )
+            if self.state:
+                if result.get("success"):
+                    self.state.sync_status = (
+                        SYNC_STATUS_SUCCESS
+                        if result.get("failed", 0) == 0
+                        else SYNC_STATUS_PARTIAL
+                    )
+                else:
+                    self.state.sync_status = SYNC_STATUS_FAILED
                 self.state.save(self.spec_dir)
 
             logger.info(
@@ -268,20 +280,13 @@ class KnowledgeBaseManager:
             return []
 
         try:
-            # This is a simplified search implementation
-            # In a full implementation, this would use the indexed documents
-            # and perform semantic or keyword search
-
-            # For now, fetch all documents and filter by query
-            # This will be enhanced in future subtasks
+            from integrations.knowledge_base.indexer import DocumentationIndexer
 
             logger.info(f"Searching knowledge base for: {query}")
 
-            # TODO: Implement proper search using indexed documents
-            # This is a placeholder that returns empty results
-            # The actual search implementation will be in subtask-3-4
-
-            return []
+            indexer = DocumentationIndexer(self.spec_dir, self.project_dir, self.state)
+            results = await indexer.search(query=query, limit=limit)
+            return results
 
         except Exception as e:
             logger.warning(f"Failed to search knowledge base: {e}")
@@ -467,12 +472,21 @@ class KnowledgeBaseManager:
         if "updated_after" in filters:
             from datetime import datetime
 
-            cutoff = datetime.fromisoformat(filters["updated_after"])
-            filtered = [
-                doc
-                for doc in filtered
-                if datetime.fromisoformat(doc.get("metadata", {}).get("updated_at", ""))
-                >= cutoff
-            ]
+            try:
+                cutoff = datetime.fromisoformat(filters["updated_after"])
+            except (ValueError, TypeError):
+                return filtered
+            date_filtered = []
+            for doc in filtered:
+                updated_at = doc.get("metadata", {}).get("updated_at", "")
+                if not updated_at:
+                    continue
+                try:
+                    if datetime.fromisoformat(updated_at) >= cutoff:
+                        date_filtered.append(doc)
+                except (ValueError, TypeError):
+                    # Include docs with malformed timestamps
+                    date_filtered.append(doc)
+            filtered = date_filtered
 
         return filtered

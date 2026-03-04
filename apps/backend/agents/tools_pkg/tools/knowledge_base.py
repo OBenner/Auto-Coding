@@ -52,6 +52,7 @@ def create_knowledge_base_tools(spec_dir: Path, project_dir: Path) -> list:
         query = args["query"]
         limit = args.get("limit", 10)
 
+        manager = None
         try:
             # Import here to avoid circular imports
             from integrations.knowledge_base import KnowledgeBaseManager
@@ -91,9 +92,6 @@ def create_knowledge_base_tools(spec_dir: Path, project_dir: Path) -> list:
 
             # Search for relevant documents
             results = await indexer.search(query=query, limit=limit)
-
-            # Close manager connection
-            await manager.close()
 
             if not results:
                 return {
@@ -136,6 +134,9 @@ def create_knowledge_base_tools(spec_dir: Path, project_dir: Path) -> list:
                     {"type": "text", "text": f"Error searching team documentation: {e}"}
                 ]
             }
+        finally:
+            if manager is not None:
+                await manager.close()
 
     tools.append(search_team_docs)
 
@@ -151,6 +152,7 @@ def create_knowledge_base_tools(spec_dir: Path, project_dir: Path) -> list:
         """Get all available team documentation."""
         limit = args.get("limit", 50)
 
+        manager = None
         try:
             # Import here to avoid circular imports
             from integrations.knowledge_base import KnowledgeBaseManager
@@ -190,9 +192,6 @@ def create_knowledge_base_tools(spec_dir: Path, project_dir: Path) -> list:
 
             # Get all documents
             documents = await indexer.get_all_documents(limit=limit)
-
-            # Close manager connection
-            await manager.close()
 
             if not documents:
                 return {
@@ -243,6 +242,9 @@ def create_knowledge_base_tools(spec_dir: Path, project_dir: Path) -> list:
                     {"type": "text", "text": f"Error getting team documentation: {e}"}
                 ]
             }
+        finally:
+            if manager is not None:
+                await manager.close()
 
     tools.append(get_team_docs)
 

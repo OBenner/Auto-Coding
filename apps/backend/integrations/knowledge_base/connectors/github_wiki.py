@@ -235,7 +235,8 @@ class GitHubWikiConnector(BaseConnector):
 
         try:
             # Pull latest changes
-            self._pull_wiki()
+            if not self._pull_wiki():
+                logger.warning("Git pull failed, proceeding with stale wiki data")
 
             # Get last sync time
             last_sync = self.state.last_sync

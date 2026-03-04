@@ -131,6 +131,15 @@ class BaseConnector(ABC):
     def _load_state(self) -> None:
         """Load knowledge base state from spec directory."""
         self.state = KnowledgeBaseState.load(self.spec_dir)
+        # Reset stale state if provider changed
+        if (
+            self.state
+            and self.state.provider
+            and self.state.provider != self.config.provider
+        ):
+            self.state.last_sync = None
+            self.state.doc_mapping = {}
+            self.state.provider = self.config.provider
 
     def _save_state(self) -> None:
         """Save knowledge base state to spec directory."""

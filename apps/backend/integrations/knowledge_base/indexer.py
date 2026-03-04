@@ -154,6 +154,10 @@ class DocumentationIndexer:
         Returns:
             List of matching documents with content, score, and metadata
         """
+        # Enforce search result limit
+        if limit <= 0 or limit > MAX_SEARCH_RESULTS:
+            limit = MAX_SEARCH_RESULTS
+
         try:
             # Ensure index is loaded
             if not self._index_loaded:

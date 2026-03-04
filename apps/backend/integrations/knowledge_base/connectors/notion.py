@@ -211,12 +211,22 @@ class NotionConnector(BaseConnector):
             all_pages = self._fetch_all_pages()
 
             # Filter pages edited since last sync
-            updated_pages = [
-                p
-                for p in all_pages
-                if p.get("last_edited_time")
-                and (last_sync is None or p["last_edited_time"] > last_sync)
-            ]
+            if last_sync is None:
+                updated_pages = all_pages
+            else:
+                updated_pages = []
+                for p in all_pages:
+                    edited_time = p.get("last_edited_time")
+                    if not edited_time:
+                        continue
+                    try:
+                        if datetime.fromisoformat(
+                            edited_time.replace("Z", "+00:00")
+                        ) > datetime.fromisoformat(last_sync.replace("Z", "+00:00")):
+                            updated_pages.append(p)
+                    except (ValueError, TypeError):
+                        # Include page if we can't parse timestamps
+                        updated_pages.append(p)
 
             # Process each updated page
             for page in updated_pages:
