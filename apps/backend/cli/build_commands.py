@@ -193,6 +193,7 @@ def handle_build_command(
         debug_success,
     )
     from phase_config import get_phase_model
+    from phase_event import init_webhooks
     from prompts_pkg.prompts import get_base_branch_from_metadata
     from qa_loop import run_qa_validation_loop, should_run_qa
 
@@ -420,6 +421,10 @@ def handle_build_command(
         working_dir=str(working_dir),
         spec_dir=str(spec_dir),
     )
+
+    # Initialize webhook integration for build lifecycle events
+    # This enables webhook dispatching when phase events are emitted
+    init_webhooks(spec_dir, working_dir)
 
     try:
         debug("run.py", "Starting agent execution")

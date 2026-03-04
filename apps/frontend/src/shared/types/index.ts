@@ -25,6 +25,7 @@ export * from './session-context';
 export * from './productivity-analytics';
 export * from './model-usage';
 export * from './template';
+export * from './webhook';
 export * from './session-replay';
 export * from './scheduler';
 export * from './decision';

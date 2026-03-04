@@ -49,6 +49,7 @@ import { QueueView } from './components/Scheduler/QueueView';
 import { Worktrees } from './components/Worktrees';
 import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
+import { WebhooksPage } from './components/WebhooksPage';
 import { PatternsPage } from './pages/PatternsPage';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
 import { ModelUsageDashboard } from './components/model-usage/ModelUsageDashboard';
@@ -1038,6 +1039,9 @@ export function App() {
                 )}
                 {activeView === 'context' && (activeProjectId || selectedProjectId) && (
                   <Context projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'webhooks' && (activeProjectId || selectedProjectId) && (
+                  <WebhooksPage projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'ideation' && (activeProjectId || selectedProjectId) && (
                   <Ideation projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />

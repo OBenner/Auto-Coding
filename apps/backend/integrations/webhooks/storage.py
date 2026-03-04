@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import tempfile
 import threading
 from dataclasses import dataclass
@@ -22,6 +23,26 @@ logger = logging.getLogger(__name__)
 
 # Process-wide lock so all WebhookStorage instances coordinate writes
 _storage_lock = threading.Lock()
+
+
+def _set_restrictive_permissions(file_path: Path) -> None:
+    """
+    Set restrictive file permissions (owner read/write only) on Unix.
+
+    On Windows, ``os.chmod`` only controls the read-only flag; use
+    directory-level ACLs to protect files containing secrets.
+
+    Args:
+        file_path: Path to the file to restrict
+    """
+    if sys.platform == "win32":
+        return
+    try:
+        os.chmod(file_path, 0o600)
+    except OSError:
+        # Intentionally ignored: permission setting is best-effort;
+        # some filesystems (e.g., network mounts) may not support chmod.
+        pass
 
 
 @dataclass
@@ -65,7 +86,13 @@ class WebhookStorage:
             return []
 
     def save_configs(self, configs: list[WebhookConfig]) -> None:
-        """Save webhook configurations to disk with restricted permissions."""
+        """Save webhook configurations to disk with restricted permissions.
+
+        Config files may contain webhook secrets and are written with
+        mode 0o600 (owner read/write only) on Unix systems.
+        On Windows, os.chmod only controls the read-only flag; rely on
+        directory-level ACLs to protect files containing secrets.
+        """
         config_path = self.get_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -77,14 +104,11 @@ class WebhookStorage:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             Path(tmp_path).replace(config_path)
-            # Restrict file permissions (best-effort on Windows)
-            try:
-                os.chmod(config_path, 0o600)
-            except OSError:
-                pass
+            _set_restrictive_permissions(config_path)
         except OSError:
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
+            _set_restrictive_permissions(config_path)
 
     def load_logs(
         self, webhook_id: str | None = None, limit: int = 100

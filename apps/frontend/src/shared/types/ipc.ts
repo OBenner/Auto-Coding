@@ -163,6 +163,14 @@ import type {
 } from './integrations';
 import type { APIProfile, ProfilesFile, TestConnectionResult, DiscoverModelsResult } from './profile';
 import type { TemplateInfo, TemplateCategory, GeneratedSpec } from './template';
+import type {
+  WebhookConfig,
+  WebhookDelivery,
+  WebhookDeliveryStats,
+  WebhookTestResult,
+  WebhookEventTypeMeta,
+  WebhookTemplateMeta
+} from './webhook';
 import type { FeedbackSummary, ImprovementData } from '../../preload/api/feedback-api';
 
 // Electron API exposed via contextBridge
@@ -992,6 +1000,28 @@ export interface ElectronAPI {
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
 
+  // Webhook operations
+  /** List all webhook configurations for a spec */
+  listWebhooks: (specId: string) => Promise<IPCResult<WebhookConfig[]>>;
+  /** Get a single webhook configuration */
+  getWebhook: (specId: string, webhookId: string) => Promise<IPCResult<WebhookConfig>>;
+  /** Create a new webhook configuration */
+  createWebhook: (specId: string, webhook: Omit<WebhookConfig, 'webhook_id' | 'created_at' | 'updated_at'>) => Promise<IPCResult<WebhookConfig>>;
+  /** Update an existing webhook configuration */
+  updateWebhook: (specId: string, webhookId: string, updates: Partial<WebhookConfig>) => Promise<IPCResult<WebhookConfig>>;
+  /** Delete a webhook configuration */
+  deleteWebhook: (specId: string, webhookId: string) => Promise<IPCResult<{ success: boolean }>>;
+  /** Test a webhook by sending a test event */
+  testWebhook: (specId: string, webhookId: string) => Promise<IPCResult<WebhookTestResult>>;
+  /** Get webhook delivery history */
+  getWebhookDeliveryHistory: (specId: string, options?: { webhookId?: string; event?: string; limit?: number }) => Promise<IPCResult<WebhookDelivery[]>>;
+  /** Get webhook delivery statistics */
+  getWebhookDeliveryStats: (specId: string, webhookId?: string) => Promise<IPCResult<WebhookDeliveryStats>>;
+  /** Get all available webhook event types */
+  getWebhookEventTypes: () => Promise<IPCResult<WebhookEventTypeMeta[]>>;
+  /** Get all available webhook templates */
+  getWebhookTemplates: () => Promise<IPCResult<WebhookTemplateMeta[]>>;
+
   // Custom agent template operations (user-created templates)
   listCustomTemplates: () => Promise<IPCResult<import('./template').CustomTemplate[]>>;
   saveCustomTemplate: (template: Omit<import('./template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
@@ -1009,7 +1039,6 @@ export interface ElectronAPI {
     taskDescription?: string;
     context?: string;
   }) => Promise<IPCResult<{ recorded: boolean; reason?: string }>>;
-
 
   // Feedback analytics operations
   getFeedbackSummary?: (projectId: string, days: number) => Promise<IPCResult<FeedbackSummary>>;

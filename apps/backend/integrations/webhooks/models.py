@@ -1,584 +1,507 @@
 """
-Webhook Data Models
-====================
+Webhook Data Models and Schemas
+================================
 
-Pydantic models for webhook configuration, logging, and event handling.
-Provides type-safe, validated data structures for the webhook integration system.
+Data models for webhook configuration, events, and delivery tracking.
 
-Key Models:
-- WebhookConfig: Configuration for webhook endpoints (incoming and outgoing)
-- WebhookLog: Audit log of webhook deliveries
-- WebhookEvent: Event types that trigger webhooks
-- WebhookDelivery: Status of webhook delivery attempts
+This module defines the core data structures for the webhook system:
+- WebhookEvent: Enum of supported event types
+- WebhookConfig: Configuration for webhook endpoints
+- WebhookDelivery: Record of delivery attempts with retry tracking
 """
 
 from __future__ import annotations
 
+import json
+import os
+import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Literal
-
-from pydantic import BaseModel, Field, model_validator
-
-# =============================================================================
-# Constants and Enums
-# =============================================================================
+from pathlib import Path
+from typing import Any
 
 
-class WebhookType(str, Enum):
-    """Type of webhook integration."""
+class WebhookEvent(str, Enum):
+    """Webhook event types for agent lifecycle events."""
 
-    INCOMING = "incoming"  # Receive webhooks from external services
-    OUTGOING = "outgoing"  # Send webhooks to external services
+    # Spec lifecycle
+    SPEC_CREATED = "spec_created"
+    SPEC_UPDATED = "spec_updated"
 
-
-class WebhookIntegration(str, Enum):
-    """Pre-built webhook integrations."""
-
-    SLACK = "slack"
-    DISCORD = "discord"
-    TEAMS = "teams"
-    JIRA = "jira"
-    GITHUB = "github"
-    GITLAB = "gitlab"
-    GENERIC = "generic"
-
-
-class WebhookEventType(str, Enum):
-    """Events that can trigger outgoing webhooks."""
-
+    # Build lifecycle
     BUILD_STARTED = "build_started"
     BUILD_COMPLETED = "build_completed"
     BUILD_FAILED = "build_failed"
-    SUBTASK_STARTED = "subtask_started"
-    SUBTASK_COMPLETED = "subtask_completed"
-    SUBTASK_FAILED = "subtask_failed"
-    PR_OPENED = "pr_opened"
-    PR_MERGED = "pr_merged"
-    PR_CLOSED = "pr_closed"
-    CUSTOM = "custom"
+
+    # QA lifecycle
+    QA_PASSED = "qa_passed"
+    QA_FAILED = "qa_failed"
+
+    # Git operations
+    MERGED = "merged"
+    PR_CREATED = "pr_created"
+
+    @classmethod
+    def all_events(cls) -> list[str]:
+        """Get all event type strings."""
+        return [e.value for e in cls]
+
+    @classmethod
+    def from_string(cls, value: str) -> WebhookEvent:
+        """Convert string to WebhookEvent, case-insensitive."""
+        normalized = value.lower().replace("-", "_")
+        for event in cls:
+            if event.value == normalized or event.name.lower() == normalized:
+                return event
+        raise ValueError(f"Invalid WebhookEvent: {value}")
+
+    @classmethod
+    def is_valid(cls, value: str) -> bool:
+        """Check if a string is a valid event type."""
+        try:
+            cls.from_string(value)
+            return True
+        except ValueError:
+            return False
 
 
 class WebhookDeliveryStatus(str, Enum):
-    """Status of webhook delivery attempts."""
+    """Status of a webhook delivery attempt."""
 
-    PENDING = "pending"
-    SUCCESS = "success"
-    FAILED = "failed"
-    RETRYING = "retrying"
-
-
-# =============================================================================
-# Configuration Models
-# =============================================================================
+    PENDING = "pending"  # Scheduled but not yet sent
+    SENDING = "sending"  # Currently being sent
+    SUCCESS = "success"  # Successfully delivered
+    FAILED = "failed"  # Failed to deliver (will retry)
+    RETRYING = "retrying"  # Retrying after failure
+    PERMANENT_FAILURE = "permanent_failure"  # Failed after all retries
+    TIMEOUT = "timeout"  # Request timed out
 
 
-class RetryConfig(BaseModel):
-    """Retry configuration for webhook deliveries."""
+class WebhookTemplate(str, Enum):
+    """Built-in webhook payload templates."""
 
-    max_retries: int = Field(
-        default=3, ge=0, le=10, description="Maximum number of retry attempts"
-    )
-    retry_delay_seconds: int = Field(
-        default=5, ge=1, le=300, description="Initial delay before first retry"
-    )
-    backoff_multiplier: float = Field(
-        default=2.0, ge=1.0, le=5.0, description="Exponential backoff multiplier"
-    )
-    retry_on_status_codes: list[int] = Field(
-        default_factory=lambda: [429, 500, 502, 503, 504],
-        description="HTTP status codes that trigger retry",
-    )
+    GENERIC = "generic"  # JSON with event data
+    SLACK = "slack"  # Slack message format
+    DISCORD = "discord"  # Discord webhook format
+    TEAMS = "teams"  # Microsoft Teams adaptive card
+    JIRA = "jira"  # JIRA comment format
 
 
-class AuthenticationConfig(BaseModel):
-    """Authentication configuration for webhook endpoints."""
-
-    auth_type: Literal["none", "api_key", "bearer_token", "basic_auth", "signature"] = (
-        Field(default="none", description="Type of authentication")
-    )
-
-    # API key / Bearer token
-    api_key: str | None = Field(default=None, description="API key or bearer token")
-    api_key_header: str | None = Field(
-        default="Authorization", description="Header name for API key"
-    )
-
-    # Basic auth
-    username: str | None = Field(default=None, description="Basic auth username")
-    password: str | None = Field(default=None, description="Basic auth password")
-
-    # Signature verification (for incoming webhooks)
-    secret: str | None = Field(
-        default=None, description="Shared secret for signature verification"
-    )
-    signature_algorithm: Literal["hmac_sha256", "hmac_sha512"] = Field(
-        default="hmac_sha256", description="Signature hash algorithm"
-    )
-    signature_header: str | None = Field(
-        default="X-Hub-Signature-256",
-        description="Header containing the signature",
-    )
-
-    @model_validator(mode="after")
-    def validate_api_key(self) -> AuthenticationConfig:
-        """Validate API key is present when auth_type requires it."""
-        if self.auth_type in ["api_key", "bearer_token"] and not self.api_key:
-            raise ValueError("API key is required for api_key and bearer_token auth")
-        return self
-
-    @model_validator(mode="after")
-    def validate_basic_auth(self) -> AuthenticationConfig:
-        """Validate both username and password are present for basic auth."""
-        if self.auth_type == "basic_auth":
-            if not self.username or not self.password:
-                raise ValueError("Both username and password required for basic auth")
-        return self
-
-    @model_validator(mode="after")
-    def validate_signature_secret(self) -> AuthenticationConfig:
-        """Validate secret is present when auth_type is signature."""
-        if self.auth_type == "signature" and not self.secret:
-            raise ValueError("Secret is required for signature auth type")
-        return self
-
-
-class WebhookConfig(BaseModel):
+@dataclass
+class WebhookConfig:
     """
-    Configuration for a webhook integration.
+    Configuration for a webhook endpoint.
 
-    Supports both incoming (receiving webhooks) and outgoing (sending notifications)
-    webhooks with various authentication methods.
+    Represents a single webhook subscription that will receive
+    events based on the configured filters.
+
+    Attributes:
+        webhook_id: Unique identifier for this webhook
+        name: Human-readable name
+        url: Webhook URL to send events to
+        secret: Optional secret for signature verification (HMAC-SHA256).
+            SECURITY NOTE: This field is stored in plain text in the dataclass.
+            In production deployments, secrets should be encrypted at rest
+            (e.g., using a secrets manager or encrypted config storage).
+            Use _redact_secret() when displaying or logging this value.
+        events: List of event types to subscribe to
+        template: Payload template to use
+        enabled: Whether this webhook is active
+        headers: Optional custom HTTP headers
+        retry_config: Retry configuration
+        created_at: When this webhook was created
+        updated_at: When this webhook was last updated
     """
 
-    id: str = Field(description="Unique identifier for this webhook config")
-    name: str = Field(description="Human-readable name for this webhook")
-
-    # Type and integration
-    type: WebhookType = Field(description="Webhook direction (incoming/outgoing)")
-    integration: WebhookIntegration = Field(description="Integration type")
-
-    # Endpoint configuration
-    url: str | None = Field(
-        default=None, description="Webhook URL (for outgoing webhooks)"
+    webhook_id: str
+    name: str
+    url: str
+    secret: str | None = None
+    events: list[str] = field(default_factory=list)
+    template: str = WebhookTemplate.GENERIC
+    enabled: bool = True
+    headers: dict[str, str] = field(default_factory=dict)
+    retry_config: dict[str, Any] = field(
+        default_factory=lambda: {
+            "max_retries": 3,
+            "initial_delay": 1.0,  # seconds
+            "max_delay": 60.0,  # seconds
+            "backoff_multiplier": 2.0,
+        }
     )
-    path: str | None = Field(
-        default=None, description="Webhook endpoint path (for incoming webhooks)"
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
-    # Authentication
-    auth: AuthenticationConfig = Field(
-        default_factory=AuthenticationConfig,
-        description="Authentication configuration",
-    )
+    def should_send_event(self, event: WebhookEvent) -> bool:
+        """
+        Check if this webhook should be triggered for an event.
 
-    # Event configuration
-    events: list[WebhookEventType] = Field(
-        default_factory=list,
-        description="Events that trigger this webhook (for outgoing webhooks)",
-    )
-    custom_event_filter: str | None = Field(
-        default=None,
-        description="Custom event filter expression (e.g., 'subtask_id.startswith(\"2-1\")')",
-    )
+        Args:
+            event: Event type to check
 
-    # Payload template
-    payload_template: dict[str, Any] | list[str] | str | None = Field(
-        default=None,
-        description="Custom payload template (JSON dict, list of field names, or Jinja2 template string)",
-    )
+        Returns:
+            True if webhook is enabled and subscribed to this event
+        """
+        if not self.enabled:
+            return False
+        return event.value in self.events or "*" in self.events
 
-    # Status
-    enabled: bool = Field(default=True, description="Whether this webhook is active")
+    def _redact_secret(self) -> str:
+        """
+        Return a masked version of the secret for logging/display.
 
-    # Retry configuration
-    retry_config: RetryConfig = Field(
-        default_factory=RetryConfig,
-        description="Retry configuration for failed deliveries",
-    )
-
-    # Metadata
-    description: str | None = Field(default=None, description="Optional description")
-    created_at: str = Field(
-        default_factory=lambda: datetime.now().isoformat(),
-        description="Creation timestamp",
-    )
-    updated_at: str = Field(
-        default_factory=lambda: datetime.now().isoformat(),
-        description="Last update timestamp",
-    )
-
-    @model_validator(mode="after")
-    def validate_outgoing_url(self) -> WebhookConfig:
-        """Validate URL is present for outgoing webhooks."""
-        if self.type == WebhookType.OUTGOING and not self.url:
-            raise ValueError("URL is required for outgoing webhooks")
-        return self
-
-    @model_validator(mode="after")
-    def validate_incoming_path(self) -> WebhookConfig:
-        """Validate path is present for incoming webhooks."""
-        if self.type == WebhookType.INCOMING and not self.path:
-            raise ValueError("Path is required for incoming webhooks")
-        if self.path and not self.path.startswith("/"):
-            raise ValueError("Path must start with /")
-        return self
-
-    @model_validator(mode="after")
-    def validate_events_for_outgoing(self) -> WebhookConfig:
-        """Validate events are specified for outgoing webhooks."""
-        if self.type == WebhookType.OUTGOING and not self.events:
-            raise ValueError(
-                "At least one event must be specified for outgoing webhooks"
-            )
-        return self
+        Returns:
+            Redacted secret string, or "(none)" if no secret is set.
+        """
+        if not self.secret:
+            return "(none)"
+        if len(self.secret) <= 4:
+            return "****"
+        return self.secret[:2] + "*" * (len(self.secret) - 4) + self.secret[-2:]
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
+        """Convert to dictionary for JSON serialization.
+
+        Note: Includes the secret field for persistence. Callers that use
+        this for logging or display should use _redact_secret() instead
+        of exposing the raw secret value.
+        """
         return {
-            "id": self.id,
+            "webhook_id": self.webhook_id,
             "name": self.name,
-            "type": self.type.value,
-            "integration": self.integration.value,
             "url": self.url,
-            "path": self.path,
-            "auth": self.auth.model_dump(),
-            "events": [e.value for e in self.events],
-            "custom_event_filter": self.custom_event_filter,
-            "payload_template": self.payload_template,
+            "secret": self.secret,
+            "events": self.events,
+            "template": self.template,
             "enabled": self.enabled,
-            "retry_config": self.retry_config.model_dump(),
-            "description": self.description,
+            "headers": self.headers,
+            "retry_config": self.retry_config,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WebhookConfig:
-        """Create WebhookConfig from dictionary."""
-        # Convert enum values back to enums
-        if "type" in data and isinstance(data["type"], str):
-            data["type"] = WebhookType(data["type"])
-        if "integration" in data and isinstance(data["integration"], str):
-            data["integration"] = WebhookIntegration(data["integration"])
-        if "events" in data and isinstance(data["events"], list):
-            data["events"] = [WebhookEventType(e) for e in data["events"]]
+        """Create from dictionary."""
+        return cls(
+            webhook_id=data["webhook_id"],
+            name=data["name"],
+            url=data["url"],
+            secret=data.get("secret"),
+            events=data.get("events", []),
+            template=data.get("template", WebhookTemplate.GENERIC),
+            enabled=data.get("enabled", True),
+            headers=data.get("headers", {}),
+            retry_config=data.get("retry_config", {}),
+            created_at=data.get("created_at", datetime.now(UTC).isoformat()),
+            updated_at=data.get("updated_at", datetime.now(UTC).isoformat()),
+        )
 
-        # Handle nested auth config
-        if "auth" in data and isinstance(data["auth"], dict):
-            data["auth"] = AuthenticationConfig(**data["auth"])
+    def save(self, config_dir: Path) -> None:
+        """
+        Save webhook configuration to disk with restrictive permissions.
 
-        # Handle nested retry config
-        if "retry_config" in data and isinstance(data["retry_config"], dict):
-            data["retry_config"] = RetryConfig(**data["retry_config"])
+        On Unix systems, config files are written with mode 0o600
+        (owner read/write only) since they may contain secrets.
+        On Windows, file permissions are managed by the OS/ACL system;
+        ensure the containing directory has appropriate access controls.
 
-        return cls(**data)
-
-
-# =============================================================================
-# Logging Models
-# =============================================================================
-
-
-class WebhookLog(BaseModel):
-    """
-    Audit log entry for webhook delivery attempts.
-
-    Tracks all webhook deliveries including requests, responses, and errors
-    for debugging and audit purposes.
-    """
-
-    id: str = Field(description="Unique log entry ID")
-    webhook_id: str = Field(description="ID of the webhook config that was used")
-
-    # Event info
-    event_type: WebhookEventType = Field(
-        description="Type of event that triggered webhook"
-    )
-    event_data: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Event payload data",
-    )
-
-    # Delivery info
-    status: WebhookDeliveryStatus = Field(
-        default=WebhookDeliveryStatus.PENDING,
-        description="Delivery status",
-    )
-
-    # Request
-    request_url: str | None = Field(default=None, description="URL webhook was sent to")
-    request_method: str = Field(default="POST", description="HTTP method used")
-    request_headers: dict[str, str] = Field(
-        default_factory=dict,
-        description="Request headers (sanitized)",
-    )
-    request_body: dict[str, Any] | None = Field(
-        default=None,
-        description="Request payload (sanitized)",
-    )
-
-    # Response
-    response_status_code: int | None = Field(
-        default=None,
-        description="HTTP status code received",
-    )
-    response_headers: dict[str, str] = Field(
-        default_factory=dict,
-        description="Response headers",
-    )
-    response_body: str | None = Field(
-        default=None,
-        description="Response body (truncated if large)",
-    )
-
-    # Error info
-    error_message: str | None = Field(
-        default=None, description="Error message if failed"
-    )
-    error_type: str | None = Field(
-        default=None,
-        description="Type of error (connection, timeout, validation, etc.)",
-    )
-
-    # Retry info
-    attempt_number: int = Field(default=1, description="Which retry attempt this is")
-    max_retries: int = Field(default=3, description="Maximum retry attempts")
-
-    # Timestamps
-    created_at: str = Field(
-        default_factory=lambda: datetime.now().isoformat(),
-        description="When the webhook delivery was attempted",
-    )
-    completed_at: str | None = Field(
-        default=None,
-        description="When the webhook delivery completed",
-    )
-    duration_ms: int | None = Field(
-        default=None,
-        description="Time taken for delivery in milliseconds",
-    )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "id": self.id,
-            "webhook_id": self.webhook_id,
-            "event_type": self.event_type.value,
-            "event_data": self.event_data,
-            "status": self.status.value,
-            "request_url": self.request_url,
-            "request_method": self.request_method,
-            "request_headers": self.request_headers,
-            "request_body": self.request_body,
-            "response_status_code": self.response_status_code,
-            "response_headers": self.response_headers,
-            "response_body": self.response_body,
-            "error_message": self.error_message,
-            "error_type": self.error_type,
-            "attempt_number": self.attempt_number,
-            "max_retries": self.max_retries,
-            "created_at": self.created_at,
-            "completed_at": self.completed_at,
-            "duration_ms": self.duration_ms,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> WebhookLog:
-        """Create WebhookLog from dictionary."""
-        if "event_type" in data and isinstance(data["event_type"], str):
-            data["event_type"] = WebhookEventType(data["event_type"])
-        if "status" in data and isinstance(data["status"], str):
-            data["status"] = WebhookDeliveryStatus(data["status"])
-        return cls(**data)
-
-    def mark_completed(
-        self,
-        status: WebhookDeliveryStatus,
-        status_code: int | None = None,
-        response_body: str | None = None,
-        error_message: str | None = None,
-    ) -> None:
-        """Mark the webhook delivery as completed."""
-        self.status = status
-        self.completed_at = datetime.now().isoformat()
-
-        if status_code is not None:
-            self.response_status_code = status_code
-        if response_body is not None:
-            self.response_body = response_body
-        if error_message is not None:
-            self.error_message = error_message
-
-        # Calculate duration
-        if self.created_at:
+        Args:
+            config_dir: Directory to save configuration in
+        """
+        config_file = config_dir / f"{self.webhook_id}.json"
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2)
+        # Restrict file permissions to owner-only on Unix.
+        # On Windows, os.chmod only affects the read-only flag;
+        # use directory-level ACLs to protect config files.
+        if sys.platform != "win32":
             try:
-                start = datetime.fromisoformat(self.created_at)
-                end = datetime.fromisoformat(self.completed_at)
-                self.duration_ms = int((end - start).total_seconds() * 1000)
-            except (ValueError, TypeError):
+                os.chmod(config_file, 0o600)
+            except OSError:
+                # Intentionally ignored: permission setting is best-effort;
+                # some filesystems may not support chmod.
                 pass
 
+    @classmethod
+    def load(cls, config_dir: Path, webhook_id: str) -> WebhookConfig | None:
+        """
+        Load webhook configuration from disk.
 
-# =============================================================================
-# Event Models
-# =============================================================================
+        Args:
+            config_dir: Directory containing webhook configurations
+            webhook_id: Webhook ID to load
+
+        Returns:
+            WebhookConfig or None if not found
+        """
+        config_file = config_dir / f"{webhook_id}.json"
+        if not config_file.exists():
+            return None
+
+        try:
+            with open(config_file, encoding="utf-8") as f:
+                data = json.load(f)
+            return cls.from_dict(data)
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            return None
+
+    @classmethod
+    def load_all(cls, config_dir: Path) -> list[WebhookConfig]:
+        """
+        Load all webhook configurations from a directory.
+
+        Args:
+            config_dir: Directory containing webhook configurations
+
+        Returns:
+            List of WebhookConfig objects
+        """
+        configs = []
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        for config_file in config_dir.glob("*.json"):
+            try:
+                with open(config_file, encoding="utf-8") as f:
+                    data = json.load(f)
+                configs.append(cls.from_dict(data))
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                continue
+
+        return configs
 
 
 @dataclass
-class WebhookEvent:
+class WebhookDelivery:
     """
-    Event that can trigger outgoing webhooks.
+    Record of a webhook delivery attempt.
 
-    Encapsulates event data for build lifecycle events that can
-    trigger notifications to external services.
+    Tracks delivery attempts for retry logic and debugging.
+
+    Attributes:
+        delivery_id: Unique identifier for this delivery attempt
+        webhook_id: ID of the webhook being delivered
+        event: Event type being delivered
+        status: Current delivery status
+        attempt_number: Which retry attempt this is (1-indexed)
+        response_status_code: HTTP status code from server (if received)
+        response_body: Response body from server (if received)
+        error_message: Error message if delivery failed
+        duration_ms: How long the request took in milliseconds
+        next_retry_at: When to retry (if status is FAILED)
+        created_at: When this delivery was attempted
+        completed_at: When this delivery completed (success or failure)
     """
 
-    type: WebhookEventType
-    data: dict[str, Any]
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
-    metadata: dict[str, Any] = field(default_factory=dict)
+    delivery_id: str
+    webhook_id: str
+    event: str
+    status: WebhookDeliveryStatus = WebhookDeliveryStatus.PENDING
+    attempt_number: int = 1
+    response_status_code: int | None = None
+    response_body: str | None = None
+    error_message: str | None = None
+    duration_ms: int | None = None
+    next_retry_at: str | None = None
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    completed_at: str | None = None
+    payload: dict[str, Any] = field(default_factory=dict)
+
+    def is_final(self) -> bool:
+        """
+        Check if this delivery is in a terminal state.
+
+        Returns:
+            True if no further retries will be attempted
+        """
+        return self.status in {
+            WebhookDeliveryStatus.SUCCESS,
+            WebhookDeliveryStatus.PERMANENT_FAILURE,
+        }
+
+    def should_retry(self) -> bool:
+        """
+        Check if this delivery should be retried.
+
+        Returns:
+            True if status indicates a retry is needed
+        """
+        return self.status == WebhookDeliveryStatus.FAILED
+
+    def get_next_retry_delay(self, retry_config: dict[str, Any]) -> float:
+        """
+        Calculate delay before next retry using exponential backoff.
+
+        Args:
+            retry_config: Retry configuration from WebhookConfig
+
+        Returns:
+            Delay in seconds before next retry
+        """
+        multiplier = retry_config.get("backoff_multiplier", 2.0)
+        initial_delay = retry_config.get("initial_delay", 1.0)
+        max_delay = retry_config.get("max_delay", 60.0)
+
+        # Exponential backoff: delay = initial * multiplier^(attempt-1)
+        delay = initial_delay * (multiplier ** (self.attempt_number - 1))
+        return min(delay, max_delay)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
-            "type": self.type.value,
-            "data": self.data,
-            "timestamp": self.timestamp,
-            "metadata": self.metadata,
+            "delivery_id": self.delivery_id,
+            "webhook_id": self.webhook_id,
+            "event": self.event,
+            "status": self.status.value,
+            "attempt_number": self.attempt_number,
+            "response_status_code": self.response_status_code,
+            "response_body": self.response_body,
+            "error_message": self.error_message,
+            "duration_ms": self.duration_ms,
+            "next_retry_at": self.next_retry_at,
+            "created_at": self.created_at,
+            "completed_at": self.completed_at,
+            "payload": self.payload,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> WebhookEvent:
-        """Create WebhookEvent from dictionary."""
-        event_type = data.get("type", "custom")
-        if isinstance(event_type, str):
-            event_type = WebhookEventType(event_type)
-
+    def from_dict(cls, data: dict[str, Any]) -> WebhookDelivery:
+        """Create from dictionary."""
         return cls(
-            type=event_type,
-            data=data.get("data", {}),
-            timestamp=data.get("timestamp", datetime.now().isoformat()),
-            metadata=data.get("metadata", {}),
+            delivery_id=data["delivery_id"],
+            webhook_id=data["webhook_id"],
+            event=data["event"],
+            status=WebhookDeliveryStatus(data.get("status", "pending")),
+            attempt_number=data.get("attempt_number", 1),
+            response_status_code=data.get("response_status_code"),
+            response_body=data.get("response_body"),
+            error_message=data.get("error_message"),
+            duration_ms=data.get("duration_ms"),
+            next_retry_at=data.get("next_retry_at"),
+            created_at=data.get("created_at", datetime.now(UTC).isoformat()),
+            completed_at=data.get("completed_at"),
+            payload=data.get("payload", {}),
         )
 
-    @classmethod
-    def build_started(
-        cls,
-        spec_id: str,
-        spec_name: str,
-        total_subtasks: int,
-        metadata: dict[str, Any] | None = None,
-    ) -> WebhookEvent:
-        """Create a build started event."""
-        return cls(
-            type=WebhookEventType.BUILD_STARTED,
-            data={
-                "spec_id": spec_id,
-                "spec_name": spec_name,
-                "total_subtasks": total_subtasks,
-            },
-            metadata=metadata or {},
-        )
+    def save(self, delivery_dir: Path) -> None:
+        """
+        Save delivery record to disk.
+
+        Args:
+            delivery_dir: Directory to save delivery records in
+        """
+        delivery_dir.mkdir(parents=True, exist_ok=True)
+        delivery_file = delivery_dir / f"{self.delivery_id}.json"
+        with open(delivery_file, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2)
 
     @classmethod
-    def build_completed(
-        cls,
-        spec_id: str,
-        spec_name: str,
-        success: bool,
-        duration_seconds: float,
-        metadata: dict[str, Any] | None = None,
-    ) -> WebhookEvent:
-        """Create a build completed event."""
-        return cls(
-            type=WebhookEventType.BUILD_COMPLETED,
-            data={
-                "spec_id": spec_id,
-                "spec_name": spec_name,
-                "success": success,
-                "duration_seconds": duration_seconds,
-            },
-            metadata=metadata or {},
-        )
+    def load(cls, delivery_dir: Path, delivery_id: str) -> WebhookDelivery | None:
+        """
+        Load delivery record from disk.
+
+        Args:
+            delivery_dir: Directory containing delivery records
+            delivery_id: Delivery ID to load
+
+        Returns:
+            WebhookDelivery or None if not found
+        """
+        delivery_file = delivery_dir / f"{delivery_id}.json"
+        if not delivery_file.exists():
+            return None
+
+        try:
+            with open(delivery_file, encoding="utf-8") as f:
+                data = json.load(f)
+            return cls.from_dict(data)
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            return None
 
     @classmethod
-    def build_failed(
-        cls,
-        spec_id: str,
-        spec_name: str,
-        error_message: str,
-        failed_subtask: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> WebhookEvent:
-        """Create a build failed event."""
-        return cls(
-            type=WebhookEventType.BUILD_FAILED,
-            data={
-                "spec_id": spec_id,
-                "spec_name": spec_name,
-                "error_message": error_message,
-                "failed_subtask": failed_subtask,
-            },
-            metadata=metadata or {},
-        )
+    def load_by_webhook(
+        cls, delivery_dir: Path, webhook_id: str
+    ) -> list[WebhookDelivery]:
+        """
+        Load all delivery records for a specific webhook.
+
+        Args:
+            delivery_dir: Directory containing delivery records
+            webhook_id: Webhook ID to filter by
+
+        Returns:
+            List of WebhookDelivery objects for this webhook
+        """
+        deliveries = []
+        delivery_dir.mkdir(parents=True, exist_ok=True)
+
+        for delivery_file in delivery_dir.glob("*.json"):
+            try:
+                with open(delivery_file, encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("webhook_id") == webhook_id:
+                    deliveries.append(cls.from_dict(data))
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                continue
+
+        # Sort by created_at descending (newest first)
+        deliveries.sort(key=lambda d: d.created_at, reverse=True)
+        return deliveries
 
     @classmethod
-    def subtask_started(
-        cls,
-        spec_id: str,
-        subtask_id: str,
-        subtask_description: str,
-        metadata: dict[str, Any] | None = None,
-    ) -> WebhookEvent:
-        """Create a subtask started event."""
-        return cls(
-            type=WebhookEventType.SUBTASK_STARTED,
-            data={
-                "spec_id": spec_id,
-                "subtask_id": subtask_id,
-                "subtask_description": subtask_description,
-            },
-            metadata=metadata or {},
-        )
+    def load_pending(cls, delivery_dir: Path) -> list[WebhookDelivery]:
+        """
+        Load all delivery records that need retry.
 
-    @classmethod
-    def subtask_completed(
-        cls,
-        spec_id: str,
-        subtask_id: str,
-        session_number: int,
-        metadata: dict[str, Any] | None = None,
-    ) -> WebhookEvent:
-        """Create a subtask completed event."""
-        return cls(
-            type=WebhookEventType.SUBTASK_COMPLETED,
-            data={
-                "spec_id": spec_id,
-                "subtask_id": subtask_id,
-                "session_number": session_number,
-            },
-            metadata=metadata or {},
-        )
+        Args:
+            delivery_dir: Directory containing delivery records
 
-    @classmethod
-    def subtask_failed(
-        cls,
-        spec_id: str,
-        subtask_id: str,
-        error_message: str,
-        attempt_number: int,
-        metadata: dict[str, Any] | None = None,
-    ) -> WebhookEvent:
-        """Create a subtask failed event."""
-        return cls(
-            type=WebhookEventType.SUBTASK_FAILED,
-            data={
-                "spec_id": spec_id,
-                "subtask_id": subtask_id,
-                "error_message": error_message,
-                "attempt_number": attempt_number,
-            },
-            metadata=metadata or {},
-        )
+        Returns:
+            List of WebhookDelivery objects with FAILED status
+        """
+        deliveries = []
+        delivery_dir.mkdir(parents=True, exist_ok=True)
+
+        for delivery_file in delivery_dir.glob("*.json"):
+            try:
+                with open(delivery_file, encoding="utf-8") as f:
+                    data = json.load(f)
+                delivery = cls.from_dict(data)
+                if delivery.should_retry():
+                    # Check if it's time to retry
+                    if delivery.next_retry_at:
+                        retry_time = datetime.fromisoformat(delivery.next_retry_at)
+                        if datetime.now(UTC) >= retry_time:
+                            deliveries.append(delivery)
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                continue
+
+        return deliveries
+
+
+# Utility functions
+
+
+def generate_webhook_id() -> str:
+    """
+    Generate a unique webhook ID.
+
+    Returns:
+        Unique webhook ID string
+    """
+    import uuid
+
+    return f"wh_{uuid.uuid4().hex[:16]}"
+
+
+def generate_delivery_id() -> str:
+    """
+    Generate a unique delivery ID.
+
+    Returns:
+        Unique delivery ID string
+    """
+    import uuid
+
+    return f"del_{uuid.uuid4().hex[:16]}"
