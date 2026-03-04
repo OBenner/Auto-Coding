@@ -25,6 +25,8 @@ _pydantic_models_path = (
 sys.path.insert(0, str(_pydantic_models_path))
 
 from pydantic_models import (
+    AICommentTriage,
+    DeepAnalysisFinding,
     # Follow-up review models
     FindingResolution,
     FollowupFinding,
@@ -35,8 +37,6 @@ from pydantic_models import (
     # Initial review models
     QuickScanResult,
     SecurityFinding,
-    DeepAnalysisFinding,
-    AICommentTriage,
 )
 
 
@@ -114,33 +114,57 @@ class TestFollowupFinding:
         assert result.suggested_fix is None
         assert result.fixable is False
 
-    def test_invalid_severity_rejected(self):
-        """Test that invalid severity is rejected."""
+    def test_invalid_severity_normalized(self):
+        """Test that invalid severity is normalized to 'medium' default."""
         data = {
             "id": "new-1",
-            "severity": "extreme",  # Invalid
+            "severity": "extreme",  # Invalid → normalized to "medium"
             "category": "security",
             "title": "Test",
             "description": "Test",
             "file": "test.py",
         }
-        with pytest.raises(ValidationError) as exc_info:
-            FollowupFinding.model_validate(data)
-        assert "severity" in str(exc_info.value)
+        result = FollowupFinding.model_validate(data)
+        assert result.severity == "medium"
 
-    def test_invalid_category_rejected(self):
-        """Test that invalid category is rejected."""
+    def test_invalid_category_normalized(self):
+        """Test that invalid category is normalized to 'quality' default."""
         data = {
             "id": "new-1",
             "severity": "high",
-            "category": "unknown_category",  # Invalid
+            "category": "unknown_category",  # Invalid → normalized to "quality"
             "title": "Test",
             "description": "Test",
             "file": "test.py",
         }
-        with pytest.raises(ValidationError) as exc_info:
-            FollowupFinding.model_validate(data)
-        assert "category" in str(exc_info.value)
+        result = FollowupFinding.model_validate(data)
+        assert result.category == "quality"
+
+    def test_case_insensitive_severity(self):
+        """Test that severity normalization is case-insensitive."""
+        data = {
+            "id": "new-1",
+            "severity": "HIGH",
+            "category": "security",
+            "title": "Test",
+            "description": "Test",
+            "file": "test.py",
+        }
+        result = FollowupFinding.model_validate(data)
+        assert result.severity == "high"
+
+    def test_case_insensitive_category(self):
+        """Test that category normalization is case-insensitive."""
+        data = {
+            "id": "new-1",
+            "severity": "high",
+            "category": "SECURITY",
+            "title": "Test",
+            "description": "Test",
+            "file": "test.py",
+        }
+        result = FollowupFinding.model_validate(data)
+        assert result.category == "security"
 
 
 class TestFollowupReviewResponse:
@@ -150,7 +174,11 @@ class TestFollowupReviewResponse:
         """Test valid complete follow-up review response."""
         data = {
             "finding_resolutions": [
-                {"finding_id": "prev-1", "status": "resolved", "resolution_notes": "Fixed"}
+                {
+                    "finding_id": "prev-1",
+                    "status": "resolved",
+                    "resolution_notes": "Fixed",
+                }
             ],
             "new_findings": [
                 {

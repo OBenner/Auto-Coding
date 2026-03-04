@@ -236,7 +236,9 @@ def get_model_proxy_config() -> ModelProxyConfig | None:
     )
 
 
-def check_network_connectivity(host: str = "api.anthropic.com", port: int = 443, timeout: int = 5) -> bool:
+def check_network_connectivity(
+    host: str = "api.anthropic.com", port: int = 443, timeout: int = 5
+) -> bool:
     """
     Check if network connectivity is available.
 
@@ -257,7 +259,7 @@ def check_network_connectivity(host: str = "api.anthropic.com", port: int = 443,
         socket.setdefaulttimeout(timeout)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
         return True
-    except (socket.error, socket.timeout, OSError) as e:
+    except OSError as e:
         logger.debug(f"Network connectivity check failed: {e}")
         return False
 
@@ -280,7 +282,9 @@ def validate_model_proxy(proxy_config: ModelProxyConfig) -> DeploymentValidation
         if not parsed.scheme or not parsed.netloc:
             validation.add_error(f"Invalid proxy URL format: {proxy_config.url}")
         elif parsed.scheme not in ("http", "https"):
-            validation.add_error(f"Proxy URL must use http or https: {proxy_config.url}")
+            validation.add_error(
+                f"Proxy URL must use http or https: {proxy_config.url}"
+            )
         else:
             validation.info["proxy_scheme"] = parsed.scheme
             validation.info["proxy_host"] = parsed.netloc

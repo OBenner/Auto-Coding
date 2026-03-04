@@ -11,22 +11,24 @@ Tests cover:
 """
 
 import json
-import tempfile
-from pathlib import Path
-
-import pytest
 
 # Add auto-claude to path for imports
 import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from ci_discovery import (
+    HAS_YAML,
     CIConfig,
     CIDiscovery,
     discover_ci,
-    get_ci_test_commands,
     get_ci_system,
-    HAS_YAML,
+    get_ci_test_commands,
 )
 
 # Skip tests that require YAML parsing when PyYAML is not installed
@@ -150,7 +152,10 @@ jobs:
 
         result = discovery.discover(temp_dir)
 
-        assert "NODE_ENV" in result.environment_variables or "CI" in result.environment_variables
+        assert (
+            "NODE_ENV" in result.environment_variables
+            or "CI" in result.environment_variables
+        )
 
     @requires_yaml
     def test_handle_multiple_workflows(self, discovery, temp_dir):
@@ -557,7 +562,9 @@ class TestConvenienceFunctions:
         """Test discover_ci function."""
         workflows = temp_dir / ".github" / "workflows"
         workflows.mkdir(parents=True)
-        (workflows / "ci.yml").write_text("name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n")
+        (workflows / "ci.yml").write_text(
+            "name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n"
+        )
 
         result = discover_ci(temp_dir)
 
@@ -574,7 +581,9 @@ class TestConvenienceFunctions:
         """Test get_ci_test_commands function."""
         workflows = temp_dir / ".github" / "workflows"
         workflows.mkdir(parents=True)
-        (workflows / "ci.yml").write_text("name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest tests/\n")
+        (workflows / "ci.yml").write_text(
+            "name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest tests/\n"
+        )
 
         commands = get_ci_test_commands(temp_dir)
 
@@ -584,7 +593,9 @@ class TestConvenienceFunctions:
         """Test get_ci_system function."""
         workflows = temp_dir / ".github" / "workflows"
         workflows.mkdir(parents=True)
-        (workflows / "ci.yml").write_text("name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n")
+        (workflows / "ci.yml").write_text(
+            "name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n"
+        )
 
         system = get_ci_system(temp_dir)
 
@@ -629,16 +640,26 @@ class TestEdgeCases:
         """Test handling of non-existent directory."""
         fake_dir = Path("/nonexistent/path")
 
-        # Should not raise
-        result = discovery.discover(fake_dir)
-        assert result is None
+        # Targeted mock: only return False for paths under /nonexistent
+        _original_exists = Path.exists
+
+        def _selective_exists(self):
+            if str(self).startswith("/nonexistent"):
+                return False
+            return _original_exists(self)
+
+        with patch.object(Path, "exists", _selective_exists):
+            result = discovery.discover(fake_dir)
+            assert result is None
 
     def test_ci_priority_github_first(self, discovery, temp_dir):
         """Test that GitHub Actions takes priority."""
         # Create both GitHub and GitLab configs
         workflows = temp_dir / ".github" / "workflows"
         workflows.mkdir(parents=True)
-        (workflows / "ci.yml").write_text("name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n")
+        (workflows / "ci.yml").write_text(
+            "name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n"
+        )
 
         (temp_dir / ".gitlab-ci.yml").write_text("test:\n  script:\n    - npm test\n")
 
@@ -651,7 +672,9 @@ class TestEdgeCases:
         """Test that results are cached."""
         workflows = temp_dir / ".github" / "workflows"
         workflows.mkdir(parents=True)
-        (workflows / "ci.yml").write_text("name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n")
+        (workflows / "ci.yml").write_text(
+            "name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n"
+        )
 
         result1 = discovery.discover(temp_dir)
         result2 = discovery.discover(temp_dir)
@@ -662,7 +685,9 @@ class TestEdgeCases:
         """Test cache clearing."""
         workflows = temp_dir / ".github" / "workflows"
         workflows.mkdir(parents=True)
-        (workflows / "ci.yml").write_text("name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n")
+        (workflows / "ci.yml").write_text(
+            "name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n"
+        )
 
         result1 = discovery.discover(temp_dir)
         discovery.clear_cache()

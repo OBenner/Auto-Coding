@@ -25,7 +25,6 @@ Supported Identity Providers:
 from __future__ import annotations
 
 import base64
-import hashlib
 import logging
 import secrets
 import xml.etree.ElementTree as ET
@@ -34,7 +33,7 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import urlencode
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -411,7 +410,9 @@ class SAMLProvider:
 
             # Extract session index
             authn_stmt = assertion_elem.find(".//saml:AuthnStatement", ns)
-            session_index = authn_stmt.get("SessionIndex") if authn_stmt is not None else None
+            session_index = (
+                authn_stmt.get("SessionIndex") if authn_stmt is not None else None
+            )
 
             # Extract conditions
             conditions = assertion_elem.find("saml:Conditions", ns)
@@ -424,9 +425,13 @@ class SAMLProvider:
                 not_on_or_after_str = conditions.get("NotOnOrAfter")
 
                 if not_before_str:
-                    not_before = datetime.fromisoformat(not_before_str.replace("Z", "+00:00"))
+                    not_before = datetime.fromisoformat(
+                        not_before_str.replace("Z", "+00:00")
+                    )
                 if not_on_or_after_str:
-                    not_on_or_after = datetime.fromisoformat(not_on_or_after_str.replace("Z", "+00:00"))
+                    not_on_or_after = datetime.fromisoformat(
+                        not_on_or_after_str.replace("Z", "+00:00")
+                    )
 
                 audience_elem = conditions.find(".//saml:Audience", ns)
                 if audience_elem is not None:
@@ -497,6 +502,7 @@ class SAMLProvider:
 
     def _extract_user_from_assertion(self, assertion: SAMLAssertion) -> SAMLUser:
         """Extract user identity from SAML assertion using attribute mapping."""
+
         # Get mapped attribute values
         def get_attr(key: str) -> Any:
             saml_attr = self.config.attribute_map.get(key)
@@ -619,9 +625,7 @@ class SAMLProvider:
             Number of sessions cleaned up
         """
         expired = [
-            sid
-            for sid, session in self._sessions.items()
-            if session.is_expired()
+            sid for sid, session in self._sessions.items() if session.is_expired()
         ]
 
         for sid in expired:
@@ -741,7 +745,9 @@ def is_valid_saml_token_format(token: str | None) -> bool:
         decoded = base64.b64decode(token)
         # Check if decoded data looks like XML
         decoded_str = decoded.decode("utf-8")
-        return decoded_str.strip().startswith("<?xml") or decoded_str.strip().startswith("<")
+        return decoded_str.strip().startswith(
+            "<?xml"
+        ) or decoded_str.strip().startswith("<")
     except Exception:
         return False
 
@@ -802,7 +808,10 @@ def validate_saml_token_format(token: str) -> None:
     # Validate XML format
     try:
         decoded_str = decoded.decode("utf-8")
-        if not (decoded_str.strip().startswith("<?xml") or decoded_str.strip().startswith("<")):
+        if not (
+            decoded_str.strip().startswith("<?xml")
+            or decoded_str.strip().startswith("<")
+        ):
             raise ValueError("Decoded data is not XML")
     except Exception as e:
         raise ValueError(
@@ -1014,11 +1023,17 @@ def load_saml_config(config_path: Path | str) -> SAMLConfig:
             sp_acs_url=data.get("sp_acs_url", "http://localhost:8080/saml/acs"),
             sp_slo_url=data.get("sp_slo_url"),
             provider_type=SAMLProviderType(data.get("provider_type", "generic")),
-            binding=SAMLBindingType(data.get("binding", SAMLBindingType.HTTP_POST.value)),
-            nameid_format=SAMLNameIDFormat(data.get("nameid_format", SAMLNameIDFormat.EMAIL.value)),
+            binding=SAMLBindingType(
+                data.get("binding", SAMLBindingType.HTTP_POST.value)
+            ),
+            nameid_format=SAMLNameIDFormat(
+                data.get("nameid_format", SAMLNameIDFormat.EMAIL.value)
+            ),
             want_assertions_signed=data.get("want_assertions_signed", True),
             want_response_signed=data.get("want_response_signed", False),
-            require_encrypted_assertions=data.get("require_encrypted_assertions", False),
+            require_encrypted_assertions=data.get(
+                "require_encrypted_assertions", False
+            ),
             sign_requests=data.get("sign_requests", False),
             attribute_map=data.get("attribute_map", {}),
             session_lifetime_hours=data.get("session_lifetime_hours", 8),

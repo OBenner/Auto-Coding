@@ -389,10 +389,14 @@ describe('Subprocess Spawn Integration', () => {
       const promise1 = manager.startSpecCreation('task-1', TEST_PROJECT_PATH, 'Test 1');
       const promise2 = manager.startTaskExecution('task-2', TEST_PROJECT_PATH, 'spec-001');
 
-      // Wait for both tasks to be tracked (spawn happens after async operations)
+      // Yield to event loop to allow async spawn operations to complete
+      // (matches pattern used by other tests in this file)
+      await new Promise(resolve => setImmediate(resolve));
+
+      // Wait for both tasks to be tracked
       await vi.waitFor(() => {
         expect(manager.getRunningTasks()).toHaveLength(2);
-      }, { timeout: 5000 });
+      }, { timeout: 10000 });
 
       // Both tasks share the same mock process, so emit exit once triggers both handlers
       mockProcess.emit('exit', 0);
@@ -403,7 +407,7 @@ describe('Subprocess Spawn Integration', () => {
 
       // Tasks should be removed from tracking after exit
       expect(manager.getRunningTasks()).toHaveLength(0);
-    }, 15000);
+    }, 30000);  // Increase timeout for Windows CI (dynamic imports are slow)
 
     it('should use configured Python path', async () => {
       const { spawn } = await import('child_process');

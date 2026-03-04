@@ -114,7 +114,9 @@ class EnterpriseConfig:
         if self.is_enabled and self.audit_enabled:
             if self.audit_log_path is None:
                 # Default to .auto-claude/enterprise/audit/
-                self.audit_log_path = Path.cwd() / ".auto-claude" / "enterprise" / "audit"
+                self.audit_log_path = (
+                    Path.cwd() / ".auto-claude" / "enterprise" / "audit"
+                )
 
         # Validate air-gapped settings
         if self.deployment_mode == DeploymentMode.AIR_GAPPED:
@@ -133,7 +135,10 @@ class EnterpriseConfig:
     @property
     def is_self_hosted(self) -> bool:
         """Check if deployment is self-hosted (including air-gapped)."""
-        return self.deployment_mode in (DeploymentMode.SELF_HOSTED, DeploymentMode.AIR_GAPPED)
+        return self.deployment_mode in (
+            DeploymentMode.SELF_HOSTED,
+            DeploymentMode.AIR_GAPPED,
+        )
 
     @property
     def requires_gdpr_compliance(self) -> bool:
@@ -175,7 +180,9 @@ class EnterpriseConfig:
         }
 
 
-def _parse_compliance_frameworks(frameworks_str: str | None) -> list[ComplianceFramework]:
+def _parse_compliance_frameworks(
+    frameworks_str: str | None,
+) -> list[ComplianceFramework]:
     """
     Parse comma-separated compliance frameworks from environment variable.
 
@@ -224,13 +231,19 @@ def load_enterprise_config() -> EnterpriseConfig:
     compliance_frameworks = _parse_compliance_frameworks(frameworks_str)
 
     # Parse audit settings
-    audit_enabled = os.environ.get("ENTERPRISE_AUDIT_ENABLED", "true" if is_enabled else "false").lower() in ("true", "1", "yes")
+    audit_enabled = os.environ.get(
+        "ENTERPRISE_AUDIT_ENABLED", "true" if is_enabled else "false"
+    ).lower() in ("true", "1", "yes")
     audit_log_path_str = os.environ.get("ENTERPRISE_AUDIT_LOG_PATH")
     audit_log_path = Path(audit_log_path_str) if audit_log_path_str else None
     audit_retention_days = int(os.environ.get("ENTERPRISE_AUDIT_RETENTION_DAYS", "90"))
 
     # Parse SSO settings
-    sso_enabled = os.environ.get("ENTERPRISE_SSO_ENABLED", "false").lower() in ("true", "1", "yes")
+    sso_enabled = os.environ.get("ENTERPRISE_SSO_ENABLED", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
     sso_provider_type = os.environ.get("ENTERPRISE_SSO_PROVIDER_TYPE")
     sso_metadata_url = os.environ.get("ENTERPRISE_SSO_METADATA_URL")
     sso_entity_id = os.environ.get("ENTERPRISE_SSO_ENTITY_ID")
@@ -240,7 +253,9 @@ def load_enterprise_config() -> EnterpriseConfig:
     data_residency_enabled = bool(data_region)
 
     # Parse permissions settings
-    permissions_enabled = os.environ.get("ENTERPRISE_PERMISSIONS_ENABLED", "true" if is_enabled else "false").lower() in ("true", "1", "yes")
+    permissions_enabled = os.environ.get(
+        "ENTERPRISE_PERMISSIONS_ENABLED", "true" if is_enabled else "false"
+    ).lower() in ("true", "1", "yes")
 
     # Parse custom endpoints (for self-hosted/air-gapped)
     custom_api_base_url = os.environ.get("ENTERPRISE_API_BASE_URL")

@@ -3,12 +3,14 @@
  *
  * Allows users to install plugins from:
  * - Local directory (for development)
+ * - Remote URL (zip file or git repository)
  * - Zip file (for distribution)
  * - Marketplace (future feature)
  *
  * Features:
  * - Radio button selection for installation source type
  * - File/directory picker integration
+ * - URL input for remote plugins
  * - Installation progress and error handling
  * - Success toast notifications
  *
@@ -23,7 +25,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, FolderOpen, FileArchive, Globe } from 'lucide-react';
+import { Loader2, FolderOpen, FileArchive, Globe, Link } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -59,9 +61,10 @@ export function InstallPluginDialog({
   const { toast } = useToast();
 
   // Form state
-  const [sourceType, setSourceType] = useState<'directory' | 'zip' | 'marketplace'>('directory');
+  const [sourceType, setSourceType] = useState<'directory' | 'zip' | 'marketplace' | 'remote'>('directory');
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [marketplaceId, setMarketplaceId] = useState<string>('');
+  const [remoteUrl, setRemoteUrl] = useState<string>('');
 
   // UI state
   const [isInstalling, setIsInstalling] = useState(false);
@@ -73,6 +76,7 @@ export function InstallPluginDialog({
       setSourceType('directory');
       setSelectedPath('');
       setMarketplaceId('');
+      setRemoteUrl('');
       setError(null);
       setIsInstalling(false);
     }
@@ -128,6 +132,10 @@ export function InstallPluginDialog({
       setError(t('plugins:install.enterMarketplaceId', 'Please enter a marketplace plugin ID'));
       return;
     }
+    if (sourceType === 'remote' && !remoteUrl) {
+      setError(t('plugins:install.enterUrl', 'Please enter a plugin URL'));
+      return;
+    }
 
     setIsInstalling(true);
     setError(null);
@@ -137,7 +145,8 @@ export function InstallPluginDialog({
       const source: PluginInstallSource = {
         type: sourceType,
         ...(sourceType === 'directory' || sourceType === 'zip' ? { path: selectedPath } : {}),
-        ...(sourceType === 'marketplace' ? { marketplace_id: marketplaceId } : {})
+        ...(sourceType === 'marketplace' ? { marketplace_id: marketplaceId } : {}),
+        ...(sourceType === 'remote' ? { url: remoteUrl } : {})
       };
 
       // Call IPC to install plugin
@@ -181,7 +190,8 @@ export function InstallPluginDialog({
   const isValid =
     (sourceType === 'directory' && selectedPath) ||
     (sourceType === 'zip' && selectedPath) ||
-    (sourceType === 'marketplace' && marketplaceId.trim());
+    (sourceType === 'marketplace' && marketplaceId.trim()) ||
+    (sourceType === 'remote' && remoteUrl.trim());
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -191,7 +201,7 @@ export function InstallPluginDialog({
             {t('plugins:install.title', 'Install Plugin')}
           </DialogTitle>
           <DialogDescription>
-            {t('plugins:install.description', 'Install a plugin from a local directory, zip file, or marketplace.')}
+            {t('plugins:install.description', 'Install a plugin from a local directory, remote URL, zip file, or marketplace.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -202,9 +212,10 @@ export function InstallPluginDialog({
             <RadioGroup
               value={sourceType}
               onValueChange={(value) => {
-                setSourceType(value as 'directory' | 'zip' | 'marketplace');
+                setSourceType(value as 'directory' | 'zip' | 'marketplace' | 'remote');
                 setSelectedPath('');
                 setMarketplaceId('');
+                setRemoteUrl('');
                 setError(null);
               }}
               className="grid grid-cols-1 gap-3"
@@ -222,6 +233,23 @@ export function InstallPluginDialog({
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {t('plugins:install.directoryDescription', 'Install from a local plugin directory (for development)')}
+                  </p>
+                </Label>
+              </div>
+
+              {/* Remote URL */}
+              <div className="flex items-start gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 transition-colors">
+                <RadioGroupItem value="remote" id="source-remote" className="mt-1" />
+                <Label
+                  htmlFor="source-remote"
+                  className="flex-1 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 font-medium mb-1">
+                    <Link className="h-4 w-4" />
+                    {t('plugins:install.fromUrl', 'From URL')}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t('plugins:install.urlDescription', 'Install from a remote plugin URL (zip file or git repository)')}
                   </p>
                 </Label>
               </div>
@@ -289,6 +317,30 @@ export function InstallPluginDialog({
                   {t('plugins:install.browse', 'Browse')}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* Remote URL Input */}
+          {sourceType === 'remote' && (
+            <div className="space-y-2">
+              <Label htmlFor="plugin-url">
+                {t('plugins:install.pluginUrl', 'Plugin URL')}
+              </Label>
+              <input
+                id="plugin-url"
+                type="text"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="https://example.com/plugin.zip"
+                value={remoteUrl}
+                onChange={(e) => {
+                  setRemoteUrl(e.target.value);
+                  setError(null);
+                }}
+                disabled={isInstalling}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('plugins:install.urlHelp', 'Enter the URL to a plugin zip file or git repository')}
+              </p>
             </div>
           )}
 

@@ -365,7 +365,12 @@ def is_higher_role(role1: Role, role2: Role) -> bool:
 class PermissionDeniedError(Exception):
     """Exception raised when permission check fails."""
 
-    def __init__(self, message: str, role: Role | None = None, permission: Permission | None = None):
+    def __init__(
+        self,
+        message: str,
+        role: Role | None = None,
+        permission: Permission | None = None,
+    ):
         """
         Initialize permission denied error.
 
@@ -424,6 +429,7 @@ def require_permission(permission: Permission | str, user_id_param: str = "user_
         is_async = inspect.iscoroutinefunction(func)
 
         if is_async:
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 # Extract user_id and role from kwargs
@@ -442,20 +448,29 @@ def require_permission(permission: Permission | str, user_id_param: str = "user_
                         role = Role(role)
                     except ValueError:
                         error_msg = f"Invalid role: {role}"
-                        logger.warning(f"Permission denied for user {user_id}: {error_msg}")
-                        raise PermissionDeniedError(error_msg, role=None, permission=permission_enum)
+                        logger.warning(
+                            f"Permission denied for user {user_id}: {error_msg}"
+                        )
+                        raise PermissionDeniedError(
+                            error_msg, role=None, permission=permission_enum
+                        )
 
                 # Check permission
-                is_allowed, reason = check_permission(role, permission_enum, user_id, func.__name__)
+                is_allowed, reason = check_permission(
+                    role, permission_enum, user_id, func.__name__
+                )
 
                 if not is_allowed:
-                    raise PermissionDeniedError(reason, role=role, permission=permission_enum)
+                    raise PermissionDeniedError(
+                        reason, role=role, permission=permission_enum
+                    )
 
                 # Execute function
                 return await func(*args, **kwargs)
 
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 # Extract user_id and role from kwargs
@@ -474,14 +489,22 @@ def require_permission(permission: Permission | str, user_id_param: str = "user_
                         role = Role(role)
                     except ValueError:
                         error_msg = f"Invalid role: {role}"
-                        logger.warning(f"Permission denied for user {user_id}: {error_msg}")
-                        raise PermissionDeniedError(error_msg, role=None, permission=permission_enum)
+                        logger.warning(
+                            f"Permission denied for user {user_id}: {error_msg}"
+                        )
+                        raise PermissionDeniedError(
+                            error_msg, role=None, permission=permission_enum
+                        )
 
                 # Check permission
-                is_allowed, reason = check_permission(role, permission_enum, user_id, func.__name__)
+                is_allowed, reason = check_permission(
+                    role, permission_enum, user_id, func.__name__
+                )
 
                 if not is_allowed:
-                    raise PermissionDeniedError(reason, role=role, permission=permission_enum)
+                    raise PermissionDeniedError(
+                        reason, role=role, permission=permission_enum
+                    )
 
                 # Execute function
                 return func(*args, **kwargs)
@@ -536,6 +559,7 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
         is_async = inspect.iscoroutinefunction(func)
 
         if is_async:
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 # Extract user_id and role from kwargs
@@ -554,7 +578,9 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
                         role = Role(role)
                     except ValueError:
                         error_msg = f"Invalid role: {role}"
-                        logger.warning(f"Role check failed for user {user_id}: {error_msg}")
+                        logger.warning(
+                            f"Role check failed for user {user_id}: {error_msg}"
+                        )
                         raise PermissionDeniedError(error_msg, role=None)
 
                 # Check if role meets requirement (same or higher in hierarchy)
@@ -580,6 +606,7 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
 
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 # Extract user_id and role from kwargs
@@ -598,7 +625,9 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
                         role = Role(role)
                     except ValueError:
                         error_msg = f"Invalid role: {role}"
-                        logger.warning(f"Role check failed for user {user_id}: {error_msg}")
+                        logger.warning(
+                            f"Role check failed for user {user_id}: {error_msg}"
+                        )
                         raise PermissionDeniedError(error_msg, role=None)
 
                 # Check if role meets requirement (same or higher in hierarchy)

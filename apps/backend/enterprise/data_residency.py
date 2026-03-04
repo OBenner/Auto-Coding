@@ -92,14 +92,14 @@ class DataResidencyConfig:
             logger.warning(
                 "Unknown data region '%s'. Supported regions: %s. Defaulting to GLOBAL.",
                 self.region,
-                ", ".join(r.value for r in DataRegion)
+                ", ".join(r.value for r in DataRegion),
             )
             self.region = DataRegion.GLOBAL.value
 
         # Set GDPR compliance based on region
         self.requires_gdpr_compliance = self.region in {
             DataRegion.EU.value,
-            DataRegion.UK.value
+            DataRegion.UK.value,
         }
 
         # Set compliance frameworks
@@ -108,7 +108,7 @@ class DataResidencyConfig:
         elif self.region == DataRegion.UK.value:
             self.compliance_frameworks = [
                 ComplianceFramework.GDPR.value,
-                ComplianceFramework.UK_DPA.value
+                ComplianceFramework.UK_DPA.value,
             ]
         elif self.region == DataRegion.US.value:
             self.compliance_frameworks = [ComplianceFramework.CCPA.value]
@@ -123,12 +123,12 @@ class DataResidencyConfig:
             # EU can transfer to regions with adequacy decisions
             self.allowed_transfer_regions = [
                 DataRegion.UK.value,  # UK adequacy decision
-                DataRegion.GLOBAL.value  # With safeguards (SCCs)
+                DataRegion.GLOBAL.value,  # With safeguards (SCCs)
             ]
         elif self.region == DataRegion.UK.value:
             self.allowed_transfer_regions = [
                 DataRegion.EU.value,  # UK-EU data bridge
-                DataRegion.GLOBAL.value  # With safeguards
+                DataRegion.GLOBAL.value,  # With safeguards
             ]
         else:
             # Non-GDPR regions can transfer freely
@@ -138,7 +138,7 @@ class DataResidencyConfig:
             "Data residency configured: region=%s, gdpr=%s, frameworks=%s",
             self.region,
             self.requires_gdpr_compliance,
-            self.compliance_frameworks
+            self.compliance_frameworks,
         )
 
     def can_transfer_to(self, target_region: str) -> bool:
@@ -210,8 +210,7 @@ class DataResidencyConfig:
 
 
 def get_data_residency_config(
-    region: str | None = None,
-    custom_endpoint: str | None = None
+    region: str | None = None, custom_endpoint: str | None = None
 ) -> DataResidencyConfig:
     """
     Get data residency configuration from environment or parameters.
@@ -236,21 +235,22 @@ def get_data_residency_config(
         config = get_data_residency_config('EU')
     """
     # Determine region from parameter or environment
-    resolved_region = region or os.getenv("DATA_RESIDENCY_REGION", DataRegion.GLOBAL.value)
+    resolved_region = region or os.getenv(
+        "DATA_RESIDENCY_REGION", DataRegion.GLOBAL.value
+    )
 
     # Determine endpoint from parameter or environment
     resolved_endpoint = custom_endpoint or os.getenv("DATA_RESIDENCY_ENDPOINT")
 
     config = DataResidencyConfig(
-        region=resolved_region,
-        custom_endpoint=resolved_endpoint
+        region=resolved_region, custom_endpoint=resolved_endpoint
     )
 
     logger.info(
         "Data residency configuration loaded: region=%s, endpoint=%s, gdpr=%s",
         config.region,
         config.get_endpoint(),
-        config.requires_gdpr_compliance
+        config.requires_gdpr_compliance,
     )
 
     return config
@@ -274,10 +274,7 @@ def get_regional_endpoint(region: str) -> str:
     return config.get_endpoint()
 
 
-def validate_data_transfer(
-    source_region: str,
-    target_region: str
-) -> tuple[bool, str]:
+def validate_data_transfer(source_region: str, target_region: str) -> tuple[bool, str]:
     """
     Validate data transfer between regions.
 

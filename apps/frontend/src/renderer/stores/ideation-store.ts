@@ -637,8 +637,17 @@ export function isUIUXIdea(idea: Idea): idea is Idea & { type: 'ui_ux_improvemen
   return idea.type === 'ui_ux_improvements';
 }
 
+// Guard against double-registration (e.g. React StrictMode double-invoke or hot-reload)
+let _ideationListenersCleanup: (() => void) | null = null;
+
 // IPC listener setup - call this once when the app initializes
 export function setupIdeationListeners(): () => void {
+  // Tear down any previously registered listeners before re-registering
+  if (_ideationListenersCleanup) {
+    _ideationListenersCleanup();
+    _ideationListenersCleanup = null;
+  }
+
   const store = useIdeationStore.getState;
 
   // Helper to check if event is for the current project
@@ -815,7 +824,7 @@ export function setupIdeationListeners(): () => void {
     store().addLog('Ideation generation stopped');
   });
 
-  return () => {
+  const cleanup = () => {
     for (const [projectId] of generationTimeoutIds) {
       clearGenerationTimeout(projectId);
     }
@@ -827,5 +836,10 @@ export function setupIdeationListeners(): () => void {
     unsubComplete();
     unsubError();
     unsubStopped();
+
+    _ideationListenersCleanup = null;
   };
+
+  _ideationListenersCleanup = cleanup;
+  return cleanup;
 }

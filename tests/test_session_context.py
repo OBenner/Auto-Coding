@@ -29,9 +29,9 @@ class TestSessionContextCodeReferences:
         ]
 
         for method_name in required_methods:
-            assert hasattr(
-                SessionContext, method_name
-            ), f"SessionContext missing method '{method_name}'"
+            assert hasattr(SessionContext, method_name), (
+                f"SessionContext missing method '{method_name}'"
+            )
             method = getattr(SessionContext, method_name)
             assert callable(method), f"SessionContext.{method_name} is not callable"
 
@@ -68,10 +68,10 @@ class TestSessionContextCodeReferences:
 
     def test_save_conversation_round_extracts_code_references(self):
         """Test that save_conversation_round handles code references from round_data."""
-        from agents.session_context import SessionContext
-
         # Verify the method signature includes handling of code_references
         import inspect
+
+        from agents.session_context import SessionContext
 
         sig = inspect.signature(SessionContext.save_conversation_round)
         params = list(sig.parameters.keys())
@@ -84,8 +84,9 @@ class TestSessionContextCodeReferences:
 
     def test_get_code_references_signature(self):
         """Test get_code_references has correct signature."""
-        from agents.session_context import SessionContext
         import inspect
+
+        from agents.session_context import SessionContext
 
         sig = inspect.signature(SessionContext.get_code_references)
         params = sig.parameters
@@ -100,8 +101,9 @@ class TestSessionContextCodeReferences:
 
     def test_get_sessions_for_file_signature(self):
         """Test get_sessions_for_file has correct signature."""
-        from agents.session_context import SessionContext
         import inspect
+
+        from agents.session_context import SessionContext
 
         sig = inspect.signature(SessionContext.get_sessions_for_file)
         params = sig.parameters
@@ -112,8 +114,9 @@ class TestSessionContextCodeReferences:
 
     def test_save_code_reference_episode_signature(self):
         """Test save_code_reference_episode has correct signature."""
-        from agents.session_context import SessionContext
         import inspect
+
+        from agents.session_context import SessionContext
 
         sig = inspect.signature(SessionContext.save_code_reference_episode)
         params = sig.parameters
@@ -134,8 +137,9 @@ class TestCodeReferenceIntegration:
 
     def test_code_reference_methods_are_async(self):
         """Verify that code reference methods are async (coroutines)."""
-        from agents.session_context import SessionContext
         import inspect
+
+        from agents.session_context import SessionContext
 
         async_methods = [
             "get_code_references",
@@ -146,6 +150,6 @@ class TestCodeReferenceIntegration:
 
         for method_name in async_methods:
             method = getattr(SessionContext, method_name)
-            assert inspect.iscoroutinefunction(
-                method
-            ), f"{method_name} should be an async method"
+            assert inspect.iscoroutinefunction(method), (
+                f"{method_name} should be an async method"
+            )

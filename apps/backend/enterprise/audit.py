@@ -599,7 +599,9 @@ class EnterpriseAuditLogger:
         reason: str | None = None,
     ) -> None:
         """Log a permission check result."""
-        action = AuditAction.PERMISSION_GRANTED if allowed else AuditAction.PERMISSION_DENIED
+        action = (
+            AuditAction.PERMISSION_GRANTED if allowed else AuditAction.PERMISSION_DENIED
+        )
         self.log(
             context,
             action,
@@ -761,7 +763,10 @@ class EnterpriseAuditLogger:
                             continue
 
                         # Apply filters
-                        if correlation_id and data.get("correlation_id") != correlation_id:
+                        if (
+                            correlation_id
+                            and data.get("correlation_id") != correlation_id
+                        ):
                             continue
                         if action and data.get("action") != action.value:
                             continue
@@ -769,7 +774,10 @@ class EnterpriseAuditLogger:
                             continue
                         if user_email and data.get("user_email") != user_email:
                             continue
-                        if organization_id and data.get("organization_id") != organization_id:
+                        if (
+                            organization_id
+                            and data.get("organization_id") != organization_id
+                        ):
                             continue
                         if project_id and data.get("project_id") != project_id:
                             continue
@@ -864,7 +872,9 @@ class EnterpriseAuditLogger:
             # Count by data region
             if entry.data_region:
                 region = entry.data_region
-                stats["by_data_region"][region] = stats["by_data_region"].get(region, 0) + 1
+                stats["by_data_region"][region] = (
+                    stats["by_data_region"].get(region, 0) + 1
+                )
 
             # Sum durations
             if entry.duration_ms:
@@ -873,7 +883,9 @@ class EnterpriseAuditLogger:
             # Sum token usage
             if entry.token_usage:
                 stats["total_input_tokens"] += entry.token_usage.get("input_tokens", 0)
-                stats["total_output_tokens"] += entry.token_usage.get("output_tokens", 0)
+                stats["total_output_tokens"] += entry.token_usage.get(
+                    "output_tokens", 0
+                )
 
         return stats
 

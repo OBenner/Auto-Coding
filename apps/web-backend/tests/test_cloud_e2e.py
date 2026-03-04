@@ -15,15 +15,16 @@ Requirements:
 - Backend API must be accessible at http://localhost:8000
 """
 
+import json
+import os
+import subprocess
 import sys
 import time
-import requests
-import json
-from typing import Dict, Optional
-import subprocess
 
-# Test configuration
-API_BASE_URL = "http://localhost:8000"
+import requests
+
+# Test configuration - must be set via environment variable for E2E tests
+API_BASE_URL = os.environ.get("API_BASE_URL", "")
 TEST_USER_EMAIL = "test@example.com"
 TEST_USER_PASSWORD = "testpass123"
 TEST_ORG = "Test Organization"
@@ -33,10 +34,10 @@ class CloudE2ETest:
     """End-to-end test runner for cloud-hosted features."""
 
     def __init__(self):
-        self.access_token: Optional[str] = None
-        self.user_id: Optional[int] = None
+        self.access_token: str | None = None
+        self.user_id: int | None = None
         self.session = requests.Session()
-        self.results: Dict[str, bool] = {}
+        self.results: dict[str, bool] = {}
 
     def log(self, message: str, level: str = "INFO"):
         """Log a test message."""
@@ -44,7 +45,9 @@ class CloudE2ETest:
         prefix = "✅" if level == "SUCCESS" else "❌" if level == "ERROR" else "ℹ️"
         print(f"[{timestamp}] {prefix} {message}")
 
-    def wait_for_service(self, url: str, timeout: int = 60, service_name: str = "service") -> bool:
+    def wait_for_service(
+        self, url: str, timeout: int = 60, service_name: str = "service"
+    ) -> bool:
         """Wait for a service to become available."""
         self.log(f"Waiting for {service_name} at {url}...")
         start_time = time.time()
@@ -82,26 +85,27 @@ class CloudE2ETest:
         """Test 2: User registration."""
         self.log("Test 2: User Signup")
         try:
-            payload = {
-                "email": TEST_USER_EMAIL,
-                "password": TEST_USER_PASSWORD
-            }
+            payload = {"email": TEST_USER_EMAIL, "password": TEST_USER_PASSWORD}
             response = self.session.post(
-                f"{API_BASE_URL}/api/users/register",
-                json=payload
+                f"{API_BASE_URL}/api/users/register", json=payload
             )
 
             if response.status_code == 201:
                 data = response.json()
                 self.user_id = data.get("id")
-                self.log(f"User created successfully: {data.get('email')} (ID: {self.user_id})", "SUCCESS")
+                self.log(
+                    f"User created successfully: {data.get('email')} (ID: {self.user_id})",
+                    "SUCCESS",
+                )
                 return True
             elif response.status_code == 400:
                 # User might already exist, that's okay
                 self.log("User already exists, continuing...", "INFO")
                 return True
             else:
-                self.log(f"Signup failed: {response.status_code} - {response.text}", "ERROR")
+                self.log(
+                    f"Signup failed: {response.status_code} - {response.text}", "ERROR"
+                )
                 return False
         except Exception as e:
             self.log(f"Signup error: {e}", "ERROR")
@@ -111,28 +115,29 @@ class CloudE2ETest:
         """Test 3: User login and token retrieval."""
         self.log("Test 3: User Login")
         try:
-            payload = {
-                "email": TEST_USER_EMAIL,
-                "password": TEST_USER_PASSWORD
-            }
+            payload = {"email": TEST_USER_EMAIL, "password": TEST_USER_PASSWORD}
             response = self.session.post(
-                f"{API_BASE_URL}/api/users/login",
-                json=payload
+                f"{API_BASE_URL}/api/users/login", json=payload
             )
 
             if response.status_code == 200:
                 data = response.json()
                 self.access_token = data.get("access_token")
                 self.user_id = data.get("user", {}).get("id")
-                self.log(f"Login successful, token received (user_id: {self.user_id})", "SUCCESS")
+                self.log(
+                    f"Login successful, token received (user_id: {self.user_id})",
+                    "SUCCESS",
+                )
 
                 # Set authorization header for subsequent requests
-                self.session.headers.update({
-                    "Authorization": f"Bearer {self.access_token}"
-                })
+                self.session.headers.update(
+                    {"Authorization": f"Bearer {self.access_token}"}
+                )
                 return True
             else:
-                self.log(f"Login failed: {response.status_code} - {response.text}", "ERROR")
+                self.log(
+                    f"Login failed: {response.status_code} - {response.text}", "ERROR"
+                )
                 return False
         except Exception as e:
             self.log(f"Login error: {e}", "ERROR")
@@ -160,14 +165,16 @@ class CloudE2ETest:
         self.log("Test 5: GitHub OAuth Redirect")
         try:
             response = self.session.get(
-                f"{API_BASE_URL}/api/git/github/authorize",
-                allow_redirects=False
+                f"{API_BASE_URL}/api/git/github/authorize", allow_redirects=False
             )
 
             if response.status_code == 302:
                 redirect_url = response.headers.get("Location", "")
                 if redirect_url.startswith("https://github.com/"):
-                    self.log(f"GitHub OAuth redirect working: {redirect_url[:100]}...", "SUCCESS")
+                    self.log(
+                        f"GitHub OAuth redirect working: {redirect_url[:100]}...",
+                        "SUCCESS",
+                    )
                     return True
                 else:
                     self.log(f"Unexpected redirect: {redirect_url}", "ERROR")
@@ -194,7 +201,10 @@ class CloudE2ETest:
                 response = self.session.get(f"{API_BASE_URL}/api/usage/stats")
                 if response.status_code == 200:
                     stats = response.json()
-                    self.log(f"Usage stats retrieved: {stats.get('total_requests', 0)} requests", "SUCCESS")
+                    self.log(
+                        f"Usage stats retrieved: {stats.get('total_requests', 0)} requests",
+                        "SUCCESS",
+                    )
                     return True
                 else:
                     self.log(f"Usage stats failed: {response.status_code}", "ERROR")
@@ -219,7 +229,10 @@ class CloudE2ETest:
                     self.log("Redis connection healthy", "SUCCESS")
                     return True
                 else:
-                    self.log("Redis connection not available (expected if Redis not running)", "INFO")
+                    self.log(
+                        "Redis connection not available (expected if Redis not running)",
+                        "INFO",
+                    )
                     return True  # Don't fail the test, just note it
             else:
                 self.log(f"Health check failed: {response.status_code}", "ERROR")
@@ -251,7 +264,9 @@ class CloudE2ETest:
         self.log("=" * 80)
 
         # Wait for backend to be ready
-        if not self.wait_for_service(f"{API_BASE_URL}/health", timeout=60, service_name="Backend API"):
+        if not self.wait_for_service(
+            f"{API_BASE_URL}/health", timeout=60, service_name="Backend API"
+        ):
             self.log("Backend API is not available, cannot run tests", "ERROR")
             return False
 
@@ -305,14 +320,20 @@ def check_docker_stack() -> bool:
             ["docker", "ps", "--filter", "name=autoclaude", "--format", "{{.Names}}"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
 
         running_containers = result.stdout.strip().split("\n")
         running_containers = [c for c in running_containers if c]
 
-        expected_containers = ["autoclaude-postgres", "autoclaude-redis", "autoclaude-backend"]
-        missing_containers = [c for c in expected_containers if c not in running_containers]
+        expected_containers = [
+            "autoclaude-postgres",
+            "autoclaude-redis",
+            "autoclaude-backend",
+        ]
+        missing_containers = [
+            c for c in expected_containers if c not in running_containers
+        ]
 
         if missing_containers:
             print(f"⚠️  Missing containers: {', '.join(missing_containers)}")

@@ -424,7 +424,7 @@ def _get_token_from_macos_keychain() -> str | None:
 
         return token
 
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, Exception):
+    except Exception:
         return None
 
 
@@ -452,7 +452,7 @@ def _get_token_from_windows_credential_files() -> str | None:
 
         return None
 
-    except (json.JSONDecodeError, KeyError, FileNotFoundError, Exception):
+    except Exception:
         return None
 
 
@@ -570,7 +570,7 @@ def _get_token_from_config_dir(config_dir: str) -> str | None:
                 ):
                     logger.debug(f"Found token in {cred_path}")
                     return token
-            except (json.JSONDecodeError, KeyError, Exception) as e:
+            except Exception as e:
                 logger.debug(f"Failed to read {cred_path}: {e}")
                 continue
 
@@ -741,7 +741,7 @@ def _find_git_bash_path() -> str | None:
             git_paths = result.stdout.strip().splitlines()
             if git_paths:
                 git_path = git_paths[0].strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+    except (FileNotFoundError, subprocess.SubprocessError):
         # Intentionally suppress errors - best-effort detection with fallback to common paths
         pass
 
@@ -978,6 +978,19 @@ def _trigger_login_windows() -> bool:
         return False
 
 
+def emit_rate_limit_marker(reset_time: str | None = None) -> None:
+    """Print a structured marker that the frontend can detect for rate-limit handling.
+
+    The frontend ``rate-limit-detector.ts`` scans process output for rate-limit
+    patterns.  This function prints a canonical marker line so the detection is
+    reliable regardless of the upstream error format.
+    """
+    parts = ["[RATE_LIMITED]"]
+    if reset_time:
+        parts.append(f"reset_time={reset_time}")
+    print(" ".join(parts), flush=True)
+
+
 def ensure_authenticated() -> str:
     """
     Ensure the user is authenticated, prompting for login if needed.
@@ -1143,9 +1156,7 @@ def get_sso_config() -> "SAMLConfig":
 
     # Parse session lifetime
     try:
-        session_lifetime_hours = int(
-            os.environ.get("SAML_SESSION_LIFETIME_HOURS", "8")
-        )
+        session_lifetime_hours = int(os.environ.get("SAML_SESSION_LIFETIME_HOURS", "8"))
     except ValueError:
         logger.warning("Invalid SAML_SESSION_LIFETIME_HOURS, using default: 8")
         session_lifetime_hours = 8
@@ -1331,7 +1342,8 @@ def authenticate_with_sso(
                     "role": user.role,
                     "groups": user.groups,
                     "jit_provisioned": (
-                        config.allow_jit_provisioning and not user.attributes.get("existing_user")
+                        config.allow_jit_provisioning
+                        and not user.attributes.get("existing_user")
                     ),
                 },
             )

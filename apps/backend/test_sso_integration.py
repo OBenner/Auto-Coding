@@ -21,7 +21,6 @@ Environment Variables:
     SAML_PROVIDER_TYPE=okta|azure_ad|google_workspace|etc
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -30,9 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from core.auth import (
     ENTERPRISE_AVAILABLE,
-    authenticate_with_sso,
     get_sso_config,
-    get_sso_user,
     is_sso_enabled,
 )
 
