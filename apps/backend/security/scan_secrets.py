@@ -29,6 +29,58 @@ logger = logging.getLogger(__name__)
 # SECRET PATTERNS
 # =============================================================================
 
+# Frontend-specific patterns for JavaScript/TypeScript/Electron apps
+# These patterns detect secrets in frontend code that ships to users
+FRONTEND_PATTERNS = [
+    # localStorage.setItem with API keys/tokens
+    # Detects: localStorage.setItem('apiKey', 'sk-1234...') or similar
+    (
+        r'localStorage\.setItem\s*\(\s*["\'](?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer)["\']\s*,\s*["\']([a-zA-Z0-9_-]{20,})["\']',
+        "localStorage API key/token assignment",
+    ),
+    # sessionStorage.setItem with API keys/tokens
+    (
+        r'sessionStorage\.setItem\s*\(\s*["\'](?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer)["\']\s*,\s*["\']([a-zA-Z0-9_-]{20,})["\']',
+        "sessionStorage API key/token assignment",
+    ),
+    # window.config object with secrets
+    # Detects: window.config = { apiKey: 'sk-1234...' } or window.config.apiKey = 'sk-1234...'
+    # Also: window.CONFIG, window.appConfig, window.APP_CONFIG
+    (
+        r'window\.(?:config|CONFIG|appConfig|APP_CONFIG)(?:\.\s*(?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer|aws[_-]?key)\s*)?[:=]\s*["\']([a-zA-Z0-9_-]{16,})["\']|window\.(?:config|CONFIG|appConfig|APP_CONFIG)\s*=\s*{[^}]*?(?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer|aws[_-]?key)\s*:\s*["\']?([a-zA-Z0-9_-]{16,})["\']?',
+        "window.config object with potential secret",
+    ),
+    # Firebase config objects (contain API keys)
+    (
+        r'firebaseConfig\s*=\s*{[^}]*apiKey\s*:\s*["\']([a-zA-Z0-9_-]{20,})["\']',
+        "Firebase config with API key",
+    ),
+    # Google Analytics measurement IDs (must be exactly G-XXXXXXXXXX format)
+    # Use word boundaries to avoid matching CSS classes like 'bg-background'
+    (
+        r"\bG-[A-Z0-9]{10}\b",
+        "Google Analytics Measurement ID",
+    ),
+    # Public API endpoints with embedded keys in URL
+    (
+        r'https?://[^\s"\']*api[_-]?key[_-]?=?[a-zA-Z0-9_-]{20,}',
+        "API endpoint with embedded key",
+    ),
+    # Vite/CRA environment variable assignments in .env files
+    # These files should be gitignored but sometimes get committed
+    (
+        r'^[A-Z_]+=\s*["\']?([a-zA-Z0-9_-]{20,})["\']?\s*$',
+        "Environment variable assignment (.env file)",
+    ),
+    # Electron main process: process.env with hardcoded values in code
+    # Note: process.env.VAR_NAME is safe (reads from environment)
+    # But process.env.VAR_NAME = 'sk-1234...' is bad
+    (
+        r'process\.env\.[A-Z_]+\s*=\s*["\']([a-zA-Z0-9_-]{20,})',
+        "Hardcoded process.env assignment",
+    ),
+]
+
 # Generic high-entropy patterns that match common API key formats
 GENERIC_PATTERNS = [
     # Generic API key patterns (32+ char alphanumeric strings assigned to variables)
@@ -106,11 +158,6 @@ SERVICE_PATTERNS = [
     (r"lin_api_[a-zA-Z0-9]{40,}", "Linear API Key"),
     # Vercel
     (r"[a-zA-Z0-9]{24}_[a-zA-Z0-9]{28,}", "Potential Vercel Token"),
-    # Heroku
-    (
-        r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}",
-        "Heroku API Key / UUID",
-    ),
     # Doppler
     (r"dp\.pt\.[a-zA-Z0-9]{40,}", "Doppler Service Token"),
 ]
@@ -145,7 +192,11 @@ DATABASE_PATTERNS = [
 
 # Combine all patterns
 ALL_PATTERNS = (
-    GENERIC_PATTERNS + SERVICE_PATTERNS + PRIVATE_KEY_PATTERNS + DATABASE_PATTERNS
+    FRONTEND_PATTERNS
+    + GENERIC_PATTERNS
+    + SERVICE_PATTERNS
+    + PRIVATE_KEY_PATTERNS
+    + DATABASE_PATTERNS
 )
 
 
@@ -235,15 +286,15 @@ BINARY_EXTENSIONS = {
 
 # False positive patterns to filter out
 FALSE_POSITIVE_PATTERNS = [
-    r"process\.env\.",  # Environment variable references
     r"os\.environ",  # Python env references
     r"ENV\[",  # Ruby/other env references
     r"\$\{[A-Z_]+\}",  # Shell variable substitution
+    r"import\.meta\.env\.[A-Z_]+",  # Vite/env references (safe)
+    r"__[\w_]+__",  # Build-time defines like __SENTRY_DSN__ (safe)
     r"your[-_]?api[-_]?key",  # Placeholder values
     r"xxx+",  # Placeholder
     r"placeholder",  # Placeholder
-    r"example",  # Example value
-    r"sample",  # Sample value
+    r"\bsample\b",  # Sample value
     r"test[-_]?key",  # Test placeholder
     r"<[A-Z_]+>",  # Placeholder like <API_KEY>
     r"TODO",  # Comment markers
@@ -251,6 +302,16 @@ FALSE_POSITIVE_PATTERNS = [
     r"CHANGEME",
     r"INSERT[-_]?YOUR",
     r"REPLACE[-_]?WITH",
+    r"\bmock\b",  # Test mocks
+    r"\bfixture\b",  # Test fixtures
+    r"(?<![\w.-])example(?![\w.-])",  # Example data (exclude domains like api.example.com)
+    r"\bdummy\b",  # Dummy/test data
+    r"\bfake\b",  # Fake test data
+    r"service[-_]?token",  # Common test token placeholder
+    r"very[-_]?long[-_]?key",  # Test key placeholder
+    r"(?<![\w-])abc123(?![\w-])",  # Common test placeholder (exclude token substrings)
+    r"(?<![\w-])xyz789(?![\w-])",  # Common test placeholder (exclude token substrings)
+    r"test@?example\.com",  # Test email
 ]
 
 
@@ -304,8 +365,17 @@ def is_false_positive(line: str, matched_text: str) -> bool:
     """Check if a match is likely a false positive."""
     line_lower = line.lower()
 
+    # Special handling for process.env: only filter safe references (reads), not assignments
+    if "process.env." in line_lower:
+        # Unsafe: process.env.X = "value" (single = assignment, not == or ===)
+        if re.search(r"process\.env\.[A-Z_]+\s*=[^=]", line):
+            return False
+        # Safe: const x = process.env.X (read from environment)
+        if re.search(r"process\.env\.[A-Z_]+(\s|\)|,|;|$)", line):
+            return True
+
     for pattern in FALSE_POSITIVE_PATTERNS:
-        if re.search(pattern, line_lower):
+        if re.search(pattern, line_lower, re.IGNORECASE):
             return True
 
     # Check if it's just a variable name or type hint
@@ -406,11 +476,20 @@ def scan_files(
     all_matches = []
 
     for file_path in files:
+        # Normalize to POSIX separators for consistent ignore-pattern matching
+        # (Windows backslashes would bypass slash-based ignore regexes)
+        normalized_path = Path(file_path).as_posix()
+
         # Skip files based on ignore patterns
-        if should_skip_file(file_path, custom_ignores):
+        if should_skip_file(normalized_path, custom_ignores):
             continue
 
-        full_path = project_dir / file_path
+        # Handle both relative and absolute paths
+        file_path_obj = Path(file_path)
+        if file_path_obj.is_absolute():
+            full_path = file_path_obj
+        else:
+            full_path = project_dir / file_path_obj
 
         # Skip if file doesn't exist or is a directory
         if not full_path.exists() or full_path.is_dir():
@@ -418,7 +497,7 @@ def scan_files(
 
         try:
             content = full_path.read_text(encoding="utf-8", errors="ignore")
-            matches = scan_content(content, file_path)
+            matches = scan_content(content, normalized_path)
             all_matches.extend(matches)
         except (OSError, UnicodeDecodeError):
             # Skip files that can't be read
@@ -523,13 +602,20 @@ def main() -> int:
 
     # Determine which files to scan
     if args.path:
-        path = Path(args.path)
+        path = Path(args.path).resolve()
         if path.is_file():
             files = [str(path)]
         elif path.is_dir():
-            files = [
-                str(f.relative_to(project_dir)) for f in path.rglob("*") if f.is_file()
-            ]
+            # For directories, collect all files and make them relative to project_dir if possible
+            # Otherwise use absolute paths
+            files = []
+            for f in path.rglob("*"):
+                if f.is_file():
+                    try:
+                        files.append(str(f.relative_to(project_dir)))
+                    except ValueError:
+                        # File is not under project_dir, use absolute path
+                        files.append(str(f))
         else:
             print(f"{RED}Error: Path not found: {args.path}{NC}", file=sys.stderr)
             return 2
