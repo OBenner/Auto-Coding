@@ -72,8 +72,7 @@ export async function loadFileBasedMemories(
       const allSessionFiles = await fsPromises.readdir(sessionInsightsDir);
       const sessionFiles = allSessionFiles
         .filter((f: string) => f.startsWith('session_') && f.endsWith('.json'))
-        .sort()
-        .reverse();
+        .sort((a: string, b: string) => b.localeCompare(a));
 
       for (const sessionFile of sessionFiles.slice(0, 3)) {
         try {

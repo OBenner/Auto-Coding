@@ -102,7 +102,7 @@ class NotionConnector(BaseConnector):
 
             # Test connection with a simple search
             response = self._make_request(
-                "POST", "/search", json={"query": "", "page_size": 1}
+                "POST", "/search", json_data={"query": "", "page_size": 1}
             )
 
             if response and response.status_code == 200:
