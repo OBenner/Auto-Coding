@@ -17,13 +17,21 @@ Public API exported from sub-modules.
 """
 
 import importlib.util
-import sys
 from pathlib import Path
 
 # Import merge functions from workspace.py (which coexists with this package)
 # We use importlib to explicitly load workspace.py since Python prefers the package
 _workspace_file = Path(__file__).parent.parent / "workspace.py"
+if not _workspace_file.exists():
+    raise ImportError(
+        f"workspace.py not found at {_workspace_file}. "
+        "The core.workspace package requires workspace.py to coexist."
+    )
+
 _spec = importlib.util.spec_from_file_location("workspace_module", _workspace_file)
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"Failed to create module spec for {_workspace_file}")
+
 _workspace_module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_workspace_module)
 merge_existing_build = _workspace_module.merge_existing_build
@@ -32,6 +40,16 @@ AI_MERGE_SYSTEM_PROMPT = _workspace_module.AI_MERGE_SYSTEM_PROMPT
 _build_merge_prompt = _workspace_module._build_merge_prompt
 _check_git_conflicts = _workspace_module._check_git_conflicts
 _rebase_spec_branch = _workspace_module._rebase_spec_branch
+
+# Import workspace configuration utilities
+get_workspace_config = _workspace_module.get_workspace_config
+get_workspace_manager = _workspace_module.get_workspace_manager
+find_workspace_for_project = _workspace_module.find_workspace_for_project
+list_workspaces = _workspace_module.list_workspaces
+
+# Import workspace configuration classes from their actual modules
+from ..workspace_config import ProjectConfig, ProjectRelationship, WorkspaceConfig
+from ..workspace_manager import ProjectState, WorkspaceManager
 
 # Models and Enums
 # Display Functions
@@ -115,6 +133,16 @@ __all__ = [
     "_build_merge_prompt",  # Internal prompt builder (ACS-194)
     "_check_git_conflicts",  # Internal git conflict detection (ACS-224)
     "_rebase_spec_branch",  # Internal rebase function (ACS-224)
+    # Multi-Codebase Workspace Configuration
+    "WorkspaceConfig",  # Workspace configuration for multiple projects
+    "WorkspaceManager",  # Workspace manager for multi-project operations
+    "ProjectConfig",  # Project configuration within a workspace
+    "ProjectState",  # Project state isolation
+    "ProjectRelationship",  # Project relationship enum
+    "get_workspace_config",  # Load workspace configuration
+    "get_workspace_manager",  # Load workspace manager
+    "find_workspace_for_project",  # Find workspace containing a project
+    "list_workspaces",  # List all available workspaces
     # Models
     "WorkspaceMode",
     "WorkspaceChoice",

@@ -4,6 +4,7 @@ import type { APIProfile, ProfileFormData, TestConnectionResult, ModelInfo } fro
 import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import { toast } from '../hooks/use-toast';
 import { markSettingsLoaded } from '../lib/sentry';
+import { initializeKeyboardShortcuts } from './keyboard-shortcuts-store';
 
 interface SettingsState {
   settings: AppSettings;
@@ -326,6 +327,40 @@ function migrateOnboardingCompleted(settings: AppSettings): AppSettings {
 }
 
 /**
+ * Migrate agent preferences to ensure sensible defaults for existing users.
+ * Populates default values for new agent preference fields if not already set.
+ */
+function migrateAgentPreferences(settings: AppSettings): AppSettings {
+  // Populate each missing agent preference field individually
+  // so that adding new fields later doesn't skip them
+  const migrated = { ...settings };
+  let changed = false;
+
+  if (migrated.agentVerbosity === undefined) {
+    migrated.agentVerbosity = 'normal';
+    changed = true;
+  }
+  if (migrated.agentRiskTolerance === undefined) {
+    migrated.agentRiskTolerance = 'balanced';
+    changed = true;
+  }
+  if (migrated.agentProjectType === undefined) {
+    migrated.agentProjectType = 'established';
+    changed = true;
+  }
+  if (migrated.agentCodingStyle === undefined) {
+    migrated.agentCodingStyle = {};
+    changed = true;
+  }
+  if (migrated.agentUserInstructions === undefined) {
+    migrated.agentUserInstructions = [];
+    changed = true;
+  }
+
+  return changed ? migrated : settings;
+}
+
+/**
  * Load settings from main process
  */
 export async function loadSettings(): Promise<void> {
@@ -335,16 +370,37 @@ export async function loadSettings(): Promise<void> {
   try {
     const result = await window.electronAPI.getSettings();
     if (result.success && result.data) {
-      // Apply migration for onboardingCompleted flag
-      const migratedSettings = migrateOnboardingCompleted(result.data);
+      // Apply migrations
+      let migratedSettings = migrateOnboardingCompleted(result.data);
+      migratedSettings = migrateAgentPreferences(migratedSettings);
       store.setSettings(migratedSettings);
 
-      // If migration changed the settings, persist them
+      // Persist any migration changes back to disk
+      const migrationUpdates: Partial<AppSettings> = {};
       if (migratedSettings.onboardingCompleted !== result.data.onboardingCompleted) {
-        await window.electronAPI.saveSettings({
-          onboardingCompleted: migratedSettings.onboardingCompleted
-        });
+        migrationUpdates.onboardingCompleted = migratedSettings.onboardingCompleted;
       }
+      if (migratedSettings.agentVerbosity !== result.data.agentVerbosity) {
+        migrationUpdates.agentVerbosity = migratedSettings.agentVerbosity;
+      }
+      if (migratedSettings.agentRiskTolerance !== result.data.agentRiskTolerance) {
+        migrationUpdates.agentRiskTolerance = migratedSettings.agentRiskTolerance;
+      }
+      if (migratedSettings.agentProjectType !== result.data.agentProjectType) {
+        migrationUpdates.agentProjectType = migratedSettings.agentProjectType;
+      }
+      if (migratedSettings.agentCodingStyle !== result.data.agentCodingStyle) {
+        migrationUpdates.agentCodingStyle = migratedSettings.agentCodingStyle;
+      }
+      if (migratedSettings.agentUserInstructions !== result.data.agentUserInstructions) {
+        migrationUpdates.agentUserInstructions = migratedSettings.agentUserInstructions;
+      }
+      if (Object.keys(migrationUpdates).length > 0) {
+        await window.electronAPI.saveSettings(migrationUpdates);
+      }
+
+      // Initialize keyboard shortcuts from localStorage
+      initializeKeyboardShortcuts();
 
       // Only mark settings as loaded on SUCCESS
       // This ensures Sentry respects user's opt-out preference even if settings fail to load
@@ -396,5 +452,32 @@ export async function loadProfiles(): Promise<void> {
     store.setProfilesError(error instanceof Error ? error.message : 'Failed to load profiles');
   } finally {
     store.setProfilesLoading(false);
+  }
+}
+
+/**
+ * Get recent actions from settings
+ * Returns the recentActions array from current settings
+ */
+export function getRecentActions(): import('../../shared/types/settings').RecentAction[] {
+  const store = useSettingsStore.getState();
+  return store.settings.recentActions || [];
+}
+
+/**
+ * Save recent actions to settings
+ * Updates the recentActions array in settings and persists to disk
+ */
+export async function saveRecentActions(actions: import('../../shared/types/settings').RecentAction[]): Promise<boolean> {
+  const store = useSettingsStore.getState();
+  try {
+    const result = await window.electronAPI.saveSettings({ recentActions: actions });
+    if (result.success) {
+      store.updateSettings({ recentActions: actions });
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
   }
 }

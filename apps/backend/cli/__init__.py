@@ -10,6 +10,8 @@ This package provides a modular CLI structure:
 - build_commands.py: Build execution and follow-up tasks
 - workspace_commands.py: Workspace management (merge, review, discard)
 - qa_commands.py: QA validation commands
+- metrics_commands.py: Learning metrics and improvement trends
+- pattern_commands.py: Pattern management (list, approve, override, delete)
 - utils.py: Shared utilities and configuration
 """
 

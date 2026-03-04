@@ -11,11 +11,16 @@ and initializing plugin instances with proper sandboxing.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import logging
+import re
 import sys
 from pathlib import Path
+
+from packaging.specifiers import SpecifierSet
+from packaging.version import InvalidVersion, Version
 
 from .base import PluginBase, PluginMetadata, PluginType
 from .isolation import PluginSandbox, ResourceLimits
@@ -23,25 +28,65 @@ from .isolation import PluginSandbox, ResourceLimits
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Import debug utilities
+# Import debug utilities - wrapped with source module name for CodeQL compliance
+_SOURCE = "plugins.loader"
 try:
-    from debug import debug, debug_error, debug_success, debug_verbose, debug_warning
+    from debug import (
+        debug as _raw_debug,
+    )
+    from debug import (
+        debug_error as _raw_debug_error,
+    )
+    from debug import (
+        debug_success as _raw_debug_success,
+    )
+    from debug import (
+        debug_verbose as _raw_debug_verbose,
+    )
+    from debug import (
+        debug_warning as _raw_debug_warning,
+    )
 except ImportError:
 
-    def debug(*args, **kwargs):
-        pass
+    def _raw_debug(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
 
-    def debug_verbose(*args, **kwargs):
-        pass
+    def _raw_debug_error(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
 
-    def debug_success(*args, **kwargs):
-        pass
+    def _raw_debug_success(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
 
-    def debug_error(*args, **kwargs):
-        pass
+    def _raw_debug_verbose(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
 
-    def debug_warning(*args, **kwargs):
-        pass
+    def _raw_debug_warning(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
+
+
+def _debug(msg: str, **kwargs) -> None:
+    """Debug log with source module."""
+    _raw_debug(_SOURCE, msg, **kwargs)
+
+
+def _debug_verbose(msg: str, **kwargs) -> None:
+    """Verbose debug log with source module."""
+    _raw_debug_verbose(_SOURCE, msg, **kwargs)
+
+
+def _debug_success(msg: str, **kwargs) -> None:
+    """Success debug log with source module."""
+    _raw_debug_success(_SOURCE, msg, **kwargs)
+
+
+def _debug_error(msg: str, **kwargs) -> None:
+    """Error debug log with source module."""
+    _raw_debug_error(_SOURCE, msg, **kwargs)
+
+
+def _debug_warning(msg: str, **kwargs) -> None:
+    """Warning debug log with source module."""
+    _raw_debug_warning(_SOURCE, msg, **kwargs)
 
 
 class PluginLoadError(Exception):
@@ -113,9 +158,136 @@ class PluginLoader:
         self.system_plugins_dir.mkdir(parents=True, exist_ok=True)
 
         logger.debug("PluginLoader initialized:")
-        debug_verbose(f"  User plugins: {self.user_plugins_dir}")
-        debug_verbose(f"  System plugins: {self.system_plugins_dir}")
-        debug_verbose(f"  Default limits: {self.default_limits.to_dict()}")
+        _debug_verbose(f"  User plugins: {self.user_plugins_dir}")
+        _debug_verbose(f"  System plugins: {self.system_plugins_dir}")
+        _debug_verbose(f"  Default limits: {self.default_limits.to_dict()}")
+
+    @staticmethod
+    def _get_auto_claude_version() -> str:
+        """
+        Get the current Auto Claude version from package.json.
+
+        Returns:
+            Version string (e.g., "3.0.0")
+
+        Raises:
+            FileNotFoundError: If package.json not found
+            ValueError: If version cannot be parsed
+        """
+        # Navigate from plugins/loader.py -> backend/ -> root/
+        root_dir = Path(__file__).parent.parent.parent.parent
+        package_json = root_dir / "package.json"
+
+        if not package_json.exists():
+            raise FileNotFoundError(
+                f"package.json not found at {package_json}. Cannot determine Auto Claude version."
+            )
+
+        try:
+            with open(package_json, encoding="utf-8") as f:
+                data = json.load(f)
+            version = data.get("version")
+            if not version:
+                raise ValueError("No 'version' field in package.json")
+            return version
+        except Exception as e:
+            raise ValueError(f"Failed to read version from package.json: {e}") from e
+
+    def _check_version_compatibility(
+        self,
+        plugin_name: str,
+        required_version: str | None,
+    ) -> tuple[bool, str | None]:
+        """
+        Check if plugin's version requirement is compatible with current Auto Claude version.
+
+        Supports various version specifier formats:
+        - Exact: "3.0.0"
+        - Comparison: ">=2.8.0", ">3.0.0", "<=3.5.0"
+        - Range: ">=2.8.0,<4.0.0"
+        - Caret: "^3.0.0" (compatible with 3.x.x, not 4.0.0)
+        - Tilde: "~3.0.0" (compatible with 3.0.x, not 3.1.0)
+
+        Args:
+            plugin_name: Name of the plugin being checked
+            required_version: Version requirement string from plugin.json
+
+        Returns:
+            Tuple of (is_compatible, error_message)
+            - is_compatible: True if compatible or no requirement specified
+            - error_message: None if compatible, error string if incompatible
+
+        Example:
+            >>> loader = PluginLoader()
+            >>> loader._check_version_compatibility("my-plugin", ">=2.8.0")
+            (True, None)
+            >>> loader._check_version_compatibility("my-plugin", ">=4.0.0")
+            (False, "Plugin 'my-plugin' requires Auto Claude >=4.0.0, but current version is 3.0.0")
+        """
+        # No requirement specified - always compatible
+        if not required_version:
+            _debug_verbose(
+                f"Plugin '{plugin_name}' has no version requirement - compatible"
+            )
+            return True, None
+
+        try:
+            # Get current Auto Claude version
+            current_version = self._get_auto_claude_version()
+            current = Version(current_version)
+
+            # Parse version requirement
+            # Handle caret (^) and tilde (~) syntax by converting to specifier format
+            version_spec = required_version.strip()
+
+            if version_spec.startswith("^"):
+                # Caret: ^3.0.0 means >=3.0.0,<4.0.0
+                base_version = version_spec[1:]
+                parts = Version(base_version).release
+                if len(parts) >= 2:
+                    major = parts[0]
+                    version_spec = f">={base_version},<{major + 1}.0.0"
+                else:
+                    version_spec = f">={base_version}"
+
+            elif version_spec.startswith("~"):
+                # Tilde: ~3.0.0 means >=3.0.0,<3.1.0
+                base_version = version_spec[1:]
+                parts = Version(base_version).release
+                if len(parts) >= 2:
+                    major, minor = parts[0], parts[1]
+                    version_spec = f">={base_version},<{major}.{minor + 1}.0"
+                else:
+                    version_spec = f">={base_version}"
+
+            # Use SpecifierSet for comparison
+            specifier = SpecifierSet(version_spec)
+
+            if current in specifier:
+                _debug_verbose(
+                    f"Plugin '{plugin_name}' version requirement '{required_version}' "
+                    f"is compatible with Auto Claude {current_version}"
+                )
+                return True, None
+            else:
+                error_msg = (
+                    f"Plugin '{plugin_name}' requires Auto Claude {required_version}, "
+                    f"but current version is {current_version}"
+                )
+                _debug_warning(error_msg)
+                return False, error_msg
+
+        except InvalidVersion as e:
+            error_msg = f"Plugin '{plugin_name}' has invalid version requirement '{required_version}': {e}"
+            logger.warning(error_msg)
+            return False, error_msg
+
+        except Exception as e:
+            error_msg = (
+                f"Failed to check version compatibility for plugin '{plugin_name}': {e}"
+            )
+            logger.warning(error_msg)
+            return False, error_msg
 
     def discover_plugins(self) -> list[PluginMetadata]:
         """
@@ -132,19 +304,32 @@ class PluginLoader:
         """
         discovered = []
 
-        debug("Discovering plugins...")
+        _debug("Discovering plugins...")
 
         # Scan system plugins first (can be overridden by user plugins)
         if self.system_plugins_dir.exists():
-            debug_verbose(f"Scanning system plugins: {self.system_plugins_dir}")
+            _debug_verbose(f"Scanning system plugins: {self.system_plugins_dir}")
             for plugin_dir in self.system_plugins_dir.iterdir():
                 if plugin_dir.is_dir():
                     try:
                         metadata = self._load_metadata(plugin_dir)
+
+                        # Check version compatibility (non-blocking for discovery)
+                        is_compatible, error_msg = self._check_version_compatibility(
+                            metadata.name, metadata.auto_claude_version
+                        )
+                        if not is_compatible:
+                            _debug_warning(
+                                f"  Found incompatible system plugin {plugin_dir.name}: {error_msg}"
+                            )
+                            logger.warning(
+                                f"System plugin {plugin_dir.name} is incompatible: {error_msg}"
+                            )
+
                         discovered.append(metadata)
-                        debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
+                        _debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
                     except Exception as e:
-                        debug_warning(
+                        _debug_warning(
                             f"  Skipping invalid system plugin {plugin_dir.name}: {e}"
                         )
                         logger.warning(
@@ -153,31 +338,44 @@ class PluginLoader:
 
         # Scan user plugins (can override system plugins)
         if self.user_plugins_dir.exists():
-            debug_verbose(f"Scanning user plugins: {self.user_plugins_dir}")
+            _debug_verbose(f"Scanning user plugins: {self.user_plugins_dir}")
             for plugin_dir in self.user_plugins_dir.iterdir():
                 if plugin_dir.is_dir():
                     try:
                         metadata = self._load_metadata(plugin_dir)
+
+                        # Check version compatibility (non-blocking for discovery)
+                        is_compatible, error_msg = self._check_version_compatibility(
+                            metadata.name, metadata.auto_claude_version
+                        )
+                        if not is_compatible:
+                            _debug_warning(
+                                f"  Found incompatible user plugin {plugin_dir.name}: {error_msg}"
+                            )
+                            logger.warning(
+                                f"User plugin {plugin_dir.name} is incompatible: {error_msg}"
+                            )
+
                         # Check for duplicates (user plugin overrides system)
                         existing = next(
                             (p for p in discovered if p.name == metadata.name), None
                         )
                         if existing:
-                            debug_warning(
+                            _debug_warning(
                                 f"  User plugin '{metadata.name}' overrides system plugin"
                             )
                             discovered.remove(existing)
                         discovered.append(metadata)
-                        debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
+                        _debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
                     except Exception as e:
-                        debug_warning(
+                        _debug_warning(
                             f"  Skipping invalid user plugin {plugin_dir.name}: {e}"
                         )
                         logger.warning(
                             f"Failed to load user plugin {plugin_dir.name}: {e}"
                         )
 
-        debug_success(f"Discovered {len(discovered)} plugins")
+        _debug_success(f"Discovered {len(discovered)} plugins")
         return discovered
 
     def load_plugin(
@@ -209,14 +407,21 @@ class PluginLoader:
         if not plugin_dir.exists():
             raise PluginLoadError(f"Plugin directory not found: {plugin_dir}")
 
-        debug(f"Loading plugin from: {plugin_dir}")
+        _debug(f"Loading plugin from: {plugin_dir}")
 
         # Load and validate manifest
         try:
             metadata = self._load_metadata(plugin_dir)
-            debug_verbose(f"  Loaded metadata: {metadata.name} v{metadata.version}")
+            _debug_verbose(f"  Loaded metadata: {metadata.name} v{metadata.version}")
         except Exception as e:
             raise PluginValidationError(f"Invalid plugin manifest: {e}") from e
+
+        # Check version compatibility
+        is_compatible, error_msg = self._check_version_compatibility(
+            metadata.name, metadata.auto_claude_version
+        )
+        if not is_compatible:
+            raise PluginValidationError(error_msg)
 
         # Find plugin module (plugin.py or __init__.py)
         module_path = self._find_plugin_module(plugin_dir)
@@ -225,7 +430,7 @@ class PluginLoader:
                 f"Plugin module not found: Expected {plugin_dir}/plugin.py or {plugin_dir}/__init__.py"
             )
 
-        debug_verbose(f"  Loading module: {module_path}")
+        _debug_verbose(f"  Loading module: {module_path}")
 
         # Dynamically import plugin module
         try:
@@ -238,7 +443,7 @@ class PluginLoader:
         # Instantiate plugin
         try:
             plugin = plugin_class(metadata)
-            debug_verbose(f"  Instantiated plugin class: {plugin_class.__name__}")
+            _debug_verbose(f"  Instantiated plugin class: {plugin_class.__name__}")
         except Exception as e:
             raise PluginLoadError(f"Failed to instantiate plugin: {e}") from e
 
@@ -252,10 +457,197 @@ class PluginLoader:
             allowed_dirs=allowed_dirs,
             limits=limits or self.default_limits,
         )
-        debug_verbose(f"  Configured sandbox with {len(allowed_dirs)} allowed dirs")
+        _debug_verbose(f"  Configured sandbox with {len(allowed_dirs)} allowed dirs")
 
-        debug_success(f"Loaded plugin: {metadata.name} v{metadata.version}")
+        _debug_success(f"Loaded plugin: {metadata.name} v{metadata.version}")
         return plugin
+
+    def validate_plugin_security(self, plugin_dir: Path) -> tuple[bool, list[str]]:
+        """
+        Perform security validation on plugin files.
+
+        Checks for:
+        - Python syntax errors
+        - Suspicious imports (subprocess, os.system, eval, exec)
+        - Potential secrets in code
+        - Malicious code patterns
+
+        Args:
+            plugin_dir: Directory containing the plugin
+
+        Returns:
+            Tuple of (is_safe, warnings) where is_safe is True if plugin passes
+            all security checks, and warnings is a list of security concerns found
+        """
+        warnings = []
+        is_safe = True
+
+        _debug_verbose(f"Validating security for plugin in: {plugin_dir}")
+
+        # Find all Python files in plugin directory
+        python_files = list(plugin_dir.rglob("*.py"))
+
+        if not python_files:
+            warnings.append("No Python files found in plugin directory")
+            is_safe = False
+            return is_safe, warnings
+
+        # Check each Python file
+        for py_file in python_files:
+            # Skip __pycache__ and hidden files
+            if "__pycache__" in str(py_file) or py_file.name.startswith("."):
+                continue
+
+            try:
+                content = py_file.read_text(encoding="utf-8")
+            except Exception as e:
+                warnings.append(f"Failed to read {py_file.name}: {e}")
+                is_safe = False
+                continue
+
+            # 1. Validate Python syntax
+            try:
+                ast.parse(content)
+            except SyntaxError as e:
+                warnings.append(
+                    f"Syntax error in {py_file.name} (line {e.lineno}): {e.msg}"
+                )
+                is_safe = False
+                continue
+
+            # 2. Check for suspicious imports
+            suspicious_imports = self._check_suspicious_imports(content, py_file.name)
+            if suspicious_imports:
+                warnings.extend(suspicious_imports)
+                # Note: Suspicious imports are warnings, not blockers
+
+            # 3. Check for dangerous function calls
+            dangerous_calls = self._check_dangerous_calls(content, py_file.name)
+            if dangerous_calls:
+                warnings.extend(dangerous_calls)
+                is_safe = False  # Block plugins with dangerous calls
+
+            # 4. Check for hardcoded secrets (using patterns from scan_secrets)
+            secret_warnings = self._check_for_secrets(content, py_file.name)
+            if secret_warnings:
+                warnings.extend(secret_warnings)
+                is_safe = False  # Block plugins with hardcoded secrets
+
+        if not warnings:
+            _debug_success("Plugin passed all security checks")
+        else:
+            _debug_warning(f"Found {len(warnings)} security concerns")
+            for warning in warnings:
+                _debug_warning(f"  - {warning}")
+
+        return is_safe, warnings
+
+    def _check_suspicious_imports(self, content: str, filename: str) -> list[str]:
+        """Check for suspicious imports that may indicate malicious behavior."""
+        warnings = []
+
+        # Patterns for suspicious imports
+        suspicious_patterns = [
+            (
+                r"import\s+subprocess",
+                "Imports subprocess module (shell command execution)",
+            ),
+            (r"from\s+subprocess\s+import", "Imports from subprocess module"),
+            (r"import\s+os\b", "Imports os module (filesystem access)"),
+            (r"from\s+os\s+import", "Imports from os module"),
+            (r"import\s+socket", "Imports socket module (network access)"),
+            (r"from\s+socket\s+import", "Imports from socket module"),
+            (r"import\s+requests", "Imports requests module (HTTP requests)"),
+            (r"import\s+urllib", "Imports urllib module (HTTP requests)"),
+        ]
+
+        for pattern, description in suspicious_patterns:
+            if re.search(pattern, content):
+                warnings.append(f"{filename}: {description}")
+
+        return warnings
+
+    def _check_dangerous_calls(self, content: str, filename: str) -> list[str]:
+        """Check for dangerous function calls that should block plugin installation."""
+        warnings = []
+
+        # Patterns for dangerous function calls (these block installation)
+        dangerous_patterns = [
+            (r"\beval\s*\(", "Uses eval() - arbitrary code execution risk"),
+            (r"\bexec\s*\(", "Uses exec() - arbitrary code execution risk"),
+            (r"\bcompile\s*\(", "Uses compile() - code compilation risk"),
+            (r"\b__import__\s*\(", "Uses __import__() - dynamic import risk"),
+            (r"os\.system\s*\(", "Uses os.system() - shell command execution"),
+            (r"os\.popen\s*\(", "Uses os.popen() - shell command execution"),
+            (r"subprocess\.call\s*\(", "Uses subprocess.call() - command execution"),
+            (r"subprocess\.run\s*\(", "Uses subprocess.run() - command execution"),
+            (r"subprocess\.Popen\s*\(", "Uses subprocess.Popen() - command execution"),
+        ]
+
+        for pattern, description in dangerous_patterns:
+            if re.search(pattern, content):
+                warnings.append(f"{filename}: {description}")
+
+        return warnings
+
+    def _check_for_secrets(self, content: str, filename: str) -> list[str]:
+        """Check for hardcoded secrets using patterns from scan_secrets module."""
+        warnings = []
+
+        # Service-specific patterns (subset of most common ones)
+        secret_patterns = [
+            (r"sk-[a-zA-Z0-9]{20,}", "Anthropic/OpenAI-style API key"),
+            (r"sk-ant-[a-zA-Z0-9-]{20,}", "Anthropic API key"),
+            (r"ghp_[a-zA-Z0-9]{36}", "GitHub Personal Access Token"),
+            (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID"),
+            (r"AIza[0-9A-Za-z_-]{35}", "Google API Key"),
+            # Generic patterns
+            (
+                r'(?:api[_-]?key|apikey|api_secret)\s*[:=]\s*["\']([a-zA-Z0-9_-]{32,})["\']',
+                "API key assignment",
+            ),
+            (
+                r'(?:access[_-]?token|auth[_-]?token)\s*[:=]\s*["\']([a-zA-Z0-9_-]{32,})["\']',
+                "Token assignment",
+            ),
+            (r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----", "Private key"),
+        ]
+
+        # False positive patterns (don't flag these)
+        false_positive_patterns = [
+            r"process\.env\.",
+            r"os\.environ",
+            r"os\.getenv",
+            r"your[-_]?api[-_]?key",
+            r"xxx+",
+            r"placeholder",
+            r"example",
+            r"<[A-Z_]+>",
+        ]
+
+        lines = content.splitlines()
+        for line_num, line in enumerate(lines, 1):
+            # Skip comments
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+
+            # Check for secrets
+            for pattern, description in secret_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    # Check if it's a false positive
+                    is_false_positive = False
+                    for fp_pattern in false_positive_patterns:
+                        if re.search(fp_pattern, line, re.IGNORECASE):
+                            is_false_positive = True
+                            break
+
+                    if not is_false_positive:
+                        warnings.append(
+                            f"{filename} (line {line_num}): Potential {description}"
+                        )
+
+        return warnings
 
     def _load_metadata(self, plugin_dir: Path) -> PluginMetadata:
         """

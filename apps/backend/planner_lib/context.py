@@ -3,8 +3,11 @@ Context loading and workflow detection for implementation planner.
 """
 
 import json
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from implementation_plan import WorkflowType
 
@@ -105,7 +108,7 @@ class ContextLoader:
                 if declared_type in _WORKFLOW_TYPE_MAPPING:
                     return _WORKFLOW_TYPE_MAPPING[declared_type]
             except (json.JSONDecodeError, KeyError):
-                pass
+                logger.debug("Failed to parse requirements.json for workflow type")
 
         # 2. Check complexity_assessment.json (AI's assessment)
         assessment_file = self.spec_dir / "complexity_assessment.json"
@@ -119,7 +122,9 @@ class ContextLoader:
                 if declared_type in _WORKFLOW_TYPE_MAPPING:
                     return _WORKFLOW_TYPE_MAPPING[declared_type]
             except (json.JSONDecodeError, KeyError):
-                pass
+                logger.debug(
+                    "Failed to parse complexity_assessment.json for workflow type"
+                )
 
         # 3. & 4. Fall back to spec content detection
         return self._detect_workflow_type_from_spec(spec_content)

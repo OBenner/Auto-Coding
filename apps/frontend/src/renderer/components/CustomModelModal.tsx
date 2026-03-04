@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dialog,
@@ -17,8 +17,9 @@ import {
   SelectTrigger,
   SelectValue
 } from './ui/select';
-import { AVAILABLE_MODELS, THINKING_LEVELS } from '../../shared/constants';
-import type { InsightsModelConfig } from '../../shared/types';
+import { THINKING_LEVELS } from '../../shared/constants';
+import { getInsightsProviderOptions, getAvailableModelsForProvider } from '../../shared/constants/insights-providers';
+import type { InsightsModelConfig, InsightsProvider } from '../../shared/types';
 import type { ModelType, ThinkingLevel } from '../../shared/types';
 
 interface CustomModelModalProps {
@@ -29,27 +30,38 @@ interface CustomModelModalProps {
 }
 
 export function CustomModelModal({ currentConfig, onSave, onClose, open = true }: CustomModelModalProps) {
-  const { t } = useTranslation('dialogs');
+  const { t } = useTranslation(['dialogs', 'common']);
   const [model, setModel] = useState<ModelType>(
     currentConfig?.model || 'sonnet'
   );
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>(
     currentConfig?.thinkingLevel || 'medium'
   );
+  const [provider, setProvider] = useState<InsightsProvider>(
+    currentConfig?.provider || 'claude'
+  );
+
+  // Build provider options with i18n
+  const insightsProviders = useMemo(() => getInsightsProviderOptions(t), [t]);
 
   // Sync internal state when modal opens or config changes
   useEffect(() => {
     if (open) {
       setModel(currentConfig?.model || 'sonnet');
       setThinkingLevel(currentConfig?.thinkingLevel || 'medium');
+      setProvider(currentConfig?.provider || 'claude');
     }
   }, [open, currentConfig]);
+
+  // Get available models for the selected provider
+  const availableModels = useMemo(() => getAvailableModelsForProvider(provider), [provider]);
 
   const handleSave = () => {
     onSave({
       profileId: 'custom',
       model,
-      thinkingLevel
+      thinkingLevel,
+      provider
     });
   };
 
@@ -57,23 +69,26 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('customModel.title')}</DialogTitle>
+          <DialogTitle>{t('dialogs:customModel.title')}</DialogTitle>
           <DialogDescription>
-            {t('customModel.description')}
+            {t('dialogs:customModel.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="model-select">{t('customModel.model')}</Label>
-            <Select value={model} onValueChange={(v) => setModel(v as ModelType)}>
-              <SelectTrigger id="model-select">
+            <Label htmlFor="provider-select">{t('dialogs:customModel.provider')}</Label>
+            <Select value={provider} onValueChange={(v) => setProvider(v as InsightsProvider)}>
+              <SelectTrigger id="provider-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {AVAILABLE_MODELS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
+                {insightsProviders.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{p.label}</span>
+                      <span className="text-xs text-muted-foreground">{p.description}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -81,7 +96,28 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="thinking-select">{t('customModel.thinkingLevel')}</Label>
+            <Label htmlFor="model-select">{t('dialogs:customModel.model')}</Label>
+            <Select value={model} onValueChange={(v) => setModel(v as ModelType)}>
+              <SelectTrigger id="model-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableModels.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{m.label}</span>
+                      {m.description && (
+                        <span className="text-xs text-muted-foreground">{m.description}</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="thinking-select">{t('dialogs:customModel.thinkingLevel')}</Label>
             <Select value={thinkingLevel} onValueChange={(v) => setThinkingLevel(v as ThinkingLevel)}>
               <SelectTrigger id="thinking-select">
                 <SelectValue />
@@ -104,10 +140,10 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            {t('customModel.cancel')}
+            {t('dialogs:customModel.cancel')}
           </Button>
           <Button onClick={handleSave}>
-            {t('customModel.apply')}
+            {t('dialogs:customModel.apply')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,6 +4,7 @@
   "author": "Auto-Coding Team",
   "description": "Example integration plugin that demonstrates MCP tool creation, config management, and state persistence using a mock file-based task manager",
   "plugin_type": "integration",
+  "auto_claude_version": ">=1.0.0",
   "required_permissions": [
     "read_files",
     "write_files"

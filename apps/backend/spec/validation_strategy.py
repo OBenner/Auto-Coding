@@ -125,6 +125,9 @@ PROJECT_TYPE_INDICATORS = {
     "ruby": {
         "files": ["Gemfile"],
     },
+    "php": {
+        "files": ["composer.json"],
+    },
 }
 
 
@@ -188,6 +191,8 @@ def detect_project_type(project_dir: Path) -> str:
         return "go"
     if (project_dir / "Gemfile").exists():
         return "ruby"
+    if (project_dir / "composer.json").exists():
+        return "php"
 
     # Check for simple HTML/CSS
     html_files = list(project_dir.glob("*.html"))
@@ -260,6 +265,7 @@ class ValidationStrategyBuilder:
             "rust": self._strategy_for_rust,
             "go": self._strategy_for_go,
             "ruby": self._strategy_for_ruby,
+            "php": self._strategy_for_php,
         }
 
         builder_func = strategy_builders.get(project_type, self._strategy_default)
@@ -769,6 +775,44 @@ class ValidationStrategyBuilder:
             reasoning="Ruby project requires RSpec tests.",
         )
 
+    def _strategy_for_php(
+        self, project_dir: Path, risk_level: str
+    ) -> ValidationStrategy:
+        """
+        Validation strategy for PHP projects.
+        """
+        steps = []
+
+        if risk_level != "trivial":
+            steps.append(
+                ValidationStep(
+                    name="PHPUnit Tests",
+                    command="./vendor/bin/phpunit",
+                    expected_outcome="All tests pass",
+                    step_type="test",
+                    required=True,
+                    blocking=True,
+                )
+            )
+            steps.append(
+                ValidationStep(
+                    name="PHP Code Sniffer",
+                    command="./vendor/bin/phpcs",
+                    expected_outcome="No coding standard violations",
+                    step_type="test",
+                    required=True,
+                    blocking=risk_level in ["high", "critical"],
+                )
+            )
+
+        return ValidationStrategy(
+            risk_level=risk_level,
+            project_type="php",
+            steps=steps,
+            test_types_required=["unit"],
+            reasoning="PHP project requires PHPUnit tests and code standard checks.",
+        )
+
     def _strategy_for_electron(
         self, project_dir: Path, risk_level: str
     ) -> ValidationStrategy:
@@ -909,6 +953,54 @@ class ValidationStrategyBuilder:
                     name="npm audit",
                     command="npm audit --json",
                     expected_outcome="No critical vulnerabilities",
+                    step_type="security",
+                    required=True,
+                    blocking=True,
+                )
+            )
+
+        if project_type in ["go", "go_api", "go_cli"]:
+            security_steps.append(
+                ValidationStep(
+                    name="gosec Security Scan",
+                    command="gosec ./...",
+                    expected_outcome="No high severity issues",
+                    step_type="security",
+                    required=True,
+                    blocking=True,
+                )
+            )
+
+        if project_type in ["rust", "rust_cli", "rust_lib"]:
+            security_steps.append(
+                ValidationStep(
+                    name="cargo audit",
+                    command="cargo audit",
+                    expected_outcome="No vulnerable dependencies",
+                    step_type="security",
+                    required=True,
+                    blocking=True,
+                )
+            )
+
+        if project_type in ["ruby", "rails", "sinatra"]:
+            security_steps.append(
+                ValidationStep(
+                    name="Brakeman Security Scan",
+                    command="bundle exec brakeman -q",
+                    expected_outcome="No high severity issues",
+                    step_type="security",
+                    required=True,
+                    blocking=True,
+                )
+            )
+
+        if project_type in ["php", "laravel", "symfony", "codeigniter"]:
+            security_steps.append(
+                ValidationStep(
+                    name="PHPStan Security Analysis",
+                    command="./vendor/bin/phpstan analyse",
+                    expected_outcome="No errors found",
                     step_type="security",
                     required=True,
                     blocking=True,

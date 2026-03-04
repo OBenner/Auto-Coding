@@ -28,7 +28,9 @@ import {
   AlertTriangle,
   Pencil,
   X,
-  GitPullRequest
+  GitPullRequest,
+  Eye,
+  Archive
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { calculateProgress } from '../../lib/utils';
@@ -42,7 +44,11 @@ import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
+import { TaskOverview } from './TaskOverview';
 import { ResourceUsageIndicator } from '../ResourceUsageIndicator';
+import { PermissionsPanel } from '../collaboration/PermissionsPanel';
+import { CommentThread } from '../collaboration/CommentThread';
+import { ApprovalWorkflow } from '../collaboration/ApprovalWorkflow';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -51,9 +57,10 @@ interface TaskDetailModalProps {
   onOpenChange: (open: boolean) => void;
   onSwitchToTerminals?: () => void;
   onOpenInbuiltTerminal?: (id: string, cwd: string) => void;
+  onViewSessions?: () => void;
 }
 
-export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal }: TaskDetailModalProps) {
+export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal, onViewSessions }: TaskDetailModalProps) {
   // Don't render anything if no task
   if (!task) {
     return null;
@@ -66,6 +73,7 @@ export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals,
       onOpenChange={onOpenChange}
       onSwitchToTerminals={onSwitchToTerminals}
       onOpenInbuiltTerminal={onOpenInbuiltTerminal}
+      onViewSessions={onViewSessions}
     />
   );
 }
@@ -77,7 +85,7 @@ const isFilesTabEnabled = () => {
 };
 
 // Separate component to use hooks only when task exists
-function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal }: { open: boolean; task: Task; onOpenChange: (open: boolean) => void; onSwitchToTerminals?: () => void; onOpenInbuiltTerminal?: (id: string, cwd: string) => void }) {
+function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal, onViewSessions }: { open: boolean; task: Task; onOpenChange: (open: boolean) => void; onSwitchToTerminals?: () => void; onOpenInbuiltTerminal?: (id: string, cwd: string) => void; onViewSessions?: () => void }) {
   const { t } = useTranslation(['tasks']);
   const { toast } = useToast();
   const state = useTaskDetail({ task });
@@ -201,6 +209,33 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
       return { success: false, error: error instanceof Error ? error.message : undefined, prUrl: undefined, alreadyExists: false };
     } finally {
       state.setIsCreatingPR(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const result = await window.electronAPI.exportTask(task.projectId, task.id);
+      if (result.success && result.data) {
+        toast({
+          title: 'Export Successful',
+          description: `Spec exported to ${result.data}`,
+          duration: 4000,
+        });
+      } else {
+        toast({
+          title: 'Export Failed',
+          description: result.error || 'Failed to export spec',
+          variant: 'destructive',
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Export Failed',
+        description: error instanceof Error ? error.message : 'Unknown error during export',
+        variant: 'destructive',
+        duration: 5000,
+      });
     }
   };
 
@@ -482,12 +517,23 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       {t('tasks:files.tab')}
                     </TabsTrigger>
                   )}
+                  <TabsTrigger
+                    value="collaboration"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                  >
+                    {t('tasks:tabs.collaboration')}
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Overview Tab */}
                 <TabsContent value="overview" className="flex-1 min-h-0 overflow-hidden mt-0">
                   <ScrollArea className="h-full">
                     <div className="p-5 space-y-5 overflow-x-hidden max-w-full">
+                      {/* Task Overview with Implementation Plan */}
+                      <TaskOverview task={task} />
+
+                      <Separator />
+
                       {/* Metadata */}
                       <TaskMetadata task={task} />
 
@@ -547,6 +593,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                             isCreatingPR={state.isCreatingPR}
                             onShowPRDialog={state.setShowPRDialog}
                             onCreatePR={handleCreatePR}
+                            showFeedbackDialog={state.showFeedbackDialog}
+                            onShowFeedbackDialog={state.setShowFeedbackDialog}
+                            onSubmitFeedback={state.handleSubmitFeedback}
                           />
                         </>
                       )}
@@ -580,11 +629,72 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     <TaskFiles task={task} />
                   </TabsContent>
                 )}
+
+                {/* Collaboration Tab */}
+                <TabsContent value="collaboration" className="flex-1 min-h-0 overflow-hidden mt-0">
+                  <ScrollArea className="h-full">
+                    <div className="p-5 space-y-6">
+                      {/* Permissions Panel */}
+                      <PermissionsPanel
+                        specId={task.specId}
+                        onPermissionGranted={() => {}}
+                        onPermissionUpdated={() => {}}
+                        onPermissionRevoked={() => {}}
+                      />
+
+                      <Separator />
+
+                      {/* Comment Thread */}
+                      <CommentThread
+                        specId={task.specId}
+                        onCommentAdded={() => {}}
+                        onCommentUpdated={() => {}}
+                        onCommentDeleted={() => {}}
+                        onCommentResolved={() => {}}
+                        onReplyAdded={() => {}}
+                      />
+
+                      <Separator />
+
+                      {/* Approval Workflow */}
+                      <ApprovalWorkflow
+                        specId={task.specId}
+                        currentUserId="" // TODO: wire to authenticated user context
+                        userRole="read"
+                        onApprovalRequested={() => {}}
+                        onApprovalApproved={() => {}}
+                        onApprovalRejected={() => {}}
+                      />
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
               </Tabs>
             </div>
 
             {/* Footer - Actions */}
             <div className="flex items-center gap-3 px-5 py-3 border-t border-border shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "text-muted-foreground hover:text-primary hover:bg-primary/10",
+                  !onViewSessions && "opacity-50 cursor-not-allowed"
+                )}
+                onClick={() => onViewSessions?.()}
+                disabled={!onViewSessions || (state.isRunning && !state.isStuck)}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                {t('tasks:taskDetail.viewSessionReplay')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground hover:bg-accent"
+                onClick={handleExport}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Export Spec
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"

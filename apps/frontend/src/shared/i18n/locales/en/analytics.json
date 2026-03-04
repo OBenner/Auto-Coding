@@ -1,0 +1,68 @@
+{
+  "title": "Analytics",
+  "subtitle": "Track agent performance and success metrics",
+  "loading": "Loading analytics data...",
+  "lastUpdated": "Last updated",
+
+  "views": {
+    "overview": "Overview",
+    "agents": "Agents",
+    "trends": "Trends",
+    "qa": "QA"
+  },
+
+  "errors": {
+    "title": "Unable to Load Analytics",
+    "loadFailed": "Failed to load analytics data",
+    "noData": "No analytics data available"
+  },
+
+  "overview": {
+    "totalSpecs": "Total Specs",
+    "successRate": "Success Rate",
+    "successRateDesc": "Overall completion rate",
+    "totalCost": "Total Cost",
+    "tokens": "tokens",
+    "avgCostPerSpec": "Avg Cost / Spec",
+    "perSpec": "per specification",
+    "complexityBreakdown": "Performance by Complexity",
+    "complexityDesc": "Success rates and metrics across different task complexities",
+    "tasks": "tasks",
+    "avgTime": "avg",
+    "avgCost": "avg"
+  },
+
+  "agents": {
+    "totalAttempts": "total attempts",
+    "successful": "Successful",
+    "failed": "Failed",
+    "totalCost": "Total Cost",
+    "avgTime": "Avg Duration",
+    "errorPatterns": "Common Error Patterns",
+    "noData": "No agent data available"
+  },
+
+  "trends": {
+    "title": "Trends Over Time",
+    "description": "Historical performance data over time",
+    "tasks": "tasks",
+    "noData": "No trend data available",
+    "loading": "Loading trends...",
+    "empty": "No trend data available",
+    "emptySubtext": "Complete more tasks to see trends over time",
+    "completedSpecs": "Completed Specs",
+    "timeSaved": "Time Saved (hours)",
+    "successRate": "Success Rate (%)"
+  },
+
+  "qa": {
+    "totalReviews": "Total Reviews",
+    "approved": "Approved",
+    "approvalRate": "approval rate",
+    "rejected": "rejected",
+    "rejectionRate": "Rejection Rate",
+    "commonIssues": "Common QA Issues",
+    "issuesDescription": "Most frequently identified issues during QA review",
+    "noIssues": "No QA issues recorded"
+  }
+}

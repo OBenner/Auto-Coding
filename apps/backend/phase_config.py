@@ -64,6 +64,7 @@ DEFAULT_PHASE_MODELS: dict[str, str] = {
     "planning": "sonnet",  # Changed from "opus" (fix #433)
     "coding": "sonnet",
     "qa": "sonnet",
+    "test_generation": "sonnet",
 }
 
 DEFAULT_PHASE_THINKING: dict[str, str] = {
@@ -71,6 +72,7 @@ DEFAULT_PHASE_THINKING: dict[str, str] = {
     "planning": "high",
     "coding": "medium",
     "qa": "high",
+    "test_generation": "medium",
 }
 
 # Agent-level default model mapping
@@ -124,12 +126,64 @@ AGENT_DEFAULT_MODELS: dict[str, str] = {
     "ideation": "sonnet",
 }
 
+# Agent-level default provider mapping
+# Maps each agent type to a default AI provider
+# Used for multi-provider orchestration where different agents can use different providers
+AGENT_DEFAULT_PROVIDERS: dict[str, str] = {
+    # ═══════════════════════════════════════════════════════════════════════
+    # SPEC CREATION AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "spec_gatherer": "claude",
+    "spec_researcher": "claude",
+    "spec_writer": "claude",
+    "spec_critic": "claude",
+    "spec_discovery": "claude",
+    "spec_context": "claude",
+    "spec_validation": "claude",
+    "spec_compaction": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # BUILD AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "planner": "claude",
+    "coder": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # QA AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "qa_reviewer": "claude",
+    "qa_fixer": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # UTILITY AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "insights": "claude",
+    "merge_resolver": "claude",
+    "commit_message": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # PR AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "pr_reviewer": "claude",
+    "pr_orchestrator_parallel": "claude",
+    "pr_followup_parallel": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ANALYSIS AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "analysis": "claude",
+    "batch_analysis": "claude",
+    "batch_validation": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ROADMAP & IDEATION (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "roadmap_discovery": "claude",
+    "competitor_analysis": "claude",
+    "ideation": "claude",
+}
+
 
 class PhaseModelConfig(TypedDict, total=False):
     spec: str
     planning: str
     coding: str
     qa: str
+    test_generation: str
 
 
 class PhaseThinkingConfig(TypedDict, total=False):
@@ -137,6 +191,7 @@ class PhaseThinkingConfig(TypedDict, total=False):
     planning: str
     coding: str
     qa: str
+    test_generation: str
 
 
 class AgentModelConfig(TypedDict, total=False):
@@ -186,7 +241,17 @@ class TaskMetadataConfig(TypedDict, total=False):
     thinkingLevel: str
 
 
-Phase = Literal["spec", "planning", "coding", "qa"]
+class ModelLockConfig(TypedDict, total=False):
+    """Structure of model locks stored in model_locks.json
+
+    Locked models prevent automatic updates and always use the specified model ID.
+    """
+
+    phaseModels: PhaseModelConfig
+    agentModels: AgentModelConfig
+
+
+Phase = Literal["spec", "planning", "coding", "qa", "test_generation"]
 
 
 def resolve_model_id(model: str) -> str:
@@ -269,6 +334,146 @@ def load_task_metadata(spec_dir: Path) -> TaskMetadataConfig | None:
         return None
 
 
+def load_model_locks(spec_dir: Path) -> ModelLockConfig:
+    """
+    Load model locks from model_locks.json in the spec directory.
+
+    If the file doesn't exist, returns an empty lock config.
+
+    Args:
+        spec_dir: Path to the spec directory
+
+    Returns:
+        Model lock configuration (empty if no locks file exists)
+    """
+    locks_path = spec_dir / "model_locks.json"
+    if not locks_path.exists():
+        return {}
+
+    try:
+        with open(locks_path, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_model_locks(spec_dir: Path, locks: ModelLockConfig) -> None:
+    """
+    Save model locks to model_locks.json in the spec directory.
+
+    Args:
+        spec_dir: Path to the spec directory
+        locks: Model lock configuration to save
+    """
+    locks_path = spec_dir / "model_locks.json"
+    try:
+        with open(locks_path, "w", encoding="utf-8") as f:
+            json.dump(locks, f, indent=2)
+    except OSError as e:
+        import logging
+
+        logging.warning(f"Failed to save model locks to {locks_path}: {e}")
+
+
+def is_phase_model_locked(spec_dir: Path, phase: Phase) -> bool:
+    """
+    Check if a phase's model is locked.
+
+    Args:
+        spec_dir: Path to the spec directory
+        phase: Execution phase to check
+
+    Returns:
+        True if the phase model is locked, False otherwise
+    """
+    locks = load_model_locks(spec_dir)
+    return bool(locks.get("phaseModels", {}).get(phase))
+
+
+def is_agent_model_locked(spec_dir: Path, agent_type: str) -> bool:
+    """
+    Check if an agent's model is locked.
+
+    Args:
+        spec_dir: Path to the spec directory
+        agent_type: Agent type to check
+
+    Returns:
+        True if the agent model is locked, False otherwise
+    """
+    locks = load_model_locks(spec_dir)
+    return bool(locks.get("agentModels", {}).get(agent_type))
+
+
+def lock_phase_model(spec_dir: Path, phase: Phase, model_id: str) -> None:
+    """
+    Lock a phase to a specific model ID.
+
+    Args:
+        spec_dir: Path to the spec directory
+        phase: Execution phase to lock
+        model_id: Full model ID to lock the phase to
+    """
+    locks = load_model_locks(spec_dir)
+    if "phaseModels" not in locks:
+        locks["phaseModels"] = {}
+    locks["phaseModels"][phase] = model_id
+    save_model_locks(spec_dir, locks)
+
+
+def lock_agent_model(spec_dir: Path, agent_type: str, model_id: str) -> None:
+    """
+    Lock an agent type to a specific model ID.
+
+    Args:
+        spec_dir: Path to the spec directory
+        agent_type: Agent type to lock
+        model_id: Full model ID to lock the agent to
+    """
+    locks = load_model_locks(spec_dir)
+    if "agentModels" not in locks:
+        locks["agentModels"] = {}
+    locks["agentModels"][agent_type] = model_id
+    save_model_locks(spec_dir, locks)
+
+
+def unlock_phase_model(spec_dir: Path, phase: Phase) -> None:
+    """
+    Unlock a phase's model, allowing it to use the configured model.
+
+    Args:
+        spec_dir: Path to the spec directory
+        phase: Execution phase to unlock
+    """
+    locks = load_model_locks(spec_dir)
+    if "phaseModels" in locks and phase in locks["phaseModels"]:
+        del locks["phaseModels"][phase]
+        # Clean up empty phaseModels dict
+        if not locks["phaseModels"]:
+            del locks["phaseModels"]
+        save_model_locks(spec_dir, locks)
+
+
+def unlock_agent_model(spec_dir: Path, agent_type: str) -> None:
+    """
+    Unlock an agent's model, allowing it to use the configured model.
+
+    Args:
+        spec_dir: Path to the spec directory
+        agent_type: Agent type to unlock
+    """
+    locks = load_model_locks(spec_dir)
+    if "agentModels" in locks and agent_type in locks["agentModels"]:
+        del locks["agentModels"][agent_type]
+        # Clean up empty agentModels dict
+        if not locks["agentModels"]:
+            del locks["agentModels"]
+        save_model_locks(spec_dir, locks)
+
+
 def get_phase_model(
     spec_dir: Path,
     phase: Phase,
@@ -279,9 +484,10 @@ def get_phase_model(
 
     Priority:
     1. CLI argument (if provided)
-    2. Phase-specific config from task_metadata.json (if auto profile)
-    3. Single model from task_metadata.json (if not auto profile)
-    4. Default phase configuration
+    2. Model lock (if phase is locked)
+    3. Phase-specific config from task_metadata.json (if auto profile)
+    4. Single model from task_metadata.json (if not auto profile)
+    5. Default phase configuration
 
     Args:
         spec_dir: Path to the spec directory
@@ -291,9 +497,16 @@ def get_phase_model(
     Returns:
         Resolved full model ID
     """
-    # CLI argument takes precedence
+    # CLI argument takes precedence (user explicitly overrides)
     if cli_model:
         return resolve_model_id(cli_model)
+
+    # Check for model lock (user explicitly locked this phase)
+    if is_phase_model_locked(spec_dir, phase):
+        locks = load_model_locks(spec_dir)
+        locked_model = locks["phaseModels"][phase]
+        # Resolve in case the lock stores a shorthand
+        return resolve_model_id(locked_model)
 
     # Load task metadata
     metadata = load_task_metadata(spec_dir)
@@ -323,10 +536,11 @@ def get_agent_model(
 
     Priority:
     1. CLI argument (if provided)
-    2. Environment variable AGENT_MODEL_<agent_type> (if set)
-    3. Agent-specific config from task_metadata.json agentModels (if present)
-    4. AGENT_DEFAULT_MODELS (if agent_type exists)
-    5. Fallback to "sonnet"
+    2. Model lock (if agent type is locked -- cannot be bypassed by env vars)
+    3. Environment variable AGENT_MODEL_<agent_type> (if set)
+    4. Agent-specific config from task_metadata.json agentModels (if present)
+    5. AGENT_DEFAULT_MODELS (if agent_type exists)
+    6. Fallback to "sonnet"
 
     Args:
         spec_dir: Path to the spec directory
@@ -336,11 +550,19 @@ def get_agent_model(
     Returns:
         Resolved full model ID
     """
-    # CLI argument takes precedence
+    # CLI argument takes precedence (user explicitly overrides)
     if cli_model:
         return resolve_model_id(cli_model)
 
-    # Check for environment variable override
+    # Check for model lock (user explicitly locked this agent type)
+    # Locks take priority over environment variables to prevent bypassing
+    if is_agent_model_locked(spec_dir, agent_type):
+        locks = load_model_locks(spec_dir)
+        locked_model = locks["agentModels"][agent_type]
+        # Resolve in case the lock stores a shorthand
+        return resolve_model_id(locked_model)
+
+    # Check for environment variable override (runtime configuration)
     env_var_name = f"AGENT_MODEL_{agent_type.upper()}"
     env_model = os.environ.get(env_var_name)
     if env_model:
@@ -544,3 +766,38 @@ def get_spec_phase_thinking_budget(phase_name: str) -> int | None:
     """
     thinking_level = SPEC_PHASE_THINKING_LEVELS.get(phase_name, "medium")
     return get_thinking_budget(thinking_level)
+
+
+def get_provider_for_agent(agent_type: str) -> str:
+    """
+    Get the AI provider to use for a specific agent.
+
+    Priority:
+    1. Environment variable AGENT_PROVIDER_<agent_type> (if set)
+    2. Global AI_ENGINE_PROVIDER environment variable (if set)
+    3. AGENT_DEFAULT_PROVIDERS mapping (if agent_type has a default)
+    4. Default to 'claude'
+
+    Args:
+        agent_type: The agent type (e.g., 'coder', 'planner', 'qa_reviewer')
+
+    Returns:
+        Provider name ('claude', 'litellm', or 'openrouter')
+    """
+    # 1. Check for agent-specific environment variable override
+    env_var_name = f"AGENT_PROVIDER_{agent_type.upper()}"
+    env_provider = os.environ.get(env_var_name)
+    if env_provider:
+        return env_provider
+
+    # 2. Global AI_ENGINE_PROVIDER env var overrides the hardcoded defaults
+    global_provider = os.environ.get("AI_ENGINE_PROVIDER")
+    if global_provider:
+        return global_provider
+
+    # 3. Check agent default providers mapping
+    default_provider = AGENT_DEFAULT_PROVIDERS.get(agent_type)
+    if default_provider:
+        return default_provider
+
+    return "claude"

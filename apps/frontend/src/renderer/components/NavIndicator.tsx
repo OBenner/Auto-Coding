@@ -1,0 +1,116 @@
+import { memo, useRef, useEffect, useState } from 'react';
+import { motion } from 'motion/react';
+import { cn } from '../lib/utils';
+
+export interface NavIndicatorProps {
+  /** The active view ID */
+  activeView: string;
+  /** Container ref to measure positioning */
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  /** Map of view IDs to their button elements */
+  itemRefs: React.MutableRefObject<Map<string, HTMLButtonElement>>;
+  /** Position and dimensions for the indicator (optional, will measure if not provided) */
+  position?: { top: number; height: number; opacity: number };
+  /** Optional additional className */
+  className?: string;
+}
+
+/**
+ * Animated navigation indicator that slides to the active nav item.
+ * Uses Motion's layout animations for smooth position/size transitions.
+ *
+ * Performance: Uses requestAnimationFrame for position updates and only
+ * recalculates when the active view changes.
+ */
+export const NavIndicator = memo(function NavIndicator({
+  activeView,
+  containerRef,
+  itemRefs,
+  position: positionProp,
+  className,
+}: NavIndicatorProps) {
+  const rafRef = useRef<number | null>(null);
+  const [internalPosition, setInternalPosition] = useState<{
+    top: number;
+    height: number;
+    opacity: number;
+  }>({ top: 0, height: 0, opacity: 0 });
+
+  // Use provided position prop, or fall back to internal measurement
+  const position = positionProp ?? internalPosition;
+
+  // Update indicator position when active view changes (only if no position prop provided)
+  useEffect(() => {
+    if (positionProp !== undefined) {
+      return; // Skip if position is controlled by parent
+    }
+
+    const updatePosition = () => {
+      const container = containerRef.current;
+      const activeItem = itemRefs.current.get(activeView);
+
+      if (!container || !activeItem) {
+        // Fade out if we can't find the elements
+        setInternalPosition((prev) => ({ ...prev, opacity: 0 }));
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const itemRect = activeItem.getBoundingClientRect();
+
+      // Calculate position relative to container
+      const top = itemRect.top - containerRect.top;
+      const height = itemRect.height;
+
+      // Cancel any pending RAF
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+
+      // Schedule state update on next animation frame
+      rafRef.current = requestAnimationFrame(() => {
+        setInternalPosition({ top, height, opacity: 1 });
+        rafRef.current = null;
+      });
+    };
+
+    // Initial update
+    updatePosition();
+
+    // Also update after a short delay to handle any layout transitions
+    const timeoutId = setTimeout(updatePosition, 100);
+
+    // Cleanup
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+      clearTimeout(timeoutId);
+    };
+  }, [activeView, containerRef, itemRefs, positionProp]);
+
+  return position.opacity > 0 ? (
+    <motion.div
+      className={cn(
+        'absolute left-0 right-0 rounded-md bg-accent/50',
+        'pointer-events-none',
+        className
+      )}
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{
+        top: position.top,
+        height: position.height,
+        opacity: position.opacity,
+        scale: 1,
+      }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{
+        type: 'spring',
+        stiffness: 500,
+        damping: 30,
+        opacity: { duration: 0.15 },
+      }}
+    />
+  ) : null;
+});

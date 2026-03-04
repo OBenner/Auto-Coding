@@ -173,7 +173,7 @@ async function downloadPrebuilds() {
   try {
     release = await getLatestRelease();
   } catch (err) {
-    console.log(`[prebuilds] Could not fetch releases: ${err.message}`);
+    console.log(`[prebuilds] Could not fetch releases: ${String(err.message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200)}`);
     return { success: false, reason: 'fetch-failed' };
   }
 
@@ -236,7 +236,8 @@ async function downloadPrebuilds() {
     if (fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
-    console.log(`[prebuilds] Download/extract failed: ${err.message}`);
+    const _safeMsg = String(err.message || '').replace(/\n|\r/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+    console.log('[prebuilds] Download/extract failed: ' + _safeMsg);
     return { success: false, reason: 'install-failed', error: err.message };
   }
 }
