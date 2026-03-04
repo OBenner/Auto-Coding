@@ -139,15 +139,21 @@ export const createFeedbackAPI = (): FeedbackAPI => ({
       });
     }
 
+    // Coerce to string before trim to handle non-string values safely
+    const safeStr = (v: unknown, maxLen: number): string | undefined => {
+      if (v == null) return undefined;
+      return String(v).trim().slice(0, maxLen) || undefined;
+    };
+
     // Sanitize and cap field lengths to prevent large payloads
     const request: FeedbackRequest = {
       feedbackType: rawRequest.feedbackType,
-      taskId: rawRequest.taskId?.trim().slice(0, 256),
-      agentType: rawRequest.agentType?.trim().slice(0, 128),
-      taskDescription: rawRequest.taskDescription?.trim().slice(0, 1024),
-      context: rawRequest.context?.trim().slice(0, 2048),
-      specDir: rawRequest.specDir?.trim().slice(0, 512),
-      projectDir: rawRequest.projectDir?.trim().slice(0, 512),
+      taskId: safeStr(rawRequest.taskId, 256),
+      agentType: safeStr(rawRequest.agentType, 128),
+      taskDescription: safeStr(rawRequest.taskDescription, 1024),
+      context: safeStr(rawRequest.context, 2048),
+      specDir: safeStr(rawRequest.specDir, 512),
+      projectDir: safeStr(rawRequest.projectDir, 512),
     };
 
     return ipcRenderer.invoke(IPC_CHANNELS.FEEDBACK_SUBMIT, request);

@@ -508,6 +508,14 @@ def modify_prompt_for_preferences(prompt: str, profile: PreferenceProfile) -> st
     return prompt + adaptive_section
 
 
+def _safe_enum(enum_cls: type[Enum], value: str, default: Enum) -> Enum:
+    """Safely convert a string to an enum, returning default on invalid value."""
+    try:
+        return enum_cls(value)
+    except ValueError:
+        return default
+
+
 def app_settings_to_profile(settings: dict) -> PreferenceProfile:
     """
     Convert frontend AppSettings dict to a backend PreferenceProfile.
@@ -518,8 +526,12 @@ def app_settings_to_profile(settings: dict) -> PreferenceProfile:
     - agentProjectType      -> project_type
     - agentCodingStyle.*    -> coding_style.*
     - agentUserInstructions -> user_instructions
+
+    Invalid enum values are mapped to safe defaults.
     """
-    coding_style_data = settings.get("agentCodingStyle", {}) or {}
+    coding_style_data = settings.get("agentCodingStyle", {})
+    if not isinstance(coding_style_data, dict):
+        coding_style_data = {}
     coding_style = CodingStylePreferences(
         indentation=coding_style_data.get("indentation", "auto"),
         quote_style=coding_style_data.get("quoteStyle", "auto"),
@@ -529,10 +541,27 @@ def app_settings_to_profile(settings: dict) -> PreferenceProfile:
         type_hints=coding_style_data.get("typeHints", True),
     )
 
+    raw_instructions = settings.get("agentUserInstructions", [])
+    if not isinstance(raw_instructions, list):
+        raw_instructions = []
+    user_instructions = [str(s) for s in raw_instructions if isinstance(s, str)]
+
     return PreferenceProfile(
-        verbosity_level=VerbosityLevel(settings.get("agentVerbosity", "normal")),
-        risk_tolerance=RiskTolerance(settings.get("agentRiskTolerance", "balanced")),
-        project_type=ProjectType(settings.get("agentProjectType", "established")),
+        verbosity_level=_safe_enum(
+            VerbosityLevel,
+            settings.get("agentVerbosity", "normal"),
+            VerbosityLevel.NORMAL,
+        ),
+        risk_tolerance=_safe_enum(
+            RiskTolerance,
+            settings.get("agentRiskTolerance", "balanced"),
+            RiskTolerance.BALANCED,
+        ),
+        project_type=_safe_enum(
+            ProjectType,
+            settings.get("agentProjectType", "established"),
+            ProjectType.ESTABLISHED,
+        ),
         coding_style=coding_style,
-        user_instructions=settings.get("agentUserInstructions", []),
+        user_instructions=user_instructions,
     )
