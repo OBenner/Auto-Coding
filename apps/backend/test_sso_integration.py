@@ -33,12 +33,17 @@ from core.auth import (
     is_sso_enabled,
 )
 
+_SEP = "=" * 70
+
+
+def _print_header(title: str) -> None:
+    """Print a test section header."""
+    print(f"\n{_SEP}\n{title}\n{_SEP}")
+
 
 def test_sso_availability():
     """Test 1: Check if enterprise SSO modules are available."""
-    print("\n" + "=" * 70)
-    print("TEST 1: Enterprise SSO Module Availability")
-    print("=" * 70)
+    _print_header("TEST 1: Enterprise SSO Module Availability")
 
     if ENTERPRISE_AVAILABLE:
         print("✓ Enterprise SSO modules are available")
@@ -54,9 +59,7 @@ def test_sso_availability():
 
 def test_sso_configuration():
     """Test 2: Check SSO configuration."""
-    print("\n" + "=" * 70)
-    print("TEST 2: SSO Configuration Check")
-    print("=" * 70)
+    _print_header("TEST 2: SSO Configuration Check")
 
     enabled = is_sso_enabled()
     print(f"SSO Enabled: {enabled}")
@@ -87,9 +90,7 @@ def test_sso_configuration():
 
 def test_audit_logger():
     """Test 3: Check audit logger availability."""
-    print("\n" + "=" * 70)
-    print("TEST 3: Audit Logger Availability")
-    print("=" * 70)
+    _print_header("TEST 3: Audit Logger Availability")
 
     if not ENTERPRISE_AVAILABLE:
         print("✗ Audit logger not available (enterprise modules missing)")
@@ -113,9 +114,7 @@ def test_audit_logger():
 
 def test_authentication_flow():
     """Test 4: Demonstrate authentication flow (without real SAML response)."""
-    print("\n" + "=" * 70)
-    print("TEST 4: Authentication Flow (Dry Run)")
-    print("=" * 70)
+    _print_header("TEST 4: Authentication Flow (Dry Run)")
 
     if not is_sso_enabled():
         print("✗ SSO not enabled, skipping authentication test")
@@ -142,9 +141,7 @@ def test_authentication_flow():
 
 def test_audit_trail():
     """Test 5: Check audit trail availability."""
-    print("\n" + "=" * 70)
-    print("TEST 5: Audit Trail Actions")
-    print("=" * 70)
+    _print_header("TEST 5: Audit Trail Actions")
 
     if not ENTERPRISE_AVAILABLE:
         print("✗ Audit actions not available (enterprise modules missing)")
@@ -178,9 +175,7 @@ def test_audit_trail():
 
 def main():
     """Run all tests."""
-    print("\n" + "=" * 70)
-    print("SSO/SAML Authentication Integration Test")
-    print("=" * 70)
+    _print_header("SSO/SAML Authentication Integration Test")
     print("\nThis script verifies the SSO authentication integration in core/auth.py")
     print("with audit logging support from enterprise modules.")
 
@@ -194,9 +189,7 @@ def main():
     results.append(("Audit Trail", test_audit_trail()))
 
     # Print summary
-    print("\n" + "=" * 70)
-    print("TEST SUMMARY")
-    print("=" * 70)
+    _print_header("TEST SUMMARY")
 
     passed = sum(1 for _, result in results if result)
     total = len(results)

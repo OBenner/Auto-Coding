@@ -464,27 +464,46 @@ def _enforce_role(
     )
 
 
+def _access_check_decorator(check_fn, user_id_param: str = "user_id"):
+    """
+    Generic decorator factory for access control checks.
+
+    Creates a decorator that extracts role/user_id from kwargs and calls
+    check_fn(role, user_id, func_name) before executing the wrapped function.
+    Works with both sync and async functions.
+    """
+    import functools
+    import inspect
+
+    def decorator(func):
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                check_fn(kwargs.get("role"), kwargs.get(user_id_param), func.__name__)
+                return await func(*args, **kwargs)
+
+            return async_wrapper
+
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            check_fn(kwargs.get("role"), kwargs.get(user_id_param), func.__name__)
+            return func(*args, **kwargs)
+
+        return sync_wrapper
+
+    return decorator
+
+
 def require_permission(permission: Permission | str, user_id_param: str = "user_id"):
     """
     Decorator that checks if user has required permission before executing function.
 
     Works with both sync and async functions. Extracts user's role from kwargs.
 
-    Args:
-        permission: Required permission (Permission enum or string)
-        user_id_param: Name of parameter containing user_id (default: "user_id")
-
     Raises:
         PermissionDeniedError: If user lacks required permission
-
-    Example:
-        @require_permission(Permission.SPEC_CREATE)
-        def create_spec(user_id: str, role: Role, spec_data: dict):
-            pass
     """
-    import functools
-    import inspect
-
     if isinstance(permission, str):
         try:
             permission_enum = Permission(permission)
@@ -493,34 +512,10 @@ def require_permission(permission: Permission | str, user_id_param: str = "user_
     else:
         permission_enum = permission
 
-    def decorator(func):
-        if inspect.iscoroutinefunction(func):
+    def check(role, user_id, func_name):
+        _enforce_permission(role, permission_enum, user_id, func_name)
 
-            @functools.wraps(func)
-            async def async_wrapper(*args, **kwargs):
-                _enforce_permission(
-                    kwargs.get("role"),
-                    permission_enum,
-                    kwargs.get(user_id_param),
-                    func.__name__,
-                )
-                return await func(*args, **kwargs)
-
-            return async_wrapper
-
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            _enforce_permission(
-                kwargs.get("role"),
-                permission_enum,
-                kwargs.get(user_id_param),
-                func.__name__,
-            )
-            return func(*args, **kwargs)
-
-        return sync_wrapper
-
-    return decorator
+    return _access_check_decorator(check, user_id_param)
 
 
 def require_role(required_role: Role | str, user_id_param: str = "user_id"):
@@ -529,21 +524,9 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
 
     Works with both sync and async functions. Checks role hierarchy.
 
-    Args:
-        required_role: Required role (Role enum or string)
-        user_id_param: Name of parameter containing user_id (default: "user_id")
-
     Raises:
         PermissionDeniedError: If user lacks required role
-
-    Example:
-        @require_role(Role.DEVELOPER)
-        def developer_only_operation(user_id: str, role: Role):
-            pass
     """
-    import functools
-    import inspect
-
     if isinstance(required_role, str):
         try:
             required_role_enum = Role(required_role)
@@ -552,34 +535,10 @@ def require_role(required_role: Role | str, user_id_param: str = "user_id"):
     else:
         required_role_enum = required_role
 
-    def decorator(func):
-        if inspect.iscoroutinefunction(func):
+    def check(role, user_id, func_name):
+        _enforce_role(role, required_role_enum, user_id, func_name)
 
-            @functools.wraps(func)
-            async def async_wrapper(*args, **kwargs):
-                _enforce_role(
-                    kwargs.get("role"),
-                    required_role_enum,
-                    kwargs.get(user_id_param),
-                    func.__name__,
-                )
-                return await func(*args, **kwargs)
-
-            return async_wrapper
-
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            _enforce_role(
-                kwargs.get("role"),
-                required_role_enum,
-                kwargs.get(user_id_param),
-                func.__name__,
-            )
-            return func(*args, **kwargs)
-
-        return sync_wrapper
-
-    return decorator
+    return _access_check_decorator(check, user_id_param)
 
 
 async def permission_check_hook(
@@ -687,6 +646,8 @@ def validate_permission_input(
     """
     Validate permission input for testing/debugging.
 
+    Delegates to check_permission which handles string-to-enum conversion.
+
     Args:
         role: User role (Role enum or string)
         permission: Required permission (Permission enum or string)
@@ -695,20 +656,4 @@ def validate_permission_input(
     Returns:
         (is_allowed, reason) tuple
     """
-    # Convert strings to enums
-    if isinstance(role, str):
-        try:
-            role = Role(role)
-        except ValueError:
-            return False, f"Invalid role: {role}"
-
-    if isinstance(permission, str):
-        try:
-            permission = Permission(permission)
-        except ValueError:
-            return False, f"Invalid permission: {permission}"
-
-    # Check permission
-    is_allowed, reason = check_permission(role, permission, resource=operation)
-
-    return is_allowed, reason
+    return check_permission(role, permission, resource=operation)
