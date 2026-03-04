@@ -120,11 +120,13 @@ async function resolveProjectContext() {
 /**
  * Wrap a handler with standard try/catch error handling.
  */
-function collabHandler(
+// biome-ignore lint/suspicious/noExplicitAny: IPC handlers receive dynamic args from ipcMain.handle
+function collabHandler<T extends (...args: any[]) => Promise<IPCResult>>(
   label: string,
-  fn: (...args: unknown[]) => Promise<IPCResult>
-): (...args: unknown[]) => Promise<IPCResult> {
-  return async (...args: unknown[]) => {
+  fn: T
+): T {
+  // biome-ignore lint/suspicious/noExplicitAny: IPC handlers receive dynamic args from ipcMain.handle
+  return (async (...args: any[]) => {
     try {
       return await fn(...args);
     } catch (error) {
@@ -134,7 +136,7 @@ function collabHandler(
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
-  };
+  }) as T;
 }
 
 /**
