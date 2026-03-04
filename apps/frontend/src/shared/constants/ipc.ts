@@ -771,5 +771,30 @@ export const IPC_CHANNELS = {
   SECURITY_GET_AUDIT_LOGS: 'security:getAuditLogs',
   SECURITY_EXPORT_CONFIG: 'security:exportConfig',
   SECURITY_RESET_TO_DEFAULT: 'security:resetToDefault',
-  SECURITY_VALIDATE_COMMAND: 'security:validateCommand'
+  SECURITY_VALIDATE_COMMAND: 'security:validateCommand',
+
+  // Collaboration operations
+  COLLABORATION_PERMISSIONS_GET: 'collaboration:permissionsGet',
+  COLLABORATION_PERMISSIONS_ADD: 'collaboration:permissionsAdd',
+  COLLABORATION_PERMISSIONS_UPDATE: 'collaboration:permissionsUpdate',
+  COLLABORATION_PERMISSIONS_REMOVE: 'collaboration:permissionsRemove',
+  COLLABORATION_COMMENTS_GET: 'collaboration:commentsGet',
+  COLLABORATION_COMMENTS_CREATE: 'collaboration:commentsCreate',
+  COLLABORATION_COMMENTS_UPDATE: 'collaboration:commentsUpdate',
+  COLLABORATION_COMMENTS_DELETE: 'collaboration:commentsDelete',
+  COLLABORATION_COMMENTS_RESOLVE: 'collaboration:commentsResolve',
+  COLLABORATION_COMMENTS_REPLY: 'collaboration:commentsReply',
+  COLLABORATION_APPROVALS_GET: 'collaboration:approvalsGet',
+  COLLABORATION_APPROVALS_REQUEST: 'collaboration:approvalsRequest',
+  COLLABORATION_APPROVALS_APPROVE: 'collaboration:approvalsApprove',
+  COLLABORATION_APPROVALS_REJECT: 'collaboration:approvalsReject',
+  COLLABORATION_NOTIFICATIONS_GET: 'collaboration:notificationsGet',
+  COLLABORATION_NOTIFICATIONS_MARK_READ: 'collaboration:notificationsMarkRead',
+  COLLABORATION_NOTIFICATIONS_MARK_ALL_READ: 'collaboration:notificationsMarkAllRead',
+  COLLABORATION_CHANGE_HISTORY_GET: 'collaboration:changeHistoryGet',
+
+  // Collaboration events (main -> renderer)
+  COLLABORATION_COMMENT_ADDED: 'collaboration:commentAdded',
+  COLLABORATION_APPROVAL_STATUS_CHANGED: 'collaboration:approvalStatusChanged',
+  COLLABORATION_NOTIFICATION_RECEIVED: 'collaboration:notificationReceived'
 } as const;

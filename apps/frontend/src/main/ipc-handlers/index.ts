@@ -48,6 +48,7 @@ import { registerWebhookHandlers } from './webhooks-handlers';
 import { registerPatternHandlers } from './pattern-handlers';
 import { registerSessionReplayHandlers } from './session-replay-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
+import { registerCollaborationHandlers } from './collaboration-handlers';
 import { notificationService } from '../notification-service';
 import { setAgentManagerRef } from './utils';
 
@@ -182,6 +183,9 @@ export function setupIpcHandlers(
   // Scheduler handlers (build scheduling and queue management)
   registerSchedulerHandlers(getMainWindow);
 
+  // Collaboration handlers (multi-user spec collaboration)
+  registerCollaborationHandlers(getMainWindow);
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -223,5 +227,6 @@ export {
   registerPatternHandlers,
   registerSessionReplayHandlers,
   registerFeedbackHandlers,
-  registerSchedulerHandlers
+  registerSchedulerHandlers,
+  registerCollaborationHandlers
 };

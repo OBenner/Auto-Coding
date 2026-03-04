@@ -220,7 +220,7 @@ export function registerModelUsageHandlers(): void {
 
         // Sanitize inputs to prevent path traversal attacks.
         // Only allow alphanumeric, dots, and hyphens (strip colons which break Windows filenames).
-        const sanitize = (v: string): string => v.replace(/[^a-zA-Z0-9.\-]/g, '_');
+        const sanitize = (v: string): string => v.replace(/[^a-zA-Z0-9.-]/g, '_');
         const cacheKeyParts = ['model_usage_summary'];
         if (startDate) cacheKeyParts.push(`from_${sanitize(startDate)}`);
         if (endDate) cacheKeyParts.push(`to_${sanitize(endDate)}`);

@@ -1,4 +1,7 @@
 {
+  "tabs": {
+    "collaboration": "Collaboration"
+  },
   "refreshTasks": "Refresh Tasks",
   "status": {
     "backlog": "Backlog",
