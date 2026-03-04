@@ -58,7 +58,7 @@ FRONTEND_PATTERNS = [
     # Google Analytics measurement IDs (must be exactly G-XXXXXXXXXX format)
     # Use word boundaries to avoid matching CSS classes like 'bg-background'
     (
-        r'\bG-[A-Z0-9]{10}\b',
+        r"\bG-[A-Z0-9]{10}\b",
         "Google Analytics Measurement ID",
     ),
     # Public API endpoints with embedded keys in URL
@@ -192,7 +192,11 @@ DATABASE_PATTERNS = [
 
 # Combine all patterns
 ALL_PATTERNS = (
-    FRONTEND_PATTERNS + GENERIC_PATTERNS + SERVICE_PATTERNS + PRIVATE_KEY_PATTERNS + DATABASE_PATTERNS
+    FRONTEND_PATTERNS
+    + GENERIC_PATTERNS
+    + SERVICE_PATTERNS
+    + PRIVATE_KEY_PATTERNS
+    + DATABASE_PATTERNS
 )
 
 
@@ -290,7 +294,7 @@ FALSE_POSITIVE_PATTERNS = [
     r"your[-_]?api[-_]?key",  # Placeholder values
     r"xxx+",  # Placeholder
     r"placeholder",  # Placeholder
-    r"sample",  # Sample value
+    r"\bsample\b",  # Sample value
     r"test[-_]?key",  # Test placeholder
     r"<[A-Z_]+>",  # Placeholder like <API_KEY>
     r"TODO",  # Comment markers
@@ -298,15 +302,15 @@ FALSE_POSITIVE_PATTERNS = [
     r"CHANGEME",
     r"INSERT[-_]?YOUR",
     r"REPLACE[-_]?WITH",
-    r"mock",  # Test mocks (no word boundary to match substrings)
-    r"fixture",  # Test fixtures (no word boundary)
-    r"example",  # Example data (no word boundary)
-    r"dummy",  # Dummy/test data (no word boundary)
-    r"fake",  # Fake test data (no word boundary)
+    r"\bmock\b",  # Test mocks
+    r"\bfixture\b",  # Test fixtures
+    r"(?<![\w.-])example(?![\w.-])",  # Example data (exclude domains like api.example.com)
+    r"\bdummy\b",  # Dummy/test data
+    r"\bfake\b",  # Fake test data
     r"service[-_]?token",  # Common test token placeholder
     r"very[-_]?long[-_]?key",  # Test key placeholder
-    r"abc123",  # Common test placeholder
-    r"xyz789",  # Common test placeholder
+    r"(?<![\w-])abc123(?![\w-])",  # Common test placeholder (exclude token substrings)
+    r"(?<![\w-])xyz789(?![\w-])",  # Common test placeholder (exclude token substrings)
     r"test@?example\.com",  # Test email
 ]
 
@@ -363,21 +367,12 @@ def is_false_positive(line: str, matched_text: str) -> bool:
 
     # Special handling for process.env: only filter safe references (reads), not assignments
     if "process.env." in line_lower:
-        # Check if this is an assignment TO process.env (unsafe) vs FROM process.env (safe)
-        # Unsafe: process.env.X = "value"  -> Don't filter
-        # Safe: const x = process.env.X  -> Filter
-        eq_pos = line.find("=")
-        env_pos = line.find("process.env.")
-
-        if eq_pos != -1 and eq_pos > env_pos:
-            # = comes after process.env., likely an assignment TO process.env (unsafe)
-            # Don't filter - this should be flagged
+        # Unsafe: process.env.X = "value" (single = assignment, not == or ===)
+        if re.search(r"process\.env\.[A-Z_]+\s*=[^=]", line):
             return False
-        else:
-            # Either no =, or = comes before process.env., likely a safe reference
-            # Check if it matches the read pattern
-            if re.search(r'process\.env\.[A-Z_]+(\s|\)|,|;|$)', line):
-                return True
+        # Safe: const x = process.env.X (read from environment)
+        if re.search(r"process\.env\.[A-Z_]+(\s|\)|,|;|$)", line):
+            return True
 
     for pattern in FALSE_POSITIVE_PATTERNS:
         if re.search(pattern, line_lower, re.IGNORECASE):
@@ -481,8 +476,12 @@ def scan_files(
     all_matches = []
 
     for file_path in files:
+        # Normalize to POSIX separators for consistent ignore-pattern matching
+        # (Windows backslashes would bypass slash-based ignore regexes)
+        normalized_path = Path(file_path).as_posix()
+
         # Skip files based on ignore patterns
-        if should_skip_file(file_path, custom_ignores):
+        if should_skip_file(normalized_path, custom_ignores):
             continue
 
         # Handle both relative and absolute paths
@@ -498,7 +497,7 @@ def scan_files(
 
         try:
             content = full_path.read_text(encoding="utf-8", errors="ignore")
-            matches = scan_content(content, file_path)
+            matches = scan_content(content, normalized_path)
             all_matches.extend(matches)
         except (OSError, UnicodeDecodeError):
             # Skip files that can't be read

@@ -15,12 +15,14 @@ Browser storage APIs are commonly used to store authentication tokens and API ke
 #### localStorage.setItem
 
 **Pattern:**
+
 ```javascript
 localStorage.setItem('apiKey', 'sk-1234567890abcdef...')
 localStorage.setItem('token', 'ghp_1234567890abcdef...')
 ```
 
 **Detection Regex:**
+
 ```regex
 localStorage\.setItem\s*\(\s*["\'](?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer)["\']\s*,\s*["\']([a-zA-Z0-9_-]{20,})["\']
 ```
@@ -33,11 +35,13 @@ localStorage\.setItem\s*\(\s*["\'](?:api[_-]?key|apikey|token|access[_-]?token|a
 #### sessionStorage.setItem
 
 **Pattern:**
+
 ```javascript
 sessionStorage.setItem('sessionToken', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...')
 ```
 
 **Detection Regex:**
+
 ```regex
 sessionStorage\.setItem\s*\(\s*["\'](?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer)["\']\s*,\s*["\']([a-zA-Z0-9_-]{20,})["\']
 ```
@@ -56,6 +60,7 @@ Web applications often expose configuration through global `window` objects. The
 #### window.config / window.CONFIG
 
 **Pattern:**
+
 ```javascript
 window.config = {
   apiKey: 'sk-1234567890abcdef...',
@@ -65,9 +70,16 @@ window.config = {
 window.config.apiKey = 'sk-1234567890abcdef...'
 ```
 
-**Detection Regex:**
+**Detection Regex (property assignment):**
+
 ```regex
-window\.(?:config|CONFIG|appConfig|APP_CONFIG)\s*(?:\.\s*[a-zA-Z_]\w*\s*)?[:=]\s*{?\s*["\']?([a-zA-Z0-9_-]{16,})["\']?
+window\.(?:config|CONFIG|appConfig|APP_CONFIG)(?:\.\s*(?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer|aws[_-]?key)\s*)?[:=]\s*["\']([a-zA-Z0-9_-]{16,})["\']
+```
+
+**Detection Regex (object literal):**
+
+```regex
+window\.(?:config|CONFIG|appConfig|APP_CONFIG)\s*=\s*{[^}]*?(?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer|aws[_-]?key)\s*:\s*["\']?([a-zA-Z0-9_-]{16,})["\']?
 ```
 
 **Key indicators:**
@@ -84,13 +96,15 @@ window\.(?:config|CONFIG|appConfig|APP_CONFIG)\s*(?:\.\s*[a-zA-Z_]\w*\s*)?[:=]\s
 Vite applications use `import.meta.env` to access environment variables. The variable reference itself is safe, but hardcoded values should still be caught.
 
 **Safe Pattern (False Positive):**
+
 ```javascript
-const apiKey = import.meta.env.VITE_API_KEY;  // ✅ Safe - reads from .env
+const apiKey = import.meta.env.VITE_API_KEY;  // Safe - reads from .env
 ```
 
 **Unsafe Pattern (Should be caught by generic patterns):**
+
 ```javascript
-const apiKey = 'sk-1234567890abcdef...';  // ❌ Should be caught
+const apiKey = 'sk-1234567890abcdef...';  // Should be caught
 ```
 
 **Detection:**
@@ -99,6 +113,7 @@ const apiKey = 'sk-1234567890abcdef...';  // ❌ Should be caught
 - Generic patterns should catch actual hardcoded values
 
 **False Positive Pattern:**
+
 ```regex
 import\.meta\.env\.[A-Z_]+
 ```
@@ -110,24 +125,30 @@ import\.meta\.env\.[A-Z_]+
 Electron main process can access Node.js environment variables through `process.env`.
 
 **Safe Pattern (False Positive):**
+
 ```typescript
-const dsn = process.env.SENTRY_DSN;  // ✅ Safe - reads from environment
+const dsn = process.env.SENTRY_DSN;  // Safe - reads from environment
 ```
 
 **Unsafe Pattern:**
+
 ```typescript
-process.env.API_KEY = 'sk-1234567890abcdef...';  // ❌ Hardcoded assignment
+process.env.API_KEY = 'sk-1234567890abcdef...';  // Hardcoded assignment
 ```
 
 **Detection Regex:**
+
 ```regex
-process\.env\.[A-Z_]+\s*=\s*["\']([a-zA-Z0-9_-]{20,})["\']
+process\.env\.[A-Z_]+\s*=\s*["\']([a-zA-Z0-9_-]{20,})
 ```
 
-**False Positive Pattern:**
-```regex
-process\.env\.[A-Z_]+  # Allow safe references
-```
+**Read vs. Write Detection:**
+
+The scanner distinguishes between safe reads and unsafe assignments using regex:
+- **Assignment** (unsafe): `process\.env\.[A-Z_]+\s*=[^=]` — single `=` not followed by another `=`
+- **Read** (safe): `process\.env\.[A-Z_]+(\s|\)|,|;|$)` — variable used in expression context
+
+This correctly handles comparison operators (`==`, `===`) which are not assignments.
 
 #### Build-time Defines (Vite/Webpack)
 
@@ -136,6 +157,7 @@ process\.env\.[A-Z_]+  # Allow safe references
 Build tools often replace variables at build time using `define` options. These appear as global variables:
 
 **Pattern:**
+
 ```javascript
 const dsn = __SENTRY_DSN__;  // Vite define replacement
 ```
@@ -154,6 +176,7 @@ const dsn = __SENTRY_DSN__;  // Vite define replacement
 Environment files should never be committed to git. The scanner detects .env files with actual secret values.
 
 **Pattern:**
+
 ```bash
 # .env file
 API_KEY=sk-1234567890abcdef
@@ -161,11 +184,12 @@ DATABASE_URL=postgresql://user:password@localhost/db
 ```
 
 **Detection Regex:**
+
 ```regex
 ^[A-Z_]+=\s*["\']?([a-zA-Z0-9_-]{20,})["\']?\s*$
 ```
 
-**Note:** The scanner should check if the file being scanned is an actual .env file and flag any non-empty, non-comment lines with 20+ character values.
+**Note:** The scanner checks if the file being scanned is an actual .env file and flags any non-empty, non-comment lines with 20+ character values.
 
 ### 5. Third-Party Service Patterns
 
@@ -176,6 +200,7 @@ DATABASE_URL=postgresql://user:password@localhost/db
 Firebase web apps include configuration objects with API keys. While Firebase keys are technically "public" (they're meant to be exposed), they should be loaded from environment variables in production.
 
 **Pattern:**
+
 ```javascript
 const firebaseConfig = {
   apiKey: "AIzaSyD1234567890abcdef",
@@ -185,12 +210,13 @@ const firebaseConfig = {
 ```
 
 **Detection Regex:**
+
 ```regex
-firebase(?:Config|:?\s*{)\s*{[^}]*apiKey\s*:\s*["\']([a-zA-Z0-9_-]{20,})["\']
+firebaseConfig\s*=\s*{[^}]*apiKey\s*:\s*["\']([a-zA-Z0-9_-]{20,})["\']
 ```
 
 **Key indicators:**
-- Variable/property name: `firebaseConfig`, `firebase: {...}`
+- Variable name: `firebaseConfig`
 - Contains `apiKey` property
 - Google API key format: `AIza...`
 
@@ -201,16 +227,18 @@ firebase(?:Config|:?\s*{)\s*{[^}]*apiKey\s*:\s*["\']([a-zA-Z0-9_-]{20,})["\']
 Google Analytics IDs are public identifiers, not secrets. However, they should be documented and tracked.
 
 **Pattern:**
+
 ```javascript
 gtag('config', 'G-XXXXXXXXXX');
 ```
 
 **Detection Regex:**
+
 ```regex
-[Gg]-[A-Z0-9]{10}
+\bG-[A-Z0-9]{10}\b
 ```
 
-**Note:** These are generally safe to expose but should be loaded from environment variables for consistency.
+**Note:** Uses word boundaries (`\b`) to avoid matching CSS classes like `bg-background`. These are generally safe to expose but should be loaded from environment variables for consistency.
 
 #### API Endpoints with Embedded Keys
 
@@ -219,18 +247,26 @@ gtag('config', 'G-XXXXXXXXXX');
 API calls with keys embedded in URL parameters instead of headers.
 
 **Pattern:**
+
 ```javascript
-fetch('https://api.example.com/endpoint?api_key=sk-1234567890abcdef')
+fetch('https://api.service.io/endpoint?api_key=sk-1234567890abcdef')
 ```
 
 **Detection Regex:**
+
 ```regex
-https?://[^\s"\'<>]*api[_-]?key[_-]?=?[a-zA-Z0-9_-]{20,}[^\s"\'<>]*
+https?://[^\s"\']*api[_-]?key[_-]?=?[a-zA-Z0-9_-]{20,}
 ```
 
 **Key indicators:**
 - URL with `api_key=` or `apikey=` parameter
 - 20+ character alphanumeric value
+
+## Matching Mode
+
+The scanner applies patterns **line by line**, not against entire file content. Each line is tested against all compiled patterns using `re.finditer()` with `re.IGNORECASE`. Anchors like `^` and `$` in patterns (e.g., the `.env` variable pattern) are evaluated relative to each individual line.
+
+For the canonical source of truth, refer to the pattern definitions in `apps/backend/security/scan_secrets.py` (`FRONTEND_PATTERNS`, `GENERIC_PATTERNS`, etc.). This document mirrors those implementations and should be updated whenever the code changes.
 
 ## Testing Guidelines
 
@@ -247,50 +283,37 @@ When creating test cases for frontend patterns:
    - Positive: Hardcoded secrets that should be detected
    - Negative: Legitimate env variable usage that should NOT be detected
 
-3. **Example test cases:**
+3. **Use fake secret builders** to avoid triggering push protection:
+
+```python
+# Build test secrets via concatenation
+_TEST_OPENAI_KEY = "sk-" + "1234567890abcdefghijklmnop"
+_TEST_GOOGLE_KEY = "AIza" + "012345678901234567890123456789012345"
+```
+
+4. **Example test cases:**
 
 ```javascript
-// ✅ Should be detected
+// Should be detected
 localStorage.setItem('apiKey', 'sk-12345678901234567890');
 
-// ❌ Should NOT be detected (false positive - safe env usage)
+// Should NOT be detected (false positive - safe env usage)
 const apiKey = import.meta.env.VITE_API_KEY;
 
-// ✅ Should be detected
+// Should be detected
 window.config = {
   apiKey: 'sk-12345678901234567890'
 };
 
-// ❌ Should NOT be detected (safe process.env reference)
+// Should NOT be detected (safe process.env reference)
 const dsn = process.env.SENTRY_DSN;
-```
-
-### Test File Structure
-
-```python
-class TestFrontendPatterns(unittest.TestCase):
-    def test_localstorage_api_key(self):
-        """Test detection of localStorage.setItem with API keys"""
-        code = '''
-        localStorage.setItem('apiKey', 'sk-12345678901234567890');
-        '''
-        matches = scan_content(code, 'test.js')
-        self.assertTrue(any('localStorage' in m.pattern_name for m in matches))
-
-    def test_import_meta_env_false_positive(self):
-        """Test that import.meta.env references are not flagged"""
-        code = '''
-        const apiKey = import.meta.env.VITE_API_KEY;
-        '''
-        matches = scan_content(code, 'test.ts')
-        self.assertFalse(matches)
 ```
 
 ## Implementation Notes
 
 ### Order of Pattern Matching
 
-Frontend patterns should be checked BEFORE generic patterns to provide more specific error messages. The current order in `ALL_PATTERNS` is:
+Frontend patterns are checked BEFORE generic patterns to provide more specific error messages. The current order in `ALL_PATTERNS` is:
 
 1. FRONTEND_PATTERNS (most specific)
 2. GENERIC_PATTERNS (catch-all)
@@ -298,13 +321,24 @@ Frontend patterns should be checked BEFORE generic patterns to provide more spec
 4. PRIVATE_KEY_PATTERNS (cryptographic)
 5. DATABASE_PATTERNS (connection strings)
 
+### False Positive Filtering
+
+Placeholder patterns use word boundaries or context-aware matching to avoid false negatives:
+- `\bmock\b`, `\bfixture\b`, `\bdummy\b`, `\bfake\b` — word boundaries prevent matching inside identifiers
+- `(?<![\w.-])example(?![\w.-])` — excludes domains like `api.example.com`
+- `(?<![\w-])abc123(?![\w-])` — excludes token substrings separated by hyphens
+
+### Cross-Platform Path Handling
+
+The scanner normalizes file paths to POSIX format (forward slashes) before checking ignore patterns. This ensures Windows backslash paths (`C:\project\node_modules\...`) correctly match ignore rules like `node_modules/`.
+
 ### File Type Considerations
 
-Frontend patterns should primarily check:
-- `.js`, `.jsx`, `.ts`, `.tsx` - JavaScript/TypeScript files
-- `.vue` - Vue components
-- `.svelte` - Svelte components
-- `.env`, `.env.local`, `.env.production` - Environment files
+Frontend patterns currently apply to all scanned files. Future improvement could scope them to frontend file types:
+- `.js`, `.jsx`, `.ts`, `.tsx` — JavaScript/TypeScript files
+- `.vue` — Vue components
+- `.svelte` — Svelte components
+- `.env`, `.env.local`, `.env.production` — Environment files
 
 ### Framework-Specific Notes
 
@@ -358,6 +392,7 @@ Frontend patterns should primarily check:
 These patterns are not currently implemented but could be added in the future:
 
 1. **Axios/Fetch interceptors with hardcoded auth:**
+
    ```javascript
    axios.interceptors.request.use(config => {
      config.headers.Authorization = 'Bearer sk-1234...';  // Hardcoded token
@@ -366,6 +401,7 @@ These patterns are not currently implemented but could be added in the future:
    ```
 
 2. **React Context with secrets:**
+
    ```javascript
    const AuthContext = createContext({
      apiKey: 'sk-1234...'  // Direct value
@@ -373,6 +409,7 @@ These patterns are not currently implemented but could be added in the future:
    ```
 
 3. **Vue/Vuex stores with secrets:**
+
    ```javascript
    export default new Vuex.Store({
      state: {
@@ -382,14 +419,16 @@ These patterns are not currently implemented but could be added in the future:
    ```
 
 4. **GraphQL clients with hardcoded tokens:**
+
    ```javascript
    const client = new ApolloClient({
-     uri: 'https://api.example.com/graphql',
+     uri: 'https://api.service.io/graphql',
      headers: { 'Authorization': 'Bearer sk-1234...' }  // Hardcoded
    });
    ```
 
 5. **Service Worker registration with tokens:**
+
    ```javascript
    navigator.serviceWorker.register('/sw.js?token=sk-1234...');  // Token in URL
    ```
