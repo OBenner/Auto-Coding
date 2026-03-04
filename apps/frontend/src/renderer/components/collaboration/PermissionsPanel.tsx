@@ -179,51 +179,49 @@ function PermissionCard({ permission, canEdit, onUpdate, onRemove }: PermissionC
           {/* Actions */}
           <div className="flex items-center gap-1">
             {canEdit ? (
-              <>
-                {isEditing ? (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleSaveUpdate}
-                      className="h-8 w-8 p-0 text-success hover:bg-success/10"
-                      title="Save changes"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCancelEdit}
-                      className="h-8 w-8 p-0 text-muted-foreground hover:bg-muted"
-                      title="Cancel"
-                    >
-                      <XCircle className="h-4 w-4" />
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsEditing(true)}
-                      className="h-8 w-8 p-0 text-info hover:bg-info/10 hover:text-info"
-                      title="Change permission level"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemove(permission.user.user_id)}
-                      className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      title="Remove access"
-                    >
-                      <UserMinus className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
-              </>
+              isEditing ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSaveUpdate}
+                    className="h-8 w-8 p-0 text-success hover:bg-success/10"
+                    title="Save changes"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelEdit}
+                    className="h-8 w-8 p-0 text-muted-foreground hover:bg-muted"
+                    title="Cancel"
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditing(true)}
+                    className="h-8 w-8 p-0 text-info hover:bg-info/10 hover:text-info"
+                    title="Change permission level"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRemove(permission.user.user_id)}
+                    className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    title="Remove access"
+                  >
+                    <UserMinus className="h-4 w-4" />
+                  </Button>
+                </>
+              )
             ) : null}
           </div>
         </div>
