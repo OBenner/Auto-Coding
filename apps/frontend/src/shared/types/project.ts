@@ -374,6 +374,57 @@ export interface ProjectEnvConfig {
 
   // Custom MCP servers defined by the user
   customMcpServers?: CustomMcpServer[];
+
+  // Knowledge Base Integration (team documentation)
+  knowledgeBaseConfig?: KnowledgeBaseConfig;
+}
+
+/**
+ * Knowledge Base Configuration (team documentation sources)
+ * Supports Notion, Confluence, GitHub Wiki, and GitBook
+ */
+export interface KnowledgeBaseConfig {
+  // Notion
+  notionEnabled?: boolean;
+  notionApiKey?: string;
+  notionWorkspaceId?: string;
+
+  // Confluence
+  confluenceEnabled?: boolean;
+  confluenceApiKey?: string;
+  confluenceApiUrl?: string; // For self-hosted instances
+  confluenceSpaceKey?: string;
+  confluenceEmail?: string; // For API authentication
+
+  // GitHub Wiki
+  githubWikiEnabled?: boolean;
+  githubWikiToken?: string; // GitHub personal access token
+  githubWikiRepository?: string; // Format: owner/repo
+
+  // GitBook
+  gitbookEnabled?: boolean;
+  gitbookApiKey?: string;
+  gitbookApiUrl?: string; // GitBook API URL
+
+  // Global settings
+  syncInterval?: number; // Sync interval in seconds (default: 3600 = 1 hour)
+  maxDocs?: number; // Maximum docs to index (default: 1000)
+}
+
+/**
+ * Result of testing a knowledge base connection
+ */
+export interface KnowledgeBaseConnectionTest {
+  success: boolean;
+  provider: string;
+  message: string;
+  error?: string;
+  details?: {
+    docsFound?: number;
+    workspaceName?: string;
+    spaceName?: string;
+    repository?: string;
+  };
 }
 
 /**

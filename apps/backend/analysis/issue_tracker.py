@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -191,7 +191,7 @@ class IssueTracker:
         Returns:
             Number of issues recorded
         """
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         recorded = 0
 
         for issue in issues:
@@ -239,7 +239,7 @@ class IssueTracker:
             line: Line number
             category: Issue category
         """
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         record = IssueRecord(
             timestamp=timestamp,
@@ -274,7 +274,7 @@ class IssueTracker:
             Number of issues marked as resolved
         """
         resolved = 0
-        resolved_at = datetime.now(timezone.utc).isoformat()
+        resolved_at = datetime.now(UTC).isoformat()
 
         for issue in self._issues:
             if issue.resolved:
@@ -343,7 +343,7 @@ class IssueTracker:
 
         # Filter by time
         if days:
-            cutoff = datetime.now(timezone.utc).timestamp() - (days * 86400)
+            cutoff = datetime.now(UTC).timestamp() - (days * 86400)
             issues = [
                 i
                 for i in issues
@@ -434,7 +434,7 @@ class IssueTracker:
 
             # Add to appropriate period buckets
             issue_time = datetime.fromisoformat(issue.timestamp).timestamp()
-            now = datetime.now(timezone.utc).timestamp()
+            now = datetime.now(UTC).timestamp()
 
             if now - issue_time <= 7 * 86400:
                 groups[key]["7"].append(issue)
@@ -498,11 +498,11 @@ class IssueTracker:
 
         prevention_rate = (resolved / max(total, 1)) * 100 if total > 0 else 0.0
 
-        period_end = datetime.now(timezone.utc)
+        period_end = datetime.now(UTC)
         period_start = period_end.timestamp() - (days * 86400)
 
         return PreventionEffectiveness(
-            period_start=datetime.fromtimestamp(period_start, timezone.utc).isoformat(),
+            period_start=datetime.fromtimestamp(period_start, UTC).isoformat(),
             period_end=period_end.isoformat(),
             issues_prevented=resolved,
             issues_found=total,

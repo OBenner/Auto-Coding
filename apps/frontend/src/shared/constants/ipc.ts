@@ -248,6 +248,11 @@ export const IPC_CHANNELS = {
   CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
   CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
 
+  // Knowledge Base operations
+  KNOWLEDGE_BASE_GET_CONFIG: 'knowledgeBase:getConfig',
+  KNOWLEDGE_BASE_UPDATE_CONFIG: 'knowledgeBase:updateConfig',
+  KNOWLEDGE_BASE_TEST_CONNECTION: 'knowledgeBase:testConnection',
+
   // Context viewer operations
   CONTEXT_GET_STATS: 'context:getStats',
   CONTEXT_GET_TOKEN_BREAKDOWN: 'context:getTokenBreakdown',

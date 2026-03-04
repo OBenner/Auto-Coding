@@ -29,7 +29,7 @@ import json
 import logging
 import os
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -619,7 +619,7 @@ class PredictiveScanner:
             issue_records = []
             for issue in result.issues:
                 record = {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "issue_type": issue.issue_type,
                     "severity": issue.severity,
                     "source": issue.source,
