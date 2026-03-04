@@ -58,6 +58,11 @@ export class FileWatcher extends EventEmitter {
       const existing = this.watchers.get(taskId);
       if (existing) {
         this.watchers.delete(taskId);
+        const pendingTimeout = this.debounceTimeouts.get(taskId);
+        if (pendingTimeout) {
+          clearTimeout(pendingTimeout);
+          this.debounceTimeouts.delete(taskId);
+        }
         existing.watcher.removeListener('change', existing.changeHandler);
         await existing.watcher.close();
       }

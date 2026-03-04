@@ -191,6 +191,7 @@ describe('File Watcher Integration', () => {
     });
 
     it('should handle file parse errors gracefully', async () => {
+      vi.useFakeTimers();
       const planPath = writePlan(TEST_SPEC_DIR);
 
       const watcher = await createWatcher();
@@ -209,8 +210,14 @@ describe('File Watcher Integration', () => {
       // Simulate file change
       mockWatcher.emit('change', planPath);
 
-      // Should not crash, just ignore the invalid JSON
+      // Advance past debounce period so the callback fires
+      await vi.advanceTimersByTimeAsync(350);
+
+      // Should not crash or emit error, just silently ignore the invalid JSON
       expect(errorHandler).not.toHaveBeenCalled();
+      expect(progressHandler).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
     });
 
     it('should forward watcher errors', async () => {
