@@ -41,10 +41,10 @@ export function useTaskFiltering(
       // Search filter
       if (filterState.searchQuery) {
         const query = filterState.searchQuery.toLowerCase();
-        const matchesId = task.id.toLowerCase().includes(query);
-        const matchesTitle = task.title.toLowerCase().includes(query);
-        const matchesDescription = task.description?.toLowerCase().includes(query);
-        const matchesSpecId = task.specId.toLowerCase().includes(query);
+        const matchesId = task.id?.toLowerCase().includes(query) ?? false;
+        const matchesTitle = task.title?.toLowerCase().includes(query) ?? false;
+        const matchesDescription = task.description?.toLowerCase().includes(query) ?? false;
+        const matchesSpecId = task.specId?.toLowerCase().includes(query) ?? false;
 
         if (!matchesId && !matchesTitle && !matchesDescription && !matchesSpecId) {
           return false;

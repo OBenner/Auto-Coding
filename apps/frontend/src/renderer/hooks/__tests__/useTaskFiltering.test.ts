@@ -286,4 +286,33 @@ describe('useTaskFiltering', () => {
       expect(result.current.uniqueValues.categories).toEqual([]);
     });
   });
+
+  describe('undefined optional fields', () => {
+    it('should handle tasks with undefined description and specId', () => {
+      const tasksWithUndefined = [
+        makeTask({ id: 'u1', title: 'Minimal task', description: undefined, specId: undefined as unknown as string }),
+        makeTask({ id: 'u2', title: 'Normal task', description: 'Has details', specId: 'spec-100' }),
+      ];
+
+      const { result } = renderHook(() => useTaskFiltering(tasksWithUndefined));
+
+      act(() => result.current.setSearchQuery('details'));
+
+      // Should match 'Has details' but not crash on undefined
+      expect(result.current.filteredTasks).toHaveLength(1);
+      expect(result.current.filteredTasks[0].id).toBe('u2');
+    });
+
+    it('should not crash when searching with all undefined fields', () => {
+      const tasksWithUndefined = [
+        makeTask({ id: 'u1', title: undefined as unknown as string, description: undefined, specId: undefined as unknown as string }),
+      ];
+
+      const { result } = renderHook(() => useTaskFiltering(tasksWithUndefined));
+
+      act(() => result.current.setSearchQuery('anything'));
+
+      expect(result.current.filteredTasks).toHaveLength(0);
+    });
+  });
 });
