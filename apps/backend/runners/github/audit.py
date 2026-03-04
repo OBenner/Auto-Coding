@@ -26,6 +26,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from core.audit_base import BaseAuditLogger
+
 # Configure module logger
 logger = logging.getLogger(__name__)
 
@@ -162,33 +164,11 @@ class AuditEntry:
         return json.dumps(self.to_dict(), default=str)
 
 
-class AuditLogger:
+class AuditLogger(BaseAuditLogger):
     """
     Structured audit logger for GitHub automation.
 
-    Usage:
-        audit = AuditLogger(log_dir=Path(".auto-claude/github/audit"))
-
-        # Start an operation with context
-        ctx = audit.start_operation(
-            actor_type=ActorType.USER,
-            actor_id="username",
-            repo="owner/repo",
-            pr_number=123,
-        )
-
-        # Log events during the operation
-        audit.log(ctx, AuditAction.PR_REVIEW_STARTED)
-
-        # ... do work ...
-
-        # Log completion with details
-        audit.log(
-            ctx,
-            AuditAction.PR_REVIEW_COMPLETED,
-            result="success",
-            details={"findings_count": 5},
-        )
+    Inherits shared infrastructure from BaseAuditLogger.
     """
 
     _instance: AuditLogger | None = None
@@ -200,75 +180,12 @@ class AuditLogger:
         max_file_size_mb: int = 100,
         enabled: bool = True,
     ):
-        """
-        Initialize audit logger.
-
-        Args:
-            log_dir: Directory for audit logs (default: .auto-claude/github/audit)
-            retention_days: Days to retain logs (default: 30)
-            max_file_size_mb: Max size per log file before rotation (default: 100MB)
-            enabled: Whether audit logging is enabled (default: True)
-        """
-        self.log_dir = log_dir or Path(".auto-claude/github/audit")
-        self.retention_days = retention_days
-        self.max_file_size_mb = max_file_size_mb
-        self.enabled = enabled
-
-        if enabled:
-            self.log_dir.mkdir(parents=True, exist_ok=True)
-            self._current_log_file: Path | None = None
-            self._rotate_if_needed()
-
-    @classmethod
-    def get_instance(
-        cls,
-        log_dir: Path | None = None,
-        **kwargs,
-    ) -> AuditLogger:
-        """Get or create singleton instance."""
-        if cls._instance is None:
-            cls._instance = cls(log_dir=log_dir, **kwargs)
-        return cls._instance
-
-    @classmethod
-    def reset_instance(cls) -> None:
-        """Reset singleton (for testing)."""
-        cls._instance = None
-
-    def _get_log_file_path(self) -> Path:
-        """Get path for current day's log file."""
-        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
-        return self.log_dir / f"audit_{date_str}.jsonl"
-
-    def _rotate_if_needed(self) -> None:
-        """Rotate log file if it exceeds max size."""
-        if not self.enabled:
-            return
-
-        log_file = self._get_log_file_path()
-
-        if log_file.exists():
-            size_mb = log_file.stat().st_size / (1024 * 1024)
-            if size_mb >= self.max_file_size_mb:
-                # Rotate: add timestamp suffix
-                timestamp = datetime.now(UTC).strftime("%H%M%S")
-                rotated = log_file.with_suffix(f".{timestamp}.jsonl")
-                log_file.rename(rotated)
-                logger.info(f"Rotated audit log to {rotated}")
-
-        self._current_log_file = log_file
-
-    def _cleanup_old_logs(self) -> None:
-        """Remove logs older than retention period."""
-        if not self.enabled or not self.log_dir.exists():
-            return
-
-        cutoff = datetime.now(UTC).timestamp() - (self.retention_days * 24 * 60 * 60)
-
-        for log_file in self.log_dir.glob("audit_*.jsonl"):
-            if log_file.stat().st_mtime < cutoff:
-                log_file.unlink()
-                logger.info(f"Deleted old audit log: {log_file}")
+        super().__init__(
+            log_dir=log_dir or Path(".auto-claude/github/audit"),
+            retention_days=retention_days,
+            max_file_size_mb=max_file_size_mb,
+            enabled=enabled,
+        )
 
     def generate_correlation_id(self) -> str:
         """Generate a unique correlation ID for an operation."""
@@ -357,20 +274,6 @@ class AuditLogger:
 
         self._write_entry(entry)
         return entry
-
-    def _write_entry(self, entry: AuditEntry) -> None:
-        """Write an entry to the log file."""
-        if not self.enabled:
-            return
-
-        self._rotate_if_needed()
-
-        try:
-            log_file = self._get_log_file_path()
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(entry.to_json() + "\n")
-        except Exception as e:
-            logger.error(f"Failed to write audit log: {e}")
 
     @contextmanager
     def operation(
