@@ -62,6 +62,10 @@ const browserMockAPI: ElectronAPI = {
     success: true
   }),
 
+  saveCompetitorAnalysis: async () => ({
+    success: true
+  }),
+
   generateRoadmap: (_projectId: string, _enableCompetitorAnalysis?: boolean, _refreshCompetitorAnalysis?: boolean) => {
     console.warn('[Browser Mock] generateRoadmap called');
   },
@@ -357,6 +361,59 @@ const browserMockAPI: ElectronAPI = {
     data: []
   }),
 
+  // Custom Agent Template Operations
+  listCustomTemplates: async () => ({
+    success: true,
+    data: []
+  }),
+  saveCustomTemplate: async (template: Omit<import('../../shared/types/template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => ({
+    success: true,
+    data: {
+      id: `custom-template-${Date.now()}`,
+      ...template,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+  }),
+  updateCustomTemplate: async (template: import('../../shared/types/template').CustomTemplate) => ({
+    success: true,
+    data: {
+      ...template,
+      updatedAt: new Date()
+    }
+  }),
+  deleteCustomTemplate: async (_templateId: string) => ({
+    success: true
+  }),
+  exportCustomTemplate: async (_templateId: string) => ({
+    success: true,
+    data: '{"mock": "template"}'
+  }),
+  importCustomTemplate: async (_jsonData: string) => ({
+    success: true,
+    data: {
+      id: `custom-template-${Date.now()}`,
+      name: 'Imported Template',
+      description: 'Imported from JSON',
+      category: 'other' as const,
+      parameters: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isPublic: false
+    }
+  }),
+  testCustomTemplate: async (_templateId: string, _testInput: string) => ({
+    success: true,
+    data: {
+      title: 'Test Result',
+      description: 'Template test result',
+      rationale: 'Test rationale',
+      user_stories: [],
+      acceptance_criteria: [],
+      technical_details: 'Test details'
+    }
+  }),
+
   // Queue Routing API (rate limit recovery)
   queue: {
     getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),
@@ -367,6 +424,31 @@ const browserMockAPI: ElectronAPI = {
     onQueueProfileSwapped: () => () => {},
     onQueueSessionCaptured: () => () => {},
     onQueueBlockedNoProfiles: () => () => {}
+  },
+
+  // Pattern learning API (codebase patterns)
+  pattern: {
+    listPatterns: async () => ({ success: true, data: [] }),
+    getPatternCategories: async () => ({ success: true, data: ['naming-conventions' as const, 'error-handling' as const, 'code-organization' as const] }),
+    getPatternDetails: async () => ({ success: true, data: { index: 1, id: '1', text: 'Mock pattern', category: 'naming-conventions', confidence: 'high' as const, reasoning: 'Mock reasoning' } }),
+    approvePattern: async () => ({ success: true, data: undefined }),
+    overridePattern: async () => ({ success: true, data: undefined }),
+    deletePattern: async () => ({ success: true, data: undefined })
+  },
+
+  // Session Replay API
+  sessionReplay: {
+    listSessions: async () => ({ success: true, data: [] }),
+    getSession: async () => ({ success: true, data: null }),
+    getTimeline: async () => ({ success: true, data: [] }),
+    getDecisionPoints: async () => ({ success: true, data: [] }),
+    getBookmarks: async () => ({ success: true, data: [] }),
+    addBookmark: async () => ({ success: true, data: { id: 'mock', timestamp: '', entry_timestamp: '', phase: '', label: '', note: null, session: 0, subtask_id: '' } }),
+    removeBookmark: async () => ({ success: true, data: undefined }),
+    getEntries: async () => ({ success: true, data: [] }),
+    search: async () => ({ success: true, data: [] }),
+    exportSession: async () => ({ success: true, data: '' }),
+    exportAll: async () => ({ success: true, data: '' }),
   },
 
   // Scheduler API (build scheduling and queue management)
@@ -383,6 +465,16 @@ const browserMockAPI: ElectronAPI = {
     onBuildProgress: () => () => {},
     onBuildComplete: () => () => {},
     onBuildFailed: () => () => {}
+  },
+
+  // Security API
+  security: {
+    getProfile: async () => ({ success: true as const, data: { level: 'standard' as const, commandAllowlist: [] } }),
+    saveProfile: async () => ({ success: true as const, data: { level: 'standard' as const, commandAllowlist: [] } }),
+    resetToDefault: async () => ({ success: true as const, data: { level: 'standard' as const, commandAllowlist: [] } }),
+    getAuditLogs: async () => ({ success: true as const, data: { logs: [], total: 0, hasMore: false } }),
+    exportConfig: async () => ({ success: true as const, data: { version: '1.0.0', exportedAt: Date.now(), profile: { level: 'standard' as const, commandAllowlist: [] }, metadata: { appVersion: '1.0.0' } } }),
+    validateCommand: async () => ({ success: true as const, data: { allowed: true } }),
   },
 
   // Claude Code Operations
@@ -534,6 +626,13 @@ const browserMockAPI: ElectronAPI = {
   installPlugin: async () => ({ success: true, data: { success: true } }),
   uninstallPlugin: async () => ({ success: true, data: { success: true } }),
 
+  // Context Viewer API
+  getContextStats: async () => ({ success: true, data: null }),
+  getTokenBreakdown: async () => ({ success: true, data: null }),
+  getPrioritizationScores: async () => ({ success: true, data: null }),
+  getOptimizationReport: async () => ({ success: true, data: null }),
+  exportContextSnapshot: async () => ({ success: true, data: null }),
+
   // Productivity analytics operations
   getProductivitySummary: async (
     _projectId?: string,
@@ -572,7 +671,54 @@ const browserMockAPI: ElectronAPI = {
     _projectId?: string,
     _filter?: import('../../shared/types').ProductivityAnalyticsFilter
   ) => ({ success: true as const, data: [] as import('../../shared/types').ProductivityTrendPoint[] }),
-  exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' })
+  getFailureMetrics: async (_projectId?: string) => ({
+    success: true as const,
+    data: { total_failures: 0 } as import('../../shared/types').FailureMetrics
+  }),
+  exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' }),
+
+  // Model Usage Analytics
+  getModelUsageSummary: async () => ({ success: true as const, data: { period_start: '1970-01-01T00:00:00.000Z', period_end: new Date().toISOString(), total_usage_count: 0, total_tokens: 0, total_cost: 0, models: [], agents: [], top_models_by_usage: [], top_models_by_cost: [] } }),
+  getModelUsageTrends: async () => ({ success: true as const, data: [] }),
+  exportModelUsageAnalytics: async () => ({ success: true as const, data: '/mock/export/model-usage' }),
+
+  // Model Lock operations
+  listModelLocks: async () => ({ success: true as const, data: { phaseModels: {}, agentModels: {} } }),
+  lockPhaseModel: async () => ({ success: true as const, data: { success: true } }),
+  lockAgentModel: async () => ({ success: true as const, data: { success: true } }),
+  unlockPhaseModel: async () => ({ success: true as const, data: { success: true } }),
+  unlockAgentModel: async () => ({ success: true as const, data: { success: true } }),
+  clearModelLocks: async () => ({ success: true as const, data: { success: true } }),
+
+  // Agent performance analytics (nested API)
+  analytics: {
+    getSummary: async () => ({
+      success: true as const,
+      data: {
+        total_specs: 0, completed_specs: 0, failed_specs: 0, in_progress_specs: 0,
+        overall_success_rate: 0, total_cost: 0, total_tokens: 0,
+        agent_stats: {}, complexity_stats: {},
+        qa_stats: { total_reviews: 0, approved: 0, rejected: 0, rejection_rate: 0, common_issues: {} },
+        last_updated: new Date().toISOString(),
+      }
+    }),
+    getAgentStats: async () => ({ success: true as const, data: {} }),
+    getTrends: async () => ({ success: true as const, data: [] }),
+    getReport: async () => ({
+      success: true as const,
+      data: {
+        summary: {
+          total_specs: 0, completed_specs: 0, failed_specs: 0, in_progress_specs: 0,
+          overall_success_rate: 0, total_cost: 0, total_tokens: 0,
+          agent_stats: {}, complexity_stats: {},
+          qa_stats: { total_reviews: 0, approved: 0, rejected: 0, rejection_rate: 0, common_issues: {} },
+          last_updated: new Date().toISOString(),
+        },
+        trends: [],
+        generated_at: new Date().toISOString(),
+      }
+    }),
+  }
 };
 
 /**

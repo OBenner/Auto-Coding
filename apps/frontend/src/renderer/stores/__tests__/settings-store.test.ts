@@ -26,7 +26,12 @@ const testSettings: AppSettings = {
   ...DEFAULT_APP_SETTINGS,
   globalClaudeOAuthToken: 'test-token-123',
   autoBuildPath: '/test/path',
-  onboardingCompleted: true
+  onboardingCompleted: true,
+  agentVerbosity: 'normal',
+  agentRiskTolerance: 'balanced',
+  agentProjectType: 'established',
+  agentCodingStyle: {},
+  agentUserInstructions: [],
 };
 
 const testProfiles: APIProfile[] = [
@@ -650,7 +655,15 @@ describe('settings-store', () => {
       expect(window.electronAPI.getSettings).toHaveBeenCalled();
 
       const state = useSettingsStore.getState();
-      expect(state.settings).toEqual(testSettings);
+      // migrateAgentPreferences adds default agent preference fields
+      expect(state.settings).toEqual({
+        ...testSettings,
+        agentVerbosity: 'normal',
+        agentRiskTolerance: 'balanced',
+        agentProjectType: 'established',
+        agentCodingStyle: {},
+        agentUserInstructions: [],
+      });
       expect(state.isLoading).toBe(false);
     });
 
@@ -693,7 +706,9 @@ describe('settings-store', () => {
 
       const state = useSettingsStore.getState();
       expect(state.settings.onboardingCompleted).toBe(true);
-      expect(window.electronAPI.saveSettings).toHaveBeenCalledWith({ onboardingCompleted: true });
+      expect(window.electronAPI.saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ onboardingCompleted: true })
+      );
     });
 
     it('should migrate onboardingCompleted for existing users with autoBuildPath', async () => {
@@ -713,7 +728,17 @@ describe('settings-store', () => {
 
       const state = useSettingsStore.getState();
       expect(state.settings.onboardingCompleted).toBe(true);
-      expect(window.electronAPI.saveSettings).toHaveBeenCalledWith({ onboardingCompleted: true });
+      // Both onboarding and agent preference migrations are persisted
+      expect(window.electronAPI.saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onboardingCompleted: true,
+          agentVerbosity: 'normal',
+          agentRiskTolerance: 'balanced',
+          agentProjectType: 'established',
+          agentCodingStyle: {},
+          agentUserInstructions: [],
+        })
+      );
     });
 
     it('should set onboardingCompleted to false for new users', async () => {
@@ -733,7 +758,17 @@ describe('settings-store', () => {
 
       const state = useSettingsStore.getState();
       expect(state.settings.onboardingCompleted).toBe(false);
-      expect(window.electronAPI.saveSettings).toHaveBeenCalledWith({ onboardingCompleted: false });
+      // Both onboarding and agent preference migrations are persisted
+      expect(window.electronAPI.saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onboardingCompleted: false,
+          agentVerbosity: 'normal',
+          agentRiskTolerance: 'balanced',
+          agentProjectType: 'established',
+          agentCodingStyle: {},
+          agentUserInstructions: [],
+        })
+      );
     });
 
     it('should not migrate if onboardingCompleted is already set', async () => {

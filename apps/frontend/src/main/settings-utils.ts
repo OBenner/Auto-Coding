@@ -9,9 +9,10 @@
  */
 
 import { app } from 'electron';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync } from 'fs';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
+import { atomicWriteFileSync } from './fs-utils';
 
 /**
  * Get the path to the settings file
@@ -57,7 +58,7 @@ export function writeSettingsFile(settings: Record<string, unknown>): void {
     mkdirSync(dir, { recursive: true });
   }
 
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+  atomicWriteFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 }
 
 /**

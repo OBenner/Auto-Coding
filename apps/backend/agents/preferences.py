@@ -58,6 +58,7 @@ class FeedbackRecord:
     context: dict[str, str] = field(
         default_factory=dict
     )  # Additional context (e.g., what was modified)
+    rating: int | None = None  # Optional rating (1-5 for stars, 0/1 for thumbs)
 
 
 @dataclass
@@ -112,6 +113,7 @@ class PreferenceProfile:
         task_description: str,
         agent_type: str,
         context: dict[str, str] | None = None,
+        rating: int | None = None,
     ) -> None:
         """
         Add a feedback record and update learned adjustments.
@@ -121,6 +123,7 @@ class PreferenceProfile:
             task_description: Description of the task that was evaluated
             agent_type: Agent that produced the output
             context: Optional additional context about the feedback
+            rating: Optional rating (1-5 for stars, 0/1 for thumbs)
         """
         # Convert string to enum if needed
         if isinstance(feedback_type, str):
@@ -132,6 +135,7 @@ class PreferenceProfile:
             task_description=task_description,
             agent_type=agent_type,
             context=context or {},
+            rating=rating,
         )
         self.feedback_history.append(record)
         self.updated_at = datetime.now(UTC).isoformat()
@@ -266,6 +270,7 @@ class PreferenceProfile:
                     "task_description": f.task_description,
                     "agent_type": f.agent_type,
                     "context": f.context,
+                    "rating": f.rating,
                 }
                 for f in self.feedback_history
             ],
@@ -305,6 +310,7 @@ class PreferenceProfile:
                 task_description=f["task_description"],
                 agent_type=f["agent_type"],
                 context=f.get("context", {}),
+                rating=f.get("rating"),
             )
             for f in data.get("feedback_history", [])
         ]
@@ -500,3 +506,62 @@ def modify_prompt_for_preferences(prompt: str, profile: PreferenceProfile) -> st
 
     # No final section found, append at the end
     return prompt + adaptive_section
+
+
+def _safe_enum(enum_cls: type[Enum], value: str, default: Enum) -> Enum:
+    """Safely convert a string to an enum, returning default on invalid value."""
+    try:
+        return enum_cls(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def app_settings_to_profile(settings: dict) -> PreferenceProfile:
+    """
+    Convert frontend AppSettings dict to a backend PreferenceProfile.
+
+    Field mapping:
+    - agentVerbosity        -> verbosity_level
+    - agentRiskTolerance    -> risk_tolerance
+    - agentProjectType      -> project_type
+    - agentCodingStyle.*    -> coding_style.*
+    - agentUserInstructions -> user_instructions
+
+    Invalid enum values are mapped to safe defaults.
+    """
+    coding_style_data = settings.get("agentCodingStyle", {})
+    if not isinstance(coding_style_data, dict):
+        coding_style_data = {}
+    coding_style = CodingStylePreferences(
+        indentation=coding_style_data.get("indentation", "auto"),
+        quote_style=coding_style_data.get("quoteStyle", "auto"),
+        line_length=coding_style_data.get("lineLength"),
+        naming_convention=coding_style_data.get("namingConvention", "auto"),
+        comment_density=coding_style_data.get("commentDensity", "normal"),
+        type_hints=coding_style_data.get("typeHints", True),
+    )
+
+    raw_instructions = settings.get("agentUserInstructions", [])
+    if not isinstance(raw_instructions, list):
+        raw_instructions = []
+    user_instructions = [str(s) for s in raw_instructions if isinstance(s, str)]
+
+    return PreferenceProfile(
+        verbosity_level=_safe_enum(
+            VerbosityLevel,
+            settings.get("agentVerbosity", "normal"),
+            VerbosityLevel.NORMAL,
+        ),
+        risk_tolerance=_safe_enum(
+            RiskTolerance,
+            settings.get("agentRiskTolerance", "balanced"),
+            RiskTolerance.BALANCED,
+        ),
+        project_type=_safe_enum(
+            ProjectType,
+            settings.get("agentProjectType", "established"),
+            ProjectType.ESTABLISHED,
+        ),
+        coding_style=coding_style,
+        user_instructions=user_instructions,
+    )

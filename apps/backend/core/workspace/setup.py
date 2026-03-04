@@ -267,6 +267,8 @@ def symlink_node_modules_to_worktree(
                     ["cmd", "/c", "mklink", "/J", str(target_path), str(source_path)],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 if result.returncode != 0:
                     raise OSError(result.stderr or "mklink /J failed")
@@ -405,7 +407,7 @@ def setup_workspace(
             try:
                 shutil.copy2(source_file, target_file)
                 security_files_copied.append(filename)
-            except (OSError, PermissionError) as e:
+            except OSError as e:
                 debug_warning(MODULE, f"Failed to copy {filename}: {e}")
                 print_status(
                     f"Warning: Could not copy {filename} to worktree", "warning"

@@ -11,6 +11,21 @@ export const IPC_CHANNELS = {
   PROJECT_UPDATE_SETTINGS: 'project:updateSettings',
   PROJECT_INITIALIZE: 'project:initialize',
   PROJECT_CHECK_VERSION: 'project:checkVersion',
+  PROJECT_GET_BY_WORKSPACE: 'project:getByWorkspace',
+  PROJECT_GET_WORKSPACE: 'project:getWorkspace',
+  PROJECT_SET_WORKSPACE: 'project:setWorkspace',
+
+  // Workspace operations (multi-codebase orchestration)
+  WORKSPACE_LIST: 'workspace:list',
+  WORKSPACE_GET: 'workspace:get',
+  WORKSPACE_CREATE: 'workspace:create',
+  WORKSPACE_UPDATE: 'workspace:update',
+  WORKSPACE_DELETE: 'workspace:delete',
+  WORKSPACE_RENAME: 'workspace:rename',
+  WORKSPACE_ADD_PROJECT: 'workspace:addProject',
+  WORKSPACE_REMOVE_PROJECT: 'workspace:removeProject',
+  WORKSPACE_UPDATE_PROJECT: 'workspace:updateProject',
+  WORKSPACE_GET_BUILD_ORDER: 'workspace:getBuildOrder',
 
   // Tab state operations (persisted in main process)
   TAB_STATE_GET: 'tabState:get',
@@ -29,6 +44,11 @@ export const IPC_CHANNELS = {
   TASK_RECOVER_STUCK: 'task:recoverStuck',
   TASK_CHECK_RUNNING: 'task:checkRunning',
 
+  // Task spec file reading (for task overview display)
+  TASK_SPEC_IMPLEMENTATION_PLAN_GET: 'task:spec:implementationPlanGet',
+  TASK_SPEC_QA_REPORT_GET: 'task:spec:qaReportGet',
+  TASK_SPEC_QA_ESCALATION_GET: 'task:spec:qaEscalationGet',
+
   // Workspace management (for human review)
   // Per-spec architecture: Each spec has its own worktree at .worktrees/{spec-name}/
   TASK_WORKTREE_STATUS: 'task:worktreeStatus',
@@ -43,10 +63,26 @@ export const IPC_CHANNELS = {
   TASK_LIST_WORKTREES: 'task:listWorktrees',
   TASK_ARCHIVE: 'task:archive',
   TASK_UNARCHIVE: 'task:unarchive',
+  TASK_EXPORT: 'task:export',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
   // Task token statistics
   TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
+
+  // Background task operations (long-running commands)
+  BACKGROUND_TASK_START: 'backgroundTask:start',
+  BACKGROUND_TASK_CANCEL: 'backgroundTask:cancel',
+  BACKGROUND_TASK_GET_STATUS: 'backgroundTask:getStatus',
+  BACKGROUND_TASK_GET_OUTPUT: 'backgroundTask:getOutput',
+  BACKGROUND_TASK_LIST_RUNNING: 'backgroundTask:listRunning',
+  BACKGROUND_TASK_LIST_BY_STATUS: 'backgroundTask:listByStatus',
+
+  // Background task events (main -> renderer)
+  BACKGROUND_TASK_CREATED: 'backgroundTask:created',
+  BACKGROUND_TASK_STARTED: 'backgroundTask:started',
+  BACKGROUND_TASK_PROGRESS: 'backgroundTask:progress',
+  BACKGROUND_TASK_COMPLETE: 'backgroundTask:complete',
+  BACKGROUND_TASK_ERROR: 'backgroundTask:error',
 
   // Batch operations
   TASK_BATCH_RUN_QA: 'task:batchRunQA',
@@ -148,6 +184,14 @@ export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
   SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',
+  SETTINGS_SAVE_PROVIDER: 'settings:saveProviderSettings',
+  SETTINGS_LOAD_PROVIDER: 'settings:loadProviderSettings',
+  SETTINGS_GET_AVAILABLE_MODELS: 'settings:getAvailableModels',
+
+  // AI Provider Configuration (backend .env sync)
+  PROVIDER_CONFIG_GET: 'provider:config:get',
+  PROVIDER_CONFIG_UPDATE: 'provider:config:update',
+  PROVIDER_CONFIG_VALIDATE: 'provider:config:validate',
 
   // API Profile management (custom Anthropic-compatible endpoints)
   PROFILES_GET: 'profiles:get',
@@ -182,6 +226,7 @@ export const IPC_CHANNELS = {
   ROADMAP_STOP: 'roadmap:stop',
   ROADMAP_UPDATE_FEATURE: 'roadmap:updateFeature',
   ROADMAP_CONVERT_TO_SPEC: 'roadmap:convertToSpec',
+  COMPETITOR_ANALYSIS_SAVE: 'roadmap:competitorAnalysisSave',
 
   // Roadmap events (main -> renderer)
   ROADMAP_PROGRESS: 'roadmap:progress',
@@ -202,6 +247,18 @@ export const IPC_CHANNELS = {
   CONTEXT_GET_MEMORIES: 'context:getMemories',
   CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
   CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
+
+  // Knowledge Base operations
+  KNOWLEDGE_BASE_GET_CONFIG: 'knowledgeBase:getConfig',
+  KNOWLEDGE_BASE_UPDATE_CONFIG: 'knowledgeBase:updateConfig',
+  KNOWLEDGE_BASE_TEST_CONNECTION: 'knowledgeBase:testConnection',
+
+  // Context viewer operations
+  CONTEXT_GET_STATS: 'context:getStats',
+  CONTEXT_GET_TOKEN_BREAKDOWN: 'context:getTokenBreakdown',
+  CONTEXT_GET_PRIORITIZATION_SCORES: 'context:getPrioritizationScores',
+  CONTEXT_GET_OPTIMIZATION_REPORT: 'context:getOptimizationReport',
+  CONTEXT_EXPORT_SNAPSHOT: 'context:exportSnapshot',
 
   // Session context operations (conversation history tracking)
   SESSION_CONTEXT_GET_HISTORY: 'sessionContext:getHistory',
@@ -447,6 +504,14 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
 
+  // GitHub Code Review operations
+  GITHUB_CODE_REVIEW_TRIGGER: 'github:code-review:trigger',
+
+  // GitHub Code Review events (main -> renderer)
+  GITHUB_CODE_REVIEW_PROGRESS: 'github:code-review:progress',
+  GITHUB_CODE_REVIEW_COMPLETE: 'github:code-review:complete',
+  GITHUB_CODE_REVIEW_ERROR: 'github:code-review:error',
+
   // Merge Analytics operations
   MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
   MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
@@ -456,7 +521,23 @@ export const IPC_CHANNELS = {
   // Productivity Analytics operations
   PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
   PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_GET_FAILURE_METRICS: 'productivityAnalytics:getFailureMetrics',
   PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
+
+  // Model Usage Analytics operations
+  MODEL_USAGE_GET_SUMMARY: 'modelUsage:getSummary',
+  MODEL_USAGE_GET_TRENDS: 'modelUsage:getTrends',
+  MODEL_USAGE_EXPORT: 'modelUsage:export',
+  MODEL_USAGE_GET_MODEL_METRICS: 'modelUsage:getModelMetrics',
+  MODEL_USAGE_GET_AGENT_METRICS: 'modelUsage:getAgentMetrics',
+
+  // Model Lock operations
+  MODEL_LOCK_LIST: 'modelLock:list',
+  MODEL_LOCK_PHASE: 'modelLock:lockPhase',
+  MODEL_LOCK_AGENT: 'modelLock:lockAgent',
+  MODEL_UNLOCK_PHASE: 'modelLock:unlockPhase',
+  MODEL_UNLOCK_AGENT: 'modelLock:unlockAgent',
+  MODEL_LOCK_CLEAR: 'modelLock:clear',
 
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
@@ -511,6 +592,10 @@ export const IPC_CHANNELS = {
   INSIGHTS_NEW_SESSION: 'insights:newSession',
   INSIGHTS_SWITCH_SESSION: 'insights:switchSession',
   INSIGHTS_DELETE_SESSION: 'insights:deleteSession',
+  INSIGHTS_DELETE_SESSIONS: 'insights:deleteSessions',
+  INSIGHTS_ARCHIVE_SESSION: 'insights:archiveSession',
+  INSIGHTS_ARCHIVE_SESSIONS: 'insights:archiveSessions',
+  INSIGHTS_UNARCHIVE_SESSION: 'insights:unarchiveSession',
   INSIGHTS_RENAME_SESSION: 'insights:renameSession',
   INSIGHTS_UPDATE_MODEL_CONFIG: 'insights:updateModelConfig',
 
@@ -518,6 +603,12 @@ export const IPC_CHANNELS = {
   INSIGHTS_STREAM_CHUNK: 'insights:streamChunk',
   INSIGHTS_STATUS: 'insights:status',
   INSIGHTS_ERROR: 'insights:error',
+
+  // Analytics operations
+  ANALYTICS_GET_SUMMARY: 'analytics:getSummary',
+  ANALYTICS_GET_AGENT_STATS: 'analytics:getAgentStats',
+  ANALYTICS_GET_TRENDS: 'analytics:getTrends',
+  ANALYTICS_GET_REPORT: 'analytics:getReport',
 
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
@@ -530,6 +621,9 @@ export const IPC_CHANNELS = {
   GIT_DETECT_MAIN_BRANCH: 'git:detectMainBranch',
   GIT_CHECK_STATUS: 'git:checkStatus',
   GIT_INITIALIZE: 'git:initialize',
+
+  // Cost reporting
+  PROJECT_LOAD_COST_REPORT: 'project:loadCostReport',
 
   // App auto-update operations
   APP_UPDATE_CHECK: 'app-update:check',
@@ -611,6 +705,47 @@ export const IPC_CHANNELS = {
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
 
+  // Webhook operations
+  WEBHOOK_GET_CONFIGS: 'webhook:getConfigs',
+  WEBHOOK_GET_CONFIG: 'webhook:getConfig',
+  WEBHOOK_SAVE_CONFIG: 'webhook:saveConfig',
+  WEBHOOK_DELETE_CONFIG: 'webhook:deleteConfig',
+  WEBHOOK_TEST_CONNECTION: 'webhook:testConnection',
+  WEBHOOK_GET_LOGS: 'webhook:getLogs',
+  WEBHOOK_GET_INTEGRATION_STATUS: 'webhook:getIntegrationStatus',
+  WEBHOOK_ENABLE_CONFIG: 'webhook:enableConfig',
+  WEBHOOK_DISABLE_CONFIG: 'webhook:disableConfig',
+
+  // Pattern operations (codebase pattern learning)
+  PATTERN_LIST: 'pattern:list',
+  PATTERN_GET_CATEGORIES: 'pattern:getCategories',
+  PATTERN_GET_DETAILS: 'pattern:getDetails',
+  PATTERN_APPROVE: 'pattern:approve',
+  PATTERN_OVERRIDE: 'pattern:override',
+  PATTERN_DELETE: 'pattern:delete',
+
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test',
+
+  // Session Replay operations
+  SESSION_REPLAY_LIST: 'sessionReplay:list',
+  SESSION_REPLAY_GET_SESSION: 'sessionReplay:getSession',
+  SESSION_REPLAY_GET_TIMELINE: 'sessionReplay:getTimeline',
+  SESSION_REPLAY_GET_DECISION_POINTS: 'sessionReplay:getDecisionPoints',
+  SESSION_REPLAY_GET_BOOKMARKS: 'sessionReplay:getBookmarks',
+  SESSION_REPLAY_ADD_BOOKMARK: 'sessionReplay:addBookmark',
+  SESSION_REPLAY_REMOVE_BOOKMARK: 'sessionReplay:removeBookmark',
+  SESSION_REPLAY_GET_ENTRIES: 'sessionReplay:getEntries',
+  SESSION_REPLAY_SEARCH: 'sessionReplay:search',
+  SESSION_REPLAY_EXPORT_SESSION: 'sessionReplay:exportSession',
+  SESSION_REPLAY_EXPORT_ALL: 'sessionReplay:exportAll',
+
   // Feedback submission (adaptive agent learning)
   FEEDBACK_SUBMIT: 'feedback:submit',
 
@@ -628,5 +763,13 @@ export const IPC_CHANNELS = {
   SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
   SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
   SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
-  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed',
+
+  // Security profile operations
+  SECURITY_GET_PROFILE: 'security:getProfile',
+  SECURITY_SAVE_PROFILE: 'security:saveProfile',
+  SECURITY_GET_AUDIT_LOGS: 'security:getAuditLogs',
+  SECURITY_EXPORT_CONFIG: 'security:exportConfig',
+  SECURITY_RESET_TO_DEFAULT: 'security:resetToDefault',
+  SECURITY_VALIDATE_COMMAND: 'security:validateCommand'
 } as const;

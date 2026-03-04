@@ -11,11 +11,17 @@ Example plugin demonstrating UI extension capabilities:
 
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from apps.backend.plugins.sdk.ui import UIPlugin, UIContext, UIComponentDefinition, UIExtensionPoint
 from apps.backend.plugins.base import PluginMetadata
+from apps.backend.plugins.sdk.ui import (
+    UIComponentDefinition,
+    UIContext,
+    UIExtensionPoint,
+    UIPlugin,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +78,7 @@ class ProjectStatsPlugin(UIPlugin):
                 props={
                     "refreshInterval": 30000,  # Refresh every 30 seconds
                     "showCharts": True,
-                }
+                },
             )
         ]
 
@@ -193,7 +199,7 @@ class ProjectStatsPlugin(UIPlugin):
             plan_file = spec_path / "implementation_plan.json"
             if plan_file.exists():
                 try:
-                    with open(plan_file, 'r', encoding='utf-8') as f:
+                    with open(plan_file, encoding="utf-8") as f:
                         plan = json.load(f)
                         status = plan.get("status", "pending")
 

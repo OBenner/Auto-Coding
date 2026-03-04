@@ -2,23 +2,64 @@
 Discovery Module
 ================
 
-Project structure analysis and indexing.
+Project structure analysis and indexing with automatic pattern extraction.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+# Import pattern detectors for auto-extraction during discovery
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_patterns_sync(spec_dir: Path, project_dir: Path) -> dict[str, int]:
+    """
+    Synchronous wrapper for pattern extraction during discovery.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+
+    Returns:
+        Dictionary with counts of patterns saved by category
+    """
+    try:
+        # Import here to avoid circular dependencies
+        from agents.memory_manager import detect_and_save_codebase_patterns
+
+        # Run async pattern detection in sync context
+        loop = asyncio.new_event_loop()
+        try:
+            pattern_counts = loop.run_until_complete(
+                detect_and_save_codebase_patterns(spec_dir, project_dir)
+            )
+            return pattern_counts
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.warning(f"Pattern extraction failed during discovery: {e}")
+        return {}
+
 
 def run_discovery_script(
     project_dir: Path,
     spec_dir: Path,
+    extract_patterns: bool = True,
 ) -> tuple[bool, str]:
-    """Run the analyzer.py script to discover project structure.
+    """Run the analyzer.py script to discover project structure and extract patterns.
+
+    Args:
+        project_dir: Project root directory
+        spec_dir: Spec directory
+        extract_patterns: Whether to auto-extract codebase patterns (default: True)
 
     Returns:
         (success, output_message)
@@ -30,10 +71,28 @@ def run_discovery_script(
     if auto_build_index.exists() and not spec_index.exists():
         # Copy existing index
         shutil.copy(auto_build_index, spec_index)
-        return True, "Copied existing project_index.json"
+        message = "Copied existing project_index.json"
+
+        # Extract patterns after copying index
+        if extract_patterns:
+            pattern_counts = _extract_patterns_sync(spec_dir, project_dir)
+            total_patterns = sum(pattern_counts.values())
+            if total_patterns > 0:
+                message += f" and extracted {total_patterns} codebase patterns"
+
+        return True, message
 
     if spec_index.exists():
-        return True, "project_index.json already exists"
+        message = "project_index.json already exists"
+
+        # Extract patterns even if index exists (patterns may not have been extracted yet)
+        if extract_patterns:
+            pattern_counts = _extract_patterns_sync(spec_dir, project_dir)
+            total_patterns = sum(pattern_counts.values())
+            if total_patterns > 0:
+                message += f", extracted {total_patterns} codebase patterns"
+
+        return True, message
 
     # Run analyzer - use framework-relative path instead of project_dir
     script_path = Path(__file__).parent.parent / "analyzer.py"
@@ -52,7 +111,22 @@ def run_discovery_script(
         )
 
         if result.returncode == 0 and spec_index.exists():
-            return True, "Created project_index.json"
+            message = "Created project_index.json"
+
+            # Auto-extract codebase patterns after successful index creation
+            if extract_patterns:
+                logger.info("Auto-extracting codebase patterns during discovery...")
+                pattern_counts = _extract_patterns_sync(spec_dir, project_dir)
+                total_patterns = sum(pattern_counts.values())
+                if total_patterns > 0:
+                    message += f" and extracted {total_patterns} codebase patterns"
+                    logger.info(
+                        f"Pattern extraction complete: {pattern_counts.get('naming', 0)} naming, "
+                        f"{pattern_counts.get('error-handling', 0)} error handling, "
+                        f"{pattern_counts.get('code-organization', 0)} organization"
+                    )
+
+            return True, message
         else:
             return False, result.stderr or result.stdout
 

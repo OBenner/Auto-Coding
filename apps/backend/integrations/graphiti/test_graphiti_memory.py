@@ -67,6 +67,7 @@ def apply_ladybug_monkeypatch():
 
     # Try native kuzu as fallback
     try:
+        # Optional: kuzu is optional (fallback if LadybugDB unavailable)
         import kuzu  # noqa: F401
 
         return True
