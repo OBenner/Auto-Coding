@@ -297,8 +297,7 @@ Begin by loading context (Phase 0 in your prompt).
             cj = checkpoint_dir / "checkpoints.json"
             if cj.exists():
                 try:
-                    with open(cj, encoding="utf-8") as f:
-                        cj_data = json.load(f)
+                    cj_data = json.loads(cj.read_text(encoding="utf-8"))
                     checkpoints_created = len(cj_data.get("checkpoints", []))
                 except (json.JSONDecodeError, OSError):
                     pass
