@@ -521,7 +521,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     value="collaboration"
                     className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
                   >
-                    Collaboration
+                    {t('tasks:tabs.collaboration')}
                   </TabsTrigger>
                 </TabsList>
 
@@ -637,15 +637,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       {/* Permissions Panel */}
                       <PermissionsPanel
                         specId={task.specId}
-                        onPermissionGranted={(permission) => {
-                          console.log('Permission granted:', permission);
-                        }}
-                        onPermissionUpdated={(permission) => {
-                          console.log('Permission updated:', permission);
-                        }}
-                        onPermissionRevoked={(userId) => {
-                          console.log('Permission revoked:', userId);
-                        }}
+                        onPermissionGranted={() => {}}
+                        onPermissionUpdated={() => {}}
+                        onPermissionRevoked={() => {}}
                       />
 
                       <Separator />
@@ -653,21 +647,11 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       {/* Comment Thread */}
                       <CommentThread
                         specId={task.specId}
-                        onCommentAdded={(comment) => {
-                          console.log('Comment added:', comment);
-                        }}
-                        onCommentUpdated={(comment) => {
-                          console.log('Comment updated:', comment);
-                        }}
-                        onCommentDeleted={(commentId) => {
-                          console.log('Comment deleted:', commentId);
-                        }}
-                        onCommentResolved={(commentId) => {
-                          console.log('Comment resolved:', commentId);
-                        }}
-                        onReplyAdded={(comment, parentId) => {
-                          console.log('Reply added:', comment, 'to:', parentId);
-                        }}
+                        onCommentAdded={() => {}}
+                        onCommentUpdated={() => {}}
+                        onCommentDeleted={() => {}}
+                        onCommentResolved={() => {}}
+                        onReplyAdded={() => {}}
                       />
 
                       <Separator />
@@ -675,17 +659,11 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       {/* Approval Workflow */}
                       <ApprovalWorkflow
                         specId={task.specId}
-                        currentUserId="current-user"
-                        userRole="write"
-                        onApprovalRequested={(approval) => {
-                          console.log('Approval requested:', approval);
-                        }}
-                        onApprovalApproved={(approval) => {
-                          console.log('Approval approved:', approval);
-                        }}
-                        onApprovalRejected={(approval) => {
-                          console.log('Approval rejected:', approval);
-                        }}
+                        currentUserId="" // TODO: wire to authenticated user context
+                        userRole="read"
+                        onApprovalRequested={() => {}}
+                        onApprovalApproved={() => {}}
+                        onApprovalRejected={() => {}}
                       />
                     </div>
                   </ScrollArea>

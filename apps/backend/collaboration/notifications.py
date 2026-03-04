@@ -39,7 +39,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from dataclasses import dataclass
@@ -48,8 +47,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from core.sentry import capture_exception
-from integrations.graphiti.memory import GraphitiMemory, get_graphiti_memory
+from .base import CollaborationManagerBase
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +122,7 @@ class Notification:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Notification":
+    def from_dict(cls, data: dict[str, Any]) -> Notification:
         """Create from dictionary."""
         return cls(
             notification_id=data["notification_id"],
@@ -173,7 +171,7 @@ class ChangeRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ChangeRecord":
+    def from_dict(cls, data: dict[str, Any]) -> ChangeRecord:
         """Create from dictionary."""
         return cls(
             change_id=data["change_id"],
@@ -185,7 +183,7 @@ class ChangeRecord:
         )
 
 
-class NotificationManager:
+class NotificationManager(CollaborationManagerBase):
     """
     Manages notifications and change history for spec collaboration.
 
@@ -215,6 +213,8 @@ class NotificationManager:
         notifications = await manager.get_notifications_for_user("alice")
     """
 
+    _manager_name = "notification"
+
     def __init__(
         self,
         spec_id: str,
@@ -229,9 +229,7 @@ class NotificationManager:
             spec_dir: Path to spec directory (for Graphiti storage)
             project_dir: Project root directory
         """
-        self.spec_id = spec_id
-        self.spec_dir = spec_dir
-        self.project_dir = project_dir
+        super().__init__(spec_id, spec_dir, project_dir)
 
         # In-memory notification cache: notification_id -> Notification
         self._notifications: dict[str, Notification] = {}
@@ -242,51 +240,7 @@ class NotificationManager:
         # User notification index: username -> [notification_ids]
         self._user_notifications: dict[str, list[str]] = {}
 
-        # Graphiti memory for persistent storage
-        self._memory: GraphitiMemory | None = None
-        self._memory_available = False
-
         logger.info(f"Initialized notification manager for spec {spec_id}")
-
-    async def initialize(self) -> bool:
-        """
-        Initialize Graphiti memory for notification storage.
-
-        Returns:
-            True if initialization succeeded
-        """
-        try:
-            self._memory = get_graphiti_memory(
-                spec_dir=self.spec_dir,
-                project_dir=self.project_dir,
-            )
-
-            if self._memory.is_enabled:
-                self._memory_available = await self._memory.initialize()
-
-                if self._memory_available:
-                    logger.info(
-                        f"Notification manager initialized with Graphiti storage "
-                        f"(group: {self._memory.group_id})"
-                    )
-                else:
-                    logger.warning(
-                        "Graphiti initialization failed - notifications will not persist"
-                    )
-            else:
-                logger.info("Graphiti not enabled - notifications will not persist")
-
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to initialize Graphiti memory: {e}")
-            capture_exception(
-                e,
-                operation="notification_manager_initialize",
-                spec_id=self.spec_id,
-            )
-            self._memory_available = False
-            return False
 
     async def track_comment_mention(
         self,
@@ -664,22 +618,10 @@ class NotificationManager:
         self,
         notification: Notification,
     ) -> bool:
-        """
-        Store a notification in Graphiti as an episode.
-
-        Args:
-            notification: Notification to store
-
-        Returns:
-            True if stored successfully
-        """
-        if not self._memory or not self._memory_available:
-            return False
-
-        try:
-            from graphiti_core.nodes import EpisodeType
-
-            episode_content = {
+        """Store a notification in Graphiti as an episode."""
+        return await self._store_episode_in_graphiti(
+            episode_name=f"notification_{notification.notification_id}",
+            episode_content={
                 "type": EPISODE_TYPE_NOTIFICATION,
                 "spec_id": self.spec_id,
                 "notification_id": notification.notification_id,
@@ -689,50 +631,22 @@ class NotificationManager:
                 "read": notification.read,
                 "created_at": notification.created_at,
                 "metadata": notification.metadata,
-            }
-
-            await self._memory._client.graphiti.add_episode(
-                name=f"notification_{notification.notification_id}",
-                episode_body=json.dumps(episode_content),
-                source=EpisodeType.text,
-                source_description=f"Notification for {notification.target_user} on spec {self.spec_id}",
-                reference_time=datetime.now(UTC),
-                group_id=self._memory.group_id,
-            )
-
-            logger.debug(f"Stored notification {notification.notification_id} in Graphiti")
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to store notification in Graphiti: {e}")
-            capture_exception(
-                e,
-                operation="store_notification_in_graphiti",
-                spec_id=self.spec_id,
-                notification_id=notification.notification_id,
-            )
-            return False
+            },
+            source_description=(
+                f"Notification for {notification.target_user} on spec {self.spec_id}"
+            ),
+            operation_name="store_notification_in_graphiti",
+            notification_id=notification.notification_id,
+        )
 
     async def _store_change_in_graphiti(
         self,
         change: ChangeRecord,
     ) -> bool:
-        """
-        Store a change record in Graphiti as an episode.
-
-        Args:
-            change: ChangeRecord to store
-
-        Returns:
-            True if stored successfully
-        """
-        if not self._memory or not self._memory_available:
-            return False
-
-        try:
-            from graphiti_core.nodes import EpisodeType
-
-            episode_content = {
+        """Store a change record in Graphiti as an episode."""
+        return await self._store_episode_in_graphiti(
+            episode_name=f"change_{change.change_id}",
+            episode_content={
                 "type": EPISODE_TYPE_CHANGE_HISTORY,
                 "spec_id": self.spec_id,
                 "change_id": change.change_id,
@@ -740,26 +654,10 @@ class NotificationManager:
                 "actor_user": change.actor_user,
                 "created_at": change.created_at,
                 "details": change.details,
-            }
-
-            await self._memory._client.graphiti.add_episode(
-                name=f"change_{change.change_id}",
-                episode_body=json.dumps(episode_content),
-                source=EpisodeType.text,
-                source_description=f"Change to spec {self.spec_id} by {change.actor_user}",
-                reference_time=datetime.now(UTC),
-                group_id=self._memory.group_id,
-            )
-
-            logger.debug(f"Stored change {change.change_id} in Graphiti")
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to store change in Graphiti: {e}")
-            capture_exception(
-                e,
-                operation="store_change_in_graphiti",
-                spec_id=self.spec_id,
-                change_id=change.change_id,
-            )
-            return False
+            },
+            source_description=(
+                f"Change to spec {self.spec_id} by {change.actor_user}"
+            ),
+            operation_name="store_change_in_graphiti",
+            change_id=change.change_id,
+        )

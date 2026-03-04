@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from .models import CollaborationUser, PermissionLevel, SpecPermission
 
@@ -117,7 +116,9 @@ class PermissionChecker:
         self.owner_user_id = owner_user_id
 
         # Permission storage: user_id -> SpecPermission
-        self._permissions: dict[str, SpecPermission] = permissions or {}
+        self._permissions: dict[str, SpecPermission] = (
+            dict(permissions) if permissions else {}
+        )
 
         # Cache for quick permission lookups
         self._permission_cache: dict[tuple[str, PermissionLevel], bool] = {}
@@ -169,10 +170,8 @@ class PermissionChecker:
         # Clear cache for this user
         self._clear_user_cache(user_id)
 
-        logger.info(
-            f"Granted {level.value} permission to {username} ({user_id}) "
-            f"on spec {self.spec_id} by {granted_by}"
-        )
+        logger.info(f"Granted {level.value} permission on spec {self.spec_id}")
+        logger.debug(f"Permission granted to {username} ({user_id}) by {granted_by}")
 
         return permission
 
@@ -191,12 +190,11 @@ class PermissionChecker:
         """
         # Cannot revoke owner's implicit admin rights
         if self.owner_user_id and user_id == self.owner_user_id:
-            raise PermissionError(
-                f"Cannot revoke permissions for spec owner {user_id}"
-            )
+            raise PermissionError(f"Cannot revoke permissions for spec owner {user_id}")
 
         if user_id not in self._permissions:
-            logger.warning(f"No permission to revoke for user {user_id}")
+            logger.warning(f"No permission to revoke on spec {self.spec_id}")
+            logger.debug(f"User {user_id} has no permission to revoke")
             return False
 
         permission = self._permissions[user_id]
@@ -206,9 +204,9 @@ class PermissionChecker:
         self._clear_user_cache(user_id)
 
         logger.info(
-            f"Revoked {permission.level.value} permission from "
-            f"{permission.user.username} ({user_id}) on spec {self.spec_id}"
+            f"Revoked {permission.level.value} permission on spec {self.spec_id}"
         )
+        logger.debug(f"Revoked from {permission.user.username} ({user_id})")
 
         return True
 
@@ -261,9 +259,8 @@ class PermissionChecker:
                 reason=f"no permission granted for spec {self.spec_id}",
             )
             self._permission_cache[cache_key] = False
-            logger.warning(
-                f"Permission denied for {user_id}: no permission on spec {self.spec_id}"
-            )
+            logger.warning(f"Permission denied: no permission on spec {self.spec_id}")
+            logger.debug(f"Denied user: {user_id}")
             return result
 
         permission = self._permissions[user_id]
@@ -288,10 +285,10 @@ class PermissionChecker:
 
         if not allowed:
             logger.warning(
-                f"Permission denied for {permission.user.username} ({user_id}): "
-                f"has {user_level.value}, needs {required_level.value} "
-                f"for spec {self.spec_id}"
+                f"Permission denied on spec {self.spec_id}: "
+                f"has {user_level.value}, needs {required_level.value}"
             )
+            logger.debug(f"Denied user: {permission.user.username} ({user_id})")
 
         return result
 
@@ -367,9 +364,7 @@ class PermissionChecker:
         Returns:
             List of users with exactly this permission level
         """
-        return [
-            perm.user for perm in self._permissions.values() if perm.level == level
-        ]
+        return [perm.user for perm in self._permissions.values() if perm.level == level]
 
     def clear_cache(self) -> None:
         """Clear the permission check cache."""
@@ -408,9 +403,7 @@ class PermissionChecker:
 
     def _clear_user_cache(self, user_id: str) -> None:
         """Clear cache entries for a specific user."""
-        keys_to_remove = [
-            key for key in self._permission_cache if key[0] == user_id
-        ]
+        keys_to_remove = [key for key in self._permission_cache if key[0] == user_id]
         for key in keys_to_remove:
             del self._permission_cache[key]
 

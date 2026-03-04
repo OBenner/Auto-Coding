@@ -22,8 +22,10 @@ from unittest.mock import patch
 import pytest
 
 # Add auto-claude to path
-sys.path.insert(0, str(Path(__file__).parent / "apps" / "backend"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
+from collaboration.approvals import ApprovalError, ApprovalManager
+from collaboration.comments import CommentError, CommentManager
 from collaboration.models import (
     ApprovalStatus,
     CollaborationUser,
@@ -31,8 +33,6 @@ from collaboration.models import (
     PermissionLevel,
     SpecPermission,
 )
-from collaboration.approvals import ApprovalManager
-from collaboration.comments import CommentManager
 from collaboration.notifications import NotificationManager
 from collaboration.permissions import PermissionChecker
 
@@ -235,8 +235,6 @@ class TestCollaborationE2E:
 
         print("✅ Complete collaboration workflow verified successfully!")
 
-        print("✅ Complete collaboration workflow verified successfully!")
-
     @pytest.mark.asyncio
     async def test_permission_hierarchy(self, setup_collaboration):
         """Test that permission hierarchy works correctly."""
@@ -361,7 +359,7 @@ class TestCollaborationE2E:
         approval_manager = setup_collaboration["approval_manager"]
 
         # Try to create comment without permission (no permission granted)
-        with pytest.raises(Exception):  # CommentError or permission error
+        with pytest.raises(CommentError):
             await comment_manager.create_comment(
                 user_id="stranger",
                 username="Stranger",
@@ -369,7 +367,7 @@ class TestCollaborationE2E:
             )
 
         # Try to approve without admin permission
-        with pytest.raises(Exception):  # ApprovalError or permission error
+        with pytest.raises(ApprovalError):
             await approval_manager.approve_spec(
                 approver_id="stranger",
                 approver_username="Stranger",
@@ -442,6 +440,8 @@ class TestCollaborationIntegration:
 
     def test_imports(self):
         """Test that all collaboration modules can be imported."""
+        from collaboration.approvals import ApprovalManager
+        from collaboration.comments import CommentManager
         from collaboration.models import (
             ApprovalStatus,
             CollaborationUser,
@@ -449,8 +449,6 @@ class TestCollaborationIntegration:
             PermissionLevel,
             SpecPermission,
         )
-        from collaboration.approvals import ApprovalManager
-        from collaboration.comments import CommentManager
         from collaboration.notifications import NotificationManager
         from collaboration.permissions import PermissionChecker
 

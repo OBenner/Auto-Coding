@@ -44,7 +44,7 @@ The collaboration system extends Auto Code from a single-developer tool to a tea
 
 The collaboration system uses a layered architecture with backend business logic, persistent storage via Graphiti, IPC communication, and React UI components.
 
-```
+```text
 ┌────────────────────────────────────────────────────────────┐
 │                  Frontend UI Layer                        │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
@@ -92,7 +92,7 @@ The collaboration system uses a layered architecture with backend business logic
 ### Enable Collaboration on a Spec
 
 ```typescript
-// In TaskDetailView, navigate to Collaboration tab
+// In TaskDetailModal, navigate to Collaboration tab
 // 1. Add team member with permissions
 // 2. Start discussion with comments
 // 3. Request approval when ready
@@ -108,22 +108,20 @@ from apps.backend.collaboration.permissions import PermissionChecker, Permission
 # Initialize permission checker
 checker = PermissionChecker(
     spec_id="001-feature",
-    spec_dir=Path(".auto-claude/specs/001-feature"),
-    project_dir=Path(".")
+    owner_user_id="owner-alice",
 )
 
 # Add team member with WRITE permission
-await checker.add_permission(
+checker.grant_permission(
     user_id="alice",
     username="Alice Johnson",
-    level=PermissionLevel.WRITE
+    level=PermissionLevel.WRITE,
+    granted_by="owner-alice",
 )
 
 # Check if user can approve
-can_approve = await checker.check_permission(
-    user_id="alice",
-    required_level=PermissionLevel.ADMIN
-)
+result = checker.check_permission("alice", PermissionLevel.ADMIN)
+can_approve = result.allowed
 ```
 
 ### Create Comment Thread
@@ -237,7 +235,7 @@ class PermissionLevel(Enum):
 
 ### Permission Hierarchy
 
-```
+```text
 ADMIN (highest)
   ├─ Approve/reject specs
   ├─ Add/remove/update permissions
@@ -262,16 +260,15 @@ READ (lowest)
 
 ```python
 # Only admins can approve
-if not await checker.check_permission(user_id, PermissionLevel.ADMIN):
+if not checker.has_admin_access(user_id):
     raise PermissionError("Only admins can approve specs")
 
 # Write permission required for comments
-if not await checker.check_permission(user_id, PermissionLevel.WRITE):
+if not checker.has_write_access(user_id):
     raise PermissionError("Write permission required to add comments")
 
-# Owner automatically has all permissions
-# Owner is defined as the user who created the spec
-is_owner = await checker.is_owner(user_id)
+# Owner automatically has all permissions (ADMIN)
+# Owner is set via owner_user_id in constructor
 ```
 
 ## Comment Threads
@@ -280,7 +277,7 @@ is_owner = await checker.is_owner(user_id)
 
 Comments support threaded replies with unlimited nesting:
 
-```
+```text
 ┌─ Top-level comment by Alice
 │  "This approach looks good!"
 │  └─ Reply by Bob
@@ -337,7 +334,7 @@ class ApprovalStatus(Enum):
 
 ### Approval Flow
 
-```
+```text
 ┌─────────────┐
 │   NONE      │  Initial state - no approval workflow started
 └──────┬──────┘
@@ -456,12 +453,12 @@ history = await notif_manager.get_change_history()
 
 ## Integration
 
-### TaskDetailView Integration
+### TaskDetailModal Integration
 
-The collaboration system is integrated into the frontend via the TaskDetailView component:
+The collaboration system is integrated into the frontend via the TaskDetailModal component:
 
 ```typescript
-// apps/frontend/src/renderer/components/task-detail/TaskDetailView.tsx
+// apps/frontend/src/renderer/components/task-detail/TaskDetailModal.tsx
 
 <Tabs defaultValue="details" className="w-full">
   <TabsList>
@@ -515,36 +512,33 @@ EPISODE_TYPE_APPROVAL = "approval"
 class PermissionChecker:
     """Role-based access control for spec collaboration"""
 
-    async def add_permission(
+    def __init__(self, spec_id: str, owner_user_id: str | None = None): ...
+
+    def grant_permission(
         self,
         user_id: str,
         username: str,
-        level: PermissionLevel
+        level: PermissionLevel,
+        granted_by: str,
     ) -> SpecPermission:
-        """Add team member with specified permission level"""
+        """Grant permission level to a user"""
 
-    async def update_permission(
+    def revoke_permission(self, user_id: str) -> bool:
+        """Revoke all permissions for a user"""
+
+    def check_permission(
         self,
         user_id: str,
-        level: PermissionLevel
-    ) -> SpecPermission:
-        """Update existing user's permission level"""
-
-    async def remove_permission(self, user_id: str) -> None:
-        """Remove user from spec"""
-
-    async def check_permission(
-        self,
-        user_id: str,
-        required_level: PermissionLevel
-    ) -> bool:
+        required_level: PermissionLevel,
+    ) -> PermissionCheckResult:
         """Check if user has required permission level"""
 
-    async def get_permissions(self) -> list[SpecPermission]:
+    def get_all_permissions(self) -> list[SpecPermission]:
         """Get all permissions for spec"""
 
-    async def is_owner(self, user_id: str) -> bool:
-        """Check if user is spec owner"""
+    def has_read_access(self, user_id: str) -> bool: ...
+    def has_write_access(self, user_id: str) -> bool: ...
+    def has_admin_access(self, user_id: str) -> bool: ...
 ```
 
 ### CommentManager
@@ -615,19 +609,19 @@ class ApprovalManager:
 
     async def approve_spec(
         self,
-        admin_id: str,
-        admin_name: str,
-        reason: str = ""
+        approver_id: str,
+        approver_username: str,
+        reason: str = "",
     ) -> Approval:
-        """Approve spec for builds"""
+        """Approve spec for builds (admin only)"""
 
     async def reject_spec(
         self,
-        admin_id: str,
-        admin_name: str,
-        reason: str
+        rejector_id: str,
+        rejector_username: str,
+        reason: str = "",
     ) -> Approval:
-        """Reject spec with reason"""
+        """Reject spec with reason (admin only)"""
 
     async def get_approval_status(self) -> Approval:
         """Get current approval status"""
@@ -674,8 +668,8 @@ class NotificationManager:
 
 ```python
 # 1. Tech lead adds team members
-await checker.add_permission("dev1", "Developer One", PermissionLevel.WRITE)
-await checker.add_permission("dev2", "Developer Two", PermissionLevel.WRITE)
+checker.grant_permission("dev1", "Developer One", PermissionLevel.WRITE, granted_by="lead")
+checker.grant_permission("dev2", "Developer Two", PermissionLevel.WRITE, granted_by="lead")
 
 # 2. Developers leave feedback
 await comment_manager.create_comment(

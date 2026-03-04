@@ -180,8 +180,8 @@ sys.path.insert(0, ${JSON.stringify(backendDir)})
 
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
-from colaboration.models import CollaborationUser, PermissionLevel
-from colaboration.permissions import PermissionChecker
+from collaboration.models import CollaborationUser, PermissionLevel
+from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 project_dir = Path(${JSON.stringify(project.path)})
@@ -281,8 +281,8 @@ sys.path.insert(0, ${JSON.stringify(backendDir)})
 
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
-from colaboration.models import PermissionLevel
-from colaboration.permissions import PermissionChecker
+from collaboration.models import PermissionLevel
+from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 user_id = ${JSON.stringify(userId)}
@@ -373,7 +373,7 @@ sys.path.insert(0, ${JSON.stringify(backendDir)})
 
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
-from colaboration.permissions import PermissionChecker
+from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 user_id = ${JSON.stringify(userId)}
@@ -550,9 +550,9 @@ sys.path.insert(0, ${JSON.stringify(backendDir)})
 
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
-from colaboration.models import CollaborationUser, Comment
-from colaboration.comments import CommentManager
-from colaboration.permissions import PermissionChecker
+from collaboration.models import CollaborationUser, Comment
+from collaboration.comments import CommentManager
+from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 project_dir = Path(${JSON.stringify(project.path)})
@@ -917,9 +917,9 @@ sys.path.insert(0, ${JSON.stringify(backendDir)})
 
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
-from colaboration.models import CollaborationUser
-from colaboration.comments import CommentManager
-from colaboration.permissions import PermissionChecker
+from collaboration.models import CollaborationUser
+from collaboration.comments import CommentManager
+from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 parent_comment_id = ${JSON.stringify(parentCommentId)}
@@ -1116,9 +1116,9 @@ sys.path.insert(0, ${JSON.stringify(backendDir)})
 
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
-from colaboration.models import CollaborationUser
-from colaboration.approvals import ApprovalManager
-from colaboration.permissions import PermissionChecker
+from collaboration.models import CollaborationUser
+from collaboration.approvals import ApprovalManager
+from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 project_dir = Path(${JSON.stringify(project.path)})
@@ -1217,9 +1217,9 @@ sys.path.insert(0, ${JSON.stringify(backendDir)})
 
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
-from colaboration.models import CollaborationUser
-from colaboration.approvals import ApprovalManager
-from colaboration.permissions import PermissionChecker
+from collaboration.models import CollaborationUser
+from collaboration.approvals import ApprovalManager
+from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 project_dir = Path(${JSON.stringify(project.path)})
@@ -1316,9 +1316,9 @@ sys.path.insert(0, ${JSON.stringify(backendDir)})
 
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
-from colaboration.models import CollaborationUser
-from colaboration.approvals import ApprovalManager
-from colaboration.permissions import PermissionChecker
+from collaboration.models import CollaborationUser
+from collaboration.approvals import ApprovalManager
+from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 project_dir = Path(${JSON.stringify(project.path)})

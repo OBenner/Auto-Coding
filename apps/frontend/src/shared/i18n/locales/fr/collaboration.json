@@ -14,6 +14,9 @@
     "usernameRequired": "Nom d'utilisateur requis",
     "enterUsername": "Entrez le nom d'utilisateur ou l'e-mail",
     "countBadge": "{count} {level}",
+    "readLabel": "Lecture",
+    "writeLabel": "Écriture",
+    "adminLabel": "Admin",
     "readBadge": "lecture",
     "writeBadge": "écriture",
     "adminBadge": "admin"

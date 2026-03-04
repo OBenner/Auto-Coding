@@ -76,21 +76,21 @@ function getPermissionLevelInfo(level: PermissionLevel, t: (key: string) => stri
   const levels: Record<PermissionLevel, PermissionLevelInfo> = {
     read: {
       level: 'read',
-      label: 'Read',
+      label: t('collaboration:permissions.readLabel'),
       description: t('collaboration:permissions.read'),
       icon: <Shield className="h-4 w-4" />,
       colorClass: 'bg-blue-500/10 text-blue-500 border-blue-500/20'
     },
     write: {
       level: 'write',
-      label: 'Write',
+      label: t('collaboration:permissions.writeLabel'),
       description: t('collaboration:permissions.write'),
       icon: <ShieldCheck className="h-4 w-4" />,
       colorClass: 'bg-green-500/10 text-green-500 border-green-500/20'
     },
     admin: {
       level: 'admin',
-      label: 'Admin',
+      label: t('collaboration:permissions.adminLabel'),
       description: t('collaboration:permissions.admin'),
       icon: <ShieldAlert className="h-4 w-4" />,
       colorClass: 'bg-purple-500/10 text-purple-500 border-purple-500/20'

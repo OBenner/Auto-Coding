@@ -14,7 +14,7 @@ Defines models for:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ class SpecPermission:
     user: CollaborationUser
     level: PermissionLevel
     granted_by: str
-    granted_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    granted_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def __post_init__(self):
         """Validate permission fields."""
@@ -117,7 +117,7 @@ class Comment:
     spec_id: str
     author: CollaborationUser
     content: str
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     parent_id: str | None = None
     mentions: list[str] = field(default_factory=list)
     resolved: bool = False
@@ -151,7 +151,7 @@ class Comment:
         # Match @username pattern (letters, numbers, hyphens, underscores)
         pattern = r"@([a-zA-Z0-9_-]+)"
         matches = re.findall(pattern, text)
-        return list(set(matches))  # Remove duplicates
+        return list(dict.fromkeys(matches))  # Remove duplicates, preserve order
 
     def is_reply(self) -> bool:
         """Check if this is a reply to another comment."""
@@ -164,7 +164,7 @@ class Comment:
 
     def mark_edited(self) -> None:
         """Update the edited timestamp."""
-        self.updated_at = datetime.utcnow().isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -190,7 +190,7 @@ class Approval:
     approver: CollaborationUser
     status: ApprovalStatus
     reason: str | None = None
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     reviewed_at: str | None = None
 
     def __post_init__(self):
@@ -209,9 +209,10 @@ class Approval:
         """
         self.status = ApprovalStatus.APPROVED
         self.reason = reason
-        self.reviewed_at = datetime.utcnow().isoformat()
-        logger.info(
-            f"Spec {self.spec_id} approved by {self.approver.username}: {reason or 'No reason provided'}"
+        self.reviewed_at = datetime.now(UTC).isoformat()
+        logger.info(f"Spec {self.spec_id} approved")
+        logger.debug(
+            f"Approval by {self.approver.username}: {reason or 'No reason provided'}"
         )
 
     def reject(self, reason: str | None = None) -> None:
@@ -223,9 +224,10 @@ class Approval:
         """
         self.status = ApprovalStatus.REJECTED
         self.reason = reason
-        self.reviewed_at = datetime.utcnow().isoformat()
-        logger.info(
-            f"Spec {self.spec_id} rejected by {self.approver.username}: {reason or 'No reason provided'}"
+        self.reviewed_at = datetime.now(UTC).isoformat()
+        logger.info(f"Spec {self.spec_id} rejected")
+        logger.debug(
+            f"Rejection by {self.approver.username}: {reason or 'No reason provided'}"
         )
 
     def is_pending(self) -> bool:

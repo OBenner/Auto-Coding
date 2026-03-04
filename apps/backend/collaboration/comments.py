@@ -42,16 +42,14 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from core.sentry import capture_exception
-from integrations.graphiti.memory import GraphitiMemory, get_graphiti_memory
 from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_COMMENT
 
+from .base import CollaborationManagerBase
 from .models import CollaborationUser, Comment, PermissionLevel
 from .permissions import PermissionChecker
 
@@ -64,7 +62,7 @@ class CommentError(Exception):
     pass
 
 
-class CommentManager:
+class CommentManager(CollaborationManagerBase):
     """
     Manages comment threads for spec collaboration.
 
@@ -106,6 +104,8 @@ class CommentManager:
         await manager.resolve_thread(comment.comment_id, user_id="alice")
     """
 
+    _manager_name = "comment"
+
     def __init__(
         self,
         spec_id: str,
@@ -122,10 +122,7 @@ class CommentManager:
             project_dir: Project root directory
             permission_checker: Optional permission checker (for access control)
         """
-        self.spec_id = spec_id
-        self.spec_dir = spec_dir
-        self.project_dir = project_dir
-        self.permission_checker = permission_checker
+        super().__init__(spec_id, spec_dir, project_dir, permission_checker)
 
         # In-memory comment cache: comment_id -> Comment
         self._comments: dict[str, Comment] = {}
@@ -133,51 +130,7 @@ class CommentManager:
         # Thread index: parent_id -> [child_comment_ids]
         self._thread_index: dict[str, list[str]] = {}
 
-        # Graphiti memory for persistent storage
-        self._memory: GraphitiMemory | None = None
-        self._memory_available = False
-
         logger.info(f"Initialized comment manager for spec {spec_id}")
-
-    async def initialize(self) -> bool:
-        """
-        Initialize Graphiti memory for comment storage.
-
-        Returns:
-            True if initialization succeeded
-        """
-        try:
-            self._memory = get_graphiti_memory(
-                spec_dir=self.spec_dir,
-                project_dir=self.project_dir,
-            )
-
-            if self._memory.is_enabled:
-                self._memory_available = await self._memory.initialize()
-
-                if self._memory_available:
-                    logger.info(
-                        f"Comment manager initialized with Graphiti storage "
-                        f"(group: {self._memory.group_id})"
-                    )
-                else:
-                    logger.warning(
-                        "Graphiti initialization failed - comments will not persist"
-                    )
-            else:
-                logger.info("Graphiti not enabled - comments will not persist")
-
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to initialize Graphiti memory: {e}")
-            capture_exception(
-                e,
-                operation="comment_manager_initialize",
-                spec_id=self.spec_id,
-            )
-            self._memory_available = False
-            return False
 
     async def create_comment(
         self,
@@ -202,14 +155,7 @@ class CommentManager:
             CommentError: If permission denied or creation fails
         """
         # Check write permission
-        if self.permission_checker:
-            result = self.permission_checker.check_permission(
-                user_id, PermissionLevel.WRITE
-            )
-            if not result.allowed:
-                raise CommentError(
-                    f"Permission denied: {result.reason or 'no write access'}"
-                )
+        self._require_permission(user_id, PermissionLevel.WRITE, CommentError)
 
         # Create comment
         comment = Comment(
@@ -226,8 +172,7 @@ class CommentManager:
         self._thread_index.setdefault(comment.comment_id, [])
 
         logger.info(
-            f"Created comment {comment.comment_id} by {username} "
-            f"on spec {self.spec_id}"
+            f"Created comment {comment.comment_id} by {username} on spec {self.spec_id}"
         )
 
         # Persist to Graphiti
@@ -261,14 +206,7 @@ class CommentManager:
             CommentError: If parent not found, permission denied, or creation fails
         """
         # Check write permission
-        if self.permission_checker:
-            result = self.permission_checker.check_permission(
-                user_id, PermissionLevel.WRITE
-            )
-            if not result.allowed:
-                raise CommentError(
-                    f"Permission denied: {result.reason or 'no write access'}"
-                )
+        self._require_permission(user_id, PermissionLevel.WRITE, CommentError)
 
         # Verify parent exists
         if parent_comment_id not in self._comments:
@@ -317,14 +255,7 @@ class CommentManager:
             CommentError: If comment not found or permission denied
         """
         # Check write permission
-        if self.permission_checker:
-            result = self.permission_checker.check_permission(
-                user_id, PermissionLevel.WRITE
-            )
-            if not result.allowed:
-                raise CommentError(
-                    f"Permission denied: {result.reason or 'no write access'}"
-                )
+        self._require_permission(user_id, PermissionLevel.WRITE, CommentError)
 
         # Verify comment exists
         if comment_id not in self._comments:
@@ -409,9 +340,7 @@ class CommentManager:
             List of unresolved Comment objects
         """
         return [
-            c
-            for c in self._comments.values()
-            if c.parent_id is None and not c.resolved
+            c for c in self._comments.values() if c.parent_id is None and not c.resolved
         ]
 
     def get_mentions_for_user(self, username: str) -> list[Comment]:
@@ -427,22 +356,10 @@ class CommentManager:
         return [c for c in self._comments.values() if username in c.mentions]
 
     async def _store_comment_in_graphiti(self, comment: Comment) -> bool:
-        """
-        Store a comment in Graphiti as an episode.
-
-        Args:
-            comment: Comment to store
-
-        Returns:
-            True if stored successfully
-        """
-        if not self._memory or not self._memory_available:
-            return False
-
-        try:
-            from graphiti_core.nodes import EpisodeType
-
-            episode_content = {
+        """Store a comment in Graphiti as an episode."""
+        return await self._store_episode_in_graphiti(
+            episode_name=f"comment_{comment.comment_id}_{self.spec_id}",
+            episode_content={
                 "type": EPISODE_TYPE_COMMENT,
                 "spec_id": self.spec_id,
                 "comment_id": comment.comment_id,
@@ -454,75 +371,28 @@ class CommentManager:
                 "resolved": comment.resolved,
                 "created_at": comment.created_at,
                 "updated_at": comment.updated_at,
-            }
-
-            await self._memory._client.graphiti.add_episode(
-                name=f"comment_{comment.comment_id}_{self.spec_id}",
-                episode_body=json.dumps(episode_content),
-                source=EpisodeType.text,
-                source_description=f"Comment on spec {self.spec_id} by {comment.author.username}",
-                reference_time=datetime.now(UTC),
-                group_id=self._memory.group_id,
-            )
-
-            logger.debug(f"Stored comment {comment.comment_id} in Graphiti")
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to store comment in Graphiti: {e}")
-            capture_exception(
-                e,
-                operation="store_comment_in_graphiti",
-                spec_id=self.spec_id,
-                comment_id=comment.comment_id,
-            )
-            return False
+            },
+            source_description=(
+                f"Comment on spec {self.spec_id} by {comment.author.username}"
+            ),
+            operation_name="store_comment_in_graphiti",
+            comment_id=comment.comment_id,
+        )
 
     async def _update_comment_in_graphiti(self, comment: Comment, action: str) -> bool:
-        """
-        Update a comment in Graphiti (for resolved status changes).
-
-        Args:
-            comment: Comment to update
-            action: Action performed (e.g., "resolved")
-
-        Returns:
-            True if updated successfully
-        """
-        if not self._memory or not self._memory_available:
-            return False
-
-        try:
-            from graphiti_core.nodes import EpisodeType
-
-            episode_content = {
+        """Update a comment in Graphiti (for resolved status changes)."""
+        return await self._store_episode_in_graphiti(
+            episode_name=f"comment_update_{comment.comment_id}_{action}",
+            episode_content={
                 "type": EPISODE_TYPE_COMMENT,
                 "spec_id": self.spec_id,
                 "comment_id": comment.comment_id,
                 "action": action,
                 "resolved": comment.resolved,
                 "updated_at": datetime.now(UTC).isoformat(),
-            }
-
-            await self._memory._client.graphiti.add_episode(
-                name=f"comment_update_{comment.comment_id}_{action}",
-                episode_body=json.dumps(episode_content),
-                source=EpisodeType.text,
-                source_description=f"Comment {action}: {comment.comment_id}",
-                reference_time=datetime.now(UTC),
-                group_id=self._memory.group_id,
-            )
-
-            logger.debug(f"Updated comment {comment.comment_id} in Graphiti ({action})")
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to update comment in Graphiti: {e}")
-            capture_exception(
-                e,
-                operation="update_comment_in_graphiti",
-                spec_id=self.spec_id,
-                comment_id=comment.comment_id,
-                action=action,
-            )
-            return False
+            },
+            source_description=f"Comment {action}: {comment.comment_id}",
+            operation_name="update_comment_in_graphiti",
+            comment_id=comment.comment_id,
+            action=action,
+        )

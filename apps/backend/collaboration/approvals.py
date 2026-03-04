@@ -42,16 +42,13 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
-from datetime import UTC, datetime
 from pathlib import Path
 
-from core.sentry import capture_exception
-from integrations.graphiti.memory import GraphitiMemory, get_graphiti_memory
 from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_APPROVAL
 
+from .base import CollaborationManagerBase
 from .models import Approval, ApprovalStatus, CollaborationUser, PermissionLevel
 from .permissions import PermissionChecker
 
@@ -64,7 +61,7 @@ class ApprovalError(Exception):
     pass
 
 
-class ApprovalManager:
+class ApprovalManager(CollaborationManagerBase):
     """
     Manages approval workflows for spec collaboration.
 
@@ -105,6 +102,8 @@ class ApprovalManager:
             pass
     """
 
+    _manager_name = "approval"
+
     def __init__(
         self,
         spec_id: str,
@@ -121,10 +120,7 @@ class ApprovalManager:
             project_dir: Project root directory
             permission_checker: Optional permission checker (for access control)
         """
-        self.spec_id = spec_id
-        self.spec_dir = spec_dir
-        self.project_dir = project_dir
-        self.permission_checker = permission_checker
+        super().__init__(spec_id, spec_dir, project_dir, permission_checker)
 
         # In-memory approval cache: approval_id -> Approval
         self._approvals: dict[str, Approval] = {}
@@ -132,51 +128,7 @@ class ApprovalManager:
         # Current active approval request (only one can be active)
         self._current_approval_id: str | None = None
 
-        # Graphiti memory for persistent storage
-        self._memory: GraphitiMemory | None = None
-        self._memory_available = False
-
         logger.info(f"Initialized approval manager for spec {spec_id}")
-
-    async def initialize(self) -> bool:
-        """
-        Initialize Graphiti memory for approval storage.
-
-        Returns:
-            True if initialization succeeded
-        """
-        try:
-            self._memory = get_graphiti_memory(
-                spec_dir=self.spec_dir,
-                project_dir=self.project_dir,
-            )
-
-            if self._memory.is_enabled:
-                self._memory_available = await self._memory.initialize()
-
-                if self._memory_available:
-                    logger.info(
-                        f"Approval manager initialized with Graphiti storage "
-                        f"(group: {self._memory.group_id})"
-                    )
-                else:
-                    logger.warning(
-                        "Graphiti initialization failed - approvals will not persist"
-                    )
-            else:
-                logger.info("Graphiti not enabled - approvals will not persist")
-
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to initialize Graphiti memory: {e}")
-            capture_exception(
-                e,
-                operation="approval_manager_initialize",
-                spec_id=self.spec_id,
-            )
-            self._memory_available = False
-            return False
 
     async def request_approval(
         self,
@@ -202,14 +154,7 @@ class ApprovalManager:
             ApprovalError: If permission denied or request fails
         """
         # Check write permission
-        if self.permission_checker:
-            result = self.permission_checker.check_permission(
-                requester_id, PermissionLevel.WRITE
-            )
-            if not result.allowed:
-                raise ApprovalError(
-                    f"Permission denied: {result.reason or 'no write access'}"
-                )
+        self._require_permission(requester_id, PermissionLevel.WRITE, ApprovalError)
 
         # Check if there's already a pending approval
         if self._current_approval_id:
@@ -269,14 +214,7 @@ class ApprovalManager:
             ApprovalError: If no pending approval, permission denied, or operation fails
         """
         # Check admin permission
-        if self.permission_checker:
-            result = self.permission_checker.check_permission(
-                approver_id, PermissionLevel.ADMIN
-            )
-            if not result.allowed:
-                raise ApprovalError(
-                    f"Permission denied: {result.reason or 'admin access required'}"
-                )
+        self._require_permission(approver_id, PermissionLevel.ADMIN, ApprovalError)
 
         # Check if there's a pending approval
         if not self._current_approval_id:
@@ -284,14 +222,10 @@ class ApprovalManager:
 
         approval = self._approvals.get(self._current_approval_id)
         if not approval:
-            raise ApprovalError(
-                f"Approval {self._current_approval_id} not found"
-            )
+            raise ApprovalError(f"Approval {self._current_approval_id} not found")
 
         if not approval.is_pending():
-            raise ApprovalError(
-                f"Approval already {approval.status.value}"
-            )
+            raise ApprovalError(f"Approval already {approval.status.value}")
 
         # Update approval
         approval.approver = CollaborationUser(
@@ -335,14 +269,7 @@ class ApprovalManager:
             ApprovalError: If no pending approval, permission denied, or operation fails
         """
         # Check admin permission
-        if self.permission_checker:
-            result = self.permission_checker.check_permission(
-                rejector_id, PermissionLevel.ADMIN
-            )
-            if not result.allowed:
-                raise ApprovalError(
-                    f"Permission denied: {result.reason or 'admin access required'}"
-                )
+        self._require_permission(rejector_id, PermissionLevel.ADMIN, ApprovalError)
 
         # Check if there's a pending approval
         if not self._current_approval_id:
@@ -350,14 +277,10 @@ class ApprovalManager:
 
         approval = self._approvals.get(self._current_approval_id)
         if not approval:
-            raise ApprovalError(
-                f"Approval {self._current_approval_id} not found"
-            )
+            raise ApprovalError(f"Approval {self._current_approval_id} not found")
 
         if not approval.is_pending():
-            raise ApprovalError(
-                f"Approval already {approval.status.value}"
-            )
+            raise ApprovalError(f"Approval already {approval.status.value}")
 
         # Update approval
         approval.approver = CollaborationUser(
@@ -491,13 +414,9 @@ class ApprovalManager:
         Returns:
             True if stored successfully
         """
-        if not self._memory or not self._memory_available:
-            return False
-
-        try:
-            from graphiti_core.nodes import EpisodeType
-
-            episode_content = {
+        return await self._store_episode_in_graphiti(
+            episode_name=f"approval_{approval.approval_id}_{action}",
+            episode_content={
                 "type": EPISODE_TYPE_APPROVAL,
                 "spec_id": self.spec_id,
                 "approval_id": approval.approval_id,
@@ -508,29 +427,12 @@ class ApprovalManager:
                 "action": action,
                 "created_at": approval.created_at,
                 "reviewed_at": approval.reviewed_at,
-            }
-
-            await self._memory._client.graphiti.add_episode(
-                name=f"approval_{approval.approval_id}_{action}",
-                episode_body=json.dumps(episode_content),
-                source=EpisodeType.text,
-                source_description=f"Approval {action} for spec {self.spec_id} by {approval.approver.username}",
-                reference_time=datetime.now(UTC),
-                group_id=self._memory.group_id,
-            )
-
-            logger.debug(
-                f"Stored approval {approval.approval_id} in Graphiti ({action})"
-            )
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to store approval in Graphiti: {e}")
-            capture_exception(
-                e,
-                operation="store_approval_in_graphiti",
-                spec_id=self.spec_id,
-                approval_id=approval.approval_id,
-                action=action,
-            )
-            return False
+            },
+            source_description=(
+                f"Approval {action} for spec {self.spec_id} "
+                f"by {approval.approver.username}"
+            ),
+            operation_name="store_approval_in_graphiti",
+            approval_id=approval.approval_id,
+            action=action,
+        )
