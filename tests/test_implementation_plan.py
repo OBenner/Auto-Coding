@@ -11,18 +11,19 @@ Tests the implementation_plan.py module functionality including:
 - Plan serialization
 """
 
-import pytest
+import json
 from pathlib import Path
 
+import pytest
 from implementation_plan import (
     ImplementationPlan,
     Phase,
-    Subtask,
-    Verification,
-    WorkflowType,
     PhaseType,
+    Subtask,
     SubtaskStatus,
+    Verification,
     VerificationType,
+    WorkflowType,
     create_feature_plan,
     create_investigation_plan,
     create_refactor_plan,
@@ -497,12 +498,21 @@ class TestDependencyResolution:
         plan = ImplementationPlan(
             feature="Test",
             phases=[
-                Phase(phase=1, name="Setup", subtasks=[
-                    Subtask(id="c1", description="Setup", status=SubtaskStatus.PENDING)
-                ]),
-                Phase(phase=2, name="Build", depends_on=[1], subtasks=[
-                    Subtask(id="c2", description="Build")
-                ]),
+                Phase(
+                    phase=1,
+                    name="Setup",
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Setup", status=SubtaskStatus.PENDING
+                        )
+                    ],
+                ),
+                Phase(
+                    phase=2,
+                    name="Build",
+                    depends_on=[1],
+                    subtasks=[Subtask(id="c2", description="Build")],
+                ),
             ],
         )
 
@@ -517,15 +527,27 @@ class TestDependencyResolution:
         plan = ImplementationPlan(
             feature="Test",
             phases=[
-                Phase(phase=1, name="Setup", subtasks=[
-                    Subtask(id="c1", description="Setup", status=SubtaskStatus.COMPLETED)
-                ]),
-                Phase(phase=2, name="Backend", depends_on=[1], subtasks=[
-                    Subtask(id="c2", description="Backend")
-                ]),
-                Phase(phase=3, name="Frontend", depends_on=[1], subtasks=[
-                    Subtask(id="c3", description="Frontend")
-                ]),
+                Phase(
+                    phase=1,
+                    name="Setup",
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="Setup", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
+                ),
+                Phase(
+                    phase=2,
+                    name="Backend",
+                    depends_on=[1],
+                    subtasks=[Subtask(id="c2", description="Backend")],
+                ),
+                Phase(
+                    phase=3,
+                    name="Frontend",
+                    depends_on=[1],
+                    subtasks=[Subtask(id="c3", description="Frontend")],
+                ),
             ],
         )
 
@@ -542,15 +564,28 @@ class TestDependencyResolution:
         plan = ImplementationPlan(
             feature="Test",
             phases=[
-                Phase(phase=1, name="Phase1", subtasks=[
-                    Subtask(id="c1", description="C1", status=SubtaskStatus.COMPLETED)
-                ]),
-                Phase(phase=2, name="Phase2", subtasks=[
-                    Subtask(id="c2", description="C2", status=SubtaskStatus.PENDING)
-                ]),
-                Phase(phase=3, name="Phase3", depends_on=[1, 2], subtasks=[
-                    Subtask(id="c3", description="C3")
-                ]),
+                Phase(
+                    phase=1,
+                    name="Phase1",
+                    subtasks=[
+                        Subtask(
+                            id="c1", description="C1", status=SubtaskStatus.COMPLETED
+                        )
+                    ],
+                ),
+                Phase(
+                    phase=2,
+                    name="Phase2",
+                    subtasks=[
+                        Subtask(id="c2", description="C2", status=SubtaskStatus.PENDING)
+                    ],
+                ),
+                Phase(
+                    phase=3,
+                    name="Phase3",
+                    depends_on=[1, 2],
+                    subtasks=[Subtask(id="c3", description="C3")],
+                ),
             ],
         )
 
@@ -617,7 +652,11 @@ class TestSchemaValidation:
                     "phase": 1,
                     "name": "Setup",
                     "subtasks": [
-                        {"id": "task-1", "description": "Do something", "status": "pending"}
+                        {
+                            "id": "task-1",
+                            "description": "Do something",
+                            "status": "pending",
+                        }
                     ],
                 }
             ],
@@ -721,7 +760,13 @@ class TestSchemaValidation:
 
     def test_all_phase_types_valid(self):
         """All defined phase types are accepted."""
-        phase_types = ["setup", "implementation", "investigation", "integration", "cleanup"]
+        phase_types = [
+            "setup",
+            "implementation",
+            "investigation",
+            "integration",
+            "cleanup",
+        ]
 
         for phase_type in phase_types:
             plan_data = {
@@ -1077,9 +1122,17 @@ class TestSchemaValidation:
         assert restored_plan.services_involved == original_plan.services_involved
         assert len(restored_plan.phases) == len(original_plan.phases)
         assert restored_plan.phases[0].name == original_plan.phases[0].name
-        assert restored_plan.phases[0].parallel_safe == original_plan.phases[0].parallel_safe
-        assert len(restored_plan.phases[0].subtasks) == len(original_plan.phases[0].subtasks)
-        assert restored_plan.phases[0].subtasks[0].id == original_plan.phases[0].subtasks[0].id
+        assert (
+            restored_plan.phases[0].parallel_safe
+            == original_plan.phases[0].parallel_safe
+        )
+        assert len(restored_plan.phases[0].subtasks) == len(
+            original_plan.phases[0].subtasks
+        )
+        assert (
+            restored_plan.phases[0].subtasks[0].id
+            == original_plan.phases[0].subtasks[0].id
+        )
         assert restored_plan.phases[0].subtasks[0].verification.run == "pytest"
 
     def test_deeply_nested_phases_with_dependencies(self):
@@ -1092,25 +1145,33 @@ class TestSchemaValidation:
                     "phase": 1,
                     "name": "Foundation",
                     "depends_on": [],
-                    "subtasks": [{"id": "t1", "description": "Task 1", "status": "completed"}],
+                    "subtasks": [
+                        {"id": "t1", "description": "Task 1", "status": "completed"}
+                    ],
                 },
                 {
                     "phase": 2,
                     "name": "Build A",
                     "depends_on": [1],
-                    "subtasks": [{"id": "t2", "description": "Task 2", "status": "completed"}],
+                    "subtasks": [
+                        {"id": "t2", "description": "Task 2", "status": "completed"}
+                    ],
                 },
                 {
                     "phase": 3,
                     "name": "Build B",
                     "depends_on": [1],
-                    "subtasks": [{"id": "t3", "description": "Task 3", "status": "pending"}],
+                    "subtasks": [
+                        {"id": "t3", "description": "Task 3", "status": "pending"}
+                    ],
                 },
                 {
                     "phase": 4,
                     "name": "Integration",
                     "depends_on": [2, 3],
-                    "subtasks": [{"id": "t4", "description": "Task 4", "status": "pending"}],
+                    "subtasks": [
+                        {"id": "t4", "description": "Task 4", "status": "pending"}
+                    ],
                 },
             ],
         }
@@ -1249,7 +1310,9 @@ class TestEdgeCaseStateTransitions:
         )
 
         fix_phase = plan.phases[2]  # Phase 3 - Fix
-        blocked_chunks = [c for c in fix_phase.subtasks if c.status == SubtaskStatus.BLOCKED]
+        blocked_chunks = [
+            c for c in fix_phase.subtasks if c.status == SubtaskStatus.BLOCKED
+        ]
 
         assert len(blocked_chunks) == 2
         assert any("fix" in c.id.lower() for c in blocked_chunks)
@@ -1268,7 +1331,9 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Phase 1",
                     subtasks=[
-                        Subtask(id="c1", description="Blocked", status=SubtaskStatus.BLOCKED),
+                        Subtask(
+                            id="c1", description="Blocked", status=SubtaskStatus.BLOCKED
+                        ),
                     ],
                 ),
             ],
@@ -1288,7 +1353,9 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Phase 1",
                     subtasks=[
-                        Subtask(id="c1", description="Task 1", status=SubtaskStatus.PENDING),
+                        Subtask(
+                            id="c1", description="Task 1", status=SubtaskStatus.PENDING
+                        ),
                     ],
                     depends_on=[2],  # Circular dependency
                 ),
@@ -1296,7 +1363,9 @@ class TestEdgeCaseStateTransitions:
                     phase=2,
                     name="Phase 2",
                     subtasks=[
-                        Subtask(id="c2", description="Task 2", status=SubtaskStatus.PENDING),
+                        Subtask(
+                            id="c2", description="Task 2", status=SubtaskStatus.PENDING
+                        ),
                     ],
                     depends_on=[1],  # Circular dependency
                 ),
@@ -1319,7 +1388,11 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Waiting Phase",
                     subtasks=[
-                        Subtask(id="c1", description="Blocked task", status=SubtaskStatus.BLOCKED),
+                        Subtask(
+                            id="c1",
+                            description="Blocked task",
+                            status=SubtaskStatus.BLOCKED,
+                        ),
                     ],
                 ),
             ],
@@ -1339,7 +1412,11 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Phase 1",
                     subtasks=[
-                        Subtask(id="c1", description="Failed task", status=SubtaskStatus.FAILED),
+                        Subtask(
+                            id="c1",
+                            description="Failed task",
+                            status=SubtaskStatus.FAILED,
+                        ),
                     ],
                 ),
             ],
@@ -1362,10 +1439,18 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Phase 1",
                     subtasks=[
-                        Subtask(id="c1", description="Done", status=SubtaskStatus.COMPLETED),
-                        Subtask(id="c2", description="Failed", status=SubtaskStatus.FAILED),
-                        Subtask(id="c3", description="Blocked", status=SubtaskStatus.BLOCKED),
-                        Subtask(id="c4", description="Pending", status=SubtaskStatus.PENDING),
+                        Subtask(
+                            id="c1", description="Done", status=SubtaskStatus.COMPLETED
+                        ),
+                        Subtask(
+                            id="c2", description="Failed", status=SubtaskStatus.FAILED
+                        ),
+                        Subtask(
+                            id="c3", description="Blocked", status=SubtaskStatus.BLOCKED
+                        ),
+                        Subtask(
+                            id="c4", description="Pending", status=SubtaskStatus.PENDING
+                        ),
                     ],
                 ),
             ],
@@ -1412,7 +1497,11 @@ class TestEdgeCaseStateTransitions:
                     name="Real Work",
                     depends_on=[1],
                     subtasks=[
-                        Subtask(id="c1", description="Actual task", status=SubtaskStatus.PENDING),
+                        Subtask(
+                            id="c1",
+                            description="Actual task",
+                            status=SubtaskStatus.PENDING,
+                        ),
                     ],
                 ),
             ],
@@ -1438,7 +1527,9 @@ class TestEdgeCaseStateTransitions:
                     name="Work Phase",
                     depends_on=[3],
                     subtasks=[
-                        Subtask(id="c1", description="Task", status=SubtaskStatus.PENDING),
+                        Subtask(
+                            id="c1", description="Task", status=SubtaskStatus.PENDING
+                        ),
                     ],
                 ),
             ],
@@ -1458,7 +1549,9 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Done Phase",
                     subtasks=[
-                        Subtask(id="c1", description="Done", status=SubtaskStatus.COMPLETED),
+                        Subtask(
+                            id="c1", description="Done", status=SubtaskStatus.COMPLETED
+                        ),
                     ],
                 ),
                 Phase(
@@ -1466,7 +1559,9 @@ class TestEdgeCaseStateTransitions:
                     name="Work Phase",
                     depends_on=[1],
                     subtasks=[
-                        Subtask(id="c2", description="Pending", status=SubtaskStatus.PENDING),
+                        Subtask(
+                            id="c2", description="Pending", status=SubtaskStatus.PENDING
+                        ),
                     ],
                 ),
             ],
@@ -1510,7 +1605,9 @@ class TestEdgeCaseStateTransitions:
         chunk.fail(reason="Investigation revealed task is not feasible")
 
         assert chunk.status == SubtaskStatus.FAILED
-        assert "FAILED: Investigation revealed task is not feasible" in chunk.actual_output
+        assert (
+            "FAILED: Investigation revealed task is not feasible" in chunk.actual_output
+        )
 
     def test_in_progress_subtask_blocks_phase_completion(self):
         """Phase with in_progress subtask is not complete."""
@@ -1519,7 +1616,9 @@ class TestEdgeCaseStateTransitions:
             name="Active Phase",
             subtasks=[
                 Subtask(id="c1", description="Done", status=SubtaskStatus.COMPLETED),
-                Subtask(id="c2", description="Working", status=SubtaskStatus.IN_PROGRESS),
+                Subtask(
+                    id="c2", description="Working", status=SubtaskStatus.IN_PROGRESS
+                ),
             ],
         )
 
@@ -1548,7 +1647,9 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Blocked Phase",
                     subtasks=[
-                        Subtask(id="c1", description="Blocked", status=SubtaskStatus.BLOCKED),
+                        Subtask(
+                            id="c1", description="Blocked", status=SubtaskStatus.BLOCKED
+                        ),
                     ],
                 ),
             ],
@@ -1594,8 +1695,12 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Phase 1",
                     subtasks=[
-                        Subtask(id="c1", description="Done", status=SubtaskStatus.COMPLETED),
-                        Subtask(id="c2", description="Blocked", status=SubtaskStatus.BLOCKED),
+                        Subtask(
+                            id="c1", description="Done", status=SubtaskStatus.COMPLETED
+                        ),
+                        Subtask(
+                            id="c2", description="Blocked", status=SubtaskStatus.BLOCKED
+                        ),
                     ],
                 ),
             ],
@@ -1616,8 +1721,16 @@ class TestEdgeCaseStateTransitions:
                     phase=1,
                     name="Phase 1",
                     subtasks=[
-                        Subtask(id="c1", description="Blocked 1", status=SubtaskStatus.BLOCKED),
-                        Subtask(id="c2", description="Blocked 2", status=SubtaskStatus.BLOCKED),
+                        Subtask(
+                            id="c1",
+                            description="Blocked 1",
+                            status=SubtaskStatus.BLOCKED,
+                        ),
+                        Subtask(
+                            id="c2",
+                            description="Blocked 2",
+                            status=SubtaskStatus.BLOCKED,
+                        ),
                     ],
                 ),
             ],
@@ -1628,3 +1741,164 @@ class TestEdgeCaseStateTransitions:
         # All subtasks blocked = effectively pending state = backlog
         assert plan.status == "backlog"
         assert plan.planStatus == "pending"
+
+
+# =============================================================================
+# STUCK SUBTASK SKIPPING TESTS (progress.py get_next_subtask)
+# =============================================================================
+
+
+class TestStuckSubtaskSkipping:
+    """Tests for stuck subtask skipping in progress.get_next_subtask()."""
+
+    def _make_plan(self, subtasks):
+        """Helper to create a minimal implementation_plan.json dict."""
+        return {
+            "feature": "Test",
+            "workflow_type": "feature",
+            "phases": [
+                {
+                    "phase": 1,
+                    "name": "Phase 1",
+                    "depends_on": [],
+                    "subtasks": subtasks,
+                }
+            ],
+        }
+
+    def _make_attempt_history(self, stuck_ids):
+        """Helper to create attempt_history.json with stuck subtasks."""
+        return {
+            "subtasks": {},
+            "stuck_subtasks": [
+                {
+                    "subtask_id": sid,
+                    "reason": "stuck",
+                    "escalated_at": "2024-01-01T00:00:00",
+                }
+                for sid in stuck_ids
+            ],
+            "metadata": {
+                "created_at": "2024-01-01T00:00:00",
+                "last_updated": "2024-01-01T00:00:00",
+            },
+        }
+
+    def test_stuck_subtask_is_skipped(self, temp_dir):
+        """Stuck subtasks are skipped when selecting the next subtask."""
+        from core.progress import get_next_subtask
+
+        spec_dir = temp_dir / "spec"
+        spec_dir.mkdir(parents=True)
+
+        # Create plan with two pending subtasks
+        plan = self._make_plan(
+            [
+                {"id": "stuck-1", "description": "Stuck task", "status": "pending"},
+                {"id": "good-1", "description": "Normal task", "status": "pending"},
+            ]
+        )
+        (spec_dir / "implementation_plan.json").write_text(json.dumps(plan))
+
+        # Mark stuck-1 as stuck
+        memory_dir = spec_dir / "memory"
+        memory_dir.mkdir(parents=True)
+        history = self._make_attempt_history(["stuck-1"])
+        (memory_dir / "attempt_history.json").write_text(json.dumps(history))
+
+        result = get_next_subtask(spec_dir)
+        assert result is not None
+        assert result["id"] == "good-1", "Should skip stuck-1 and select good-1"
+
+    def test_normal_subtask_selected_when_stuck_exist(self, temp_dir):
+        """Normal pending subtasks are selected even when stuck ones exist."""
+        from core.progress import get_next_subtask
+
+        spec_dir = temp_dir / "spec"
+        spec_dir.mkdir(parents=True)
+
+        plan = self._make_plan(
+            [
+                {"id": "stuck-a", "description": "Stuck A", "status": "pending"},
+                {"id": "stuck-b", "description": "Stuck B", "status": "pending"},
+                {"id": "normal-c", "description": "Normal C", "status": "pending"},
+            ]
+        )
+        (spec_dir / "implementation_plan.json").write_text(json.dumps(plan))
+
+        memory_dir = spec_dir / "memory"
+        memory_dir.mkdir(parents=True)
+        history = self._make_attempt_history(["stuck-a", "stuck-b"])
+        (memory_dir / "attempt_history.json").write_text(json.dumps(history))
+
+        result = get_next_subtask(spec_dir)
+        assert result is not None
+        assert result["id"] == "normal-c"
+
+    def test_no_attempt_history_file(self, temp_dir):
+        """When attempt_history.json doesn't exist, normal selection proceeds."""
+        from core.progress import get_next_subtask
+
+        spec_dir = temp_dir / "spec"
+        spec_dir.mkdir(parents=True)
+
+        plan = self._make_plan(
+            [
+                {"id": "task-1", "description": "Task 1", "status": "pending"},
+            ]
+        )
+        (spec_dir / "implementation_plan.json").write_text(json.dumps(plan))
+
+        # No memory directory or attempt_history.json
+
+        result = get_next_subtask(spec_dir)
+        assert result is not None
+        assert result["id"] == "task-1"
+
+    def test_corrupted_attempt_history_json(self, temp_dir):
+        """When attempt_history.json is corrupted, normal selection proceeds."""
+        from core.progress import get_next_subtask
+
+        spec_dir = temp_dir / "spec"
+        spec_dir.mkdir(parents=True)
+
+        plan = self._make_plan(
+            [
+                {"id": "task-1", "description": "Task 1", "status": "pending"},
+            ]
+        )
+        (spec_dir / "implementation_plan.json").write_text(json.dumps(plan))
+
+        memory_dir = spec_dir / "memory"
+        memory_dir.mkdir(parents=True)
+        (memory_dir / "attempt_history.json").write_text("{invalid json!!!")
+
+        result = get_next_subtask(spec_dir)
+        assert result is not None
+        assert result["id"] == "task-1", (
+            "Should still select task when JSON is corrupted"
+        )
+
+    def test_all_pending_subtasks_stuck_returns_none(self, temp_dir):
+        """When ALL pending subtasks are stuck, returns None."""
+        from core.progress import get_next_subtask
+
+        spec_dir = temp_dir / "spec"
+        spec_dir.mkdir(parents=True)
+
+        plan = self._make_plan(
+            [
+                {"id": "stuck-1", "description": "Stuck 1", "status": "pending"},
+                {"id": "stuck-2", "description": "Stuck 2", "status": "pending"},
+                {"id": "done-1", "description": "Done 1", "status": "completed"},
+            ]
+        )
+        (spec_dir / "implementation_plan.json").write_text(json.dumps(plan))
+
+        memory_dir = spec_dir / "memory"
+        memory_dir.mkdir(parents=True)
+        history = self._make_attempt_history(["stuck-1", "stuck-2"])
+        (memory_dir / "attempt_history.json").write_text(json.dumps(history))
+
+        result = get_next_subtask(spec_dir)
+        assert result is None, "Should return None when all pending subtasks are stuck"

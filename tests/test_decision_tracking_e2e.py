@@ -11,17 +11,18 @@ Tests the full decision tracking pipeline:
 
 import json
 import shutil
+
+# Import decision tracking modules
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-# Import decision tracking modules
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from agents.decision_tracker import DecisionTracker
-from task_logger.decision_models import Alternative, DecisionType, ConfidenceLevel
+from task_logger.decision_models import Alternative, ConfidenceLevel, DecisionType
 from task_logger.logger import TaskLogger
 from task_logger.models import LogPhase
 
@@ -49,9 +50,7 @@ def task_logger(test_spec_dir):
 def decision_tracker(test_spec_dir, task_logger):
     """Create a DecisionTracker for testing."""
     tracker = DecisionTracker(
-        spec_dir=test_spec_dir,
-        task_logger=task_logger,
-        current_phase=LogPhase.CODING
+        spec_dir=test_spec_dir, task_logger=task_logger, current_phase=LogPhase.CODING
     )
     tracker.set_session(1)
     tracker.set_subtask("test-subtask-1")
@@ -72,7 +71,7 @@ class TestDecisionTrackingE2E:
             confidence=0.85,
             impact="Improves code maintainability and reduces runtime errors",
             reversible=True,
-            dependencies=["pydantic library"]
+            dependencies=["pydantic library"],
         )
 
         # Verify decision was created correctly
@@ -89,7 +88,7 @@ class TestDecisionTrackingE2E:
             description="Manual validation with if/else statements",
             reasoning="Simple approach, no external dependencies",
             rejected_reason="Harder to maintain, error-prone, lacks type safety",
-            tradeoffs=["No dependencies", "More verbose code"]
+            tradeoffs=["No dependencies", "More verbose code"],
         )
         decision_tracker.add_alternative(decision, alt1)
 
@@ -97,22 +96,19 @@ class TestDecisionTrackingE2E:
             description="Use Marshmallow for validation",
             reasoning="Popular validation library with good documentation",
             rejected_reason="Less type-safe than Pydantic, requires more boilerplate",
-            tradeoffs=["More flexible", "Steeper learning curve"]
+            tradeoffs=["More flexible", "Steeper learning curve"],
         )
         decision_tracker.add_alternative(decision, alt2)
 
         # Add reasoning chain
         decision_tracker.add_reasoning_step(
-            decision,
-            "Identified need for input validation in authentication flow"
+            decision, "Identified need for input validation in authentication flow"
         )
         decision_tracker.add_reasoning_step(
-            decision,
-            "Evaluated three main approaches: manual, Marshmallow, Pydantic"
+            decision, "Evaluated three main approaches: manual, Marshmallow, Pydantic"
         )
         decision_tracker.add_reasoning_step(
-            decision,
-            "Pydantic chosen for type safety and IDE support"
+            decision, "Pydantic chosen for type safety and IDE support"
         )
 
         # Verify alternatives and reasoning chain
@@ -126,12 +122,15 @@ class TestDecisionTrackingE2E:
         decisions_file = test_spec_dir / "decisions.json"
         assert decisions_file.exists()
 
-        with open(decisions_file, "r", encoding="utf-8") as f:
+        with open(decisions_file, encoding="utf-8") as f:
             data = json.load(f)
             assert "decisions" in data
             assert len(data["decisions"]) == 1
             saved_decision = data["decisions"][0]
-            assert saved_decision["chosen_approach"] == "Use Pydantic models for validation"
+            assert (
+                saved_decision["chosen_approach"]
+                == "Use Pydantic models for validation"
+            )
             assert len(saved_decision["alternatives"]) == 2
             assert len(saved_decision["reasoning_chain"]) == 3
 
@@ -139,11 +138,12 @@ class TestDecisionTrackingE2E:
         task_logs_file = test_spec_dir / "task_logs.json"
         assert task_logs_file.exists()
 
-        with open(task_logs_file, "r", encoding="utf-8") as f:
+        with open(task_logs_file, encoding="utf-8") as f:
             log_data = json.load(f)
             # Find decision log entries (they use log_with_detail, so type is TEXT with detail field)
             decision_entries = [
-                entry for phase_entries in log_data["phases"].values()
+                entry
+                for phase_entries in log_data["phases"].values()
                 for entry in phase_entries.get("entries", [])
                 if "Decision:" in entry.get("content", "")
             ]
@@ -160,26 +160,26 @@ class TestDecisionTrackingE2E:
                 "type": DecisionType.APPROACH,
                 "context": "How to structure the authentication system",
                 "approach": "JWT-based authentication with refresh tokens",
-                "confidence": 0.92
+                "confidence": 0.92,
             },
             {
                 "type": DecisionType.TOOL_SELECTION,
                 "context": "Which testing framework to use",
                 "approach": "pytest with fixtures and parametrization",
-                "confidence": 0.95
+                "confidence": 0.95,
             },
             {
                 "type": DecisionType.ARCHITECTURE,
                 "context": "How to organize backend modules",
                 "approach": "Feature-based structure with shared core",
-                "confidence": 0.78
+                "confidence": 0.78,
             },
             {
                 "type": DecisionType.ERROR_RECOVERY,
                 "context": "How to handle failed API requests",
                 "approach": "Exponential backoff with max 3 retries",
-                "confidence": 0.55  # Low confidence - should flag for review
-            }
+                "confidence": 0.55,  # Low confidence - should flag for review
+            },
         ]
 
         for data in decisions_data:
@@ -188,13 +188,13 @@ class TestDecisionTrackingE2E:
                 context=data["context"],
                 chosen_approach=data["approach"],
                 reasoning=f"Reasoning for {data['approach']}",
-                confidence=data["confidence"]
+                confidence=data["confidence"],
             )
             decision_tracker.log_decision(decision, print_to_console=False)
 
         # Verify all decisions were saved
         decisions_file = test_spec_dir / "decisions.json"
-        with open(decisions_file, "r", encoding="utf-8") as f:
+        with open(decisions_file, encoding="utf-8") as f:
             data = json.load(f)
             assert len(data["decisions"]) == 4
 
@@ -213,7 +213,7 @@ class TestDecisionTrackingE2E:
             context="Performance optimization strategy",
             chosen_approach="Implement caching layer",
             reasoning="Might improve performance, but not fully analyzed",
-            confidence=0.35  # Very low confidence
+            confidence=0.35,  # Very low confidence
         )
         assert decision1.requires_review
         assert decision1.confidence_level == ConfidenceLevel.VERY_LOW.value
@@ -224,7 +224,7 @@ class TestDecisionTrackingE2E:
             context="Data storage approach",
             chosen_approach="Use SQLite for local storage",
             reasoning="Simple but might not scale well",
-            confidence=0.55  # Low confidence
+            confidence=0.55,  # Low confidence
         )
         assert decision2.requires_review
         assert decision2.confidence_level == ConfidenceLevel.LOW.value
@@ -235,7 +235,7 @@ class TestDecisionTrackingE2E:
             context="Which database driver to use",
             chosen_approach="Use aiosqlite for async SQLite access",
             reasoning="Well-tested, widely adopted, good async support",
-            confidence=0.90  # High confidence
+            confidence=0.90,  # High confidence
         )
         assert not decision3.requires_review
         assert decision3.confidence_level == ConfidenceLevel.HIGH.value
@@ -257,7 +257,7 @@ class TestDecisionTrackingE2E:
             context="Planning phase decision",
             chosen_approach="Top-down planning approach",
             reasoning="Clear hierarchy and dependencies",
-            confidence=0.88
+            confidence=0.88,
         )
 
         decision_tracker.set_phase(LogPhase.CODING)
@@ -267,7 +267,7 @@ class TestDecisionTrackingE2E:
             context="Coding phase decision",
             chosen_approach="Async/await pattern for I/O",
             reasoning="Better performance for concurrent operations",
-            confidence=0.92
+            confidence=0.92,
         )
 
         decision_tracker.set_subtask("subtask-3")
@@ -276,7 +276,7 @@ class TestDecisionTrackingE2E:
             context="Another coding decision",
             chosen_approach="Use dataclasses for models",
             reasoning="Built-in, type-safe, minimal boilerplate",
-            confidence=0.45  # Low confidence
+            confidence=0.45,  # Low confidence
         )
 
         # Filter by phase
@@ -326,7 +326,7 @@ class TestDecisionTrackingE2E:
                 context=f"Test {decision_type.value} decision",
                 chosen_approach=f"Approach for {decision_type.value}",
                 reasoning="Test reasoning",
-                confidence=confidence
+                confidence=confidence,
             )
 
         # Get statistics
@@ -344,10 +344,16 @@ class TestDecisionTrackingE2E:
         # 0.78 = MEDIUM (0.6-0.8)
         # 0.55, 0.45 = LOW (0.4-0.6)
         # 0.95 = VERY_HIGH (>= 0.95)
-        assert stats["by_confidence_level"][ConfidenceLevel.VERY_HIGH.value] == 1  # 0.95
-        assert stats["by_confidence_level"][ConfidenceLevel.HIGH.value] == 3  # 0.92, 0.88, 0.85
+        assert (
+            stats["by_confidence_level"][ConfidenceLevel.VERY_HIGH.value] == 1
+        )  # 0.95
+        assert (
+            stats["by_confidence_level"][ConfidenceLevel.HIGH.value] == 3
+        )  # 0.92, 0.88, 0.85
         assert stats["by_confidence_level"][ConfidenceLevel.MEDIUM.value] == 1  # 0.78
-        assert stats["by_confidence_level"][ConfidenceLevel.LOW.value] == 2  # 0.55, 0.45
+        assert (
+            stats["by_confidence_level"][ConfidenceLevel.LOW.value] == 2
+        )  # 0.55, 0.45
 
         # Check average confidence
         expected_avg = sum(c for _, c in decisions_to_track) / len(decisions_to_track)
@@ -365,14 +371,14 @@ class TestDecisionTrackingE2E:
             context="First decision",
             chosen_approach="Approach 1",
             reasoning="Reasoning 1",
-            confidence=0.85
+            confidence=0.85,
         )
         tracker1.track_decision(
             decision_type=DecisionType.IMPLEMENTATION,
             context="Second decision",
             chosen_approach="Approach 2",
             reasoning="Reasoning 2",
-            confidence=0.92
+            confidence=0.92,
         )
         tracker1._save_decisions()
 
@@ -390,13 +396,13 @@ class TestDecisionTrackingE2E:
             context="Third decision",
             chosen_approach="Approach 3",
             reasoning="Reasoning 3",
-            confidence=0.78
+            confidence=0.78,
         )
         tracker2._save_decisions()
 
         # Verify all three decisions are in file
         decisions_file = test_spec_dir / "decisions.json"
-        with open(decisions_file, "r", encoding="utf-8") as f:
+        with open(decisions_file, encoding="utf-8") as f:
             data = json.load(f)
             assert len(data["decisions"]) == 3
 
@@ -412,7 +418,7 @@ class TestDecisionTrackingE2E:
             impact="Enables extensibility without modifying core code",
             reversible=False,  # Architectural decisions are harder to reverse
             dependencies=["plugin loader", "event bus", "DI container"],
-            metadata={"estimated_effort": "high", "risk_level": "medium"}
+            metadata={"estimated_effort": "high", "risk_level": "medium"},
         )
 
         # Add alternatives
@@ -421,7 +427,7 @@ class TestDecisionTrackingE2E:
             reasoning="Straightforward to implement",
             rejected_reason="Lacks flexibility and hot-reload support",
             confidence_impact="Would increase confidence to 0.95 due to simplicity",
-            tradeoffs=["Simpler", "Less flexible", "Requires restart for changes"]
+            tradeoffs=["Simpler", "Less flexible", "Requires restart for changes"],
         )
         decision_tracker.add_alternative(decision, alt)
 
@@ -430,7 +436,7 @@ class TestDecisionTrackingE2E:
             "Analyzed requirements for plugin extensibility",
             "Considered three approaches: import-based, event-driven, and hybrid",
             "Evaluated trade-offs between simplicity and flexibility",
-            "Chose event-driven for better long-term maintainability"
+            "Chose event-driven for better long-term maintainability",
         ]
         for step in reasoning_steps:
             decision_tracker.add_reasoning_step(decision, step)
@@ -440,14 +446,20 @@ class TestDecisionTrackingE2E:
 
         # Load saved data and verify format
         decisions_file = test_spec_dir / "decisions.json"
-        with open(decisions_file, "r", encoding="utf-8") as f:
+        with open(decisions_file, encoding="utf-8") as f:
             data = json.load(f)
             saved_decision = data["decisions"][0]
 
             # Verify all required fields exist (matching TypeScript DecisionPoint interface)
             required_fields = [
-                "timestamp", "decision_type", "context", "chosen_approach",
-                "reasoning", "confidence", "confidence_level", "phase"
+                "timestamp",
+                "decision_type",
+                "context",
+                "chosen_approach",
+                "reasoning",
+                "confidence",
+                "confidence_level",
+                "phase",
             ]
             for field in required_fields:
                 assert field in saved_decision, f"Missing required field: {field}"
@@ -481,9 +493,14 @@ class TestDecisionTrackingE2E:
 
             # Verify decision type is valid
             valid_types = [
-                "approach", "implementation", "tool_selection",
-                "file_modification", "error_recovery", "architecture",
-                "optimization", "other"
+                "approach",
+                "implementation",
+                "tool_selection",
+                "file_modification",
+                "error_recovery",
+                "architecture",
+                "optimization",
+                "other",
             ]
             assert saved_decision["decision_type"] in valid_types
 
@@ -500,7 +517,7 @@ class TestDecisionTrackingE2E:
             context="Planning the implementation strategy",
             chosen_approach="Bottom-up implementation starting with core modules",
             reasoning="Reduces dependencies and enables parallel development",
-            confidence=0.88
+            confidence=0.88,
         )
         tracker.log_decision(decision1, print_to_console=False)
         logger.end_phase(LogPhase.PLANNING, success=True)
@@ -513,7 +530,7 @@ class TestDecisionTrackingE2E:
             context="Implementing authentication logic",
             chosen_approach="JWT with HttpOnly cookies",
             reasoning="Secure and prevents XSS attacks",
-            confidence=0.92
+            confidence=0.92,
         )
         tracker.log_decision(decision2, print_to_console=False)
         logger.end_phase(LogPhase.CODING, success=True)
@@ -526,7 +543,7 @@ class TestDecisionTrackingE2E:
             context="Choosing testing approach",
             chosen_approach="Integration tests with pytest fixtures",
             reasoning="Covers real-world scenarios and edge cases",
-            confidence=0.90
+            confidence=0.90,
         )
         tracker.log_decision(decision3, print_to_console=False)
         logger.end_phase(LogPhase.VALIDATION, success=True)
@@ -546,7 +563,7 @@ class TestDecisionTrackingE2E:
 
         # Verify task logs have entries from all phases
         task_logs_file = test_spec_dir / "task_logs.json"
-        with open(task_logs_file, "r", encoding="utf-8") as f:
+        with open(task_logs_file, encoding="utf-8") as f:
             log_data = json.load(f)
             assert LogPhase.PLANNING.value in log_data["phases"]
             assert LogPhase.CODING.value in log_data["phases"]

@@ -1,0 +1,42 @@
+{
+  "test_name": "test_2_single_tool_invocation",
+  "subtask_id": "subtask-2-2",
+  "description": "Run test_2_single_tool_invocation - health_check and get_window_info",
+  "success": null,
+  "blocked_by": "nested_session_prevention",
+  "blocking_reason": "Claude Code cannot be launched inside another Claude Code session. The CLAUDECODE environment variable is set, preventing nested agent execution.",
+  "resolution": "To run this test, execute manually outside of Claude Code: cd apps/backend && python run_test_2.py",
+  "tests": [
+    {
+      "name": "health_check",
+      "status": "blocked",
+      "expected_keywords": ["uptime", "status", "healthy"],
+      "tool_name": "mcp__auto-claude-electron__health_check",
+      "expected_response_fields": ["uptime", "status", "version", "mode"]
+    },
+    {
+      "name": "get_window_info",
+      "status": "blocked",
+      "expected_keywords": ["window", "id", "title"],
+      "tool_name": "mcp__auto-claude-electron__get_window_info",
+      "expected_response_fields": ["windows", "count", "activeWindow"]
+    }
+  ],
+  "verification": {
+    "expected": ["uptime", "status", "window id", "title"],
+    "result": "BLOCKED - requires manual execution outside Claude Code"
+  },
+  "manual_test_instructions": [
+    "1. Close this Claude Code session",
+    "2. Open a terminal in the project directory",
+    "3. cd apps/backend",
+    "4. Ensure Electron app is running with ELECTRON_MCP_ENABLED=true",
+    "5. Run: python run_test_2.py",
+    "6. Verify output shows uptime, status, window id, title"
+  ],
+  "environment_requirements": {
+    "ELECTRON_MCP_ENABLED": "true",
+    "ELECTRON_MCP_MODE": "embedded",
+    "CLAUDECODE": "must be unset for test to run"
+  }
+}

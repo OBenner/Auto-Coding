@@ -5,16 +5,21 @@ Pydantic models for task (spec) management API endpoints.
 Tasks and specs are synonymous - a spec is a task to be implemented.
 """
 
-from typing import Optional
 from pydantic import BaseModel, Field
 
 
 class TaskStatus(BaseModel):
     """Task status and progress information"""
 
-    status: str = Field(..., description="Status: pending, initialized, in_progress, complete")
-    progress: str = Field(..., description="Progress string (e.g., '3/10' for subtasks)")
-    has_build: bool = Field(default=False, description="Whether an active build exists in worktree")
+    status: str = Field(
+        ..., description="Status: pending, initialized, in_progress, complete"
+    )
+    progress: str = Field(
+        ..., description="Progress string (e.g., '3/10' for subtasks)"
+    )
+    has_build: bool = Field(
+        default=False, description="Whether an active build exists in worktree"
+    )
 
 
 class TaskSummary(BaseModel):
@@ -46,9 +51,11 @@ class TaskDetail(BaseModel):
     name: str = Field(..., description="Spec name")
     folder: str = Field(..., description="Folder name")
     status: str = Field(..., description="Current status")
-    progress: TaskProgressDetail = Field(..., description="Detailed progress information")
+    progress: TaskProgressDetail = Field(
+        ..., description="Detailed progress information"
+    )
     has_build: bool = Field(default=False, description="Whether an active build exists")
-    spec_content: Optional[str] = Field(None, description="Content of spec.md file")
+    spec_content: str | None = Field(None, description="Content of spec.md file")
 
 
 class TaskListResponse(BaseModel):

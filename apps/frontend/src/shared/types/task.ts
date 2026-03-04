@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel, PhaseModelConfig, PhaseThinkingConfig } from './settings';
 import type { ExecutionPhase as ExecutionPhaseType, CompletablePhase } from '../constants/phase-protocol';
+import type { AIProvider } from './common';
 
 export type TaskStatus = 'backlog' | 'queue' | 'in_progress' | 'ai_review' | 'human_review' | 'done' | 'pr_created' | 'error';
 
@@ -225,6 +226,9 @@ export interface TaskDraft {
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
+  provider?: AIProvider;  // AI provider selection
+  providerModel?: string;  // Provider-specific model ID
+  customTemplateId?: string;  // Custom agent template ID
   savedAt: Date;
 }
 
@@ -262,6 +266,7 @@ export interface TaskMetadata {
   gitlabIssueIid?: number;  // Reference to GitLab issue IID if from GitLab
   gitlabUrl?: string;  // GitLab issue URL
   templateName?: string;  // Template name if created from template
+  customTemplateId?: string;  // Custom agent template ID if using custom template
 
   // Classification
   category?: TaskCategory;
@@ -312,6 +317,10 @@ export interface TaskMetadata {
 
   // Multi-model agent orchestration
   agentModels?: Record<string, string>;  // Agent-specific model overrides (e.g., { coder: 'haiku', planner: 'sonnet' })
+
+  // Provider selection
+  provider?: AIProvider;  // AI engine provider (claude, litellm, openrouter, zhipuai)
+  providerModel?: string;  // Provider-specific model ID
 
   // Archive status
   archivedAt?: string;  // ISO date when task was archived
@@ -376,6 +385,23 @@ export interface PlanSubtask {
     run?: string;
     scenario?: string;
   };
+}
+
+// Cost tracking types (from cost_tracking.py)
+export interface UsageRecord {
+  agent_type: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+  timestamp: string;
+}
+
+export interface CostReport {
+  spec_dir: string;
+  total_cost: number;
+  records: UsageRecord[];
+  last_updated: string;
 }
 
 // Workspace management types (for human review)
@@ -584,4 +610,28 @@ export interface TaskTokenStats {
   total_tokens: number;
   created_at: string;
   updated_at: string;
+}
+
+// Background task types (long-running commands)
+export type BackgroundTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface BackgroundTask {
+  id: string;
+  command: string;
+  workingDir: string;
+  status: BackgroundTaskStatus;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  timeout: number;
+  output: string;
+  error: string | null;
+  exitCode: number | null;
+  pid: number | null;
+  memoryStats?: {
+    percent: number;
+    availableMb: number;
+    totalMb: number;
+    usedMb: number;
+  };
 }

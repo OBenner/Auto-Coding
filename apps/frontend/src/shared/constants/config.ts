@@ -48,6 +48,8 @@ export const DEFAULT_APP_SETTINGS = {
   globalOpenAIApiKey: undefined as string | undefined,
   // Selected agent profile - defaults to 'auto' for per-phase optimized model selection
   selectedAgentProfile: 'auto',
+  // Selected AI provider - defaults to 'anthropic' (Claude)
+  selectedProviderId: 'anthropic',
   // Changelog preferences (persisted between sessions)
   changelogFormat: 'keep-a-changelog' as const,
   changelogAudience: 'user-facing' as const,
@@ -65,7 +67,11 @@ export const DEFAULT_APP_SETTINGS = {
   // Keyboard shortcuts (customizable by users)
   keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
   // Recent actions for quick actions menu (persisted between sessions)
-  recentActions: []
+  recentActions: [],
+  // Feedback collection (enabled by default)
+  feedbackEnabled: true,
+  // GPU acceleration for terminal rendering (off by default for stability)
+  gpuAcceleration: 'off' as const
 };
 
 // ============================================
@@ -109,6 +115,7 @@ export const AUTO_BUILD_PATHS = {
   ROADMAP_FILE: 'roadmap.json',
   ROADMAP_DISCOVERY: 'roadmap_discovery.json',
   COMPETITOR_ANALYSIS: 'competitor_analysis.json',
+  MANUAL_COMPETITORS: 'manual_competitors.json',
   IDEATION_FILE: 'ideation.json',
   IDEATION_CONTEXT: 'ideation_context.json',
   PROJECT_INDEX: '.auto-claude/project_index.json',

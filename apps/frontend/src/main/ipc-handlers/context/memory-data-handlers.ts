@@ -7,7 +7,10 @@ import type {
   IPCResult,
   MemoryEpisode,
   ContextSearchResult,
-  PatternSuggestion
+  PatternSuggestion,
+  KnowledgeBaseConfig,
+  KnowledgeBaseConnectionTest,
+  ProjectEnvConfig
 } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { getMemoryService, isKuzuAvailable } from '../../memory-service';
@@ -18,6 +21,7 @@ import {
 } from './utils';
 import { runPythonSubprocess } from '../github/utils/subprocess-runner';
 import { parsePythonCommand } from '../../python-detector';
+import { parseEnvFile } from '../utils';
 
 /**
  * Check if a file exists
@@ -68,8 +72,7 @@ export async function loadFileBasedMemories(
       const allSessionFiles = await fsPromises.readdir(sessionInsightsDir);
       const sessionFiles = allSessionFiles
         .filter((f: string) => f.startsWith('session_') && f.endsWith('.json'))
-        .sort()
-        .reverse();
+        .sort((a: string, b: string) => b.localeCompare(a));
 
       for (const sessionFile of sessionFiles.slice(0, 3)) {
         try {
@@ -520,6 +523,343 @@ asyncio.run(main())
         return {
           success: false,
           error: `Failed to confirm pattern: ${error}`
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // Knowledge Base Configuration Operations
+  // ============================================
+
+  /**
+   * Parse knowledge base configuration from project environment variables
+   */
+  const parseKnowledgeBaseConfig = (envVars: Record<string, string>): KnowledgeBaseConfig => {
+    const config: KnowledgeBaseConfig = {};
+
+    // Notion
+    if (envVars['KNOWLEDGE_BASE_NOTION_API_KEY']) {
+      config.notionEnabled = true;
+      config.notionApiKey = envVars['KNOWLEDGE_BASE_NOTION_API_KEY'];
+    }
+    if (envVars['KNOWLEDGE_BASE_NOTION_WORKSPACE_ID']) {
+      config.notionWorkspaceId = envVars['KNOWLEDGE_BASE_NOTION_WORKSPACE_ID'];
+    }
+
+    // Confluence
+    if (envVars['KNOWLEDGE_BASE_CONFLUENCE_API_KEY']) {
+      config.confluenceEnabled = true;
+      config.confluenceApiKey = envVars['KNOWLEDGE_BASE_CONFLUENCE_API_KEY'];
+    }
+    if (envVars['KNOWLEDGE_BASE_CONFLUENCE_API_URL']) {
+      config.confluenceApiUrl = envVars['KNOWLEDGE_BASE_CONFLUENCE_API_URL'];
+    }
+    if (envVars['KNOWLEDGE_BASE_CONFLUENCE_SPACE_KEY']) {
+      config.confluenceSpaceKey = envVars['KNOWLEDGE_BASE_CONFLUENCE_SPACE_KEY'];
+    }
+    if (envVars['KNOWLEDGE_BASE_CONFLUENCE_EMAIL']) {
+      config.confluenceEmail = envVars['KNOWLEDGE_BASE_CONFLUENCE_EMAIL'];
+    }
+
+    // GitHub Wiki
+    if (envVars['KNOWLEDGE_BASE_GITHUB_WIKI_API_KEY']) {
+      config.githubWikiEnabled = true;
+      config.githubWikiToken = envVars['KNOWLEDGE_BASE_GITHUB_WIKI_API_KEY'];
+    }
+    if (envVars['KNOWLEDGE_BASE_GITHUB_WIKI_REPOSITORY']) {
+      config.githubWikiRepository = envVars['KNOWLEDGE_BASE_GITHUB_WIKI_REPOSITORY'];
+    }
+
+    // GitBook
+    if (envVars['KNOWLEDGE_BASE_GITBOOK_API_KEY']) {
+      config.gitbookEnabled = true;
+      config.gitbookApiKey = envVars['KNOWLEDGE_BASE_GITBOOK_API_KEY'];
+    }
+    if (envVars['KNOWLEDGE_BASE_GITBOOK_API_URL']) {
+      config.gitbookApiUrl = envVars['KNOWLEDGE_BASE_GITBOOK_API_URL'];
+    }
+
+    // Global settings
+    if (envVars['KNOWLEDGE_BASE_SYNC_INTERVAL']) {
+      const interval = parseInt(envVars['KNOWLEDGE_BASE_SYNC_INTERVAL'], 10);
+      if (!isNaN(interval)) {
+        config.syncInterval = interval;
+      }
+    }
+    if (envVars['KNOWLEDGE_BASE_MAX_DOCS']) {
+      const maxDocs = parseInt(envVars['KNOWLEDGE_BASE_MAX_DOCS'], 10);
+      if (!isNaN(maxDocs)) {
+        config.maxDocs = maxDocs;
+      }
+    }
+
+    return config;
+  };
+
+  /**
+   * Generate .env file content for knowledge base configuration
+   */
+  const updateKnowledgeBaseEnvVars = (
+    envVars: Record<string, string>,
+    config: KnowledgeBaseConfig
+  ): Record<string, string> => {
+    // Notion
+    if (config.notionApiKey !== undefined) {
+      envVars['KNOWLEDGE_BASE_NOTION_API_KEY'] = config.notionApiKey;
+    }
+    if (config.notionWorkspaceId !== undefined) {
+      envVars['KNOWLEDGE_BASE_NOTION_WORKSPACE_ID'] = config.notionWorkspaceId;
+    }
+
+    // Confluence
+    if (config.confluenceApiKey !== undefined) {
+      envVars['KNOWLEDGE_BASE_CONFLUENCE_API_KEY'] = config.confluenceApiKey;
+    }
+    if (config.confluenceApiUrl !== undefined) {
+      envVars['KNOWLEDGE_BASE_CONFLUENCE_API_URL'] = config.confluenceApiUrl;
+    }
+    if (config.confluenceSpaceKey !== undefined) {
+      envVars['KNOWLEDGE_BASE_CONFLUENCE_SPACE_KEY'] = config.confluenceSpaceKey;
+    }
+    if (config.confluenceEmail !== undefined) {
+      envVars['KNOWLEDGE_BASE_CONFLUENCE_EMAIL'] = config.confluenceEmail;
+    }
+
+    // GitHub Wiki
+    if (config.githubWikiToken !== undefined) {
+      envVars['KNOWLEDGE_BASE_GITHUB_WIKI_API_KEY'] = config.githubWikiToken;
+    }
+    if (config.githubWikiRepository !== undefined) {
+      envVars['KNOWLEDGE_BASE_GITHUB_WIKI_REPOSITORY'] = config.githubWikiRepository;
+    }
+
+    // GitBook
+    if (config.gitbookApiKey !== undefined) {
+      envVars['KNOWLEDGE_BASE_GITBOOK_API_KEY'] = config.gitbookApiKey;
+    }
+    if (config.gitbookApiUrl !== undefined) {
+      envVars['KNOWLEDGE_BASE_GITBOOK_API_URL'] = config.gitbookApiUrl;
+    }
+
+    // Global settings
+    if (config.syncInterval !== undefined) {
+      envVars['KNOWLEDGE_BASE_SYNC_INTERVAL'] = String(config.syncInterval);
+    }
+    if (config.maxDocs !== undefined) {
+      envVars['KNOWLEDGE_BASE_MAX_DOCS'] = String(config.maxDocs);
+    }
+
+    return envVars;
+  };
+
+  // Get knowledge base configuration
+  ipcMain.handle(
+    IPC_CHANNELS.KNOWLEDGE_BASE_GET_CONFIG,
+    async (_, projectId: string): Promise<IPCResult<KnowledgeBaseConfig>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      if (!project.autoBuildPath) {
+        return { success: false, error: 'Project not initialized' };
+      }
+
+      try {
+        const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+        const config = parseKnowledgeBaseConfig(projectEnvVars);
+
+        return { success: true, data: config };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get knowledge base configuration'
+        };
+      }
+    }
+  );
+
+  // Update knowledge base configuration
+  ipcMain.handle(
+    IPC_CHANNELS.KNOWLEDGE_BASE_UPDATE_CONFIG,
+    async (_, projectId: string, config: KnowledgeBaseConfig): Promise<IPCResult<void>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      if (!project.autoBuildPath) {
+        return { success: false, error: 'Project not initialized' };
+      }
+
+      try {
+        const envPath = path.join(project.path, project.autoBuildPath, '.env');
+
+        // Read existing .env file
+        let existingContent: string | undefined;
+        try {
+          existingContent = await fsPromises.readFile(envPath, 'utf-8');
+        } catch {
+          // File doesn't exist yet, that's okay
+        }
+
+        // Parse existing environment variables
+        const existingVars = existingContent ? parseEnvFile(existingContent) : {};
+
+        // Update with knowledge base configuration
+        const updatedVars = updateKnowledgeBaseEnvVars(existingVars, config);
+
+        // Generate .env content with safe value serialization
+        const serializeEnvValue = (value: string): string => {
+          if (
+            value.includes(' ') ||
+            value.includes('#') ||
+            value.includes('=') ||
+            value.includes('"') ||
+            value.includes('\n') ||
+            value.startsWith(' ') ||
+            value.endsWith(' ')
+          ) {
+            return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+          }
+          return value;
+        };
+
+        const content = Object.entries(updatedVars)
+          .map(([key, value]) => `${key}=${serializeEnvValue(value)}`)
+          .join('\n');
+
+        // Write to file
+        await fsPromises.writeFile(envPath, content, 'utf-8');
+
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to update knowledge base configuration'
+        };
+      }
+    }
+  );
+
+  // Test knowledge base connection
+  ipcMain.handle(
+    IPC_CHANNELS.KNOWLEDGE_BASE_TEST_CONNECTION,
+    async (_, projectId: string, provider: string): Promise<IPCResult<KnowledgeBaseConnectionTest>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      if (!project.autoBuildPath) {
+        return { success: false, error: 'Project not initialized' };
+      }
+
+      try {
+        // Call Python backend to test connection
+        const [pythonCommand, baseArgs] = parsePythonCommand(project.path);
+        const backendPath = path.join(project.path, 'apps', 'backend');
+
+        // Prepare arguments for knowledge base connection test
+        const args = [
+          '-c',
+          `
+import sys
+import json
+import asyncio
+from pathlib import Path
+sys.path.insert(0, '${backendPath.replace(/\\/g, '\\\\')}')
+
+async def main():
+    from integrations.knowledge_base.manager import KnowledgeBaseManager
+
+    provider = ${JSON.stringify(provider)}
+    project_dir = Path('${project.path.replace(/\\/g, '\\\\')}')
+    spec_dir = project_dir / '.auto-claude' / 'specs' / '_connection_test'
+    spec_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create manager (auto-detects provider from env)
+    manager = KnowledgeBaseManager(spec_dir, project_dir)
+
+    if not manager.is_enabled:
+        print(json.dumps({
+            "success": False,
+            "provider": provider,
+            "message": f"{provider} is not configured"
+        }))
+        return
+
+    # Test connection via manager's public API
+    try:
+        connected = await manager.initialize()
+        if not connected:
+            print(json.dumps({
+                "success": False,
+                "provider": provider,
+                "message": f"Failed to connect to {provider}"
+            }))
+            return
+
+        status = manager.get_status_summary()
+        details = {"provider": status.get("provider", provider)}
+
+        print(json.dumps({
+            "success": True,
+            "provider": provider,
+            "message": f"Successfully connected to {provider}",
+            "details": details
+        }))
+    except Exception as e:
+        print(json.dumps({
+            "success": False,
+            "provider": provider,
+            "message": f"Connection failed: {str(e)}",
+            "error": str(e)
+        }))
+    finally:
+        await manager.close()
+
+asyncio.run(main())
+          `.trim()
+        ];
+
+        const { promise } = runPythonSubprocess<KnowledgeBaseConnectionTest>({
+          pythonPath: pythonCommand,
+          args: [...baseArgs, ...args],
+          cwd: backendPath,
+          env: { ...process.env, PYTHONPATH: backendPath }
+        });
+
+        const result = await promise;
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || 'Failed to test knowledge base connection'
+          };
+        }
+
+        // Parse Python output
+        try {
+          const lines = result.stdout.split('\n');
+          const jsonLine = lines.find(line => line.trim().startsWith('{'));
+          if (!jsonLine) {
+            return { success: false, error: 'No JSON output from Python script' };
+          }
+
+          const data = JSON.parse(jsonLine);
+          return { success: true, data: data };
+        } catch (parseError) {
+          return {
+            success: false,
+            error: `Failed to parse connection test result: ${parseError}`
+          };
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to test knowledge base connection'
         };
       }
     }

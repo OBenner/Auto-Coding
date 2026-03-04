@@ -2,12 +2,13 @@
 Main TaskLogger class for logging task execution.
 """
 
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 from core.debug import debug, debug_error, debug_info, debug_success, is_debug_enabled
 
-from .models import LogEntry, LogEntryType, LogPhase
+from .models import Bookmark, LogEntry, LogEntryType, LogPhase
 from .storage import LogStorage
 from .streaming import emit_marker
 
@@ -45,6 +46,9 @@ class TaskLogger:
         self.current_phase: LogPhase | None = None
         self.current_session: int | None = None
         self.current_subtask: str | None = None
+        self.last_subtask: str | None = (
+            None  # Track last subtask for transition detection
+        )
         self.storage = LogStorage(spec_dir)
 
     @property
@@ -115,9 +119,65 @@ class TaskLogger:
         """Set the current session number."""
         self.current_session = session
 
+    def start_session(self, session: int) -> None:
+        """
+        Start a new session.
+
+        Args:
+            session: Session number
+        """
+        self.current_session = session
+        self.storage.start_session(session)
+
+        # Debug log (when DEBUG=true)
+        self._debug_log(f"Session {session} started", LogEntryType.INFO)
+
+    def end_session(self) -> None:
+        """End the current session and calculate duration."""
+        if self.current_session is not None:
+            self.storage.end_session(self.current_session)
+
+            # Debug log (when DEBUG=true)
+            self._debug_log(f"Session {self.current_session} ended", LogEntryType.INFO)
+
     def set_subtask(self, subtask_id: str | None) -> None:
-        """Set the current subtask being processed."""
-        self.current_subtask = subtask_id
+        """
+        Set the current subtask being processed.
+
+        Automatically tracks subtask transitions.
+
+        Args:
+            subtask_id: New subtask ID (None to clear)
+        """
+        # Detect transition
+        if subtask_id != self.current_subtask:
+            # Only record transitions when at least one side is a valid subtask ID;
+            # skip meaningless None -> None transitions.
+            if self.current_subtask or subtask_id:
+                self.storage.add_subtask_transition(
+                    from_subtask=self.current_subtask,
+                    to_subtask=subtask_id,
+                    session=self.current_session,
+                )
+
+            # Add subtask to session
+            if subtask_id and self.current_session is not None:
+                self.storage.add_subtask_to_session(self.current_session, subtask_id)
+
+            # Debug log (when DEBUG=true)
+            if subtask_id:
+                self._debug_log(
+                    f"Subtask transition: {self.current_subtask} -> {subtask_id}",
+                    LogEntryType.INFO,
+                )
+            else:
+                self._debug_log(
+                    f"Subtask ended: {self.current_subtask}", LogEntryType.INFO
+                )
+
+            # Update current subtask
+            self.last_subtask = self.current_subtask
+            self.current_subtask = subtask_id
 
     def start_phase(self, phase: LogPhase, message: str | None = None) -> None:
         """
@@ -296,6 +356,7 @@ class TaskLogger:
         subphase: str | None = None,
         collapsed: bool = True,
         print_to_console: bool = True,
+        decision_data: dict | None = None,
     ) -> None:
         """
         Log a message with expandable detail content.
@@ -303,11 +364,12 @@ class TaskLogger:
         Args:
             content: Brief summary shown by default
             detail: Full content shown when expanded (e.g., file contents, command output)
-            entry_type: Type of entry (text, error, success, info)
+            entry_type: Type of entry (text, error, success, info, decision)
             phase: Optional phase override
             subphase: Optional subphase grouping (e.g., "PROJECT DISCOVERY")
             collapsed: Whether detail should be collapsed by default (default True)
             print_to_console: Whether to print summary to stdout (default True)
+            decision_data: Optional DecisionPoint data dict for decision entries
         """
         phase_key = (phase or self.current_phase or LogPhase.CODING).value
 
@@ -321,22 +383,23 @@ class TaskLogger:
             detail=detail,
             subphase=subphase,
             collapsed=collapsed,
+            decision_data=decision_data,
         )
         self._add_entry(entry)
 
         # Emit streaming marker with detail indicator
-        self._emit(
-            "TEXT",
-            {
-                "content": content,
-                "phase": phase_key,
-                "type": entry_type.value,
-                "subtask_id": self.current_subtask,
-                "timestamp": self._timestamp(),
-                "has_detail": True,
-                "subphase": subphase,
-            },
-        )
+        emit_data: dict = {
+            "content": content,
+            "phase": phase_key,
+            "type": entry_type.value,
+            "subtask_id": self.current_subtask,
+            "timestamp": self._timestamp(),
+            "has_detail": True,
+            "subphase": subphase,
+        }
+        if decision_data:
+            emit_data["decision_data"] = decision_data
+        self._emit("TEXT", emit_data)
 
         # Debug log (when DEBUG=true) - include detail for verbose mode
         self._debug_log(
@@ -533,6 +596,101 @@ class TaskLogger:
     def get_phase_logs(self, phase: LogPhase) -> dict:
         """Get logs for a specific phase."""
         return self.storage.get_phase_data(phase.value)
+
+    def create_bookmark(
+        self,
+        label: str,
+        note: str | None = None,
+        entry_timestamp: str | None = None,
+    ) -> str:
+        """
+        Create a bookmark at the current moment or at a specific log entry.
+
+        Args:
+            label: User-provided label/title for the bookmark
+            note: Optional note/comment
+            entry_timestamp: Optional timestamp of specific log entry to bookmark.
+                           If not provided, uses current timestamp.
+
+        Returns:
+            The bookmark ID
+        """
+        bookmark_id = str(uuid.uuid4())
+        phase_key = (self.current_phase or LogPhase.CODING).value
+
+        bookmark = Bookmark(
+            id=bookmark_id,
+            timestamp=self._timestamp(),
+            entry_timestamp=entry_timestamp or self._timestamp(),
+            phase=phase_key,
+            label=label,
+            note=note,
+            session=self.current_session,
+            subtask_id=self.current_subtask,
+        )
+
+        self.storage.add_bookmark(bookmark)
+
+        # Emit streaming marker for real-time UI updates
+        self._emit(
+            "BOOKMARK_CREATED",
+            {
+                "id": bookmark_id,
+                "label": label,
+                "phase": phase_key,
+                "session": self.current_session,
+            },
+        )
+
+        # Debug log (when DEBUG=true)
+        self._debug_log(f"Bookmark created: {label}", LogEntryType.INFO, phase_key)
+
+        return bookmark_id
+
+    def get_bookmarks(
+        self,
+        phase: str | None = None,
+        session: int | None = None,
+        subtask_id: str | None = None,
+    ) -> list[dict]:
+        """
+        Get bookmarks, optionally filtered.
+
+        Args:
+            phase: Optional phase filter
+            session: Optional session filter
+            subtask_id: Optional subtask filter
+
+        Returns:
+            List of bookmark dictionaries
+        """
+        return self.storage.get_bookmarks(
+            phase=phase, session=session, subtask_id=subtask_id
+        )
+
+    def remove_bookmark(self, bookmark_id: str) -> bool:
+        """
+        Remove a bookmark by its ID.
+
+        Args:
+            bookmark_id: The bookmark ID to remove
+
+        Returns:
+            True if bookmark was found and removed, False otherwise
+        """
+        success = self.storage.remove_bookmark(bookmark_id)
+
+        if success:
+            # Emit streaming marker for real-time UI updates
+            self._emit("BOOKMARK_REMOVED", {"id": bookmark_id})
+
+            # Debug log (when DEBUG=true)
+            phase_key = (self.current_phase or LogPhase.CODING).value
+            self._debug_log(
+                f"Bookmark removed: {bookmark_id}", LogEntryType.INFO, phase_key
+            )
+
+        return success
 
     def clear(self) -> None:
         """Clear all logs (useful for testing)."""

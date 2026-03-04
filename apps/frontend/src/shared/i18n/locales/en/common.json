@@ -1,4 +1,22 @@
 {
+  "competitorAnalysis": {
+    "addCompetitor": "Add Competitor",
+    "manualBadge": "Manual",
+    "noCompetitorsYet": "No competitors added yet",
+    "addCompetitorToStart": "Add a competitor to get started",
+    "analysisResults": "Competitor Analysis Results",
+    "analysisDescription": "Analyzed {{count}} competitors to identify market gaps and opportunities",
+    "visit": "Visit",
+    "identifiedPainPoints": "Identified Pain Points ({{count}})",
+    "noPainPointsIdentified": "No pain points identified",
+    "source": "Source:",
+    "frequency": "Frequency:",
+    "opportunity": "Opportunity:",
+    "marketInsightsSummary": "Market Insights Summary",
+    "topPainPoints": "Top Pain Points:",
+    "differentiatorOpportunities": "Differentiator Opportunities:",
+    "marketTrends": "Market Trends:"
+  },
   "projectTab": {
     "settings": "Project settings",
     "showArchived": "Show archived",
@@ -11,6 +29,7 @@
   },
   "accessibility": {
     "deleteFeatureAriaLabel": "Delete feature",
+    "archiveFeatureAriaLabel": "Archive feature",
     "closeFeatureDetailsAriaLabel": "Close feature details",
     "regenerateRoadmapAriaLabel": "Regenerate Roadmap",
     "repositoryOwnerAriaLabel": "Repository owner",
@@ -73,21 +92,38 @@
     "stop": "Stop",
     "refresh": "Refresh",
     "refreshing": "Refreshing...",
+    "showMore": "Show more",
+    "showLess": "Show less",
     "merge": "Merge",
+    "export": "Export",
+    "filter": "Filter",
+    "all": "All",
+    "allowed": "Allowed",
+    "blocked": "Blocked",
+    "clear": "Clear",
+    "clearFilters": "Clear Filters",
+    "command": "Command",
+    "path": "Path",
+    "agent": "Agent",
+    "project": "Project",
+    "session": "Session",
+    "context": "Context",
+    "status": "Status",
+    "events": "events",
     "discard": "Discard",
     "switch": "Switch",
     "add": "Add",
     "gotIt": "Got it",
     "continue": "Continue",
     "saving": "Saving...",
-    "export": "Export",
     "load": "Load"
   },
   "actions": {
     "view": "View",
     "refresh": "Refresh",
     "export": "Export",
-    "load": "Load"
+    "load": "Load",
+    "delete": "Delete"
   },
   "labels": {
     "loading": "Loading...",
@@ -109,6 +145,7 @@
     "selectAll": "Select All",
     "clearSelection": "Clear Selection",
     "deleteSelected": "Delete Selected",
+    "archiveSelected": "Archive Selected",
     "selectedOfTotal": "{{selected}} of {{total}} selected"
   },
   "time": {
@@ -380,6 +417,10 @@
     "verifyChanges": "Verify Changes",
     "verifyAnyway": "Verify",
     "runFollowupAnyway": "Run follow-up verification even though no files overlap",
+    "disputed": "Disputed",
+    "disputedByValidator": "Disputed by Validator ({{count}})",
+    "crossValidatedBy": "Confirmed by {{count}} agents",
+    "disputedSectionHint": "These findings were reported by specialists but disputed by the validator. You can still select and post them.",
     "logs": {
       "agentActivity": "Agent Activity",
       "showMore": "Show {{count}} more",
@@ -398,6 +439,51 @@
     "done": "Done",
     "failedLabel": "Failed",
     "starting": "Starting..."
+  },
+  "insights": {
+    "suggestedTask": "Suggested Task",
+    "creating": "Creating...",
+    "taskCreated": "Task Created",
+    "createTask": "Create Task",
+    "chatHistory": "Chat History",
+    "archive": "Archive",
+    "unarchive": "Unarchive",
+    "archiveSelected": "Archive Selected",
+    "showArchived": "Show Archived",
+    "hideArchived": "Hide Archived",
+    "bulkDeleteTitle": "Delete Conversations",
+    "bulkDeleteDescription": "Are you sure you want to delete {{count}} conversation(s)? This action cannot be undone.",
+    "bulkDeleteConfirm": "Delete {{count}} Conversation(s)",
+    "noConversations": "No conversations",
+    "archived": "Archived",
+    "conversationsToDelete": "Conversations to delete",
+    "archiveConfirmDescription": "Are you sure you want to archive the selected conversations?",
+    "archiveConfirmTitle": "Archive Conversations",
+    "archiveConfirmButton": "Archive {{count}} Conversation(s)",
+    "deleteTitle": "Delete Conversation",
+    "deleteDescription": "Are you sure you want to delete this conversation? This action cannot be undone.",
+    "selectMode": "Select",
+    "exitSelectMode": "Done",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgo": "{{count}} days ago",
+    "messageCount": "{{count}} message",
+    "messageCount_other": "{{count}} messages",
+    "images": {
+      "pasteHint": "Paste an image or screenshot",
+      "dropHint": "Drop image here",
+      "screenshotButton": "Attach screenshot",
+      "removeImage": "Remove image",
+      "imageCount": "{{count}} image attached",
+      "imageCount_plural": "{{count}} images attached",
+      "maxImagesReached": "Maximum number of images reached",
+      "invalidType": "Invalid file type. Please use PNG, JPEG, GIF, or WebP.",
+      "processFailed": "Failed to process image",
+      "dragOver": "Drop image to attach",
+      "analysisUnsupported": "Note: Image analysis is not yet supported. Images are stored for reference but cannot be analyzed by the model.",
+      "screenshotTooLarge": "Screenshot is too large ({{size}}MB). Maximum size is {{max}}MB. Consider capturing a smaller area.",
+      "notAnalyzed": "Images were stored for reference but not analyzed by the model."
+    }
   },
   "ideation": {
     "converting": "Converting...",
@@ -568,6 +654,16 @@
     "step3": "Click \"Authenticate\" to complete login",
     "footer": "The account will be available once you complete authentication."
   },
+  "roadmap": {
+    "archiveFeature": "Archive",
+    "archiveFeatureConfirmTitle": "Archive Feature?",
+    "archiveFeatureConfirmDescription": "This will remove \"{{title}}\" from your roadmap.",
+    "goToTask": "Go to Task",
+    "convertToTask": "Convert to Auto-Build Task",
+    "build": "Build",
+    "task": "Task",
+    "viewTask": "View Task"
+  },
   "roadmapGeneration": {
     "progress": "Progress",
     "elapsed": "Elapsed: {{time}}",
@@ -615,7 +711,8 @@
       "description": "Please re-authenticate your Claude profile to continue using Auto-Coding.",
       "taskAffected": "Task affected",
       "technicalDetails": "Technical details",
-      "goToSettings": "Go to Settings"
+      "goToSettings": "Go to Settings",
+      "badgeTooltip": "Authentication issue — click to resolve"
     }
   },
   "roadmapProgress": {
@@ -704,6 +801,13 @@
       "hideCommentsAriaLabel": "Hide comments",
       "commentByAuthor": "Comment by {{author}}"
     }
+  },
+  "cost": {
+    "breakdown": "Cost Breakdown by Provider",
+    "total": "total",
+    "tokens": "tokens",
+    "noCosts": "No costs recorded yet",
+    "localModelsNote": "Local models (Ollama) run on your machine at no API cost"
   },
   "memory": {
     "graphView": "Graph View",
@@ -803,6 +907,91 @@
     "submitted": "Feedback submitted successfully",
     "submitError": "Failed to submit feedback: {{error}}",
     "notAvailable": "Feedback Not Available",
-    "notAvailableDescription": "Feedback system is not yet fully configured"
+    "notAvailableDescription": "Feedback system is not yet fully configured",
+    "dialogTitle": "Rate Agent Output",
+    "dialogDescription": "Help us improve by rating the quality of the agent's work.",
+    "ratingLabel": "How would you rate this output?",
+    "positive": "Good",
+    "negative": "Needs Work",
+    "commentLabel": "Additional comments",
+    "commentPlaceholder": "Tell us what could be improved...",
+    "submitting": "Submitting...",
+    "submit": "Submit Feedback",
+    "reportIssueTitle": "Report an Issue",
+    "reportIssueDescription": "Provide details about the issue or suggestion to help us improve.",
+    "issueTitle": "Title",
+    "issueTitlePlaceholder": "Brief summary of the issue...",
+    "issueDescription": "Description",
+    "issueDescriptionPlaceholder": "Detailed description of the issue, including steps to reproduce if applicable...",
+    "issueSeverity": "Severity",
+    "submitReport": "Submit Report"
+  },
+  "quality": {
+    "score": "Quality Score",
+    "trend": "Trend",
+    "alert": "Quality Alert"
+  },
+  "failureAnalysis": {
+    "title": "Failure Analysis Trends",
+    "loading": "Loading failure analysis...",
+    "noData": "No failure trend data available",
+    "noDataHint": "Complete more QA iterations to see failure trends",
+    "chartFooter": "Failure trends over the last 7 days - Lower recurrence rate indicates improved learning",
+    "chartAriaLabel": "Failure analysis trends chart showing failures, root cause rate, and recurrence rate over time",
+    "chartTitle": "Failure Analysis Trends Chart",
+    "totalFailures": "Total Failures",
+    "rootCauseRate": "Root Cause Rate",
+    "recurrenceRate": "Recurrence Rate",
+    "metrics": {
+      "failures": "Failures",
+      "rootCauseRatePercent": "Root Cause Rate (%)",
+      "recurrenceRatePercent": "Recurrence Rate (%)"
+    }
+  },
+  "failurePatterns": {
+    "title": "Failure Patterns",
+    "failureCount": "{{count}} failure",
+    "failureCount_plural": "{{count}} failures",
+    "loading": "Loading failure analysis...",
+    "noData": "No failure data recorded yet",
+    "noDataHint": "Failure analysis will appear here after QA iterations",
+    "totalFailures": "Total Failures",
+    "rootCauseRate": "Root Cause Rate",
+    "patternDetection": "Pattern Detection",
+    "recurrenceRate": "Recurrence Rate",
+    "commonCategories": "Common Failure Categories"
+  },
+  "patternReview": {
+    "title": "Learned Patterns",
+    "subtitle": "Review and manage patterns learned from your codebase",
+    "filterLabel": "Filter by category:",
+    "filterAll": "All",
+    "filterNaming": "Naming",
+    "filterErrorHandling": "Error Handling",
+    "filterOrganization": "Organization",
+    "emptyTitle": "No patterns found",
+    "emptyDescription": "Patterns are automatically learned during spec discovery. Create a new spec to start learning patterns from your codebase.",
+    "noProject": "No project found",
+    "failedToLoad": "Failed to load patterns",
+    "failedToApprove": "Failed to approve pattern",
+    "failedToOverride": "Failed to override pattern",
+    "failedToDelete": "Failed to delete pattern",
+    "unknownError": "Unknown error",
+    "confidence": "{{level}} confidence",
+    "approved": "Approved",
+    "save": "Save",
+    "cancel": "Cancel",
+    "tooltipApprove": "Approve pattern",
+    "tooltipEdit": "Edit pattern",
+    "tooltipDelete": "Delete pattern",
+    "tooltipShowDetails": "Show details",
+    "tooltipHideDetails": "Hide details",
+    "reasoning": "Reasoning:",
+    "deleteTitle": "Delete Pattern",
+    "deleteDescription": "Are you sure you want to delete this pattern? This action cannot be undone.",
+    "deleteConfirm": "Delete",
+    "categoryNaming": "Naming Conventions",
+    "categoryErrorHandling": "Error Handling",
+    "categoryOrganization": "Code Organization"
   }
 }

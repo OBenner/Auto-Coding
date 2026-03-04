@@ -30,6 +30,7 @@ class SessionConfig:
     Attributes:
         name: Session name/identifier
         system_prompt: System prompt for the agent
+        provider: Provider name (e.g., 'claude', 'litellm', 'openrouter', 'zhipuai')
         model: Model identifier (provider-specific)
         max_tokens: Maximum tokens for responses
         temperature: Temperature for response generation
@@ -41,6 +42,7 @@ class SessionConfig:
 
     name: str
     system_prompt: str = ""
+    provider: str | None = None
     model: str | None = None
     max_tokens: int | None = None
     temperature: float | None = None

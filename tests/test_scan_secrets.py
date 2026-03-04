@@ -13,13 +13,13 @@ Tests the scan_secrets.py module functionality including:
 from pathlib import Path
 
 from security.scan_secrets import (
+    SecretMatch,
+    is_false_positive,
+    load_secretsignore,
+    mask_secret,
     scan_content,
     scan_files,
-    is_false_positive,
     should_skip_file,
-    mask_secret,
-    load_secretsignore,
-    SecretMatch,
 )
 
 
@@ -31,7 +31,9 @@ class TestPatternDetection:
         content = 'api_key = "sk-1234567890abcdefghijklmnop"'
         matches = scan_content(content, "test.py")
         assert len(matches) >= 1
-        assert any("OpenAI" in m.pattern_name or "API" in m.pattern_name for m in matches)
+        assert any(
+            "OpenAI" in m.pattern_name or "API" in m.pattern_name for m in matches
+        )
 
     def test_detects_anthropic_key(self):
         """Detects Anthropic API keys."""
@@ -85,7 +87,10 @@ MIIEpAIBAAKCAQEA...
         content = 'DATABASE_URL = "postgresql://user:password123@localhost/db"'
         matches = scan_content(content, "test.py")
         assert len(matches) >= 1
-        assert any("PostgreSQL" in m.pattern_name or "Connection" in m.pattern_name for m in matches)
+        assert any(
+            "PostgreSQL" in m.pattern_name or "Connection" in m.pattern_name
+            for m in matches
+        )
 
     def test_detects_mongodb_url(self):
         """Detects MongoDB URLs with credentials."""
@@ -118,12 +123,18 @@ class TestFalsePositiveFiltering:
 
     def test_env_reference_is_false_positive(self):
         """Environment variable references are false positives."""
-        assert is_false_positive("API_KEY = process.env.API_KEY", "process.env.API_KEY") is True
+        assert (
+            is_false_positive("API_KEY = process.env.API_KEY", "process.env.API_KEY")
+            is True
+        )
         assert is_false_positive("key = os.environ.get('KEY')", "os.environ") is True
 
     def test_placeholder_is_false_positive(self):
         """Placeholder values are false positives."""
-        assert is_false_positive("api_key = 'your-api-key-here'", "your-api-key-here") is True
+        assert (
+            is_false_positive("api_key = 'your-api-key-here'", "your-api-key-here")
+            is True
+        )
         assert is_false_positive("key = 'xxxxxxxxxxxxxxxx'", "xxxxxxxxxxxxxxxx") is True
         # Note: The false positive check lowercases the line, so <API_KEY> becomes <api_key>
         # which doesn't match the uppercase pattern. Test what actually works.
@@ -131,7 +142,9 @@ class TestFalsePositiveFiltering:
 
     def test_example_value_is_false_positive(self):
         """Example values are false positives."""
-        assert is_false_positive("# Example: api_key = 'example_key'", "example") is True
+        assert (
+            is_false_positive("# Example: api_key = 'example_key'", "example") is True
+        )
         assert is_false_positive("sample_key = 'sample_value'", "sample") is True
 
     def test_test_key_is_false_positive(self):
@@ -144,10 +157,12 @@ class TestFalsePositiveFiltering:
 
     def test_real_key_not_false_positive(self):
         """Real keys should not be filtered."""
-        assert is_false_positive(
-            "api_key = 'sk-real-api-key-1234567890'",
-            "sk-real-api-key-1234567890"
-        ) is False
+        assert (
+            is_false_positive(
+                "api_key = 'sk-real-api-key-1234567890'", "sk-real-api-key-1234567890"
+            )
+            is False
+        )
 
 
 class TestFileSkipping:
@@ -246,7 +261,9 @@ class TestScanFiles:
     def test_scans_source_files(self, temp_dir: Path):
         """Scans source files for secrets."""
         # Create a file with a secret
-        (temp_dir / "config.py").write_text('API_KEY = "sk-1234567890abcdefghijklmnop"\n')
+        (temp_dir / "config.py").write_text(
+            'API_KEY = "sk-1234567890abcdefghijklmnop"\n'
+        )
 
         matches = scan_files(["config.py"], temp_dir)
 
@@ -305,7 +322,7 @@ class TestSecretMatchDataClass:
             line_number=10,
             pattern_name="OpenAI API key",
             matched_text="sk-12345",
-            line_content="api_key = 'sk-12345'"
+            line_content="api_key = 'sk-12345'",
         )
 
         assert match.file_path == "test.py"
@@ -320,10 +337,12 @@ class TestIntegration:
         """Full scan workflow with staged files."""
 
         # Create files with potential secrets
-        stage_files({
-            "config.py": 'API_KEY = "sk-test1234567890abcdefghij"',
-            "safe.py": "x = 42",
-        })
+        stage_files(
+            {
+                "config.py": 'API_KEY = "sk-test1234567890abcdefghij"',
+                "safe.py": "x = 42",
+            }
+        )
 
         # Scan staged files
         matches = scan_files(["config.py", "safe.py"], temp_git_repo)

@@ -8,10 +8,15 @@ Uses subtask-based implementation plans (implementation_plan.json).
 Enhanced with colored output, icons, and better visual formatting.
 """
 
+import asyncio
 import json
+import logging
 from pathlib import Path
+from typing import Any
 
 from core.plan_normalization import normalize_subtask_aliases
+
+logger = logging.getLogger(__name__)
 from core.timing_history import get_timing_history
 from ui import (
     Icons,
@@ -26,6 +31,8 @@ from ui import (
     success,
     warning,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def count_subtasks(spec_dir: Path) -> tuple[int, int]:
@@ -111,6 +118,65 @@ def is_build_complete(spec_dir: Path) -> bool:
     """
     completed, total = count_subtasks(spec_dir)
     return total > 0 and completed == total
+
+
+def _load_stuck_subtask_ids(spec_dir: Path) -> set[str]:
+    """Load IDs of subtasks marked as stuck from attempt_history.json."""
+    stuck_subtask_ids: set[str] = set()
+    attempt_history_file = spec_dir / "memory" / "attempt_history.json"
+    if attempt_history_file.exists():
+        try:
+            with open(attempt_history_file, encoding="utf-8") as f:
+                attempt_history = json.load(f)
+            for entry in attempt_history.get("stuck_subtasks", []):
+                if "subtask_id" in entry:
+                    stuck_subtask_ids.add(entry["subtask_id"])
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            # Corrupted attempt history is non-fatal; skip stuck-subtask filtering
+            pass
+    return stuck_subtask_ids
+
+
+def is_build_ready_for_qa(spec_dir: Path) -> bool:
+    """
+    Check if the build is ready for QA validation.
+
+    Unlike is_build_complete() which requires all subtasks to be "completed",
+    this function considers the build ready when all subtasks have reached
+    a terminal state: completed, failed, or stuck (exhausted retries in attempt_history.json).
+
+    Args:
+        spec_dir: Directory containing implementation_plan.json
+
+    Returns:
+        True if all subtasks are in a terminal state, False otherwise
+    """
+    plan_file = spec_dir / "implementation_plan.json"
+    if not plan_file.exists():
+        return False
+
+    stuck_subtask_ids = _load_stuck_subtask_ids(spec_dir)
+
+    try:
+        with open(plan_file, encoding="utf-8") as f:
+            plan = json.load(f)
+
+        total = 0
+        terminal = 0
+
+        for phase in plan.get("phases", []):
+            for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                total += 1
+                status = subtask.get("status", "pending")
+                subtask_id = subtask.get("id")
+
+                if status in ("completed", "failed") or subtask_id in stuck_subtask_ids:
+                    terminal += 1
+
+        return total > 0 and terminal == total
+
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return False
 
 
 def get_progress_percentage(spec_dir: Path) -> float:
@@ -256,15 +322,38 @@ def print_progress_summary(spec_dir: Path, show_next: bool = True) -> None:
                         f"  {icon(Icons.WARNING)} Circular Fixes: {recovery_stats['circular_fixes']}"
                     )
 
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            pass  # Ignore corrupted/unreadable progress files
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.debug(f"Failed to load plan file for phase summary: {e}")
     else:
         print()
         print_status("No implementation subtasks yet - planner needs to run", "pending")
 
 
-def print_build_complete_banner(spec_dir: Path) -> None:
-    """Print a completion banner."""
+def print_build_complete_banner(
+    spec_dir: Path,
+    duration_seconds: float | None = None,
+) -> None:
+    """
+    Print a completion banner and send build completed webhooks.
+
+    Args:
+        spec_dir: Spec directory
+        duration_seconds: Optional build duration in seconds
+    """
+    # Get spec info for webhooks
+    # Extract numeric prefix from spec directory name like "084-webhook-integration-hub"
+    parts = spec_dir.name.split("-", 1)
+    spec_id = parts[0] if parts[0].isdigit() else spec_dir.name
+    spec_name = parts[1] if len(parts) > 1 else spec_id
+
+    # Send build completed webhook
+    try:
+        duration = duration_seconds or 0.0
+        _notify_build_completed_impl(spec_dir, spec_id, spec_name, True, duration)
+    except Exception as e:
+        logger.error(f"Failed to send build_completed webhook: {e}", exc_info=True)
+
+    # Print banner
     content = [
         success(f"{icon(Icons.SUCCESS)} BUILD COMPLETE!"),
         "",
@@ -301,6 +390,60 @@ def print_paused_banner(
 
     print()
     print(box(content, width=70, style="heavy"))
+
+
+def notify_build_start(spec_dir: Path) -> None:
+    """
+    Notify that a build has started.
+
+    Sends webhooks for build start event. This should be called when
+    the build process first begins.
+
+    Args:
+        spec_dir: Spec directory
+    """
+    try:
+        completed, total = count_subtasks(spec_dir)
+        if total == 0:
+            return  # No subtasks yet, don't send webhook
+
+        # Extract numeric prefix from spec directory name like "084-webhook-integration-hub"
+        parts = spec_dir.name.split("-", 1)
+        spec_id = parts[0] if parts[0].isdigit() else spec_dir.name
+        spec_name = parts[1] if len(parts) > 1 else spec_id
+
+        _notify_build_started_impl(spec_dir, spec_id, spec_name, total)
+    except Exception as e:
+        logger.error(f"Failed to send build_started webhook: {e}", exc_info=True)
+
+
+def notify_build_error(
+    spec_dir: Path,
+    error_message: str,
+    failed_subtask: str | None = None,
+) -> None:
+    """
+    Notify that a build has failed.
+
+    Sends webhooks for build failure event. This should be called when
+    a critical error occurs that prevents build completion.
+
+    Args:
+        spec_dir: Spec directory
+        error_message: Error message describing the failure
+        failed_subtask: Optional subtask that failed
+    """
+    try:
+        # Extract numeric prefix from spec directory name like "084-webhook-integration-hub"
+        parts = spec_dir.name.split("-", 1)
+        spec_id = parts[0] if parts[0].isdigit() else spec_dir.name
+        spec_name = parts[1] if len(parts) > 1 else spec_id
+
+        _notify_build_failed_impl(
+            spec_dir, spec_id, spec_name, error_message, failed_subtask
+        )
+    except Exception as e:
+        logger.error(f"Failed to send build_failed webhook: {e}", exc_info=True)
 
 
 def get_plan_summary(spec_dir: Path) -> dict:
@@ -426,12 +569,36 @@ def get_current_phase(spec_dir: Path) -> dict | None:
         return None
 
 
-def get_next_subtask(spec_dir: Path) -> dict | None:
+def _build_phase_completion_map(
+    phases: list[dict], stuck_subtask_ids: set[str]
+) -> dict[str, bool]:
+    """Return map of phase_id -> completion status.
+
+    A phase is complete if all its subtasks/chunks have status == 'completed'
+    or are in the stuck list (treated as resolved for dependency purposes).
+    """
+    phase_complete: dict[str, bool] = {}
+    for i, phase in enumerate(phases):
+        phase_id_value = phase.get("id")
+        phase_id_raw = (
+            phase_id_value if phase_id_value is not None else phase.get("phase")
+        )
+        phase_id_key = str(phase_id_raw) if phase_id_raw is not None else f"unknown:{i}"
+        subtasks_list = phase.get("subtasks", phase.get("chunks", []))
+        phase_complete[phase_id_key] = all(
+            s.get("status") == "completed" or s.get("id") in stuck_subtask_ids
+            for s in subtasks_list
+        )
+    return phase_complete
+
+
+def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | None:
     """
     Find the next subtask to work on, respecting phase dependencies.
 
     Args:
         spec_dir: Directory containing implementation_plan.json
+        restart_from: Optional subtask ID to restart from (skips completed subtasks)
 
     Returns:
         The next subtask dict to work on, or None if all complete
@@ -441,26 +608,137 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
     if not plan_file.exists():
         return None
 
+    stuck_subtask_ids = _load_stuck_subtask_ids(spec_dir)
+
     try:
         with open(plan_file, encoding="utf-8") as f:
             plan = json.load(f)
 
         phases = plan.get("phases", [])
 
+        # If restart_from is specified, find that specific subtask
+        # and skip to the next pending subtask if it's already completed
+        if restart_from:
+            restart_phase_index = None
+            restart_subtask_index = None
+            restart_phase_id = None
+            restart_phase_name = None
+            restart_phase_num = None
+
+            # Find the restart point
+            for phase_idx, phase in enumerate(phases):
+                phase_id_value = phase.get("id")
+                phase_id = (
+                    phase_id_value if phase_id_value is not None else phase.get("phase")
+                )
+                for subtask_idx, subtask in enumerate(
+                    phase.get("subtasks", phase.get("chunks", []))
+                ):
+                    if subtask.get("id") == restart_from:
+                        restart_phase_index = phase_idx
+                        restart_subtask_index = subtask_idx
+                        restart_phase_id = phase_id
+                        restart_phase_name = phase.get("name")
+                        restart_phase_num = phase.get("phase")
+                        break
+                if restart_phase_index is not None:
+                    break
+
+            # If restart point found, skip to next pending subtask
+            if restart_phase_index is not None:
+                current_phase = phases[restart_phase_index]
+
+                # Ensure restart phase dependencies are satisfied
+                phase_complete = _build_phase_completion_map(phases, stuck_subtask_ids)
+                depends_on_raw = current_phase.get("depends_on", [])
+                if isinstance(depends_on_raw, list):
+                    depends_on = [str(d) for d in depends_on_raw if d is not None]
+                elif depends_on_raw is None:
+                    depends_on = []
+                else:
+                    depends_on = [str(depends_on_raw)]
+
+                deps_satisfied = all(
+                    phase_complete.get(dep, False) for dep in depends_on
+                )
+
+                if not deps_satisfied:
+                    logging.getLogger(__name__).warning(
+                        "restart_from subtask '%s' is in a phase with unmet "
+                        "dependencies; falling back to normal flow",
+                        restart_from,
+                    )
+                    # Fall through to normal flow below
+                else:
+                    subtasks = current_phase.get(
+                        "subtasks", current_phase.get("chunks", [])
+                    )
+
+                    # Start from the restart subtask and look for the next pending one
+                    for i in range(restart_subtask_index, len(subtasks)):
+                        subtask = subtasks[i]
+                        status = subtask.get("status", "pending")
+                        if status != "completed":
+                            # Found next non-completed subtask
+                            subtask_out, _changed = normalize_subtask_aliases(subtask)
+                            return {
+                                **subtask_out,
+                                "phase_id": restart_phase_id,
+                                "phase_name": restart_phase_name,
+                                "phase_num": restart_phase_num,
+                            }
+
+                    # If all subtasks in this phase are complete, check subsequent phases
+                    for phase_idx in range(restart_phase_index + 1, len(phases)):
+                        phase = phases[phase_idx]
+                        phase_id_value = phase.get("id")
+                        phase_id = (
+                            phase_id_value
+                            if phase_id_value is not None
+                            else phase.get("phase")
+                        )
+                        depends_on_raw = phase.get("depends_on", [])
+                        if isinstance(depends_on_raw, list):
+                            depends_on = [
+                                str(d) for d in depends_on_raw if d is not None
+                            ]
+                        elif depends_on_raw is None:
+                            depends_on = []
+                        else:
+                            depends_on = [str(depends_on_raw)]
+
+                        # Check if dependencies are satisfied
+                        deps_satisfied = all(
+                            phase_complete.get(dep, False) for dep in depends_on
+                        )
+                        if not deps_satisfied:
+                            continue
+
+                        # Find first pending subtask in this phase
+                        for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                            status = subtask.get("status", "pending")
+                            if status != "completed":
+                                subtask_out, _changed = normalize_subtask_aliases(
+                                    subtask
+                                )
+                                return {
+                                    **subtask_out,
+                                    "phase_id": phase_id,
+                                    "phase_name": phase.get("name"),
+                                    "phase_num": phase.get("phase"),
+                                }
+
+                    # All subsequent subtasks are complete
+                    return None
+            # If restart_from subtask not found, log warning and fall through to normal flow
+            if restart_phase_index is None:
+                logging.getLogger(__name__).warning(
+                    f"restart_from subtask '{restart_from}' not found in plan, "
+                    "falling through to normal flow"
+                )
+
         # Build a map of phase completion
-        phase_complete: dict[str, bool] = {}
-        for i, phase in enumerate(phases):
-            phase_id_value = phase.get("id")
-            phase_id_raw = (
-                phase_id_value if phase_id_value is not None else phase.get("phase")
-            )
-            phase_id_key = (
-                str(phase_id_raw) if phase_id_raw is not None else f"unknown:{i}"
-            )
-            subtasks = phase.get("subtasks", phase.get("chunks", []))
-            phase_complete[phase_id_key] = all(
-                s.get("status") == "completed" for s in subtasks
-            )
+        phase_complete = _build_phase_completion_map(phases, stuck_subtask_ids)
 
         # Find next available subtask
         for phase in phases:
@@ -481,8 +759,10 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
             if not deps_satisfied:
                 continue
 
-            # Find first pending subtask in this phase
+            # Find first pending subtask in this phase (skip stuck ones)
             for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                if subtask.get("id") in stuck_subtask_ids:
+                    continue
                 status = subtask.get("status", "pending")
                 if status in {"pending", "not_started", "not started"}:
                     subtask_out, _changed = normalize_subtask_aliases(subtask)
@@ -498,6 +778,70 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
 
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return None
+
+
+def reset_subtask_to_pending(spec_dir: Path, subtask_id: str) -> bool:
+    """
+    Reset a subtask's status back to 'pending' so it can be retried.
+
+    This is needed during recovery: when a subtask fails mid-execution,
+    its status stays 'in_progress' but get_next_subtask() only picks up
+    'pending' subtasks. Without this reset, the recovery loop can't find
+    the subtask to retry.
+
+    Args:
+        spec_dir: Directory containing implementation_plan.json
+        subtask_id: ID of the subtask to reset
+
+    Returns:
+        True if the subtask was found and reset
+    """
+    plan_file = spec_dir / "implementation_plan.json"
+    if not plan_file.exists():
+        return False
+
+    try:
+        with open(plan_file, encoding="utf-8") as f:
+            plan = json.load(f)
+
+        # Find and reset the subtask
+        found = False
+        for phase in plan.get("phases", []):
+            for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                if subtask.get("id") == subtask_id:
+                    old_status = subtask.get("status", "unknown")
+                    subtask["status"] = "pending"
+                    # Clear execution data for clean retry
+                    subtask.pop("actual_output", None)
+                    subtask.pop("started_at", None)
+                    subtask.pop("completed_at", None)
+                    logger.info(f"Reset subtask {subtask_id}: {old_status} -> pending")
+                    found = True
+                    break
+            if found:
+                break
+
+        if not found:
+            return False
+
+        # Atomic write back
+        tmp_file = plan_file.with_suffix(".json.tmp")
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(plan, f, indent=2)
+        tmp_file.replace(plan_file)
+
+        return True
+
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+        logger.error(f"Failed to reset subtask {subtask_id}: {e}")
+        # Clean up temp file
+        tmp_file = plan_file.with_suffix(".json.tmp")
+        if tmp_file.exists():
+            try:
+                tmp_file.unlink()
+            except OSError:
+                pass
+        return False
 
 
 def format_duration(seconds: float) -> str:
@@ -666,6 +1010,201 @@ def get_remaining_time_estimate(spec_dir: Path) -> dict:
             "confidence": "low",
             "pending_count": 0,
         }
+
+
+# =============================================================================
+# Webhook Integration Functions
+# =============================================================================
+
+
+def _send_webhooks_async(
+    spec_dir: Path,
+    event_type: str,
+    event_data: dict[str, Any],
+) -> None:
+    """
+    Fire-and-forget webhook sending in a new event loop.
+
+    Sends webhooks asynchronously without blocking the main thread.
+    Errors are logged but don't propagate to avoid interrupting builds.
+
+    Args:
+        spec_dir: Spec directory containing webhook configuration
+        event_type: Type of event (build_started, build_completed, build_failed)
+        event_data: Event data to send
+    """
+
+    async def _send_all() -> None:
+        try:
+            from integrations.webhooks.handlers.outgoing import send_webhook_event
+            from integrations.webhooks.models import (
+                WebhookEvent,
+                WebhookEventType,
+                WebhookType,
+            )
+            from integrations.webhooks.storage import WebhookStorage
+
+            # Load webhook configs
+            storage = WebhookStorage(spec_dir=spec_dir)
+            configs = storage.load_configs()
+
+            # Filter for outgoing webhooks enabled for this event
+            matching_configs = [
+                cfg
+                for cfg in configs
+                if cfg.type == WebhookType.OUTGOING
+                and cfg.enabled
+                and WebhookEventType(event_type) in cfg.events
+            ]
+
+            if not matching_configs:
+                return
+
+            # Create webhook event
+            webhook_event = WebhookEvent(
+                type=WebhookEventType(event_type),
+                data=event_data,
+            )
+
+            # Send to all matching webhooks
+            for config in matching_configs:
+                try:
+                    result = await send_webhook_event(config, webhook_event, spec_dir)
+                    if result.success:
+                        logger.info(
+                            f"Webhook {config.id} sent successfully for event {event_type}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Webhook {config.id} failed for event {event_type}: "
+                            f"{result.log_entry.error_message}"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Error sending webhook {config.id} for event {event_type}: {e}",
+                        exc_info=True,
+                    )
+
+        except ImportError:
+            # Webhook module not available - silently skip
+            # (This is expected in environments without webhook dependencies)
+            pass
+        except Exception as e:
+            # Log but don't raise - webhook failures shouldn't break builds
+            logger.error(
+                f"Error in webhook integration for event {event_type}: {e}",
+                exc_info=True,
+            )
+
+    # Run in a background thread to avoid conflicts with existing event loops
+    import threading
+
+    def _run_in_thread() -> None:
+        try:
+            asyncio.run(_send_all())
+        except Exception as e:
+            logger.error(
+                f"Failed to send webhooks for event {event_type}: {e}", exc_info=True
+            )
+
+    thread = threading.Thread(target=_run_in_thread, daemon=True)
+    thread.start()
+
+
+def _notify_build_started_impl(
+    spec_dir: Path,
+    spec_id: str,
+    spec_name: str,
+    total_subtasks: int,
+) -> None:
+    """
+    Internal implementation: Send webhooks for build start event.
+
+    This is a fire-and-forget operation - webhooks are sent asynchronously
+    and errors don't propagate to avoid interrupting the build.
+
+    Args:
+        spec_dir: Spec directory
+        spec_id: Spec identifier (e.g., "001")
+        spec_name: Spec name/title
+        total_subtasks: Total number of subtasks in the build
+    """
+    try:
+        event_data = {
+            "spec_id": spec_id,
+            "spec_name": spec_name,
+            "total_subtasks": total_subtasks,
+        }
+        _send_webhooks_async(spec_dir, "build_started", event_data)
+    except Exception as e:
+        # Log but don't raise - webhook failures shouldn't break builds
+        logger.error(f"Failed to trigger build_started webhooks: {e}", exc_info=True)
+
+
+def _notify_build_completed_impl(
+    spec_dir: Path,
+    spec_id: str,
+    spec_name: str,
+    success: bool,
+    duration_seconds: float,
+) -> None:
+    """
+    Internal implementation: Send webhooks for build completion event.
+
+    This is a fire-and-forget operation - webhooks are sent asynchronously
+    and errors don't propagate to avoid interrupting the build.
+
+    Args:
+        spec_dir: Spec directory
+        spec_id: Spec identifier (e.g., "001")
+        spec_name: Spec name/title
+        success: Whether the build completed successfully
+        duration_seconds: Total build duration in seconds
+    """
+    try:
+        event_data = {
+            "spec_id": spec_id,
+            "spec_name": spec_name,
+            "success": success,
+            "duration_seconds": duration_seconds,
+        }
+        _send_webhooks_async(spec_dir, "build_completed", event_data)
+    except Exception as e:
+        # Log but don't raise - webhook failures shouldn't break builds
+        logger.error(f"Failed to trigger build_completed webhooks: {e}", exc_info=True)
+
+
+def _notify_build_failed_impl(
+    spec_dir: Path,
+    spec_id: str,
+    spec_name: str,
+    error_message: str,
+    failed_subtask: str | None = None,
+) -> None:
+    """
+    Internal implementation: Send webhooks for build failure event.
+
+    This is a fire-and-forget operation - webhooks are sent asynchronously
+    and errors don't propagate to avoid interrupting the build.
+
+    Args:
+        spec_dir: Spec directory
+        spec_id: Spec identifier (e.g., "001")
+        spec_name: Spec name/title
+        error_message: Error message describing the failure
+        failed_subtask: Optional subtask that failed
+    """
+    try:
+        event_data = {
+            "spec_id": spec_id,
+            "spec_name": spec_name,
+            "error_message": error_message,
+            "failed_subtask": failed_subtask,
+        }
+        _send_webhooks_async(spec_dir, "build_failed", event_data)
+    except Exception as e:
+        # Log but don't raise - webhook failures shouldn't break builds
+        logger.error(f"Failed to trigger build_failed webhooks: {e}", exc_info=True)
 
 
 def get_recovery_metrics_summary(spec_dir: Path) -> dict | None:

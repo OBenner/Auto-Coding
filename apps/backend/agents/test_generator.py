@@ -2,11 +2,16 @@
 Test Generator Agent Module
 ============================
 
-AI agent that generates pytest tests based on code analysis results.
+AI agent that generates tests based on code analysis results.
+Supports multiple test frameworks:
+- pytest for Python code
+- Vitest for TypeScript/React code
+
 Uses the Test Generator Agent prompt to create comprehensive test coverage.
 """
 
 import ast
+import asyncio
 import json
 import logging
 import re
@@ -35,7 +40,49 @@ from ui import (
     print_status,
 )
 
+# Import framework-specific generators
+from .vitest_generator import generate_vitest_tests, validate_vitest_tests
+
 logger = logging.getLogger(__name__)
+
+
+def detect_test_framework(analysis_results: dict[str, Any]) -> str:
+    """
+    Detect which test framework to use based on analysis results.
+
+    Args:
+        analysis_results: Code analysis results from CodeAnalyzer or TypeScriptAnalyzer
+
+    Returns:
+        "pytest" for Python code, "vitest" for TypeScript/React code
+    """
+    # Check for TypeScript/React indicators
+    has_components = "components" in analysis_results and analysis_results.get(
+        "components"
+    )
+    has_hooks = "hooks" in analysis_results and analysis_results.get("hooks")
+    has_tsx_files = any(
+        str(f).endswith((".tsx", ".ts"))
+        for f in analysis_results.get("analyzed_files", [])
+    )
+
+    # Check for Python indicators
+    has_classes = "classes" in analysis_results and analysis_results.get("classes")
+    has_py_files = any(
+        str(f).endswith(".py") for f in analysis_results.get("analyzed_files", [])
+    )
+
+    # Decision logic
+    if has_components or has_hooks or has_tsx_files:
+        return "vitest"
+    elif has_classes or has_py_files:
+        return "pytest"
+    else:
+        # Default to pytest if unclear
+        logger.warning(
+            "Could not determine test framework from analysis results, defaulting to pytest"
+        )
+        return "pytest"
 
 
 def analyze_coverage_gaps(
@@ -229,67 +276,41 @@ def _format_line_ranges(line_numbers: list[int]) -> str:
     return ", ".join(ranges)
 
 
-def validate_generated_tests(test_files: list[Path], project_dir: Path) -> bool:
+def validate_generated_tests(
+    test_files: list[Path], project_dir: Path, framework: str = "pytest"
+) -> bool:
     """
     Validate that generated tests are syntactically correct.
 
-    Uses pytest --collect-only to verify tests can be collected without errors.
+    Routes to framework-specific validation:
+    - pytest: Uses pytest --collect-only to verify tests can be collected
+    - vitest: Uses TypeScript compiler and Vitest to verify tests
 
     Args:
         test_files: List of generated test file paths
         project_dir: Project root directory
+        framework: Test framework ("pytest" or "vitest")
 
     Returns:
         True if all tests are valid, False otherwise
     """
-    import subprocess
-
     if not test_files:
         logger.warning("No test files to validate")
         return False
 
-    print()
-    print_status("Validating generated tests...", "progress")
+    # Route to framework-specific validation
+    if framework == "vitest":
+        logger.info("Using Vitest validation for TypeScript/React tests")
+        # validate_vitest_tests is async; use asyncio.run() from sync context.
+        # In production, vitest validation is handled directly by
+        # generate_vitest_tests() which awaits validate_vitest_tests().
+        return asyncio.run(validate_vitest_tests(test_files, project_dir))
 
-    for test_file in test_files:
-        file_path = project_dir / test_file
-        if not file_path.exists():
-            print_status(f"Test file not found: {test_file}", "error")
-            return False
+    # Default to pytest validation
+    logger.info("Using pytest validation for Python tests")
+    from ._validation import validate_python_tests
 
-        # Check Python syntax
-        try:
-            with open(file_path, encoding="utf-8") as f:
-                compile(f.read(), str(file_path), "exec")
-            print_status(f"Syntax valid: {test_file.name}", "success")
-        except SyntaxError as e:
-            print_status(f"Syntax error in {test_file}: {e}", "error")
-            return False
-
-        # Check if pytest can collect tests
-        try:
-            result = subprocess.run(
-                ["pytest", str(file_path), "--collect-only", "-q"],
-                cwd=project_dir,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode != 0:
-                print_status(f"pytest collection failed for {test_file}", "error")
-                logger.debug(f"pytest output: {result.stdout}\n{result.stderr}")
-                return False
-            print_status(f"pytest collection OK: {test_file.name}", "success")
-        except subprocess.TimeoutExpired:
-            print_status(f"pytest collection timeout for {test_file}", "error")
-            return False
-        except FileNotFoundError:
-            logger.warning("pytest not found - skipping collection validation")
-            print_status("pytest not available - syntax check only", "warning")
-            continue
-
-    print_status("All generated tests are valid", "success")
-    return True
+    return asyncio.run(validate_python_tests(test_files, project_dir))
 
 
 def validate_test_quality(test_files: list[Path], project_dir: Path) -> dict[str, Any]:
@@ -782,12 +803,15 @@ async def run_test_generator_session(
     verbose: bool = False,
 ) -> dict[str, Any]:
     """
-    Run Test Generator Agent session to generate pytest tests.
+    Run Test Generator Agent session to generate tests for analyzed code.
+
+    Automatically detects the appropriate test framework (pytest or vitest)
+    based on the code analysis results and routes to the corresponding generator.
 
     Args:
         project_dir: Root directory for the project
         spec_dir: Directory containing the spec
-        analysis_results: Code analysis results from CodeAnalyzer
+        analysis_results: Code analysis results from CodeAnalyzer or TypeScriptAnalyzer
         model: Claude model to use (defaults to phase config)
         max_thinking_tokens: Extended thinking token budget (optional)
         verbose: Whether to show detailed output
@@ -797,7 +821,29 @@ async def run_test_generator_session(
         - generated_files: List of generated test file paths (relative to project_dir)
         - success: Whether generation succeeded
         - error: Error message if failed
+        - framework: Test framework used ("pytest" or "vitest")
     """
+    # Detect which test framework to use
+    framework = detect_test_framework(analysis_results)
+    logger.info(f"Detected test framework: {framework}")
+
+    # Route to the appropriate generator
+    if framework == "vitest":
+        logger.info("Routing to Vitest generator for TypeScript/React tests")
+        result = await generate_vitest_tests(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            analysis_results=analysis_results,
+            model=model,
+            max_thinking_tokens=max_thinking_tokens,
+            verbose=verbose,
+        )
+        result["framework"] = "vitest"
+        return result
+
+    # Default to pytest for Python tests
+    logger.info("Routing to pytest generator for Python tests")
+
     # Initialize task logger
     task_logger = get_task_logger(spec_dir)
 
@@ -816,10 +862,11 @@ async def run_test_generator_session(
     emit_phase(ExecutionPhase.TEST_GENERATION, "Generating pytest tests")
 
     # Determine model and thinking budget
+    # Test generation is part of the QA phase
     if model is None:
-        model = get_phase_model("test_generation")
+        model = get_phase_model(spec_dir, "qa")
     if max_thinking_tokens is None:
-        max_thinking_tokens = get_phase_thinking_budget("test_generation")
+        max_thinking_tokens = get_phase_thinking_budget(spec_dir, "qa")
 
     print_key_value("Model", model)
     print_key_value(
@@ -831,8 +878,7 @@ async def run_test_generator_session(
     # Log session start
     if task_logger:
         task_logger.start_phase(LogPhase.CODING, "Starting test generation...")
-        task_logger.log_entry(
-            LogEntryType.INFO,
+        task_logger.log_info(
             f"Analyzing {len(analysis_results.get('functions', []))} functions, "
             f"{len(analysis_results.get('classes', []))} classes",
         )
@@ -852,7 +898,7 @@ async def run_test_generator_session(
         error_msg = f"Failed to load test_generator prompt: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Create the starting message with analysis results
@@ -890,7 +936,7 @@ Begin by loading context (Phase 0 in your prompt).
         error_msg = f"Failed to create Claude SDK client: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Run the agent session
@@ -907,15 +953,13 @@ Begin by loading context (Phase 0 in your prompt).
 
         # Log session completion
         if task_logger:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS, "Test Generator Agent session completed"
-            )
+            task_logger.log_success("Test Generator Agent session completed")
 
     except Exception as e:
         error_msg = f"Test Generator Agent session failed: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Scan tests/ directory for newly created test files
@@ -952,7 +996,7 @@ Begin by loading context (Phase 0 in your prompt).
     print()
 
     # Validate generated tests
-    validation_success = validate_generated_tests(test_files, project_dir)
+    validation_success = validate_generated_tests(test_files, project_dir, "pytest")
 
     if not validation_success:
         if task_logger:
@@ -1106,6 +1150,7 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
         "generated_files": [str(f) for f in test_files],
         "success": validation_success,
         "error": None if validation_success else "Test validation failed",
+        "framework": "pytest",
         "coverage_analyzed": coverage_result is not None and coverage_result.success,
         "coverage_percent": coverage_result.total_coverage if coverage_result else None,
         "coverage_gaps": len(gaps_summary.get("files_with_gaps", []))

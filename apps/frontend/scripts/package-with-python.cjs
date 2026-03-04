@@ -241,7 +241,7 @@ function cleanBackendForPackaging(frontendDir) {
         console.log(`[package] Cannot move ${dir}, removing it instead...`);
         try {
           fs.rmSync(fullPath, { recursive: true, force: true });
-        } catch (rmErr) {
+        } catch (_rmErr) {
           if (isWindows()) {
             // Use PowerShell for reliable removal of symlinks/junctions on Windows
             console.log(`[package] Using PowerShell to remove ${dir}...`);

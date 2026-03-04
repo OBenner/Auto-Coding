@@ -6,24 +6,24 @@
  */
 
 import type {
-  AgentEvent,
-  ErrorEvent,
-  ExecutionEvent,
-  IdeationEvent,
-  LogEvent,
-  RoadmapEvent,
-  WebSocketAction,
-  WebSocketMessage,
+	AgentEvent,
+	ErrorEvent,
+	ExecutionEvent,
+	IdeationEvent,
+	LogEvent,
+	RoadmapEvent,
+	WebSocketAction,
+	WebSocketMessage,
 } from "./types";
 
 /**
  * WebSocket connection state
  */
 export type ConnectionState =
-  | "connecting"
-  | "connected"
-  | "disconnected"
-  | "error";
+	| "connecting"
+	| "connected"
+	| "disconnected"
+	| "error";
 
 /**
  * Event handler type for WebSocket events
@@ -34,351 +34,448 @@ export type EventHandler<T = AgentEvent> = (event: T) => void;
  * WebSocket client configuration
  */
 export interface WebSocketConfig {
-  url: string;
-  reconnect?: boolean;
-  reconnectDelay?: number;
-  maxReconnectAttempts?: number;
-  pingInterval?: number;
-  debug?: boolean;
+	url: string;
+	reconnect?: boolean;
+	reconnectDelay?: number;
+	maxReconnectAttempts?: number;
+	pingInterval?: number;
+	debug?: boolean;
 }
 
 /**
  * Default WebSocket configuration
  */
 const DEFAULT_WS_CONFIG: Required<WebSocketConfig> = {
-  url: import.meta.env.VITE_WS_URL || "ws://localhost:8000",
-  reconnect: true,
-  reconnectDelay: 3000, // 3 seconds
-  maxReconnectAttempts: 10,
-  pingInterval: 30000, // 30 seconds
-  debug: import.meta.env.VITE_DEBUG === "true",
+	url: import.meta.env.VITE_WS_URL || "ws://localhost:8000",
+	reconnect: true,
+	reconnectDelay: 3000, // 3 seconds
+	maxReconnectAttempts: 10,
+	pingInterval: 30000, // 30 seconds
+	debug: import.meta.env.VITE_DEBUG === "true",
 };
 
 /**
  * WebSocket Client for real-time agent events
  */
 export class WebSocketClient {
-  private config: Required<WebSocketConfig>;
-  private ws: WebSocket | null = null;
-  private state: ConnectionState = "disconnected";
-  private reconnectAttempts = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private pingTimer: ReturnType<typeof setInterval> | null = null;
-  private subscriptions = new Set<string>();
+	private config: Required<WebSocketConfig>;
+	private ws: WebSocket | null = null;
+	private state: ConnectionState = "disconnected";
+	private reconnectAttempts = 0;
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private pingTimer: ReturnType<typeof setInterval> | null = null;
+	private subscriptions = new Set<string>();
+	private manualClose = false; // Track if disconnect was intentional
 
-  // Event handlers
-  private eventHandlers = new Map<string, Set<EventHandler>>();
-  private stateHandlers = new Set<(state: ConnectionState) => void>();
+	// Event handlers
+	private eventHandlers = new Map<string, Set<EventHandler>>();
+	private stateHandlers = new Set<(state: ConnectionState) => void>();
+	private errorHandlers = new Set<(error: Error) => void>();
 
-  constructor(config: Partial<WebSocketConfig> = {}) {
-    this.config = { ...DEFAULT_WS_CONFIG, ...config };
-    this.log("WebSocketClient initialized", this.config);
-  }
+	constructor(config: Partial<WebSocketConfig> = {}) {
+		this.config = { ...DEFAULT_WS_CONFIG, ...config };
+		this.log("WebSocketClient initialized", this.config);
+	}
 
-  /**
-   * Internal logging helper - sanitizes all values inline to prevent log injection
-   */
-  private log(message: string, ...args: unknown[]): void {
-    if (this.config.debug) {
-      // eslint-disable-next-line no-control-regex
-      const safeMsg = String(message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
-      // eslint-disable-next-line no-control-regex
-      const sanitizedArgs = args.map(a => String(a).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200));
-      console.log('[WebSocketClient] ' + safeMsg, ...sanitizedArgs);
-    }
-  }
+	/**
+	 * Sanitize a value for safe logging (strips control characters, truncates).
+	 */
+	private static sanitize(value: unknown): string {
+		return String(value).replace(/\p{Cc}/gu, "").slice(0, 200);
+	}
 
-  /**
-   * Update connection state and notify handlers
-   */
-  private setState(state: ConnectionState): void {
-    if (this.state === state) return;
+	/**
+	 * Internal logging helper - sanitizes all values to prevent log injection
+	 */
+	private log(message: string, ...args: unknown[]): void {
+		if (this.config.debug) {
+			const safeMsg = WebSocketClient.sanitize(message);
+			const sanitizedArgs = args.map((a) => WebSocketClient.sanitize(a));
+			console.log("[WebSocketClient]", safeMsg, sanitizedArgs.join(" "));
+		}
+	}
 
-    this.state = state;
-    this.log(`State changed: ${state}`);
+	/**
+	 * Update connection state and notify handlers
+	 */
+	private setState(state: ConnectionState): void {
+		if (this.state === state) return;
 
-    for (const handler of this.stateHandlers) {
-      try {
-        handler(state);
-      } catch (error) {
-        console.error("Error in state handler:", error);
-      }
-    }
-  }
+		this.state = state;
+		this.log(`State changed: ${state}`);
 
-  /**
-   * Connect to WebSocket server
-   */
-  connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.log("Already connected");
-      return;
-    }
+		for (const handler of this.stateHandlers) {
+			try {
+				handler(state);
+			} catch (error) {
+				console.error("Error in state handler:", error);
+			}
+		}
+	}
 
-    if (this.ws?.readyState === WebSocket.CONNECTING) {
-      this.log("Already connecting");
-      return;
-    }
+	/**
+	 * Connect to WebSocket server
+	 */
+	connect(): void {
+		if (this.ws?.readyState === WebSocket.OPEN) {
+			this.log("Already connected");
+			return;
+		}
 
-    try {
-      this.setState("connecting");
-      this.log(`Connecting to ${this.config.url}/ws/agent-events`);
+		if (this.ws?.readyState === WebSocket.CONNECTING) {
+			this.log("Already connecting");
+			return;
+		}
 
-      this.ws = new WebSocket(`${this.config.url}/ws/agent-events`);
+		// Reset manual close flag to allow reconnection on subsequent calls
+		this.manualClose = false;
 
-      this.ws.onopen = () => {
-        this.log("Connected");
-        this.setState("connected");
-        this.reconnectAttempts = 0;
+		try {
+			this.setState("connecting");
+			this.log(`Connecting to ${this.config.url}/ws/agent-events`);
 
-        // Start ping interval
-        this.startPing();
+			this.ws = new WebSocket(`${this.config.url}/ws/agent-events`);
 
-        // Re-subscribe to previous subscriptions
-        for (const specId of this.subscriptions) {
-          this.subscribe(specId);
-        }
-      };
+			this.ws.onopen = () => {
+				this.log("Connected");
+				this.setState("connected");
+				this.reconnectAttempts = 0;
+				this.manualClose = false; // Reset manual close flag on successful connection
 
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data) as AgentEvent;
-          this.handleEvent(data);
-        } catch (error) {
-          console.error("Error parsing WebSocket message:", error);
-        }
-      };
+				// Start ping interval
+				this.startPing();
 
-      this.ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        this.setState("error");
-      };
+				// Re-subscribe to previous subscriptions
+				for (const specId of this.subscriptions) {
+					this.subscribe(specId);
+				}
+			};
 
-      this.ws.onclose = () => {
-        this.log("Connection closed");
-        this.setState("disconnected");
-        this.stopPing();
+			this.ws.onmessage = (event) => {
+				try {
+					const data = JSON.parse(event.data) as AgentEvent;
+					this.handleEvent(data);
+				} catch (error) {
+					console.error("Error parsing WebSocket message:", error);
+				}
+			};
 
-        // Attempt reconnect if enabled
-        if (this.config.reconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
-          this.scheduleReconnect();
-        }
-      };
-    } catch (error) {
-      console.error("Error connecting to WebSocket:", error);
-      this.setState("error");
-    }
-  }
+			this.ws.onerror = (error) => {
+				const errorObj = new Error("WebSocket connection error");
+				console.error("WebSocket error:", error);
 
-  /**
-   * Disconnect from WebSocket server
-   */
-  disconnect(): void {
-    this.log("Disconnecting");
-    this.config.reconnect = false; // Disable auto-reconnect
-    this.clearReconnectTimer();
-    this.stopPing();
+				// Emit to error handlers
+				for (const handler of this.errorHandlers) {
+					try {
+						handler(errorObj);
+					} catch (err) {
+						console.error("Error in error handler:", err);
+					}
+				}
 
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+				this.setState("error");
+			};
 
-    this.setState("disconnected");
-  }
+			this.ws.onclose = (event) => {
+				this.log(`Connection closed (code: ${event.code}, reason: ${event.reason})`);
+				this.setState("disconnected");
+				this.stopPing();
 
-  /**
-   * Schedule a reconnection attempt
-   */
-  private scheduleReconnect(): void {
-    this.clearReconnectTimer();
+				// Don't reconnect if this was a manual disconnect
+				if (this.manualClose) {
+					this.log("Manual disconnect, skipping reconnect");
+					return;
+				}
 
-    this.reconnectAttempts++;
-    const delay = this.config.reconnectDelay * this.reconnectAttempts;
+				// Attempt reconnect if enabled
+				if (this.config.reconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
+					this.scheduleReconnect();
+				} else if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
+					this.log("Max reconnect attempts reached, giving up");
 
-    this.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+					// Emit error to notify listeners
+					const maxRetriesError = new Error(
+						`Max reconnect attempts (${this.config.maxReconnectAttempts}) reached`
+					);
+					for (const handler of this.errorHandlers) {
+						try {
+							handler(maxRetriesError);
+						} catch (err) {
+							console.error("Error in error handler:", err);
+						}
+					}
+				}
+			};
+		} catch (error) {
+			console.error("Error connecting to WebSocket:", error);
+			this.setState("error");
+		}
+	}
 
-    this.reconnectTimer = setTimeout(() => {
-      this.connect();
-    }, delay);
-  }
+	/**
+	 * Disconnect from WebSocket server
+	 */
+	disconnect(): void {
+		this.log("Disconnecting");
+		this.manualClose = true; // Mark as intentional disconnect
+		this.config.reconnect = false; // Disable auto-reconnect
+		this.clearReconnectTimer();
+		this.stopPing();
 
-  /**
-   * Clear reconnect timer
-   */
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-  }
+		if (this.ws) {
+			this.ws.close(1000, "Client disconnect"); // 1000 = Normal Closure
+			this.ws = null;
+		}
 
-  /**
-   * Start ping interval to keep connection alive
-   */
-  private startPing(): void {
-    this.stopPing();
+		this.setState("disconnected");
+	}
 
-    this.pingTimer = setInterval(() => {
-      this.send({ action: "ping" });
-    }, this.config.pingInterval);
-  }
+	/**
+	 * Schedule a reconnection attempt with exponential backoff
+	 */
+	private scheduleReconnect(): void {
+		this.clearReconnectTimer();
 
-  /**
-   * Stop ping interval
-   */
-  private stopPing(): void {
-    if (this.pingTimer) {
-      clearInterval(this.pingTimer);
-      this.pingTimer = null;
-    }
-  }
+		this.reconnectAttempts++;
+		// Exponential backoff: delay * 2^(attempts-1), capped at 30 seconds
+		const delay = Math.min(
+			this.config.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+			30000
+		);
 
-  /**
-   * Send a WebSocket message
-   */
-  private send(message: WebSocketMessage): void {
-    if (this.ws?.readyState !== WebSocket.OPEN) {
-      console.warn("Cannot send message: WebSocket not connected");
-      return;
-    }
+		this.log(
+			`Scheduling reconnect attempt ${this.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`,
+		);
 
-    try {
-      this.ws.send(JSON.stringify(message));
-      this.log("Sent message:", message);
-    } catch (error) {
-      console.error("Error sending WebSocket message:", error);
-    }
-  }
+		this.reconnectTimer = setTimeout(() => {
+			this.connect();
+		}, delay);
+	}
 
-  /**
-   * Subscribe to events for a specific spec
-   */
-  subscribe(specId: string): void {
-    this.subscriptions.add(specId);
-    this.send({ action: "subscribe", spec_id: specId });
-    this.log(`Subscribed to spec: ${specId}`);
-  }
+	/**
+	 * Clear reconnect timer
+	 */
+	private clearReconnectTimer(): void {
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+	}
 
-  /**
-   * Unsubscribe from events for a specific spec
-   */
-  unsubscribe(specId: string): void {
-    this.subscriptions.delete(specId);
-    this.send({ action: "unsubscribe", spec_id: specId });
-    this.log(`Unsubscribed from spec: ${specId}`);
-  }
+	/**
+	 * Start ping interval to keep connection alive
+	 */
+	private startPing(): void {
+		this.stopPing();
 
-  /**
-   * Handle incoming WebSocket event
-   */
-  private handleEvent(event: AgentEvent): void {
-    this.log("Received event:", event);
+		this.pingTimer = setInterval(() => {
+			this.send({ action: "ping" });
+		}, this.config.pingInterval);
+	}
 
-    // Emit to specific event type handlers
-    const typeHandlers = this.eventHandlers.get(event.event_type);
-    if (typeHandlers) {
-      for (const handler of typeHandlers) {
-        try {
-          handler(event);
-        } catch (error) {
-          // eslint-disable-next-line no-control-regex
-          console.error("Error in event handler for type:", String(event.event_type).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50), error);
-        }
-      }
-    }
+	/**
+	 * Stop ping interval
+	 */
+	private stopPing(): void {
+		if (this.pingTimer) {
+			clearInterval(this.pingTimer);
+			this.pingTimer = null;
+		}
+	}
 
-    // Emit to wildcard handlers
-    const wildcardHandlers = this.eventHandlers.get("*");
-    if (wildcardHandlers) {
-      for (const handler of wildcardHandlers) {
-        try {
-          handler(event);
-        } catch (error) {
-          console.error("Error in wildcard event handler:", error);
-        }
-      }
-    }
-  }
+	/**
+	 * Send a WebSocket message
+	 */
+	private send(message: WebSocketMessage): void {
+		if (this.ws?.readyState !== WebSocket.OPEN) {
+			console.warn("Cannot send message: WebSocket not connected");
+			return;
+		}
 
-  /**
-   * Register an event handler
-   */
-  on(eventType: "execution", handler: EventHandler<ExecutionEvent>): void;
-  on(eventType: "ideation", handler: EventHandler<IdeationEvent>): void;
-  on(eventType: "roadmap", handler: EventHandler<RoadmapEvent>): void;
-  on(eventType: "log", handler: EventHandler<LogEvent>): void;
-  on(eventType: "error", handler: EventHandler<ErrorEvent>): void;
-  on(eventType: "*", handler: EventHandler<AgentEvent>): void;
-  // biome-ignore lint/suspicious/noExplicitAny: Implementation signature needs to accept all overloads
-  on(eventType: string, handler: EventHandler<any>): void {
-    if (!this.eventHandlers.has(eventType)) {
-      this.eventHandlers.set(eventType, new Set());
-    }
-    this.eventHandlers.get(eventType)!.add(handler);
-    this.log(`Registered handler for: ${eventType}`);
-  }
+		try {
+			this.ws.send(JSON.stringify(message));
+			this.log("Sent message:", message);
+		} catch (error) {
+			console.error("Error sending WebSocket message:", error);
+		}
+	}
 
-  /**
-   * Unregister an event handler
-   */
-  off(eventType: string, handler: EventHandler): void {
-    const handlers = this.eventHandlers.get(eventType);
-    if (handlers) {
-      handlers.delete(handler);
-      this.log(`Unregistered handler for: ${eventType}`);
-    }
-  }
+	/**
+	 * Subscribe to events for a specific spec
+	 */
+	subscribe(specId: string): void {
+		this.subscriptions.add(specId);
+		this.send({ action: "subscribe", spec_id: specId });
+		this.log(`Subscribed to spec: ${specId}`);
+	}
 
-  /**
-   * Register a state change handler
-   */
-  onStateChange(handler: (state: ConnectionState) => void): void {
-    this.stateHandlers.add(handler);
-  }
+	/**
+	 * Unsubscribe from events for a specific spec
+	 */
+	unsubscribe(specId: string): void {
+		this.subscriptions.delete(specId);
+		this.send({ action: "unsubscribe", spec_id: specId });
+		this.log(`Unsubscribed from spec: ${specId}`);
+	}
 
-  /**
-   * Unregister a state change handler
-   */
-  offStateChange(handler: (state: ConnectionState) => void): void {
-    this.stateHandlers.delete(handler);
-  }
+	/**
+	 * Handle incoming WebSocket event
+	 */
+	private handleEvent(event: AgentEvent): void {
+		this.log("Received event:", event);
 
-  /**
-   * Get current connection state
-   */
-  getState(): ConnectionState {
-    return this.state;
-  }
+		// Emit to specific event type handlers
+		const typeHandlers = this.eventHandlers.get(event.event_type);
+		if (typeHandlers) {
+			for (const handler of typeHandlers) {
+				try {
+					handler(event);
+				} catch (error) {
+					const safeType = WebSocketClient.sanitize(event.event_type);
+					console.error(
+						"Error in event handler for type:",
+						safeType,
+						error,
+					);
+				}
+			}
+		}
 
-  /**
-   * Check if connected
-   */
-  isConnected(): boolean {
-    return this.state === "connected" && this.ws?.readyState === WebSocket.OPEN;
-  }
+		// Emit to wildcard handlers
+		const wildcardHandlers = this.eventHandlers.get("*");
+		if (wildcardHandlers) {
+			for (const handler of wildcardHandlers) {
+				try {
+					handler(event);
+				} catch (error) {
+					console.error("Error in wildcard event handler:", error);
+				}
+			}
+		}
+	}
 
-  /**
-   * Get list of active subscriptions
-   */
-  getSubscriptions(): string[] {
-    return Array.from(this.subscriptions);
-  }
+	/**
+	 * Register an event handler
+	 */
+	on(eventType: "execution", handler: EventHandler<ExecutionEvent>): void;
+	on(eventType: "ideation", handler: EventHandler<IdeationEvent>): void;
+	on(eventType: "roadmap", handler: EventHandler<RoadmapEvent>): void;
+	on(eventType: "log", handler: EventHandler<LogEvent>): void;
+	on(eventType: "error", handler: EventHandler<ErrorEvent>): void;
+	on(eventType: "*", handler: EventHandler<AgentEvent>): void;
+	// biome-ignore lint/suspicious/noExplicitAny: Implementation signature needs to accept all overloads
+	on(eventType: string, handler: EventHandler<any>): void {
+		if (!this.eventHandlers.has(eventType)) {
+			this.eventHandlers.set(eventType, new Set());
+		}
+		this.eventHandlers.get(eventType)!.add(handler);
+		this.log(`Registered handler for: ${eventType}`);
+	}
 
-  /**
-   * Update WebSocket configuration
-   */
-  updateConfig(config: Partial<WebSocketConfig>): void {
-    this.config = { ...this.config, ...config };
-    this.log("Config updated", this.config);
-  }
+	/**
+	 * Unregister an event handler
+	 */
+	off(eventType: string, handler: EventHandler): void {
+		const handlers = this.eventHandlers.get(eventType);
+		if (handlers) {
+			handlers.delete(handler);
+			this.log(`Unregistered handler for: ${eventType}`);
+		}
+	}
 
-  /**
-   * Get current configuration
-   */
-  getConfig(): Readonly<Required<WebSocketConfig>> {
-    return { ...this.config };
-  }
+	/**
+	 * Register a state change handler
+	 */
+	onStateChange(handler: (state: ConnectionState) => void): void {
+		this.stateHandlers.add(handler);
+	}
+
+	/**
+	 * Unregister a state change handler
+	 */
+	offStateChange(handler: (state: ConnectionState) => void): void {
+		this.stateHandlers.delete(handler);
+	}
+
+	/**
+	 * Register an error handler
+	 */
+	onError(handler: (error: Error) => void): void {
+		this.errorHandlers.add(handler);
+	}
+
+	/**
+	 * Unregister an error handler
+	 */
+	offError(handler: (error: Error) => void): void {
+		this.errorHandlers.delete(handler);
+	}
+
+	/**
+	 * Get current connection state
+	 */
+	getState(): ConnectionState {
+		return this.state;
+	}
+
+	/**
+	 * Check if connected
+	 */
+	isConnected(): boolean {
+		return this.state === "connected" && this.ws?.readyState === WebSocket.OPEN;
+	}
+
+	/**
+	 * Get current reconnect attempt count
+	 */
+	getReconnectAttempts(): number {
+		return this.reconnectAttempts;
+	}
+
+	/**
+	 * Manually trigger reconnection
+	 * Useful when max reconnect attempts has been reached
+	 */
+	reconnect(): void {
+		this.log("Manual reconnection triggered");
+		this.clearReconnectTimer();
+
+		// Reset reconnect attempts and enable reconnect
+		this.reconnectAttempts = 0;
+		this.manualClose = false;
+		this.config.reconnect = true;
+
+		// Connect if not already connecting/connected
+		if (
+			!this.ws ||
+			this.ws.readyState === WebSocket.CLOSED ||
+			this.ws.readyState === WebSocket.CLOSING
+		) {
+			this.connect();
+		}
+	}
+
+	/**
+	 * Get list of active subscriptions
+	 */
+	getSubscriptions(): string[] {
+		return Array.from(this.subscriptions);
+	}
+
+	/**
+	 * Update WebSocket configuration
+	 */
+	updateConfig(config: Partial<WebSocketConfig>): void {
+		this.config = { ...this.config, ...config };
+		this.log("Config updated", this.config);
+	}
+
+	/**
+	 * Get current configuration
+	 */
+	getConfig(): Readonly<Required<WebSocketConfig>> {
+		return { ...this.config };
+	}
 }
 
 /**
@@ -391,7 +488,7 @@ export const wsClient = new WebSocketClient();
  * Create a new WebSocket client with custom configuration
  */
 export function createWebSocketClient(
-  config: Partial<WebSocketConfig> = {}
+	config: Partial<WebSocketConfig> = {},
 ): WebSocketClient {
-  return new WebSocketClient(config);
+	return new WebSocketClient(config);
 }

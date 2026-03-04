@@ -956,6 +956,19 @@ def _trigger_login_windows() -> bool:
         return False
 
 
+def emit_rate_limit_marker(reset_time: str | None = None) -> None:
+    """Print a structured marker that the frontend can detect for rate-limit handling.
+
+    The frontend ``rate-limit-detector.ts`` scans process output for rate-limit
+    patterns.  This function prints a canonical marker line so the detection is
+    reliable regardless of the upstream error format.
+    """
+    parts = ["[RATE_LIMITED]"]
+    if reset_time:
+        parts.append(f"reset_time={reset_time}")
+    print(" ".join(parts), flush=True)
+
+
 def ensure_authenticated() -> str:
     """
     Ensure the user is authenticated, prompting for login if needed.
