@@ -4,10 +4,6 @@ This test verifies the fix for type validation in phases.py that prevents
 AttributeError when target_audience is not a dict.
 """
 
-import json
-import tempfile
-from pathlib import Path
-
 
 def test_target_audience_validation_logic():
     """Test the type validation logic directly without importing the module.
@@ -70,9 +66,7 @@ def test_target_audience_validation_logic():
     elif not target_audience.get("primary"):
         missing.append("target_audience.primary")
 
-    assert (
-        "target_audience.primary" in missing
-    ), "Should reject dict without primary"
+    assert "target_audience.primary" in missing, "Should reject dict without primary"
 
     # Test 6: Empty dict (should fail with specific error)
     target_audience = {}
@@ -184,9 +178,7 @@ def test_original_bug_scenario():
 
     # Validation should fail gracefully, not crash
     assert len(missing) > 0, "Should detect the invalid type"
-    assert (
-        "target_audience (invalid type)" in missing
-    ), "Should identify the type error"
+    assert "target_audience (invalid type)" in missing, "Should identify the type error"
 
 
 if __name__ == "__main__":

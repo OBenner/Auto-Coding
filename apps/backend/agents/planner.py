@@ -8,9 +8,14 @@ Handles follow-up planner sessions for adding new subtasks to completed specs.
 import logging
 from pathlib import Path
 
-from core.client import create_client
+from analysis.prevention_scanner import PreventionScanner
+from core.providers import create_engine_provider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig, get_provider_config
+from implementation_plan import ImplementationPlan
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
+from prompts_pkg.prompts import get_followup_planner_prompt
 from task_logger import (
     LogPhase,
     get_task_logger,
@@ -29,7 +34,67 @@ from ui import (
 
 from .session import run_agent_session, save_token_stats
 
+# Import plugin system for agent lifecycle hooks
+try:
+    from plugins.base import PluginType
+    from plugins.registry import PluginRegistry
+    from plugins.sdk.agent import AgentContext
+
+    PLUGINS_AVAILABLE = True
+except ImportError:
+    PLUGINS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+def create_planner_session(
+    project_dir: Path,
+    spec_dir: Path,
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
+):
+    """
+    Create a planner agent session using the configured AI engine provider.
+
+    This function is used by both the follow-up planner and verification tests.
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        ProviderError: If provider creation or session creation fails
+    """
+    # Create provider from environment configuration (with per-agent overrides)
+    config = ProviderConfig.from_env(agent_type="planner")
+    provider = create_engine_provider(config)
+
+    # For Claude provider, pass provider-specific kwargs
+    if provider.name == "claude":
+        session = provider.create_session(
+            config=SessionConfig(
+                name="planner-session",
+                model=model,
+            ),
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="planner",
+            max_thinking_tokens=max_thinking_tokens,
+        )
+    else:
+        session = provider.create_session(
+            SessionConfig(
+                name="planner-session",
+                model=model,
+            )
+        )
+
+    return session
 
 
 async def run_followup_planner(
@@ -62,9 +127,6 @@ async def run_followup_planner(
     Returns:
         bool: True if planning completed successfully
     """
-    from implementation_plan import ImplementationPlan
-    from prompts import get_followup_planner_prompt
-
     # Initialize status manager for ccstatusline
     status_manager = StatusManager(project_dir)
     status_manager.set_active(spec_dir.name, BuildState.PLANNING)
@@ -95,25 +157,106 @@ async def run_followup_planner(
     # Respects task_metadata.json configuration when no CLI override
     planning_model = get_phase_model(spec_dir, "planning", model)
     planning_thinking_budget = get_phase_thinking_budget(spec_dir, "planning")
-    client = create_client(
+
+    # Create session using provider factory
+    session = create_planner_session(
         project_dir,
         spec_dir,
-        planning_model,
+        model=planning_model,
         max_thinking_tokens=planning_thinking_budget,
     )
+
+    # Get the underlying SDK client from the session
+    client = session.client
 
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
 
+    # Run prevention scanner before planning
+    print_status("Running prevention scanner...", "progress")
+    try:
+        scanner = PreventionScanner()
+        scan_result = scanner.scan(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+        )
+
+        # Log scan summary
+        if task_logger:
+            summary = scanner.format_summary(scan_result)
+            task_logger.log_message(summary, LogPhase.PLANNING)
+
+        if scan_result.should_block:
+            logger.warning("Prevention scanner found blocking issues")
+            print_status(
+                f"⚠️  Critical issues found: {scan_result.summary.get('critical', 0)} critical, "
+                f"{scan_result.summary.get('high', 0)} high",
+                "warning",
+            )
+        elif scan_result.should_warn:
+            logger.info("Prevention scanner found warnings")
+            print_status(
+                f"Note: {scan_result.summary.get('total_issues', 0)} issues detected "
+                f"(see prevention_scan.json)",
+                "info",
+            )
+        else:
+            logger.info("Prevention scanner found no critical issues")
+            print_status("✅ No critical issues detected", "success")
+    except Exception as e:
+        logger.warning(f"Prevention scanner failed: {e}")
+        print_status(f"Prevention scanner warning: {e}", "warning")
+        # Continue with planning even if scanner fails
+
+    print()
     print_status("Running follow-up planner...", "progress")
     print()
 
     try:
         # Run single planning session
         async with client:
-            status, response, usage_metadata = await run_agent_session(
+            (
+                status,
+                response,
+                usage_metadata,
+                _,
+            ) = await run_agent_session(
                 client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
             )
+
+        # Call after_session hook for enabled agent plugins
+        if PLUGINS_AVAILABLE:
+            try:
+                registry = PluginRegistry.get_instance()
+                agent_plugins = registry.list_plugins(
+                    plugin_type=PluginType.AGENT, enabled_only=True
+                )
+
+                if agent_plugins:
+                    # Create agent context for plugins
+                    agent_context = AgentContext(
+                        project_dir=project_dir,
+                        spec_dir=spec_dir,
+                        session_id=f"followup-planner-{spec_dir.name}",
+                        client=client,
+                        phase="planning",
+                        metadata={"status": status},
+                    )
+
+                    # Call after_session for each enabled agent plugin
+                    session_success = status != "error"
+                    for plugin in agent_plugins:
+                        try:
+                            plugin.after_session(agent_context, success=session_success)
+                            logger.debug(
+                                f"Called after_session for plugin: {plugin.name}"
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin {plugin.name} after_session hook failed: {e}"
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to call after_session hooks: {e}")
 
         # Save token statistics for planning phase
         if usage_metadata:
@@ -150,6 +293,14 @@ async def run_followup_planner(
         plan_file = spec_dir / "implementation_plan.json"
         if plan_file.exists():
             plan = ImplementationPlan.load(plan_file)
+
+            # Capture and persist provider configuration
+            provider_config = get_provider_config()
+            if provider_config:
+                plan.provider_config = {
+                    "provider": provider_config.provider,
+                    "model": provider_config.get_model_for_provider(),
+                }
 
             # Check if there are any pending subtasks
             all_subtasks = [c for p in plan.phases for c in p.subtasks]

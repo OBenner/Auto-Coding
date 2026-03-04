@@ -226,7 +226,9 @@ Begin by loading context (Phase 0 in your prompt).
 
     # Add migration context if provided
     if migration_context:
-        starting_message += f"\n\n## Migration Context\n\n{json.dumps(migration_context, indent=2)}\n"
+        starting_message += (
+            f"\n\n## Migration Context\n\n{json.dumps(migration_context, indent=2)}\n"
+        )
 
     # Create SDK client with migration_assistant agent type
     try:
@@ -279,9 +281,7 @@ Begin by loading context (Phase 0 in your prompt).
             # Validate the checkpoint structure
             validation = validate_migration_checkpoint(checkpoint_dir, project_dir)
             if not validation["valid"]:
-                logger.warning(
-                    f"Checkpoint validation issues: {validation['issues']}"
-                )
+                logger.warning(f"Checkpoint validation issues: {validation['issues']}")
                 if task_logger:
                     task_logger.log(
                         f"Checkpoint validation issues: {', '.join(validation['issues'])}",
@@ -292,7 +292,9 @@ Begin by loading context (Phase 0 in your prompt).
         print_status("Migration session completed", "success")
         print_key_value("Checkpoints created", str(checkpoints_created))
         if migration_plan.exists():
-            print_key_value("Migration plan", str(migration_plan.relative_to(project_dir)))
+            print_key_value(
+                "Migration plan", str(migration_plan.relative_to(project_dir))
+            )
         print()
 
         return {

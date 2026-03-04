@@ -26,7 +26,32 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# =============================================================================
+# Severity / Category Validators
+# =============================================================================
+
+_VALID_SEVERITIES = {"critical", "high", "medium", "low"}
+
+
+def _normalize_severity(v: str) -> str:
+    """Normalize severity to a valid value, defaulting to 'medium'."""
+    if isinstance(v, str):
+        v = v.lower().strip()
+    if v not in _VALID_SEVERITIES:
+        return "medium"
+    return v
+
+
+def _normalize_category(v: str, valid_set: set[str], default: str = "quality") -> str:
+    """Normalize category to a valid value, defaulting to given default."""
+    if isinstance(v, str):
+        v = v.lower().strip().replace("-", "_")
+    if v not in valid_set:
+        return default
+    return v
+
 
 # =============================================================================
 # Common Finding Types
@@ -139,22 +164,34 @@ class FindingResolution(BaseModel):
     )
 
 
+_FOLLOWUP_CATEGORIES = {"security", "quality", "logic", "test", "docs"}
+
+
 class FollowupFinding(BaseModel):
-    """A new finding from follow-up review (simpler than initial review)."""
+    """A new finding from follow-up review (simpler than initial review).
+
+    verification is intentionally omitted — not consumed by followup_reviewer.py.
+    """
 
     id: str = Field(description="Unique identifier for this finding")
-    severity: Literal["critical", "high", "medium", "low"] = Field(
-        description="Issue severity level"
-    )
-    category: Literal["security", "quality", "logic", "test", "docs"] = Field(
-        description="Issue category"
-    )
+    severity: str = Field(description="Issue severity level")
+    category: str = Field(description="Issue category")
     title: str = Field(description="Brief issue title")
     description: str = Field(description="Detailed explanation of the issue")
     file: str = Field(description="File path where issue was found")
     line: int = Field(0, description="Line number of the issue")
     suggested_fix: str | None = Field(None, description="How to fix this issue")
     fixable: bool = Field(False, description="Whether this can be auto-fixed")
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _normalize_severity(cls, v: str) -> str:
+        return _normalize_severity(v)
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _normalize_category(cls, v: str) -> str:
+        return _normalize_category(v, _FOLLOWUP_CATEGORIES)
 
 
 class FollowupReviewResponse(BaseModel):
@@ -374,6 +411,19 @@ class CodebaseFitFinding(BaseFinding):
     )
 
 
+_ORCHESTRATOR_CATEGORIES = {
+    "security",
+    "quality",
+    "logic",
+    "codebase_fit",
+    "test",
+    "docs",
+    "redundancy",
+    "pattern",
+    "performance",
+}
+
+
 class ParallelOrchestratorFinding(BaseModel):
     """A finding from the parallel orchestrator with source agent tracking."""
 
@@ -383,20 +433,8 @@ class ParallelOrchestratorFinding(BaseModel):
     end_line: int | None = Field(None, description="End line for multi-line issues")
     title: str = Field(description="Brief issue title (max 80 chars)")
     description: str = Field(description="Detailed explanation of the issue")
-    category: Literal[
-        "security",
-        "quality",
-        "logic",
-        "codebase_fit",
-        "test",
-        "docs",
-        "redundancy",
-        "pattern",
-        "performance",
-    ] = Field(description="Issue category")
-    severity: Literal["critical", "high", "medium", "low"] = Field(
-        description="Issue severity level"
-    )
+    category: str = Field(description="Issue category")
+    severity: str = Field(description="Issue severity level")
     evidence: str | None = Field(
         None,
         description="Actual code snippet proving the issue exists. Required for validation.",
@@ -410,6 +448,16 @@ class ParallelOrchestratorFinding(BaseModel):
     cross_validated: bool = Field(
         False, description="Whether multiple agents agreed on this finding"
     )
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _normalize_severity(cls, v: str) -> str:
+        return _normalize_severity(v)
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _normalize_category(cls, v: str) -> str:
+        return _normalize_category(v, _ORCHESTRATOR_CATEGORIES)
 
 
 class AgentAgreement(BaseModel):
@@ -464,12 +512,23 @@ class ResolutionVerification(BaseModel):
         Field(description="Resolution status after AI verification")
     )
     evidence: str = Field(
-        min_length=1,
-        description="Actual code snippet showing the resolution status. Required.",
+        default="",
+        description="Actual code snippet showing the resolution status.",
     )
     resolution_notes: str | None = Field(
         None, description="Detailed notes on how the issue was addressed"
     )
+
+
+_PARALLEL_FOLLOWUP_CATEGORIES = {
+    "security",
+    "quality",
+    "logic",
+    "test",
+    "docs",
+    "regression",
+    "incomplete_fix",
+}
 
 
 class ParallelFollowupFinding(BaseModel):
@@ -481,18 +540,8 @@ class ParallelFollowupFinding(BaseModel):
     end_line: int | None = Field(None, description="End line for multi-line issues")
     title: str = Field(description="Brief issue title (max 80 chars)")
     description: str = Field(description="Detailed explanation of the issue")
-    category: Literal[
-        "security",
-        "quality",
-        "logic",
-        "test",
-        "docs",
-        "regression",
-        "incomplete_fix",
-    ] = Field(description="Issue category")
-    severity: Literal["critical", "high", "medium", "low"] = Field(
-        description="Issue severity level"
-    )
+    category: str = Field(description="Issue category")
+    severity: str = Field(description="Issue severity level")
     evidence: str | None = Field(
         None,
         description="Actual code snippet proving the issue exists. Required for validation.",
@@ -505,6 +554,16 @@ class ParallelFollowupFinding(BaseModel):
     related_to_previous: str | None = Field(
         None, description="ID of related previous finding if this is a regression"
     )
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _normalize_severity(cls, v: str) -> str:
+        return _normalize_severity(v)
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _normalize_category(cls, v: str) -> str:
+        return _normalize_category(v, _PARALLEL_FOLLOWUP_CATEGORIES)
 
 
 class CommentAnalysis(BaseModel):
@@ -649,4 +708,47 @@ class FindingValidationResponse(BaseModel):
             "Brief summary of validation results: how many confirmed, "
             "how many dismissed, how many need human review"
         )
+    )
+
+
+# =============================================================================
+# Extraction Recovery Models (Minimal schemas for near-100% validation success)
+# =============================================================================
+
+
+class ExtractedFindingSummary(BaseModel):
+    """Minimal per-finding summary for extraction recovery.
+
+    Uses str + validators instead of Literal types to maximize
+    structured output validation success rate.
+    """
+
+    severity: str = Field(description="Issue severity: critical, high, medium, or low")
+    description: str = Field(description="Brief description of the issue")
+    file: str = Field(default="unknown", description="File path where issue was found")
+    line: int = Field(default=0, description="Line number of the issue")
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _normalize_severity(cls, v: str) -> str:
+        return _normalize_severity(v)
+
+
+class FollowupExtractionResponse(BaseModel):
+    """Minimal extraction schema for recovery when full structured output fails.
+
+    Only ~6 fields vs ~20+ in FollowupReviewResponse, giving near-100%
+    validation success. Used as Tier 2 recovery in the three-tier cascade.
+    """
+
+    verdict: str = Field(
+        default="NEEDS_REVISION",
+        description="Overall verdict: READY_TO_MERGE, MERGE_WITH_CHANGES, NEEDS_REVISION, or BLOCKED",
+    )
+    verdict_reasoning: str = Field(
+        default="Recovered via extraction", description="Explanation for the verdict"
+    )
+    new_finding_summaries: list[ExtractedFindingSummary] = Field(
+        default_factory=list,
+        description="Summaries of new findings discovered during review",
     )

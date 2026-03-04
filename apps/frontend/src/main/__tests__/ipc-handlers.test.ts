@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { EventEmitter } from "events";
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from "fs";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 
@@ -146,10 +146,22 @@ function setupTestProject(): void {
   mkdirSync(path.join(TEST_PROJECT_PATH, "auto-claude", "specs"), { recursive: true });
 }
 
-// Cleanup test directories
-function cleanupTestDirs(): void {
-  if (existsSync(TEST_DIR)) {
-    rmSync(TEST_DIR, { recursive: true, force: true });
+// Cleanup test directories with retry for Windows ENOTEMPTY errors
+async function cleanupTestDirs(): Promise<void> {
+  if (!existsSync(TEST_DIR)) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      rmSync(TEST_DIR, { recursive: true, force: true });
+      return;
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if ((code === "ENOTEMPTY" || code === "EPERM") && attempt < 2) {
+        // Windows may hold file locks briefly; wait and retry
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        continue;
+      }
+      throw err;
+    }
   }
 }
 
@@ -183,7 +195,7 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
   };
 
   beforeEach(async () => {
-    cleanupTestDirs();
+    await cleanupTestDirs();
     setupTestProject();
     mkdirSync(path.join(TEST_DIR, "userData", "store"), { recursive: true });
 
@@ -243,8 +255,8 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
     vi.resetModules();
   });
 
-  afterEach(() => {
-    cleanupTestDirs();
+  afterEach(async () => {
+    await cleanupTestDirs();
     vi.clearAllMocks();
   });
 
@@ -300,12 +312,13 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
       writeFileSync(storeFile, JSON.stringify({ projects: [], settings: {} }));
 
       // Wait for ProjectStore's async initialization to complete (reads the file above).
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Use a longer delay to avoid race conditions on slower CI runners.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Add project twice
       const result1 = await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
       // Wait for the fire-and-forget saveAsync to flush
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       const result2 = await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
 
       const data1 = (result1 as { data: { id: string } }).data;
@@ -688,6 +701,34 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
     });
 
     it("should forward exit events with status change on failure", async () => {
+      // Create .auto-claude/specs/task-1 structure BEFORE adding the project
+      // so that getAutoBuildPath() finds it and getTasks() can discover the task.
+      const specDir = path.join(TEST_PROJECT_PATH, ".auto-claude", "specs", "task-1");
+      mkdirSync(specDir, { recursive: true });
+      writeFileSync(
+        path.join(specDir, "implementation_plan.json"),
+        JSON.stringify({ feature: "Test Task", status: "in_progress" })
+      );
+
+      // Pre-populate the store file WITH the project already included.
+      // This eliminates the race between initializeAsync() and addProject():
+      // initializeAsync() loads the project from disk, so there's no window
+      // where it can overwrite in-memory data with an empty array.
+      const storeFile = path.join(TEST_DIR, "userData", "store", "projects.json");
+      const prePopulatedProject = {
+        id: "test-project-id",
+        name: "test-project",
+        path: TEST_PROJECT_PATH,
+        autoBuildPath: ".auto-claude",
+        settings: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      writeFileSync(storeFile, JSON.stringify({
+        projects: [prePopulatedProject],
+        settings: {}
+      }));
+
       const { setupIpcHandlers } = await import("../ipc-handlers");
       setupIpcHandlers(
         mockAgentManager as never,
@@ -696,32 +737,31 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
         mockPythonEnvManager as never
       );
 
-      // Wait for ProjectStore's async initialization to complete
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Add project first
-      await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
-
-      // Create a spec/task directory with implementation_plan.json
-      const specDir = path.join(TEST_PROJECT_PATH, ".auto-claude", "specs", "task-1");
-      mkdirSync(specDir, { recursive: true });
-      writeFileSync(
-        path.join(specDir, "implementation_plan.json"),
-        JSON.stringify({ feature: "Test Task", status: "in_progress" })
+      // Wait for ProjectStore's async initializeAsync() to load the pre-populated data.
+      // Use vi.waitFor to poll instead of a fixed timeout for reliability under I/O load.
+      const { projectStore } = await import("../project-store");
+      await vi.waitFor(
+        () => {
+          expect(projectStore.getProjects().length).toBeGreaterThan(0);
+        },
+        { timeout: 5000, interval: 50 }
       );
 
       mockAgentManager.emit("exit", "task-1", 1, "task-execution");
 
       // The exit handler uses an async IIFE with multiple awaits
-      // (findTaskAndProject, getTasks, etc.), so we must flush the promise
-      // queue before checking the assertion.
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
-        "task:statusChange",
-        "task-1",
-        "human_review",
-        expect.any(String) // projectId for multi-project filtering
+      // (findTaskAndProject, getTasks, etc.). Use vi.waitFor() instead of a fixed
+      // timeout to reliably handle varying I/O latency across platforms (Windows, macOS).
+      await vi.waitFor(
+        () => {
+          expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
+            "task:statusChange",
+            "task-1",
+            "human_review",
+            expect.any(String) // projectId for multi-project filtering
+          );
+        },
+        { timeout: 5000, interval: 100 }
       );
     });
   });

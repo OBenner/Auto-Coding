@@ -11,9 +11,9 @@ Tests the core.providers module functionality including:
 """
 
 import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # =============================================================================
 # PROVIDER CONFIG TESTS
@@ -107,7 +107,14 @@ class TestProviderConfig:
         """Tests from_env() handles case-insensitive provider names."""
         from core.providers.config import ProviderConfig
 
-        for provider in ["CLAUDE", "Claude", "LITELLM", "LiteLLM", "OPENROUTER", "OpenRouter"]:
+        for provider in [
+            "CLAUDE",
+            "Claude",
+            "LITELLM",
+            "LiteLLM",
+            "OPENROUTER",
+            "OpenRouter",
+        ]:
             env = {"AI_ENGINE_PROVIDER": provider}
             with patch.dict(os.environ, env, clear=True):
                 config = ProviderConfig.from_env()
@@ -312,7 +319,7 @@ class TestProviderHelperFunctions:
 
     def test_get_provider_config(self):
         """Tests get_provider_config() returns ProviderConfig instance."""
-        from core.providers.config import get_provider_config, ProviderConfig
+        from core.providers.config import ProviderConfig, get_provider_config
 
         env = {"AI_ENGINE_PROVIDER": "claude", "ANTHROPIC_API_KEY": "test-key"}
         with patch.dict(os.environ, env, clear=True):
@@ -408,7 +415,7 @@ class TestProviderExceptions:
 
     def test_provider_config_error_inherits_provider_error(self):
         """Tests ProviderConfigError inherits from ProviderError."""
-        from core.providers.exceptions import ProviderError, ProviderConfigError
+        from core.providers.exceptions import ProviderConfigError, ProviderError
 
         error = ProviderConfigError("Invalid config")
         assert isinstance(error, ProviderError)
@@ -418,9 +425,9 @@ class TestProviderExceptions:
     def test_exception_can_be_caught_as_provider_error(self):
         """Tests child exceptions can be caught as ProviderError."""
         from core.providers.exceptions import (
+            ProviderConfigError,
             ProviderError,
             ProviderNotInstalled,
-            ProviderConfigError,
         )
 
         # Test ProviderNotInstalled can be caught as ProviderError
@@ -452,13 +459,17 @@ class TestFactoryFunctions:
         assert "claude" in names
         assert "litellm" in names
         assert "openrouter" in names
-        assert len(names) == 3
+        assert "zhipuai" in names
+        assert "openai" in names
+        assert "ollama" in names
+        assert "google" in names
+        assert len(names) == 7
 
     def test_create_engine_provider_unknown_raises_error(self):
         """Tests create_engine_provider() raises error for unknown provider."""
-        from core.providers.factory import create_engine_provider
         from core.providers.config import ProviderConfig
         from core.providers.exceptions import ProviderError
+        from core.providers.factory import create_engine_provider
 
         config = ProviderConfig(provider="unknown_provider")
         with pytest.raises(ProviderError) as exc_info:
@@ -469,49 +480,39 @@ class TestFactoryFunctions:
 
     def test_create_engine_provider_claude_dispatches_correctly(self):
         """Tests create_engine_provider() dispatches to claude factory."""
-        from core.providers.factory import create_engine_provider
         from core.providers.config import ProviderConfig
+        from core.providers.factory import create_engine_provider
 
-        config = ProviderConfig(
-            provider="claude", anthropic_api_key="test-key"
-        )
+        config = ProviderConfig(provider="claude", anthropic_api_key="test-key")
 
         # Mock the Claude adapter import
-        with patch(
-            "core.providers.factory._create_claude_provider"
-        ) as mock_create:
+        with patch("core.providers.factory._create_claude_provider") as mock_create:
             mock_create.return_value = MagicMock()
-            provider = create_engine_provider(config)
+            create_engine_provider(config)
             mock_create.assert_called_once_with(config)
 
     def test_create_engine_provider_litellm_dispatches_correctly(self):
         """Tests create_engine_provider() dispatches to litellm factory."""
-        from core.providers.factory import create_engine_provider
         from core.providers.config import ProviderConfig
+        from core.providers.factory import create_engine_provider
 
         config = ProviderConfig(provider="litellm", litellm_model="gpt-4")
 
-        with patch(
-            "core.providers.factory._create_litellm_provider"
-        ) as mock_create:
+        with patch("core.providers.factory._create_litellm_provider") as mock_create:
             mock_create.return_value = MagicMock()
-            provider = create_engine_provider(config)
+            create_engine_provider(config)
             mock_create.assert_called_once_with(config)
 
     def test_create_engine_provider_openrouter_dispatches_correctly(self):
         """Tests create_engine_provider() dispatches to openrouter factory."""
-        from core.providers.factory import create_engine_provider
         from core.providers.config import ProviderConfig
+        from core.providers.factory import create_engine_provider
 
-        config = ProviderConfig(
-            provider="openrouter", openrouter_api_key="or-key"
-        )
+        config = ProviderConfig(provider="openrouter", openrouter_api_key="or-key")
 
-        with patch(
-            "core.providers.factory._create_openrouter_provider"
-        ) as mock_create:
+        with patch("core.providers.factory._create_openrouter_provider") as mock_create:
             mock_create.return_value = MagicMock()
-            provider = create_engine_provider(config)
+            create_engine_provider(config)
             mock_create.assert_called_once_with(config)
 
 
@@ -525,9 +526,9 @@ class TestClaudeProviderFactory:
         The actual import error behavior is tested by attempting to import
         a non-existent adapter module.
         """
-        from core.providers.factory import _create_claude_provider
         from core.providers.config import ProviderConfig
         from core.providers.exceptions import ProviderNotInstalled
+        from core.providers.factory import _create_claude_provider
 
         # Verify the ProviderNotInstalled exception is correctly defined
         error = ProviderNotInstalled("Test error")
@@ -535,7 +536,7 @@ class TestClaudeProviderFactory:
         assert "Test error" in str(error)
 
         # Verify _create_claude_provider exists and is callable
-        config = ProviderConfig(provider="claude", anthropic_api_key="test-key")
+        ProviderConfig(provider="claude", anthropic_api_key="test-key")
         assert callable(_create_claude_provider)
 
         # The import error path is tested indirectly - if the adapter module
@@ -584,9 +585,7 @@ class TestOpenRouterProviderFactory:
         """Tests _create_openrouter_provider succeeds with valid import."""
         from core.providers.config import ProviderConfig
 
-        config = ProviderConfig(
-            provider="openrouter", openrouter_api_key="or-key"
-        )
+        config = ProviderConfig(provider="openrouter", openrouter_api_key="or-key")
 
         # This test may fail if openai package is not installed,
         # which is expected behavior - we handle that with ProviderNotInstalled
@@ -614,22 +613,30 @@ class TestAIEngineProviderEnum:
         from core.providers.config import AIEngineProvider
 
         assert AIEngineProvider.CLAUDE.value == "claude"
+        assert AIEngineProvider.OPENAI.value == "openai"
+        assert AIEngineProvider.GOOGLE.value == "google"
         assert AIEngineProvider.LITELLM.value == "litellm"
         assert AIEngineProvider.OPENROUTER.value == "openrouter"
+        assert AIEngineProvider.ZHIPUAI.value == "zhipuai"
+        assert AIEngineProvider.OLLAMA.value == "ollama"
 
     def test_enum_is_str(self):
         """Tests AIEngineProvider values are strings."""
         from core.providers.config import AIEngineProvider
 
         assert isinstance(AIEngineProvider.CLAUDE.value, str)
+        assert isinstance(AIEngineProvider.OPENAI.value, str)
+        assert isinstance(AIEngineProvider.GOOGLE.value, str)
         assert isinstance(AIEngineProvider.LITELLM.value, str)
         assert isinstance(AIEngineProvider.OPENROUTER.value, str)
+        assert isinstance(AIEngineProvider.ZHIPUAI.value, str)
+        assert isinstance(AIEngineProvider.OLLAMA.value, str)
 
     def test_enum_count(self):
         """Tests AIEngineProvider has expected number of values."""
         from core.providers.config import AIEngineProvider
 
-        assert len(AIEngineProvider) == 3
+        assert len(AIEngineProvider) == 7
 
 
 # =============================================================================
@@ -644,9 +651,9 @@ class TestProviderIntegration:
         """Tests full flow: env -> config -> factory -> provider for Claude."""
         env = {"AI_ENGINE_PROVIDER": "claude", "ANTHROPIC_API_KEY": "test-key"}
         with patch.dict(os.environ, env, clear=True):
+            from core.providers.adapters.claude import ClaudeAgentProvider
             from core.providers.config import ProviderConfig
             from core.providers.factory import create_engine_provider
-            from core.providers.adapters.claude import ClaudeAgentProvider
 
             # Load config from env
             config = ProviderConfig.from_env()

@@ -157,7 +157,8 @@ class PtyDaemon {
     });
 
     socket.on('error', (err) => {
-      console.error('[PTY Daemon] Socket error:', err);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+      console.error('[PTY Daemon] Socket error: ' + String(err).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200));
     });
   }
 
@@ -227,7 +228,8 @@ class PtyDaemon {
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[PTY Daemon] Error handling message:', errorMsg);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+      console.error('[PTY Daemon] Error handling message: ' + String(errorMsg).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200));
       this.sendError(socket, errorMsg, msg.requestId);
     }
   }
@@ -302,7 +304,8 @@ class PtyDaemon {
       });
 
       this.ptys.set(id, managed);
-      console.error(`[PTY Daemon] Created PTY ${id} (${config.shell})`);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+      console.error('[PTY Daemon] Created PTY ' + String(id).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50) + ' (' + String(config.shell).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 100) + ')');
 
       return id;
     } catch (error) {
@@ -334,7 +337,8 @@ class PtyDaemon {
       throw new Error(`PTY ${id} not found`);
     }
     if (managed.isDead) {
-      console.warn(`[PTY Daemon] Cannot resize dead PTY ${id}`);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+      console.warn('[PTY Daemon] Cannot resize dead PTY ' + String(id).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50));
       return;
     }
     managed.process.resize(cols, rows);
@@ -348,7 +352,8 @@ class PtyDaemon {
   private killPty(id: string): void {
     const managed = this.ptys.get(id);
     if (!managed) {
-      console.warn(`[PTY Daemon] PTY ${id} not found for kill`);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+      console.warn('[PTY Daemon] PTY ' + String(id).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50) + ' not found for kill');
       return;
     }
 
@@ -356,12 +361,14 @@ class PtyDaemon {
       try {
         managed.process.kill();
       } catch (error) {
-        console.error(`[PTY Daemon] Error killing PTY ${id}:`, error);
+        // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+        console.error('[PTY Daemon] Error killing PTY ' + String(id).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50) + ': ' + String(error).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200));
       }
     }
 
     this.ptys.delete(id);
-    console.error(`[PTY Daemon] Removed PTY ${id}`);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+    console.error('[PTY Daemon] Removed PTY ' + String(id).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50));
   }
 
   /**
@@ -394,7 +401,8 @@ class PtyDaemon {
       throw new Error(`PTY ${id} not found`);
     }
     managed.clients.add(socket);
-    console.error(`[PTY Daemon] Client subscribed to PTY ${id}`);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+    console.error('[PTY Daemon] Client subscribed to PTY ' + String(id).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50));
   }
 
   /**
@@ -404,7 +412,8 @@ class PtyDaemon {
     const managed = this.ptys.get(id);
     if (managed) {
       managed.clients.delete(socket);
-      console.error(`[PTY Daemon] Client unsubscribed from PTY ${id}`);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+      console.error('[PTY Daemon] Client unsubscribed from PTY ' + String(id).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50));
     }
   }
 

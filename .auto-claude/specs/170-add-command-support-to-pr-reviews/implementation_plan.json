@@ -1,0 +1,442 @@
+{
+  "feature": "GitHub PR Command Execution",
+  "workflow_type": "feature",
+  "workflow_rationale": "New feature layering command execution on top of existing PR review workflow. Single service (backend) with multiple command types requiring permission validation and security checks.",
+  "phases": [
+    {
+      "id": "phase-1-parser",
+      "name": "Command Parser",
+      "type": "implementation",
+      "description": "Create command parser to extract commands from PR comment text",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create command_parser.py module with base structure",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/runners/github/command_parser.py"
+          ],
+          "patterns_from": [
+            "apps/backend/runners/github/gh_client.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from runners.github.command_parser import CommandParser; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Created command_parser.py module with base structure including CommandParser class, Command dataclass, and CommandParseError exception. Module follows patterns from gh_client.py and imports successfully. Verification passed.",
+          "updated_at": "2026-02-16T10:31:36.871521+00:00"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Implement command extraction for /merge, /resolve, /process",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/command_parser.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from runners.github.command_parser import CommandParser; p=CommandParser(); cmds=p.parse('/merge main'); print('merge' in str(cmds))\"",
+            "expected": "True"
+          },
+          "status": "completed",
+          "notes": "Implemented command extraction for /merge, /resolve, and /process commands. CommandParser uses regex pattern to extract commands with arguments, handles multiple commands in single comment, ignores unknown commands gracefully. All verification tests passed.",
+          "updated_at": "2026-02-16T14:32:00.000000+00:00"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Add edge case handling (empty input, malformed commands, special chars)",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/command_parser.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from runners.github.command_parser import CommandParser; p=CommandParser(); cmds=p.parse(''); print(len(cmds)==0)\"",
+            "expected": "True"
+          },
+          "status": "completed",
+          "notes": "Added comprehensive edge case handling: empty input returns empty list, malformed command detection with MALFORMED_PATTERN, special character sanitization via _sanitize_command_type(), numeric command filtering, double slash prevention with negative lookbehind, argument sanitization in _parse_args(). All verification tests passed including empty string, whitespace-only, trailing special chars, leading special chars, double slashes, numeric commands, and malformed patterns.",
+          "updated_at": "2026-02-16T10:39:24.924533+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-executor",
+      "name": "Command Executor",
+      "type": "implementation",
+      "description": "Create command executor with handlers for each command type",
+      "depends_on": [
+        "phase-1-parser"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Create command_executor.py module with base structure",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/runners/github/command_executor.py"
+          ],
+          "patterns_from": [
+            "apps/backend/runners/github/gh_client.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from runners.github.command_executor import CommandExecutor; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Created CommandExecutor class with complete base structure. Includes: custom exceptions (CommandExecutionError, PermissionDeniedError), CommandResult dataclass, execute() and execute_all() methods, stub handlers for merge/resolve/process commands, permission validation framework, and feedback posting. Follows all patterns from gh_client.py (async/await, logging, error handling, type hints). Module syntax verified successfully with py_compile.",
+          "updated_at": "2026-02-16T14:42:00.000000+00:00"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Implement /merge command handler using GHClient.pr_merge()",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/command_executor.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/runners/github/gh_client.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review code: handler calls gh_client.pr_merge() and returns structured result"
+          },
+          "status": "completed",
+          "notes": "Implemented _handle_merge() method that calls gh_client.pr_merge() to execute PR merges. Features: parse optional merge method from command args (merge/squash/rebase), comprehensive error handling for common merge failures (not mergeable, conflicts, CI checks, approval required, draft state), structured CommandResult with success/error data, proper logging using logger (no print statements). Follows all patterns from gh_client.py.",
+          "updated_at": "2026-02-16T15:00:00.000000+00:00"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Implement /resolve command handler for package dependency conflicts",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/command_executor.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review code: handler detects package manager and runs install command"
+          },
+          "status": "completed",
+          "notes": "Implemented comprehensive /resolve command handler with: package manager detection via lock/config files (supports npm, yarn, pnpm, bun, pip, poetry, cargo, go, bundler, composer, maven, gradle, dotnet, pub), async subprocess execution with 120s timeout, detailed error handling (timeout, file not found, command failures), structured CommandResult with success/error data, proper logging using logger (no print statements), _detect_package_manager() and _get_install_command() helper methods. Follows all patterns from gh_client.py.",
+          "updated_at": "2026-02-16T15:15:00.000000+00:00"
+        },
+        {
+          "id": "subtask-2-4",
+          "description": "Implement /process command handler for PR comment processing",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/command_executor.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/runners/github/gh_client.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review code: handler calls get_inline_comments() and generates responses"
+          },
+          "status": "completed",
+          "notes": "Implemented _handle_process() method that processes PR inline comments. Features: fetches comments via gh_client.get_inline_comments(), groups comments by file, generates markdown summary with per-file breakdown (up to 5 comments per file shown), posts summary via gh_client.pr_comment(), handles empty comments case gracefully, comprehensive error handling for GHCommandError and generic exceptions, structured CommandResult with comment_count/files_affected/summary_posted data. Follows all patterns from gh_client.py (async/await, logging, error handling, type hints).",
+          "updated_at": "2026-02-16T16:20:00.000000+00:00"
+        },
+        {
+          "id": "subtask-2-5",
+          "description": "Add permission validation before write operations",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/command_executor.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/runners/github/permissions.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review code: all write operations check permissions via GitHubPermissionChecker"
+          },
+          "status": "completed",
+          "notes": "Implemented comprehensive permission validation using GitHubPermissionChecker. Changes: 1) Added imports for GitHubPermissionChecker and PermissionError, 2) Updated __init__ to accept allowed_roles parameter (default: OWNER, MEMBER, COLLABORATOR), 3) Implemented _check_permissions() to validate write operations (merge, resolve) require write access via is_allowed_for_autofix(), read operations (process) check user role but allow broader access, 4) Added _get_permission_checker() helper for lazy initialization with token scope verification, 5) Proper error handling with fail-safe approach (fail closed for writes, fail open for reads). All write operations now validate user role before execution. Code follows patterns from permissions.py exactly.",
+          "updated_at": "2026-02-16T16:30:00.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-integration",
+      "name": "Integration",
+      "type": "integration",
+      "description": "Wire command system into orchestrator and add error feedback",
+      "depends_on": [
+        "phase-2-executor"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Add command processing method to orchestrator",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/orchestrator.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review code: orchestrator has process_commands() method that calls parser and executor"
+          },
+          "status": "completed",
+          "notes": "Added process_commands() method to GitHubOrchestrator class. Implementation includes: 1) Added imports for CommandParser, Command, CommandExecutor, and CommandResult in both import blocks, 2) Created async process_commands() method that takes comment_text, pr_number, and username parameters, 3) Method creates CommandParser instance to parse commands from comment text, 4) Creates CommandExecutor with gh_client, repo, and allowed_roles from config, 5) Calls executor.execute_all() to run commands sequentially (stops on first failure), 6) Includes proper error handling with try/except, 7) Uses logger for all logging (no print statements), 8) Reports progress via _report_progress() at key stages (parsing, executing, complete), 9) Returns list of CommandResult objects. Follows all orchestrator patterns: async/await, delegation to services, progress callbacks, structured error handling. Verified with py_compile syntax check.",
+          "updated_at": "2026-02-16T16:45:00.000000+00:00"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Add PR comment feedback for command results",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/command_executor.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/runners/github/gh_client.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review code: all command results posted via gh_client.pr_comment() with structured messages"
+          },
+          "status": "completed",
+          "notes": "Implemented comprehensive PR comment feedback for all command results. Changes: 1) Implemented _post_feedback() method that posts feedback via gh_client.pr_comment(), 2) Created _format_feedback_comment() helper to format structured markdown comments, 3) Comments include: status indicator (✓/✗), command type and message, error details in code blocks (if failed), contextual information based on command type (merge method, package manager, comment counts), automatic footer indicating auto-generation, 4) Proper error handling for failed comment posting, 5) All command results now posted as PR comments automatically. Follows all patterns from gh_client.py (async/await, logging, error handling). Verified with py_compile syntax check.",
+          "updated_at": "2026-02-16T17:00:00.000000+00:00"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Add command execution logging for audit trail",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/github/command_executor.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review code: all command executions logged with timestamp, user, command, result"
+          },
+          "status": "completed",
+          "notes": "Implemented comprehensive command execution logging for complete audit trail. Changes: 1) Added datetime import for ISO 8601 timestamps, 2) Created _log_audit() helper method that generates structured JSON audit entries with: timestamp (ISO 8601), event_type (attempt, success, failure, permission_denied, merge_attempt, merge_success, merge_failure, resolve_attempt, resolve_success, resolve_failure, resolve_timeout, process_attempt, process_success, process_failure, permission_check, permission_granted, permission_denied, permission_check_error), username, command details (type, args, position, raw_text), pr_number, result (success, message, error, data), error messages, additional_context specific to each operation, 3) Updated execute() to log all execution attempts, successes, failures, and permission denials, 4) Updated _handle_merge() to log merge attempts, successes, failures with specific error types (not_mergeable, merge_conflict, failing_checks, approval_required, draft_pr, unknown), 5) Updated _handle_resolve() to log resolve attempts, package manager detection, install commands, successes, failures with return codes, timeouts, and executable not found errors, 6) Updated _handle_process() to log process attempts, comment counts, files affected, successes, and failures, 7) Updated _check_permissions() to log permission checks with user roles and operation types (write vs read). All audit logs use structured JSON format for easy parsing and include all required fields: timestamp, user, command, result. Verified with py_compile syntax check.",
+          "updated_at": "2026-02-16T17:15:00.000000+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-tests",
+      "name": "Testing",
+      "type": "implementation",
+      "description": "Write comprehensive tests for command parsing and execution",
+      "depends_on": [
+        "phase-3-integration"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Write unit tests for command parser",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/tests/test_command_parser.py"
+          ],
+          "patterns_from": [
+            "apps/backend/tests/test_recovery_e2e.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -m pytest tests/test_command_parser.py -v",
+            "expected": "PASSED"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive unit tests for command parser in test_command_parser.py. Test suite includes 15 tests covering: simple commands without arguments, commands with single/multiple arguments, multiple commands in one comment, commands with trailing punctuation, unknown commands ignored, empty/whitespace input, commands mixed with text, custom allowed commands, is_supported_command method, invalid input types, position tracking, arguments with special characters, all supported commands, and raw text preservation. All tests follow patterns from test_recovery_e2e.py with clear documentation, fixtures, print statements for progress tracking, and proper assertions. All 15 tests passed successfully.",
+          "updated_at": "2026-02-16T18:00:00.000000+00:00"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Write unit tests for command executor",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/tests/test_command_executor.py"
+          ],
+          "patterns_from": [
+            "apps/backend/tests/test_recovery_e2e.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -m pytest tests/test_command_executor.py -v",
+            "expected": "PASSED"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive unit tests for command executor in test_command_executor.py. Test suite includes 15 tests covering: CommandExecutor initialization with various parameters, successful merge command execution, merge command with conflicts, permission denial for write commands, resolve command with npm project, resolve command with no package manager detected, process command with inline comments, process command with no comments, package manager detection for various project types (npm, yarn, pnpm, pip, poetry, cargo, go), feedback comment formatting for success and error cases, executing multiple commands sequentially, execute_all stops on first failure, unknown command type handling, merge method argument variations (merge, squash, rebase), and CommandResult dataclass validation. Tests use TestableCommandExecutor with mocked GHClient and MockPermissionChecker to avoid complex import dependencies. All 15 tests passed successfully.",
+          "updated_at": "2026-02-16T18:30:00.000000+00:00"
+        },
+        {
+          "id": "subtask-4-3",
+          "description": "Write integration tests for end-to-end command flow",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/tests/integration/test_github_commands.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -m pytest tests/integration/test_github_commands.py -v",
+            "expected": "PASSED"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive integration tests for end-to-end GitHub PR command flow. Test suite includes 10 tests covering: end-to-end merge command flow (parsing → execution → feedback), end-to-end resolve command with package manager detection, end-to-end process command with inline comment handling, permission denied flow integration, multiple commands sequential execution, command failure stops execution behavior, no commands in comment handling, unknown command ignored gracefully, mixed known and unknown commands filtering, and audit trail logging verification. Tests use MockGHClient and MockPermissionChecker for isolated integration testing without external dependencies. All tests verify the complete flow from command parsing through execution to feedback posting. All 10 tests passed successfully.",
+          "updated_at": "2026-02-16T19:00:00.000000+00:00"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 4,
+    "total_subtasks": 14,
+    "services_involved": [
+      "backend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "Sequential execution required due to dependencies"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 170"
+  },
+  "verification_strategy": {
+    "risk_level": "high",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit",
+      "integration",
+      "e2e"
+    ],
+    "security_scanning_required": true,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All new tests pass with >80% code coverage",
+      "Command parser handles edge cases gracefully",
+      "All command handlers validate permissions before execution",
+      "Error feedback posted as PR comments",
+      "No arbitrary command execution possible",
+      "Existing PR review functionality unchanged"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests - Command Parser",
+        "command": "cd apps/backend && python -m pytest tests/test_command_parser.py -v --cov=runners/github/command_parser --cov-report=term-missing",
+        "expected_outcome": "All tests pass with >80% coverage",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Unit Tests - Command Executor",
+        "command": "cd apps/backend && python -m pytest tests/test_command_executor.py -v --cov=runners/github/command_executor --cov-report=term-missing",
+        "expected_outcome": "All tests pass with >80% coverage",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Integration Tests",
+        "command": "cd apps/backend && python -m pytest tests/integration/test_github_commands.py -v",
+        "expected_outcome": "All integration tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Security Scan - Command Injection",
+        "command": "cd apps/backend && python -c \"from runners.github.command_parser import CommandParser; p=CommandParser(); cmds=p.parse('; rm -rf /'); assert len(cmds)==0, 'Command injection vulnerability'\"",
+        "expected_outcome": "No commands extracted from malicious input",
+        "type": "security",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Security Scan - Permission Checks",
+        "command": "grep -r 'permission' apps/backend/runners/github/command_executor.py | grep -i 'check\\|validate' || echo 'No permission checks found'",
+        "expected_outcome": "Permission checks present before write operations",
+        "type": "security",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Security Scan - Subprocess Safety",
+        "command": "grep -r 'subprocess\\|shell=True' apps/backend/runners/github/command_executor.py | grep -v '#' || echo 'No direct subprocess calls found'",
+        "expected_outcome": "No direct subprocess or shell=True usage (must use GHClient)",
+        "type": "security",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "HIGH risk due to security-critical operations (merge, modify PRs) and potential for command injection. Comprehensive testing including security scans required. No staging deployment needed as no infrastructure changes."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && python -m pytest tests/test_command_parser.py -v",
+        "cd apps/backend && python -m pytest tests/test_command_executor.py -v"
+      ],
+      "minimum_coverage": 80
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && python -m pytest tests/integration/test_github_commands.py -v"
+      ],
+      "services_to_test": [
+        "backend"
+      ]
+    },
+    "e2e_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && python -m pytest tests/integration/test_github_commands.py -v -k e2e"
+      ],
+      "flows": [
+        "merge-command",
+        "resolve-dependencies",
+        "process-comments"
+      ]
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-02-16T11:19:50.492Z",
+  "last_updated": "2026-02-16T16:20:00.000000+00:00"
+}

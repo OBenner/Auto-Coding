@@ -1,7 +1,7 @@
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import type { Task, ExecutionPhase } from '../../../shared/types';
 import type { TerminalStatus } from '../../stores/terminal-store';
-import { Circle, Search, Code2, Wrench, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Circle, Search, Code2, FileCode, Wrench, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export interface TerminalProps {
   id: string;
@@ -46,6 +46,7 @@ export const PHASE_CONFIG: Record<ExecutionPhase, { label: string; color: string
   idle: { label: 'Ready', color: 'bg-muted text-muted-foreground', icon: Circle },
   planning: { label: 'Planning', color: 'bg-info/20 text-info', icon: Search },
   coding: { label: 'Coding', color: 'bg-primary/20 text-primary', icon: Code2 },
+  test_generation: { label: 'Tests', color: 'bg-cyan-500/20 text-cyan-500', icon: FileCode },
   qa_review: { label: 'QA Review', color: 'bg-warning/20 text-warning', icon: Search },
   qa_fixing: { label: 'Fixing', color: 'bg-warning/20 text-warning', icon: Wrench },
   complete: { label: 'Complete', color: 'bg-success/20 text-success', icon: CheckCircle2 },

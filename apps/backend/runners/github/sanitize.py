@@ -74,7 +74,7 @@ class ContentSanitizer:
 
     # Patterns for dangerous content
     HTML_COMMENT_PATTERN = re.compile(r"<!--[\s\S]*?-->", re.MULTILINE)
-    SCRIPT_TAG_PATTERN = re.compile(r"<script[\s\S]*?</script>", re.IGNORECASE)
+    SCRIPT_TAG_PATTERN = re.compile(r"<script[\s\S]*?</script\s*>", re.IGNORECASE)
     STYLE_TAG_PATTERN = re.compile(r"<style[\s\S]*?</style>", re.IGNORECASE)
 
     # Patterns that look like prompt injection attempts

@@ -1,0 +1,68 @@
+{
+  "title": "Analytiques",
+  "subtitle": "Suivre les performances de l'agent et les métriques de succès",
+  "loading": "Chargement des données analytiques...",
+  "lastUpdated": "Dernière mise à jour",
+
+  "views": {
+    "overview": "Vue d'ensemble",
+    "agents": "Agents",
+    "trends": "Tendances",
+    "qa": "QA"
+  },
+
+  "errors": {
+    "title": "Impossible de charger les analytiques",
+    "loadFailed": "Échec du chargement des données analytiques",
+    "noData": "Aucune donnée analytique disponible"
+  },
+
+  "overview": {
+    "totalSpecs": "Spécifications totales",
+    "successRate": "Taux de réussite",
+    "successRateDesc": "Taux d'achèvement global",
+    "totalCost": "Coût total",
+    "tokens": "jetons",
+    "avgCostPerSpec": "Coût moyen / Spec",
+    "perSpec": "par spécification",
+    "complexityBreakdown": "Performance par complexité",
+    "complexityDesc": "Taux de réussite et métriques selon les différentes complexités de tâches",
+    "tasks": "tâches",
+    "avgTime": "moy",
+    "avgCost": "moy"
+  },
+
+  "agents": {
+    "totalAttempts": "tentatives totales",
+    "successful": "Réussi",
+    "failed": "Échoué",
+    "totalCost": "Coût total",
+    "avgTime": "Durée moyenne",
+    "errorPatterns": "Modèles d'erreur courants",
+    "noData": "Aucune donnée d'agent disponible"
+  },
+
+  "trends": {
+    "title": "Tendances au fil du temps",
+    "description": "Données de performance historiques au fil du temps",
+    "tasks": "tâches",
+    "noData": "Aucune donnée de tendance disponible",
+    "loading": "Chargement des tendances...",
+    "empty": "Aucune donnée de tendance disponible",
+    "emptySubtext": "Complétez plus de tâches pour voir les tendances",
+    "completedSpecs": "Spécifications terminées",
+    "timeSaved": "Temps économisé (heures)",
+    "successRate": "Taux de réussite (%)"
+  },
+
+  "qa": {
+    "totalReviews": "Revues totales",
+    "approved": "Approuvé",
+    "approvalRate": "taux d'approbation",
+    "rejected": "rejeté",
+    "rejectionRate": "Taux de rejet",
+    "commonIssues": "Problèmes QA courants",
+    "issuesDescription": "Problèmes les plus fréquemment identifiés lors de la revue QA",
+    "noIssues": "Aucun problème QA enregistré"
+  }
+}

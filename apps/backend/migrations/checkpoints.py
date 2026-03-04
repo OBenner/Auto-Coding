@@ -9,11 +9,16 @@ Creates git-based snapshots at each migration phase for easy rollback.
 from __future__ import annotations
 
 import json
+import re
+import shlex
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+
+# Git commit hash pattern (40 hex chars for SHA-1, or 64 for SHA-256)
+_COMMIT_HASH_RE = re.compile(r"^[0-9a-fA-F]{7,64}$")
 
 
 class CheckpointStatus(Enum):
@@ -109,6 +114,11 @@ class CheckpointManager:
         with open(self.checkpoints_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
+    @staticmethod
+    def _validate_commit_hash(commit_hash: str) -> bool:
+        """Validate that a string looks like a git commit hash."""
+        return bool(_COMMIT_HASH_RE.match(commit_hash))
+
     def _get_current_commit(self) -> str | None:
         """
         Get the current git commit hash.
@@ -138,6 +148,9 @@ class CheckpointManager:
         Returns:
             Dict with commit info (message, author, date)
         """
+        if not self._validate_commit_hash(commit_hash):
+            return {"message": "", "author": "", "date": ""}
+
         try:
             result = subprocess.run(
                 ["git", "show", "--no-patch", "--format=%s%n%an%n%ai", commit_hash],
@@ -251,10 +264,15 @@ class CheckpointManager:
         if not checkpoint_dict:
             return False
 
+        # Validate commit hash to prevent command injection
+        commit_hash = checkpoint_dict["commit_hash"]
+        if not self._validate_commit_hash(commit_hash):
+            return False
+
         # Rollback to the commit
         try:
             subprocess.run(
-                ["git", "reset", "--hard", checkpoint_dict["commit_hash"]],
+                ["git", "reset", "--hard", commit_hash],
                 cwd=self.project_dir,
                 capture_output=True,
                 text=True,
@@ -334,7 +352,7 @@ class CheckpointManager:
             True if successful
         """
         baseline = self.get_baseline_commit()
-        if not baseline:
+        if not baseline or not self._validate_commit_hash(baseline):
             return False
 
         try:
@@ -365,13 +383,23 @@ class CheckpointManager:
         """
         script_path = self.rollback_scripts_dir / f"{checkpoint.id}.sh"
 
-        script_content = f"""#!/bin/bash
-# Rollback script for {checkpoint.name}
-# Generated: {checkpoint.timestamp}
+        # Validate commit hash before generating script
+        if not self._validate_commit_hash(checkpoint.commit_hash):
+            return
 
-echo "Rolling back to checkpoint: {checkpoint.name}"
-echo "Phase: {checkpoint.phase_id}"
-echo "Commit: {checkpoint.commit_hash}"
+        # Shell-escape all interpolated values to prevent injection
+        safe_name = shlex.quote(checkpoint.name)
+        safe_phase = shlex.quote(checkpoint.phase_id)
+        safe_hash = shlex.quote(checkpoint.commit_hash)
+        safe_timestamp = shlex.quote(checkpoint.timestamp)
+
+        script_content = f"""#!/bin/bash
+# Rollback script for checkpoint
+# Generated: {safe_timestamp}
+
+echo "Rolling back to checkpoint: "{safe_name}
+echo "Phase: "{safe_phase}
+echo "Commit: "{safe_hash}
 echo ""
 
 # Confirm with user
@@ -383,13 +411,13 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Perform rollback
-git reset --hard {checkpoint.commit_hash}
+git reset --hard {safe_hash}
 
 if [ $? -eq 0 ]; then
-    echo "✓ Successfully rolled back to {checkpoint.name}"
+    echo "Successfully rolled back to checkpoint "{safe_name}
     echo "Current commit: $(git rev-parse --short HEAD)"
 else
-    echo "✗ Rollback failed"
+    echo "Rollback failed"
     exit 1
 fi
 """

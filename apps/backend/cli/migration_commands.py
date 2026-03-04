@@ -71,7 +71,9 @@ def handle_migration_status_command(project_dir: Path, spec_dir: Path) -> None:
         if "rollback_scripts" in info_dict:
             print_key_value("Rollback scripts", str(info_dict["rollback_scripts"]))
         if info_dict.get("migration_plan"):
-            print_key_value("Migration plan", str(migration_plan.relative_to(project_dir)))
+            print_key_value(
+                "Migration plan", str(migration_plan.relative_to(project_dir))
+            )
 
     print()
 

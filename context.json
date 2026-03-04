@@ -1,64 +1,110 @@
 {
   "files_to_modify": {
+    "backend": [
+      "apps/backend/core/cost_tracking.py",
+      "apps/backend/phase_config.py",
+      "apps/backend/agents/session.py",
+      "apps/backend/cli/main.py",
+      "apps/backend/cli/build_commands.py",
+      "apps/backend/cli/utils.py"
+    ],
     "frontend": [
-      "apps/frontend/src/main/project-store.ts",
-      "apps/frontend/src/main/ipc-handlers/agent-events-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/changelog-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/env-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/insights-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/linear-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/project-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/roadmap-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/terminal-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/memory-data-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/memory-status-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/project-context-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/import-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/investigation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/issue-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/release-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/repository-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/import-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/investigation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/issue-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/merge-request-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/release-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/repository-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/generation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/idea-manager.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/session-manager.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/task-converter.ts",
-      "apps/frontend/src/main/ipc-handlers/task/archive-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/task/crud-handlers.ts",
-      "apps/frontend/src/main/agent/agent-process.ts"
+      "apps/frontend/src/main/ipc-handlers/analytics-handlers.ts",
+      "apps/frontend/src/main/ipc-handlers/index.ts",
+      "apps/frontend/src/renderer/App.tsx",
+      "apps/frontend/src/renderer/pages/ProjectSettings.tsx",
+      "apps/frontend/src/shared/i18n/locales/en/settings.json"
+    ]
+  },
+  "files_to_create": {
+    "backend": [
+      "apps/backend/analysis/model_usage_analytics.py",
+      "apps/backend/scripts/model_locks_manager.py",
+      "apps/backend/cli/exit_codes.py",
+      "apps/backend/cli/json_output.py",
+      "apps/backend/cli/artifacts.py",
+      "tests/test_cli_exit_codes.py",
+      "tests/test_json_output.py",
+      "tests/test_artifacts.py"
+    ],
+    "frontend": [
+      "apps/frontend/src/main/ipc-handlers/model-usage-handlers.ts",
+      "apps/frontend/src/renderer/components/model-usage/ModelUsageDashboard.tsx",
+      "apps/frontend/src/renderer/components/model-usage/ModelUsageCard.tsx",
+      "apps/frontend/src/renderer/components/model-usage/CostChart.tsx",
+      "apps/frontend/src/renderer/components/model-usage/AgentModelDisplay.tsx",
+      "apps/frontend/src/renderer/components/model-usage/ModelLockControl.tsx",
+      "apps/frontend/src/renderer/components/model-usage/ModelChangeConfirmationDialog.tsx",
+      "apps/frontend/src/shared/i18n/locales/en/model-usage.json",
+      "apps/frontend/src/shared/i18n/locales/fr/model-usage.json"
+    ],
+    "root": [
+      ".github/workflows/auto-claude-build.yml",
+      "guides/ci-cd-integration.md"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/main/terminal-session-store.ts",
-    "apps/frontend/src/main/agent/agent-queue.ts",
-    "apps/frontend/src/main/ipc-handlers/gitlab/spec-utils.ts"
+    "apps/backend/core/cost_tracking.py",
+    "apps/backend/phase_config.py",
+    "apps/backend/analysis/productivity_analytics.py",
+    "apps/frontend/src/renderer/components/analytics/ProductivityDashboard.tsx",
+    "apps/frontend/src/renderer/components/analytics/MetricsSummaryCard.tsx",
+    "apps/frontend/src/renderer/components/analytics/TrendsChart.tsx",
+    "apps/frontend/src/renderer/components/project-settings/AgentConfigSection.tsx",
+    "apps/frontend/src/main/ipc-handlers/analytics-handlers.ts",
+    "apps/backend/cli/workspace_commands.py",
+    "apps/backend/ui/status.py",
+    "apps/backend/agents/utils.py",
+    ".github/workflows/ci.yml"
   ],
   "patterns": {
-    "async_fs_pattern": "Use 'import { promises as fsPromises } from 'fs'' and await fsPromises.readFile/writeFile",
-    "ipc_pattern": "IPC handlers already use async/await, just need to add await before projectStore method calls",
-    "error_handling": "Use try-catch blocks around file operations, fallback to empty data on errors"
+    "backend_analytics": "Productivity analytics pattern: create Python script in analysis/ directory, call via IPC handler using spawn(). Script outputs JSON with summary, trends, export options.",
+    "ipc_handler_pattern": "IPC handlers in main/ipc-handlers/ use ipcMain.handle() with IPC_CHANNELS constant. Execute Python scripts via spawn() with augmented env vars.",
+    "dashboard_component": "Dashboard components follow ProductivityDashboard pattern: useState for data, useCallback for loading, use Toast for notifications. Separate into card and chart components.",
+    "settings_component": "Settings components use CollapsibleSection with Label + Select pattern. All state changes via onUpdateSettings callback.",
+    "i18n_pattern": "Add translation keys to en/ and fr/ locales. Use namespace: t('namespace:key') pattern in components.",
+    "cli_argument_pattern": "All CLI flags are added to argparse.ArgumentParser in cli/main.py with proper help text and examples",
+    "exit_code_pattern": "Use sys.exit() with specific codes - currently using 0 (success), 1 (error), 130 (Ctrl+C)",
+    "json_output_pattern": "JSON output already used in workspace_commands.py: print(json.dumps(result))",
+    "env_var_pattern": "Environment variables read via os.getenv() in utils.py - e.g., DEFAULT_BRANCH, AUTO_BUILD_MODEL",
+    "artifact_pattern": "Status and build data tracked in ui/status.py with BuildState enum and StatusManager"
   },
   "existing_implementations": {
-    "description": "TerminalSessionStore already implements async save pattern with write serialization to prevent concurrent writes",
-    "relevant_files": [
-      "apps/frontend/src/main/terminal-session-store.ts",
-      "apps/frontend/src/main/agent/agent-queue.ts"
-    ]
-  },
-  "sync_operations_count": {
-    "readFileSync": 9,
-    "writeFileSync": 3,
-    "existsSync": 15,
-    "mkdirSync": 1,
-    "readdirSync": 2
-  },
-  "affected_handlers": {
-    "count": 28,
-    "pattern": "All handlers already use async/await, just need to add await before projectStore calls"
+    "cost_tracking": {
+      "description": "Found existing cost tracking system in apps/backend/core/cost_tracking.py",
+      "relevant_files": [
+        "apps/backend/core/cost_tracking.py",
+        "apps/backend/core/token_tracker.py"
+      ],
+      "details": "CostTracker class logs usage records with agent_type, model, tokens, cost, timestamp. Reads MODEL_PRICING dict with per-1M-token pricing."
+    },
+    "model_configuration": {
+      "description": "Found model configuration system in phase_config.py",
+      "relevant_files": [
+        "apps/backend/phase_config.py"
+      ],
+      "details": "AGENT_DEFAULT_MODELS dict maps agent types to default models. Supports environment variable overrides AGENT_MODEL_<AGENT_TYPE>. Task metadata agentModels field for per-agent config."
+    },
+    "agent_session": {
+      "description": "Found agent session tracking in agents/session.py",
+      "relevant_files": [
+        "apps/backend/agents/session.py"
+      ],
+      "details": "AgentSession class manages SDK client creation and agent execution. Logs model used per session."
+    },
+    "dashboard_ui": {
+      "description": "Found analytics dashboard pattern",
+      "relevant_files": [
+        "apps/frontend/src/renderer/components/analytics/ProductivityDashboard.tsx",
+        "apps/frontend/src/renderer/components/analytics/MetricsSummaryCard.tsx",
+        "apps/frontend/src/renderer/components/analytics/TrendsChart.tsx"
+      ],
+      "details": "ProductivityDashboard uses summary cards and trends chart. IPC handlers call Python scripts via executePythonAnalytics()."
+    },
+    "cli_structure": "CLI entry point is apps/backend/run.py which imports cli.main. argparse used for argument parsing in cli/main.py",
+    "exit_codes": "Current exit codes: 0 (success), 1 (various errors), 130 (KeyboardInterrupt). No specific codes for build/QA failure",
+    "json_output": "JSON output pattern exists in workspace_commands.py for --merge-preview and --create-pr commands",
+    "build_states": "BuildState enum in ui/status.py: IDLE, PLANNING, BUILDING, QA, COMPLETE, PAUSED, ERROR",
+    "github_actions": "Existing CI workflow: .github/workflows/ci.yml with cross-platform testing (Linux, Windows, macOS)"
   }
 }

@@ -14,13 +14,14 @@ Usage:
 """
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from core.providers.base import AIEngineProvider
-    from core.providers.config import ProviderConfig
-
+from core.providers.config import ProviderConfig
 from core.providers.exceptions import ProviderError, ProviderNotInstalled
+
+if TYPE_CHECKING:
+    from core.providers.base import AgentSession, AIEngineProvider
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,56 @@ def _create_claude_provider(config: "ProviderConfig") -> "AIEngineProvider":
 
     logger.debug(f"Creating Claude provider with model: {config.claude_model}")
     return ClaudeAgentProvider(config)
+
+
+def _create_openai_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create an OpenAI direct provider.
+
+    Args:
+        config: ProviderConfig with OpenAI settings
+
+    Returns:
+        OpenAIProvider instance
+
+    Raises:
+        ProviderNotInstalled: If openai package is not installed
+        ProviderError: If provider creation fails
+    """
+    try:
+        from core.providers.adapters.openai import OpenAIProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "OpenAI adapter not installed. Install with: pip install openai"
+        ) from e
+
+    logger.debug(f"Creating OpenAI provider with model: {config.openai_model}")
+    return OpenAIProvider(config)
+
+
+def _create_google_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create a Google Gemini provider.
+
+    Args:
+        config: ProviderConfig with Google settings
+
+    Returns:
+        GoogleProvider instance
+
+    Raises:
+        ProviderNotInstalled: If google-generativeai package is not installed
+        ProviderError: If provider creation fails
+    """
+    try:
+        from core.providers.adapters.google import GoogleProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "Google adapter not installed. Install with: pip install google-generativeai"
+        ) from e
+
+    logger.debug(f"Creating Google provider with model: {config.google_model}")
+    return GoogleProvider(config)
 
 
 def _create_litellm_provider(config: "ProviderConfig") -> "AIEngineProvider":
@@ -101,6 +152,56 @@ def _create_openrouter_provider(config: "ProviderConfig") -> "AIEngineProvider":
     return OpenRouterProvider(config)
 
 
+def _create_zhipuai_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create a Zhipu AI provider.
+
+    Args:
+        config: ProviderConfig with Zhipu AI settings
+
+    Returns:
+        ZhipuAIProvider instance
+
+    Raises:
+        ProviderNotInstalled: If zai-sdk package is not installed
+        ProviderError: If provider creation fails
+    """
+    try:
+        from core.providers.adapters.zhipuai import ZhipuAIProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "ZhipuAI adapter not installed. Install with: pip install zai-sdk"
+        ) from e
+
+    logger.debug(f"Creating ZhipuAI provider with model: {config.zhipuai_model}")
+    return ZhipuAIProvider(config)
+
+
+def _create_ollama_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create an Ollama local model provider.
+
+    Args:
+        config: ProviderConfig with Ollama settings
+
+    Returns:
+        OllamaProvider instance
+
+    Raises:
+        ProviderNotInstalled: If openai package is not installed
+        ProviderError: If provider creation fails
+    """
+    try:
+        from core.providers.adapters.ollama import OllamaProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "Ollama adapter not installed. Install with: pip install openai"
+        ) from e
+
+    logger.debug(f"Creating Ollama provider with model: {config.ollama_model}")
+    return OllamaProvider(config)
+
+
 def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
     """
     Create an AI engine provider based on configuration.
@@ -135,15 +236,82 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
 
     if provider == "claude":
         return _create_claude_provider(config)
+    elif provider == "openai":
+        return _create_openai_provider(config)
+    elif provider == "google":
+        return _create_google_provider(config)
     elif provider == "litellm":
         return _create_litellm_provider(config)
     elif provider == "openrouter":
         return _create_openrouter_provider(config)
+    elif provider == "zhipuai":
+        return _create_zhipuai_provider(config)
+    elif provider == "ollama":
+        return _create_ollama_provider(config)
     else:
         raise ProviderError(
             f"Unknown AI engine provider: {provider}. "
-            f"Supported providers: claude, litellm, openrouter"
+            f"Supported providers: claude, openai, google, litellm, openrouter, zhipuai, ollama"
         )
+
+
+def create_agent_session(
+    agent_type: str,
+    project_dir: "Path",
+    spec_dir: "Path",
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
+) -> "AgentSession":
+    """
+    Shared factory for creating agent sessions across all agent types.
+
+    Consolidates the duplicated provider/session logic from planner.py,
+    coder.py, qa/reviewer.py, and qa/fixer.py.
+
+    Args:
+        agent_type: The agent type ('planner', 'coder', 'qa_reviewer', 'qa_fixer')
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        AttributeError: If the session object lacks a ``client`` attribute
+        ProviderError: If provider creation or session creation fails
+    """
+    from core.providers.base import SessionConfig
+
+    config = ProviderConfig.from_env(agent_type=agent_type)
+    provider = create_engine_provider(config)
+
+    if provider.name == "claude":
+        session = provider.create_session(
+            config=SessionConfig(
+                name=f"{agent_type}-session",
+                model=model,
+            ),
+            project_dir=Path(project_dir),
+            spec_dir=Path(spec_dir),
+            agent_type=agent_type,
+            max_thinking_tokens=max_thinking_tokens,
+        )
+    else:
+        session = provider.create_session(
+            SessionConfig(
+                name=f"{agent_type}-session",
+                model=model,
+            )
+        )
+
+    if not hasattr(session, "client"):
+        raise AttributeError(
+            f"Provider {provider.name} session missing 'client' attribute"
+        )
+
+    return session
 
 
 def get_available_provider_names() -> list[str]:
@@ -153,4 +321,4 @@ def get_available_provider_names() -> list[str]:
     Returns:
         List of provider name strings
     """
-    return ["claude", "litellm", "openrouter"]
+    return ["claude", "openai", "google", "litellm", "openrouter", "zhipuai", "ollama"]

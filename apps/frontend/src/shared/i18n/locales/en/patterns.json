@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "Learned Patterns",
+    "description": "Review and manage code patterns learned from agent sessions",
+    "refresh": "Refresh",
+    "errorTitle": "Error loading patterns",
+    "retry": "Retry"
+  },
+  "component": {
+    "title": "Pattern Review",
+    "description": "Review learned code patterns and mark them as team standards or deprecated.",
+    "categories": "Categories",
+    "patterns": "Patterns",
+    "loading": "Loading patterns...",
+    "empty": "No patterns learned yet",
+    "emptyDescription": "Patterns are extracted during agent code generation sessions and stored in Graphiti memory.",
+    "emptyFilter": "No patterns in this category",
+    "showAll": "Show all patterns"
+  },
+  "actions": {
+    "approve": "Approve as Team Standard",
+    "deprecate": "Mark as Deprecated"
+  },
+  "filters": {
+    "all": "all"
+  },
+  "metadata": {
+    "spec": "Spec",
+    "pattern": "pattern",
+    "patterns": "patterns"
+  },
+  "legend": {
+    "title": "About Pattern Confidence:",
+    "high": "High confidence (90%+): Pattern used frequently and consistently",
+    "medium": "Medium confidence (70-90%): Pattern used moderately, may need review",
+    "low": "Low confidence (<70%): Pattern used infrequently, verify before approving",
+    "approved": "Approved patterns are marked as team standards (confidence: 100%)",
+    "deprecated": "Deprecated patterns are marked to avoid (confidence: 0%)"
+  }
+}

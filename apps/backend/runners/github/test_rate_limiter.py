@@ -11,7 +11,6 @@ Comprehensive test suite for rate limiting system covering:
 - Edge cases
 """
 
-import asyncio
 import time
 
 import pytest
@@ -376,7 +375,7 @@ class TestCheckRateLimit:
     @pytest.mark.asyncio
     async def test_check_github_failure(self):
         """Check fails when rate limited."""
-        limiter = RateLimiter.get_instance(
+        RateLimiter.get_instance(
             github_limit=0,  # No tokens
             github_refill_rate=0.0,
         )
@@ -445,7 +444,7 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_burst_handling(self):
         """Handle burst of requests."""
-        limiter = RateLimiter.get_instance(
+        RateLimiter.get_instance(
             github_limit=5,
             github_refill_rate=5.0,
         )

@@ -6,12 +6,15 @@ Main review checkpoint logic including interactive menu, user prompts,
 and file editing capabilities.
 """
 
+import logging
 import os
 import subprocess
 import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from ui import (
     Icons,
@@ -216,7 +219,7 @@ def run_review_checkpoint(
                 formatted = dt.strftime("%Y-%m-%d %H:%M")
                 content.append(f"{muted('Approved at:')} {formatted}")
             except ValueError:
-                pass
+                logger.debug("Failed to parse approved_at timestamp")
         print()
         print(box(content, width=60, style="light"))
         print()

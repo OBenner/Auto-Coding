@@ -1,0 +1,101 @@
+{
+  "generic": "Une erreur s'est produite",
+  "unknownError": "Une erreur inconnue s'est produite",
+  "operationFailed": "Opération échouée",
+  "networkError": "Erreur réseau",
+  "notFound": "Non trouvé",
+  "unauthorized": "Non autorisé",
+  "forbidden": "Interdit",
+  "serverError": "Erreur du serveur",
+  "timeout": "Délai d'expiration de la requête",
+  "api": {
+    "connectionFailed": "Échec de la connexion à l'API",
+    "requestFailed": "Échec de la requête API",
+    "invalidResponse": "Réponse API invalide",
+    "timeout": "Délai d'expiration de la requête API",
+    "unauthorized": "Échec de l'authentification API",
+    "notFound": "Point de terminaison API introuvable : {{endpoint}}",
+    "serverError": "Erreur du serveur API : {{message}}"
+  },
+  "task": {
+    "notFound": "Tâche introuvable : {{taskId}}",
+    "createFailed": "Échec de la création de la tâche",
+    "startFailed": "Échec du démarrage de la tâche : {{error}}",
+    "stopFailed": "Échec de l'arrêt de la tâche : {{error}}",
+    "deleteFailed": "Échec de la suppression de la tâche : {{error}}",
+    "loadFailed": "Échec du chargement des détails de la tâche",
+    "alreadyRunning": "La tâche est déjà en cours d'exécution",
+    "notRunning": "La tâche n'est pas en cours d'exécution",
+    "invalidStatus": "Statut de tâche invalide : {{status}}",
+    "parseError": "Échec de l'analyse des données de la tâche : {{error}}"
+  },
+  "spec": {
+    "notFound": "Spécification introuvable : {{specId}}",
+    "createFailed": "Échec de la création de la spécification",
+    "loadFailed": "Échec du chargement des détails de la spécification",
+    "deleteFailed": "Échec de la suppression de la spécification : {{error}}",
+    "invalidFormat": "Format de spécification invalide",
+    "parseError": "Échec de l'analyse de la spécification : {{error}}"
+  },
+  "websocket": {
+    "connectionFailed": "Échec de la connexion WebSocket",
+    "disconnected": "WebSocket déconnecté",
+    "reconnectFailed": "Échec de la reconnexion WebSocket",
+    "sendFailed": "Échec de l'envoi du message WebSocket",
+    "invalidMessage": "Message WebSocket invalide reçu"
+  },
+  "auth": {
+    "tokenMissing": "Le jeton d'authentification est manquant",
+    "tokenInvalid": "Le jeton d'authentification n'est pas valide",
+    "tokenExpired": "Le jeton d'authentification a expiré",
+    "verificationFailed": "Échec de la vérification du jeton",
+    "unauthorized": "Vous n'êtes pas autorisé à effectuer cette action",
+    "sessionExpired": "Votre session a expiré. Veuillez vous reconnecter."
+  },
+  "validation": {
+    "required": "Ce champ est obligatoire",
+    "invalidFormat": "Format invalide",
+    "tooShort": "La valeur est trop courte (minimum : {{min}})",
+    "tooLong": "La valeur est trop longue (maximum : {{max}})",
+    "invalidUrl": "Format d'URL invalide",
+    "invalidEmail": "Format d'e-mail invalide",
+    "mustBeNumber": "La valeur doit être un nombre",
+    "mustBePositive": "La valeur doit être positive",
+    "outOfRange": "La valeur doit être comprise entre {{min}} et {{max}}"
+  },
+  "file": {
+    "uploadFailed": "Échec du téléchargement du fichier",
+    "invalidType": "Type de fichier invalide : {{type}}",
+    "tooLarge": "Le fichier est trop volumineux (maximum : {{maxSize}})",
+    "readFailed": "Échec de la lecture du fichier",
+    "notFound": "Fichier introuvable : {{filename}}"
+  },
+  "settings": {
+    "loadFailed": "Échec du chargement des paramètres",
+    "saveFailed": "Échec de l'enregistrement des paramètres",
+    "resetFailed": "Échec de la réinitialisation des paramètres",
+    "invalidValue": "Valeur de paramètre invalide : {{setting}}"
+  },
+  "cache": {
+    "loadFailed": "Échec du chargement des données en cache",
+    "saveFailed": "Échec de l'enregistrement dans le cache",
+    "clearFailed": "Échec de l'effacement du cache"
+  },
+  "general": {
+    "pageNotFound": "Page introuvable",
+    "accessDenied": "Accès refusé",
+    "sessionExpired": "Session expirée",
+    "maintenanceMode": "Le système est en maintenance",
+    "tryAgain": "Veuillez réessayer",
+    "contactSupport": "Veuillez contacter le support si le problème persiste"
+  },
+  "errorBoundary": {
+    "title": "Une erreur s'est produite",
+    "description": "Une erreur s'est produite lors du rendu de ce contenu",
+    "errorMessage": "Message d'erreur",
+    "tryAgain": "Réessayer"
+  },
+  "terminal": {
+    "backendRequired": "La saisie du terminal nécessite une connexion au backend"
+  }
+}

@@ -177,7 +177,10 @@ class MigrationPlanner:
                 import json
 
                 data = json.loads(package_json.read_text(encoding="utf-8"))
-                deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+                deps = {
+                    **data.get("dependencies", {}),
+                    **data.get("devDependencies", {}),
+                }
 
                 # Detect React
                 if "react" in deps:
@@ -260,18 +263,20 @@ class MigrationPlanner:
                 content = file.read_text(encoding="utf-8")
                 # Look for Python 2 specific patterns
                 patterns["python2_patterns"] += len(
-                    re.findall(r"print\s+[^\(]|xrange\(|unicode\(|\.iteritems\(", content)
+                    re.findall(
+                        r"print\s+[^\(]|xrange\(|unicode\(|\.iteritems\(", content
+                    )
                 )
             except Exception:
                 continue
 
         return patterns
 
-    def _estimate_overall_complexity(self, patterns: dict[str, Any]) -> MigrationComplexity:
+    def _estimate_overall_complexity(
+        self, patterns: dict[str, Any]
+    ) -> MigrationComplexity:
         """Estimate overall migration complexity based on detected patterns."""
-        total_changes = sum(
-            v for v in patterns.values() if isinstance(v, int)
-        )
+        total_changes = sum(v for v in patterns.values() if isinstance(v, int))
 
         if total_changes == 0:
             return MigrationComplexity.LOW
@@ -570,7 +575,7 @@ class MigrationPlanner:
 
         for i, phase in enumerate(self.phases):
             checkpoint = MigrationCheckpoint(
-                id=f"checkpoint-{i+1}",
+                id=f"checkpoint-{i + 1}",
                 phase_id=phase.id,
                 name=f"Checkpoint after {phase.name}",
                 validation_steps=[
@@ -579,7 +584,7 @@ class MigrationPlanner:
                     "Verify no regressions",
                 ],
                 success_criteria=phase.validation_criteria,
-                rollback_command=f".migration-checkpoints/rollback/checkpoint-{i+1}.sh",
+                rollback_command=f".migration-checkpoints/rollback/checkpoint-{i + 1}.sh",
             )
             self.checkpoints.append(checkpoint)
 
