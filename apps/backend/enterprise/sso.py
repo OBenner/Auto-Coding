@@ -38,6 +38,10 @@ from urllib.parse import urlencode
 # Configure module logger
 logger = logging.getLogger(__name__)
 
+# SAML XML Schema attribute URIs (OASIS standard namespace identifiers, not HTTP connections)
+_CLAIMS_NS = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims"  # noqa: S105
+_CLAIMS_GROUP_NS = "http://schemas.xmlsoap.org/claims"  # noqa: S105
+
 
 class SAMLProviderType(str, Enum):
     """Supported SAML identity provider types."""
@@ -109,12 +113,12 @@ class SAMLConfig:
         if not self.attribute_map:
             # Default SAML attribute mappings
             self.attribute_map = {
-                "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
-                "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
-                "last_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
-                "display_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
-                "role": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role",
-                "groups": "http://schemas.xmlsoap.org/claims/Group",
+                "email": f"{_CLAIMS_NS}/emailaddress",
+                "first_name": f"{_CLAIMS_NS}/givenname",
+                "last_name": f"{_CLAIMS_NS}/surname",
+                "display_name": f"{_CLAIMS_NS}/name",
+                "role": f"{_CLAIMS_NS}/role",
+                "groups": f"{_CLAIMS_GROUP_NS}/Group",
             }
 
 
