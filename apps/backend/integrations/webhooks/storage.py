@@ -40,6 +40,8 @@ def _set_restrictive_permissions(file_path: Path) -> None:
     try:
         os.chmod(file_path, 0o600)
     except OSError:
+        # Intentionally ignored: permission setting is best-effort;
+        # some filesystems (e.g., network mounts) may not support chmod.
         pass
 
 

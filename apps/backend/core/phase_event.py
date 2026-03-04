@@ -116,8 +116,6 @@ def emit_phase(
         subtask: Optional subtask identifier
         include_resources: Whether to include resource usage metrics (default: True)
     """
-    global _last_phase
-
     phase_value = phase.value if isinstance(phase, ExecutionPhase) else phase
 
     payload: dict[str, Any] = {
@@ -236,6 +234,8 @@ def _debug_log(message: str) -> None:
         sys.stderr.write(f"[phase_event] {message}\n")
         sys.stderr.flush()
     except (OSError, UnicodeEncodeError):
+        # Intentionally ignored: debug logging is best-effort;
+        # stderr may be unavailable or broken in some environments.
         pass
 
 

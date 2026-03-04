@@ -316,7 +316,11 @@ export function registerWebhookHandlers(): void {
         const configDir = getWebhookConfigDir(specId);
         const configPath = path.join(configDir, `${webhookId}.json`);
 
-        if (!existsSync(configPath)) {
+        // Read file directly instead of checking existence first (avoids TOCTOU race)
+        let content: string;
+        try {
+          content = readFileSync(configPath, 'utf-8');
+        } catch {
           return {
             success: false,
             error: 'Webhook not found',
@@ -324,7 +328,6 @@ export function registerWebhookHandlers(): void {
         }
 
         // Load existing webhook
-        const content = readFileSync(configPath, 'utf-8');
         const existing = JSON.parse(content) as WebhookConfig;
 
         // Apply updates

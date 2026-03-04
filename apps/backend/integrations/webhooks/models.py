@@ -220,6 +220,8 @@ class WebhookConfig:
             try:
                 os.chmod(config_file, 0o600)
             except OSError:
+                # Intentionally ignored: permission setting is best-effort;
+                # some filesystems may not support chmod.
                 pass
 
     @classmethod

@@ -413,7 +413,6 @@ def format_event_description(event_type: str, context: dict) -> str:
         Formatted description string
     """
     spec_id = context.get("spec_id", "Unknown")
-    spec_title = context.get("spec_title", "Unknown")
 
     descriptions = {
         EVENT_SPEC_CREATED: f"New spec created: {spec_id}",

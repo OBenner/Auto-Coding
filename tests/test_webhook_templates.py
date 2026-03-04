@@ -19,10 +19,8 @@ Test Coverage:
 
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -32,6 +30,7 @@ sys.path.insert(0, str(backend_path))
 
 # Import from templates module (not package) to avoid naming conflict
 import importlib.util
+
 templates_module_path = backend_path / "integrations" / "webhooks" / "templates.py"
 spec = importlib.util.spec_from_file_location(
     "integrations.webhooks.templates_module",
@@ -44,8 +43,7 @@ TemplateEngine = templates_module.TemplateEngine
 render_template = templates_module.render_template
 
 from integrations.webhooks.models import WebhookConfig, WebhookEvent, WebhookTemplate
-from integrations.webhooks.payload import build_payload, PayloadBuilder
-
+from integrations.webhooks.payload import PayloadBuilder, build_payload
 
 # =============================================================================
 # FIXTURES

@@ -15,12 +15,9 @@ Tests the complete webhook system integration including:
 
 import asyncio
 import json
-import os
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -42,12 +39,9 @@ from integrations.webhooks.delivery import (
 )
 from integrations.webhooks.dispatcher import (
     WebhookDispatcher,
-    dispatch_event,
-    dispatch_spec_created,
 )
 from integrations.webhooks.models import (
     WebhookConfig,
-    WebhookDelivery,
     WebhookEvent,
     WebhookTemplate,
 )
