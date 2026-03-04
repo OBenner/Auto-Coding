@@ -10,6 +10,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdir
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { getConfiguredPythonPath } from '../python-env-manager';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -432,21 +433,23 @@ export function registerWebhookHandlers(): void {
         // Send test webhook using Python backend
         const { spawn } = require('node:child_process');
         const specDir = path.resolve(process.cwd(), '.auto-claude', 'specs', specId);
+        const pythonPath = getConfiguredPythonPath();
 
         return new Promise((resolve) => {
+          // Pass arguments via sys.argv to avoid string interpolation injection
           const python = spawn(
-            'python',
+            pythonPath,
             ['-c', `
-from integrations.webhooks.dispatcher import WebhookDispatcher
+import json, sys
 from pathlib import Path
-import json
-import sys
+from integrations.webhooks.dispatcher import WebhookDispatcher
 
-spec_dir = Path("${specDir}")
+spec_dir = Path(sys.argv[1])
+webhook_id = sys.argv[2]
 dispatcher = WebhookDispatcher(spec_dir)
-result = dispatcher.test_webhook("${webhookId}")
+result = dispatcher.test_webhook(webhook_id)
 print(json.dumps(result))
-`],
+`, specDir, webhookId],
             { cwd: path.resolve(process.cwd(), 'apps', 'backend') }
           );
 
