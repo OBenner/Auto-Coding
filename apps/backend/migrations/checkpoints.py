@@ -425,11 +425,11 @@ fi
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script_content)
 
-        # Make script executable (Unix-like systems)
+        # Make script executable (Unix-like systems; no-op on Windows)
         try:
             script_path.chmod(0o755)
-        except Exception:
-            pass
+        except OSError:
+            pass  # Expected on Windows where chmod is not supported
 
     def _checkpoint_to_dict(self, checkpoint: Checkpoint) -> dict:
         """Convert Checkpoint to dictionary."""

@@ -10,11 +10,10 @@ Tests the migration_assistant.py module functionality including:
 - Error handling and logging
 """
 
-import json
 import platform
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -50,7 +49,7 @@ class TestMigrationCheckpointValidation:
         result = validate_migration_checkpoint(checkpoint_dir, project_dir)
 
         assert result["valid"] is False
-        assert "No checkpoint commit file found" in result["issues"]
+        assert "No checkpoint metadata found" in result["issues"]
 
     def test_validation_fails_when_no_rollback_dir(self, tmp_path):
         """Verify validation fails when rollback directory is missing."""
@@ -85,7 +84,7 @@ class TestMigrationCheckpointValidation:
 
     @pytest.mark.skipif(
         platform.system() == "Windows",
-        reason="Unix executable permissions not supported on Windows"
+        reason="Unix executable permissions not supported on Windows",
     )
     def test_validation_fails_when_script_not_executable(self, tmp_path):
         """Verify validation fails when rollback scripts are not executable (Unix only)."""
@@ -109,7 +108,7 @@ class TestMigrationCheckpointValidation:
 
     @pytest.mark.skipif(
         platform.system() == "Windows",
-        reason="Unix executable permissions not supported on Windows"
+        reason="Unix executable permissions not supported on Windows",
     )
     def test_validation_succeeds_with_valid_checkpoint(self, tmp_path):
         """Verify validation succeeds when checkpoint is properly structured (Unix only)."""
@@ -136,7 +135,7 @@ class TestMigrationCheckpointValidation:
 
     @pytest.mark.skipif(
         platform.system() == "Windows",
-        reason="Unix executable permissions not supported on Windows"
+        reason="Unix executable permissions not supported on Windows",
     )
     def test_validation_reads_latest_checkpoint(self, tmp_path):
         """Verify validation reads the latest checkpoint when multiple exist (Unix only)."""
@@ -160,12 +159,14 @@ class TestMigrationCheckpointValidation:
 
         assert result["valid"] is True
         assert result["checkpoint_info"]["commit"] == "commit3"
-        assert result["checkpoint_info"]["checkpoint_file"] == "checkpoint-003-commit.txt"
+        assert (
+            result["checkpoint_info"]["checkpoint_file"] == "checkpoint-003-commit.txt"
+        )
         assert result["checkpoint_info"]["rollback_scripts"] == 3
 
     @pytest.mark.skipif(
         platform.system() == "Windows",
-        reason="Unix executable permissions not supported on Windows"
+        reason="Unix executable permissions not supported on Windows",
     )
     def test_validation_includes_migration_plan_when_exists(self, tmp_path):
         """Verify validation includes migration plan info when file exists (Unix only)."""
@@ -213,7 +214,10 @@ class TestMigrationCheckpointValidation:
             result = validate_migration_checkpoint(checkpoint_dir, project_dir)
 
         assert result["valid"] is False
-        assert any("Failed to read checkpoint commit file" in issue for issue in result["issues"])
+        assert any(
+            "Failed to read checkpoint commit file" in issue
+            for issue in result["issues"]
+        )
 
 
 class TestMigrationAssistantSession:
@@ -228,9 +232,18 @@ class TestMigrationAssistantSession:
         spec_dir.mkdir()
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", side_effect=FileNotFoundError("Prompt not found")):
-                with patch("agents.migration_assistant.get_phase_model", return_value="claude-sonnet-4"):
-                    with patch("agents.migration_assistant.get_phase_thinking_budget", return_value=10000):
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                side_effect=FileNotFoundError("Prompt not found"),
+            ):
+                with patch(
+                    "agents.migration_assistant.get_phase_model",
+                    return_value="claude-sonnet-4",
+                ):
+                    with patch(
+                        "agents.migration_assistant.get_phase_thinking_budget",
+                        return_value=10000,
+                    ):
                         result = await run_migration_assistant(project_dir, spec_dir)
 
         assert result["success"] is False
@@ -246,11 +259,25 @@ class TestMigrationAssistantSession:
         spec_dir.mkdir()
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", return_value="Test prompt"):
-                with patch("agents.migration_assistant.get_phase_model", return_value="claude-sonnet-4"):
-                    with patch("agents.migration_assistant.get_phase_thinking_budget", return_value=10000):
-                        with patch("agents.migration_assistant.create_client", side_effect=RuntimeError("SDK error")):
-                            result = await run_migration_assistant(project_dir, spec_dir)
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                return_value="Test prompt",
+            ):
+                with patch(
+                    "agents.migration_assistant.get_phase_model",
+                    return_value="claude-sonnet-4",
+                ):
+                    with patch(
+                        "agents.migration_assistant.get_phase_thinking_budget",
+                        return_value=10000,
+                    ):
+                        with patch(
+                            "agents.migration_assistant.create_client",
+                            side_effect=RuntimeError("SDK error"),
+                        ):
+                            result = await run_migration_assistant(
+                                project_dir, spec_dir
+                            )
 
         assert result["success"] is False
         assert "Failed to create Claude SDK client" in result["error"]
@@ -268,14 +295,29 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(return_value={"response": "success"})
+        mock_client.create_agent_session = AsyncMock(
+            return_value={"response": "success"}
+        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", return_value="Test prompt"):
-                with patch("agents.migration_assistant.create_client", return_value=mock_client):
-                    with patch("agents.migration_assistant.get_phase_model", return_value="claude-sonnet-4"):
-                        with patch("agents.migration_assistant.get_phase_thinking_budget", return_value=10000):
-                            result = await run_migration_assistant(project_dir, spec_dir)
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                return_value="Test prompt",
+            ):
+                with patch(
+                    "agents.migration_assistant.create_client", return_value=mock_client
+                ):
+                    with patch(
+                        "agents.migration_assistant.get_phase_model",
+                        return_value="claude-sonnet-4",
+                    ):
+                        with patch(
+                            "agents.migration_assistant.get_phase_thinking_budget",
+                            return_value=10000,
+                        ):
+                            result = await run_migration_assistant(
+                                project_dir, spec_dir
+                            )
 
         assert result["success"] is True
         assert result["checkpoints_created"] == 0  # No checkpoints created yet
@@ -291,21 +333,36 @@ class TestMigrationAssistantSession:
         migration_context = {
             "from_framework": "React 17",
             "to_framework": "React 18",
-            "migration_type": "framework_upgrade"
+            "migration_type": "framework_upgrade",
         }
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(return_value={"response": "success"})
+        mock_client.create_agent_session = AsyncMock(
+            return_value={"response": "success"}
+        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", return_value="Test prompt"):
-                with patch("agents.migration_assistant.create_client", return_value=mock_client):
-                    with patch("agents.migration_assistant.get_phase_model", return_value="claude-sonnet-4"):
-                        with patch("agents.migration_assistant.get_phase_thinking_budget", return_value=10000):
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                return_value="Test prompt",
+            ):
+                with patch(
+                    "agents.migration_assistant.create_client", return_value=mock_client
+                ):
+                    with patch(
+                        "agents.migration_assistant.get_phase_model",
+                        return_value="claude-sonnet-4",
+                    ):
+                        with patch(
+                            "agents.migration_assistant.get_phase_thinking_budget",
+                            return_value=10000,
+                        ):
                             await run_migration_assistant(
-                                project_dir, spec_dir, migration_context=migration_context
+                                project_dir,
+                                spec_dir,
+                                migration_context=migration_context,
                             )
 
         # Verify create_agent_session was called with migration context
@@ -340,14 +397,29 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(return_value={"response": "success"})
+        mock_client.create_agent_session = AsyncMock(
+            return_value={"response": "success"}
+        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", return_value="Test prompt"):
-                with patch("agents.migration_assistant.create_client", return_value=mock_client):
-                    with patch("agents.migration_assistant.get_phase_model", return_value="claude-sonnet-4"):
-                        with patch("agents.migration_assistant.get_phase_thinking_budget", return_value=10000):
-                            result = await run_migration_assistant(project_dir, spec_dir)
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                return_value="Test prompt",
+            ):
+                with patch(
+                    "agents.migration_assistant.create_client", return_value=mock_client
+                ):
+                    with patch(
+                        "agents.migration_assistant.get_phase_model",
+                        return_value="claude-sonnet-4",
+                    ):
+                        with patch(
+                            "agents.migration_assistant.get_phase_thinking_budget",
+                            return_value=10000,
+                        ):
+                            result = await run_migration_assistant(
+                                project_dir, spec_dir
+                            )
 
         assert result["success"] is True
         assert result["checkpoints_created"] == 3
@@ -367,14 +439,29 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(return_value={"response": "success"})
+        mock_client.create_agent_session = AsyncMock(
+            return_value={"response": "success"}
+        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", return_value="Test prompt"):
-                with patch("agents.migration_assistant.create_client", return_value=mock_client):
-                    with patch("agents.migration_assistant.get_phase_model", return_value="claude-sonnet-4"):
-                        with patch("agents.migration_assistant.get_phase_thinking_budget", return_value=10000):
-                            result = await run_migration_assistant(project_dir, spec_dir)
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                return_value="Test prompt",
+            ):
+                with patch(
+                    "agents.migration_assistant.create_client", return_value=mock_client
+                ):
+                    with patch(
+                        "agents.migration_assistant.get_phase_model",
+                        return_value="claude-sonnet-4",
+                    ):
+                        with patch(
+                            "agents.migration_assistant.get_phase_thinking_budget",
+                            return_value=10000,
+                        ):
+                            result = await run_migration_assistant(
+                                project_dir, spec_dir
+                            )
 
         assert result["success"] is True
         assert result["migration_plan_path"] == "migration_plan.md"
@@ -390,14 +477,29 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(side_effect=RuntimeError("Session failed"))
+        mock_client.create_agent_session = AsyncMock(
+            side_effect=RuntimeError("Session failed")
+        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", return_value="Test prompt"):
-                with patch("agents.migration_assistant.create_client", return_value=mock_client):
-                    with patch("agents.migration_assistant.get_phase_model", return_value="claude-sonnet-4"):
-                        with patch("agents.migration_assistant.get_phase_thinking_budget", return_value=10000):
-                            result = await run_migration_assistant(project_dir, spec_dir)
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                return_value="Test prompt",
+            ):
+                with patch(
+                    "agents.migration_assistant.create_client", return_value=mock_client
+                ):
+                    with patch(
+                        "agents.migration_assistant.get_phase_model",
+                        return_value="claude-sonnet-4",
+                    ):
+                        with patch(
+                            "agents.migration_assistant.get_phase_thinking_budget",
+                            return_value=10000,
+                        ):
+                            result = await run_migration_assistant(
+                                project_dir, spec_dir
+                            )
 
         assert result["success"] is False
         assert "Migration session failed" in result["error"]
@@ -414,16 +516,23 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(return_value={"response": "success"})
+        mock_client.create_agent_session = AsyncMock(
+            return_value={"response": "success"}
+        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", return_value="Test prompt"):
-                with patch("agents.migration_assistant.create_client", return_value=mock_client) as mock_create:
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                return_value="Test prompt",
+            ):
+                with patch(
+                    "agents.migration_assistant.create_client", return_value=mock_client
+                ) as mock_create:
                     await run_migration_assistant(
                         project_dir,
                         spec_dir,
                         model="claude-opus-4",
-                        max_thinking_tokens=16000
+                        max_thinking_tokens=16000,
                     )
 
         # Verify create_client was called with custom parameters
@@ -450,15 +559,32 @@ class TestMigrationAssistantSession:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.create_agent_session = AsyncMock(return_value={"response": "success"})
+        mock_client.create_agent_session = AsyncMock(
+            return_value={"response": "success"}
+        )
 
         with patch("agents.migration_assistant.get_task_logger", return_value=None):
-            with patch("agents.migration_assistant.get_agent_prompt", return_value="Test prompt"):
-                with patch("agents.migration_assistant.create_client", return_value=mock_client):
-                    with patch("agents.migration_assistant.get_phase_model", return_value="claude-sonnet-4"):
-                        with patch("agents.migration_assistant.get_phase_thinking_budget", return_value=10000):
-                            with patch("agents.migration_assistant.logger") as mock_logger:
-                                result = await run_migration_assistant(project_dir, spec_dir)
+            with patch(
+                "agents.migration_assistant.get_agent_prompt",
+                return_value="Test prompt",
+            ):
+                with patch(
+                    "agents.migration_assistant.create_client", return_value=mock_client
+                ):
+                    with patch(
+                        "agents.migration_assistant.get_phase_model",
+                        return_value="claude-sonnet-4",
+                    ):
+                        with patch(
+                            "agents.migration_assistant.get_phase_thinking_budget",
+                            return_value=10000,
+                        ):
+                            with patch(
+                                "agents.migration_assistant.logger"
+                            ) as mock_logger:
+                                result = await run_migration_assistant(
+                                    project_dir, spec_dir
+                                )
 
         # Verify warning was logged for checkpoint validation issues
         assert result["success"] is True

@@ -76,10 +76,6 @@ def __getattr__(name):
         from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
 
         return locals()[name]
-    elif name == "run_migration_assistant":
-        from .migration_assistant import run_migration_assistant
-
-        return run_migration_assistant
     elif name in ("load_workspace_context", "get_workspace_project_dirs"):
         from .utils import get_workspace_project_dirs, load_workspace_context
 

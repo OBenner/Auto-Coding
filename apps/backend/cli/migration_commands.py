@@ -147,6 +147,7 @@ def handle_migration_command(
         print(
             f"Resume with: python auto-claude/run.py --spec {spec_dir.name} --migrate"
         )
+        sys.exit(130)
     except Exception as e:
         print(f"\n❌ Migration failed: {e}\n")
         sys.exit(1)

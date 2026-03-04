@@ -11,12 +11,11 @@ Tests the complete migration assistant workflow including:
 """
 
 import json
-import os
 import platform
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -24,7 +23,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "apps" / "backend"))
 
 from migrations.checkpoints import CheckpointManager, CheckpointStatus
-from migrations.planner import MigrationComplexity, MigrationPlanner, MigrationType
+from migrations.planner import MigrationPlanner, MigrationType
 
 # =============================================================================
 # TEST FIXTURES
@@ -227,9 +226,7 @@ class TestCheckpointManagerIntegration:
         project_dir, spec_dir = migration_env
         manager = CheckpointManager(project_dir, spec_dir)
 
-        checkpoint = manager.create_checkpoint(
-            phase_id="phase-1", name="Test checkpoint"
-        )
+        manager.create_checkpoint(phase_id="phase-1", name="Test checkpoint")
 
         rollback_scripts = list(manager.rollback_scripts_dir.glob("*.sh"))
         script = rollback_scripts[0]
@@ -356,6 +353,7 @@ class TestMigrationPlannerIntegration:
 class TestMigrationWorkflowEndToEnd:
     """End-to-end tests for complete migration workflow."""
 
+    @pytest.mark.asyncio
     @patch("agents.migration_assistant.get_phase_thinking_budget")
     @patch("agents.migration_assistant.get_phase_model")
     @patch("agents.migration_assistant.create_client")
@@ -388,7 +386,7 @@ class TestMigrationWorkflowEndToEnd:
             "type": "framework_upgrade",
         }
 
-        result = await run_migration_assistant(
+        await run_migration_assistant(
             project_dir=project_dir,
             spec_dir=spec_dir,
             migration_context=migration_context,
@@ -407,6 +405,7 @@ class TestMigrationWorkflowEndToEnd:
         session_call = mock_client.create_agent_session.call_args
         assert "migration-assistant-session" in str(session_call)
 
+    @pytest.mark.asyncio
     @patch("agents.migration_assistant.get_phase_thinking_budget")
     @patch("agents.migration_assistant.get_phase_model")
     @patch("agents.migration_assistant.create_client")
@@ -460,6 +459,7 @@ class TestMigrationWorkflowEndToEnd:
         assert result["checkpoints_created"] == 1
         assert result["migration_plan_path"] is not None
 
+    @pytest.mark.asyncio
     @patch("agents.migration_assistant.get_phase_thinking_budget")
     @patch("agents.migration_assistant.get_phase_model")
     @patch("agents.migration_assistant.create_client")
@@ -586,28 +586,19 @@ class TestMigrationValidationAndErrors:
 
         # Create complete checkpoint
         manager = CheckpointManager(project_dir, spec_dir)
-        checkpoint = manager.create_checkpoint(
-            phase_id="phase-1", name="Complete checkpoint"
-        )
+        manager.create_checkpoint(phase_id="phase-1", name="Complete checkpoint")
 
         # Validate checkpoint
         validation = validate_migration_checkpoint(manager.checkpoints_dir, project_dir)
 
-        # On Windows, executable permission check fails (st_mode & 0o100 is always False)
-        # So we expect validation to fail with an executable issue
-        if platform.system() == "Windows":
-            # Windows will report script not executable
-            assert not validation["valid"]
-            assert any("executable" in issue.lower() for issue in validation["issues"])
-            # On Windows, commit info may not be in checkpoint_info due to validation failure
-            # but rollback_scripts count should be there
-            assert "rollback_scripts" in validation["checkpoint_info"]
-        else:
-            # On Unix, the script should be made executable by CheckpointManager
-            assert validation["valid"]
-            assert len(validation["issues"]) == 0
-            # Checkpoint info should include commit hash
-            assert "commit" in validation["checkpoint_info"]
+        # Executable permission check is now platform-gated (Unix only)
+        # CheckpointManager makes scripts executable on Unix, skips on Windows
+        assert validation["valid"], (
+            f"Validation failed with issues: {validation['issues']}"
+        )
+        assert len(validation["issues"]) == 0
+        assert "commit" in validation["checkpoint_info"]
+        assert "rollback_scripts" in validation["checkpoint_info"]
 
     def test_checkpoint_validation_with_incomplete_checkpoint(self, migration_env):
         """Test validating an incomplete checkpoint."""

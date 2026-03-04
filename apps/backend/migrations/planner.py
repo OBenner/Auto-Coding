@@ -8,6 +8,7 @@ Supports incremental migration strategies with checkpoints and rollback capabili
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from enum import Enum
@@ -174,8 +175,6 @@ class MigrationPlanner:
         package_json = self.project_dir / "package.json"
         if package_json.exists():
             try:
-                import json
-
                 data = json.loads(package_json.read_text(encoding="utf-8"))
                 deps = {
                     **data.get("dependencies", {}),
@@ -198,8 +197,8 @@ class MigrationPlanner:
                 if "engines" in data and "node" in data["engines"]:
                     frameworks["node"] = data["engines"]["node"]
 
-            except Exception:
-                pass
+            except (json.JSONDecodeError, OSError):
+                pass  # Skip malformed or unreadable package.json
 
         # Check for Python projects
         requirements_txt = self.project_dir / "requirements.txt"
@@ -224,8 +223,8 @@ class MigrationPlanner:
                         elif package_lower == "fastapi":
                             frameworks["fastapi"] = version
 
-            except Exception:
-                pass
+            except OSError:
+                pass  # Skip unreadable requirements.txt
 
         return frameworks
 

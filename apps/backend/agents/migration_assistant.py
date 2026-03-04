@@ -8,6 +8,7 @@ incremental, validated steps with rollback capability at each checkpoint.
 
 import json
 import logging
+import platform
 from pathlib import Path
 from typing import Any
 
@@ -101,10 +102,11 @@ def validate_migration_checkpoint(
             issues.append("No rollback scripts found")
         else:
             checkpoint_info["rollback_scripts"] = len(rollback_scripts)
-            # Check if scripts are executable
-            for script in rollback_scripts:
-                if not script.stat().st_mode & 0o100:
-                    issues.append(f"Rollback script not executable: {script.name}")
+            # Check if scripts are executable (Unix only)
+            if platform.system() != "Windows":
+                for script in rollback_scripts:
+                    if not script.stat().st_mode & 0o100:
+                        issues.append(f"Rollback script not executable: {script.name}")
 
     # Check for migration plan
     migration_plan = project_dir / "migration_plan.md"
@@ -190,9 +192,9 @@ async def run_migration_assistant(
                 LogEntryType.INFO,
             )
 
-    # Load the migration assistant prompt
+    # Load the migration assistant prompt (validates it exists)
     try:
-        prompt = get_agent_prompt("migration_assistant")
+        _prompt = get_agent_prompt("migration_assistant")
     except Exception as e:
         error_msg = f"Failed to load migration_assistant prompt: {e}"
         logger.error(error_msg)
@@ -272,7 +274,7 @@ Begin by loading context (Phase 0 in your prompt).
 
     try:
         async with client:
-            response = await client.create_agent_session(
+            await client.create_agent_session(
                 name="migration-assistant-session",
                 starting_message=starting_message,
             )
