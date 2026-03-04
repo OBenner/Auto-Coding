@@ -400,18 +400,17 @@ class BugDetector:
                     node.slice, (ast.Name, ast.Attribute, ast.BinOp, ast.UnaryOp)
                 ):
                     # Variable or expression as index - could be out of bounds
-                    if not isinstance(node.slice, ast.Slice):  # Not a slice operation
-                        issues.append(
-                            BugReport(
-                                bug_type="index_error",
-                                severity=self.SEVERITY_LOW,
-                                message="Potential IndexError: variable index without bounds check",
-                                lineno=node.lineno,
-                                code_snippet=code,
-                                suggestion=f"Add bounds check: if len({ast.unparse(node.value)}) > index",
-                                confidence=0.4,
-                            )
+                    issues.append(
+                        BugReport(
+                            bug_type="index_error",
+                            severity=self.SEVERITY_LOW,
+                            message="Potential IndexError: variable index without bounds check",
+                            lineno=node.lineno,
+                            code_snippet=code,
+                            suggestion=f"Add bounds check: if len({ast.unparse(node.value)}) > index",
+                            confidence=0.4,
                         )
+                    )
 
         return issues
 

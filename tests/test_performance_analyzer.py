@@ -266,6 +266,7 @@ for user in users:
         assert "Files Analyzed: 10" in report
         assert "N+1 Query" in report
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="chmod not effective on Windows")
     def test_analyze_handles_file_read_errors_gracefully(self, tmp_path):
         """Test that file read errors are handled gracefully."""
         # Create a file but make it unreadable

@@ -249,7 +249,7 @@ def handle_predictive_scan_check_command(
             for issue in blocking_issues[:5]:  # Show first 5
                 print(
                     f"  [{issue.severity.upper()}] {issue.title} "
-                    f"({issue.file}:{issue.line})",
+                    f"({issue.file}:{issue.line or 'n/a'})",
                     file=sys.stderr,
                 )
             if len(blocking_issues) > 5:

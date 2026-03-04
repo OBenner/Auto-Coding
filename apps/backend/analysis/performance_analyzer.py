@@ -399,7 +399,7 @@ class PerformanceAnalyzer:
 
             # Detect resource management issues
             elif isinstance(node, ast.Call):
-                resource_issues = self._detect_resource_issues(node)
+                resource_issues = self._detect_resource_issues(node, tree)
                 issues.extend(resource_issues)
 
         return issues
@@ -418,13 +418,10 @@ class PerformanceAnalyzer:
         """
         issues = []
 
-        # Get loop body
+        # Determine loop type
         if isinstance(loop_node, (ast.For, ast.While)):
-            _body = loop_node.body
             loop_type = "for" if isinstance(loop_node, ast.For) else "while"
         else:
-            # Comprehension
-            _body = [loop_node.elt] if hasattr(loop_node, "elt") else []
             loop_type = "comprehension"
 
         # Check for DB/API calls in loop body
@@ -585,12 +582,15 @@ class PerformanceAnalyzer:
 
         return issues
 
-    def _detect_resource_issues(self, node: ast.Call) -> list[PerformanceIssue]:
+    def _detect_resource_issues(
+        self, node: ast.Call, tree: ast.AST
+    ) -> list[PerformanceIssue]:
         """
         Detect resource management issues.
 
         Args:
             node: Call AST node
+            tree: The full module AST tree (passed to _is_inside_with)
 
         Returns:
             List of PerformanceIssue objects
@@ -599,7 +599,7 @@ class PerformanceAnalyzer:
         func_name = self._get_call_name(node)
 
         # Check for file operations without context manager
-        if func_name == "open" and not self._is_inside_with(node):
+        if func_name == "open" and not self._is_inside_with(node, tree):
             # This is handled by linters typically, but we can note it
             pass
 
@@ -667,20 +667,39 @@ class PerformanceAnalyzer:
         except Exception:
             return "<unknown>"
 
-    def _is_inside_with(self, node: ast.Call) -> bool:
-        """Check if a call is inside a with statement."""
-        for parent in ast.walk(node):
+    def _is_inside_with(self, node: ast.Call, tree: ast.AST) -> bool:
+        """Check if a call is inside a with statement.
+
+        Walks the full AST tree to find any ast.With node whose body
+        contains the target node's line number.
+
+        Args:
+            node: The Call node to check
+            tree: The full module AST tree (needed to find ancestors)
+
+        Returns:
+            True if the call is within a with statement body
+        """
+        target_line = getattr(node, "lineno", None)
+        if target_line is None:
+            return False
+
+        for parent in ast.walk(tree):
             if isinstance(parent, ast.With):
-                # Check if this call is in the with clause
+                # Check if node is used as a context expression
                 for item in parent.items:
-                    if item.context_expr == node:
+                    if item.context_expr is node:
                         return True
+                # Check if node's line falls within the with body
+                for child in parent.body:
+                    for descendant in ast.walk(child):
+                        if descendant is node:
+                            return True
         return False
 
     def _get_nesting_level(self, node: ast.For | ast.While, tree: ast.AST) -> int:
         """Calculate the nesting level of a loop."""
         level = 0
-        _current = node
 
         # Walk up from the node to find containing loops
         for parent in ast.walk(tree):
@@ -708,9 +727,9 @@ class PerformanceAnalyzer:
 
             # Count function calls
             elif isinstance(child, ast.Call):
-                complexity += 0.5
+                complexity += 1
 
-        return min(int(complexity), 10)
+        return min(complexity, 10)
 
     def _contains_db_call(self, node: ast.For | ast.While) -> bool:
         """Check if loop contains database calls."""

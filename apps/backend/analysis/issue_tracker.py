@@ -421,9 +421,7 @@ class IssueTracker:
         Returns:
             List of IssueTrend objects
         """
-        # Get issues for different time periods
-        _issues_7 = self.get_issues(days=7, category=category, severity=severity)
-        _issues_30 = self.get_issues(days=30, category=category, severity=severity)
+        # Get issues for the full 90-day period (bucketed into 7/30/90 below)
         issues_90 = self.get_issues(days=90, category=category, severity=severity)
 
         # Group by category and severity

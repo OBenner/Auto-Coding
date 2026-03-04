@@ -678,9 +678,12 @@ def _run_cli() -> None:
 
     # Handle predictive scan commands
     if args.predictive_scan:
+        scan_spec_dir = None
+        if args.spec:
+            scan_spec_dir = find_spec(project_dir, args.spec)
         exit_code = handle_predictive_scan_command(
             project_dir=project_dir,
-            spec_dir=None,  # Will use spec_dir if provided with --spec
+            spec_dir=scan_spec_dir,
             file_patterns=args.scan_file_patterns,
             run_llm=not args.no_scan_llm,
             output_json=args.scan_json,
