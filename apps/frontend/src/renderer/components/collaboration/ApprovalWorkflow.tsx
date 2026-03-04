@@ -333,25 +333,16 @@ export function ApprovalWorkflow({
   const handleRequestApproval = async () => {
     setActionInProgress(true);
     setError(null);
-
-    try {
-      // TODO: Replace with actual IPC call
-      // const result = await window.electronAPI.collaborationApprovalsRequest({ specId });
-      // if (!result.success) {
-      //   throw new Error(result.error || 'Failed to request approval');
-      // }
-      // const newApproval: Approval = result.data;
-      // setCurrentApproval(newApproval);
-      // setApprovalHistory(prev => [newApproval, ...prev]);
-      // onApprovalRequested?.(newApproval);
-
-      // Placeholder: No-op until IPC handler is connected
-    } catch (err) {
-      console.error('Failed to request approval:', err);
-      setError(err instanceof Error ? err.message : 'Failed to request approval');
-    } finally {
-      setActionInProgress(false);
-    }
+    // TODO: Replace with actual IPC call
+    // const result = await window.electronAPI.collaborationApprovalsRequest({ specId });
+    // if (!result.success) {
+    //   throw new Error(result.error || 'Failed to request approval');
+    // }
+    // const newApproval: Approval = result.data;
+    // setCurrentApproval(newApproval);
+    // setApprovalHistory(prev => [newApproval, ...prev]);
+    // onApprovalRequested?.(newApproval);
+    setActionInProgress(false);
   };
 
   const handleApprove = async (reason: string) => {

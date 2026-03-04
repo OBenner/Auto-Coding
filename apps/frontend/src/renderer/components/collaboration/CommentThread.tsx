@@ -582,21 +582,15 @@ export function CommentThread({
     }
   };
 
-  const handleResolveComment = async (commentId: string) => {
+  const handleResolveComment = async (_commentId: string) => {
     setError(null);
-
-    try {
-      // TODO: Replace with actual IPC call
-      // const result = await window.electronAPI.collaboration.comments.resolve(commentId);
-      // if (!result.success) {
-      //   throw new Error(result.error || 'Failed to resolve comment');
-      // }
-      // onCommentResolved?.(commentId);
-      // await loadComments();
-    } catch (err) {
-      console.error('Failed to resolve comment:', err);
-      setError(err instanceof Error ? err.message : 'Failed to resolve comment');
-    }
+    // TODO: Replace with actual IPC call
+    // const result = await window.electronAPI.collaboration.comments.resolve(commentId);
+    // if (!result.success) {
+    //   throw new Error(result.error || 'Failed to resolve comment');
+    // }
+    // onCommentResolved?.(commentId);
+    // await loadComments();
   };
 
   const handleReply = (commentId: string) => {
