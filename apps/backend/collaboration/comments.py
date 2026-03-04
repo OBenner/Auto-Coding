@@ -229,9 +229,10 @@ class CommentManager(CollaborationManagerBase):
         self._thread_index.setdefault(parent_comment_id, []).append(reply.comment_id)
 
         logger.info(
-            f"Created reply {reply.comment_id} by {username} "
+            f"Created reply {reply.comment_id} by user {user_id} "
             f"to comment {parent_comment_id} on spec {self.spec_id}"
         )
+        logger.debug(f"Reply author username: {username}")
 
         # Persist to Graphiti
         if self._memory_available:
@@ -262,9 +263,13 @@ class CommentManager(CollaborationManagerBase):
         if comment_id not in self._comments:
             raise CommentError(f"Comment {comment_id} not found")
 
-        # Collect all comments to resolve: parent + all replies
-        comments_to_resolve = [comment_id]
-        comments_to_resolve.extend(self._thread_index.get(comment_id, []))
+        # BFS to collect all nested descendants (not just direct children)
+        comments_to_resolve: list[str] = []
+        queue = [comment_id]
+        while queue:
+            cid = queue.pop(0)
+            comments_to_resolve.append(cid)
+            queue.extend(self._thread_index.get(cid, []))
 
         for cid in comments_to_resolve:
             comment = self._comments.get(cid)
@@ -354,12 +359,14 @@ class CommentManager(CollaborationManagerBase):
         Get all comments that mention a specific user.
 
         Args:
-            username: Username to search for (without @ prefix)
+            username: Username to search for (with or without @ prefix)
 
         Returns:
             List of Comment objects mentioning this user
         """
-        return [c for c in self._comments.values() if username in c.mentions]
+        # Normalize: strip leading @, lowercase to match stored mentions
+        normalized = username.lstrip("@").lower()
+        return [c for c in self._comments.values() if normalized in c.mentions]
 
     async def _store_comment_in_graphiti(self, comment: Comment) -> bool:
         """Store a comment in Graphiti as an episode."""

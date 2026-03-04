@@ -140,6 +140,8 @@ class Comment:
         """
         Extract @username mentions from text (case-insensitive, normalized to lowercase).
 
+        Excludes email addresses (e.g., user@example.com is not a mention).
+
         Args:
             text: Comment text to parse
 
@@ -148,8 +150,9 @@ class Comment:
         """
         import re
 
-        # Match @username pattern (letters, numbers, hyphens, underscores)
-        pattern = r"@([a-zA-Z0-9_-]+)"
+        # Match @username at start of string or after whitespace/punctuation,
+        # followed by a word boundary (excludes emails like user@example.com)
+        pattern = r"(?:^|(?<=\s)|(?<=\())@([a-zA-Z0-9_-]+)\b(?!\.[a-zA-Z])"
         matches = re.findall(pattern, text, re.IGNORECASE)
         normalized = [m.lower() for m in matches]
         return list(dict.fromkeys(normalized))  # Remove duplicates, preserve order

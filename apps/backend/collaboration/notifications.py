@@ -281,8 +281,11 @@ class NotificationManager(CollaborationManagerBase):
             notifications.append(notification)
 
             logger.info(
-                f"Created mention notification for {username} "
-                f"in comment {comment_id} by {author_username}"
+                f"Created mention notification {notification.notification_id} "
+                f"in comment {comment_id}"
+            )
+            logger.debug(
+                f"Mention notification target: {username}, author: {author_username}"
             )
 
         # Persist to Graphiti
@@ -326,9 +329,10 @@ class NotificationManager(CollaborationManagerBase):
         )
 
         logger.info(
-            f"Created permission notification for {username}: "
-            f"{level} granted by {granted_by}"
+            f"Created permission notification {notification.notification_id}: "
+            f"level={level}"
         )
+        logger.debug(f"Permission grant: {username} by {granted_by}")
 
         # Add change record for audit trail
         await self._add_change_record(

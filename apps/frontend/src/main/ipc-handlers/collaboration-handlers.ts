@@ -265,9 +265,12 @@ project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
-# Revoke old permission and grant new one
+# Revoke old permission from both checker and Graphiti
 checker = PermissionChecker(spec_id=spec_id)
 checker.revoke_permission(user_id)
+memory.revoke_permission(spec_id, user_id)
+
+# Grant new permission
 new_permission = checker.grant_permission(
     user_id=user_id,
     username=user_id,  # Will be updated on retrieval
@@ -382,54 +385,55 @@ print(json.dumps(result))
       if (!ctx) return { success: false, error: 'Task or project not found' };
 
       const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
+import asyncio
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser, Comment
 from collaboration.comments import CommentManager
 from collaboration.permissions import PermissionChecker
 
-spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(ctx.project.path)})
-parent_id = ${JSON.stringify(parentId)}
+async def main():
+    spec_id = ${JSON.stringify(specId)}
+    project_dir = Path(${JSON.stringify(ctx.project.path)})
+    parent_id = ${JSON.stringify(parentId)}
 
-memory = get_graphiti_memory(None, project_dir)
-permission_checker = PermissionChecker(spec_id=spec_id)
-manager = CommentManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
+    memory = get_graphiti_memory(None, project_dir)
+    permission_checker = PermissionChecker(spec_id=spec_id)
+    manager = CommentManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
 
-user = CollaborationUser(user_id=${JSON.stringify(userId)}, username=${JSON.stringify(username)})
+    user = CollaborationUser(user_id=${JSON.stringify(userId)}, username=${JSON.stringify(username)})
 
-if parent_id:
-    # Reply to comment
-    comment = await manager.reply_to_comment(
-        parent_comment_id=parent_id,
-        user_id=user.user_id,
-        username=user.username,
-        content=${JSON.stringify(content)}
-    )
-else:
-    # Top-level comment
-    comment = await manager.create_comment(
-        user_id=user.user_id,
-        username=user.username,
-        content=${JSON.stringify(content)}
-    )
+    if parent_id:
+        comment = await manager.reply_to_comment(
+            parent_comment_id=parent_id,
+            user_id=user.user_id,
+            username=user.username,
+            content=${JSON.stringify(content)}
+        )
+    else:
+        comment = await manager.create_comment(
+            user_id=user.user_id,
+            username=user.username,
+            content=${JSON.stringify(content)}
+        )
 
-# Convert to dict
-result = {
-    'comment_id': comment.comment_id,
-    'spec_id': comment.spec_id,
-    'author': {
-        'user_id': comment.author.user_id,
-        'username': comment.author.username
-    },
-    'content': comment.content,
-    'created_at': comment.created_at,
-    'parent_id': comment.parent_id,
-    'mentions': comment.mentions,
-    'resolved': comment.resolved
-}
+    result = {
+        'comment_id': comment.comment_id,
+        'spec_id': comment.spec_id,
+        'author': {
+            'user_id': comment.author.user_id,
+            'username': comment.author.username
+        },
+        'content': comment.content,
+        'created_at': comment.created_at,
+        'parent_id': comment.parent_id,
+        'mentions': comment.mentions,
+        'resolved': comment.resolved
+    }
 
-print(json.dumps(result))
+    print(json.dumps(result))
+
+asyncio.run(main())
       `, 'COLLABORATION_COMMENTS_CREATE');
 
       if (ipcResult.success) {
@@ -568,44 +572,47 @@ print(json.dumps({
       if (!ctx) return { success: false, error: 'Task or project not found' };
 
       const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
+import asyncio
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser
 from collaboration.comments import CommentManager
 from collaboration.permissions import PermissionChecker
 
-spec_id = ${JSON.stringify(specId)}
-parent_comment_id = ${JSON.stringify(parentCommentId)}
-project_dir = Path(${JSON.stringify(ctx.project.path)})
+async def main():
+    spec_id = ${JSON.stringify(specId)}
+    parent_comment_id = ${JSON.stringify(parentCommentId)}
+    project_dir = Path(${JSON.stringify(ctx.project.path)})
 
-memory = get_graphiti_memory(None, project_dir)
-permission_checker = PermissionChecker(spec_id=spec_id)
-manager = CommentManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
+    memory = get_graphiti_memory(None, project_dir)
+    permission_checker = PermissionChecker(spec_id=spec_id)
+    manager = CommentManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
 
-user = CollaborationUser(user_id=${JSON.stringify(userId)}, username=${JSON.stringify(username)})
+    user = CollaborationUser(user_id=${JSON.stringify(userId)}, username=${JSON.stringify(username)})
 
-reply = await manager.reply_to_comment(
-    parent_comment_id=parent_comment_id,
-    user_id=user.user_id,
-    username=user.username,
-    content=${JSON.stringify(content)}
-)
+    reply = await manager.reply_to_comment(
+        parent_comment_id=parent_comment_id,
+        user_id=user.user_id,
+        username=user.username,
+        content=${JSON.stringify(content)}
+    )
 
-# Convert to dict
-result = {
-    'comment_id': reply.comment_id,
-    'spec_id': reply.spec_id,
-    'author': {
-        'user_id': reply.author.user_id,
-        'username': reply.author.username
-    },
-    'content': reply.content,
-    'created_at': reply.created_at,
-    'parent_id': reply.parent_id,
-    'mentions': reply.mentions
-}
+    result = {
+        'comment_id': reply.comment_id,
+        'spec_id': reply.spec_id,
+        'author': {
+            'user_id': reply.author.user_id,
+            'username': reply.author.username
+        },
+        'content': reply.content,
+        'created_at': reply.created_at,
+        'parent_id': reply.parent_id,
+        'mentions': reply.mentions
+    }
 
-print(json.dumps(result))
+    print(json.dumps(result))
+
+asyncio.run(main())
       `, 'COLLABORATION_COMMENTS_REPLY');
 
       if (ipcResult.success) {
@@ -646,10 +653,14 @@ if approval:
     result = {
         'approval_id': approval.approval_id,
         'spec_id': approval.spec_id,
+        'requester': {
+            'user_id': approval.requester.user_id,
+            'username': approval.requester.username
+        } if approval.requester else None,
         'approver': {
             'user_id': approval.approver.user_id,
             'username': approval.approver.username
-        },
+        } if approval.approver else None,
         'status': approval.status.value,
         'reason': approval.reason,
         'created_at': approval.created_at,
@@ -676,37 +687,40 @@ print(json.dumps(result))
       if (!ctx) return { success: false, error: 'Task or project not found' };
 
       const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
+import asyncio
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser
 from collaboration.approvals import ApprovalManager
 from collaboration.permissions import PermissionChecker
 
-spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(ctx.project.path)})
+async def main():
+    spec_id = ${JSON.stringify(specId)}
+    project_dir = Path(${JSON.stringify(ctx.project.path)})
 
-memory = get_graphiti_memory(None, project_dir)
-permission_checker = PermissionChecker(spec_id=spec_id)
-manager = ApprovalManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
+    memory = get_graphiti_memory(None, project_dir)
+    permission_checker = PermissionChecker(spec_id=spec_id)
+    manager = ApprovalManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
 
-user = CollaborationUser(user_id=${JSON.stringify(userId)}, username=${JSON.stringify(username)})
+    user = CollaborationUser(user_id=${JSON.stringify(userId)}, username=${JSON.stringify(username)})
 
-approval = await manager.request_approval(requester_id=user.user_id, requester_username=user.username)
+    approval = await manager.request_approval(requester_id=user.user_id, requester_username=user.username)
 
-# Convert to dict
-result = {
-    'approval_id': approval.approval_id,
-    'spec_id': approval.spec_id,
-    'status': approval.status.value,
-    'created_at': approval.created_at
-}
-if approval.requester:
-    result['requester'] = {
-        'user_id': approval.requester.user_id,
-        'username': approval.requester.username
+    result = {
+        'approval_id': approval.approval_id,
+        'spec_id': approval.spec_id,
+        'status': approval.status.value,
+        'created_at': approval.created_at
     }
+    if approval.requester:
+        result['requester'] = {
+            'user_id': approval.requester.user_id,
+            'username': approval.requester.username
+        }
 
-print(json.dumps(result))
+    print(json.dumps(result))
+
+asyncio.run(main())
       `, 'COLLABORATION_APPROVALS_REQUEST');
 
       if (ipcResult.success) {
@@ -734,34 +748,38 @@ print(json.dumps(result))
       if (!ctx) return { success: false, error: 'Task or project not found' };
 
       const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
+import asyncio
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser
 from collaboration.approvals import ApprovalManager
 from collaboration.permissions import PermissionChecker
 
-spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(ctx.project.path)})
-reason = ${JSON.stringify(reason)}
+async def main():
+    spec_id = ${JSON.stringify(specId)}
+    project_dir = Path(${JSON.stringify(ctx.project.path)})
+    reason = ${JSON.stringify(reason)}
 
-memory = get_graphiti_memory(None, project_dir)
-permission_checker = PermissionChecker(spec_id=spec_id)
-manager = ApprovalManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
+    memory = get_graphiti_memory(None, project_dir)
+    permission_checker = PermissionChecker(spec_id=spec_id)
+    manager = ApprovalManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
 
-approver = CollaborationUser(user_id=${JSON.stringify(approverId)}, username=${JSON.stringify(approverUsername)})
+    approver = CollaborationUser(user_id=${JSON.stringify(approverId)}, username=${JSON.stringify(approverUsername)})
 
-await manager.approve_spec(approver_id=approver.user_id, approver_username=approver.username, reason=reason)
+    await manager.approve_spec(approver_id=approver.user_id, approver_username=approver.username, reason=reason)
 
-# Get updated approval
-approval = memory.get_approval(spec_id)
+    # Get updated approval
+    approval = memory.get_approval(spec_id)
 
-result = {
-    'approval_id': approval.approval_id,
-    'status': approval.status.value,
-    'reviewed_at': approval.reviewed_at
-}
+    result = {
+        'approval_id': approval.approval_id,
+        'status': approval.status.value,
+        'reviewed_at': approval.reviewed_at
+    }
 
-print(json.dumps(result))
+    print(json.dumps(result))
+
+asyncio.run(main())
       `, 'COLLABORATION_APPROVALS_APPROVE');
 
       if (ipcResult.success) {
@@ -789,34 +807,38 @@ print(json.dumps(result))
       if (!ctx) return { success: false, error: 'Task or project not found' };
 
       const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
+import asyncio
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser
 from collaboration.approvals import ApprovalManager
 from collaboration.permissions import PermissionChecker
 
-spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(ctx.project.path)})
-reason = ${JSON.stringify(reason)}
+async def main():
+    spec_id = ${JSON.stringify(specId)}
+    project_dir = Path(${JSON.stringify(ctx.project.path)})
+    reason = ${JSON.stringify(reason)}
 
-memory = get_graphiti_memory(None, project_dir)
-permission_checker = PermissionChecker(spec_id=spec_id)
-manager = ApprovalManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
+    memory = get_graphiti_memory(None, project_dir)
+    permission_checker = PermissionChecker(spec_id=spec_id)
+    manager = ApprovalManager(spec_id=spec_id, spec_dir=project_dir / 'specs' / spec_id, project_dir=project_dir, permission_checker=permission_checker)
 
-approver = CollaborationUser(user_id=${JSON.stringify(approverId)}, username=${JSON.stringify(approverUsername)})
+    approver = CollaborationUser(user_id=${JSON.stringify(approverId)}, username=${JSON.stringify(approverUsername)})
 
-await manager.reject_spec(approver_id=approver.user_id, approver_username=approver.username, reason=reason)
+    await manager.reject_spec(rejector_id=approver.user_id, rejector_username=approver.username, reason=reason)
 
-# Get updated approval
-approval = memory.get_approval(spec_id)
+    # Get updated approval
+    approval = memory.get_approval(spec_id)
 
-result = {
-    'approval_id': approval.approval_id,
-    'status': approval.status.value,
-    'reviewed_at': approval.reviewed_at
-}
+    result = {
+        'approval_id': approval.approval_id,
+        'status': approval.status.value,
+        'reviewed_at': approval.reviewed_at
+    }
 
-print(json.dumps(result))
+    print(json.dumps(result))
+
+asyncio.run(main())
       `, 'COLLABORATION_APPROVALS_REJECT');
 
       if (ipcResult.success) {
