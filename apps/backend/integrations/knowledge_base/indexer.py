@@ -9,7 +9,7 @@ Provides semantic search and context retrieval operations.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.sentry import capture_exception
 
@@ -40,7 +40,7 @@ class DocumentationIndexer:
         self,
         spec_dir: Path,
         project_dir: Path,
-        state: Optional[KnowledgeBaseState] = None,
+        state: KnowledgeBaseState | None = None,
     ):
         """
         Initialize documentation indexer.
@@ -53,13 +53,13 @@ class DocumentationIndexer:
         self.spec_dir = spec_dir
         self.project_dir = project_dir
         self.state = state
-        self._documents: Dict[str, Dict[str, Any]] = {}
+        self._documents: dict[str, dict[str, Any]] = {}
         self._index_loaded = False
 
     async def index_documents(
         self,
-        documents: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        documents: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """
         Index a list of documents for search.
 
@@ -83,7 +83,9 @@ class DocumentationIndexer:
                     doc_id = doc.get("id")
                     if not doc_id:
                         failed_count += 1
-                        errors.append(f"Document missing 'id': {doc.get('title', 'Unknown')}")
+                        errors.append(
+                            f"Document missing 'id': {doc.get('title', 'Unknown')}"
+                        )
                         continue
 
                     # Store document with metadata
@@ -137,7 +139,7 @@ class DocumentationIndexer:
         query: str,
         limit: int = 10,
         min_score: float = DEFAULT_MIN_SCORE,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for relevant documents based on a query.
 
@@ -187,9 +189,7 @@ class DocumentationIndexer:
             results.sort(key=lambda x: x["score"], reverse=True)
             results = results[:limit]
 
-            logger.info(
-                f"Found {len(results)} documents for query: {query[:50]}..."
-            )
+            logger.info(f"Found {len(results)} documents for query: {query[:50]}...")
 
             return results
 
@@ -209,7 +209,7 @@ class DocumentationIndexer:
         query: str,
         num_results: int = 5,
         min_score: float = 0.0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get relevant context for a query, formatted for agent consumption.
 
@@ -258,7 +258,7 @@ class DocumentationIndexer:
             )
             return []
 
-    async def get_document_by_id(self, doc_id: str) -> Optional[Dict[str, Any]]:
+    async def get_document_by_id(self, doc_id: str) -> dict[str, Any] | None:
         """
         Retrieve a specific document by ID.
 
@@ -281,8 +281,8 @@ class DocumentationIndexer:
 
     async def get_all_documents(
         self,
-        limit: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Get all indexed documents.
 
@@ -308,7 +308,7 @@ class DocumentationIndexer:
             logger.warning(f"Failed to get all documents: {e}")
             return []
 
-    def get_index_stats(self) -> Dict[str, Any]:
+    def get_index_stats(self) -> dict[str, Any]:
         """
         Get statistics about the document index.
 
@@ -322,7 +322,7 @@ class DocumentationIndexer:
         total_docs = len(self._documents)
 
         # Count by source
-        source_counts: Dict[str, int] = {}
+        source_counts: dict[str, int] = {}
         for doc in self._documents.values():
             source = doc.get("metadata", {}).get("source", "unknown")
             source_counts[source] = source_counts.get(source, 0) + 1
@@ -407,7 +407,7 @@ class DocumentationIndexer:
         except OSError as e:
             logger.warning(f"Failed to delete document index file: {e}")
 
-    def _normalize_query(self, query: str) -> List[str]:
+    def _normalize_query(self, query: str) -> list[str]:
         """
         Normalize query into search terms.
 
@@ -425,13 +425,61 @@ class DocumentationIndexer:
 
         # Filter out common stop words
         stop_words = {
-            "a", "an", "the", "and", "or", "but", "is", "are", "was",
-            "were", "be", "been", "being", "have", "has", "had", "do",
-            "does", "did", "will", "would", "should", "could", "may",
-            "might", "must", "can", "for", "of", "with", "by", "from",
-            "in", "on", "at", "to", "as", "it", "this", "that", "these",
-            "those", "i", "you", "he", "she", "we", "they", "what",
-            "which", "who", "when", "where", "why", "how"
+            "a",
+            "an",
+            "the",
+            "and",
+            "or",
+            "but",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "should",
+            "could",
+            "may",
+            "might",
+            "must",
+            "can",
+            "for",
+            "of",
+            "with",
+            "by",
+            "from",
+            "in",
+            "on",
+            "at",
+            "to",
+            "as",
+            "it",
+            "this",
+            "that",
+            "these",
+            "those",
+            "i",
+            "you",
+            "he",
+            "she",
+            "we",
+            "they",
+            "what",
+            "which",
+            "who",
+            "when",
+            "where",
+            "why",
+            "how",
         }
 
         filtered_terms = [t for t in terms if t not in stop_words and len(t) > 1]
@@ -440,8 +488,8 @@ class DocumentationIndexer:
 
     def _calculate_score(
         self,
-        doc: Dict[str, Any],
-        query_terms: List[str],
+        doc: dict[str, Any],
+        query_terms: list[str],
     ) -> float:
         """
         Calculate relevance score for a document.
@@ -491,7 +539,7 @@ class DocumentationIndexer:
 
         return normalized_score
 
-    def _format_doc_as_context(self, doc: Dict[str, Any]) -> str:
+    def _format_doc_as_context(self, doc: dict[str, Any]) -> str:
         """
         Format a document as context for agent consumption.
 

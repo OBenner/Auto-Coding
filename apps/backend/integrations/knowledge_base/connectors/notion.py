@@ -18,11 +18,11 @@ Key Features:
 - Error handling and retry logic
 """
 
-import os
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -32,9 +32,9 @@ from ..config import (
     SYNC_STATUS_PARTIAL,
     SYNC_STATUS_SUCCESS,
     KnowledgeBaseConfig,
-    KnowledgeBaseState,
-    PROVIDER_NOTION,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class NotionConnector(BaseConnector):
@@ -71,7 +71,7 @@ class NotionConnector(BaseConnector):
 
         self.api_key = config.api_key
         self.workspace_id = config.workspace_id or ""
-        self.session: Optional[requests.Session] = None
+        self.session: requests.Session | None = None
 
         if not self.api_key:
             raise ValueError("NOTION_API_KEY is required for Notion connector")
@@ -92,17 +92,17 @@ class NotionConnector(BaseConnector):
         try:
             # Create HTTP session
             self.session = requests.Session()
-            self.session.headers.update({
-                "Authorization": f"Bearer {self.api_key}",
-                "Notion-Version": self.API_VERSION,
-                "Content-Type": "application/json",
-            })
+            self.session.headers.update(
+                {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Notion-Version": self.API_VERSION,
+                    "Content-Type": "application/json",
+                }
+            )
 
             # Test connection with a simple search
             response = self._make_request(
-                "POST",
-                "/search",
-                json={"query": "", "page_size": 1}
+                "POST", "/search", json={"query": "", "page_size": 1}
             )
 
             if response and response.status_code == 200:
@@ -114,7 +114,7 @@ class NotionConnector(BaseConnector):
         except (OSError, requests.RequestException):
             return False
 
-    def fetch_documents(self) -> List[Dict[str, Any]]:
+    def fetch_documents(self) -> list[dict[str, Any]]:
         """
         Fetch all documents (pages) from the Notion workspace.
 
@@ -158,7 +158,9 @@ class NotionConnector(BaseConnector):
             self.state.indexed_docs = len(documents)
             self.state.failed_docs = len(errors)
             self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+            self.state.sync_status = (
+                SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+            )
             self.state.error_message = "; ".join(errors[:5])  # First 5 errors
             self._save_state()
 
@@ -171,7 +173,7 @@ class NotionConnector(BaseConnector):
 
         return documents
 
-    def incremental_sync(self) -> Dict[str, Any]:
+    def incremental_sync(self) -> dict[str, Any]:
         """
         Perform incremental sync since last successful update.
 
@@ -210,8 +212,10 @@ class NotionConnector(BaseConnector):
 
             # Filter pages edited since last sync
             updated_pages = [
-                p for p in all_pages
-                if p.get("last_edited_time") and p["last_edited_time"] > last_sync
+                p
+                for p in all_pages
+                if p.get("last_edited_time")
+                and (last_sync is None or p["last_edited_time"] > last_sync)
             ]
 
             # Process each updated page
@@ -237,14 +241,18 @@ class NotionConnector(BaseConnector):
 
                 except Exception as e:
                     result["failed"] += 1
-                    result["errors"].append(f"Failed to sync page {page.get('id')}: {e}")
+                    result["errors"].append(
+                        f"Failed to sync page {page.get('id')}: {e}"
+                    )
 
             # Update state
             self.state.total_docs = len(self.state.doc_mapping)
             self.state.indexed_docs = len(self.state.doc_mapping)
             self.state.failed_docs = result["failed"]
             self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+            self.state.sync_status = (
+                SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+            )
             self.state.error_message = "; ".join(result["errors"][:5])
             self._save_state()
 
@@ -265,10 +273,10 @@ class NotionConnector(BaseConnector):
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict] = None,
-        params: Optional[Dict] = None,
+        json_data: dict | None = None,
+        params: dict | None = None,
         retries: int = 3,
-    ) -> Optional[requests.Response]:
+    ) -> requests.Response | None:
         """
         Make an HTTP request to the Notion API with retry logic.
 
@@ -290,11 +298,7 @@ class NotionConnector(BaseConnector):
         for attempt in range(retries):
             try:
                 response = self.session.request(
-                    method,
-                    url,
-                    json=json_data,
-                    params=params,
-                    timeout=30
+                    method, url, json=json_data, params=params, timeout=30
                 )
 
                 # Rate limiting - wait and retry
@@ -312,17 +316,17 @@ class NotionConnector(BaseConnector):
                     return response
 
                 # Server error - retry after delay
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
             except (OSError, requests.RequestException):
                 if attempt < retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                 else:
                     return None
 
         return None
 
-    def _fetch_all_pages(self) -> List[Dict[str, Any]]:
+    def _fetch_all_pages(self) -> list[dict[str, Any]]:
         """
         Fetch all pages from the Notion workspace.
 
@@ -332,15 +336,10 @@ class NotionConnector(BaseConnector):
             List of page objects with id, title, last_edited_time, url
         """
         pages = []
-        next_cursor: Optional[str] = None
+        next_cursor: str | None = None
 
         while True:
-            search_body = {
-                "filter": {
-                    "value": "page",
-                    "property": "object"
-                }
-            }
+            search_body = {"filter": {"value": "page", "property": "object"}}
 
             if next_cursor:
                 search_body["start_cursor"] = next_cursor
@@ -361,7 +360,7 @@ class NotionConnector(BaseConnector):
 
         return pages
 
-    def _fetch_page_content(self, page: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _fetch_page_content(self, page: dict[str, Any]) -> dict[str, Any] | None:
         """
         Fetch the full content of a Notion page.
 
@@ -402,10 +401,10 @@ class NotionConnector(BaseConnector):
                 "created_time": created_time,
                 "last_edited_time": last_edited_time,
                 "source": "Notion",
-            }
+            },
         }
 
-    def _fetch_page_blocks(self, block_id: str) -> List[Dict[str, Any]]:
+    def _fetch_page_blocks(self, block_id: str) -> list[dict[str, Any]]:
         """
         Fetch all blocks from a page (recursive for nested blocks).
 
@@ -416,7 +415,7 @@ class NotionConnector(BaseConnector):
             List of block objects
         """
         blocks = []
-        next_cursor: Optional[str] = None
+        next_cursor: str | None = None
 
         while True:
             params = {}
@@ -424,9 +423,7 @@ class NotionConnector(BaseConnector):
                 params["start_cursor"] = next_cursor
 
             response = self._make_request(
-                "GET",
-                f"/blocks/{block_id}/children",
-                params=params
+                "GET", f"/blocks/{block_id}/children", params=params
             )
 
             if not response or response.status_code != 200:
@@ -449,7 +446,7 @@ class NotionConnector(BaseConnector):
 
         return blocks
 
-    def _extract_page_title(self, page: Dict[str, Any]) -> str:
+    def _extract_page_title(self, page: dict[str, Any]) -> str:
         """
         Extract the title from a Notion page.
 
@@ -472,7 +469,7 @@ class NotionConnector(BaseConnector):
         # Fallback to page ID
         return page.get("id", "Untitled")
 
-    def _blocks_to_markdown(self, blocks: List[Dict[str, Any]]) -> str:
+    def _blocks_to_markdown(self, blocks: list[dict[str, Any]]) -> str:
         """
         Convert Notion blocks to markdown format.
 
@@ -516,23 +513,23 @@ class NotionConnector(BaseConnector):
 
         return "\n\n".join(markdown_lines)
 
-    def _format_paragraph(self, block: Dict[str, Any]) -> str:
+    def _format_paragraph(self, block: dict[str, Any]) -> str:
         """Format a paragraph block as markdown."""
         text = self._extract_rich_text(block.get("paragraph", {}))
         return text
 
-    def _format_heading(self, block: Dict[str, Any], level: int) -> str:
+    def _format_heading(self, block: dict[str, Any], level: int) -> str:
         """Format a heading block as markdown."""
         text = self._extract_rich_text(block.get(f"heading_{level}", {}))
         prefix = "#" * level
         return f"{prefix} {text}"
 
-    def _format_list_item(self, block: Dict[str, Any], prefix: str) -> str:
+    def _format_list_item(self, block: dict[str, Any], prefix: str) -> str:
         """Format a list item block as markdown."""
         text = self._extract_rich_text(block.get(block["type"], {}))
         return f"{prefix} {text}"
 
-    def _format_todo(self, block: Dict[str, Any]) -> str:
+    def _format_todo(self, block: dict[str, Any]) -> str:
         """Format a to-do block as markdown."""
         todo_data = block.get("to_do", {})
         checked = todo_data.get("checked", False)
@@ -540,25 +537,25 @@ class NotionConnector(BaseConnector):
         checkbox = "[x]" if checked else "[ ]"
         return f"{checkbox} {text}"
 
-    def _format_code(self, block: Dict[str, Any]) -> str:
+    def _format_code(self, block: dict[str, Any]) -> str:
         """Format a code block as markdown."""
         code_data = block.get("code", {})
         code = self._extract_plain_text(code_data.get("rich_text", []))
         language = code_data.get("language", "")
         return f"```{language}\n{code}\n```"
 
-    def _format_quote(self, block: Dict[str, Any]) -> str:
+    def _format_quote(self, block: dict[str, Any]) -> str:
         """Format a quote block as markdown."""
         text = self._extract_rich_text(block.get("quote", {}))
         return f"> {text}"
 
-    def _format_callout(self, block: Dict[str, Any]) -> str:
+    def _format_callout(self, block: dict[str, Any]) -> str:
         """Format a callout block as markdown."""
         text = self._extract_rich_text(block.get("callout", {}))
         emoji = block.get("callout", {}).get("icon", {}).get("emoji", "ℹ️")
         return f"> {emoji} {text}"
 
-    def _extract_rich_text(self, block_data: Dict[str, Any]) -> str:
+    def _extract_rich_text(self, block_data: dict[str, Any]) -> str:
         """
         Extract text from Notion rich text array.
 
@@ -571,7 +568,7 @@ class NotionConnector(BaseConnector):
         rich_text = block_data.get("rich_text", [])
         return self._extract_plain_text(rich_text)
 
-    def _extract_plain_text(self, rich_text: List[Dict[str, Any]]) -> str:
+    def _extract_plain_text(self, rich_text: list[dict[str, Any]]) -> str:
         """
         Extract plain text from Notion rich text array.
 

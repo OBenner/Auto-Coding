@@ -23,12 +23,11 @@ Key Features:
 """
 
 import logging
-import os
 import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import BaseConnector
 from ..config import (
@@ -36,8 +35,6 @@ from ..config import (
     SYNC_STATUS_PARTIAL,
     SYNC_STATUS_SUCCESS,
     KnowledgeBaseConfig,
-    KnowledgeBaseState,
-    PROVIDER_GITHUB_WIKI,
 )
 
 # Configure logger
@@ -75,10 +72,12 @@ class GitHubWikiConnector(BaseConnector):
 
         self.api_key = config.api_key
         self.repository = config.repository
-        self.wiki_dir: Optional[Path] = None
+        self.wiki_dir: Path | None = None
 
         if not self.api_key:
-            raise ValueError("GITHUB_WIKI_API_KEY is required for GitHub Wiki connector")
+            raise ValueError(
+                "GITHUB_WIKI_API_KEY is required for GitHub Wiki connector"
+            )
         if not self.repository:
             raise ValueError("GITHUB_WIKI_REPOSITORY is required (format: owner/repo)")
 
@@ -113,17 +112,19 @@ class GitHubWikiConnector(BaseConnector):
 
             if success:
                 self._connected = True
-                logger.info(f"Successfully cloned wiki repository from {wiki_url}")
+                logger.info(
+                    "Successfully cloned wiki repository for %s", self.repository
+                )
                 return True
 
-            logger.error(f"Failed to clone wiki repository from {wiki_url}")
+            logger.error("Failed to clone wiki repository for %s", self.repository)
             return False
 
         except (OSError, subprocess.SubprocessError) as e:
             logger.error(f"Error connecting to GitHub Wiki: {e}")
             return False
 
-    def fetch_documents(self) -> List[Dict[str, Any]]:
+    def fetch_documents(self) -> list[dict[str, Any]]:
         """
         Fetch all documents (pages) from the GitHub Wiki.
 
@@ -155,7 +156,9 @@ class GitHubWikiConnector(BaseConnector):
             md_files = list(self.wiki_dir.rglob("*.md"))
 
             if not md_files:
-                logger.warning(f"No markdown files found in wiki repository at {self.wiki_dir}")
+                logger.warning(
+                    f"No markdown files found in wiki repository at {self.wiki_dir}"
+                )
 
             for md_file in md_files:
                 try:
@@ -173,7 +176,9 @@ class GitHubWikiConnector(BaseConnector):
             self.state.indexed_docs = len(documents)
             self.state.failed_docs = len(errors)
             self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+            self.state.sync_status = (
+                SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+            )
             self.state.error_message = "; ".join(errors[:5])  # First 5 errors
 
             # Build doc_mapping
@@ -197,7 +202,7 @@ class GitHubWikiConnector(BaseConnector):
 
         return documents
 
-    def incremental_sync(self) -> Dict[str, Any]:
+    def incremental_sync(self) -> dict[str, Any]:
         """
         Perform incremental sync since last successful update.
 
@@ -278,7 +283,9 @@ class GitHubWikiConnector(BaseConnector):
             self.state.indexed_docs = len(self.state.doc_mapping)
             self.state.failed_docs = result["failed"]
             self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+            self.state.sync_status = (
+                SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+            )
             self.state.error_message = "; ".join(result["errors"][:5])
             self._save_state()
 
@@ -322,6 +329,20 @@ class GitHubWikiConnector(BaseConnector):
         wiki_repo = f"{repo}.wiki"
         return f"https://{self.api_key}@github.com/{owner}/{wiki_repo}.git"
 
+    def _sanitize_output(self, text: str) -> str:
+        """
+        Sanitize text output to remove credentials before logging.
+
+        Args:
+            text: Text that may contain credentials (e.g., git URLs with tokens)
+
+        Returns:
+            Sanitized text with credentials replaced
+        """
+        if self.api_key and self.api_key in text:
+            return text.replace(self.api_key, "***")
+        return text
+
     def _clone_wiki(self, url: str, target_dir: Path) -> bool:
         """
         Clone the wiki repository to target directory.
@@ -343,17 +364,22 @@ class GitHubWikiConnector(BaseConnector):
                 ["git", "clone", url, str(target_dir)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=60,
             )
 
             if result.returncode == 0:
                 return True
 
-            logger.error(f"Git clone failed: {result.stderr}")
+            # Sanitize stderr to avoid leaking credentials in logs
+            sanitized_stderr = self._sanitize_output(result.stderr)
+            logger.error("Git clone failed: %s", sanitized_stderr)
             return False
 
         except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
-            logger.error(f"Error cloning wiki repository: {e}")
+            logger.error(
+                "Error cloning wiki repository: %s", self._sanitize_output(str(e))
+            )
             return False
 
     def _pull_wiki(self) -> bool:
@@ -372,20 +398,24 @@ class GitHubWikiConnector(BaseConnector):
                 cwd=str(self.wiki_dir),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=30,
             )
 
             if result.returncode == 0:
                 return True
 
-            logger.error(f"Git pull failed: {result.stderr}")
+            sanitized_stderr = self._sanitize_output(result.stderr)
+            logger.error("Git pull failed: %s", sanitized_stderr)
             return False
 
         except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
-            logger.error(f"Error pulling wiki repository: {e}")
+            logger.error(
+                "Error pulling wiki repository: %s", self._sanitize_output(str(e))
+            )
             return False
 
-    def _read_wiki_page(self, md_file: Path) -> Optional[Dict[str, Any]]:
+    def _read_wiki_page(self, md_file: Path) -> dict[str, Any] | None:
         """
         Read a wiki page from a markdown file.
 
@@ -401,7 +431,9 @@ class GitHubWikiConnector(BaseConnector):
             content = md_file.read_text(encoding="utf-8")
 
             # Get relative path from wiki root
-            rel_path = md_file.relative_to(self.wiki_dir) if self.wiki_dir else md_file.name
+            rel_path = (
+                md_file.relative_to(self.wiki_dir) if self.wiki_dir else md_file.name
+            )
 
             # Derive title from filename (remove .md extension)
             title = md_file.stem

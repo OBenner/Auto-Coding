@@ -11,7 +11,6 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 # Knowledge Base Providers
 PROVIDER_NOTION = "notion"
@@ -74,8 +73,12 @@ class KnowledgeBaseConfig:
             api_key=api_key,
             api_url=os.environ.get(f"KNOWLEDGE_BASE_{provider_upper}_API_URL", ""),
             space_key=os.environ.get(f"KNOWLEDGE_BASE_{provider_upper}_SPACE_KEY", ""),
-            workspace_id=os.environ.get(f"KNOWLEDGE_BASE_{provider_upper}_WORKSPACE_ID", ""),
-            repository=os.environ.get(f"KNOWLEDGE_BASE_{provider_upper}_REPOSITORY", ""),
+            workspace_id=os.environ.get(
+                f"KNOWLEDGE_BASE_{provider_upper}_WORKSPACE_ID", ""
+            ),
+            repository=os.environ.get(
+                f"KNOWLEDGE_BASE_{provider_upper}_REPOSITORY", ""
+            ),
             enabled=bool(api_key),
         )
 
@@ -167,7 +170,7 @@ class KnowledgeBaseState:
             json.dump(self.to_dict(), f, indent=2)
 
     @classmethod
-    def load(cls, spec_dir: Path) -> Optional["KnowledgeBaseState"]:
+    def load(cls, spec_dir: Path) -> "KnowledgeBaseState | None":
         """Load state from the spec directory."""
         marker_file = spec_dir / KB_MARKER
         if not marker_file.exists():
@@ -233,7 +236,7 @@ def format_kb_summary(state: KnowledgeBaseState) -> str:
         Formatted summary
     """
     if not state.initialized:
-        return f"Knowledge base: Not initialized"
+        return "Knowledge base: Not initialized"
 
     provider_name = get_provider_display_name(state.provider)
     status_emoji = {

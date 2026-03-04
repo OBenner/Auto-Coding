@@ -11,13 +11,23 @@ export * from './task';
 export * from './terminal';
 export * from './agent';
 export * from './settings';
+export * from './security';
 export * from './changelog';
 export * from './insights';
 export * from './roadmap';
 export * from './integrations';
 export * from './app-update';
 export * from './cli';
+export * from './analytics';
 export * from './merge-analytics';
+export * from './workspace';
+export * from './session-context';
+export * from './productivity-analytics';
+export * from './model-usage';
+export * from './template';
+export * from './session-replay';
+export * from './scheduler';
+export * from './decision';
 
 // IPC types (must be last to use types from other modules)
 export * from './ipc';

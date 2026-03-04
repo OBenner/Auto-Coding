@@ -13,7 +13,6 @@ This plugin:
 """
 
 import logging
-from pathlib import Path
 
 from apps.backend.plugins.sdk.agent import AgentContext, AgentPlugin
 
@@ -53,9 +52,7 @@ class HelloWorldAgentPlugin(AgentPlugin):
 
         Use this to clean up resources and save state.
         """
-        logger.info(
-            f"{self.name}: Plugin unloaded after {self.session_count} sessions"
-        )
+        logger.info(f"{self.name}: Plugin unloaded after {self.session_count} sessions")
 
     def on_enable(self) -> None:
         """
@@ -102,14 +99,10 @@ class HelloWorldAgentPlugin(AgentPlugin):
             success: True if session completed successfully
         """
         status = "succeeded" if success else "failed"
-        logger.info(
-            f"{self.name}: Session {status} for spec '{context.spec_name}'"
-        )
+        logger.info(f"{self.name}: Session {status} for spec '{context.spec_name}'")
 
         if not success:
-            logger.warning(
-                f"{self.name}: Session failed - you may want to investigate"
-            )
+            logger.warning(f"{self.name}: Session failed - you may want to investigate")
 
     def on_message(self, context: AgentContext, message: any) -> None:
         """

@@ -13,7 +13,7 @@ Provides a high-level interface that:
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.sentry import capture_exception
 from integrations.knowledge_base.base import BaseConnector
@@ -69,9 +69,9 @@ class KnowledgeBaseManager:
         """
         self.spec_dir = spec_dir
         self.project_dir = project_dir
-        self.config: Optional[KnowledgeBaseConfig] = None
-        self.state: Optional[KnowledgeBaseState] = None
-        self._connector: Optional[BaseConnector] = None
+        self.config: KnowledgeBaseConfig | None = None
+        self.state: KnowledgeBaseState | None = None
+        self._connector: BaseConnector | None = None
         self._available = False
 
         # Try to load configuration from environment
@@ -90,11 +90,7 @@ class KnowledgeBaseManager:
     @property
     def is_initialized(self) -> bool:
         """Check if knowledge base has been initialized for this spec."""
-        return (
-            self._available
-            and self.state is not None
-            and self.state.initialized
-        )
+        return self._available and self.state is not None and self.state.initialized
 
     async def initialize(self) -> bool:
         """
@@ -158,7 +154,7 @@ class KnowledgeBaseManager:
             self._connector.disconnect()
             self._connector = None
 
-    async def sync(self, force: bool = False) -> Dict[str, Any]:
+    async def sync(self, force: bool = False) -> dict[str, Any]:
         """
         Perform a sync operation.
 
@@ -255,8 +251,8 @@ class KnowledgeBaseManager:
         self,
         query: str,
         limit: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Search the knowledge base for relevant documents.
 
@@ -301,9 +297,9 @@ class KnowledgeBaseManager:
 
     async def get_documents(
         self,
-        limit: Optional[int] = None,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        limit: int | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Get all or filtered documents from the knowledge base.
 
@@ -342,7 +338,7 @@ class KnowledgeBaseManager:
             )
             return []
 
-    def get_status_summary(self) -> Dict[str, Any]:
+    def get_status_summary(self) -> dict[str, Any]:
         """
         Get a summary of knowledge base status.
 
@@ -362,7 +358,9 @@ class KnowledgeBaseManager:
             "provider": self.config.provider if self.config else None,
             "initialized": self.is_initialized,
             "connected": self.is_connected,
-            "sync_summary": self._connector.get_sync_summary() if self._connector else None,
+            "sync_summary": self._connector.get_sync_summary()
+            if self._connector
+            else None,
         }
 
     def get_status_string(self) -> str:
@@ -442,8 +440,8 @@ class KnowledgeBaseManager:
 
     @staticmethod
     def _apply_filters(
-        documents: List[Dict[str, Any]], filters: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        documents: list[dict[str, Any]], filters: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """
         Apply filters to a list of documents.
 

@@ -8,7 +8,7 @@ All connectors (Notion, Confluence, GitHub Wiki, GitBook) must inherit from this
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .config import KnowledgeBaseConfig, KnowledgeBaseState
 
@@ -40,7 +40,7 @@ class BaseConnector(ABC):
         """
         self.config = config
         self.spec_dir = spec_dir
-        self.state: Optional[KnowledgeBaseState] = None
+        self.state: KnowledgeBaseState | None = None
         self._connected = False
 
         # Validate config
@@ -64,7 +64,7 @@ class BaseConnector(ABC):
         pass
 
     @abstractmethod
-    def fetch_documents(self) -> List[Dict[str, Any]]:
+    def fetch_documents(self) -> list[dict[str, Any]]:
         """
         Fetch all documents from the knowledge base.
 
@@ -84,7 +84,7 @@ class BaseConnector(ABC):
         pass
 
     @abstractmethod
-    def incremental_sync(self) -> Dict[str, Any]:
+    def incremental_sync(self) -> dict[str, Any]:
         """
         Perform incremental sync since last successful update.
 
@@ -148,7 +148,7 @@ class BaseConnector(ABC):
         )
         self._save_state()
 
-    def get_sync_summary(self) -> Dict[str, Any]:
+    def get_sync_summary(self) -> dict[str, Any]:
         """
         Get a summary of the current sync status.
 

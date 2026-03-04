@@ -21,11 +21,12 @@ Key Features:
 """
 
 import base64
+import logging
 import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urljoin
 
 import requests
@@ -36,9 +37,9 @@ from ..config import (
     SYNC_STATUS_PARTIAL,
     SYNC_STATUS_SUCCESS,
     KnowledgeBaseConfig,
-    KnowledgeBaseState,
-    PROVIDER_CONFLUENCE,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ConfluenceConnector(BaseConnector):
@@ -75,14 +76,16 @@ class ConfluenceConnector(BaseConnector):
         self.api_url = config.api_url
         self.space_key = config.space_key
         self.email = os.environ.get("KNOWLEDGE_BASE_CONFLUENCE_EMAIL", "")
-        self.session: Optional[requests.Session] = None
+        self.session: requests.Session | None = None
 
         if not self.api_key:
             raise ValueError("CONFLUENCE_API_KEY is required for Confluence connector")
         if not self.api_url:
             raise ValueError("CONFLUENCE_API_URL is required for Confluence connector")
         if not self.space_key:
-            raise ValueError("CONFLUENCE_SPACE_KEY is required for Confluence connector")
+            raise ValueError(
+                "CONFLUENCE_SPACE_KEY is required for Confluence connector"
+            )
         if not self.email:
             raise ValueError("CONFLUENCE_EMAIL is required for Confluence connector")
 
@@ -102,11 +105,13 @@ class ConfluenceConnector(BaseConnector):
         try:
             # Create HTTP session
             self.session = requests.Session()
-            self.session.headers.update({
-                "Authorization": self._get_auth_header(),
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            })
+            self.session.headers.update(
+                {
+                    "Authorization": self._get_auth_header(),
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                }
+            )
 
             # Test connection by fetching space info
             space_url = self._build_api_url(f"/space/{self.space_key}")
@@ -121,7 +126,7 @@ class ConfluenceConnector(BaseConnector):
         except (OSError, requests.RequestException):
             return False
 
-    def fetch_documents(self) -> List[Dict[str, Any]]:
+    def fetch_documents(self) -> list[dict[str, Any]]:
         """
         Fetch all documents (pages) from the Confluence space.
 
@@ -165,7 +170,9 @@ class ConfluenceConnector(BaseConnector):
             self.state.indexed_docs = len(documents)
             self.state.failed_docs = len(errors)
             self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+            self.state.sync_status = (
+                SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+            )
             self.state.error_message = "; ".join(errors[:5])  # First 5 errors
             self._save_state()
 
@@ -178,7 +185,7 @@ class ConfluenceConnector(BaseConnector):
 
         return documents
 
-    def incremental_sync(self) -> Dict[str, Any]:
+    def incremental_sync(self) -> dict[str, Any]:
         """
         Perform incremental sync since last successful update.
 
@@ -217,8 +224,10 @@ class ConfluenceConnector(BaseConnector):
 
             # Filter pages modified since last sync
             updated_pages = [
-                p for p in all_pages
-                if p.get("_links", {}).get("webui") and self._is_page_modified_after(p, last_sync)
+                p
+                for p in all_pages
+                if p.get("_links", {}).get("webui")
+                and self._is_page_modified_after(p, last_sync)
             ]
 
             # Process each updated page
@@ -244,14 +253,18 @@ class ConfluenceConnector(BaseConnector):
 
                 except Exception as e:
                     result["failed"] += 1
-                    result["errors"].append(f"Failed to sync page {page.get('id')}: {e}")
+                    result["errors"].append(
+                        f"Failed to sync page {page.get('id')}: {e}"
+                    )
 
             # Update state
             self.state.total_docs = len(self.state.doc_mapping)
             self.state.indexed_docs = len(self.state.doc_mapping)
             self.state.failed_docs = result["failed"]
             self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+            self.state.sync_status = (
+                SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+            )
             self.state.error_message = "; ".join(result["errors"][:5])
             self._save_state()
 
@@ -304,10 +317,10 @@ class ConfluenceConnector(BaseConnector):
         self,
         method: str,
         url: str,
-        params: Optional[Dict] = None,
-        json_data: Optional[Dict] = None,
+        params: dict | None = None,
+        json_data: dict | None = None,
         retries: int = 3,
-    ) -> Optional[requests.Response]:
+    ) -> requests.Response | None:
         """
         Make an HTTP request to the Confluence API with retry logic.
 
@@ -327,11 +340,7 @@ class ConfluenceConnector(BaseConnector):
         for attempt in range(retries):
             try:
                 response = self.session.request(
-                    method,
-                    url,
-                    params=params,
-                    json=json_data,
-                    timeout=30
+                    method, url, params=params, json=json_data, timeout=30
                 )
 
                 # Rate limiting - wait and retry
@@ -349,17 +358,17 @@ class ConfluenceConnector(BaseConnector):
                     return response
 
                 # Server error - retry after delay
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
             except (OSError, requests.RequestException):
                 if attempt < retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                 else:
                     return None
 
         return None
 
-    def _fetch_all_pages(self) -> List[Dict[str, Any]]:
+    def _fetch_all_pages(self) -> list[dict[str, Any]]:
         """
         Fetch all pages from the configured Confluence space.
 
@@ -400,7 +409,7 @@ class ConfluenceConnector(BaseConnector):
 
         return pages
 
-    def _is_page_modified_after(self, page: Dict[str, Any], timestamp: str) -> bool:
+    def _is_page_modified_after(self, page: dict[str, Any], timestamp: str) -> bool:
         """
         Check if a page was modified after the given timestamp.
 
@@ -417,16 +426,20 @@ class ConfluenceConnector(BaseConnector):
             last_modified = history.get("lastUpdated", {}).get("when")
 
             if last_modified:
-                modified_time = datetime.fromisoformat(last_modified.replace("Z", "+00:00"))
+                modified_time = datetime.fromisoformat(
+                    last_modified.replace("Z", "+00:00")
+                )
                 sync_time = datetime.fromisoformat(timestamp)
                 return modified_time > sync_time
 
         except (ValueError, AttributeError):
-            pass
+            logger.debug(
+                "Could not parse modification time for page %s", page.get("id")
+            )
 
         return False
 
-    def _fetch_page_content(self, page: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _fetch_page_content(self, page: dict[str, Any]) -> dict[str, Any] | None:
         """
         Fetch the full content of a Confluence page.
 
@@ -445,7 +458,9 @@ class ConfluenceConnector(BaseConnector):
         # Get basic page info
         title = page.get("title", "Untitled")
         webui_link = page.get("_links", {}).get("webui", "")
-        base_url = self.api_url.rstrip("/").replace("/rest/api", "").replace("/wiki", "")
+        base_url = (
+            self.api_url.rstrip("/").replace("/rest/api", "").replace("/wiki", "")
+        )
         url = f"{base_url}{webui_link}" if webui_link else ""
 
         # Get metadata
@@ -484,7 +499,7 @@ class ConfluenceConnector(BaseConnector):
                 "version": version,
                 "space_key": self.space_key,
                 "source": "Confluence",
-            }
+            },
         }
 
     def _storage_to_markdown(self, storage_html: str) -> str:
@@ -689,6 +704,7 @@ class ConfluenceConnector(BaseConnector):
             parser.feed(storage_html)
         except Exception:
             # Fallback: return basic text if parsing fails
+            logger.debug("HTML parsing failed, returning raw content")
             return storage_html
 
         markdown = parser.get_markdown()

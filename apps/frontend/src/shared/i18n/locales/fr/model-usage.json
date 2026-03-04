@@ -1,0 +1,103 @@
+{
+  "title": "Utilisation des Modèles",
+  "description": "Voir et gérer l'utilisation des modèles IA dans vos projets",
+  "loading": "Chargement des verrous de modèle...",
+  "lockedModels": "Modèles Verrouillés",
+  "lockedModelsDescription": "Les modèles verrouillés empêchent les mises à niveau automatiques et garantissent un comportement cohérent",
+  "locked": "verrouillé",
+  "errors": {
+    "lockOperationFailed": "Échec de la mise à jour du verrouillage du modèle",
+    "loadFailed": "Échec du chargement des données d'utilisation des modèles",
+    "unlockFailed": "Échec du déverrouillage du modèle",
+    "lockFailed": "Échec du verrouillage du modèle",
+    "fetchLocksFailed": "Échec de la récupération des verrous de modèle"
+  },
+  "lock": {
+    "lockModel": "Verrouiller {{agent}} à ce modèle",
+    "unlockModel": "Déverrouiller le modèle {{agent}}",
+    "lockedTo": "Verrouillé à {{model}}",
+    "modelLocked": "Modèle Verrouillé",
+    "modelUnlocked": "Modèle Déverrouillé",
+    "lockTooltip": "Empêcher les mises à niveau automatiques du modèle pour cet agent",
+    "unlockTooltip": "Autoriser les mises à niveau automatiques du modèle pour cet agent"
+  },
+  "changeConfirmation": {
+    "title": "Confirmer le Changement de Modèle",
+    "description": "Vous êtes sur le point de changer le modèle pour <strong>{{agent}}</strong>.",
+    "currentModel": "Modèle actuel",
+    "newModel": "Nouveau modèle",
+    "reasonLabel": "Raison du changement",
+    "reasonRequired": "Veuillez fournir une raison pour ce changement de modèle",
+    "warning": "Ce changement affectera toutes les tâches futures utilisant cet agent. Assurez-vous de comprendre les implications avant de procéder.",
+    "confirm": "Confirmer le Changement",
+    "cancel": "Annuler",
+    "changing": "Changement en cours..."
+  },
+  "dashboard": {
+    "title": "Analytiques d'utilisation des modèles",
+    "subtitle": "Suivre l'utilisation des modèles IA, les coûts et la transparence de configuration",
+    "loadingAnalytics": "Chargement des analytiques d'utilisation des modèles...",
+    "summaryMetrics": "Métriques récapitulatives",
+    "totalApiCalls": "Total appels API",
+    "totalTokens": "Total jetons",
+    "totalCost": "Coût total",
+    "modelsUsed": "Modèles utilisés",
+    "usageByAgent": "Utilisation par agent",
+    "topByUsage": "Top modèles par utilisation",
+    "topByCost": "Top modèles par coût",
+    "allModels": "Tous les modèles",
+    "calls": "appels",
+    "tokens": "jetons",
+    "refresh": "Actualiser",
+    "exportJson": "Exporter JSON",
+    "exportCsv": "Exporter CSV",
+    "timeRange": {
+      "all": "Tout"
+    },
+    "empty": {
+      "title": "Aucune donnée d'utilisation des modèles disponible",
+      "description": "Exécutez des tâches pour voir vos analytiques d'utilisation des modèles"
+    },
+    "toast": {
+      "refreshed": "Analytiques actualisées",
+      "refreshedDescription": "Les données analytiques d'utilisation des modèles ont été mises à jour.",
+      "warning": "Avertissement",
+      "summaryFailed": "Échec du chargement du résumé d'utilisation des modèles.",
+      "trendsFailed": "Échec du chargement des tendances d'utilisation des modèles.",
+      "exportSuccess": "Exportation réussie",
+      "exportSuccessDescription": "Analytiques d'utilisation des modèles exportées vers {{path}}",
+      "exportFailed": "Échec de l'exportation",
+      "exportFailedDescription": "Échec de l'exportation des analytiques",
+      "exportError": "Erreur d'exportation",
+      "exportErrorDescription": "Une erreur est survenue lors de l'exportation des analytiques.",
+      "error": "Erreur",
+      "loadError": "Échec du chargement des données analytiques d'utilisation des modèles."
+    }
+  },
+  "costChart": {
+    "title": "Tendances des coûts au fil du temps",
+    "cost": "Coût ($)",
+    "tokens": "Jetons",
+    "apiCalls": "Appels API",
+    "loading": "Chargement des tendances de coûts...",
+    "empty": "Aucune donnée de tendance de coûts disponible",
+    "emptySubtext": "Exécutez plus de tâches pour voir les tendances de coûts"
+  },
+  "card": {
+    "model": "modèle",
+    "models": "modèles",
+    "preferredModel": "Modèle principal",
+    "apiCalls": "Appels API",
+    "totalTokens": "Total jetons",
+    "totalCost": "Coût total",
+    "modelsUsed": "Modèles utilisés",
+    "modelBreakdown": "Répartition par modèle",
+    "calls": "appels"
+  },
+  "chart": {
+    "loading": "Chargement des données du graphique...",
+    "emptyTitle": "Aucune donnée disponible",
+    "emptySubtitle": "Exécutez plus de tâches pour voir les tendances",
+    "rangeLatest": "Plage"
+  }
+}

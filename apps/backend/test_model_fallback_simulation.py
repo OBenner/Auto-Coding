@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def test_fallback_function():
     """Test retry_with_fallback function directly with simulated failures."""
-    from core.model_fallback import MODEL_FALLBACK_CHAIN, retry_with_fallback
+    from core.model_fallback import retry_with_fallback
 
     logger.info("=" * 60)
     logger.info("TEST 1: Direct retry_with_fallback function test")
@@ -100,7 +100,7 @@ def test_all_models_fail():
 
     logger.info("\n--- Testing opus -> sonnet -> haiku all fail ---")
     try:
-        result = retry_with_fallback(
+        retry_with_fallback(
             callable_fn=always_fail,
             model="claude-opus-4-20250514",
             max_retries_per_model=1,
@@ -134,7 +134,7 @@ def test_non_retryable_error():
 
     logger.info("\n--- Testing non-retryable error raises immediately ---")
     try:
-        result = retry_with_fallback(
+        retry_with_fallback(
             callable_fn=raise_non_retryable,
             model="claude-opus-4-20250514",
             max_retries_per_model=1,
@@ -205,7 +205,7 @@ def test_create_client_fallback():
 
             # This should trigger fallback from opus to sonnet
             try:
-                client = create_client(
+                create_client(
                     project_dir=project_dir,
                     spec_dir=spec_dir,
                     model="claude-opus-4-20250514",

@@ -59,7 +59,7 @@ export async function loadFileBasedMemories(
     }
   }
 
-  recentSpecDirs.sort().reverse();
+  recentSpecDirs.sort((a, b) => b.localeCompare(a));
   const topSpecDirs = recentSpecDirs.slice(0, 10); // Last 10 specs
 
   for (const specDir of topSpecDirs) {

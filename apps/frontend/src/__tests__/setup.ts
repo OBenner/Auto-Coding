@@ -118,12 +118,17 @@ if (typeof window !== 'undefined') {
   };
 }
 
+// Sanitize a value for safe logging - strips control characters and truncates
+function sanitizeForLog(value: unknown): string {
+  return String(value).replace(/\p{Cc}/gu, '').slice(0, 500);
+}
+
 // Suppress console errors in tests unless explicitly testing error scenarios
 const originalConsoleError = console.error;
 console.error = (...args: unknown[]) => {
-  // Allow certain error messages through for debugging
-  const message = args[0]?.toString() || '';
+  const message = sanitizeForLog(args[0] ?? '');
   if (message.includes('[TEST]')) {
-    originalConsoleError(...args);
+    // Join into single sanitized string to prevent log injection
+    originalConsoleError(args.map(sanitizeForLog).join(' '));
   }
 };

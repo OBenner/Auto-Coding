@@ -3,6 +3,7 @@ import type { Project, ProjectSettings as ProjectSettingsType, AutoBuildVersionI
 import { SettingsSection } from '../SettingsSection';
 import { GeneralSettings } from '../../project-settings/GeneralSettings';
 import { SecuritySettings } from '../../project-settings/SecuritySettings';
+import { ModelUsageSettings } from '../../project-settings/ModelUsageSettings';
 import { LinearIntegration } from '../integrations/LinearIntegration';
 import { GitHubIntegration } from '../integrations/GitHubIntegration';
 import { GitLabIntegration } from '../integrations/GitLabIntegration';
@@ -190,6 +191,22 @@ export function SectionRouter({
               expanded={true}
               onToggle={() => undefined}
             />
+          </InitializationGuard>
+        </SettingsSection>
+      );
+
+    case 'model-usage':
+      return (
+        <SettingsSection
+          title={t('projectSections.model-usage.integrationTitle')}
+          description={t('projectSections.model-usage.integrationDescription')}
+        >
+          <InitializationGuard
+            initialized={!!project.autoBuildPath}
+            title={t('projectSections.model-usage.integrationTitle')}
+            description={t('projectSections.model-usage.syncDescription')}
+          >
+            <ModelUsageSettings project={project} />
           </InitializationGuard>
         </SettingsSection>
       );

@@ -18,11 +18,11 @@ Key Features:
 - Error handling and retry logic
 """
 
-import os
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -32,9 +32,9 @@ from ..config import (
     SYNC_STATUS_PARTIAL,
     SYNC_STATUS_SUCCESS,
     KnowledgeBaseConfig,
-    KnowledgeBaseState,
-    PROVIDER_GITBOOK,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class GitBookConnector(BaseConnector):
@@ -69,7 +69,7 @@ class GitBookConnector(BaseConnector):
 
         self.api_key = config.api_key
         self.api_url = config.api_url or self.API_BASE_URL
-        self.session: Optional[requests.Session] = None
+        self.session: requests.Session | None = None
 
         if not self.api_key:
             raise ValueError("GITBOOK_API_KEY is required for GitBook connector")
@@ -90,10 +90,12 @@ class GitBookConnector(BaseConnector):
         try:
             # Create HTTP session
             self.session = requests.Session()
-            self.session.headers.update({
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            })
+            self.session.headers.update(
+                {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                }
+            )
 
             # Test connection by fetching user info
             response = self._make_request("GET", "/v1/user")
@@ -107,7 +109,7 @@ class GitBookConnector(BaseConnector):
         except (OSError, requests.RequestException):
             return False
 
-    def fetch_documents(self) -> List[Dict[str, Any]]:
+    def fetch_documents(self) -> list[dict[str, Any]]:
         """
         Fetch all documents (pages) from accessible GitBook spaces.
 
@@ -152,7 +154,9 @@ class GitBookConnector(BaseConnector):
             self.state.indexed_docs = len(documents)
             self.state.failed_docs = len(errors)
             self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+            self.state.sync_status = (
+                SYNC_STATUS_SUCCESS if not errors else SYNC_STATUS_PARTIAL
+            )
             self.state.error_message = "; ".join(errors[:5])  # First 5 errors
             self._save_state()
 
@@ -165,7 +169,7 @@ class GitBookConnector(BaseConnector):
 
         return documents
 
-    def incremental_sync(self) -> Dict[str, Any]:
+    def incremental_sync(self) -> dict[str, Any]:
         """
         Perform incremental sync since last successful update.
 
@@ -208,8 +212,10 @@ class GitBookConnector(BaseConnector):
 
                     # Filter pages modified since last sync
                     updated_pages = [
-                        p for p in space_pages
-                        if p.get("updatedAt") and p["updatedAt"] > last_sync
+                        p
+                        for p in space_pages
+                        if p.get("updatedAt")
+                        and (last_sync is None or p["updatedAt"] > last_sync)
                     ]
 
                     # Process each updated page
@@ -236,7 +242,9 @@ class GitBookConnector(BaseConnector):
                         except Exception as e:
                             page_id = page.get("id", "unknown")
                             result["failed"] += 1
-                            result["errors"].append(f"Failed to sync page {page_id}: {e}")
+                            result["errors"].append(
+                                f"Failed to sync page {page_id}: {e}"
+                            )
 
                 except Exception as e:
                     space_id = space.get("id", "unknown")
@@ -247,7 +255,9 @@ class GitBookConnector(BaseConnector):
             self.state.indexed_docs = len(self.state.doc_mapping)
             self.state.failed_docs = result["failed"]
             self.state.last_sync = datetime.now().isoformat()
-            self.state.sync_status = SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+            self.state.sync_status = (
+                SYNC_STATUS_SUCCESS if not result["failed"] else SYNC_STATUS_PARTIAL
+            )
             self.state.error_message = "; ".join(result["errors"][:5])
             self._save_state()
 
@@ -268,10 +278,10 @@ class GitBookConnector(BaseConnector):
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict] = None,
-        params: Optional[Dict] = None,
+        json_data: dict | None = None,
+        params: dict | None = None,
         retries: int = 3,
-    ) -> Optional[requests.Response]:
+    ) -> requests.Response | None:
         """
         Make an HTTP request to the GitBook API with retry logic.
 
@@ -293,11 +303,7 @@ class GitBookConnector(BaseConnector):
         for attempt in range(retries):
             try:
                 response = self.session.request(
-                    method,
-                    url,
-                    json=json_data,
-                    params=params,
-                    timeout=30
+                    method, url, json=json_data, params=params, timeout=30
                 )
 
                 # Rate limiting - wait and retry
@@ -315,17 +321,17 @@ class GitBookConnector(BaseConnector):
                     return response
 
                 # Server error - retry after delay
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
             except (OSError, requests.RequestException):
                 if attempt < retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                 else:
                     return None
 
         return None
 
-    def _fetch_all_spaces(self) -> List[Dict[str, Any]]:
+    def _fetch_all_spaces(self) -> list[dict[str, Any]]:
         """
         Fetch all accessible GitBook spaces.
 
@@ -342,11 +348,11 @@ class GitBookConnector(BaseConnector):
                 spaces = data.get("items", [])
 
         except Exception:
-            pass
+            logger.debug("Failed to fetch GitBook spaces")
 
         return spaces
 
-    def _fetch_space_documents(self, space: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _fetch_space_documents(self, space: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Fetch all documents from a GitBook space.
 
@@ -365,11 +371,14 @@ class GitBookConnector(BaseConnector):
                 if doc:
                     documents.append(doc)
             except Exception:
+                logger.debug(
+                    "Failed to fetch page content from space %s", space.get("id")
+                )
                 continue
 
         return documents
 
-    def _fetch_space_pages(self, space: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _fetch_space_pages(self, space: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Fetch all pages from a GitBook space.
 
@@ -390,7 +399,7 @@ class GitBookConnector(BaseConnector):
             response = self._make_request(
                 "GET",
                 f"/v1/spaces/{space_id}/search",
-                params={"query": "", "page": 1, "limit": 100}
+                params={"query": "", "page": 1, "limit": 100},
             )
 
             if response and response.status_code == 200:
@@ -403,7 +412,7 @@ class GitBookConnector(BaseConnector):
                     response = self._make_request(
                         "GET",
                         f"/v1/spaces/{space_id}/search",
-                        params={"query": "", "page": next_page, "limit": 100}
+                        params={"query": "", "page": next_page, "limit": 100},
                     )
 
                     if not response or response.status_code != 200:
@@ -413,15 +422,13 @@ class GitBookConnector(BaseConnector):
                     pages.extend(data.get("items", []))
 
         except Exception:
-            pass
+            logger.debug("Failed to fetch pages for space %s", space.get("id"))
 
         return pages
 
     def _fetch_page_content(
-        self,
-        page: Dict[str, Any],
-        space: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        self, page: dict[str, Any], space: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """
         Fetch the full content of a GitBook page.
 
@@ -461,7 +468,7 @@ class GitBookConnector(BaseConnector):
                 "updated_at": updated_at,
                 "source": "GitBook",
                 "space_id": space_id,
-            }
+            },
         }
 
     def _fetch_page_text(self, page_id: str, space_id: str) -> str:
@@ -477,8 +484,7 @@ class GitBookConnector(BaseConnector):
         """
         try:
             response = self._make_request(
-                "GET",
-                f"/v1/spaces/{space_id}/content/{page_id}"
+                "GET", f"/v1/spaces/{space_id}/content/{page_id}"
             )
 
             if response and response.status_code == 200:
@@ -488,11 +494,13 @@ class GitBookConnector(BaseConnector):
                 return self._extract_content(data)
 
         except Exception:
-            pass
+            logger.debug(
+                "Failed to fetch text for page %s in space %s", page_id, space_id
+            )
 
         return ""
 
-    def _extract_content(self, content_data: Dict[str, Any]) -> str:
+    def _extract_content(self, content_data: dict[str, Any]) -> str:
         """
         Extract content from GitBook API response.
 
@@ -519,7 +527,7 @@ class GitBookConnector(BaseConnector):
 
         return ""
 
-    def _nodes_to_markdown(self, nodes: List[Dict[str, Any]]) -> str:
+    def _nodes_to_markdown(self, nodes: list[dict[str, Any]]) -> str:
         """
         Convert GitBook content nodes to markdown format.
 
@@ -556,17 +564,17 @@ class GitBookConnector(BaseConnector):
 
         return "\n\n".join(markdown_lines)
 
-    def _format_paragraph(self, node: Dict[str, Any]) -> str:
+    def _format_paragraph(self, node: dict[str, Any]) -> str:
         """Format a paragraph node as markdown."""
         return self._extract_text(node)
 
-    def _format_heading(self, node: Dict[str, Any], level: int) -> str:
+    def _format_heading(self, node: dict[str, Any], level: int) -> str:
         """Format a heading node as markdown."""
         text = self._extract_text(node)
         prefix = "#" * level
         return f"{prefix} {text}"
 
-    def _format_list(self, node: Dict[str, Any]) -> str:
+    def _format_list(self, node: dict[str, Any]) -> str:
         """Format a list node as markdown."""
         items = node.get("items", [])
         list_type = node.get("style", "bullet")  # bullet or ordered
@@ -581,24 +589,24 @@ class GitBookConnector(BaseConnector):
 
         return "\n".join(lines)
 
-    def _format_code(self, node: Dict[str, Any]) -> str:
+    def _format_code(self, node: dict[str, Any]) -> str:
         """Format a code node as markdown."""
         code = node.get("code", "")
         language = node.get("language", "")
         return f"```{language}\n{code}\n```"
 
-    def _format_quote(self, node: Dict[str, Any]) -> str:
+    def _format_quote(self, node: dict[str, Any]) -> str:
         """Format a quote node as markdown."""
         text = self._extract_text(node)
         return f"> {text}"
 
-    def _format_callout(self, node: Dict[str, Any]) -> str:
+    def _format_callout(self, node: dict[str, Any]) -> str:
         """Format a callout node as markdown."""
         text = self._extract_text(node)
         emoji = node.get("icon", "ℹ️")
         return f"> {emoji} {text}"
 
-    def _extract_text(self, node: Dict[str, Any]) -> str:
+    def _extract_text(self, node: dict[str, Any]) -> str:
         """
         Extract text from a GitBook content node.
 
@@ -640,10 +648,7 @@ class GitBookConnector(BaseConnector):
 
         # Try to get from nested nodes
         if "nodes" in node:
-            return "\n".join(
-                self._extract_text(child)
-                for child in node["nodes"]
-            )
+            return "\n".join(self._extract_text(child) for child in node["nodes"])
 
         return ""
 

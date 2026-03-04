@@ -67,10 +67,10 @@ class TestEnvVarTokenResolution:
         token = get_auth_token()
         assert token == claude_token
 
-    def test_no_token_returns_none(self, mocker):
+    def test_no_token_returns_none(self, monkeypatch):
         """Returns None when no auth token is configured."""
         # Mock keychain to return None (env vars already cleared by fixture)
-        mocker.patch("core.auth.get_token_from_keychain", return_value=None)
+        monkeypatch.setattr("core.auth.get_token_from_keychain", lambda: None)
         token = get_auth_token()
         assert token is None
 
@@ -369,12 +369,12 @@ class TestRequireAuthToken:
     """Tests for require_auth_token function."""
 
     @pytest.fixture(autouse=True)
-    def clear_env(self, mocker):
+    def clear_env(self, monkeypatch):
         """Clear auth environment variables and mock keychain before each test."""
         for var in AUTH_TOKEN_ENV_VARS:
             os.environ.pop(var, None)
         # Mock keychain to return None (tests that need a token will set env var)
-        mocker.patch("core.auth.get_token_from_keychain", return_value=None)
+        monkeypatch.setattr("core.auth.get_token_from_keychain", lambda: None)
         yield
         # Cleanup after test
         for var in AUTH_TOKEN_ENV_VARS:
@@ -556,10 +556,10 @@ class TestTokenSourceDetection:
         source = get_auth_token_source()
         assert source == "Linux Secret Service"
 
-    def test_source_none_when_not_found(self, mocker):
+    def test_source_none_when_not_found(self, monkeypatch):
         """Returns None when no token source is found."""
         # Mock keychain to return None (env vars already cleared by fixture)
-        mocker.patch("core.auth.get_token_from_keychain", return_value=None)
+        monkeypatch.setattr("core.auth.get_token_from_keychain", lambda: None)
         source = get_auth_token_source()
         assert source is None
 
@@ -881,8 +881,9 @@ class TestTokenDecryptionErrorHandling:
 
     def test_decrypt_token_valid_base64_characters_accepted(self):
         """Verify decrypt_token accepts standard and URL-safe base64 characters."""
-        from core.auth import decrypt_token
         from unittest.mock import patch
+
+        from core.auth import decrypt_token
 
         # Standard base64 includes +/=
         # URL-safe base64 includes -_
@@ -1048,9 +1049,7 @@ class TestTokenDecryptionKeychain:
         keychain_token = "sk-ant-oat01-from-keychain"
 
         monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", env_token)
-        monkeypatch.setattr(
-            "core.auth.get_token_from_keychain", lambda: keychain_token
-        )
+        monkeypatch.setattr("core.auth.get_token_from_keychain", lambda: keychain_token)
 
         from core.auth import get_auth_token
 
@@ -1066,9 +1065,7 @@ class TestTokenDecryptionKeychain:
         keychain_token = "sk-ant-oat01-from-keychain"
 
         monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", encrypted_env)
-        monkeypatch.setattr(
-            "core.auth.get_token_from_keychain", lambda: keychain_token
-        )
+        monkeypatch.setattr("core.auth.get_token_from_keychain", lambda: keychain_token)
 
         with patch("core.auth.decrypt_token") as mock_decrypt:
             mock_decrypt.return_value = decrypted_env

@@ -38,15 +38,26 @@ The Auto Code Web Backend provides a web API layer on top of the Auto Code auton
 ### Installation
 
 1. **Create virtual environment:**
+
    ```bash
    cd apps/web-backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   # Recommended (requires `uv`, see CLAUDE.md):
+   uv venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+   # If `uv` is not installed, you can instead run:
+   # python -m venv .venv
+   # source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
 2. **Install dependencies:**
+
    ```bash
-   pip install -r requirements.txt
+   # Recommended (uses the `uv` package manager):
+   uv pip install -r requirements.txt
+
+   # If `uv` is not available:
+   # python -m pip install -r requirements.txt
    ```
 
 3. **Configure environment:**
