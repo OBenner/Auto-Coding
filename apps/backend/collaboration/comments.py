@@ -172,8 +172,9 @@ class CommentManager(CollaborationManagerBase):
         self._thread_index.setdefault(comment.comment_id, [])
 
         logger.info(
-            f"Created comment {comment.comment_id} by {username} on spec {self.spec_id}"
+            f"Created comment {comment.comment_id} by user {user_id} on spec {self.spec_id}"
         )
+        logger.debug(f"Comment author username: {username}")
 
         # Persist to Graphiti
         if self._memory_available:
@@ -261,19 +262,24 @@ class CommentManager(CollaborationManagerBase):
         if comment_id not in self._comments:
             raise CommentError(f"Comment {comment_id} not found")
 
-        comment = self._comments[comment_id]
+        # Collect all comments to resolve: parent + all replies
+        comments_to_resolve = [comment_id]
+        comments_to_resolve.extend(self._thread_index.get(comment_id, []))
 
-        # Mark as resolved
-        comment.mark_resolved()
+        for cid in comments_to_resolve:
+            comment = self._comments.get(cid)
+            if comment and not comment.resolved:
+                comment.mark_resolved()
+
+                # Persist each resolved comment to Graphiti
+                if self._memory_available:
+                    await self._update_comment_in_graphiti(comment, action="resolved")
 
         logger.info(
-            f"Resolved comment thread {comment_id} on spec {self.spec_id} "
+            f"Resolved comment thread {comment_id} "
+            f"({len(comments_to_resolve)} comments) on spec {self.spec_id} "
             f"by user {user_id}"
         )
-
-        # Update in Graphiti if available
-        if self._memory_available:
-            await self._update_comment_in_graphiti(comment, action="resolved")
 
         return True
 

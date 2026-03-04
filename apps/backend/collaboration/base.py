@@ -163,7 +163,7 @@ class CollaborationManagerBase:
         try:
             from graphiti_core.nodes import EpisodeType
 
-            await self._memory._client.graphiti.add_episode(
+            await self._memory.client.graphiti.add_episode(
                 name=episode_name,
                 episode_body=json.dumps(episode_content),
                 source=EpisodeType.text,

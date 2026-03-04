@@ -12,10 +12,9 @@
  */
 
 import { ipcMain } from 'electron';
-import { IPC_CHANNELS, AUTO_BUILD_PATHS } from '../../shared/constants';
+import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult } from '../../shared/types';
 import path from 'path';
-import { promises as fsPromises } from 'fs';
 import { projectStore } from '../project-store';
 import { runPythonSubprocess } from './github/utils/subprocess-runner';
 import { getRunnerEnv } from './github/utils/runner-env';
@@ -33,22 +32,109 @@ function getBackendDir(): string {
 /**
  * Helper to get Python executable path and environment
  */
-async function getPythonEnv(projectPath: string): Promise<{ pythonPath: string; env: Record<string, string> }> {
+async function getPythonEnv(_projectPath: string): Promise<{ pythonPath: string; env: Record<string, string> }> {
   const env = await getRunnerEnv();
   const pythonPath = 'python';
   return { pythonPath, env };
 }
 
+// ========================================
+// Shared Helpers
+// ========================================
+
 /**
- * Check if a file exists
+ * Build Python script args with standard boilerplate (import sys, json, sys.path.insert).
  */
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fsPromises.access(filePath);
-    return true;
-  } catch {
-    return false;
+function buildCollabScript(backendDir: string, pythonCode: string): string[] {
+  return [
+    '-c',
+    `
+import sys
+import json
+
+# Add backend to path
+sys.path.insert(0, ${JSON.stringify(backendDir)})
+
+${pythonCode}
+    `
+  ];
+}
+
+/**
+ * Run a Python collaboration subprocess, parse JSON stdout, and return an IPCResult.
+ */
+async function runCollabPython(
+  pythonPath: string,
+  backendDir: string,
+  env: Record<string, string>,
+  pythonCode: string,
+  errorLabel: string
+): Promise<IPCResult> {
+  const args = buildCollabScript(backendDir, pythonCode);
+
+  const { promise } = runPythonSubprocess({
+    pythonPath,
+    args,
+    cwd: backendDir,
+    env
+  });
+
+  const result = await promise;
+
+  if (!result.success || result.exitCode !== 0) {
+    console.error(`[${errorLabel}] Python subprocess failed:`, result.error);
+    return { success: false, error: result.error || `Failed: ${errorLabel}` };
   }
+
+  const data = result.stdout.trim() ? JSON.parse(result.stdout.trim()) : null;
+  return { success: true, data };
+}
+
+/**
+ * Resolve spec context: find task+project, get Python env, backend dir.
+ * Returns null if context cannot be resolved (error already returned).
+ */
+async function resolveSpecContext(specId: string) {
+  const { task, project } = await findTaskAndProject(specId);
+  if (!task || !project) return null;
+
+  const { pythonPath, env } = await getPythonEnv(project.path);
+  const backendDir = getBackendDir();
+  return { task, project, pythonPath, env, backendDir };
+}
+
+/**
+ * Resolve project context (no specId needed, uses first project).
+ * Returns null if no project found.
+ */
+async function resolveProjectContext() {
+  const projects = projectStore.getProjects();
+  const project = projects[0];
+  if (!project) return null;
+
+  const { pythonPath, env } = await getPythonEnv(project.path);
+  const backendDir = getBackendDir();
+  return { project, pythonPath, env, backendDir };
+}
+
+/**
+ * Wrap a handler with standard try/catch error handling.
+ */
+function collabHandler(
+  label: string,
+  fn: (...args: unknown[]) => Promise<IPCResult>
+): (...args: unknown[]) => Promise<IPCResult> {
+  return async (...args: unknown[]) => {
+    try {
+      return await fn(...args);
+    } catch (error) {
+      console.error(`[${label}] Error:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  };
 }
 
 /**
@@ -59,41 +145,21 @@ export function registerCollaborationHandlers(getMainWindow: () => BrowserWindow
   // Permission Handlers
   // ========================================
 
-  /**
-   * Get all permissions for a spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_PERMISSIONS_GET,
-    async (_, specId: string): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_PERMISSIONS_GET called for spec:', specId);
+    collabHandler('COLLABORATION_PERMISSIONS_GET', async (_, specId: string) => {
+      console.warn('[IPC] COLLABORATION_PERMISSIONS_GET called for spec:', specId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify('')})
 
-memory = get_graphiti_memory(None, project_dir)
+memory = get_graphiti_memory(None, Path(${JSON.stringify(ctx.project.path)}))
 
 # Get permissions from Graphiti
 permissions = memory.get_permissions(spec_id)
@@ -111,43 +177,13 @@ for perm in permissions:
     })
 
 print(json.dumps(result))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ permissions: unknown[] }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_PERMISSIONS_GET] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to get permissions' };
-        }
-
-        const permissions = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_PERMISSIONS_GET returning', permissions.length, 'permissions');
-
-        return { success: true, data: permissions };
-      } catch (error) {
-        console.error('[COLLABORATION_PERMISSIONS_GET] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_PERMISSIONS_GET');
+    })
   );
 
-  /**
-   * Add a user to spec with role
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_PERMISSIONS_ADD,
-    async (
+    collabHandler('COLLABORATION_PERMISSIONS_ADD', async (
       _,
       specId: string,
       userId: string,
@@ -155,36 +191,19 @@ print(json.dumps(result))
       level: string,
       grantedBy: string,
       email?: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_PERMISSIONS_ADD called for spec:', specId, 'user:', username);
+    ) => {
+      console.warn('[IPC] COLLABORATION_PERMISSIONS_ADD called for spec:', specId, 'user:', username);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser, PermissionLevel
 from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -215,70 +234,23 @@ print(json.dumps({
     'granted_by': permission.granted_by,
     'granted_at': permission.granted_at
 }))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ permission: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_PERMISSIONS_ADD] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to add permission' };
-        }
-
-        const permission = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_PERMISSIONS_ADD success');
-
-        return { success: true, data: permission };
-      } catch (error) {
-        console.error('[COLLABORATION_PERMISSIONS_ADD] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_PERMISSIONS_ADD');
+    })
   );
 
-  /**
-   * Update user's role on spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_PERMISSIONS_UPDATE,
-    async (
+    collabHandler('COLLABORATION_PERMISSIONS_UPDATE', async (
       _,
       specId: string,
       userId: string,
       newLevel: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_PERMISSIONS_UPDATE called for spec:', specId, 'user:', userId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_PERMISSIONS_UPDATE called for spec:', specId, 'user:', userId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import PermissionLevel
@@ -287,7 +259,7 @@ from collaboration.permissions import PermissionChecker
 spec_id = ${JSON.stringify(specId)}
 user_id = ${JSON.stringify(userId)}
 new_level = PermissionLevel(${JSON.stringify(newLevel)})
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -308,76 +280,29 @@ print(json.dumps({
     'user_id': new_permission.user.user_id,
     'level': new_permission.level.value
 }))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ permission: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_PERMISSIONS_UPDATE] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to update permission' };
-        }
-
-        const permission = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_PERMISSIONS_UPDATE success');
-
-        return { success: true, data: permission };
-      } catch (error) {
-        console.error('[COLLABORATION_PERMISSIONS_UPDATE] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_PERMISSIONS_UPDATE');
+    })
   );
 
-  /**
-   * Remove user from spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_PERMISSIONS_REMOVE,
-    async (
+    collabHandler('COLLABORATION_PERMISSIONS_REMOVE', async (
       _,
       specId: string,
       userId: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_PERMISSIONS_REMOVE called for spec:', specId, 'user:', userId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_PERMISSIONS_REMOVE called for spec:', specId, 'user:', userId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 user_id = ${JSON.stringify(userId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -389,73 +314,27 @@ revoked = checker.revoke_permission(user_id)
 memory.revoke_permission(spec_id, user_id)
 
 print(json.dumps({ 'revoked': revoked }))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ result: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_PERMISSIONS_REMOVE] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to remove permission' };
-        }
-
-        console.warn('[IPC] COLLABORATION_PERMISSIONS_REMOVE success');
-
-        return { success: true };
-      } catch (error) {
-        console.error('[COLLABORATION_PERMISSIONS_REMOVE] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_PERMISSIONS_REMOVE');
+    })
   );
 
   // ========================================
   // Comment Handlers
   // ========================================
 
-  /**
-   * Get all comments for a spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_COMMENTS_GET,
-    async (_, specId: string): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_COMMENTS_GET called for spec:', specId);
+    collabHandler('COLLABORATION_COMMENTS_GET', async (_, specId: string) => {
+      console.warn('[IPC] COLLABORATION_COMMENTS_GET called for spec:', specId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -482,72 +361,25 @@ for comment in comments:
     })
 
 print(json.dumps(result))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ comments: unknown[] }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_COMMENTS_GET] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to get comments' };
-        }
-
-        const comments = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_COMMENTS_GET returning', comments.length, 'comments');
-
-        return { success: true, data: comments };
-      } catch (error) {
-        console.error('[COLLABORATION_COMMENTS_GET] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_COMMENTS_GET');
+    })
   );
 
-  /**
-   * Create a new comment
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_COMMENTS_CREATE,
-    async (
+    collabHandler('COLLABORATION_COMMENTS_CREATE', async (
       _,
       specId: string,
       userId: string,
       username: string,
       content: string,
       parentId?: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_COMMENTS_CREATE called for spec:', specId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_COMMENTS_CREATE called for spec:', specId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser, Comment
@@ -555,7 +387,7 @@ from collaboration.comments import CommentManager
 from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 parent_id = ${JSON.stringify(parentId)}
 
 memory = get_graphiti_memory(None, project_dir)
@@ -596,83 +428,39 @@ result = {
 }
 
 print(json.dumps(result))
-          `
-        ];
+      `, 'COLLABORATION_COMMENTS_CREATE');
 
-        const { promise } = runPythonSubprocess<{ comment: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_COMMENTS_CREATE] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to create comment' };
-        }
-
-        const comment = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_COMMENTS_CREATE success');
-
-        // Emit event for real-time updates
+      if (ipcResult.success) {
         const mainWindow = getMainWindow();
         if (mainWindow) {
-          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_COMMENT_ADDED, { specId, comment });
+          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_COMMENT_ADDED, { specId, comment: ipcResult.data });
         }
-
-        return { success: true, data: comment };
-      } catch (error) {
-        console.error('[COLLABORATION_COMMENTS_CREATE] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
       }
-    }
+
+      return ipcResult;
+    })
   );
 
-  /**
-   * Update existing comment
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_COMMENTS_UPDATE,
-    async (
+    collabHandler('COLLABORATION_COMMENTS_UPDATE', async (
       _,
       specId: string,
       commentId: string,
       newContent: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_COMMENTS_UPDATE called for comment:', commentId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_COMMENTS_UPDATE called for comment:', commentId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 
 spec_id = ${JSON.stringify(specId)}
 comment_id = ${JSON.stringify(commentId)}
 new_content = ${JSON.stringify(newContent)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -691,75 +479,28 @@ result = {
 }
 
 print(json.dumps(result))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ comment: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_COMMENTS_UPDATE] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to update comment' };
-        }
-
-        const comment = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_COMMENTS_UPDATE success');
-
-        return { success: true, data: comment };
-      } catch (error) {
-        console.error('[COLLABORATION_COMMENTS_UPDATE] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_COMMENTS_UPDATE');
+    })
   );
 
-  /**
-   * Delete a comment
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_COMMENTS_DELETE,
-    async (
+    collabHandler('COLLABORATION_COMMENTS_DELETE', async (
       _,
       specId: string,
       commentId: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_COMMENTS_DELETE called for comment:', commentId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_COMMENTS_DELETE called for comment:', commentId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 
 spec_id = ${JSON.stringify(specId)}
 comment_id = ${JSON.stringify(commentId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -767,74 +508,31 @@ memory = get_graphiti_memory(None, project_dir)
 memory.delete_comment(comment_id)
 
 print(json.dumps({ 'deleted': True }))
-          `
-        ];
+      `, 'COLLABORATION_COMMENTS_DELETE');
 
-        const { promise } = runPythonSubprocess<{ result: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_COMMENTS_DELETE] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to delete comment' };
-        }
-
-        console.warn('[IPC] COLLABORATION_COMMENTS_DELETE success');
-
-        return { success: true };
-      } catch (error) {
-        console.error('[COLLABORATION_COMMENTS_DELETE] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      if (ipcResult.success) return { success: true };
+      return ipcResult;
+    })
   );
 
-  /**
-   * Resolve a comment thread
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_COMMENTS_RESOLVE,
-    async (
+    collabHandler('COLLABORATION_COMMENTS_RESOLVE', async (
       _,
       specId: string,
       commentId: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_COMMENTS_RESOLVE called for comment:', commentId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_COMMENTS_RESOLVE called for comment:', commentId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 
 spec_id = ${JSON.stringify(specId)}
 comment_id = ${JSON.stringify(commentId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -849,72 +547,25 @@ print(json.dumps({
     'comment_id': comment.comment_id,
     'resolved': comment.resolved
 }))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ comment: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_COMMENTS_RESOLVE] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to resolve comment' };
-        }
-
-        const comment = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_COMMENTS_RESOLVE success');
-
-        return { success: true, data: comment };
-      } catch (error) {
-        console.error('[COLLABORATION_COMMENTS_RESOLVE] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_COMMENTS_RESOLVE');
+    })
   );
 
-  /**
-   * Reply to a comment
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_COMMENTS_REPLY,
-    async (
+    collabHandler('COLLABORATION_COMMENTS_REPLY', async (
       _,
       specId: string,
       parentCommentId: string,
       userId: string,
       username: string,
       content: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_COMMENTS_REPLY called for comment:', parentCommentId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_COMMENTS_REPLY called for comment:', parentCommentId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser
@@ -923,7 +574,7 @@ from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
 parent_comment_id = ${JSON.stringify(parentCommentId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 permission_checker = PermissionChecker(spec_id=spec_id)
@@ -953,80 +604,36 @@ result = {
 }
 
 print(json.dumps(result))
-          `
-        ];
+      `, 'COLLABORATION_COMMENTS_REPLY');
 
-        const { promise } = runPythonSubprocess<{ comment: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_COMMENTS_REPLY] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to reply to comment' };
-        }
-
-        const comment = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_COMMENTS_REPLY success');
-
-        // Emit event for real-time updates
+      if (ipcResult.success) {
         const mainWindow = getMainWindow();
         if (mainWindow) {
-          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_COMMENT_ADDED, { specId, comment });
+          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_COMMENT_ADDED, { specId, comment: ipcResult.data });
         }
-
-        return { success: true, data: comment };
-      } catch (error) {
-        console.error('[COLLABORATION_COMMENTS_REPLY] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
       }
-    }
+
+      return ipcResult;
+    })
   );
 
   // ========================================
   // Approval Handlers
   // ========================================
 
-  /**
-   * Get approval status for a spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_APPROVALS_GET,
-    async (_, specId: string): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_APPROVALS_GET called for spec:', specId);
+    collabHandler('COLLABORATION_APPROVALS_GET', async (_, specId: string) => {
+      console.warn('[IPC] COLLABORATION_APPROVALS_GET called for spec:', specId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -1050,70 +657,23 @@ else:
     result = None
 
 print(json.dumps(result))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ approval: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_APPROVALS_GET] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to get approval status' };
-        }
-
-        const approval = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_APPROVALS_GET returning approval:', approval);
-
-        return { success: true, data: approval };
-      } catch (error) {
-        console.error('[COLLABORATION_APPROVALS_GET] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_APPROVALS_GET');
+    })
   );
 
-  /**
-   * Request approval for a spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_APPROVALS_REQUEST,
-    async (
+    collabHandler('COLLABORATION_APPROVALS_REQUEST', async (
       _,
       specId: string,
       userId: string,
       username: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_APPROVALS_REQUEST called for spec:', specId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_APPROVALS_REQUEST called for spec:', specId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser
@@ -1121,7 +681,7 @@ from collaboration.approvals import ApprovalManager
 from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 permission_checker = PermissionChecker(spec_id=spec_id)
@@ -1135,86 +695,43 @@ approval = await manager.request_approval(requester_id=user.user_id, requester_u
 result = {
     'approval_id': approval.approval_id,
     'spec_id': approval.spec_id,
-    'approver': {
-        'user_id': approval.approver.user_id,
-        'username': approval.approver.username
-    },
     'status': approval.status.value,
     'created_at': approval.created_at
 }
+if approval.requester:
+    result['requester'] = {
+        'user_id': approval.requester.user_id,
+        'username': approval.requester.username
+    }
 
 print(json.dumps(result))
-          `
-        ];
+      `, 'COLLABORATION_APPROVALS_REQUEST');
 
-        const { promise } = runPythonSubprocess<{ approval: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_APPROVALS_REQUEST] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to request approval' };
-        }
-
-        const approval = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_APPROVALS_REQUEST success');
-
-        // Emit event for real-time updates
+      if (ipcResult.success) {
         const mainWindow = getMainWindow();
         if (mainWindow) {
-          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_APPROVAL_STATUS_CHANGED, { specId, approval });
+          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_APPROVAL_STATUS_CHANGED, { specId, approval: ipcResult.data });
         }
-
-        return { success: true, data: approval };
-      } catch (error) {
-        console.error('[COLLABORATION_APPROVALS_REQUEST] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
       }
-    }
+
+      return ipcResult;
+    })
   );
 
-  /**
-   * Approve a spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_APPROVALS_APPROVE,
-    async (
+    collabHandler('COLLABORATION_APPROVALS_APPROVE', async (
       _,
       specId: string,
       approverId: string,
       approverUsername: string,
       reason?: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_APPROVALS_APPROVE called for spec:', specId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_APPROVALS_APPROVE called for spec:', specId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser
@@ -1222,7 +739,7 @@ from collaboration.approvals import ApprovalManager
 from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 reason = ${JSON.stringify(reason)}
 
 memory = get_graphiti_memory(None, project_dir)
@@ -1243,77 +760,33 @@ result = {
 }
 
 print(json.dumps(result))
-          `
-        ];
+      `, 'COLLABORATION_APPROVALS_APPROVE');
 
-        const { promise } = runPythonSubprocess<{ approval: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_APPROVALS_APPROVE] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to approve spec' };
-        }
-
-        const approval = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_APPROVALS_APPROVE success');
-
-        // Emit event for real-time updates
+      if (ipcResult.success) {
         const mainWindow = getMainWindow();
         if (mainWindow) {
-          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_APPROVAL_STATUS_CHANGED, { specId, approval });
+          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_APPROVAL_STATUS_CHANGED, { specId, approval: ipcResult.data });
         }
-
-        return { success: true, data: approval };
-      } catch (error) {
-        console.error('[COLLABORATION_APPROVALS_APPROVE] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
       }
-    }
+
+      return ipcResult;
+    })
   );
 
-  /**
-   * Reject a spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_APPROVALS_REJECT,
-    async (
+    collabHandler('COLLABORATION_APPROVALS_REJECT', async (
       _,
       specId: string,
       approverId: string,
       approverUsername: string,
       reason?: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_APPROVALS_REJECT called for spec:', specId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_APPROVALS_REJECT called for spec:', specId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 from collaboration.models import CollaborationUser
@@ -1321,7 +794,7 @@ from collaboration.approvals import ApprovalManager
 from collaboration.permissions import PermissionChecker
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 reason = ${JSON.stringify(reason)}
 
 memory = get_graphiti_memory(None, project_dir)
@@ -1342,298 +815,106 @@ result = {
 }
 
 print(json.dumps(result))
-          `
-        ];
+      `, 'COLLABORATION_APPROVALS_REJECT');
 
-        const { promise } = runPythonSubprocess<{ approval: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_APPROVALS_REJECT] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to reject spec' };
-        }
-
-        const approval = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_APPROVALS_REJECT success');
-
-        // Emit event for real-time updates
+      if (ipcResult.success) {
         const mainWindow = getMainWindow();
         if (mainWindow) {
-          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_APPROVAL_STATUS_CHANGED, { specId, approval });
+          mainWindow.webContents.send(IPC_CHANNELS.COLLABORATION_APPROVAL_STATUS_CHANGED, { specId, approval: ipcResult.data });
         }
-
-        return { success: true, data: approval };
-      } catch (error) {
-        console.error('[COLLABORATION_APPROVALS_REJECT] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
       }
-    }
+
+      return ipcResult;
+    })
   );
 
   // ========================================
   // Notification Handlers
   // ========================================
 
-  /**
-   * Get notifications for a user
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_NOTIFICATIONS_GET,
-    async (_, userId: string): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_NOTIFICATIONS_GET called for user:', userId);
+    collabHandler('COLLABORATION_NOTIFICATIONS_GET', async (_, userId: string) => {
+      console.warn('[IPC] COLLABORATION_NOTIFICATIONS_GET called for user:', userId);
+      const ctx = await resolveProjectContext();
+      if (!ctx) return { success: false, error: 'No projects found' };
 
-        // Get first project for context
-        const projects = projectStore.getProjects();
-        const project = projects[0];
-
-        if (!project) {
-          return { success: false, error: 'No projects found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
-from pathlib import Path
-from integrations.graphiti.memory import get_graphiti_memory
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 user_id = ${JSON.stringify(userId)}
 
 # Collect notifications from all projects
-all_notifications = []
-
 # For now, return empty list - notification retrieval would need project context
-# This would be enhanced to query across all project Graphiti instances
-
 result = []
 
 print(json.dumps(result))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ notifications: unknown[] }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_NOTIFICATIONS_GET] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to get notifications' };
-        }
-
-        const notifications = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_NOTIFICATIONS_GET returning', notifications.length, 'notifications');
-
-        return { success: true, data: notifications };
-      } catch (error) {
-        console.error('[COLLABORATION_NOTIFICATIONS_GET] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_NOTIFICATIONS_GET');
+    })
   );
 
-  /**
-   * Mark notification as read
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_NOTIFICATIONS_MARK_READ,
-    async (
+    collabHandler('COLLABORATION_NOTIFICATIONS_MARK_READ', async (
       _,
       notificationId: string
-    ): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_NOTIFICATIONS_MARK_READ called for notification:', notificationId);
+    ) => {
+      console.warn('[IPC] COLLABORATION_NOTIFICATIONS_MARK_READ called for notification:', notificationId);
+      const ctx = await resolveProjectContext();
+      if (!ctx) return { success: false, error: 'No projects found' };
 
-        const projects = projectStore.getProjects();
-        const project = projects[0];
-
-        if (!project) {
-          return { success: false, error: 'No projects found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
-from pathlib import Path
-from integrations.graphiti.memory import get_graphiti_memory
-
+      const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 notification_id = ${JSON.stringify(notificationId)}
 
 # Mark notification as read
 # This would be implemented in NotificationManager
-# For now, return success
-
 result = { 'marked': True }
 
 print(json.dumps(result))
-          `
-        ];
+      `, 'COLLABORATION_NOTIFICATIONS_MARK_READ');
 
-        const { promise } = runPythonSubprocess<{ result: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_NOTIFICATIONS_MARK_READ] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to mark notification as read' };
-        }
-
-        console.warn('[IPC] COLLABORATION_NOTIFICATIONS_MARK_READ success');
-
-        return { success: true };
-      } catch (error) {
-        console.error('[COLLABORATION_NOTIFICATIONS_MARK_READ] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      if (ipcResult.success) return { success: true };
+      return ipcResult;
+    })
   );
 
-  /**
-   * Mark all notifications as read
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_NOTIFICATIONS_MARK_ALL_READ,
-    async (_, userId: string): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_NOTIFICATIONS_MARK_ALL_READ called for user:', userId);
+    collabHandler('COLLABORATION_NOTIFICATIONS_MARK_ALL_READ', async (_, userId: string) => {
+      console.warn('[IPC] COLLABORATION_NOTIFICATIONS_MARK_ALL_READ called for user:', userId);
+      const ctx = await resolveProjectContext();
+      if (!ctx) return { success: false, error: 'No projects found' };
 
-        const projects = projectStore.getProjects();
-        const project = projects[0];
-
-        if (!project) {
-          return { success: false, error: 'No projects found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      const ipcResult = await runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 user_id = ${JSON.stringify(userId)}
 
 # Mark all notifications as read
 # This would be implemented in NotificationManager
-# For now, return success
-
 result = { 'marked': True }
 
 print(json.dumps(result))
-          `
-        ];
+      `, 'COLLABORATION_NOTIFICATIONS_MARK_ALL_READ');
 
-        const { promise } = runPythonSubprocess<{ result: unknown }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_NOTIFICATIONS_MARK_ALL_READ] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to mark all notifications as read' };
-        }
-
-        console.warn('[IPC] COLLABORATION_NOTIFICATIONS_MARK_ALL_READ success');
-
-        return { success: true };
-      } catch (error) {
-        console.error('[COLLABORATION_NOTIFICATIONS_MARK_ALL_READ] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      if (ipcResult.success) return { success: true };
+      return ipcResult;
+    })
   );
 
   // ========================================
   // Change History Handlers
   // ========================================
 
-  /**
-   * Get change history for a spec
-   */
   ipcMain.handle(
     IPC_CHANNELS.COLLABORATION_CHANGE_HISTORY_GET,
-    async (_, specId: string): Promise<IPCResult> => {
-      try {
-        console.warn('[IPC] COLLABORATION_CHANGE_HISTORY_GET called for spec:', specId);
+    collabHandler('COLLABORATION_CHANGE_HISTORY_GET', async (_, specId: string) => {
+      console.warn('[IPC] COLLABORATION_CHANGE_HISTORY_GET called for spec:', specId);
+      const ctx = await resolveSpecContext(specId);
+      if (!ctx) return { success: false, error: 'Task or project not found' };
 
-        // Find the task and project using the shared helper
-        const { task, project } = await findTaskAndProject(specId);
-
-        if (!task || !project) {
-          return { success: false, error: 'Task or project not found' };
-        }
-
-        const { pythonPath, env } = await getPythonEnv(project.path);
-        const backendDir = getBackendDir();
-
-        const args = [
-          '-c',
-          `
-import sys
-import json
-
-# Add backend to path
-sys.path.insert(0, ${JSON.stringify(backendDir)})
-
+      return runCollabPython(ctx.pythonPath, ctx.backendDir, ctx.env, `
 from pathlib import Path
 from integrations.graphiti.memory import get_graphiti_memory
 
 spec_id = ${JSON.stringify(specId)}
-project_dir = Path(${JSON.stringify(project.path)})
+project_dir = Path(${JSON.stringify(ctx.project.path)})
 
 memory = get_graphiti_memory(None, project_dir)
 
@@ -1652,35 +933,8 @@ for change in changes:
     })
 
 print(json.dumps(result))
-          `
-        ];
-
-        const { promise } = runPythonSubprocess<{ changes: unknown[] }>({
-          pythonPath,
-          args,
-          cwd: backendDir,
-          env
-        });
-
-        const result = await promise;
-
-        if (!result.success || result.exitCode !== 0) {
-          console.error('[COLLABORATION_CHANGE_HISTORY_GET] Python subprocess failed:', result.error);
-          return { success: false, error: result.error || 'Failed to get change history' };
-        }
-
-        const changes = JSON.parse(result.stdout.trim());
-        console.warn('[IPC] COLLABORATION_CHANGE_HISTORY_GET returning', changes.length, 'changes');
-
-        return { success: true, data: changes };
-      } catch (error) {
-        console.error('[COLLABORATION_CHANGE_HISTORY_GET] Error:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-      }
-    }
+      `, 'COLLABORATION_CHANGE_HISTORY_GET');
+    })
   );
 
   console.warn('[IPC] Collaboration handlers registered successfully');

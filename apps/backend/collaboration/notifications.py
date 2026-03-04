@@ -47,14 +47,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from integrations.graphiti.queries_pkg.schema import (
+    EPISODE_TYPE_CHANGE_HISTORY,
+    EPISODE_TYPE_NOTIFICATION,
+)
+
 from .base import CollaborationManagerBase
 
 logger = logging.getLogger(__name__)
-
-
-# Episode type constants for Graphiti storage
-EPISODE_TYPE_NOTIFICATION = "notification"
-EPISODE_TYPE_CHANGE_HISTORY = "change_history"
 
 
 class NotificationType(Enum):
@@ -330,6 +330,13 @@ class NotificationManager(CollaborationManagerBase):
             f"{level} granted by {granted_by}"
         )
 
+        # Add change record for audit trail
+        await self._add_change_record(
+            change_type=ChangeType.PERMISSION_GRANTED,
+            actor_user=granted_by,
+            details={"target_user": username, "permission_level": level},
+        )
+
         # Persist to Graphiti
         if self._memory_available:
             await self._store_notification_in_graphiti(notification)
@@ -339,6 +346,7 @@ class NotificationManager(CollaborationManagerBase):
     async def track_approval_requested(
         self,
         requested_by: str,
+        admin_usernames: list[str] | None = None,
     ) -> list[Notification]:
         """
         Track when approval is requested for a spec.
@@ -347,20 +355,41 @@ class NotificationManager(CollaborationManagerBase):
 
         Args:
             requested_by: User who requested approval
+            admin_usernames: List of admin usernames to notify (if known)
 
         Returns:
             List of created Notification objects
         """
-        # This is a placeholder - in real implementation, would query for admins
-        # For now, we create the change history record
         await self._add_change_record(
             change_type=ChangeType.APPROVAL_REQUESTED,
             actor_user=requested_by,
             details={},
         )
 
+        notifications: list[Notification] = []
+        for admin_user in admin_usernames or []:
+            notification = Notification(
+                notification_id=str(uuid.uuid4()),
+                spec_id=self.spec_id,
+                notification_type=NotificationType.APPROVAL_REQUESTED,
+                target_user=admin_user,
+                actor_user=requested_by,
+                created_at=datetime.now(UTC).isoformat(),
+                metadata={},
+            )
+
+            self._notifications[notification.notification_id] = notification
+            self._user_notifications.setdefault(admin_user, []).append(
+                notification.notification_id
+            )
+            notifications.append(notification)
+
+        if self._memory_available:
+            for notification in notifications:
+                await self._store_notification_in_graphiti(notification)
+
         logger.info(f"Tracked approval request by {requested_by}")
-        return []
+        return notifications
 
     async def track_approval_approved(
         self,
@@ -385,8 +414,11 @@ class NotificationManager(CollaborationManagerBase):
             metadata={},
         )
 
-        # Store in cache
+        # Store in cache and user index
         self._notifications[notification.notification_id] = notification
+        self._user_notifications.setdefault(approver, []).append(
+            notification.notification_id
+        )
 
         # Add to change history
         await self._add_change_record(
@@ -428,8 +460,11 @@ class NotificationManager(CollaborationManagerBase):
             metadata={"reason": reason},
         )
 
-        # Store in cache
+        # Store in cache and user index
         self._notifications[notification.notification_id] = notification
+        self._user_notifications.setdefault(approver, []).append(
+            notification.notification_id
+        )
 
         # Add to change history
         await self._add_change_record(
@@ -514,7 +549,7 @@ class NotificationManager(CollaborationManagerBase):
 
     async def mark_notification_read(self, notification_id: str) -> bool:
         """
-        Mark a notification as read.
+        Mark a notification as read and persist to Graphiti.
 
         Args:
             notification_id: Notification to mark as read
@@ -529,12 +564,20 @@ class NotificationManager(CollaborationManagerBase):
         notification = self._notifications[notification_id]
         notification.read = True
 
+        # Persist updated read status to Graphiti
+        if self._memory_available:
+            try:
+                await self._store_notification_in_graphiti(notification)
+            except Exception as e:
+                logger.error(f"Failed to persist notification read status: {e}")
+                return False
+
         logger.debug(f"Marked notification {notification_id} as read")
         return True
 
     async def mark_all_notifications_read(self, username: str) -> int:
         """
-        Mark all notifications for a user as read.
+        Mark all notifications for a user as read and persist to Graphiti.
 
         Args:
             username: User whose notifications to mark read
@@ -551,6 +594,15 @@ class NotificationManager(CollaborationManagerBase):
                 if not notification.read:
                     notification.read = True
                     count += 1
+
+                    # Persist each updated notification
+                    if self._memory_available:
+                        try:
+                            await self._store_notification_in_graphiti(notification)
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to persist notification {nid} read status: {e}"
+                            )
 
         logger.info(f"Marked {count} notifications as read for {username}")
         return count

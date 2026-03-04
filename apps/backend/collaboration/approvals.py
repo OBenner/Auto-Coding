@@ -164,14 +164,15 @@ class ApprovalManager(CollaborationManagerBase):
                     f"Approval already pending (ID: {self._current_approval_id})"
                 )
 
-        # Create approval request
+        # Create approval request (approver is None until a decision is made)
         approval = Approval(
             approval_id=str(uuid.uuid4()),
             spec_id=self.spec_id,
-            approver=CollaborationUser(
+            requester=CollaborationUser(
                 user_id=requester_id, username=requester_username, email=email
             ),
             status=ApprovalStatus.PENDING,
+            approver=None,
         )
 
         # Store in cache
@@ -180,8 +181,9 @@ class ApprovalManager(CollaborationManagerBase):
 
         logger.info(
             f"Created approval request {approval.approval_id} "
-            f"by {requester_username} for spec {self.spec_id}"
+            f"by requester {requester_id} for spec {self.spec_id}"
         )
+        logger.debug(f"Approval requester username: {requester_username}")
 
         # Persist to Graphiti
         if self._memory_available:
@@ -234,9 +236,10 @@ class ApprovalManager(CollaborationManagerBase):
         approval.approve(reason)
 
         logger.info(
-            f"Spec {self.spec_id} approved by {approver_username}: "
+            f"Spec {self.spec_id} approved by user {approver_id}: "
             f"{reason or 'No reason provided'}"
         )
+        logger.debug(f"Approver username: {approver_username}")
 
         # Persist to Graphiti
         if self._memory_available:
@@ -289,9 +292,10 @@ class ApprovalManager(CollaborationManagerBase):
         approval.reject(reason)
 
         logger.info(
-            f"Spec {self.spec_id} rejected by {rejector_username}: "
+            f"Spec {self.spec_id} rejected by user {rejector_id}: "
             f"{reason or 'No reason provided'}"
         )
+        logger.debug(f"Rejector username: {rejector_username}")
 
         # Persist to Graphiti
         if self._memory_available:
@@ -414,14 +418,15 @@ class ApprovalManager(CollaborationManagerBase):
         Returns:
             True if stored successfully
         """
+        actor = approval.approver or approval.requester
         return await self._store_episode_in_graphiti(
             episode_name=f"approval_{approval.approval_id}_{action}",
             episode_content={
                 "type": EPISODE_TYPE_APPROVAL,
                 "spec_id": self.spec_id,
                 "approval_id": approval.approval_id,
-                "approver_id": approval.approver.user_id,
-                "approver_username": approval.approver.username,
+                "requester_id": approval.requester.user_id,
+                "approver_id": approval.approver.user_id if approval.approver else None,
                 "status": approval.status.value,
                 "reason": approval.reason,
                 "action": action,
@@ -429,8 +434,7 @@ class ApprovalManager(CollaborationManagerBase):
                 "reviewed_at": approval.reviewed_at,
             },
             source_description=(
-                f"Approval {action} for spec {self.spec_id} "
-                f"by {approval.approver.username}"
+                f"Approval {action} for spec {self.spec_id} by user {actor.user_id}"
             ),
             operation_name="store_approval_in_graphiti",
             approval_id=approval.approval_id,

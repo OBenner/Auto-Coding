@@ -138,20 +138,21 @@ class Comment:
 
     def _extract_mentions(self, text: str) -> list[str]:
         """
-        Extract @username mentions from text.
+        Extract @username mentions from text (case-insensitive, normalized to lowercase).
 
         Args:
             text: Comment text to parse
 
         Returns:
-            List of mentioned usernames (without @ prefix)
+            List of mentioned usernames (without @ prefix, lowercased, deduplicated)
         """
         import re
 
         # Match @username pattern (letters, numbers, hyphens, underscores)
         pattern = r"@([a-zA-Z0-9_-]+)"
-        matches = re.findall(pattern, text)
-        return list(dict.fromkeys(matches))  # Remove duplicates, preserve order
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        normalized = [m.lower() for m in matches]
+        return list(dict.fromkeys(normalized))  # Remove duplicates, preserve order
 
     def is_reply(self) -> bool:
         """Check if this is a reply to another comment."""
@@ -178,7 +179,8 @@ class Approval:
     Attributes:
         approval_id: Unique identifier for this approval record
         spec_id: Spec being approved/rejected
-        approver: User providing approval/rejection
+        requester: User who requested the approval
+        approver: User who approved/rejected (None while pending)
         status: Approval status (PENDING, APPROVED, REJECTED)
         reason: Optional explanation for decision
         created_at: ISO timestamp when approval was created
@@ -187,8 +189,9 @@ class Approval:
 
     approval_id: str
     spec_id: str
-    approver: CollaborationUser
+    requester: CollaborationUser
     status: ApprovalStatus
+    approver: CollaborationUser | None = None
     reason: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     reviewed_at: str | None = None
@@ -211,9 +214,10 @@ class Approval:
         self.reason = reason
         self.reviewed_at = datetime.now(UTC).isoformat()
         logger.info(f"Spec {self.spec_id} approved")
-        logger.debug(
-            f"Approval by {self.approver.username}: {reason or 'No reason provided'}"
-        )
+        if self.approver:
+            logger.debug(
+                f"Approval by {self.approver.username}: {reason or 'No reason provided'}"
+            )
 
     def reject(self, reason: str | None = None) -> None:
         """
@@ -226,9 +230,10 @@ class Approval:
         self.reason = reason
         self.reviewed_at = datetime.now(UTC).isoformat()
         logger.info(f"Spec {self.spec_id} rejected")
-        logger.debug(
-            f"Rejection by {self.approver.username}: {reason or 'No reason provided'}"
-        )
+        if self.approver:
+            logger.debug(
+                f"Rejection by {self.approver.username}: {reason or 'No reason provided'}"
+            )
 
     def is_pending(self) -> bool:
         """Check if this approval is still pending review."""
