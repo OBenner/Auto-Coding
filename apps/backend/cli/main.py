@@ -24,6 +24,10 @@ from .batch_commands import (
 )
 from .build_commands import handle_build_command
 from .followup_commands import handle_followup_command
+from .migration_commands import (
+    handle_migration_command,
+    handle_migration_status_command,
+)
 from .predictive_scan_commands import (
     handle_predictive_scan_check_command,
     handle_predictive_scan_command,
@@ -250,6 +254,18 @@ Environment Variables:
         "--followup",
         action="store_true",
         help="Add follow-up tasks to a completed spec (extends existing implementation plan)",
+    )
+
+    # Migration options
+    parser.add_argument(
+        "--migrate",
+        action="store_true",
+        help="Run migration assistant agent for framework/library migrations",
+    )
+    parser.add_argument(
+        "--migration-status",
+        action="store_true",
+        help="Show migration checkpoint status and validation results",
     )
 
     # Review options
@@ -853,6 +869,20 @@ def _run_cli() -> None:
     # Handle --followup command
     if args.followup:
         handle_followup_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            model=model,
+            verbose=args.verbose,
+        )
+        return
+
+    # Handle migration commands
+    if args.migration_status:
+        handle_migration_status_command(project_dir, spec_dir)
+        return
+
+    if args.migrate:
+        handle_migration_command(
             project_dir=project_dir,
             spec_dir=spec_dir,
             model=model,

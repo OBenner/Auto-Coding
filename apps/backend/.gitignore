@@ -67,6 +67,7 @@ tests/
 
 # Auto Code generated files
 .auto-claude-security.json
+.migration-checkpoints/
 .auto-claude-status
 .security-key
 logs/security/
