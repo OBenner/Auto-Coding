@@ -14,6 +14,7 @@ from .jobs_detector import JobsDetector
 from .migrations_detector import MigrationsDetector
 from .monitoring_detector import MonitoringDetector
 from .services_detector import ServicesDetector
+from .testing_detector import TestingDetector
 
 __all__ = [
     "ApiDocsDetector",
@@ -23,4 +24,5 @@ __all__ = [
     "MigrationsDetector",
     "MonitoringDetector",
     "ServicesDetector",
+    "TestingDetector",
 ]
