@@ -29,7 +29,41 @@
     },
     "authentication": {
       "title": "Claude SDK Authentication",
-      "description": "Set up authentication for the Claude Agent SDK"
+      "description": "Set up authentication for the Claude Agent SDK",
+      "checking": "Checking authentication status...",
+      "authenticated": "Authenticated",
+      "notAuthenticated": "Not Authenticated",
+      "statusTitle": "Authentication Status",
+      "tokenStatus": "Token",
+      "tokenPresent": "Present",
+      "tokenMissing": "Missing",
+      "instructionsTitle": "How to Authenticate",
+      "instructions": {
+        "intro": "To use Auto Code, you need to authenticate with the Claude SDK using the Claude CLI. Follow these steps:",
+        "step1": {
+          "title": "Open your terminal",
+          "description": "Open a terminal or command prompt in your project directory"
+        },
+        "step2": {
+          "title": "Run the Claude CLI",
+          "description": "Type the following command and press Enter"
+        },
+        "step3": {
+          "title": "Complete OAuth flow",
+          "description": "The CLI will open your browser. Sign in with your Anthropic account and authorize access"
+        },
+        "step4": {
+          "title": "Return here",
+          "description": "Once authorized, click the button below to verify your authentication"
+        },
+        "noteTitle": "Note",
+        "note": "Your authentication token is securely stored in your system keychain. You won't need to authenticate again unless you revoke access."
+      },
+      "retryButton": "Check Again",
+      "nextStepsTitle": "Next Steps",
+      "nextSteps": "Your Claude SDK authentication is configured. Click Next to continue with Graphiti setup.",
+      "tokenInfoTitle": "About Authentication",
+      "tokenInfo": "Auto Code uses the Claude Agent SDK with OAuth authentication. Your token is stored securely and never shared."
     },
     "graphiti": {
       "title": "Graphiti Memory System",

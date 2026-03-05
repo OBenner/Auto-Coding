@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import { PythonCheckStep } from './PythonCheckStep';
+import { AuthStep } from './AuthStep';
 
 // Step configuration
 const SETUP_STEPS = [
@@ -272,7 +273,7 @@ export function SetupWizard({ onComplete, onCancel }: SetupWizardProps) {
               <PythonCheckStep onValidate={handleStepValidate} />
             )}
             {currentStep.id === 'authentication' && (
-              <StepPlaceholder stepId="authentication" onValidate={handleStepValidate} />
+              <AuthStep onValidate={handleStepValidate} />
             )}
             {currentStep.id === 'graphiti' && (
               <StepPlaceholder stepId="graphiti" onValidate={handleStepValidate} />
