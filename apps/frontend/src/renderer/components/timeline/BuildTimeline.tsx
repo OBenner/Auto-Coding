@@ -28,6 +28,7 @@ import {
 } from './utils/timeline-layout';
 import { DEFAULT_TIMELINE_CONFIG } from './types';
 import { PhaseSwimLane } from './PhaseSwimLane';
+import { TimelineControls } from './TimelineControls';
 
 interface BuildTimelineProps {
   /** Task ID to load implementation plan for */
@@ -88,36 +89,6 @@ export const BuildTimeline = memo(function BuildTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ x: number; y: number; scrollX: number; scrollY: number } | null>(null);
-
-  /**
-   * Handle zoom in
-   */
-  const handleZoomIn = useCallback(() => {
-    setViewState((prev) => ({
-      ...prev,
-      zoom: clampZoom(prev.zoom + 0.1, config),
-    }));
-  }, [config]);
-
-  /**
-   * Handle zoom out
-   */
-  const handleZoomOut = useCallback(() => {
-    setViewState((prev) => ({
-      ...prev,
-      zoom: clampZoom(prev.zoom - 0.1, config),
-    }));
-  }, [config]);
-
-  /**
-   * Handle zoom reset
-   */
-  const handleZoomReset = useCallback(() => {
-    setViewState((prev) => ({
-      ...prev,
-      zoom: config.defaultZoom,
-    }));
-  }, [config]);
 
   /**
    * Handle scroll change
@@ -350,51 +321,15 @@ export const BuildTimeline = memo(function BuildTimeline({
       onMouseLeave={handleMouseUp}
     >
       {/* Timeline controls overlay */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-        <div className="flex items-center gap-1 bg-background/80 backdrop-blur-sm border rounded-lg p-1 shadow-sm">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleZoomIn}
-            disabled={viewState.zoom >= config.maxZoom}
-            className={cn(
-              'p-1.5 rounded-md transition-colors',
-              'hover:bg-accent',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-            title={t('timeline.zoomIn') || 'Zoom in'}
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleZoomReset}
-            className="p-1.5 rounded-md hover:bg-accent transition-colors text-xs font-medium min-w-[3rem]"
-            title={t('timeline.reset') || 'Reset zoom'}
-          >
-            {Math.round(viewState.zoom * 100)}%
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleZoomOut}
-            disabled={viewState.zoom <= config.minZoom}
-            className={cn(
-              'p-1.5 rounded-md transition-colors',
-              'hover:bg-accent',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-            title={t('timeline.zoomOut') || 'Zoom out'}
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-            </svg>
-          </motion.button>
-        </div>
-      </div>
+      <TimelineControls
+        viewState={viewState}
+        config={config}
+        onZoomChange={(zoom) => setViewState((prev) => ({ ...prev, zoom }))}
+        onPanChange={(scrollX, scrollY) => setViewState((prev) => ({ ...prev, scrollX, scrollY }))}
+        position="top-right"
+        showPanControls={false}
+        showZoomControls={true}
+      />
 
       {/* Scrollable timeline container */}
       <div

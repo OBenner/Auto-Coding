@@ -1,0 +1,52 @@
+{
+  "title": "Build Timeline",
+  "description": "Interactive timeline visualization of agent phases and subtasks",
+  "loading": "Loading timeline...",
+  "error": "Failed to load timeline",
+  "noData": "No timeline data available",
+  "zoomIn": "Zoom in",
+  "zoomOut": "Zoom out",
+  "reset": "Reset zoom",
+  "dragHint": "Drag to pan",
+  "controls": {
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "reset": "Reset zoom",
+    "panUp": "Pan up",
+    "panDown": "Pan down",
+    "panLeft": "Pan left",
+    "panRight": "Pan right",
+    "zoomControls": "Zoom controls",
+    "panControls": "Pan controls"
+  },
+  "phases": {
+    "planning": "Planning",
+    "coding": "Coding",
+    "qa_review": "Reviewing",
+    "qa_fixing": "Fixing"
+  },
+  "status": {
+    "pending": "Pending",
+    "in_progress": "In Progress",
+    "completed": "Completed",
+    "failed": "Failed"
+  },
+  "time": {
+    "estimated": "Est.",
+    "actual": "Actual",
+    "remaining": "Remaining"
+  },
+  "subtask": {
+    "expand": "Expand subtask details",
+    "collapse": "Collapse subtask details",
+    "files": "Files",
+    "noFiles": "No files associated",
+    "dependencies": "Dependencies"
+  },
+  "export": {
+    "button": "Export as image",
+    "downloading": "Downloading...",
+    "success": "Timeline exported successfully",
+    "error": "Failed to export timeline"
+  }
+}
