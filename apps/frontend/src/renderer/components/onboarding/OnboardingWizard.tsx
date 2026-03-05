@@ -24,6 +24,7 @@ import { useSettingsStore } from '../../stores/settings-store';
 interface OnboardingWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenTutorial?: () => void;
   onOpenTaskCreator?: () => void;
   onOpenSettings?: () => void;
 }
@@ -57,6 +58,7 @@ const WIZARD_STEPS: { id: WizardStepId; labelKey: string }[] = [
 export function OnboardingWizard({
   open,
   onOpenChange,
+  onOpenTutorial,
   onOpenTaskCreator,
   onOpenSettings
 }: OnboardingWizardProps) {
@@ -140,6 +142,15 @@ export function OnboardingWizard({
   }, [updateSettings, onOpenChange, resetWizard]);
 
   // Handle opening task creator from within wizard
+  // Handle opening tutorial from completion step
+  const handleOpenTutorial = useCallback(() => {
+    if (onOpenTutorial) {
+      // Finish wizard first, then open tutorial
+      completeWizard();
+      onOpenTutorial();
+    }
+  }, [onOpenTutorial, completeWizard]);
+
   const handleOpenTaskCreator = useCallback(() => {
     if (onOpenTaskCreator) {
       // Close wizard first, then open task creator
@@ -217,6 +228,7 @@ export function OnboardingWizard({
         return (
           <CompletionStep
             onFinish={completeWizard}
+            onOpenTutorial={handleOpenTutorial}
             onOpenTaskCreator={handleOpenTaskCreator}
             onOpenSettings={handleOpenSettings}
           />
