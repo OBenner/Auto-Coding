@@ -45,6 +45,11 @@ import type { PatternSuggestion } from '../../shared/types';
 export type { PatternSuggestion };
 
 /**
+ * Import skeleton component for loading state
+ */
+import { PatternSuggestionsSkeleton } from './skeletons/PatternSuggestionsSkeleton';
+
+/**
  * Pattern action state
  */
 type PatternAction = 'pending' | 'confirmed' | 'rejected' | 'modified';
@@ -440,16 +445,7 @@ export function CreateSpecView({
       </div>
 
       {/* Loading State */}
-      {isLoading && (
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-center gap-3 text-muted-foreground">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <span>Finding relevant patterns...</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {isLoading && <PatternSuggestionsSkeleton count={3} showHeader={false} />}
 
       {/* Error State */}
       {error && (
