@@ -16,6 +16,7 @@ import {
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { ScrollArea } from '../ui/scroll-area';
+import { SpecDetailSkeleton } from '../skeletons/SpecDetailSkeleton';
 import { cn } from '../../lib/utils';
 import type { Task, ImplementationPlan, Phase, SubtaskStatus, QAEscalation } from '../../../shared/types';
 
@@ -124,11 +125,7 @@ export function TaskOverview({ task }: TaskOverviewProps) {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <SpecDetailSkeleton />;
   }
 
   if (error) {
