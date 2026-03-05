@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: auto-claude
+  labels:
+    app: auto-claude
+    component: backend
+    tier: application
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auto-claude
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: auto-claude
+        component: backend
+        tier: application
+    spec:
+      containers:
+      - name: backend
+        image: auto-code-backend:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        # Claude API configuration
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: anthropic-api-key
+              optional: true
+        - name: CLAUDE_CODE_OAUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: claude-code-oauth-token
+              optional: true
+        - name: CLAUDE_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: claude-model
+              optional: true
+        # Graphiti memory configuration
+        - name: GRAPHITI_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: graphiti-enabled
+              optional: true
+        - name: GRAPHITI_LLM_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: graphiti-llm-provider
+              optional: true
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: openai-api-key
+              optional: true
+        # GitHub integration
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: github-token
+              optional: true
+        # Linear integration
+        - name: LINEAR_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: linear-api-key
+              optional: true
+        - name: LINEAR_TEAM_ID
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: linear-team-id
+              optional: true
+        # Project configuration
+        - name: PROJECT_DIR
+          value: "/app"
+        - name: AUTO_CLAUDE_CI
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: auto-claude-ci
+              optional: true
+        - name: AUTO_CLAUDE_JSON_OUTPUT
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: auto-claude-json-output
+              optional: true
+        volumeMounts:
+        - name: backend-data
+          mountPath: /app/.auto-claude
+        - name: backend-worktrees
+          mountPath: /app/.worktrees
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+      volumes:
+      - name: backend-data
+        persistentVolumeClaim:
+          claimName: backend-data-pvc
+      - name: backend-worktrees
+        persistentVolumeClaim:
+          claimName: backend-worktrees-pvc
+      restartPolicy: Always

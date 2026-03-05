@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  namespace: auto-claude
+  labels:
+    app: auto-claude
+    component: web-frontend
+    tier: frontend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: auto-claude
+      component: web-frontend
+  template:
+    metadata:
+      labels:
+        app: auto-claude
+        component: web-frontend
+        tier: frontend
+    spec:
+      containers:
+      - name: web-frontend
+        image: auto-code-web-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        env:
+        # API backend URL - using Kubernetes service DNS
+        - name: VITE_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: vite-api-url
+              optional: true
+        - name: VITE_WS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: vite-ws-url
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      restartPolicy: Always
