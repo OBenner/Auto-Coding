@@ -26,6 +26,7 @@ import { ContextViewerAPI, createContextViewerAPI } from './modules/context-view
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
 import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
 import { SecurityAPI, createSecurityAPI } from './security-api';
+import { SetupAPI, createSetupAPI } from './setup-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -48,6 +49,8 @@ export interface ElectronAPI extends
   ContextViewerAPI,
   FeedbackAPI,
   SecurityAPI {
+  /** Setup wizard API for first-run configuration */
+  setup: SetupAPI;
   /** Security API (nested access for security store) */
   security: SecurityAPI;
   github: GitHubAPI;
@@ -65,6 +68,7 @@ export const createElectronAPI = (): ElectronAPI => {
   const securityAPI = createSecurityAPI();
   return {
     ...createProjectAPI(),
+    ...createSetupAPI(),
     ...createTerminalAPI(),
     ...createTaskAPI(),
     ...createSettingsAPI(),
@@ -83,6 +87,7 @@ export const createElectronAPI = (): ElectronAPI => {
     ...securityAPI,
     security: securityAPI,
     github: createGitHubAPI(),
+    setup: createSetupAPI(),
     queue: createQueueAPI(),  // Queue routing for rate limit recovery
     pattern: createPatternAPI(),
     sessionReplay: createSessionReplayAPI(),
@@ -114,6 +119,7 @@ export {
   createContextViewerAPI,
   createSchedulerAPI,
   createFeedbackAPI,
+  createSetupAPI,
   createSecurityAPI
 };
 
