@@ -40,6 +40,10 @@ from ui import (
     print_status,
 )
 
+# Import shared generator helpers
+from ._generator_base import log_generator_result, run_generator_session
+from ._validation import validate_python_tests
+
 # Import framework-specific generators
 from .vitest_generator import generate_vitest_tests, validate_vitest_tests
 
@@ -792,6 +796,172 @@ def _calculate_quality_score(metrics: Any, issue_count: int) -> float:
     score -= deduction
 
     return max(0.0, min(100.0, score))
+
+
+async def generate_integration_tests(
+    project_dir: Path,
+    spec_dir: Path,
+    analysis_results: dict[str, Any],
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
+    verbose: bool = False,
+) -> dict[str, Any]:
+    """
+    Run Integration Test Generator Agent session to generate integration tests for API endpoints.
+
+    Integration tests validate that multiple components work together correctly,
+    such as API endpoints interacting with databases, services, and external dependencies.
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        analysis_results: Code analysis results (should include API endpoints, routes, etc.)
+        model: Claude model to use (defaults to phase config)
+        max_thinking_tokens: Extended thinking token budget (optional)
+        verbose: Whether to show detailed output
+
+    Returns:
+        Dictionary with:
+        - generated_files: List of generated test file paths (relative to project_dir)
+        - success: Whether generation succeeded
+        - error: Error message if failed
+        - framework: Test framework used ("integration-pytest")
+    """
+    starting_message = f"""You are the Integration Test Generator Agent. Your task is to generate comprehensive integration tests for API endpoints and multi-component interactions.
+
+## Code Analysis Results
+
+{json.dumps(analysis_results, indent=2)}
+
+## Your Task
+
+1. Read the spec.md to understand what API endpoints and services were implemented
+2. Review the implementation_plan.json to see what integrations were built
+3. Study existing integration test patterns in tests/integration/test_*.py (if they exist)
+4. Identify API endpoints, routes, and service integrations that need testing
+5. Generate integration test files that validate:
+   - API endpoint functionality (request/response validation)
+   - Database interactions (CRUD operations)
+   - Service layer integration
+   - Authentication and authorization
+   - Error handling and edge cases
+6. Follow the project's testing conventions
+7. Use appropriate mocking for external dependencies
+
+## Integration Test Pattern (pytest)
+
+Your tests should:
+- Use pytest as the test framework
+- Test multiple components working together (not isolated units)
+- Validate API endpoints with different inputs
+- Test database operations (create, read, update, delete)
+- Verify service layer logic
+- Handle authentication/authorization scenarios
+- Test error conditions and edge cases
+- Use fixtures for test data setup and teardown
+
+Generate test files in the tests/integration/ directory following the naming convention test_integration_*.py.
+
+Begin by loading context (Phase 0 in your prompt).
+"""
+
+    # Run the shared generator session boilerplate
+    endpoints_count = len(analysis_results.get("endpoints", []))
+    routes_count = len(analysis_results.get("routes", []))
+    services_count = len(analysis_results.get("services", []))
+
+    session_result = await run_generator_session(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        analysis_results=analysis_results,
+        session_title="INTEGRATION TEST GENERATOR SESSION",
+        session_description="Generating integration tests for API endpoints and services...",
+        prompt_name="test_generator",  # Reuse test_generator prompt
+        agent_type="test_generator",
+        session_name="integration-test-generator-session",
+        starting_message=starting_message,
+        log_phase=LogPhase.VALIDATION,
+        log_summary=(
+            f"Analyzing {endpoints_count} endpoints, "
+            f"{routes_count} routes, "
+            f"{services_count} services for integration tests"
+        ),
+        model=model,
+        max_thinking_tokens=max_thinking_tokens,
+        verbose=verbose,
+    )
+
+    framework = "integration-pytest"
+
+    if not session_result["success"]:
+        return {
+            "generated_files": [],
+            "success": False,
+            "error": session_result["error"],
+            "framework": framework,
+        }
+
+    # Scan tests/integration/ directory for newly created test files
+    print()
+    print_status("Scanning for generated integration test files...", "progress")
+
+    test_files: list[Path] = []
+    tests_integration_dir = project_dir / "tests" / "integration"
+    if tests_integration_dir.exists():
+        for test_file in tests_integration_dir.glob("test_integration_*.py"):
+            test_files.append(test_file.relative_to(project_dir))
+    else:
+        # Try to find integration tests in the main tests/ directory
+        tests_dir = project_dir / "tests"
+        if tests_dir.exists():
+            for test_file in tests_dir.glob("test_integration_*.py"):
+                test_files.append(test_file.relative_to(project_dir))
+            if test_files:
+                print_status(
+                    f"Found {len(test_files)} integration tests in tests/", "success"
+                )
+        else:
+            return {
+                "generated_files": [],
+                "success": False,
+                "error": "tests/ directory not found",
+                "framework": framework,
+            }
+
+    if not test_files:
+        logger.warning("No integration test files were generated")
+        print_status("No integration test files found", "warning")
+        return {
+            "generated_files": [],
+            "success": False,
+            "error": "No test files generated",
+            "framework": framework,
+        }
+
+    print_key_value("Generated files", str(len(test_files)))
+    for test_file in test_files:
+        print(f"  {muted('•')} {test_file}")
+    print()
+
+    # Validate generated tests
+    validation_success = await validate_python_tests(
+        test_files, project_dir, label="Integration"
+    )
+
+    # Log results
+    log_generator_result(
+        spec_dir=spec_dir,
+        test_files=test_files,
+        validation_success=validation_success,
+        framework="Integration",
+    )
+
+    return {
+        "generated_files": [str(f) for f in test_files],
+        "success": validation_success,
+        "error": None if validation_success else "Test validation failed",
+        "framework": framework,
+    }
 
 
 async def run_test_generator_session(
