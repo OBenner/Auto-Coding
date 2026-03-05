@@ -19,3 +19,4 @@ export * from './session-replay-api';
 export * from './context-viewer-api';
 export * from './session-context-api';
 export * from './productivity-analytics-api';
+export * from './search-api';

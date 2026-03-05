@@ -18,7 +18,8 @@ import {
   changelogMock,
   insightsMock,
   infrastructureMock,
-  settingsMock
+  settingsMock,
+  searchMock
 } from './mocks';
 
 // Check if we're in a browser (not Electron)
@@ -828,6 +829,9 @@ const browserMockAPI: ElectronAPI = {
       }
     }),
   }
+
+  // Code Search API
+  search: searchMock,
 };
 
 /**

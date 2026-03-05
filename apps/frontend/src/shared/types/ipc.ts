@@ -1054,6 +1054,8 @@ export interface ElectronAPI {
   sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
   // Scheduler API for build scheduling and queue management
   scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
+  // Code Search API for codebase search and saved searches
+  search: import('../../preload/api/modules/search-api').SearchAPI;
 
   // Security API (nested access for security store, flat access for components)
   security: import('../../preload/api/security-api').SecurityAPI;

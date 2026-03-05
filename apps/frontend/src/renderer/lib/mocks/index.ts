@@ -15,3 +15,5 @@ export { changelogMock } from './changelog-mock';
 export { insightsMock } from './insights-mock';
 export { infrastructureMock } from './infrastructure-mock';
 export { settingsMock } from './settings-mock';
+  searchMock
+export { mockSearchAPI as searchMock } from './search-mock';
