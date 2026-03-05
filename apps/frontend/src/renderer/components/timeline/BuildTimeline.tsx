@@ -27,6 +27,7 @@ import {
   calculateScrollAfterZoom,
 } from './utils/timeline-layout';
 import { DEFAULT_TIMELINE_CONFIG } from './types';
+import { PhaseSwimLane } from './PhaseSwimLane';
 
 interface BuildTimelineProps {
   /** Task ID to load implementation plan for */
@@ -224,8 +225,8 @@ export const BuildTimeline = memo(function BuildTimeline({
    * Handle phase click
    */
   const handlePhaseClick = useCallback((phase: TimelinePhase) => {
-    // TODO: Will be implemented when PhaseSwimLane is created
-    console.log('[BuildTimeline] Phase clicked:', `phase-${phase.phase}`);
+    // Phase click handler - can be extended for phase selection/filtering
+    console.log('[BuildTimeline] Phase clicked:', `phase-${phase.phase}`, phase.name);
   }, []);
 
   // IntersectionObserver for performance optimization
@@ -419,8 +420,7 @@ export const BuildTimeline = memo(function BuildTimeline({
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         >
-          {/* Phase swim lanes placeholder */}
-          {/* This will be populated by PhaseSwimLane components in subtask-2-2 */}
+          {/* Phase swim lanes */}
           <div className="w-full h-full">
             {timelineData.phases.map((phase) => {
               const phaseId = `phase-${phase.phase}`;
@@ -429,33 +429,14 @@ export const BuildTimeline = memo(function BuildTimeline({
               if (!layout) return null;
 
               return (
-                <motion.div
+                <PhaseSwimLane
                   key={phaseId}
-                  className="absolute border-b border-border/50"
-                  style={{
-                    top: layout.y,
-                    left: 0,
-                    width: '100%',
-                    height: layout.height,
-                  }}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{
-                    delay: phase.displayIndex * 0.05,
-                    duration: 0.3,
-                  }}
-                >
-                  {/* Phase label placeholder */}
-                  <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-                    {phase.name}
-                  </div>
-
-                  {/* Phase background placeholder */}
-                  <div className="absolute inset-0 bg-muted/20 rounded" />
-
-                  {/* Subtask blocks placeholder */}
-                  {/* This will be populated by SubtaskBlock components in subtask-3-1 */}
-                </motion.div>
+                  phase={phase}
+                  layout={layout}
+                  progress={phase.progress}
+                  enableAnimations={animationState.isEnabled && animationState.isVisible}
+                  onClick={handlePhaseClick}
+                />
               );
             })}
           </div>
