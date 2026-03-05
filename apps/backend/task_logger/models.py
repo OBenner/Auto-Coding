@@ -57,6 +57,7 @@ class LogEntry:
     alternatives: list[str] | None = None  # Alternative options that were considered
     decision: str | None = None  # The final decision or choice made
     decision_data: dict | None = None  # Full DecisionPoint data for UI rendering
+    thinking_block: str | None = None  # Raw thinking block from extended thinking
 
     def to_dict(self) -> dict:
         """Convert to dictionary, excluding None values."""
