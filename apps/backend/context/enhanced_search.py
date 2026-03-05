@@ -473,3 +473,165 @@ class EnhancedCodeSearch:
             "graphiti_search_available": self._graphiti_search is not None,
             "semantic_search_enabled": self._code_searcher.use_semantic_search,
         }
+
+    def export_search_results(
+        self,
+        results: dict | list,
+        output_path: Path | str | None = None,
+        format: str = "json",
+    ) -> Path:
+        """
+        Export search results to a file.
+
+        Supports JSON and CSV formats for exporting search results from any
+        search method (search_by_purpose, find_similar_patterns, find_callers,
+        find_callees, or search_unified).
+
+        Args:
+            results: Search results to export (dict from search_unified or list from other methods)
+            output_path: Output file path (default: ./search_results_{timestamp}.{format})
+            format: Export format ('json' or 'csv', default: 'json')
+
+        Returns:
+            Path to the exported file
+
+        Raises:
+            ValueError: If format is not supported or results is invalid
+            IOError: If file write fails
+        """
+        import csv
+        import json
+        from datetime import datetime
+
+        # Validate results
+        if not results or (isinstance(results, (list, dict)) and len(results) == 0):
+            raise ValueError("Cannot export empty search results")
+
+        # Determine output path
+        if output_path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = f"search_results_{timestamp}.{format}"
+
+        output_file = Path(output_path)
+
+        try:
+            if format == "json":
+                # Export as JSON
+                with open(output_file, "w", encoding="utf-8") as f:
+                    json.dump(results, f, indent=2, default=str)
+
+                logger.info(f"Exported search results to JSON: {output_file}")
+                return output_file
+
+            elif format == "csv":
+                # Export as CSV (requires flat data structure)
+                if isinstance(results, dict):
+                    # Unified search results - flatten structure
+                    if "files" in results:
+                        data = self._flatten_unified_results(results)
+                    else:
+                        # Generic dict - convert to list of key-value pairs
+                        data = [
+                            {"key": str(k), "value": str(v)} for k, v in results.items()
+                        ]
+                else:
+                    # List of dicts (from search_by_purpose, find_callers, etc.)
+                    data = results
+
+                with open(output_file, "w", newline="", encoding="utf-8") as f:
+                    if not data:
+                        raise ValueError("No data to export to CSV")
+
+                    # Get headers from first result
+                    writer = csv.DictWriter(f, fieldnames=data[0].keys())
+                    writer.writeheader()
+
+                    # Write data rows
+                    for row in data:
+                        # Convert non-string values to strings
+                        cleaned_row = {
+                            k: str(v)
+                            if not isinstance(v, (str, int, float, bool))
+                            else v
+                            for k, v in row.items()
+                        }
+                        writer.writerow(cleaned_row)
+
+                logger.info(f"Exported {len(data)} results to CSV: {output_file}")
+                return output_file
+
+            else:
+                raise ValueError(
+                    f"Unsupported format: {format}. Supported formats: json, csv"
+                )
+
+        except OSError as e:
+            logger.error(f"Failed to write export file: {e}")
+            capture_exception(
+                e,
+                results_summary=f"{len(results)} items",
+                operation="export_search_results",
+            )
+            raise
+        except Exception as e:
+            logger.error(f"Failed to export search results: {e}")
+            capture_exception(e, format=format, operation="export_search_results")
+            raise
+
+    def _flatten_unified_results(self, results: dict) -> list[dict]:
+        """
+        Flatten unified search results for CSV export.
+
+        Args:
+            results: Unified search results dict with 'files', 'purpose', 'patterns' keys
+
+        Returns:
+            Flattened list of dicts with all results in a single structure
+        """
+        flattened = []
+        result_type = "unified_search"
+
+        # Add file results
+        for idx, file_result in enumerate(results.get("files", [])):
+            flattened.append(
+                {
+                    "type": result_type,
+                    "category": "file",
+                    "index": idx,
+                    "file_path": str(getattr(file_result, "file_path", "")),
+                    "score": getattr(file_result, "score", 0.0),
+                    "matches": getattr(file_result, "matches", []),
+                }
+            )
+
+        # Add purpose results
+        for idx, purpose_result in enumerate(results.get("purpose", [])):
+            flattened.append(
+                {
+                    "type": result_type,
+                    "category": "purpose",
+                    "index": idx,
+                    "entity_name": purpose_result.get("entity_name", ""),
+                    "entity_type": purpose_result.get("entity_type", ""),
+                    "purpose": purpose_result.get("purpose", ""),
+                    "file_path": purpose_result.get("file_path", ""),
+                    "lineno": purpose_result.get("lineno", ""),
+                    "score": purpose_result.get("score", 0.0),
+                }
+            )
+
+        # Add pattern results
+        for idx, pattern_result in enumerate(results.get("patterns", [])):
+            flattened.append(
+                {
+                    "type": result_type,
+                    "result_category": "pattern",
+                    "index": idx,
+                    "content": pattern_result.get("content", ""),
+                    "score": pattern_result.get("score", 0.0),
+                    "pattern_type": pattern_result.get("type", ""),
+                    "category": pattern_result.get("category", ""),
+                }
+            )
+
+        return flattened
