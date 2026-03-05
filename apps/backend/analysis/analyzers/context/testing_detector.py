@@ -29,7 +29,7 @@ class TestingDetector(BaseAnalyzer):
     HYPOTHESIS_LIBS = ["hypothesis"]
 
     # JavaScript/TypeScript testing libraries
-    JEST_LIBS = ["jest", "@jest/globals", "ts-jest"]
+    JEST_LIBS = ["jest", "@jest/globals", "ts-jest", "@types/jest"]
     VITEST_LIBS = ["vitest", "@vitest/ui"]
     MOCHA_LIBS = ["mocha", "chai", "@types/mocha"]
     JASMINE_LIBS = ["jasmine", "@types/jasmine"]
@@ -128,7 +128,15 @@ class TestingDetector(BaseAnalyzer):
         # Python dependencies
         if self._exists("requirements.txt"):
             content = self._read_file("requirements.txt")
-            all_deps.update(content.splitlines())
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                # Extract package name from requirement spec
+                # Handles: package==1.0, package>=1.0, package~=1.0, package
+                pkg_name = line.split(">=")[0].split("==")[0].split("~=")[0].split("<=")[0].split()[0]
+                if pkg_name:
+                    all_deps.add(pkg_name)
 
         # Node.js dependencies
         pkg = self._read_json("package.json")
@@ -143,110 +151,138 @@ class TestingDetector(BaseAnalyzer):
     ) -> None:
         """Detect Python testing frameworks."""
         # Check for pytest
+        pytest_found = False
         for lib in self.PYTEST_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("pytest")
+                if not pytest_found:
+                    testing_info["frameworks"].append("pytest")
+                    pytest_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for unittest
+        unittest_found = False
         for lib in self.UNITTEST_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("unittest")
+                if not unittest_found:
+                    testing_info["frameworks"].append("unittest")
+                    unittest_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for nose
+        nose_found = False
         for lib in self.NOSE_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("nose")
+                if not nose_found:
+                    testing_info["frameworks"].append("nose")
+                    nose_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for doctest
+        doctest_found = False
         for lib in self.DOCTEST_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("doctest")
+                if not doctest_found:
+                    testing_info["frameworks"].append("doctest")
+                    doctest_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for hypothesis
+        hypothesis_found = False
         for lib in self.HYPOTHESIS_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("hypothesis")
+                if not hypothesis_found:
+                    testing_info["frameworks"].append("hypothesis")
+                    hypothesis_found = True
                 testing_info["libraries"].append(lib)
-                break
 
     def _detect_js_frameworks(
         self, all_deps: set[str], testing_info: dict[str, Any]
     ) -> None:
         """Detect JavaScript/TypeScript testing frameworks."""
         # Check for jest
+        jest_found = False
         for lib in self.JEST_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("jest")
+                if not jest_found:
+                    testing_info["frameworks"].append("jest")
+                    jest_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for vitest
+        vitest_found = False
         for lib in self.VITEST_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("vitest")
+                if not vitest_found:
+                    testing_info["frameworks"].append("vitest")
+                    vitest_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for mocha
+        mocha_found = False
         for lib in self.MOCHA_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("mocha")
+                if not mocha_found:
+                    testing_info["frameworks"].append("mocha")
+                    mocha_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for jasmine
+        jasmine_found = False
         for lib in self.JASMINE_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("jasmine")
+                if not jasmine_found:
+                    testing_info["frameworks"].append("jasmine")
+                    jasmine_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for ava
+        ava_found = False
         for lib in self.AVA_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("ava")
+                if not ava_found:
+                    testing_info["frameworks"].append("ava")
+                    ava_found = True
                 testing_info["libraries"].append(lib)
-                break
 
     def _detect_e2e_frameworks(
         self, all_deps: set[str], testing_info: dict[str, Any]
     ) -> None:
         """Detect E2E testing frameworks."""
         # Check for playwright
+        playwright_found = False
         for lib in self.PLAYWRIGHT_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("playwright")
+                if not playwright_found:
+                    testing_info["frameworks"].append("playwright")
+                    playwright_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for cypress
+        cypress_found = False
         for lib in self.CYPRESS_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("cypress")
+                if not cypress_found:
+                    testing_info["frameworks"].append("cypress")
+                    cypress_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for puppeteer
+        puppeteer_found = False
         for lib in self.PUPPETEER_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("puppeteer")
+                if not puppeteer_found:
+                    testing_info["frameworks"].append("puppeteer")
+                    puppeteer_found = True
                 testing_info["libraries"].append(lib)
-                break
 
         # Check for selenium
+        selenium_found = False
         for lib in self.SELENIUM_LIBS:
             if lib in all_deps:
-                testing_info["frameworks"].append("selenium")
+                if not selenium_found:
+                    testing_info["frameworks"].append("selenium")
+                    selenium_found = True
                 testing_info["libraries"].append(lib)
-                break
 
     def _find_config_files(self) -> list[str]:
         """Find test configuration files."""

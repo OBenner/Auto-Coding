@@ -575,7 +575,7 @@ class TestDirectoryDetection:
         detector.detect()
 
         # Should not be in test_directories since it's a file, not a directory
-        assert "tests" not in analysis["testing"].get("test_directories", [])
+        assert "tests" not in analysis.get("testing", {}).get("test_directories", [])
 
 
 class TestCompleteDetection:
