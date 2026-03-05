@@ -848,6 +848,213 @@ def _check_fixture_usage(node: ast.FunctionDef) -> bool:
     return False
 
 
+def detect_edge_cases_from_analysis(
+    analysis_results: dict[str, Any], project_dir: Path
+) -> list[dict[str, Any]]:
+    """
+    Detect edge cases from code analysis results for test generation.
+
+    This function extracts or detects edge case patterns from source code to guide
+    the AI agent in generating comprehensive tests. It prioritizes edge_cases already
+    present in analysis_results (from CodeAnalyzer or TypeScriptAnalyzer), and falls
+    back to AST-based detection for Python source files.
+
+    Detected edge cases include:
+    - Error handling (try/except blocks)
+    - Boundary conditions (None checks, numeric boundaries, empty checks)
+    - Type validation (isinstance checks)
+    - Error raising (raise statements)
+    - Assertions
+
+    Args:
+        analysis_results: Code analysis results from CodeAnalyzer or TypeScriptAnalyzer
+        project_dir: Root project directory for reading source files
+
+    Returns:
+        List of edge case dictionaries with keys:
+        - type: Category of edge case (error_handling, boundary_condition, type_validation, etc.)
+        - pattern: Specific pattern detected (try/except, none_check, isinstance_check, etc.)
+        - lineno: Line number where pattern was found
+        - description: Human-readable description of the edge case
+        - file: Source file where edge case was found (if available)
+    """
+    # First, check if edge_cases are already in the analysis results
+    if "edge_cases" in analysis_results and analysis_results["edge_cases"]:
+        return analysis_results["edge_cases"]
+
+    edge_cases = []
+
+    # If we have analyzed_files in the results, detect edge cases from Python sources
+    analyzed_files = analysis_results.get("analyzed_files", [])
+    if not analyzed_files:
+        # Try to extract file paths from functions/classes
+        for func in analysis_results.get("functions", []):
+            if "file" in func:
+                file_path = func["file"]
+                if file_path not in analyzed_files:
+                    analyzed_files.append(file_path)
+        for cls in analysis_results.get("classes", []):
+            if "file" in cls:
+                file_path = cls["file"]
+                if file_path not in analyzed_files:
+                    analyzed_files.append(file_path)
+
+    # Detect edge cases from Python source files
+    for file_path in analyzed_files:
+        # Only process Python files
+        if not str(file_path).endswith(".py"):
+            continue
+
+        full_path = project_dir / file_path
+        if not full_path.exists():
+            logger.debug(f"Source file not found: {full_path}")
+            continue
+
+        try:
+            source = full_path.read_text(encoding="utf-8")
+            tree = ast.parse(source)
+
+            # Detect edge cases in this file
+            file_edge_cases = _detect_edge_cases_from_ast(tree, str(file_path))
+            edge_cases.extend(file_edge_cases)
+
+        except SyntaxError as e:
+            logger.warning(f"Syntax error in {file_path}: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to detect edge cases in {file_path}: {e}")
+
+    return edge_cases
+
+
+def _detect_edge_cases_from_ast(tree: ast.AST, file_path: str) -> list[dict[str, Any]]:
+    """
+    Detect edge case patterns from Python AST.
+
+    This is a simplified version of CodeAnalyzer._detect_edge_cases() that
+    focuses on patterns most relevant for test generation.
+
+    Args:
+        tree: AST tree of the source code
+        file_path: Path to the source file
+
+    Returns:
+        List of edge case dictionaries
+    """
+    edge_cases = []
+
+    for node in ast.walk(tree):
+        # Detect try/except blocks (error handling)
+        if isinstance(node, ast.Try):
+            for handler in node.handlers:
+                exc_type = "Exception"
+                if handler.type:
+                    if isinstance(handler.type, ast.Name):
+                        exc_type = handler.type.id
+                    elif isinstance(handler.type, ast.Attribute):
+                        exc_type = ast.unparse(handler.type)
+
+                edge_cases.append(
+                    {
+                        "type": "error_handling",
+                        "pattern": f"try/except {exc_type}",
+                        "lineno": node.lineno,
+                        "description": f"Handles {exc_type} exceptions",
+                        "file": file_path,
+                    }
+                )
+
+        # Detect boundary checks and None checks
+        elif isinstance(node, ast.Compare):
+            code = ast.unparse(node)
+
+            # Check for None comparisons
+            if "None" in code:
+                edge_cases.append(
+                    {
+                        "type": "boundary_condition",
+                        "pattern": "none_check",
+                        "lineno": node.lineno,
+                        "description": f"None check: {code}",
+                        "file": file_path,
+                    }
+                )
+
+            # Check for numeric boundary conditions
+            elif any(op in code for op in ["< 0", "> 0", "== 0", "<= 0", ">= 0"]):
+                edge_cases.append(
+                    {
+                        "type": "boundary_condition",
+                        "pattern": "numeric_boundary",
+                        "lineno": node.lineno,
+                        "description": f"Numeric boundary: {code}",
+                        "file": file_path,
+                    }
+                )
+
+            # Check for empty/length checks
+            elif "len(" in code and any(op in code for op in ["== 0", "> 0", "< 1"]):
+                edge_cases.append(
+                    {
+                        "type": "boundary_condition",
+                        "pattern": "empty_check",
+                        "lineno": node.lineno,
+                        "description": f"Empty check: {code}",
+                        "file": file_path,
+                    }
+                )
+
+        # Detect isinstance type checks
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == "isinstance":
+                if len(node.args) >= 2:
+                    type_check = (
+                        ast.unparse(node.args[1]) if len(node.args) > 1 else "unknown"
+                    )
+                    edge_cases.append(
+                        {
+                            "type": "type_validation",
+                            "pattern": "isinstance_check",
+                            "lineno": node.lineno,
+                            "description": f"Type check: isinstance(..., {type_check})",
+                            "file": file_path,
+                        }
+                    )
+
+        # Detect raise statements (explicit errors)
+        elif isinstance(node, ast.Raise):
+            exc_type = "Exception"
+            if node.exc:
+                if isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name):
+                    exc_type = node.exc.func.id
+                elif isinstance(node.exc, ast.Name):
+                    exc_type = node.exc.id
+
+            edge_cases.append(
+                {
+                    "type": "error_raising",
+                    "pattern": f"raise {exc_type}",
+                    "lineno": node.lineno,
+                    "description": f"Raises {exc_type}",
+                    "file": file_path,
+                }
+            )
+
+        # Detect assertions
+        elif isinstance(node, ast.Assert):
+            test_code = ast.unparse(node.test)
+            edge_cases.append(
+                {
+                    "type": "assertion",
+                    "pattern": "assert",
+                    "lineno": node.lineno,
+                    "description": f"Assertion: {test_code}",
+                    "file": file_path,
+                }
+            )
+
+    return edge_cases
+
+
 def _check_edge_case_coverage(node: ast.FunctionDef, source: str) -> dict[str, Any]:
     """
     Check if test covers edge cases.
