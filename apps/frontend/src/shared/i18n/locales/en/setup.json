@@ -113,7 +113,22 @@
     },
     "testRun": {
       "title": "Test Run",
-      "description": "Run a quick test to verify everything is working"
+      "description": "Run a quick test to verify everything is working",
+      "running": "Running test...",
+      "success": "Test Passed",
+      "failed": "Test Failed",
+      "resultTitle": "Test Result",
+      "duration": "Duration",
+      "outputTitle": "Test Output",
+      "errorTitle": "Error Details",
+      "retryButton": "Run Test Again",
+      "nextStepsTitle": "Setup Complete!",
+      "nextSteps": "Your Auto Code setup is working correctly. You can now start building with AI agents.",
+      "nextStepsList": {
+        "createSpec": "Create your first spec using the interactive spec builder",
+        "runBuild": "Run autonomous builds with AI-powered planning and coding",
+        "exploreFeatures": "Explore advanced features like Graphiti memory and Linear integration"
+      }
     },
     "success": {
       "title": "Setup Complete!",

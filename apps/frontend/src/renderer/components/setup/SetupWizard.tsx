@@ -22,6 +22,7 @@ import { PythonCheckStep } from './PythonCheckStep';
 import { AuthStep } from './AuthStep';
 import { GraphitiStep } from './GraphitiStep';
 import { EnvConfigStep } from './EnvConfigStep';
+import { TestRunStep } from './TestRunStep';
 
 // Step configuration
 const SETUP_STEPS = [
@@ -284,7 +285,7 @@ export function SetupWizard({ onComplete, onCancel }: SetupWizardProps) {
               <EnvConfigStep onValidate={handleStepValidate} />
             )}
             {currentStep.id === 'test-run' && (
-              <StepPlaceholder stepId="test-run" onValidate={handleStepValidate} />
+              <TestRunStep onValidate={handleStepValidate} />
             )}
             {currentStep.id === 'success' && (
               <StepPlaceholder stepId="success" onValidate={handleStepValidate} />
