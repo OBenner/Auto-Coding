@@ -22,6 +22,7 @@ from analysis.coverage_analyzer import (
     CoverageAnalyzer,
     CoverageResult,
     parse_coverage_json,
+    validate_coverage_threshold,
 )
 from core.client import create_client
 from phase_config import get_phase_model, get_phase_thinking_budget
@@ -96,19 +97,42 @@ def analyze_coverage_gaps(
     project_dir: Path,
     source_dir: str | None = None,
     config: CoverageConfig | None = None,
+    enforce_threshold: bool = True,
 ) -> tuple[CoverageResult | None, dict[str, Any]]:
     """
-    Run coverage analysis and identify gaps in test coverage.
+    Run coverage analysis and identify gaps in test coverage with threshold enforcement.
+
+    This function performs comprehensive coverage analysis and enforces minimum coverage
+    thresholds. It provides detailed gap reporting including:
+    - Files below the coverage threshold
+    - Critical gaps (significantly below threshold)
+    - Missing line numbers per file
+    - Coverage statistics and enforcement status
+    - Prioritized list of files needing tests
 
     Args:
         project_dir: Root directory of the project
         source_dir: Directory to measure coverage for (e.g., "apps/backend")
         config: Coverage configuration with thresholds (optional)
+        enforce_threshold: Whether to enforce the minimum coverage threshold (default: True)
 
     Returns:
         Tuple of (coverage_result, gaps_summary)
         - coverage_result: CoverageResult with analysis data or None if failed
-        - gaps_summary: Dictionary with gap statistics and files needing attention
+        - gaps_summary: Dictionary with detailed gap statistics and enforcement status:
+            * total_coverage: Overall coverage percentage
+            * meets_threshold: Whether coverage meets the minimum threshold
+            * threshold_message: Validation message from validate_coverage_threshold
+            * files_with_gaps: List of files below threshold (sorted by priority)
+            * critical_gaps: List of files with coverage < 50% of threshold
+            * high_priority_gaps: List of files with coverage 50-80% of threshold
+            * medium_priority_gaps: List of files with coverage 80-100% of threshold
+            * missing_lines_by_file: Dict mapping file paths to missing line numbers
+            * coverage_by_file: Dict mapping file paths to coverage percentages
+            * total_lines_missing: Total number of missing lines across all files
+            * total_files_analyzed: Total number of files in coverage report
+            * threshold_percent: The minimum coverage threshold used
+            * error: Error message if coverage analysis failed
     """
     analyzer = CoverageAnalyzer(project_dir)
 
@@ -118,7 +142,12 @@ def analyze_coverage_gaps(
     installed, message = analyzer.check_pytest_cov_installed()
     if not installed:
         logger.warning(f"pytest-cov not available: {message}")
-        return None, {"error": message, "coverage_gaps": []}
+        error_summary = {
+            "error": message,
+            "meets_threshold": False,
+            "threshold_percent": config.minimum_coverage if config else 80.0,
+        }
+        return None, error_summary
 
     # Determine source directory if not specified
     if source_dir is None:
@@ -129,118 +158,296 @@ def analyze_coverage_gaps(
             # Use current directory
             source_dir = "."
 
-    # Run coverage with JSON output
+    # Get minimum coverage threshold
+    min_coverage = config.minimum_coverage if config else 80.0
+
+    # Run coverage with JSON output (optionally enforce threshold)
     coverage_output = project_dir / ".coverage.test_generator.json"
     result = analyzer.run_coverage(
         source_dir=source_dir,
         output_format="json",
         output_file=coverage_output,
+        min_coverage=min_coverage if enforce_threshold else None,
     )
 
     if not result.success:
         logger.warning(f"Coverage analysis failed: {result.error_message}")
-        return None, {"error": result.error_message, "coverage_gaps": []}
+        error_summary = {
+            "error": result.error_message,
+            "meets_threshold": False,
+            "threshold_percent": min_coverage,
+        }
+        return None, error_summary
 
     # Parse the JSON coverage report
     try:
         coverage_result = parse_coverage_json(coverage_output)
     except Exception as e:
         logger.error(f"Failed to parse coverage JSON: {e}")
-        return None, {"error": str(e), "coverage_gaps": []}
+        error_summary = {
+            "error": str(e),
+            "meets_threshold": False,
+            "threshold_percent": min_coverage,
+        }
+        return None, error_summary
 
-    # Identify coverage gaps
+    # Validate coverage meets threshold using the coverage_analyzer function
+    passes_threshold, threshold_message = validate_coverage_threshold(
+        coverage_result, min_coverage
+    )
+
+    # Identify coverage gaps with detailed categorization
     gaps_summary = {
         "total_coverage": coverage_result.total_coverage,
+        "meets_threshold": passes_threshold,
+        "threshold_message": threshold_message,
+        "threshold_percent": min_coverage,
         "files_with_gaps": [],
-        "critical_gaps": [],
+        "critical_gaps": [],  # < 50% of threshold
+        "high_priority_gaps": [],  # 50-80% of threshold
+        "medium_priority_gaps": [],  # 80-100% of threshold
         "missing_lines_by_file": {},
+        "coverage_by_file": {},
+        "total_lines_missing": 0,
+        "total_files_analyzed": len(coverage_result.files),
     }
 
-    # Get minimum coverage threshold
-    min_coverage = config.minimum_coverage if config else 80.0
-
-    # Analyze each file for gaps
+    # Analyze each file for gaps with priority categorization
     for file_path, file_coverage in coverage_result.files.items():
+        coverage_percent = file_coverage.coverage_percent
+        gaps_summary["coverage_by_file"][file_path] = coverage_percent
+
         # Check if file is below threshold
-        if file_coverage.coverage_percent < min_coverage:
+        if coverage_percent < min_coverage:
+            # Calculate coverage deficit
+            deficit = min_coverage - coverage_percent
+            deficit_ratio = deficit / min_coverage
+
+            # Add to appropriate priority category
+            if deficit_ratio > 0.5:  # More than 50% below threshold
+                gaps_summary["critical_gaps"].append(file_path)
+            elif deficit_ratio > 0.2:  # 20-50% below threshold
+                gaps_summary["high_priority_gaps"].append(file_path)
+            else:  # Less than 20% below threshold
+                gaps_summary["medium_priority_gaps"].append(file_path)
+
             gaps_summary["files_with_gaps"].append(file_path)
             gaps_summary["missing_lines_by_file"][file_path] = (
                 file_coverage.lines_missing
             )
+            gaps_summary["total_lines_missing"] += len(file_coverage.lines_missing)
 
-            # Mark as critical gap if significantly below threshold
-            if file_coverage.coverage_percent < min_coverage * 0.5:
-                gaps_summary["critical_gaps"].append(file_path)
+    # Sort files within each priority category by coverage (lowest first)
+    for category in ["critical_gaps", "high_priority_gaps", "medium_priority_gaps"]:
+        gaps_summary[category].sort(key=lambda fp: gaps_summary["coverage_by_file"][fp])
 
-    # Log results
+    # Also sort the main files_with_gaps by priority (critical first, then coverage)
+    priority_order = {}
+    for idx, fp in enumerate(gaps_summary["critical_gaps"]):
+        priority_order[fp] = idx
+    for idx, fp in enumerate(gaps_summary["high_priority_gaps"]):
+        priority_order[fp] = len(gaps_summary["critical_gaps"]) + idx
+    for idx, fp in enumerate(gaps_summary["medium_priority_gaps"]):
+        priority_order[fp] = (
+            len(gaps_summary["critical_gaps"])
+            + len(gaps_summary["high_priority_gaps"])
+            + idx
+        )
+
+    gaps_summary["files_with_gaps"].sort(
+        key=lambda fp: (
+            priority_order.get(fp, 999),
+            -gaps_summary["coverage_by_file"][fp],
+        )
+    )
+
+    # Log results with detailed statistics
     files_with_gaps_count = len(gaps_summary["files_with_gaps"])
+    total_files = gaps_summary["total_files_analyzed"]
+
     if files_with_gaps_count > 0:
+        # Coverage below threshold
+        status_level = "error" if not passes_threshold else "warning"
         print_status(
-            f"Found {files_with_gaps_count} file(s) with coverage gaps",
-            "warning",
+            f"Coverage threshold enforcement: {threshold_message}",
+            status_level,
         )
         print_key_value("Total coverage", f"{coverage_result.total_coverage:.1f}%")
-        print_key_value("Files with gaps", str(files_with_gaps_count))
+        print_key_value("Required threshold", f"{min_coverage:.1f}%")
+        print_key_value("Files with gaps", f"{files_with_gaps_count}/{total_files}")
+        print_key_value("Total missing lines", str(gaps_summary["total_lines_missing"]))
+
         if gaps_summary["critical_gaps"]:
-            print_key_value("Critical gaps", str(len(gaps_summary["critical_gaps"])))
+            print_key_value(
+                "Critical gaps (<50% of threshold)",
+                str(len(gaps_summary["critical_gaps"])),
+            )
+        if gaps_summary["high_priority_gaps"]:
+            print_key_value(
+                "High priority gaps (50-80% of threshold)",
+                str(len(gaps_summary["high_priority_gaps"])),
+            )
+        if gaps_summary["medium_priority_gaps"]:
+            print_key_value(
+                "Medium priority gaps (80-100% of threshold)",
+                str(len(gaps_summary["medium_priority_gaps"])),
+            )
     else:
+        # Coverage meets or exceeds threshold
         print_status(
-            f"Coverage meets threshold: {coverage_result.total_coverage:.1f}%",
+            f"✓ Coverage meets threshold: {coverage_result.total_coverage:.1f}% "
+            f"(required: {min_coverage:.1f}%)",
             "success",
         )
+        print_key_value("Files analyzed", str(total_files))
+        print_key_value("Files meeting threshold", f"{total_files}/{total_files}")
 
     return coverage_result, gaps_summary
 
 
 def format_coverage_gaps_prompt(gaps_summary: dict[str, Any]) -> str:
     """
-    Format coverage gaps as a prompt for the AI agent.
+    Format coverage gaps as a detailed prompt for the AI agent.
+
+    This function creates a comprehensive, prioritized report of coverage gaps
+    to guide test generation. It categorizes gaps by priority and provides
+    specific line numbers needing coverage.
 
     Args:
-        gaps_summary: Summary from analyze_coverage_gaps
+        gaps_summary: Summary from analyze_coverage_gaps with detailed metrics
 
     Returns:
-        Formatted string describing coverage gaps
+        Formatted string describing coverage gaps with prioritization
     """
     if "error" in gaps_summary:
-        return f"Coverage analysis failed: {gaps_summary['error']}"
+        return f"## Coverage Analysis Failed\n\n{gaps_summary['error']}"
 
-    if not gaps_summary.get("files_with_gaps"):
-        return "Coverage meets all thresholds. No gaps detected."
+    # Get threshold information
+    threshold = gaps_summary.get("threshold_percent", 80.0)
+    total_coverage = gaps_summary["total_coverage"]
 
     lines = []
-    lines.append("## Coverage Gaps Detected")
-    lines.append("")
-    lines.append(f"**Total Coverage:** {gaps_summary['total_coverage']:.1f}%")
-    lines.append(f"**Files with Gaps:** {len(gaps_summary['files_with_gaps'])}")
+    lines.append("## Coverage Gap Analysis")
     lines.append("")
 
-    if gaps_summary.get("critical_gaps"):
-        lines.append("### Critical Gaps (Significantly Below Threshold)")
-        for file_path in gaps_summary["critical_gaps"][:5]:
-            lines.append(f"- {file_path}")
+    # Coverage status header
+    if gaps_summary.get("meets_threshold", False):
+        lines.append("✓ **Status:** Coverage meets threshold")
+        lines.append(
+            f"**Total Coverage:** {total_coverage:.1f}% (required: {threshold:.1f}%)"
+        )
+    else:
+        lines.append("⚠ **Status:** Coverage below threshold")
+        lines.append(
+            f"**Total Coverage:** {total_coverage:.1f}% (required: {threshold:.1f}%)"
+        )
+        lines.append(f"**Deficit:** {threshold - total_coverage:.1f}%")
+
+    # Statistics
+    lines.append("")
+    lines.append("### Statistics")
+    lines.append(f"- **Files Analyzed:** {gaps_summary.get('total_files_analyzed', 0)}")
+    lines.append(
+        f"- **Files with Gaps:** {len(gaps_summary.get('files_with_gaps', []))}"
+    )
+    lines.append(
+        f"- **Total Missing Lines:** {gaps_summary.get('total_lines_missing', 0)}"
+    )
+
+    # Priority breakdown
+    if gaps_summary.get("files_with_gaps"):
+        lines.append("")
+        lines.append("### Gap Prioritization")
+
+        if gaps_summary.get("critical_gaps"):
+            critical_count = len(gaps_summary["critical_gaps"])
+            lines.append(
+                f"- **🔴 Critical:** {critical_count} file(s) with coverage < {threshold * 0.5:.1f}%"
+            )
+
+        if gaps_summary.get("high_priority_gaps"):
+            high_count = len(gaps_summary["high_priority_gaps"])
+            lines.append(
+                f"- **🟠 High Priority:** {high_count} file(s) with coverage {threshold * 0.5:.1f}%-{threshold * 0.8:.1f}%"
+            )
+
+        if gaps_summary.get("medium_priority_gaps"):
+            medium_count = len(gaps_summary["medium_priority_gaps"])
+            lines.append(
+                f"- **🟡 Medium Priority:** {medium_count} file(s) with coverage {threshold * 0.8:.1f}%-{threshold:.1f}%"
+            )
+
+    # Detailed file listing by priority
+    if gaps_summary.get("files_with_gaps"):
+        lines.append("")
+        lines.append("### Files Requiring Additional Tests")
+        lines.append("")
+        lines.append("*Files are listed by priority (critical → high → medium)*")
         lines.append("")
 
-    lines.append("### Files Requiring Additional Tests")
-    for file_path in gaps_summary["files_with_gaps"][:10]:
-        missing_lines = gaps_summary["missing_lines_by_file"].get(file_path, [])
-        if missing_lines:
-            line_ranges = _format_line_ranges(missing_lines[:20])
-            lines.append(f"- **{file_path}**")
-            lines.append(f"  - Missing lines: {line_ranges}")
-        else:
-            lines.append(f"- **{file_path}**")
+        # Show files with their coverage and missing lines
+        max_files_to_show = 15
+        shown_count = 0
 
-    if len(gaps_summary["files_with_gaps"]) > 10:
-        lines.append(
-            f"- ... and {len(gaps_summary['files_with_gaps']) - 10} more files"
-        )
+        for file_path in gaps_summary["files_with_gaps"]:
+            if shown_count >= max_files_to_show:
+                break
 
+            coverage = gaps_summary["coverage_by_file"].get(file_path, 0.0)
+            missing_lines = gaps_summary["missing_lines_by_file"].get(file_path, [])
+
+            # Determine priority indicator
+            if file_path in gaps_summary.get("critical_gaps", []):
+                priority = "🔴"
+            elif file_path in gaps_summary.get("high_priority_gaps", []):
+                priority = "🟠"
+            else:
+                priority = "🟡"
+
+            lines.append(f"{priority} **{file_path}**")
+            lines.append(
+                f"   - Coverage: {coverage:.1f}% (threshold: {threshold:.1f}%)"
+            )
+
+            if missing_lines:
+                # Show line ranges (limit to first 30 lines to keep prompt manageable)
+                line_ranges = _format_line_ranges(missing_lines[:30])
+                lines.append(f"   - Missing lines: {line_ranges}")
+
+                if len(missing_lines) > 30:
+                    lines.append(f"   - ... and {len(missing_lines) - 30} more lines")
+
+            shown_count += 1
+
+        # Show count of remaining files
+        remaining_files = len(gaps_summary["files_with_gaps"]) - shown_count
+        if remaining_files > 0:
+            lines.append("")
+            lines.append(f"... and {remaining_files} more file(s) with coverage gaps")
+
+    # Action items
+    lines.append("")
+    lines.append("### Action Items")
     lines.append("")
     lines.append(
-        "**Action Required:** Generate additional tests to cover the missing lines above."
+        "1. **Prioritize Critical Gaps:** Start with files marked 🔴 (lowest coverage)"
     )
-    lines.append("Focus on the specific line numbers that are not covered.")
+    lines.append(
+        "2. **Target Missing Lines:** Write tests specifically for the missing line numbers"
+    )
+    lines.append(
+        "3. **Focus on High Impact:** Address high-priority gaps (🟠) before medium (🟡)"
+    )
+    lines.append(
+        "4. **Verify Coverage:** Run tests and re-check coverage after each batch"
+    )
+    lines.append("")
+    lines.append(
+        "**Note:** Coverage is measured at the line level. Ensure tests execute all"
+    )
+    lines.append(
+        "the missing lines listed above, including edge cases and error paths."
+    )
 
     return "\n".join(lines)
 
