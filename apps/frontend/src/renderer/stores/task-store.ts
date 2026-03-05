@@ -944,6 +944,64 @@ export function stopTask(taskId: string): void {
 }
 
 /**
+ * Start a task with optimistic UI update
+ * Immediately updates the task status to 'in_progress' before server confirmation,
+ * with automatic rollback on error.
+ *
+ * @param taskId - The task ID to start
+ * @param options - Optional configuration (parallel execution, worker count)
+ * @throws Error if task not found or start operation fails
+ */
+export async function startTaskOptimistic(
+  taskId: string,
+  options?: { parallel?: boolean; workers?: number }
+): Promise<void> {
+  await createOptimisticTaskAction(
+    taskId,
+    (task) => {
+      // Optimistic update: change status to 'in_progress'
+      return {
+        status: 'in_progress' as const,
+      };
+    },
+    async () => {
+      // Call the backend API to start the task
+      await window.electronAPI.startTask(taskId, options);
+    },
+    (error) => {
+      console.error('[startTaskOptimistic] Failed to start task:', error);
+    }
+  );
+}
+
+/**
+ * Stop a task with optimistic UI update
+ * Immediately updates the task status back to 'backlog'
+ * before server confirmation, with automatic rollback on error.
+ *
+ * @param taskId - The task ID to stop
+ * @throws Error if task not found or stop operation fails
+ */
+export async function stopTaskOptimistic(taskId: string): Promise<void> {
+  await createOptimisticTaskAction(
+    taskId,
+    (task) => {
+      // Optimistic update: revert to 'backlog' (most common pre-start status)
+      return {
+        status: 'backlog' as const,
+      };
+    },
+    async () => {
+      // Call the backend API to stop the task
+      await window.electronAPI.stopTask(taskId);
+    },
+    (error) => {
+      console.error('[stopTaskOptimistic] Failed to stop task:', error);
+    }
+  );
+}
+
+/**
  * Submit review for a task
  */
 export async function submitReview(
