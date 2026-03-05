@@ -22,6 +22,11 @@ services:
     networks:
       - autoclaude-network
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Redis for usage tracking and caching
   redis:
@@ -40,6 +45,11 @@ services:
     networks:
       - autoclaude-network
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Auto Code backend CLI service
   backend:
@@ -77,6 +87,11 @@ services:
     networks:
       - autoclaude-network
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Auto Code web backend API
   web-backend:
@@ -139,6 +154,11 @@ services:
     networks:
       - autoclaude-network
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Auto Code web frontend (Vite + React + nginx)
   web-frontend:
@@ -164,6 +184,11 @@ services:
     networks:
       - autoclaude-network
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   autoclaude-network:
