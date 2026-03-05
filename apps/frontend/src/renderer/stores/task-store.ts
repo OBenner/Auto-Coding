@@ -1233,6 +1233,43 @@ export async function archiveTasks(
 // Task Creation Draft Management
 // ============================================
 
+/**
+ * Archive a single task with optimistic UI update
+ * Immediately adds archivedAt timestamp before server confirmation,
+ * with automatic rollback on error.
+ *
+ * @param projectId - The project ID
+ * @param taskId - The task ID to archive
+ * @throws Error if task not found or archive operation fails
+ */
+export async function archiveTaskOptimistic(
+  projectId: string,
+  taskId: string
+): Promise<void> {
+  await createOptimisticTaskAction(
+    taskId,
+    (task) => {
+      // Optimistic update: add archivedAt timestamp
+      return {
+        metadata: {
+          ...task.metadata,
+          archivedAt: new Date().toISOString(),
+        },
+      };
+    },
+    async () => {
+      // Call the backend API to archive the task
+      const result = await window.electronAPI.archiveTasks(projectId, [taskId]);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to archive task');
+      }
+    },
+    (error) => {
+      console.error('[archiveTaskOptimistic] Failed to archive task:', error);
+    }
+  );
+}
+
 const DRAFT_KEY_PREFIX = 'task-creation-draft';
 
 /**

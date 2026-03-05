@@ -32,7 +32,7 @@ import {
   JSON_ERROR_PREFIX,
   JSON_ERROR_TITLE_SUFFIX
 } from '../../shared/constants';
-import { startTask, stopTask, checkTaskRunning, recoverStuckTask, isIncompleteHumanReview, archiveTasks } from '../stores/task-store';
+import { startTask, stopTask, checkTaskRunning, recoverStuckTask, isIncompleteHumanReview, archiveTasks, archiveTaskOptimistic } from '../stores/task-store';
 import type { Task, TaskCategory, ReviewReason, TaskStatus } from '../../shared/types';
 
 // Module-level visibility change singleton — one listener for all TaskCard instances
@@ -354,9 +354,13 @@ export const TaskCard = memo(function TaskCard({
 
   const handleArchive = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const result = await archiveTasks(task.projectId, [task.id]);
-    if (!result.success) {
-      console.error('[TaskCard] Failed to archive task:', task.id, result.error);
+    // Optimistic archive - immediately updates UI with archivedAt timestamp
+    // The archiveTaskOptimistic function handles rollback on error
+    try {
+      await archiveTaskOptimistic(task.projectId, task.id);
+    } catch (error) {
+      // Error is already logged by archiveTaskOptimistic
+      console.error('[TaskCard] Archive failed, UI reverted:', error);
     }
   };
 
