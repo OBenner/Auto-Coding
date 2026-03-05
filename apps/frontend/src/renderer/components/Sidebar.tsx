@@ -32,7 +32,8 @@ import {
   Activity,
   Database,
   MessageSquare,
-  Code
+  Code,
+  Brain
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -68,7 +69,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage' | 'agent-inspector';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -103,6 +104,7 @@ const baseNavItems: NavItem[] = [
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
   { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: Activity, shortcut: 'T' },
   { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play },
+  { id: 'agent-inspector', labelKey: 'navigation:items.agentInspector', icon: Brain },
   { id: 'feedback', labelKey: 'navigation:items.feedback', icon: MessageSquare, shortcut: 'F' },
   { id: 'model-usage', labelKey: 'navigation:items.modelUsage', icon: Database, shortcut: 'O' }
 ];
