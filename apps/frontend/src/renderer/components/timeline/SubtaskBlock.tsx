@@ -8,7 +8,7 @@
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
-import { Clock, AlertCircle, CheckCircle2, Loader2, Hourglass } from 'lucide-react';
+import { Clock, AlertCircle, CheckCircle2, Loader2, Hourglass, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type {
   TimelineSubtask,
@@ -72,6 +72,25 @@ function formatTime(seconds?: number): string {
 }
 
 /**
+ * Calculate time variance for visual indicators
+ * Returns 'over' if actual > estimate, 'under' if actual < estimate, null otherwise
+ */
+function getTimeVariance(
+  actual?: number,
+  estimated?: number
+): 'over' | 'under' | null {
+  if (actual === undefined || estimated === undefined || estimated === 0) {
+    return null;
+  }
+  const ratio = actual / estimated;
+  // Consider over if 10% or more over estimate
+  if (ratio > 1.1) return 'over';
+  // Consider under if 10% or more under estimate
+  if (ratio < 0.9) return 'under';
+  return null;
+}
+
+/**
  * SubtaskBlock renders a colored block for a timeline subtask
  * Shows status-based colors, time tracking, and click interaction
  */
@@ -108,6 +127,11 @@ export const SubtaskBlock = memo(function SubtaskBlock({
     onClick?.(subtask);
   }, [subtask, onClick]);
 
+  // Calculate time variance for visual indicator
+  const timeVariance = useMemo(() => {
+    return getTimeVariance(subtask.actualTime, subtask.estimatedTime);
+  }, [subtask.actualTime, subtask.estimatedTime]);
+
   // Memoize time display
   const timeDisplay = useMemo(() => {
     if (!showTimeEstimates) return null;
@@ -119,20 +143,37 @@ export const SubtaskBlock = memo(function SubtaskBlock({
     const displayTime = subtask.actualTime !== undefined ? actual : estimated;
     const showBoth = subtask.actualTime !== undefined && subtask.estimatedTime !== undefined;
 
+    // Determine color based on time variance
+    const timeColorClass = timeVariance === 'over'
+      ? 'text-destructive'
+      : timeVariance === 'under'
+      ? 'text-green-600 dark:text-green-400'
+      : 'text-muted-foreground';
+
     return (
-      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-        <Clock className="h-2.5 w-2.5" />
+      <div className="flex items-center gap-1.5 text-[10px]">
+        <Clock className={cn('h-2.5 w-2.5', timeColorClass)} />
         {showBoth ? (
-          <span className="text-[9px]">
-            {actual}
-            <span className="text-muted-foreground/60"> / {estimated}</span>
+          <span className="flex items-center gap-1 text-[9px]">
+            <span className={cn('font-medium', timeColorClass)}>{actual}</span>
+            <span className="text-muted-foreground/60">/</span>
+            <span className="text-muted-foreground/80">{estimated}</span>
+            {timeVariance && (
+              <span className={cn('flex items-center', timeColorClass)}>
+                {timeVariance === 'over' ? (
+                  <TrendingUp className="h-2.5 w-2.5" />
+                ) : (
+                  <TrendingDown className="h-2.5 w-2.5" />
+                )}
+              </span>
+            )}
           </span>
         ) : (
-          <span>{displayTime}</span>
+          <span className={timeColorClass}>{displayTime}</span>
         )}
       </div>
     );
-  }, [showTimeEstimates, subtask.estimatedTime, subtask.actualTime]);
+  }, [showTimeEstimates, subtask.estimatedTime, subtask.actualTime, timeVariance]);
 
   // Status icon
   const statusIcon = useMemo(() => {
