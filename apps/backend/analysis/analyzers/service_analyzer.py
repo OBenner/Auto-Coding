@@ -14,6 +14,7 @@ from typing import Any
 
 from .base import BaseAnalyzer
 from .context_analyzer import ContextAnalyzer
+from .context.testing_detector import TestingDetector
 from .database_detector import DatabaseDetector
 from .framework_analyzer import FrameworkAnalyzer
 from .route_detector import RouteDetector
@@ -211,27 +212,8 @@ class ServiceAnalyzer(BaseAnalyzer):
 
     def _detect_testing(self) -> None:
         """Detect testing framework and configuration."""
-        if self._exists("package.json"):
-            pkg = self._read_json("package.json")
-            if pkg:
-                deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
-                if "vitest" in deps:
-                    self.analysis["testing"] = "Vitest"
-                elif "jest" in deps:
-                    self.analysis["testing"] = "Jest"
-                if "@playwright/test" in deps:
-                    self.analysis["e2e_testing"] = "Playwright"
-                elif "cypress" in deps:
-                    self.analysis["e2e_testing"] = "Cypress"
-
-        elif self._exists("pytest.ini") or self._exists("pyproject.toml"):
-            self.analysis["testing"] = "pytest"
-
-        # Find test directory
-        for test_dir in ["tests", "test", "__tests__", "spec"]:
-            if self._exists(test_dir):
-                self.analysis["test_directory"] = test_dir
-                break
+        testing_detector = TestingDetector(self.path, self.analysis)
+        testing_detector.detect()
 
     def _find_dockerfile(self) -> None:
         """Find Dockerfile for this service."""
