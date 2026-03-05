@@ -160,9 +160,9 @@ def _check_authentication() -> bool:
     print()
 
     try:
-        from core.auth import get_oauth_token
+        from core.auth import get_auth_token
 
-        token = get_oauth_token()
+        token = get_auth_token()
 
         if token:
             print(f"  {icon(Icons.CHECKMARK)} {success('Authentication configured')}")
