@@ -44,6 +44,9 @@ from ui import (
 from ._generator_base import log_generator_result, run_generator_session
 from ._validation import validate_python_tests
 
+# Import fixture generator
+from .fixture_generator import generate_fixtures
+
 # Import framework-specific generators
 from .vitest_generator import generate_vitest_tests, validate_vitest_tests
 
@@ -971,6 +974,7 @@ async def run_test_generator_session(
     model: str | None = None,
     max_thinking_tokens: int | None = None,
     verbose: bool = False,
+    generate_fixtures_first: bool = True,
 ) -> dict[str, Any]:
     """
     Run Test Generator Agent session to generate tests for analyzed code.
@@ -985,6 +989,7 @@ async def run_test_generator_session(
         model: Claude model to use (defaults to phase config)
         max_thinking_tokens: Extended thinking token budget (optional)
         verbose: Whether to show detailed output
+        generate_fixtures_first: Whether to generate fixtures before tests (default: True)
 
     Returns:
         Dictionary with:
@@ -1060,6 +1065,45 @@ async def run_test_generator_session(
         print_key_value("Min coverage", f"{coverage_config.minimum_coverage:.0f}%")
     except Exception as e:
         logger.warning(f"Failed to load coverage config: {e}")
+
+    # Generate fixtures first if requested
+    fixture_files = []
+    if generate_fixtures_first:
+        print()
+        print_status("Generating test fixtures...", "progress")
+        try:
+            fixture_result = await generate_fixtures(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                analysis_results=analysis_results,
+                model=model,
+                max_thinking_tokens=max_thinking_tokens,
+                verbose=verbose,
+            )
+
+            if fixture_result["success"] and fixture_result.get("generated_files"):
+                fixture_files = fixture_result["generated_files"]
+                print_key_value("Fixture files", str(len(fixture_files)))
+                for fixture_file in fixture_files:
+                    print(f"  {muted('•')} {fixture_file}")
+            elif not fixture_result["success"]:
+                logger.warning(
+                    f"Fixture generation failed: {fixture_result.get('error')}"
+                )
+                print_status(
+                    f"Fixture generation failed: {fixture_result.get('error')}",
+                    "warning",
+                )
+            else:
+                logger.info("No fixtures were generated")
+                print_status("No fixtures were generated", "info")
+
+        except Exception as e:
+            error_msg = f"Fixture generation failed with exception: {e}"
+            logger.warning(error_msg)
+            print_status(error_msg, "warning")
+
+    print()
 
     # Load the test generator prompt
     try:
@@ -1318,6 +1362,7 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
 
     return {
         "generated_files": [str(f) for f in test_files],
+        "fixture_files": fixture_files,
         "success": validation_success,
         "error": None if validation_success else "Test validation failed",
         "framework": "pytest",
