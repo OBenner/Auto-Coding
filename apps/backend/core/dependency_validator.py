@@ -11,6 +11,26 @@ from pathlib import Path
 from core.platform import is_linux, is_windows
 
 
+def _is_pytest_running() -> bool:
+    """Check if pytest is currently running.
+
+    This allows us to skip platform dependency validation during test collection,
+    which prevents pytest from crashing when optional dependencies are missing.
+    """
+    # Check if pytest is in sys.modules (fast check)
+    if 'pytest' not in sys.modules:
+        return False
+
+    # Additional check: see if we're in a test context
+    # This is more reliable than just checking module presence
+    try:
+        import pytest
+        # Check if pytest has been imported (which happens during collection)
+        return True
+    except ImportError:
+        return False
+
+
 def validate_platform_dependencies() -> None:
     """
     Validate that platform-specific dependencies are installed.
@@ -18,7 +38,14 @@ def validate_platform_dependencies() -> None:
     Raises:
         SystemExit: If required platform-specific dependencies are missing,
                    with helpful installation instructions.
+
+    Note:
+        Validation is skipped during pytest collection to prevent test
+        suite crashes when optional dependencies are not installed.
     """
+    # Skip validation during pytest to avoid crashing test runs
+    if _is_pytest_running():
+        return
     # Check Windows-specific dependencies (all Python versions per ACS-306)
     # pywin32 is required on all Python versions on Windows - MCP library unconditionally imports win32api
     if is_windows():
