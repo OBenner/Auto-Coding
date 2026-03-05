@@ -136,6 +136,11 @@
     "setupComplete": "Setup Complete",
     "setupCompleteDescription": "Your environment is configured and ready. You can start creating tasks immediately or explore the application at your own pace.",
     "whatsNext": "What's Next?",
+    "startTutorial": {
+      "title": "Start Tutorial",
+      "description": "Learn how Auto Code works with a hands-on example (under 15 minutes).",
+      "action": "Start Tutorial"
+    },
     "createTask": {
       "title": "Create a Task",
       "description": "Start by creating your first task to see Auto-Coding in action.",

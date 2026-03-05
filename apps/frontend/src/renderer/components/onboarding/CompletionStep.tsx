@@ -4,7 +4,8 @@ import {
   FileText,
   Settings,
   BookOpen,
-  ArrowRight
+  ArrowRight,
+  GraduationCap
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
@@ -12,6 +13,7 @@ import { Card, CardContent } from '../ui/card';
 
 interface CompletionStepProps {
   onFinish: () => void;
+  onOpenTutorial?: () => void;
   onOpenTaskCreator?: () => void;
   onOpenSettings?: () => void;
 }
@@ -60,12 +62,20 @@ function NextStepCard({ icon, title, description, action, actionLabel }: NextSte
  */
 export function CompletionStep({
   onFinish,
+  onOpenTutorial,
   onOpenTaskCreator,
   onOpenSettings
 }: CompletionStepProps) {
   const { t } = useTranslation('onboarding');
 
   const nextSteps = [
+    {
+      icon: <GraduationCap className="h-5 w-5" />,
+      title: t('completion.startTutorial.title'),
+      description: t('completion.startTutorial.description'),
+      action: onOpenTutorial,
+      actionLabel: t('completion.startTutorial.action')
+    },
     {
       icon: <FileText className="h-5 w-5" />,
       title: t('completion.createTask.title'),
