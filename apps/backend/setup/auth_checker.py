@@ -31,9 +31,9 @@ def check_oauth_token() -> AuthCheckResult:
     the user is authenticated and has a valid token.
     """
     try:
-        from core.auth import get_oauth_token
+        from core.auth import get_auth_token
 
-        token = get_oauth_token()
+        token = get_auth_token()
 
         if token:
             logger.debug("OAuth token found in keychain")
