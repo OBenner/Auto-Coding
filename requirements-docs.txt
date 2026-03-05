@@ -1,0 +1,13 @@
+# Documentation Dependencies
+
+# MkDocs Material - Material Design theme for MkDocs
+# Provides modern, responsive documentation with search, navigation, and dark mode
+mkdocs-material>=9.0.0
+
+# MkDocstrings - Automatic documentation from Python docstrings
+# Supports automatic API reference generation from source code
+mkdocstrings[python]>=0.24.0
+
+# Mike - Multi-version documentation deployment
+# Enables versioning and deployment of multiple documentation versions
+mike>=2.0.0
