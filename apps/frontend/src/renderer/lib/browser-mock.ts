@@ -828,9 +828,7 @@ const browserMockAPI: ElectronAPI = {
         generated_at: new Date().toISOString(),
       }
     }),
-  }
-
-  // Code Search API
+  },
   search: searchMock,
 };
 

@@ -14,7 +14,8 @@ import {
   Search,
   Calendar,
   Tag,
-  AlertTriangle
+  AlertTriangle,
+  Download
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
@@ -31,7 +32,6 @@ import {
 } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { toast } from '../../hooks/use-toast';
-import { IPC_CHANNELS } from '../../../shared/constants';
 
 /**
  * Saved search type matching the IPC handler
@@ -82,7 +82,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [_hasLoaded, setHasLoaded] = useState(false);
 
   // Dialog states
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -112,8 +112,8 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
       setIsLoading(true);
       setLoadError(null);
 
-      if (!window.electronAPI?.searchSavedList) {
-        throw new Error('electronAPI.searchSavedList is not available');
+      if (!window.electronAPI?.search.searchSavedList) {
+        throw new Error('electronAPI?.search.searchSavedList is not available');
       }
 
       const result = await withTimeout(
@@ -197,7 +197,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
-    if (!selectedSearch || !window.electronAPI?.searchSavedDelete) return;
+    if (!selectedSearch || !window.electronAPI?.search.searchSavedDelete) return;
 
     try {
       const result = await withTimeout(
@@ -227,7 +227,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
   }, [projectId, selectedSearch, loadSavedSearches]);
 
   const handleSaveSearch = useCallback(async (isEdit = false) => {
-    if (!window.electronAPI?.searchSavedSave && !window.electronAPI?.searchSavedUpdate) {
+    if (!window.electronAPI?.search.searchSavedSave && !window.electronAPI?.search.searchSavedUpdate) {
       toast({
         title: 'Error',
         description: 'Saved search functionality is not available',
@@ -242,7 +242,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
         filters: formData.filters || {},
       };
 
-      let result: any = undefined;
+      let result: any ;
       if (isEdit && selectedSearch) {
         result = await withTimeout(
           window.electronAPI.search.searchSavedUpdate?.(
@@ -279,7 +279,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
   }, [projectId, formData, selectedSearch, loadSavedSearches]);
 
   const handleExport = useCallback(async () => {
-    if (!window.electronAPI?.searchSavedExport) return;
+    if (!window.electronAPI?.search.searchSavedExport) return;
 
     try {
       const result = await withTimeout(

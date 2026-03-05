@@ -53,6 +53,7 @@ export interface ElectronAPI extends
   SearchAPI {
   /** Security API (nested access for security store) */
   security: SecurityAPI;
+  search: SearchAPI;
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
@@ -91,7 +92,8 @@ export const createElectronAPI = (): ElectronAPI => {
     queue: createQueueAPI(),  // Queue routing for rate limit recovery
     pattern: createPatternAPI(),
     sessionReplay: createSessionReplayAPI(),
-    scheduler: createSchedulerAPI()
+    scheduler: createSchedulerAPI(),
+    search: createSearchAPI()
   };
 };
 
