@@ -42,6 +42,9 @@ TOOL_GET_SPEC_STATISTICS = "mcp__auto-claude__get_spec_statistics"
 TOOL_SEARCH_TEAM_DOCS = "mcp__auto-claude__search_team_docs"
 TOOL_GET_TEAM_DOCS = "mcp__auto-claude__get_team_docs"
 
+# Roadmap management tools
+TOOL_REORDER_FEATURES = "mcp__auto-claude__reorder_features"
+
 # Background task management tools
 TOOL_START_BACKGROUND = "mcp__auto-claude__start_background_command"
 TOOL_GET_TASK_STATUS = "mcp__auto-claude__get_task_status"
