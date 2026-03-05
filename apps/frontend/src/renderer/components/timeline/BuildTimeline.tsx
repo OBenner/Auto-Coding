@@ -1,0 +1,480 @@
+/**
+ * BuildTimeline main component
+ *
+ * Horizontal timeline visualization showing agent phases, subtasks, and their relationships
+ * with real-time progress updates, zoom/pan controls, and export functionality.
+ */
+
+import { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { motion } from 'motion/react';
+import { cn } from '../../lib/utils';
+import { useTimelineData } from './hooks/useTimelineData';
+import type {
+  TimelineData,
+  TimelineViewState,
+  TimelineConfig,
+  TimelineAnimationState,
+  TimelinePhase,
+  TimelineSubtask,
+} from './types';
+import {
+  calculateAllPhaseLayouts,
+  calculateAllSubtaskLayouts,
+  calculateTimelineWidth,
+  calculateTimelineHeight,
+  clampZoom,
+  calculateScrollAfterZoom,
+} from './utils/timeline-layout';
+import { DEFAULT_TIMELINE_CONFIG } from './types';
+
+interface BuildTimelineProps {
+  /** Task ID to load implementation plan for */
+  taskId: string;
+  /** Current execution progress for real-time updates */
+  executionProgress?: TimelineData['executionProgress'];
+  /** Custom configuration options */
+  config?: Partial<TimelineConfig>;
+  /** Additional CSS classes */
+  className?: string;
+}
+
+/**
+ * Main timeline component with horizontal layout, zoom/pan controls, and phase swim lanes
+ * Handles view state, layout calculations, and provides context for child components
+ */
+export const BuildTimeline = memo(function BuildTimeline({
+  taskId,
+  executionProgress,
+  config: customConfig,
+  className,
+}: BuildTimelineProps) {
+  const { t } = useTranslation('tasks');
+
+  // Merge custom config with defaults
+  const config: TimelineConfig = {
+    ...DEFAULT_TIMELINE_CONFIG,
+    ...customConfig,
+  };
+
+  // Load timeline data
+  const {
+    timelineData,
+    isLoading,
+    error,
+    getPhase,
+    getSubtask,
+    getSubtasksForPhase,
+    getCurrentSubtask,
+    getOverallProgress,
+  } = useTimelineData(taskId, executionProgress);
+
+  // View state for zoom and pan
+  const [viewState, setViewState] = useState<TimelineViewState>({
+    zoom: config.defaultZoom,
+    scrollX: 0,
+    scrollY: 0,
+    isDragging: false,
+  });
+
+  // Animation state for performance optimization
+  const [animationState, setAnimationState] = useState<TimelineAnimationState>({
+    isEnabled: config.enableAnimations,
+    isVisible: true,
+  });
+
+  // Refs for container and scroll handling
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<{ x: number; y: number; scrollX: number; scrollY: number } | null>(null);
+
+  /**
+   * Handle zoom in
+   */
+  const handleZoomIn = useCallback(() => {
+    setViewState((prev) => ({
+      ...prev,
+      zoom: clampZoom(prev.zoom + 0.1, config),
+    }));
+  }, [config]);
+
+  /**
+   * Handle zoom out
+   */
+  const handleZoomOut = useCallback(() => {
+    setViewState((prev) => ({
+      ...prev,
+      zoom: clampZoom(prev.zoom - 0.1, config),
+    }));
+  }, [config]);
+
+  /**
+   * Handle zoom reset
+   */
+  const handleZoomReset = useCallback(() => {
+    setViewState((prev) => ({
+      ...prev,
+      zoom: config.defaultZoom,
+    }));
+  }, [config]);
+
+  /**
+   * Handle scroll change
+   */
+  const handleScrollChange = useCallback((scrollX: number, scrollY: number) => {
+    setViewState((prev) => ({
+      ...prev,
+      scrollX,
+      scrollY,
+    }));
+  }, []);
+
+  /**
+   * Handle mouse wheel for zooming (Ctrl+wheel) and scrolling
+   */
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom with Ctrl/Cmd+wheel
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -1 : 1;
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        const focusX = e.clientX - rect.left;
+        const focusY = e.clientY - rect.top;
+
+        const newZoom = clampZoom(viewState.zoom + delta * 0.1, config);
+        const newScroll = calculateScrollAfterZoom(
+          viewState.scrollX,
+          viewState.scrollY,
+          viewState.zoom,
+          newZoom,
+          focusX,
+          focusY
+        );
+
+        setViewState({
+          ...viewState,
+          zoom: newZoom,
+          scrollX: newScroll.scrollX,
+          scrollY: newScroll.scrollY,
+        });
+      }
+    },
+    [viewState, config]
+  );
+
+  /**
+   * Handle mouse down for drag-to-pan
+   */
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start drag on middle mouse button or space+left click
+    if (e.button === 1 || (e.button === 0 && false)) {
+      e.preventDefault();
+      setViewState((prev) => ({
+        ...prev,
+        isDragging: true,
+      }));
+      dragStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        scrollX: viewState.scrollX,
+        scrollY: viewState.scrollY,
+      };
+    }
+  }, [viewState]);
+
+  /**
+   * Handle mouse move for dragging
+   */
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!viewState.isDragging || !dragStartRef.current) return;
+
+    const deltaX = dragStartRef.current.x - e.clientX;
+    const deltaY = dragStartRef.current.y - e.clientY;
+
+    setViewState({
+      ...viewState,
+      scrollX: dragStartRef.current.scrollX + deltaX,
+      scrollY: dragStartRef.current.scrollY + deltaY,
+    });
+  }, [viewState]);
+
+  /**
+   * Handle mouse up to end drag
+   */
+  const handleMouseUp = useCallback(() => {
+    setViewState((prev) => ({
+      ...prev,
+      isDragging: false,
+    }));
+    dragStartRef.current = null;
+  }, []);
+
+  /**
+   * Handle subtask click
+   */
+  const handleSubtaskClick = useCallback((subtask: TimelineSubtask) => {
+    // TODO: Will be implemented when SubtaskBlock is created
+    console.log('[BuildTimeline] Subtask clicked:', subtask.id);
+  }, []);
+
+  /**
+   * Handle phase click
+   */
+  const handlePhaseClick = useCallback((phase: TimelinePhase) => {
+    // TODO: Will be implemented when PhaseSwimLane is created
+    console.log('[BuildTimeline] Phase clicked:', `phase-${phase.phase}`);
+  }, []);
+
+  // IntersectionObserver for performance optimization
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setAnimationState((prev) => ({
+          ...prev,
+          isVisible: entry.isIntersecting,
+        }));
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // Calculate layouts
+  const phaseLayouts = timelineData
+    ? calculateAllPhaseLayouts(timelineData.phases, viewState, config)
+    : new Map();
+
+  const subtasksByPhase = timelineData
+    ? new Map(
+        timelineData.phases.map((phase) => [
+          `phase-${phase.phase}`,
+          getSubtasksForPhase(phase.phase),
+        ])
+      )
+    : new Map();
+
+  const subtaskLayouts = timelineData && phaseLayouts
+    ? calculateAllSubtaskLayouts(subtasksByPhase, phaseLayouts, viewState, config)
+    : new Map();
+
+  // Calculate timeline dimensions
+  const timelineWidth = timelineData
+    ? calculateTimelineWidth(timelineData.subtasks, config, viewState.zoom)
+    : 0;
+  const timelineHeight = timelineData
+    ? calculateTimelineHeight(timelineData.phases.length, config, viewState.zoom)
+    : 0;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className={cn('flex items-center justify-center p-8', className)}>
+        <motion.div
+          className="flex flex-col items-center gap-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-sm text-muted-foreground">
+            {t('timeline.loading') || 'Loading timeline...'}
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className={cn('flex items-center justify-center p-8', className)}>
+        <motion.div
+          className="flex flex-col items-center gap-3 text-center max-w-md"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+            <svg className="h-6 w-6 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              {t('timeline.error') || 'Failed to load timeline'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">{error}</p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (!timelineData || timelineData.phases.length === 0) {
+    return (
+      <div className={cn('flex items-center justify-center p-8', className)}>
+        <motion.div
+          className="flex flex-col items-center gap-3 text-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+            <svg className="h-6 w-6 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+            </svg>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {t('timeline.noData') || 'No timeline data available'}
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn('relative w-full h-full overflow-hidden', className)}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      {/* Timeline controls overlay */}
+      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+        <div className="flex items-center gap-1 bg-background/80 backdrop-blur-sm border rounded-lg p-1 shadow-sm">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleZoomIn}
+            disabled={viewState.zoom >= config.maxZoom}
+            className={cn(
+              'p-1.5 rounded-md transition-colors',
+              'hover:bg-accent',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+            title={t('timeline.zoomIn') || 'Zoom in'}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleZoomReset}
+            className="p-1.5 rounded-md hover:bg-accent transition-colors text-xs font-medium min-w-[3rem]"
+            title={t('timeline.reset') || 'Reset zoom'}
+          >
+            {Math.round(viewState.zoom * 100)}%
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleZoomOut}
+            disabled={viewState.zoom <= config.minZoom}
+            className={cn(
+              'p-1.5 rounded-md transition-colors',
+              'hover:bg-accent',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+            title={t('timeline.zoomOut') || 'Zoom out'}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+            </svg>
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Scrollable timeline container */}
+      <div
+        ref={timelineRef}
+        className="w-full h-full overflow-auto"
+        style={{
+          cursor: viewState.isDragging ? 'grabbing' : 'grab',
+        }}
+        onScroll={(e) => {
+          handleScrollChange(e.currentTarget.scrollLeft, e.currentTarget.scrollTop);
+        }}
+      >
+        {/* Timeline content with zoom transform */}
+        <motion.div
+          className="relative"
+          style={{
+            width: timelineWidth,
+            height: timelineHeight,
+            transform: `scale(${viewState.zoom})`,
+            transformOrigin: 'top left',
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          {/* Phase swim lanes placeholder */}
+          {/* This will be populated by PhaseSwimLane components in subtask-2-2 */}
+          <div className="w-full h-full">
+            {timelineData.phases.map((phase) => {
+              const phaseId = `phase-${phase.phase}`;
+              const layout = phaseLayouts.get(phaseId);
+
+              if (!layout) return null;
+
+              return (
+                <motion.div
+                  key={phaseId}
+                  className="absolute border-b border-border/50"
+                  style={{
+                    top: layout.y,
+                    left: 0,
+                    width: '100%',
+                    height: layout.height,
+                  }}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{
+                    delay: phase.displayIndex * 0.05,
+                    duration: 0.3,
+                  }}
+                >
+                  {/* Phase label placeholder */}
+                  <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                    {phase.name}
+                  </div>
+
+                  {/* Phase background placeholder */}
+                  <div className="absolute inset-0 bg-muted/20 rounded" />
+
+                  {/* Subtask blocks placeholder */}
+                  {/* This will be populated by SubtaskBlock components in subtask-3-1 */}
+                </motion.div>
+              );
+            })}
+          </div>
+
+          {/* SVG layer for dependency connectors placeholder */}
+          {/* This will be populated by DependencyConnector components in subtask-4-1 */}
+          <svg
+            className="absolute inset-0 pointer-events-none"
+            style={{ zIndex: 5 }}
+          />
+        </motion.div>
+      </div>
+
+      {/* Cursor hint for drag-to-pan */}
+      {viewState.isDragging && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-background/80 backdrop-blur-sm border rounded-lg px-3 py-1.5 text-xs text-muted-foreground pointer-events-none">
+          {t('timeline.dragHint') || 'Drag to pan'}
+        </div>
+      )}
+    </div>
+  );
+});
