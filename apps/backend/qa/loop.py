@@ -65,6 +65,7 @@ from .reviewer import run_qa_agent_session
 # Configuration
 MAX_QA_ITERATIONS = 50
 MAX_CONSECUTIVE_ERRORS = 3  # Stop after 3 consecutive errors without progress
+MINIMUM_COVERAGE_THRESHOLD = 80.0  # Minimum coverage percentage required
 
 # Auto-generated marker for QA_FIX_REQUEST.md
 QA_FIX_REQUEST_MARKER = "<!-- AUTO_GENERATED_BY_QA_AGENT -->"
@@ -705,6 +706,182 @@ async def run_qa_validation_loop(
         debug_error("qa_loop", f"Test generation failed: {e}")
         print(f"\n⚠️  Test generation failed: {e}")
         print("   Continuing with QA validation...")
+
+    # ==============================================================================
+    # COVERAGE ENFORCEMENT
+    # ==============================================================================
+
+    # Check if coverage meets minimum threshold before proceeding with QA
+    if coverage_report and hasattr(coverage_report, "overall_coverage"):
+        coverage_percentage = (
+            coverage_report.overall_coverage * 100
+        )  # Convert to percentage
+
+        if coverage_percentage < MINIMUM_COVERAGE_THRESHOLD:
+            # Coverage too low - fail validation immediately
+            coverage_shortfall = MINIMUM_COVERAGE_THRESHOLD - coverage_percentage
+
+            debug_error(
+                "qa_loop",
+                "Coverage below minimum threshold",
+                coverage=f"{coverage_percentage:.1f}%",
+                required=f"{MINIMUM_COVERAGE_THRESHOLD:.1f}%",
+                shortfall=f"{coverage_shortfall:.1f}%",
+            )
+
+            print("\n❌ COVERAGE REQUIREMENT NOT MET")
+            print(f"   Current Coverage: {coverage_percentage:.1f}%")
+            print(f"   Required Coverage: {MINIMUM_COVERAGE_THRESHOLD:.1f}%")
+            print(f"   Shortfall: {coverage_shortfall:.1f}%")
+            print("\n   Build REJECTED due to insufficient test coverage.")
+            print(
+                f"   Please add tests to achieve at least {MINIMUM_COVERAGE_THRESHOLD:.1f}% coverage."
+            )
+
+            # Create QA_FIX_REQUEST.md with coverage issue
+            fix_request_file = spec_dir / "QA_FIX_REQUEST.md"
+
+            # Get uncovered files for the report
+            uncovered_files_list = []
+            if hasattr(coverage_report, "files"):
+                # Sort files by coverage (lowest first)
+                low_coverage_files = sorted(
+                    [
+                        f
+                        for f in coverage_report.files
+                        if f.coverage_percentage < MINIMUM_COVERAGE_THRESHOLD
+                    ],
+                    key=lambda f: f.coverage_percentage,
+                )[:10]  # Top 10 files needing coverage
+
+                uncovered_files_list = [
+                    {
+                        "file_path": f.file_path,
+                        "coverage_percent": f.coverage_percentage * 100,
+                        "lines_missed": f.lines_missed,
+                        "lines_total": f.lines_total,
+                    }
+                    for f in low_coverage_files
+                ]
+
+            import json
+
+            fix_request_content = f"""# QA Fix Request - Coverage Below Threshold
+
+{QA_FIX_REQUEST_MARKER}
+
+**Generated**: {datetime.now(UTC).isoformat()}
+**Status**: REJECTED
+**Reason**: Test coverage below minimum requirement
+
+## Coverage Summary
+
+- **Current Coverage**: {coverage_percentage:.1f}%
+- **Required Coverage**: {MINIMUM_COVERAGE_THRESHOLD:.1f}%
+- **Shortfall**: {coverage_shortfall:.1f}%
+- **Lines Covered**: {coverage_report.lines_covered:,} / {coverage_report.lines_total:,}
+
+## Files Requiring Additional Tests
+
+The following files need more test coverage to meet the minimum threshold:
+
+"""
+
+            for i, file_info in enumerate(uncovered_files_list, 1):
+                file_path = file_info["file_path"]
+                file_coverage = file_info["coverage_percent"]
+                lines_missed = file_info["lines_missed"]
+                lines_total = file_info["lines_total"]
+                lines_covered = lines_total - lines_missed
+
+                fix_request_content += f"""### {i}. `{file_path}`
+
+- **Coverage**: {file_coverage:.1f}% ({lines_covered:,}/{lines_total:,} lines)
+- **Lines Missing Coverage**: {lines_missed:,}
+
+"""
+
+            fix_request_content += """## Required Actions
+
+1. **Add unit tests** for the uncovered code paths
+2. **Add integration tests** for API endpoints and service interactions
+3. **Add edge case tests** for error conditions and boundary values
+4. **Re-run tests** with coverage enabled: `pytest --cov=your_module --cov-report=json`
+5. **Re-submit** for QA validation
+
+## Coverage Details
+
+See `coverage_report.json` in the spec directory for detailed coverage information.
+
+To view coverage by file:
+```bash
+# View coverage report
+coverage report -m
+
+# Generate HTML coverage report
+coverage html
+# Open htmlcov/index.html in your browser
+```
+
+## Priority Files
+
+Focus on files with the lowest coverage first for maximum impact.
+"""
+
+            # Write fix request file
+            await asyncio.to_thread(
+                fix_request_file.write_text, fix_request_content, encoding="utf-8"
+            )
+            debug("qa_loop", f"Created coverage fix request: {fix_request_file}")
+
+            # Record rejection in iteration history
+            qa_iteration = get_qa_iteration_count(spec_dir)
+            coverage_issue = {
+                "type": "critical",
+                "title": f"Test coverage ({coverage_percentage:.1f}%) below minimum threshold ({MINIMUM_COVERAGE_THRESHOLD:.1f}%)",
+                "description": f"Build has {coverage_percentage:.1f}% coverage but requires {MINIMUM_COVERAGE_THRESHOLD:.1f}%. Shortfall: {coverage_shortfall:.1f}%",
+                "file": "N/A",
+                "line": None,
+                "coverage_shortfall": coverage_shortfall,
+                "current_coverage": coverage_percentage,
+                "required_coverage": MINIMUM_COVERAGE_THRESHOLD,
+            }
+
+            record_iteration(
+                spec_dir, qa_iteration + 1, "rejected", [coverage_issue], 0.0
+            )
+
+            # Dispatch webhook for coverage failure
+            try:
+                dispatch_qa_result(
+                    spec_dir,
+                    spec_id=spec_dir.name,
+                    passed=False,
+                    qa_iteration=qa_iteration + 1,
+                    duration_seconds=0.0,
+                    issues_count=1,
+                    issues=[coverage_issue],
+                )
+                debug("qa_loop", "Dispatched qa_failed webhook event (coverage)")
+            except Exception as e:
+                debug_warning("qa_loop", f"Failed to dispatch qa_failed webhook: {e}")
+
+            # End validation phase with coverage failure
+            if task_logger:
+                task_logger.end_phase(
+                    LogPhase.VALIDATION,
+                    success=False,
+                    message=f"Coverage {coverage_percentage:.1f}% below minimum {MINIMUM_COVERAGE_THRESHOLD:.1f}%",
+                )
+
+            return False
+        else:
+            debug_success(
+                "qa_loop",
+                "Coverage meets minimum threshold",
+                coverage=f"{coverage_percentage:.1f}%",
+                required=f"{MINIMUM_COVERAGE_THRESHOLD:.1f}%",
+            )
 
     # Start validation phase in task logger
     if task_logger:
