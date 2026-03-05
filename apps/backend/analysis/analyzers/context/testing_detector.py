@@ -157,6 +157,20 @@ class TestingDetector(BaseAnalyzer):
                 testing_info["libraries"].append(lib)
                 break
 
+        # Check for doctest
+        for lib in self.DOCTEST_LIBS:
+            if lib in all_deps:
+                testing_info["frameworks"].append("doctest")
+                testing_info["libraries"].append(lib)
+                break
+
+        # Check for hypothesis
+        for lib in self.HYPOTHESIS_LIBS:
+            if lib in all_deps:
+                testing_info["frameworks"].append("hypothesis")
+                testing_info["libraries"].append(lib)
+                break
+
     def _detect_js_frameworks(
         self, all_deps: set[str], testing_info: dict[str, Any]
     ) -> None:
