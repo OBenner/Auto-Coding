@@ -14,9 +14,9 @@ from .agent import AgentContext, AgentPlugin
 from .docs_generator import PluginDocsGenerator
 from .integration import IntegrationContext, IntegrationPlugin
 from .scaffold import PluginScaffold
-from .testing import MockAgentContext
+from .testing import MockAgentContext, MockIntegrationContext, PluginTestCase
 from .ui import UIComponentDefinition, UIContext, UIExtensionPoint, UIPlugin
-from .utils import PluginFileManager
+from .utils import PluginFileManager, PluginConfigManager, PluginStateManager
 from .validator import PluginValidator
 
 __all__ = [
@@ -25,9 +25,13 @@ __all__ = [
     "IntegrationContext",
     "IntegrationPlugin",
     "MockAgentContext",
+    "MockIntegrationContext",
+    "PluginConfigManager",
     "PluginDocsGenerator",
     "PluginFileManager",
     "PluginScaffold",
+    "PluginStateManager",
+    "PluginTestCase",
     "PluginValidator",
     "UIContext",
     "UIPlugin",
