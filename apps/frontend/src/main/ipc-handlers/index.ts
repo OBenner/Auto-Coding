@@ -49,6 +49,7 @@ import { registerPatternHandlers } from './pattern-handlers';
 import { registerSessionReplayHandlers } from './session-replay-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
 import { registerCollaborationHandlers } from './collaboration-handlers';
+import { registerTutorialHandlers } from './tutorial-handlers';
 import { notificationService } from '../notification-service';
 import { setAgentManagerRef } from './utils';
 
@@ -186,6 +187,9 @@ export function setupIpcHandlers(
   // Collaboration handlers (multi-user spec collaboration)
   registerCollaborationHandlers(getMainWindow);
 
+  // Tutorial handlers (onboarding tutorial)
+  registerTutorialHandlers(getMainWindow);
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -228,3 +232,4 @@ export { registerSessionReplayHandlers } from './session-replay-handlers';
 export { registerFeedbackHandlers } from './feedback-handlers';
 export { registerSchedulerHandlers } from './scheduler-handlers';
 export { registerCollaborationHandlers } from './collaboration-handlers';
+export { registerTutorialHandlers } from './tutorial-handlers';
