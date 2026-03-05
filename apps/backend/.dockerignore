@@ -1,0 +1,89 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Virtual environment
+.venv/
+.venv*/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Puppeteer / Browser automation
+puppeteer_logs/
+puppeteer-*.log
+*.screenshot.png
+screenshots/
+.puppeteerrc.*
+chrome-profile/
+chromium-profile/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Git worktrees (used by parallel mode)
+.worktrees/
+
+# Claude Code settings (project-specific)
+.claude_settings.json
+.auto-build-security.json
+
+# Tests (development only)
+tests/
+*.test.py
+test_*.py
+
+# Auto Code data directory
+.auto-claude/
+
+# Auto Code generated files
+.auto-claude-security.json
+.migration-checkpoints/
+.auto-claude-status
+.security-key
+logs/security/
+
+# Documentation
+*.md
+!README.md
+
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose*.yml
