@@ -1,0 +1,97 @@
+# Documentation Deployment
+#
+# Builds and deploys MkDocs documentation to GitHub Pages.
+# Runs on pushes to main/develop and can be triggered manually.
+#
+# The workflow:
+# 1. Builds documentation with MkDocs Material theme
+# 2. Generates API docs from Python docstrings
+# 3. Deploys to GitHub Pages (gh-pages branch)
+
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
+      - '.github/workflows/deploy-docs.yml'
+      # Backend code changes that affect API docs
+      - 'apps/backend/core/**'
+      - 'apps/backend/agents/**'
+      - 'apps/backend/integrations/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Documentation version to deploy (e.g., latest, 2.8.0)'
+        required: false
+        default: 'latest'
+
+concurrency:
+  group: docs-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write  # Required for gh-pages deployment
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Build and Deploy Documentation
+  # --------------------------------------------------------------------------
+  deploy-docs:
+    name: Build and Deploy Docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Fetch all history for versioning
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache documentation dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: docs-${{ runner.os }}-pip-${{ hashFiles('requirements-docs.txt') }}
+          restore-keys: |
+            docs-${{ runner.os }}-pip-
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-docs.txt
+
+      - name: Configure git for mike versioning
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+      - name: Build and deploy with mike (versioned)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          mike deploy --push --update-aliases "${VERSION}" latest
+          mike set-default --push latest
+
+      - name: Build and deploy latest docs
+        if: github.event_name == 'push'
+        run: |
+          # Deploy to gh-pages branch
+          mkdocs gh-deploy --force --message "docs: deploy from {sha} [skip ci]"
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "✅ Documentation deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📚 View at: https://obenner.github.io/Auto-Coding/" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "📌 Version: ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          fi
