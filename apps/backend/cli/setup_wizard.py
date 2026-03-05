@@ -113,11 +113,11 @@ def _print_welcome_banner() -> None:
     print("This wizard will guide you through setting up Auto Code.")
     print("The following will be validated:")
     print()
-    print(f"  {icon(Icons.CHECKMARK)} Python 3.12+ installation")
-    print(f"  {icon(Icons.CHECKMARK)} Claude SDK authentication")
-    print(f"  {icon(Icons.CHECKMARK)} Graphiti memory system")
-    print(f"  {icon(Icons.CHECKMARK)} Environment configuration (.env)")
-    print(f"  {icon(Icons.CHECKMARK)} Hello-world test run")
+    print(f"  {icon(Icons.SUCCESS)} Python 3.12+ installation")
+    print(f"  {icon(Icons.SUCCESS)} Claude SDK authentication")
+    print(f"  {icon(Icons.SUCCESS)} Graphiti memory system")
+    print(f"  {icon(Icons.SUCCESS)} Environment configuration (.env)")
+    print(f"  {icon(Icons.SUCCESS)} Hello-world test run")
     print()
     print(divider(width=60))
     print()
@@ -136,7 +136,7 @@ def _validate_python() -> bool:
     result = validate_python_version()
 
     if result["valid"]:
-        print(f"  {icon(Icons.CHECKMARK)} {success('Python version OK')}")
+        print(f"  {icon(Icons.SUCCESS)} {success('Python version OK')}")
         print_key_value("Version", result["version"], indent=4)
         print()
         return True
@@ -165,7 +165,7 @@ def _check_authentication() -> bool:
         token = get_auth_token()
 
         if token:
-            print(f"  {icon(Icons.CHECKMARK)} {success('Authentication configured')}")
+            print(f"  {icon(Icons.SUCCESS)} {success('Authentication configured')}")
             print(f"    {muted('OAuth token found in system keychain')}")
             print()
             return True
@@ -207,9 +207,7 @@ def _validate_graphiti() -> bool:
 
     if result["valid"]:
         if result["enabled"]:
-            print(
-                f"  {icon(Icons.CHECKMARK)} {success('Graphiti configured and ready')}"
-            )
+            print(f"  {icon(Icons.SUCCESS)} {success('Graphiti configured and ready')}")
             print_key_value("LLM Provider", result["llm_provider"], indent=4)
             print_key_value("Embedder Provider", result["embedder_provider"], indent=4)
         else:
@@ -263,7 +261,7 @@ def _create_env_file() -> bool:
     result = create_env_file(config=config, backup_existing=True, force=False)
 
     if result["success"]:
-        print(f"  {icon(Icons.CHECKMARK)} {success('.env file created')}")
+        print(f"  {icon(Icons.SUCCESS)} {success('.env file created')}")
         print_key_value("Location", result["env_path"], indent=4)
 
         if result["backed_up"]:
@@ -297,12 +295,12 @@ def _run_hello_world_test() -> bool:
     result = run_hello_world_test()
 
     if result["success"]:
-        print(f"  {icon(Icons.CHECKMARK)} {success('All tests passed!')}")
+        print(f"  {icon(Icons.SUCCESS)} {success('All tests passed!')}")
         print()
         if result["steps_completed"]:
             print("  Completed steps:")
             for step in result["steps_completed"]:
-                print(f"    {icon(Icons.CHECKMARK)} {step}")
+                print(f"    {icon(Icons.SUCCESS)} {step}")
         print()
         return True
     else:
@@ -311,7 +309,7 @@ def _run_hello_world_test() -> bool:
         if result["steps_completed"]:
             print("  Completed steps:")
             for step in result["steps_completed"]:
-                print(f"    {icon(Icons.CHECKMARK)} {step}")
+                print(f"    {icon(Icons.SUCCESS)} {step}")
             print()
         if result["steps_failed"]:
             print("  Failed steps:")
@@ -329,7 +327,7 @@ def _print_success_message() -> None:
     print()
     print(divider(width=60))
     print()
-    print(box(f"{icon(Icons.CHECKMARK)} Setup Complete!", width=60))
+    print(box(f"{icon(Icons.SUCCESS)} Setup Complete!", width=60))
     print()
     print(f"{success('Auto Code is ready to use!')}")
     print()

@@ -25,8 +25,17 @@ def validate_platform_dependencies() -> None:
         try:  # Platform-specific
             # Optional: pywintypes is platform-specific (Windows only)
             import pywintypes  # noqa: F401
-        except ImportError:
-            _exit_with_pywin32_error()
+        except (ImportError, OSError) as e:
+            # Provide helpful error but don't exit during import
+            # This allows tests to import the module
+            import warnings
+
+            warnings.warn(
+                f"Windows dependency 'pywin32' is not properly installed: {e}. "
+                "Some features may not work correctly. "
+                "Install with: pip install pywin32>=306",
+                stacklevel=2,
+            )
 
     # Check Linux-specific dependencies (ACS-310)
     # Note: secretstorage is optional for app functionality (falls back to .env),

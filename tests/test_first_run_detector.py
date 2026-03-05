@@ -14,20 +14,61 @@ from setup.first_run_detector import detect_first_run, mark_setup_complete, rese
 
 
 def test_returns_true_when_neither_exists():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        backend_dir = Path(tmpdir) / "apps" / "backend"
-        backend_dir.mkdir(parents=True)
-        home_dir = Path(tmpdir)
+    """Test that detect_first_run returns True when neither .env nor setup marker exist."""
+    # Create mock paths that don't exist
+    mock_env_file = MagicMock()
+    mock_env_file.exists.return_value = False
 
-        with patch("setup.first_run_detector.Path") as mock_path:
-            mock_instance = MagicMock()
-            mock_instance.resolve.return_value = backend_dir
-            mock_path.return_value = mock_instance
+    # Create the final setup marker mock (home_dir / ".auto-claude" / ".setup_complete")
+    mock_final_marker = MagicMock()
+    mock_final_marker.exists.return_value = False
 
-            with patch("os.path.expanduser", return_value=str(home_dir)):
-                result = detect_first_run()
+    # Create the intermediate mock (home_dir / ".auto-claude")
+    mock_auto_claude = MagicMock()
+    mock_auto_claude.exists.return_value = False
+    mock_auto_claude.__truediv__.return_value = mock_final_marker
 
-        assert result is True
+    # Create the home_dir mock
+    mock_home_dir = MagicMock()
+    mock_home_dir.exists.return_value = False
+    mock_home_dir.__truediv__.return_value = mock_auto_claude
+
+    call_count = [0]
+
+    def get_path_mock(*path_args, **kwargs):
+        """Return appropriate mock based on what path is being constructed."""
+        call_count[0] += 1
+        call_num = call_count[0]
+
+        if not path_args:
+            return MagicMock()
+
+        # Call 1: Path(__file__) - return mock for the module file
+        if call_num == 1:
+            mock_file = MagicMock()
+            mock_parent = MagicMock()
+            mock_grandparent = MagicMock()
+            # When doing backend_dir / ".env", return mock_env_file
+            mock_grandparent.__truediv__.return_value = mock_env_file
+            mock_grandparent.resolve.return_value = mock_grandparent
+            mock_parent.parent = mock_grandparent
+            mock_file.parent = mock_parent
+            return mock_file
+
+        # Call 2: Path(os.path.expanduser("~")) - return mock_home_dir
+        if call_num == 2:
+            return mock_home_dir
+
+        # Any other calls - return a mock that doesn't exist
+        mock = MagicMock()
+        mock.exists.return_value = False
+        return mock
+
+    with patch("setup.first_run_detector.Path", side_effect=get_path_mock):
+        result = detect_first_run()
+
+    assert result is True, f"Expected True (first run), got {result}"
+
 
 
 def test_returns_false_when_env_exists():
