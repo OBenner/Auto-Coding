@@ -35,6 +35,9 @@ class TestingDetector(BaseAnalyzer):
     JASMINE_LIBS = ["jasmine", "@types/jasmine"]
     AVA_LIBS = ["ava"]
 
+    # Combined JS/TS testing libraries
+    JS_LIBS = JEST_LIBS + VITEST_LIBS + MOCHA_LIBS + JASMINE_LIBS + AVA_LIBS
+
     # E2E testing libraries
     PLAYWRIGHT_LIBS = ["playwright", "@playwright/test"]
     CYPRESS_LIBS = ["cypress"]
@@ -193,6 +196,20 @@ class TestingDetector(BaseAnalyzer):
         for lib in self.MOCHA_LIBS:
             if lib in all_deps:
                 testing_info["frameworks"].append("mocha")
+                testing_info["libraries"].append(lib)
+                break
+
+        # Check for jasmine
+        for lib in self.JASMINE_LIBS:
+            if lib in all_deps:
+                testing_info["frameworks"].append("jasmine")
+                testing_info["libraries"].append(lib)
+                break
+
+        # Check for ava
+        for lib in self.AVA_LIBS:
+            if lib in all_deps:
+                testing_info["frameworks"].append("ava")
                 testing_info["libraries"].append(lib)
                 break
 
