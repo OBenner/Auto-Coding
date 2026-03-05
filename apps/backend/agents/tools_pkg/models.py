@@ -522,14 +522,15 @@ def _map_mcp_server_name(
     if not name:
         return None
     mappings = {
+        "actor-critic-thinking": "actor-critic-thinking",
+        "auto-claude": "auto-claude",
         "context7": "context7",
+        "electron": "electron",
         "graphiti-memory": "graphiti",
         "graphiti": "graphiti",
         "linear": "linear",
-        "electron": "electron",
         "puppeteer": "puppeteer",
-        "auto-claude": "auto-claude",
-        "actor-critic-thinking": "actor-critic-thinking",
+        "searxng": "searxng",
     }
     # Check if it's a known mapping
     mapped = mappings.get(name.lower().strip())
