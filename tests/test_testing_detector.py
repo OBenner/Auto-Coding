@@ -29,7 +29,7 @@ class TestTestingDetectorInitialization:
         assert detector.analysis is analysis
 
 
-class TestPythonFrameworkDetection:
+class TestPythonDetection:
     """Tests for Python testing framework detection."""
 
     def test_detects_pytest_from_requirements(self, temp_dir: Path):
@@ -67,7 +67,7 @@ class TestPythonFrameworkDetection:
         assert "unittest" in analysis["testing"]["frameworks"]
         assert "unittest2" in analysis["testing"]["libraries"]
 
-    def test_detects_nose(self, temp_dir: Path):
+    def test_detects_nose2(self, temp_dir: Path):
         """Detects nose testing framework."""
         (temp_dir / "requirements.txt").write_text("nose2\n")
 
