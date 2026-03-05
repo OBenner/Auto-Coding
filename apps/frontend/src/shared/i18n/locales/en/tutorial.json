@@ -1,0 +1,215 @@
+{
+  "title": "Getting Started Tutorial",
+  "description": "Learn how Auto Code works with a hands-on example",
+  "progress": "Progress",
+
+  "steps": {
+    "intro": "Introduction",
+    "specPhase": "Spec Creation",
+    "planningPhase": "Planning",
+    "codingPhase": "Coding",
+    "qaPhase": "QA Review",
+    "completion": "Complete"
+  },
+
+  "intro": {
+    "title": "Welcome to Your First Autonomous Build",
+    "description": "Let's walk through building a simple login form component together",
+    "whatYouWillLearn": "What You'll Learn",
+    "learningPoints": {
+      "specs": "How agents create detailed specifications from simple requests",
+      "planning": "How tasks are broken down into manageable subtasks",
+      "coding": "How AI agents implement features autonomously",
+      "qa": "How quality assurance validates the implementation",
+      "workflow": "The complete autonomous development workflow"
+    },
+    "exampleTask": "Example Task",
+    "exampleTaskTitle": "Add Login Form Component",
+    "exampleTaskDescription": "We'll build a simple but complete login form with email, password, validation, and submit handling.",
+    "timeEstimate": "Estimated Time",
+    "timeEstimateValue": "Under 15 minutes",
+    "readyToStart": "Ready to start your autonomous coding journey?"
+  },
+
+  "spec_phase": {
+    "title": "Spec Creation Phase",
+    "description": "The agent is creating a detailed specification for your feature",
+    "whatIsHappening": "What's Happening",
+    "explanation": "The spec agent is analyzing your request and creating a comprehensive specification that defines exactly what will be built. This includes user stories, acceptance criteria, and technical requirements.",
+    "whyImportant": "Why This Matters",
+    "importance": "A clear spec ensures the implementation meets your needs and provides a reference point for quality assurance. It's like creating a blueprint before building a house.",
+    "explainMore": {
+      "title": "What is a spec?",
+      "whatIsSpec": "A specification (spec) is a detailed document that describes:",
+      "components": {
+        "userStories": "User stories - who needs this feature and why",
+        "acceptance": "Acceptance criteria - what success looks like",
+        "technical": "Technical requirements - how it should work",
+        "context": "Context - relevant code patterns and dependencies"
+      },
+      "discovery": "The spec agent discovers existing code patterns, analyzes dependencies, and researches best practices to create a comprehensive plan.",
+      "review": "You'll have a chance to review and approve the spec before implementation begins."
+    },
+    "checkpoint": {
+      "title": "Checkpoint: Review Spec",
+      "description": "The spec has been created. You can review it to ensure it matches your expectations before moving to implementation."
+    }
+  },
+
+  "planning_phase": {
+    "title": "Planning Phase",
+    "description": "The agent is creating an implementation plan with subtasks",
+    "whatIsHappening": "What's Happening",
+    "explanation": "The planner agent is breaking down the spec into concrete, actionable subtasks. Each subtask targets specific files and has clear verification steps.",
+    "whyImportant": "Why This Matters",
+    "importance": "Breaking work into subtasks makes progress trackable, enables parallel execution, and makes it easier to recover from errors. It's like having a detailed checklist for a complex project.",
+    "explainMore": {
+      "title": "How does planning work?",
+      "strategy": "The planner analyzes the spec and creates a dependency-aware plan:",
+      "components": {
+        "subtasks": "Subtasks - individual units of work with clear goals",
+        "files": "File targets - which files to create or modify",
+        "verification": "Verification - how to test each subtask",
+        "dependencies": "Dependencies - which tasks must complete first"
+      },
+      "parallel": "Subtasks that don't depend on each other can run in parallel, speeding up development.",
+      "tracking": "Each subtask has status tracking (pending, in_progress, completed, failed) so you can see exactly where the build is."
+    },
+    "checkpoint": {
+      "title": "Checkpoint: Review Plan",
+      "description": "The implementation plan is ready. Review the subtasks to understand what will be built and in what order."
+    }
+  },
+
+  "coding_phase": {
+    "title": "Coding Phase",
+    "description": "The agent is implementing the feature autonomously",
+    "whatIsHappening": "What's Happening",
+    "explanation": "The coder agent is implementing each subtask by reading relevant files, following code patterns, and writing clean, maintainable code. It runs verification commands after each subtask to ensure correctness.",
+    "whyImportant": "Why This Matters",
+    "importance": "Autonomous coding follows existing patterns, maintains code quality, and handles complex multi-file changes consistently. It's like having an experienced developer who never gets tired or makes careless mistakes.",
+    "explainMore": {
+      "title": "How does the coder agent work?",
+      "process": "The coder follows a systematic approach:",
+      "steps": {
+        "read": "Read pattern files to understand existing code style",
+        "analyze": "Analyze files to modify and their context",
+        "implement": "Implement changes following established patterns",
+        "verify": "Run verification commands to check correctness",
+        "commit": "Commit changes with descriptive messages"
+      },
+      "patterns": "The agent studies existing code patterns (like similar components) to maintain consistency across your codebase.",
+      "recovery": "If a subtask fails verification, the agent can retry with a recovery strategy or escalate for review.",
+      "subagents": "For complex work, the agent can spawn subagents to work on independent subtasks in parallel."
+    },
+    "realTimeUpdates": "Watch the progress in real-time as each subtask is completed",
+    "subtaskProgress": "Subtask Progress"
+  },
+
+  "qa_phase": {
+    "title": "QA Review Phase",
+    "description": "The QA agent is validating the implementation",
+    "whatIsHappening": "What's Happening",
+    "explanation": "The QA reviewer agent is checking the implementation against the spec's acceptance criteria. It reviews code quality, tests functionality, and ensures all requirements are met.",
+    "whyImportant": "Why This Matters",
+    "importance": "Automated QA catches issues early, ensures acceptance criteria are met, and maintains high code quality. It's like having a dedicated QA engineer review every change.",
+    "explainMore": {
+      "title": "What does QA review?",
+      "checks": "The QA agent performs comprehensive validation:",
+      "criteria": {
+        "acceptance": "Acceptance criteria - all requirements from spec met",
+        "code": "Code quality - follows patterns, no console.log, proper error handling",
+        "tests": "Verification - all verification commands pass",
+        "integration": "Integration - changes work with existing code",
+        "e2e": "End-to-end testing - UI flows work as expected (for frontend changes)"
+      },
+      "testing": "For frontend changes, the QA agent can use the Electron MCP server to perform automated end-to-end testing by interacting with the running application.",
+      "outcomes": "Three possible outcomes:",
+      "outcomeTypes": {
+        "approved": "Approved - all criteria met, ready to merge",
+        "fixable": "Fixable Issues - minor issues that can be automatically fixed",
+        "rejected": "Rejected - significant issues requiring review"
+      },
+      "fixes": "If fixable issues are found, the QA fixer agent will automatically address them and re-run validation."
+    },
+    "validationInProgress": "Validating implementation...",
+    "runningTests": "Running tests and checks"
+  },
+
+  "completion": {
+    "title": "Tutorial Complete!",
+    "subtitle": "You've learned how Auto Code works - now you're ready to build anything",
+    "congratulations": "Congratulations",
+    "whatYouLearned": "What You Learned",
+    "learnedPoints": {
+      "specs": "How spec agents create detailed blueprints from simple requests",
+      "planning": "How work is broken down into manageable, trackable subtasks",
+      "coding": "How AI agents write code autonomously while following your patterns",
+      "qa": "How automated QA ensures quality and catches issues early",
+      "workflow": "The complete autonomous development workflow from idea to mergeable code"
+    },
+    "yourBranch": "Your Branch",
+    "branchReady": "A complete, tested implementation is ready in an isolated branch:",
+    "branchName": "auto-code/tutorial-login-form",
+    "branchActions": {
+      "review": "Review the changes in your editor",
+      "test": "Test the login form component",
+      "merge": "Merge it into your project when ready"
+    },
+    "nextSteps": "What's Next?",
+    "createTask": {
+      "title": "Create Your First Real Task",
+      "description": "Start building features with autonomous agents",
+      "action": "Create Task"
+    },
+    "exploreFeatures": {
+      "title": "Explore Advanced Features",
+      "description": "Learn about memory, parallel execution, and integrations",
+      "features": {
+        "memory": "Graphiti Memory - cross-session context and insights",
+        "parallel": "Parallel Agents - multiple agents working simultaneously",
+        "integrations": "Integrations - Linear, GitHub, and more"
+      }
+    },
+    "readDocs": {
+      "title": "Read the Documentation",
+      "description": "Deep dive into Auto Code's capabilities",
+      "links": {
+        "quickStart": "Quick Start Guide",
+        "specs": "Writing Effective Specs",
+        "workflow": "Understanding the Workflow",
+        "troubleshooting": "Troubleshooting Guide"
+      }
+    },
+    "tips": {
+      "title": "Pro Tips",
+      "tip1": "Start with clear, specific task descriptions for best results",
+      "tip2": "Review specs before implementation to ensure they match your vision",
+      "tip3": "Use the memory system to build context over multiple sessions",
+      "tip4": "Let agents work autonomously - they'll ask if they need clarification"
+    }
+  },
+
+  "navigation": {
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish Tutorial",
+    "skip": "Skip Tutorial",
+    "cancel": "Cancel"
+  },
+
+  "status": {
+    "preparing": "Preparing tutorial...",
+    "running": "Running phase...",
+    "completed": "Phase completed",
+    "failed": "Phase failed",
+    "reviewing": "Reviewing..."
+  },
+
+  "errors": {
+    "startFailed": "Failed to start tutorial",
+    "phaseFailed": "Phase failed: {{phase}}",
+    "connectionLost": "Connection to backend lost",
+    "tryAgain": "Please try again or skip the tutorial"
+  }
+}
