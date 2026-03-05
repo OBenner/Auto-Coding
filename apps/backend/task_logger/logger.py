@@ -347,6 +347,57 @@ class TaskLogger:
         """Log a decision made by the AI agent."""
         self.log(content, LogEntryType.DECISION, phase)
 
+    def log_thinking(
+        self,
+        content: str,
+        phase: LogPhase | None = None,
+        print_to_console: bool = False,
+    ) -> None:
+        """
+        Log an extended thinking block from the AI agent.
+
+        Args:
+            content: The thinking block content
+            phase: Optional phase override (uses current_phase if not specified)
+            print_to_console: Whether to also print to stdout (default False)
+        """
+        phase_key = (phase or self.current_phase or LogPhase.CODING).value
+
+        entry = LogEntry(
+            timestamp=self._timestamp(),
+            type=LogEntryType.THINKING.value,
+            content=content,
+            phase=phase_key,
+            subtask_id=self.current_subtask,
+            session=self.current_session,
+            thinking_block=content,
+        )
+        self._add_entry(entry)
+
+        # Emit streaming marker
+        self._emit(
+            "THINKING",
+            {
+                "content": content,
+                "phase": phase_key,
+                "subtask_id": self.current_subtask,
+                "timestamp": self._timestamp(),
+            },
+        )
+
+        # Debug log (when DEBUG=true) - truncate for readability
+        debug_content = content[:200] + "..." if len(content) > 200 else content
+        self._debug_log(
+            f"Thinking block: {debug_content}",
+            LogEntryType.THINKING,
+            phase_key,
+            subtask=self.current_subtask,
+        )
+
+        # Print to console if requested
+        if print_to_console:
+            print(f"[Thinking] {content}", flush=True)
+
     def log_with_detail(
         self,
         content: str,

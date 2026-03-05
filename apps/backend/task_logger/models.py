@@ -27,6 +27,7 @@ class LogEntryType(str, Enum):
     SUCCESS = "success"
     INFO = "info"
     DECISION = "decision"
+    THINKING = "thinking"
 
 
 @dataclass
