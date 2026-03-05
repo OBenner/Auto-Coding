@@ -26,6 +26,21 @@
   "suspiciousPatterns": "Suspicious Patterns Detected",
   "infiniteLoop": "Potential infinite loop detected",
   "repeatedFailures": "Repeated failures detected",
+  "export": {
+    "title": "Export Session Log",
+    "description": "Export agent thought process with all details",
+    "format": "Format",
+    "formatJson": "JSON",
+    "formatMarkdown": "Markdown",
+    "formatJsonDesc": "Machine-readable format with complete data",
+    "formatMarkdownDesc": "Human-readable format for documentation",
+    "formatJsonInfo": "Exports the session data in JSON format, including all thoughts, tool calls, and performance metrics. Suitable for programmatic processing.",
+    "formatMarkdownInfo": "Exports the session data in Markdown format with formatted sections. Suitable for documentation and sharing.",
+    "export": "Export",
+    "exporting": "Exporting...",
+    "cancel": "Cancel",
+    "exportSuccess": "Session exported successfully"
+  },
   "errors": {
     "loadFailed": "Failed to load agent thoughts",
     "exportFailed": "Failed to export session log"
