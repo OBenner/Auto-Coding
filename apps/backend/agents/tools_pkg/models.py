@@ -88,6 +88,14 @@ GRAPHITI_MCP_TOOLS = [
     "mcp__graphiti-memory__get_entity_edge",  # Get specific entity/relationship
 ]
 
+# SearXNG MCP tools for free web search (when SEARXNG_ENABLED is set)
+# SearXNG is a self-hosted metasearch engine - free alternative to Anthropic's WebSearch
+# See guides/SEARXNG-SETUP.md for Docker setup instructions
+SEARXNG_TOOLS = [
+    "mcp__searxng__web_search",  # Search web via SearXNG metasearch
+    "mcp__searxng__read_url",  # Fetch and parse URL content
+]
+
 # =============================================================================
 # Browser Automation MCP Tools (QA agents only)
 # =============================================================================
@@ -139,6 +147,25 @@ def is_electron_mcp_enabled() -> bool:
     - Embedded mode: MCP server runs inside Electron process
     """
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
+
+
+def is_searxng_enabled() -> bool:
+    """
+    Check if SearXNG MCP server integration is enabled.
+
+    Requires SEARXNG_ENABLED to be set to 'true'.
+    When enabled, agents can use SearXNG tools for free web search.
+
+    SearXNG is a self-hosted metasearch engine that aggregates results from
+    multiple search engines (DuckDuckGo, Brave, Google, Bing, etc.).
+    This provides a free alternative to Anthropic's WebSearch ($0.01/query).
+
+    Prerequisites:
+    - Docker installed and running
+    - SearXNG container running on SEARXNG_URL (default: http://localhost:8888)
+    - JSON format enabled in SearXNG settings.yml
+    """
+    return os.environ.get("SEARXNG_ENABLED", "").lower() == "true"
 
 
 # =============================================================================
