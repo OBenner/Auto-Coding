@@ -19,6 +19,7 @@ import enAnalytics from './locales/en/analytics.json';
 import enModelUsage from './locales/en/model-usage.json';
 import enCodeReview from './locales/en/codeReview.json';
 import enQuality from './locales/en/quality.json';
+import enAgentInspector from './locales/en/agent-inspector.json';
 
 // Import French translation resources
 import frCommon from './locales/fr/common.json';
@@ -38,6 +39,7 @@ import frAnalytics from './locales/fr/analytics.json';
 import frModelUsage from './locales/fr/model-usage.json';
 import frCodeReview from './locales/fr/codeReview.json';
 import frQuality from './locales/fr/quality.json';
+import frAgentInspector from './locales/fr/agent-inspector.json';
 
 export const defaultNS = 'common';
 
@@ -59,7 +61,8 @@ export const resources = {
     analytics: enAnalytics,
     'model-usage': enModelUsage,
     codeReview: enCodeReview,
-    quality: enQuality
+    quality: enQuality,
+    'agent-inspector': enAgentInspector
   },
   fr: {
     common: frCommon,
@@ -78,7 +81,8 @@ export const resources = {
     analytics: frAnalytics,
     'model-usage': frModelUsage,
     codeReview: frCodeReview,
-    quality: frQuality
+    quality: frQuality,
+    'agent-inspector': frAgentInspector
   }
 } as const;
 
@@ -89,7 +93,7 @@ i18n
     lng: 'en', // Default language (will be overridden by settings)
     fallbackLng: 'en',
     defaultNS,
-    ns: ['common', 'navigation', 'settings', 'security', 'tasks', 'welcome', 'onboarding', 'dialogs', 'github', 'gitlab', 'taskReview', 'terminal', 'errors', 'analytics', 'model-usage', 'codeReview', 'quality'],
+    ns: ['common', 'navigation', 'settings', 'security', 'tasks', 'welcome', 'onboarding', 'dialogs', 'github', 'gitlab', 'taskReview', 'terminal', 'errors', 'analytics', 'model-usage', 'codeReview', 'quality', 'agent-inspector'],
     interpolation: {
       escapeValue: false // React already escapes values
     },

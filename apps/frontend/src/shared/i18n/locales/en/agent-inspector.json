@@ -1,0 +1,30 @@
+{
+  "thinkingContent": "Thinking Process",
+  "collapseThought": "Collapse thinking details",
+  "expandThought": "Expand thinking details",
+  "session": "Session",
+  "toolCall": "Tool Call",
+  "input": "Input",
+  "output": "Output",
+  "duration": "Duration",
+  "timestamp": "Timestamp",
+  "phase": "Phase",
+  "subtask": "Subtask",
+  "noThoughtsYet": "No thoughts captured yet",
+  "noThoughtsDescription": "Agent thoughts will appear here in real-time as they work.",
+  "filterByToolType": "Filter by tool type",
+  "searchPlaceholder": "Search thoughts and tool calls...",
+  "clearFilters": "Clear filters",
+  "exportSession": "Export Session Log",
+  "performanceMetrics": "Performance Metrics",
+  "tokenUsage": "Token Usage",
+  "timePerStep": "Time per Step",
+  "totalSteps": "Total Steps",
+  "suspiciousPatterns": "Suspicious Patterns Detected",
+  "infiniteLoop": "Potential infinite loop detected",
+  "repeatedFailures": "Repeated failures detected",
+  "errors": {
+    "loadFailed": "Failed to load agent thoughts",
+    "exportFailed": "Failed to export session log"
+  }
+}

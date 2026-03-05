@@ -1,0 +1,30 @@
+{
+  "thinkingContent": "Processus de Réflexion",
+  "collapseThought": "Réduire les détails de réflexion",
+  "expandThought": "Développer les détails de réflexion",
+  "session": "Session",
+  "toolCall": "Appel d'Outil",
+  "input": "Entrée",
+  "output": "Sortie",
+  "duration": "Durée",
+  "timestamp": "Horodatage",
+  "phase": "Phase",
+  "subtask": "Sous-tâche",
+  "noThoughtsYet": "Aucune pensée capturée pour le moment",
+  "noThoughtsDescription": "Les pensées de l'agent apparaîtront ici en temps réel pendant qu'il travaille.",
+  "filterByToolType": "Filtrer par type d'outil",
+  "searchPlaceholder": "Rechercher des pensées et des appels d'outils...",
+  "clearFilters": "Effacer les filtres",
+  "exportSession": "Exporter le Journal de Session",
+  "performanceMetrics": "Métriques de Performance",
+  "tokenUsage": "Utilisation des Jetons",
+  "timePerStep": "Temps par Étape",
+  "totalSteps": "Total des Étapes",
+  "suspiciousPatterns": "Modèles Suspects Détectés",
+  "infiniteLoop": "Boucle infinie potentielle détectée",
+  "repeatedFailures": "Échecs répétés détectés",
+  "errors": {
+    "loadFailed": "Échec du chargement des pensées de l'agent",
+    "exportFailed": "Échec de l'exportation du journal de session"
+  }
+}
