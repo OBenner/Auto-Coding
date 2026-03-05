@@ -45,8 +45,15 @@
   },
   "export": {
     "button": "Export as image",
-    "downloading": "Downloading...",
+    "buttonLabel": "Export as PNG",
+    "downloading": "Exporting...",
+    "copying": "Copying to clipboard...",
     "success": "Timeline exported successfully",
-    "error": "Failed to export timeline"
+    "copySuccess": "Timeline copied to clipboard",
+    "error": "Failed to export timeline",
+    "copyError": "Failed to copy to clipboard",
+    "defaultFilename": "timeline",
+    "clipboardFilename": "clipboard",
+    "copyToClipboard": "Copy to clipboard"
   }
 }
