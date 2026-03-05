@@ -1,0 +1,63 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auto-claude-ingress
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.labels" . | nindent 4 }}
+    app: auto-claude
+    component: ingress
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+  - hosts:
+    {{- if .Values.ingress.hosts.frontend.host }}
+    - {{ .Values.ingress.hosts.frontend.host }}
+    {{- end }}
+    {{- if .Values.ingress.hosts.backend.host }}
+    - {{ .Values.ingress.hosts.backend.host }}
+    {{- end }}
+    {{- if .Values.ingress.tls.secretName }}
+    secretName: {{ .Values.ingress.tls.secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+  {{- if .Values.ingress.hosts.frontend.host }}
+  # Frontend application
+  - host: {{ .Values.ingress.hosts.frontend.host }}
+    http:
+      paths:
+      {{- range .Values.ingress.hosts.frontend.paths }}
+      - path: {{ .path }}
+        pathType: {{ .pathType }}
+        backend:
+          service:
+            name: web-frontend
+            port:
+              number: {{ $.Values.webFrontend.service.port }}
+      {{- end }}
+  {{- end }}
+  {{- if .Values.ingress.hosts.backend.host }}
+  # Backend API
+  - host: {{ .Values.ingress.hosts.backend.host }}
+    http:
+      paths:
+      {{- range .Values.ingress.hosts.backend.paths }}
+      - path: {{ .path }}
+        pathType: {{ .pathType }}
+        backend:
+          service:
+            name: web-backend
+            port:
+              number: {{ $.Values.webBackend.service.port }}
+      {{- end }}
+  {{- end }}
+{{- end }}

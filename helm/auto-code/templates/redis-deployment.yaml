@@ -1,0 +1,71 @@
+{{- if .Values.redis.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.redis.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.redis.replicas }}
+  selector:
+    matchLabels:
+      {{- include "auto-code.redis.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "auto-code.redis.labels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: redis
+        image: "{{ .Values.images.redis.repository }}:{{ .Values.images.redis.tag }}"
+        imagePullPolicy: {{ .Values.images.redis.pullPolicy }}
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        ports:
+        - name: redis
+          containerPort: 6379
+          protocol: TCP
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: redis-password
+              optional: true
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        livenessProbe:
+          {{- toYaml .Values.redis.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.redis.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.redis.resources | nindent 10 }}
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-data-pvc
+      restartPolicy: Always
+{{- end }}
+---
+{{- if and .Values.redis.enabled .Values.redis.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-pvc
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.redis.labels" . | nindent 4 }}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.redis.persistence.size }}
+  {{- if .Values.redis.persistence.storageClass }}
+  storageClassName: {{ .Values.redis.persistence.storageClass }}
+  {{- end }}
+{{- end }}

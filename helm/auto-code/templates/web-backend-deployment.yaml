@@ -1,0 +1,129 @@
+{{- if .Values.webBackend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-backend
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.webBackend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.webBackend.replicas }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "auto-code.webBackend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "auto-code.webBackend.labels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: web-backend
+        image: "{{ .Values.images.webBackend.repository }}:{{ .Values.images.webBackend.tag }}"
+        imagePullPolicy: {{ .Values.images.webBackend.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        # Server configuration
+        - name: HOST
+          value: "0.0.0.0"
+        - name: PORT
+          value: "8000"
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: debug
+              optional: true
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: log-level
+              optional: true
+        # CORS configuration
+        - name: CORS_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: cors-origins
+              optional: true
+        # Authentication
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: secret-key
+        - name: ACCESS_TOKEN_EXPIRE_MINUTES
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: access-token-expire-minutes
+              optional: true
+        # Database configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: database-url
+        # Redis configuration
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_DB
+          value: "0"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: redis-password
+              optional: true
+        # OAuth configuration
+        - name: GITHUB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: github-client-id
+              optional: true
+        - name: GITHUB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: github-client-secret
+              optional: true
+        - name: GITLAB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: gitlab-client-id
+              optional: true
+        - name: GITLAB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auto-claude-secrets
+              key: gitlab-client-secret
+              optional: true
+        - name: OAUTH_REDIRECT_URI
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: oauth-redirect-uri
+              optional: true
+        # WebSocket configuration
+        - name: WS_HEARTBEAT_INTERVAL
+          value: "30"
+        # Backend directory
+        - name: AUTO_CLAUDE_BACKEND_DIR
+          value: "/app/backend"
+        livenessProbe:
+          {{- toYaml .Values.webBackend.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.webBackend.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.webBackend.resources | nindent 10 }}
+      restartPolicy: Always
+{{- end }}
