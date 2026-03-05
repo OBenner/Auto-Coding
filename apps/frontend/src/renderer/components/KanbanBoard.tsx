@@ -32,7 +32,7 @@ import { TaskCardSkeleton } from './skeletons/TaskCardSkeleton';
 import { QueueSettingsModal } from './QueueSettingsModal';
 import { TASK_STATUS_COLUMNS, TASK_STATUS_LABELS } from '../../shared/constants';
 import { cn, shallowEqual } from '../lib/utils';
-import { persistTaskStatus, forceCompleteTask, archiveTasks, useTaskStore } from '../stores/task-store';
+import { persistTaskStatus, forceCompleteTask, archiveTasks, useTaskStore, createOptimisticTaskAction } from '../stores/task-store';
 import { updateProjectSettings, useProjectStore } from '../stores/project-store';
 import { useKanbanSettingsStore, COLLAPSED_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH } from '../stores/kanban-settings-store';
 import { useToast } from '../hooks/use-toast';
@@ -990,27 +990,44 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
    */
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus, providedTask?: Task) => {
     const task = providedTask || tasks.find(t => t.id === taskId);
-    const result = await persistTaskStatus(taskId, newStatus);
+    if (!task) return;
 
-    if (!result.success) {
-      if (result.worktreeExists) {
-        // Show the worktree cleanup dialog
-        setWorktreeCleanupDialog({
-          open: true,
-          taskId: taskId,
-          taskTitle: task?.title || t('tasks:untitled'),
-          worktreePath: result.worktreePath,
-          isProcessing: false,
-          error: undefined
-        });
-      } else {
-        // Show error toast for other failures
-        toast({
-          title: t('common:errors.operationFailed'),
-          description: result.error || t('common:errors.unknownError'),
-          variant: 'destructive'
-        });
-      }
+    const previousStatus = task.status;
+
+    try {
+      // Optimistic update: immediately update UI
+      await createOptimisticTaskAction(
+        taskId,
+        (t) => ({ status: newStatus }),
+        async () => {
+          // Call backend API
+          const result = await persistTaskStatus(taskId, newStatus);
+          if (!result.success) {
+            if (result.worktreeExists) {
+              // Show worktree cleanup dialog
+              setWorktreeCleanupDialog({
+                open: true,
+                taskId: taskId,
+                taskTitle: task?.title || t('tasks:untitled'),
+                worktreePath: result.worktreePath,
+                isProcessing: false,
+                error: undefined
+              });
+            } else {
+              // Throw to trigger rollback
+              throw new Error(result.error || 'Failed to update task status');
+            }
+          }
+        }
+      );
+    } catch (error) {
+      // Rollback handled by createOptimisticTaskAction
+      // Show error toast
+      toast({
+        title: t('common:errors.operationFailed'),
+        description: error instanceof Error ? error.message : t('common:errors.unknownError'),
+        variant: 'destructive'
+      });
     }
   };
 

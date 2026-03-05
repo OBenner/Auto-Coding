@@ -33,6 +33,7 @@ import {
   JSON_ERROR_TITLE_SUFFIX
 } from '../../shared/constants';
 import { startTask, stopTask, checkTaskRunning, recoverStuckTask, isIncompleteHumanReview, archiveTasks, archiveTaskOptimistic } from '../stores/task-store';
+import { useToast } from '../hooks/use-toast';
 import type { Task, TaskCategory, ReviewReason, TaskStatus } from '../../shared/types';
 
 // Module-level visibility change singleton — one listener for all TaskCard instances
@@ -169,6 +170,7 @@ export const TaskCard = memo(function TaskCard({
   onToggleSelect
 }: TaskCardProps) {
   const { t } = useTranslation(['tasks', 'errors']);
+  const { toast } = useToast();
   const [isStuck, setIsStuck] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const stuckCheckRef = useRef<{ timeout: NodeJS.Timeout | null; interval: NodeJS.Timeout | null }>({
@@ -338,6 +340,12 @@ export const TaskCard = memo(function TaskCard({
       if (onStatusChange && previousStatus !== newStatus) {
         onStatusChange(previousStatus);
       }
+      // Show error toast
+      toast({
+        title: 'Action Failed',
+        description: `Could not ${isRunning ? 'stop' : 'start'} task. Please try again.`,
+        variant: 'destructive'
+      });
     }
   }, [task.id, task.status, isRunning, isStuck, onStatusChange]);
 
@@ -361,6 +369,12 @@ export const TaskCard = memo(function TaskCard({
     } catch (error) {
       // Error is already logged by archiveTaskOptimistic
       console.error('[TaskCard] Archive failed, UI reverted:', error);
+      // Show error toast
+      toast({
+        title: 'Archive Failed',
+        description: 'Could not archive task. Please try again.',
+        variant: 'destructive'
+      });
     }
   };
 
