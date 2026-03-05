@@ -51,6 +51,7 @@ import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
 import { WebhooksPage } from './components/WebhooksPage';
 import { PatternsPage } from './pages/PatternsPage';
+import { CodeSearchPage } from './pages/CodeSearchPage';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
 import { ModelUsageDashboard } from './components/model-usage/ModelUsageDashboard';
 import { MergeAnalyticsDashboard } from './components/merge-analytics/MergeAnalyticsDashboard';
@@ -1099,6 +1100,9 @@ export function App() {
                 )}
                 {activeView === 'patterns' && (activeProjectId || selectedProjectId) && (
                   <PatternsPage projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'code-search' && (activeProjectId || selectedProjectId) && (
+                  <CodeSearchPage projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
                 {activeView === 'sessions' && (
