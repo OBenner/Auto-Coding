@@ -14,3 +14,4 @@ export * from './EnvConfigModal';
 export * from './AddProjectModal';
 export * from './templates';
 export * from './SessionContextIndicator';
+export * from './timeline/BuildTimeline';
