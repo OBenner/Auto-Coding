@@ -1,0 +1,54 @@
+{
+  "title": "Setup Wizard",
+  "stepCounter": "Step {{current}} of {{total}}",
+  "actions": {
+    "cancel": "Cancel",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish"
+  },
+  "steps": {
+    "pythonCheck": {
+      "title": "Python Version Check",
+      "description": "Verify your Python installation meets the minimum version requirement",
+      "checking": "Checking Python version...",
+      "valid": "Valid",
+      "invalid": "Invalid",
+      "versionTitle": "Python Version",
+      "required": "Required",
+      "howToUpgradeTitle": "How to Upgrade Python",
+      "howToUpgrade": {
+        "download": "Download and install Python 3.12 or higher from:",
+        "pythonOrg": "python.org",
+        "windows": "Windows: Run the installer and check 'Add Python to PATH'",
+        "mac": "macOS: Use Homebrew: brew install python@3.12",
+        "linux": "Linux: Use your package manager (e.g., apt install python3.12)"
+      },
+      "nextStepsTitle": "Next Steps",
+      "nextSteps": "Your Python installation is compatible. Click Next to continue with authentication setup."
+    },
+    "authentication": {
+      "title": "Claude SDK Authentication",
+      "description": "Set up authentication for the Claude Agent SDK"
+    },
+    "graphiti": {
+      "title": "Graphiti Memory System",
+      "description": "Configure the optional memory system for enhanced context awareness"
+    },
+    "envConfig": {
+      "title": "Environment Configuration",
+      "description": "Review and save your environment configuration"
+    },
+    "testRun": {
+      "title": "Test Run",
+      "description": "Run a quick test to verify everything is working"
+    },
+    "success": {
+      "title": "Setup Complete!",
+      "description": "You're ready to start using Auto Code"
+    }
+  },
+  "placeholder": {
+    "stepComponent": "Step component: {{step}} (placeholder - to be implemented)"
+  }
+}

@@ -18,6 +18,7 @@ import { Progress } from '../ui/progress';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
+import { PythonCheckStep } from './PythonCheckStep';
 
 // Step configuration
 const SETUP_STEPS = [
@@ -268,7 +269,7 @@ export function SetupWizard({ onComplete, onCancel }: SetupWizardProps) {
           {/* Step content */}
           <div className="mt-6">
             {currentStep.id === 'python-check' && (
-              <StepPlaceholder stepId="python-check" onValidate={handleStepValidate} />
+              <PythonCheckStep onValidate={handleStepValidate} />
             )}
             {currentStep.id === 'authentication' && (
               <StepPlaceholder stepId="authentication" onValidate={handleStepValidate} />
