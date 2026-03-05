@@ -41,6 +41,37 @@
     "cancel": "Cancel",
     "exportSuccess": "Session exported successfully"
   },
+  "metrics": {
+    "totalTokens": "Total Tokens",
+    "input": "Input",
+    "output": "Output",
+    "thinking": "Thinking",
+    "totalDuration": "Total Duration",
+    "totalSteps": "Total Steps",
+    "efficiency": "Efficiency",
+    "tokensPerStep": "Tokens per step",
+    "breakdown": "Performance Breakdown",
+    "tokenDistribution": "Token Distribution",
+    "timingStats": "Timing Statistics",
+    "fastest": "Fastest",
+    "average": "Average",
+    "slowest": "Slowest",
+    "sessionTimeline": "Session Timeline",
+    "started": "Started",
+    "completed": "Completed",
+    "inProgress": "In Progress",
+    "avgPerStep": "Avg per step",
+    "toolCalls": "Tool calls",
+    "thoughts": "Thoughts"
+  },
+  "patterns": {
+    "noIssues": "No Issues Detected",
+    "noIssuesDescription": "Agent behavior appears normal with no suspicious patterns.",
+    "issuesDetected": "Suspicious Patterns Detected",
+    "issuesCount": "Found {{count}} potential issues that may require attention.",
+    "occurrences": "Occurrences",
+    "affectedItems": "Affected items"
+  },
   "errors": {
     "loadFailed": "Failed to load agent thoughts",
     "exportFailed": "Failed to export session log"
