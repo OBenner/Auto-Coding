@@ -30,8 +30,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # trigger graphiti_core -> real_ladybug -> pywintypes import chain (ACS-253)
 from core.dependency_validator import validate_platform_dependencies
 
-validate_platform_dependencies()
-
 # Load .env file with centralized error handling
 from cli.utils import import_dotenv
 
@@ -62,6 +60,9 @@ __all__ = [
 def main():
     """CLI entry point."""
     import argparse
+
+    # Validate platform-specific dependencies before running
+    validate_platform_dependencies()
 
     parser = argparse.ArgumentParser(
         description="AI-powered ideation generation",
