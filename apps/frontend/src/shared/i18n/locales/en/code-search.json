@@ -1,0 +1,183 @@
+{
+  "title": "Code Search",
+  "searchBar": {
+    "placeholder": "Search code...",
+    "placeholderPurpose": "Search by purpose (e.g., 'authentication function')",
+    "placeholderPatterns": "Search by pattern (e.g., 'try-catch blocks')",
+    "placeholderCallers": "Find callers of function",
+    "placeholderCallees": "Find callees of function"
+  },
+  "searchResults": {
+    "title": "Search Results",
+    "query": "Query",
+    "searching": "Searching codebase...",
+    "noResults": "No results found",
+    "noResultsHint": "Try different keywords or check your search filters",
+    "emptyState": "Enter a search query to find code",
+    "resultCount_one": "{{count}} result",
+    "resultCount_other": "{{count}} results",
+    "types": {
+      "files": "Files",
+      "purpose": "Purpose",
+      "patterns": "Patterns",
+      "callers": "Callers",
+      "callees": "Callees"
+    },
+    "metadata": {
+      "type": "Type",
+      "file": "File",
+      "line": "Line",
+      "category": "Category"
+    },
+    "more": "+{{count}} more",
+    "unknown": "Unknown"
+  },
+  "savedSearches": {
+    "title": "Saved Searches",
+    "description": "Manage and reuse your code search queries",
+    "actions": {
+      "export": "Export",
+      "refresh": "Refresh",
+      "newSearch": "New Search",
+      "runSearch": "Run search",
+      "editSearch": "Edit search",
+      "deleteSearch": "Delete search",
+      "retry": "Retry"
+    },
+    "empty": {
+      "title": "No saved searches yet",
+      "description": "Save your frequently used search queries to quickly access them later",
+      "action": "Create Your First Saved Search"
+    },
+    "error": {
+      "title": "Failed to load saved searches",
+      "loadFailed": "Unable to load saved searches. Please try again."
+    },
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "My search query",
+      "query": "Query",
+      "queryPlaceholder": "function authentication",
+      "searchType": "Search Type",
+      "description": "Description",
+      "descriptionPlaceholder": "Find authentication-related functions",
+      "tags": "Tags",
+      "tagsPlaceholder": "Add a tag",
+      "addTag": "Add",
+      "required": "Required"
+    },
+    "searchTypes": {
+      "unified": "Unified",
+      "purpose": "Purpose",
+      "patterns": "Patterns",
+      "callers": "Callers",
+      "callees": "Callees"
+    },
+    "dates": {
+      "created": "Created",
+      "lastUsed": "Last used",
+      "never": "Never",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "daysAgo": "{{count}} days ago",
+      "weeksAgo": "{{count}} weeks ago",
+      "monthsAgo": "{{count}} months ago"
+    },
+    "dialog": {
+      "createTitle": "Create Saved Search",
+      "createDescription": "Save a search query to quickly access it later",
+      "editTitle": "Edit Saved Search",
+      "editDescription": "Update your saved search query",
+      "deleteTitle": "Delete Saved Search",
+      "deleteDescription": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+      "cancel": "Cancel",
+      "save": "Save Search",
+      "update": "Update Search",
+      "delete": "Delete"
+    },
+    "toast": {
+      "refreshed": {
+        "title": "Saved Searches Refreshed",
+        "description": "Your saved searches have been updated."
+      },
+      "created": {
+        "title": "Search Saved",
+        "description": "\"{{name}}\" has been saved."
+      },
+      "updated": {
+        "title": "Search Updated",
+        "description": "\"{{name}}\" has been updated."
+      },
+      "deleted": {
+        "title": "Search Deleted",
+        "description": "\"{{name}}\" has been removed from your saved searches."
+      },
+      "deleteFailed": {
+        "title": "Delete Failed",
+        "description": "Failed to delete saved search"
+      },
+      "saveFailed": {
+        "title": "Save Failed",
+        "description": "Failed to save search"
+      },
+      "exportSuccess": {
+        "title": "Export Successful",
+        "description": "Exported {{count}} saved search(es) to {{path}}"
+      },
+      "exportFailed": {
+        "title": "Export Failed",
+        "description": "Failed to export saved searches"
+      },
+      "error": {
+        "title": "Error",
+        "description": "Saved search functionality is not available"
+      }
+    }
+  },
+  "filters": {
+    "title": "Search Filters",
+    "description": "Refine your search results",
+    "fileTypes": "File Types",
+    "directories": "Directories",
+    "exclude": "Exclude Patterns",
+    "caseSensitive": "Case Sensitive",
+    "regex": "Use Regular Expressions",
+    "apply": "Apply Filters",
+    "clear": "Clear Filters",
+    "noFilters": "No active filters"
+  },
+  "settings": {
+    "title": "Code Search Settings",
+    "description": "Configure code search behavior and preferences",
+    "sections": {
+      "general": {
+        "title": "General",
+        "description": "Basic search settings"
+      },
+      "indexing": {
+        "title": "Indexing",
+        "description": "Code indexing and memory settings"
+      },
+      "advanced": {
+        "title": "Advanced",
+        "description": "Advanced search options"
+      }
+    },
+    "options": {
+      "maxResults": "Maximum Results",
+      "searchTimeout": "Search Timeout (seconds)",
+      "enableSemantic": "Enable Semantic Search",
+      "enableHistory": "Search Across History",
+      "autoIndex": "Auto-index on Changes"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Keyboard Shortcuts",
+    "description": "Quick actions for code search",
+    "focusSearch": "Focus Search Bar",
+    "runSearch": "Run Search",
+    "clearSearch": "Clear Search",
+    "saveSearch": "Save Search",
+    "toggleFilters": "Toggle Filters"
+  }
+}

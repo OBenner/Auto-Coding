@@ -1,0 +1,183 @@
+{
+  "title": "Recherche de Code",
+  "searchBar": {
+    "placeholder": "Rechercher du code...",
+    "placeholderPurpose": "Rechercher par objectif (ex: 'fonction d'authentification')",
+    "placeholderPatterns": "Rechercher par motif (ex: 'blocs try-catch')",
+    "placeholderCallers": "Trouver les appelants de la fonction",
+    "placeholderCallees": "Trouver les appelés de la fonction"
+  },
+  "searchResults": {
+    "title": "Résultats de Recherche",
+    "query": "Requête",
+    "searching": "Recherche dans la base de code...",
+    "noResults": "Aucun résultat trouvé",
+    "noResultsHint": "Essayez d'autres mots-clés ou vérifiez vos filtres de recherche",
+    "emptyState": "Entrez une requête de recherche pour trouver du code",
+    "resultCount_one": "{{count}} résultat",
+    "resultCount_other": "{{count}} résultats",
+    "types": {
+      "files": "Fichiers",
+      "purpose": "Objectif",
+      "patterns": "Motifs",
+      "callers": "Appelants",
+      "callees": "Appelés"
+    },
+    "metadata": {
+      "type": "Type",
+      "file": "Fichier",
+      "line": "Ligne",
+      "category": "Catégorie"
+    },
+    "more": "+{{count}} de plus",
+    "unknown": "Inconnu"
+  },
+  "savedSearches": {
+    "title": "Recherches Sauvegardées",
+    "description": "Gérer et réutiliser vos requêtes de recherche de code",
+    "actions": {
+      "export": "Exporter",
+      "refresh": "Actualiser",
+      "newSearch": "Nouvelle Recherche",
+      "runSearch": "Exécuter la recherche",
+      "editSearch": "Modifier la recherche",
+      "deleteSearch": "Supprimer la recherche",
+      "retry": "Réessayer"
+    },
+    "empty": {
+      "title": "Aucune recherche sauvegardée",
+      "description": "Sauvegardez vos requêtes de recherche fréquentes pour y accéder rapidement plus tard",
+      "action": "Créer Votre Première Recherche Sauvegardée"
+    },
+    "error": {
+      "title": "Échec du chargement des recherches sauvegardées",
+      "loadFailed": "Impossible de charger les recherches sauvegardées. Veuillez réessayer."
+    },
+    "form": {
+      "name": "Nom",
+      "namePlaceholder": "Ma requête de recherche",
+      "query": "Requête",
+      "queryPlaceholder": "fonction d'authentification",
+      "searchType": "Type de Recherche",
+      "description": "Description",
+      "descriptionPlaceholder": "Trouver les fonctions liées à l'authentification",
+      "tags": "Étiquettes",
+      "tagsPlaceholder": "Ajouter une étiquette",
+      "addTag": "Ajouter",
+      "required": "Obligatoire"
+    },
+    "searchTypes": {
+      "unified": "Unifié",
+      "purpose": "Objectif",
+      "patterns": "Motifs",
+      "callers": "Appelants",
+      "callees": "Appelés"
+    },
+    "dates": {
+      "created": "Créé",
+      "lastUsed": "Dernière utilisation",
+      "never": "Jamais",
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "daysAgo": "Il y a {{count}} jours",
+      "weeksAgo": "Il y a {{count}} semaines",
+      "monthsAgo": "Il y a {{count}} mois"
+    },
+    "dialog": {
+      "createTitle": "Créer une Recherche Sauvegardée",
+      "createDescription": "Sauvegarder une requête de recherche pour y accéder rapidement plus tard",
+      "editTitle": "Modifier la Recherche Sauvegardée",
+      "editDescription": "Mettre à jour votre requête de recherche sauvegardée",
+      "deleteTitle": "Supprimer la Recherche Sauvegardée",
+      "deleteDescription": "Êtes-vous sûr de vouloir supprimer \"{{name}}\" ? Cette action ne peut pas être annulée.",
+      "cancel": "Annuler",
+      "save": "Sauvegarder la Recherche",
+      "update": "Mettre à Jour la Recherche",
+      "delete": "Supprimer"
+    },
+    "toast": {
+      "refreshed": {
+        "title": "Recherches Sauvegardées Actualisées",
+        "description": "Vos recherches sauvegardées ont été mises à jour."
+      },
+      "created": {
+        "title": "Recherche Sauvegardée",
+        "description": "\"{{name}}\" a été sauvegardée."
+      },
+      "updated": {
+        "title": "Recherche Mise à Jour",
+        "description": "\"{{name}}\" a été mise à jour."
+      },
+      "deleted": {
+        "title": "Recherche Supprimée",
+        "description": "\"{{name}}\" a été supprimée de vos recherches sauvegardées."
+      },
+      "deleteFailed": {
+        "title": "Échec de la Suppression",
+        "description": "Échec de la suppression de la recherche sauvegardée"
+      },
+      "saveFailed": {
+        "title": "Échec de la Sauvegarde",
+        "description": "Échec de la sauvegarde de la recherche"
+      },
+      "exportSuccess": {
+        "title": "Export Réussi",
+        "description": "{{count}} recherche(s) sauvegardée(s) exportée(s) vers {{path}}"
+      },
+      "exportFailed": {
+        "title": "Échec de l'Export",
+        "description": "Échec de l'export des recherches sauvegardées"
+      },
+      "error": {
+        "title": "Erreur",
+        "description": "La fonctionnalité de recherche sauvegardée n'est pas disponible"
+      }
+    }
+  },
+  "filters": {
+    "title": "Filtres de Recherche",
+    "description": "Affiner vos résultats de recherche",
+    "fileTypes": "Types de Fichiers",
+    "directories": "Répertoires",
+    "exclude": "Motifs d'Exclusion",
+    "caseSensitive": "Sensible à la Casse",
+    "regex": "Utiliser des Expressions Régulières",
+    "apply": "Appliquer les Filtres",
+    "clear": "Effacer les Filtres",
+    "noFilters": "Aucun filtre actif"
+  },
+  "settings": {
+    "title": "Paramètres de Recherche de Code",
+    "description": "Configurer le comportement et les préférences de recherche de code",
+    "sections": {
+      "general": {
+        "title": "Général",
+        "description": "Paramètres de recherche de base"
+      },
+      "indexing": {
+        "title": "Indexation",
+        "description": "Paramètres d'indexation de code et de mémoire"
+      },
+      "advanced": {
+        "title": "Avancé",
+        "description": "Options de recherche avancées"
+      }
+    },
+    "options": {
+      "maxResults": "Résultats Maximum",
+      "searchTimeout": "Délai de Recherche (secondes)",
+      "enableSemantic": "Activer la Recherche Sémantique",
+      "enableHistory": "Rechercher dans l'Historique",
+      "autoIndex": "Indexer Automatiquement les Modifications"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Raccourcis Clavier",
+    "description": "Actions rapides pour la recherche de code",
+    "focusSearch": "Focaliser la Barre de Recherche",
+    "runSearch": "Exécuter la Recherche",
+    "clearSearch": "Effacer la Recherche",
+    "saveSearch": "Sauvegarder la Recherche",
+    "toggleFilters": "Afficher/Masquer les Filtres"
+  }
+}
