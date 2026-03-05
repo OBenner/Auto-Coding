@@ -242,7 +242,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
         filters: formData.filters || {},
       };
 
-      let result: any ;
+      let result: { success: boolean; search?: SavedSearch; error?: string };
       if (isEdit && selectedSearch) {
         result = await withTimeout(
           window.electronAPI.search.searchSavedUpdate?.(

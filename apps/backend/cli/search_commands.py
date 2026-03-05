@@ -464,7 +464,7 @@ def manage_saved_searches(
         merge_strategy: Merge strategy for imports (error, skip, overwrite)
     """
     print_banner()
-    print(f"\n{icon(Icons.BOOKMARK)} Saved Searches\n")
+    print(f"\n{icon(Icons.SEARCH)} Saved Searches\n")
 
     saved_searches = SavedSearches()
 

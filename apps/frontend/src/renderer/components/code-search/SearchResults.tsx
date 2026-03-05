@@ -8,7 +8,6 @@ import {
   Search,
   AlertCircle,
   ChevronRight,
-  Clock,
   Target,
   GitBranch,
   Type,
@@ -197,9 +196,6 @@ function CallerCalleeResultItem({ result }: { result: CallerCalleeResult }) {
   );
 }
 
-function formatScore(score: number): string {
-  return `${Math.round(score * 100)}%`;
-}
 
 export function SearchResults({
   results,
