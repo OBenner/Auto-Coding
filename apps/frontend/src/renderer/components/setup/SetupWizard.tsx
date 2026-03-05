@@ -20,6 +20,7 @@ import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import { PythonCheckStep } from './PythonCheckStep';
 import { AuthStep } from './AuthStep';
+import { GraphitiStep } from './GraphitiStep';
 
 // Step configuration
 const SETUP_STEPS = [
@@ -276,7 +277,7 @@ export function SetupWizard({ onComplete, onCancel }: SetupWizardProps) {
               <AuthStep onValidate={handleStepValidate} />
             )}
             {currentStep.id === 'graphiti' && (
-              <StepPlaceholder stepId="graphiti" onValidate={handleStepValidate} />
+              <GraphitiStep onValidate={handleStepValidate} />
             )}
             {currentStep.id === 'env-config' && (
               <StepPlaceholder stepId="env-config" onValidate={handleStepValidate} />
