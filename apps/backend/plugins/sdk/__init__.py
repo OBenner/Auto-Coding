@@ -11,14 +11,24 @@ This package provides base classes, utilities, and APIs for creating:
 """
 
 from .agent import AgentContext, AgentPlugin
+from .docs_generator import PluginDocsGenerator
 from .integration import IntegrationContext, IntegrationPlugin
+from .scaffold import PluginScaffold
+from .testing import MockAgentContext
 from .ui import UIComponentDefinition, UIContext, UIExtensionPoint, UIPlugin
+from .utils import PluginFileManager
+from .validator import PluginValidator
 
 __all__ = [
     "AgentContext",
     "AgentPlugin",
     "IntegrationContext",
     "IntegrationPlugin",
+    "MockAgentContext",
+    "PluginDocsGenerator",
+    "PluginFileManager",
+    "PluginScaffold",
+    "PluginValidator",
     "UIContext",
     "UIPlugin",
     "UIExtensionPoint",
