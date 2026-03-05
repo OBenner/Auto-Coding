@@ -12,8 +12,8 @@
       "title": "Python Version Check",
       "description": "Verify your Python installation meets the minimum version requirement",
       "checking": "Checking Python version...",
-      "valid": "Valid",
-      "invalid": "Invalid",
+      "valid": "Valid Python Version",
+      "invalid": "Invalid Python Version",
       "versionTitle": "Python Version",
       "required": "Required",
       "howToUpgradeTitle": "How to Upgrade Python",
@@ -24,8 +24,8 @@
         "mac": "macOS: Use Homebrew: brew install python@3.12",
         "linux": "Linux: Use your package manager (e.g., apt install python3.12)"
       },
-      "nextStepsTitle": "Next Steps",
-      "nextSteps": "Your Python installation is compatible. Click Next to continue with authentication setup."
+      "nextStepsTitle": "Ready to Continue",
+      "nextSteps": "Python version is compatible. You can proceed to the next step."
     },
     "authentication": {
       "title": "Claude SDK Authentication",
@@ -34,40 +34,91 @@
       "authenticated": "Authenticated",
       "notAuthenticated": "Not Authenticated",
       "statusTitle": "Authentication Status",
-      "tokenStatus": "Token",
+      "tokenStatus": "Token Status",
       "tokenPresent": "Present",
       "tokenMissing": "Missing",
-      "instructionsTitle": "How to Authenticate",
+      "instructionsTitle": "Setup Instructions",
       "instructions": {
-        "intro": "To use Auto Code, you need to authenticate with the Claude SDK using the Claude CLI. Follow these steps:",
+        "intro": "Follow these steps to authenticate with Claude SDK:",
         "step1": {
-          "title": "Open your terminal",
-          "description": "Open a terminal or command prompt in your project directory"
+          "title": "Install Claude CLI",
+          "description": "If not already installed, install the Claude CLI tool:"
         },
         "step2": {
-          "title": "Run the Claude CLI",
-          "description": "Type the following command and press Enter"
+          "title": "Run Login Command",
+          "description": "Open your terminal and run the login command:"
         },
         "step3": {
-          "title": "Complete OAuth flow",
-          "description": "The CLI will open your browser. Sign in with your Anthropic account and authorize access"
+          "title": "Complete Authentication",
+          "description": "Follow the browser prompts to complete OAuth authentication"
         },
         "step4": {
-          "title": "Return here",
-          "description": "Once authorized, click the button below to verify your authentication"
+          "title": "Verify Token",
+          "description": "The token will be automatically stored in your system keychain"
         },
         "noteTitle": "Note",
-        "note": "Your authentication token is securely stored in your system keychain. You won't need to authenticate again unless you revoke access."
+        "note": "Make sure you have the 'claude' command available in your PATH"
       },
-      "retryButton": "Check Again",
-      "nextStepsTitle": "Next Steps",
-      "nextSteps": "Your Claude SDK authentication is configured. Click Next to continue with Graphiti setup.",
-      "tokenInfoTitle": "About Authentication",
-      "tokenInfo": "Auto Code uses the Claude Agent SDK with OAuth authentication. Your token is stored securely and never shared."
+      "retryButton": "Retry Check",
+      "nextStepsTitle": "Authentication Complete",
+      "nextSteps": "Claude SDK authentication is configured and ready to use.",
+      "tokenInfoTitle": "Token Information",
+      "tokenInfo": "Your authentication token is securely stored in the system keychain and will be used for all API calls."
     },
     "graphiti": {
       "title": "Graphiti Memory System",
-      "description": "Configure the optional memory system for enhanced context awareness"
+      "description": "Configure the optional memory system for enhanced context awareness",
+      "validating": "Validating configuration...",
+      "configured": "Configured",
+      "notConfigured": "Not Configured",
+      "statusTitle": "Configuration Status",
+      "success": {
+        "configured": "Successfully configured with {{provider}}"
+      },
+      "errors": {
+        "apiKeyRequired": "API key is required for this provider",
+        "endpointRequired": "Endpoint URL is required for this provider",
+        "embeddingKeyRequired": "Embedding key is required for this provider"
+      },
+      "fields": {
+        "provider": {
+          "label": "AI Provider",
+          "placeholder": "Select a provider",
+          "description": "Choose your AI provider for Graphiti memory system"
+        },
+        "apiKey": {
+          "label": "API Key",
+          "placeholder": "Enter your API key",
+          "description": "Your API key for the selected AI provider"
+        },
+        "embeddingKey": {
+          "label": "Embedding Key",
+          "placeholder": "Enter your embedding key",
+          "description": "Your embedding key for vector embeddings (required for Anthropic)"
+        },
+        "endpoint": {
+          "label": "Endpoint URL",
+          "placeholder": "Enter endpoint URL",
+          "description": "Custom endpoint URL for your AI provider"
+        }
+      },
+      "actions": {
+        "validate": "Validate Configuration",
+        "retry": "Retry"
+      },
+      "instructionsTitle": "How to Get API Keys",
+      "instructions": {
+        "intro": "To use Graphiti memory system, you need API keys from your chosen AI provider:",
+        "step1": "Visit your provider's dashboard/developer portal",
+        "step2": "Create a new API key with appropriate permissions",
+        "step3": "Copy the key and paste it in the configuration above",
+        "noteTitle": "Important",
+        "note": "Ensure your API key has access to the models you plan to use"
+      },
+      "nextStepsTitle": "Graphiti Configuration Complete",
+      "nextSteps": "Your Graphiti memory system is ready to use with {{provider}}.",
+      "configInfoTitle": "Configuration Details",
+      "configInfo": "Graphiti will use {{provider}} for AI-powered memory and context management."
     },
     "envConfig": {
       "title": "Environment Configuration",
@@ -76,28 +127,28 @@
       "summaryTitle": "Configuration Summary",
       "summaryDescription": "Review your settings before creating the .env file",
       "python": {
-        "title": "Python Version",
-        "valid": "Your Python installation is compatible and ready to use.",
-        "invalid": "Python version check failed. Please return to the Python step to resolve this issue."
+        "title": "Python",
+        "valid": "Python version is compatible",
+        "invalid": "Python version is not compatible"
       },
       "authentication": {
         "title": "Claude SDK Authentication",
-        "configured": "Configured",
-        "notConfigured": "Not Configured",
-        "valid": "Your Claude SDK authentication is properly configured.",
-        "invalid": "Authentication is not configured. Please return to the Authentication step to complete setup."
+        "configured": "Authentication configured",
+        "notConfigured": "Authentication not configured",
+        "valid": "Authentication is properly configured",
+        "invalid": "Authentication is not configured"
       },
       "graphiti": {
         "title": "Graphiti Memory System",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "valid": "Graphiti memory system is configured with {{provider}} provider.",
-        "invalid": "Graphiti configuration is incomplete. Please return to the Graphiti step to complete setup."
+        "valid": "Graphiti is configured with {{provider}}",
+        "invalid": "Graphiti is not properly configured"
       },
       "successTitle": ".env File Created Successfully",
       "errorTitle": "Failed to Create .env File",
       "fileLocation": "File Location",
-      "infoTitle": "About .env Configuration",
+      "infoTitle": "About .env File",
       "info": {
         "intro": "The .env file will store your configuration settings securely:",
         "step1": "Claude SDK authentication token",
@@ -114,20 +165,20 @@
     "testRun": {
       "title": "Test Run",
       "description": "Run a quick test to verify everything is working",
-      "running": "Running test...",
-      "success": "Test Passed",
+      "running": "Running hello-world test...",
+      "success": "Test Successful",
       "failed": "Test Failed",
       "resultTitle": "Test Result",
       "duration": "Duration",
       "outputTitle": "Test Output",
       "errorTitle": "Error Details",
-      "retryButton": "Run Test Again",
-      "nextStepsTitle": "Setup Complete!",
-      "nextSteps": "Your Auto Code setup is working correctly. You can now start building with AI agents.",
+      "retryButton": "Retry Test",
+      "nextStepsTitle": "Setup Verified",
+      "nextSteps": "Your Auto Code setup is working correctly! You can now start building.",
       "nextStepsList": {
-        "createSpec": "Create your first spec using the interactive spec builder",
-        "runBuild": "Run autonomous builds with AI-powered planning and coding",
-        "exploreFeatures": "Explore advanced features like Graphiti memory and Linear integration"
+        "createSpec": "Create your first specification",
+        "runBuild": "Run your first build",
+        "exploreFeatures": "Explore Auto Code features"
       }
     },
     "success": {
