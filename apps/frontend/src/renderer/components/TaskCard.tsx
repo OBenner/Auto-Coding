@@ -308,14 +308,38 @@ export const TaskCard = memo(function TaskCard({
     };
   }, [isRunning, performStuckCheck]);
 
-  const handleStartStop = (e: React.MouseEvent) => {
+  const handleStartStop = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isRunning && !isStuck) {
-      stopTask(task.id);
-    } else {
-      startTask(task.id);
+
+    // Capture previous status for revert
+    const previousStatus = task.status;
+
+    // Determine new status optimistically
+    const newStatus: TaskStatus = (isRunning && !isStuck) ? 'backlog' : 'in_progress';
+
+    // Apply optimistic update by calling onStatusChange if available
+    // This provides immediate UI feedback
+    if (onStatusChange) {
+      onStatusChange(newStatus);
     }
-  };
+
+    try {
+      // Actually start/stop the task on the backend
+      if (isRunning && !isStuck) {
+        await stopTask(task.id);
+      } else {
+        await startTask(task.id);
+      }
+      // If successful, the optimistic update is now the actual state
+      // The task store will emit updates that sync everything
+    } catch (error) {
+      // Revert optimistic update on failure
+      console.error('[TaskCard] Failed to start/stop task, reverting:', error);
+      if (onStatusChange && previousStatus !== newStatus) {
+        onStatusChange(previousStatus);
+      }
+    }
+  }, [task.id, task.status, isRunning, isStuck, onStatusChange]);
 
   const handleRecover = async (e: React.MouseEvent) => {
     e.stopPropagation();
