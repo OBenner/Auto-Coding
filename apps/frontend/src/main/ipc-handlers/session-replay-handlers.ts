@@ -56,6 +56,8 @@ interface LogEntry {
   subtask_id?: string;
   session?: number;
   tool_name?: string;
+  tool_input?: string | Record<string, unknown>;
+  thinking_block?: string;
   is_decision_point?: boolean;
   decision_point?: ReplayDecisionPoint;
 }
@@ -842,6 +844,379 @@ export function registerSessionReplayHandlers(): void {
         return { success: true, data: exportAllAsMarkdown(logs) };
       } catch (error) {
         debugError('[Session Replay] Failed to export all sessions:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // Agent Inspector Operations
+  // ============================================
+
+  /**
+   * Get agent thinking blocks from task logs
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_INSPECTOR_GET_THOUGHTS,
+    async (
+      _,
+      projectPath: string,
+      specId: string,
+      sessionId?: string
+    ): Promise<IPCResult<any[]>> => {
+      try {
+        const specDir = path.join(
+          projectPath,
+          AUTO_BUILD_PATHS.SPECS_DIR,
+          specId
+        );
+
+        const logs = await loadTaskLogs(specDir);
+
+        if (!logs?.phases) {
+          return { success: true, data: [] };
+        }
+
+        const thoughts: any[] = [];
+        let thoughtIdCounter = 0;
+
+        // Extract thinking blocks from all phases
+        for (const phaseData of Object.values(logs.phases)) {
+          for (const entry of phaseData.entries) {
+            // Include entries with type="thinking" or entries with thinking_block field
+            if (
+              entry.type === 'thinking' ||
+              (entry.thinking_block && entry.thinking_block.trim() !== '')
+            ) {
+              // Filter by session if provided
+              if (sessionId !== undefined) {
+                const numericSessionId = Number.parseInt(sessionId, 10);
+                if (entry.session !== numericSessionId) {
+                  continue;
+                }
+              }
+
+              thoughts.push({
+                id: `thought-${thoughtIdCounter++}`,
+                timestamp: entry.timestamp,
+                phase: entry.phase,
+                subtask: entry.subtask_id,
+                content: entry.thinking_block || entry.content,
+                session: entry.session,
+              });
+            }
+          }
+        }
+
+        // Sort by timestamp (newest first)
+        thoughts.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+
+        return { success: true, data: thoughts };
+      } catch (error) {
+        debugError('[Agent Inspector] Failed to get thoughts:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+  );
+
+  /**
+   * Get agent tool calls from task logs
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_INSPECTOR_GET_TOOL_CALLS,
+    async (
+      _,
+      projectPath: string,
+      specId: string,
+      sessionId?: string
+    ): Promise<IPCResult<any[]>> => {
+      try {
+        const specDir = path.join(
+          projectPath,
+          AUTO_BUILD_PATHS.SPECS_DIR,
+          specId
+        );
+
+        const logs = await loadTaskLogs(specDir);
+
+        if (!logs?.phases) {
+          return { success: true, data: [] };
+        }
+
+        const toolCalls: any[] = [];
+        const toolCallsMap = new Map<string, any>();
+
+        // Extract tool calls from all phases
+        for (const phaseData of Object.values(logs.phases)) {
+          for (const entry of phaseData.entries) {
+            // Filter by session if provided
+            if (sessionId !== undefined) {
+              const numericSessionId = Number.parseInt(sessionId, 10);
+              if (entry.session !== numericSessionId) {
+                continue;
+              }
+            }
+
+            // Process tool_start entries
+            if (entry.type === 'tool_start' && entry.tool_name) {
+              const toolId = `${entry.tool_name}-${entry.timestamp}`;
+
+              // Parse tool input if it's a string
+              let parsedInput: Record<string, unknown> = {};
+              if (entry.tool_input) {
+                try {
+                  parsedInput = typeof entry.tool_input === 'string'
+                    ? JSON.parse(entry.tool_input)
+                    : entry.tool_input;
+                } catch {
+                  parsedInput = { raw: entry.tool_input };
+                }
+              }
+
+              toolCallsMap.set(toolId, {
+                id: toolId,
+                name: entry.tool_name,
+                input: parsedInput,
+                timestamp: entry.timestamp,
+                phase: entry.phase,
+                subtask: entry.subtask_id,
+                session: entry.session,
+                success: undefined,
+                output: undefined,
+                error: undefined,
+                duration_ms: undefined,
+              });
+            }
+
+            // Process tool_end entries to match with tool_start
+            if (entry.type === 'tool_end' && entry.tool_name) {
+              // Try to find matching tool_start by looking back for the most recent one
+              const matchingToolId = Array.from(toolCallsMap.keys())
+                .reverse()
+                .find((id) => id.startsWith(`${entry.tool_name}-`));
+
+              if (matchingToolId) {
+                const toolCall = toolCallsMap.get(matchingToolId);
+
+                // Parse output if it's a string
+                let parsedOutput: Record<string, unknown> | string | undefined;
+                if (entry.content) {
+                  try {
+                    parsedOutput = JSON.parse(entry.content);
+                  } catch {
+                    parsedOutput = entry.content;
+                  }
+                }
+
+                // Update tool call with end information
+                toolCall.output = parsedOutput;
+                toolCall.success = true;
+
+                // Calculate duration if possible
+                const startTime = new Date(toolCall.timestamp).getTime();
+                const endTime = new Date(entry.timestamp).getTime();
+                toolCall.duration_ms = endTime - startTime;
+              }
+            }
+
+            // Process error entries for tool calls
+            if (entry.type === 'error' && entry.tool_name) {
+              const matchingToolId = Array.from(toolCallsMap.keys())
+                .reverse()
+                .find((id) => id.startsWith(`${entry.tool_name}-`));
+
+              if (matchingToolId) {
+                const toolCall = toolCallsMap.get(matchingToolId);
+                toolCall.success = false;
+                toolCall.error = entry.content;
+              }
+            }
+          }
+        }
+
+        // Convert map to array
+        toolCalls.push(...Array.from(toolCallsMap.values()));
+
+        // Sort by timestamp (newest first)
+        toolCalls.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+
+        return { success: true, data: toolCalls };
+      } catch (error) {
+        debugError('[Agent Inspector] Failed to get tool calls:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+  );
+
+  /**
+   * Get combined inspector data (thoughts + tool calls)
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_INSPECTOR_GET_INSPECTOR_DATA,
+    async (
+      _,
+      projectPath: string,
+      specId: string,
+      sessionId?: string
+    ): Promise<IPCResult<{ thoughts: any[]; toolCalls: any[] }>> => {
+      try {
+        const specDir = path.join(
+          projectPath,
+          AUTO_BUILD_PATHS.SPECS_DIR,
+          specId
+        );
+
+        const logs = await loadTaskLogs(specDir);
+
+        if (!logs?.phases) {
+          return {
+            success: true,
+            data: {
+              thoughts: [],
+              toolCalls: [],
+            },
+          };
+        }
+
+        const thoughts: any[] = [];
+        const toolCalls: any[] = [];
+        const toolCallsMap = new Map<string, any>();
+        let thoughtIdCounter = 0;
+
+        // Extract thoughts and tool calls from all phases
+        for (const phaseData of Object.values(logs.phases)) {
+          for (const entry of phaseData.entries) {
+            // Filter by session if provided
+            const shouldIncludeEntry = sessionId === undefined ||
+              entry.session === Number.parseInt(sessionId, 10);
+
+            if (!shouldIncludeEntry) {
+              continue;
+            }
+
+            // Extract thinking blocks
+            if (
+              entry.type === 'thinking' ||
+              (entry.thinking_block && entry.thinking_block.trim() !== '')
+            ) {
+              thoughts.push({
+                id: `thought-${thoughtIdCounter++}`,
+                timestamp: entry.timestamp,
+                phase: entry.phase,
+                subtask: entry.subtask_id,
+                content: entry.thinking_block || entry.content,
+                session: entry.session,
+              });
+            }
+
+            // Extract tool calls - tool_start
+            if (entry.type === 'tool_start' && entry.tool_name) {
+              const toolId = `${entry.tool_name}-${entry.timestamp}`;
+
+              // Parse tool input
+              let parsedInput: Record<string, unknown> = {};
+              if (entry.tool_input) {
+                try {
+                  parsedInput = typeof entry.tool_input === 'string'
+                    ? JSON.parse(entry.tool_input)
+                    : entry.tool_input;
+                } catch {
+                  parsedInput = { raw: entry.tool_input };
+                }
+              }
+
+              toolCallsMap.set(toolId, {
+                id: toolId,
+                name: entry.tool_name,
+                input: parsedInput,
+                timestamp: entry.timestamp,
+                phase: entry.phase,
+                subtask: entry.subtask_id,
+                session: entry.session,
+                success: undefined,
+                output: undefined,
+                error: undefined,
+                duration_ms: undefined,
+              });
+            }
+
+            // Extract tool calls - tool_end
+            if (entry.type === 'tool_end' && entry.tool_name) {
+              const matchingToolId = Array.from(toolCallsMap.keys())
+                .reverse()
+                .find((id) => id.startsWith(`${entry.tool_name}-`));
+
+              if (matchingToolId) {
+                const toolCall = toolCallsMap.get(matchingToolId);
+
+                // Parse output
+                let parsedOutput: Record<string, unknown> | string | undefined;
+                if (entry.content) {
+                  try {
+                    parsedOutput = JSON.parse(entry.content);
+                  } catch {
+                    parsedOutput = entry.content;
+                  }
+                }
+
+                toolCall.output = parsedOutput;
+                toolCall.success = true;
+
+                // Calculate duration
+                const startTime = new Date(toolCall.timestamp).getTime();
+                const endTime = new Date(entry.timestamp).getTime();
+                toolCall.duration_ms = endTime - startTime;
+              }
+            }
+
+            // Extract tool calls - errors
+            if (entry.type === 'error' && entry.tool_name) {
+              const matchingToolId = Array.from(toolCallsMap.keys())
+                .reverse()
+                .find((id) => id.startsWith(`${entry.tool_name}-`));
+
+              if (matchingToolId) {
+                const toolCall = toolCallsMap.get(matchingToolId);
+                toolCall.success = false;
+                toolCall.error = entry.content;
+              }
+            }
+          }
+        }
+
+        // Convert tool calls map to array
+        toolCalls.push(...Array.from(toolCallsMap.values()));
+
+        // Sort by timestamp (newest first)
+        thoughts.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        toolCalls.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+
+        return {
+          success: true,
+          data: {
+            thoughts,
+            toolCalls,
+          },
+        };
+      } catch (error) {
+        debugError('[Agent Inspector] Failed to get inspector data:', error);
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',

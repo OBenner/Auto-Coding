@@ -69,13 +69,29 @@ export function ThoughtInspector({
       setLoading(true);
       setError(null);
 
-      // TODO: Replace with actual IPC calls when backend handlers are implemented
-      // For now, using mock data structure
-      const mockThoughts: AgentThinkingBlock[] = [];
-      const mockToolCalls: AgentToolCall[] = [];
+      // Use electronAPI if available (Electron), otherwise use mock data (browser)
+      if (!window.electronAPI?.agentInspector) {
+        // In browser mode, use empty arrays
+        setThoughts([]);
+        setToolCalls([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
 
-      setThoughts(mockThoughts);
-      setToolCalls(mockToolCalls);
+      // Get combined inspector data from backend
+      const result = await window.electronAPI.agentInspector.getInspectorData(
+        projectId,
+        projectId, // Using projectId as specId for now
+        sessionId
+      );
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Failed to load inspector data');
+      }
+
+      setThoughts(result.data.thoughts);
+      setToolCalls(result.data.toolCalls);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

@@ -562,6 +562,9 @@ const browserMockAPI: ElectronAPI = {
 
   // Agent Inspector API (thought process transparency)
   agentInspector: {
+    getThoughts: async () => ({ success: true, data: [] }),
+    getToolCalls: async () => ({ success: true, data: [] }),
+    getInspectorData: async () => ({ success: true, data: { thoughts: [], toolCalls: [] } }),
     exportSession: async () => ({ success: true, data: '' }),
   },
 
