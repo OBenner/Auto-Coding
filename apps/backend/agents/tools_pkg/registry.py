@@ -22,6 +22,7 @@ from .tools import (
     create_memory_tools,
     create_progress_tools,
     create_qa_tools,
+    create_roadmap_tools,
     create_statistics_tools,
     create_subtask_tools,
 )
@@ -52,6 +53,7 @@ def create_all_tools(spec_dir: Path, project_dir: Path) -> list:
     all_tools.extend(create_background_task_tools(spec_dir, project_dir))
     all_tools.extend(create_debugging_tools(spec_dir, project_dir))
     all_tools.extend(create_knowledge_base_tools(spec_dir, project_dir))
+    all_tools.extend(create_roadmap_tools(spec_dir, project_dir))
 
     return all_tools
 
