@@ -10,6 +10,7 @@ Orchestrates comprehensive project context analysis including:
 - Background jobs/task queues
 - API documentation
 - Monitoring and observability
+- Testing frameworks and patterns
 
 This module delegates to specialized detectors for clean separation of concerns.
 """
@@ -28,6 +29,7 @@ from .context import (
     MigrationsDetector,
     MonitoringDetector,
     ServicesDetector,
+    TestingDetector,
 )
 
 
@@ -99,4 +101,13 @@ class ContextAnalyzer(BaseAnalyzer):
         Delegates to MonitoringDetector for actual detection logic.
         """
         detector = MonitoringDetector(self.path, self.analysis)
+        detector.detect()
+
+    def detect_testing(self) -> None:
+        """
+        Detect testing frameworks and patterns.
+
+        Delegates to TestingDetector for actual detection logic.
+        """
+        detector = TestingDetector(self.path, self.analysis)
         detector.detect()
