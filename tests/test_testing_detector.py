@@ -433,6 +433,16 @@ class TestConfigDetection:
 
         assert ".mocharc.json" in analysis["testing"]["config_files"]
 
+    def test_detects_mocha_rc_yml(self, temp_dir: Path):
+        """Detects .mocharc.yml configuration file."""
+        (temp_dir / ".mocharc.yml").write_text("timeout: 5000\n")
+
+        analysis = {}
+        detector = TestingDetector(temp_dir, analysis)
+        detector.detect()
+
+        assert ".mocharc.yml" in analysis["testing"]["config_files"]
+
     def test_detects_multiple_configs(self, temp_dir: Path):
         """Detects multiple configuration files."""
         (temp_dir / "pytest.ini").write_text("[pytest]\n")
