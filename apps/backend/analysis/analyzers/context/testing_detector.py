@@ -44,6 +44,9 @@ class TestingDetector(BaseAnalyzer):
     PUPPETEER_LIBS = ["puppeteer"]
     SELENIUM_LIBS = ["selenium"]
 
+    # Combined E2E testing libraries
+    E2E_LIBS = PLAYWRIGHT_LIBS + CYPRESS_LIBS + PUPPETEER_LIBS + SELENIUM_LIBS
+
     # Test configuration files
     CONFIG_FILES = [
         "pytest.ini",
@@ -235,6 +238,13 @@ class TestingDetector(BaseAnalyzer):
         for lib in self.PUPPETEER_LIBS:
             if lib in all_deps:
                 testing_info["frameworks"].append("puppeteer")
+                testing_info["libraries"].append(lib)
+                break
+
+        # Check for selenium
+        for lib in self.SELENIUM_LIBS:
+            if lib in all_deps:
+                testing_info["frameworks"].append("selenium")
                 testing_info["libraries"].append(lib)
                 break
 
