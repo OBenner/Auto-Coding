@@ -1,0 +1,99 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Git worktrees (used by parallel mode)
+.worktrees/
+
+# Auto Code data and generated files
+.auto-claude/
+.auto-claude-security.json
+.auto-claude-status
+.migration-checkpoints/
+.security-key
+logs/security/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+.venv*/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.vite/
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.claude_settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker files
+**/Dockerfile
+**/.dockerignore
+docker-compose*.yml
+
+# Documentation (keep README files)
+*.md
+!README.md
+!**/README.md
+
+# Tests (development only)
+tests/
+**/tests/
+*.test.py
+test_*.py
+test-results/
+playwright-report/
+
+# CI/CD
+.github/
+
+# Build outputs
+**/dist/
+**/build/
+
+# Logs
+*.log
+logs/
+
+# Puppeteer / Browser automation
+puppeteer_logs/
+puppeteer-*.log
+*.screenshot.png
+screenshots/
+chrome-profile/
+chromium-profile/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+*.backup
