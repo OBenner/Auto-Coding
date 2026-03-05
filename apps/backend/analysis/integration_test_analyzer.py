@@ -484,26 +484,36 @@ class IntegrationTestAnalyzer:
 
         for child in ast.walk(node):
             if isinstance(child, ast.Call):
-                # Check for ORM method calls
+                # Handle both attribute calls (table.select()) and function calls (select())
                 if isinstance(child.func, ast.Attribute):
                     method_name = child.func.attr.lower()
+                elif isinstance(child.func, ast.Name):
+                    method_name = child.func.id.lower()
+                else:
+                    continue
 
-                    if method_name in self.DB_QUERY_METHODS:
-                        # Determine operation type
-                        op_type = self._classify_db_operation(method_name)
+                if method_name in self.DB_QUERY_METHODS:
+                    # Determine operation type
+                    op_type = self._classify_db_operation(method_name)
 
-                        # Try to extract model name
+                    # Try to extract model name
+                    if isinstance(child.func, ast.Attribute):
                         model = self._extract_model_name(child.func)
+                    elif isinstance(child.func, ast.Name) and child.args:
+                        # For select(User), extract model from first argument
+                        model = self._extract_model_from_arg(child.args[0])
+                    else:
+                        model = None
 
-                        operations.append(
-                            DatabaseOperationInfo(
-                                operation_type=op_type,
-                                model=model,
-                                function_name=node.name,
-                                lineno=child.lineno,
-                                orm_type="sqlalchemy",  # Default, could be enhanced
-                            )
+                    operations.append(
+                        DatabaseOperationInfo(
+                            operation_type=op_type,
+                            model=model,
+                            function_name=node.name,
+                            lineno=child.lineno,
+                            orm_type="sqlalchemy",  # Default, could be enhanced
                         )
+                    )
 
         return operations
 
@@ -735,6 +745,30 @@ class IntegrationTestAnalyzer:
         elif isinstance(func.value, ast.Attribute):
             return func.value.attr
 
+        return None
+
+    def _extract_model_from_arg(self, arg: ast.AST) -> str | None:
+        """
+        Extract database model name from function argument.
+
+        For SQLAlchemy 2.0 style calls like select(User), the model is passed
+        as an argument.
+
+        Args:
+            arg: AST node from function arguments
+
+        Returns:
+            Model name or None
+        """
+        if isinstance(arg, ast.Name):
+            return arg.id
+        elif isinstance(arg, ast.Attribute):
+            # Handle cases like models.User
+            return arg.attr
+        elif isinstance(arg, ast.Call):
+            # Handle cases like User() (unlikely but possible)
+            if isinstance(arg.func, ast.Name):
+                return arg.func.id
         return None
 
     def _extract_service_name(self, call: ast.Call) -> str | None:

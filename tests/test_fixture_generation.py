@@ -127,14 +127,15 @@ class TestGenerateFixtures:
     @pytest.fixture(autouse=True)
     def _mock_fixture_generator_deps(self, monkeypatch):
         """Apply common monkeypatches for all fixture generator tests."""
-        self._mock_client = MagicMock()
-        self._mock_client.create_agent_session = AsyncMock(
-            return_value={"success": True}
-        )
-
+        # Mock run_generator_session instead of create_client
+        # (fixture_generator imports run_generator_session, not create_client directly)
         monkeypatch.setattr(
-            "agents.fixture_generator.create_client",
-            lambda **kwargs: self._mock_client,
+            "agents.fixture_generator.run_generator_session",
+            AsyncMock(return_value={
+                "success": True,
+                "generated_files": [],
+                "error": None
+            })
         )
         monkeypatch.setattr(
             "agents.fixture_generator.get_agent_prompt", lambda x: "test prompt"
@@ -306,15 +307,21 @@ def data():
     return {}
 """)
 
-        client_kwargs = {}
+        # Track call arguments to run_generator_session
+        call_kwargs = {}
 
-        def mock_create_client(**kwargs):
-            client_kwargs.update(kwargs)
-            mock_client = MagicMock()
-            mock_client.create_agent_session = AsyncMock(return_value={"success": True})
-            return mock_client
+        def mock_run_session(**kwargs):
+            call_kwargs.update(kwargs)
+            return {
+                "success": True,
+                "generated_files": [],
+                "error": None
+            }
 
-        monkeypatch.setattr("agents.fixture_generator.create_client", mock_create_client)
+        monkeypatch.setattr(
+            "agents.fixture_generator.run_generator_session",
+            mock_run_session
+        )
         monkeypatch.setattr(
             "agents.fixture_generator.validate_fixture_files",
             lambda x, y: AsyncMock(return_value=True)
@@ -330,9 +337,8 @@ def data():
         )
 
         assert result["success"] is True
-        assert client_kwargs["model"] == "claude-opus-4"
-        assert client_kwargs["max_thinking_tokens"] == 10000
-        assert client_kwargs["agent_type"] == "fixture_generator"
+        assert call_kwargs["model"] == "claude-opus-4"
+        assert call_kwargs["max_thinking_tokens"] == 10000
 
     @pytest.mark.asyncio
     async def test_analysis_results_in_starting_message(self, temp_dir: Path, monkeypatch):
