@@ -184,7 +184,6 @@ class IntegrationTestAnalyzer:
         "get",
         "create",
         "save",
-        "commit",
     }
 
     # External service patterns
@@ -269,7 +268,7 @@ class IntegrationTestAnalyzer:
         # Analyze top-level definitions
         for node in ast.walk(tree):
             # Extract API endpoints
-            if isinstance(node, ast.FunctionDef):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 endpoint = self._extract_endpoint(node, result.framework)
                 if endpoint:
                     result.endpoints.append(endpoint)
@@ -543,7 +542,38 @@ class IntegrationTestAnalyzer:
         is_async = isinstance(node, ast.AsyncFunctionDef)
 
         for child in ast.walk(node):
-            if isinstance(child, ast.Call):
+            # Check for awaited HTTP calls
+            if isinstance(child, ast.Await):
+                # DEBUG: Print await info
+                import sys
+                print(f"DEBUG: Found ast.Await at line {child.lineno}", file=sys.stderr)
+                print(f"DEBUG: child.value type: {type(child.value)}", file=sys.stderr)
+                if isinstance(child.value, ast.Call):
+                    print(f"DEBUG: child.value.func type: {type(child.value.func)}", file=sys.stderr)
+                    if hasattr(child.value.func, 'attr'):
+                        print(f"DEBUG: method name: {child.value.func.attr}", file=sys.stderr)
+                
+                if isinstance(child.value, ast.Call):
+                    call = child.value
+                    if isinstance(call.func, ast.Attribute):
+                        method_name = call.func.attr.lower()
+                        print(f"DEBUG: Method '{method_name}' in HTTP_CLIENT_METHODS: {method_name in self.HTTP_CLIENT_METHODS}", file=sys.stderr)
+
+                        if method_name in self.HTTP_CLIENT_METHODS:
+                            # Try to extract service name from URL or variable
+                            service_name = self._extract_service_name(call)
+
+                            external_calls.append(
+                                ExternalServiceInfo(
+                                    service_name=service_name or "external_api",
+                                    function_name=node.name,
+                                    lineno=child.lineno,
+                                    method=method_name.upper(),
+                                    is_async=True,  # Mark as async
+                                )
+                            )
+            # Keep existing sync detection
+            elif isinstance(child, ast.Call):
                 if isinstance(child.func, ast.Attribute):
                     method_name = child.func.attr.lower()
 

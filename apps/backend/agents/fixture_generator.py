@@ -149,6 +149,18 @@ Begin by loading context (Phase 0 in your prompt).
             "framework": framework,
         }
 
+    # Check for tests directory
+    tests_dir = project_dir / "tests"
+    if not tests_dir.exists():
+        print()
+        print_status("tests/ directory not found", "warning")
+        return {
+            "generated_files": [],
+            "success": False,
+            "error": "tests/ directory not found",
+            "framework": framework,
+        }
+
     # Scan for newly created fixture files
     print()
     print_status("Scanning for generated fixture files...", "progress")
