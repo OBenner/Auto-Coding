@@ -71,7 +71,45 @@
     },
     "envConfig": {
       "title": "Environment Configuration",
-      "description": "Review and save your environment configuration"
+      "description": "Review and save your environment configuration",
+      "loading": "Loading configuration summary...",
+      "summaryTitle": "Configuration Summary",
+      "summaryDescription": "Review your settings before creating the .env file",
+      "python": {
+        "title": "Python Version",
+        "valid": "Your Python installation is compatible and ready to use.",
+        "invalid": "Python version check failed. Please return to the Python step to resolve this issue."
+      },
+      "authentication": {
+        "title": "Claude SDK Authentication",
+        "configured": "Configured",
+        "notConfigured": "Not Configured",
+        "valid": "Your Claude SDK authentication is properly configured.",
+        "invalid": "Authentication is not configured. Please return to the Authentication step to complete setup."
+      },
+      "graphiti": {
+        "title": "Graphiti Memory System",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "valid": "Graphiti memory system is configured with {{provider}} provider.",
+        "invalid": "Graphiti configuration is incomplete. Please return to the Graphiti step to complete setup."
+      },
+      "successTitle": ".env File Created Successfully",
+      "errorTitle": "Failed to Create .env File",
+      "fileLocation": "File Location",
+      "infoTitle": "About .env Configuration",
+      "info": {
+        "intro": "The .env file will store your configuration settings securely:",
+        "step1": "Claude SDK authentication token",
+        "step2": "Graphiti memory system provider and API keys",
+        "step3": "Other application settings and preferences"
+      },
+      "nextStepsTitle": "Next Steps",
+      "nextSteps": "Your environment is configured. Click Next to run a test and verify everything works.",
+      "actions": {
+        "create": "Create .env File",
+        "retry": "Try Again"
+      }
     },
     "testRun": {
       "title": "Test Run",
