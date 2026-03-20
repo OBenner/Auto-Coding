@@ -11,6 +11,9 @@ from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 
+from core.error_codes import ErrorCode
+from core.error_detection import get_error_code
+
 
 class SDKErrorCategory(Enum):
     """Categories of errors encountered during SDK interactions."""
@@ -162,6 +165,29 @@ _CATEGORY_DEFAULTS: dict[SDKErrorCategory, dict] = {
     },
 }
 
+# Mapping from ErrorCode to SDKErrorCategory
+_ERROR_CODE_TO_CATEGORY: dict[ErrorCode, SDKErrorCategory] = {
+    ErrorCode.AUTH_INVALID: SDKErrorCategory.AUTH_INVALID,
+    ErrorCode.AUTH_EXPIRED: SDKErrorCategory.AUTH_EXPIRED,
+    ErrorCode.AUTH_MISSING: SDKErrorCategory.AUTH_INVALID,
+    ErrorCode.BILLING_EXHAUSTED: SDKErrorCategory.BILLING_EXHAUSTED,
+    ErrorCode.QUOTA_EXCEEDED: SDKErrorCategory.BILLING_EXHAUSTED,
+    ErrorCode.RATE_LIMITED: SDKErrorCategory.RATE_LIMITED,
+    ErrorCode.RATE_LIMIT_HARD: SDKErrorCategory.RATE_LIMITED,
+    ErrorCode.NETWORK: SDKErrorCategory.NETWORK,
+    ErrorCode.NETWORK_UNREACHABLE: SDKErrorCategory.NETWORK,
+    ErrorCode.NETWORK_TIMEOUT: SDKErrorCategory.NETWORK,
+    ErrorCode.OVERLOADED: SDKErrorCategory.OVERLOADED,
+    ErrorCode.SERVICE_UNAVAILABLE: SDKErrorCategory.OVERLOADED,
+    ErrorCode.INTERNAL_ERROR: SDKErrorCategory.NETWORK,
+    ErrorCode.BAD_GATEWAY: SDKErrorCategory.NETWORK,
+    ErrorCode.CONTEXT_OVERFLOW: SDKErrorCategory.CONTEXT_OVERFLOW,
+    ErrorCode.PROMPT_TOO_LONG: SDKErrorCategory.CONTEXT_OVERFLOW,
+    ErrorCode.TOKEN_LIMIT_EXCEEDED: SDKErrorCategory.CONTEXT_OVERFLOW,
+    ErrorCode.STUCK_LOOP: SDKErrorCategory.STUCK_LOOP,
+    ErrorCode.UNKNOWN: SDKErrorCategory.UNKNOWN,
+}
+
 
 def _match_patterns(text: str, patterns: list[re.Pattern[str]]) -> re.Match[str] | None:
     for pattern in patterns:
@@ -191,7 +217,31 @@ class ErrorClassifier:
         self._recent_responses: deque[str] = deque(maxlen=stuck_loop_threshold + 1)
 
     def classify_exception(self, exc: Exception) -> ClassifiedError:
-        """Classify a Python exception into an error category."""
+        """Classify a Python exception into an error category.
+
+        First checks if the exception is a typed error (TypedError) with an error_code.
+        If so, maps the ErrorCode to the appropriate SDKErrorCategory.
+        Otherwise, falls back to string-based pattern matching for backward compatibility.
+
+        Args:
+            exc: The exception to classify
+
+        Returns:
+            A ClassifiedError object with category and metadata
+        """
+        # First, check if this is a typed error with an error_code attribute
+        error_code = get_error_code(exc)
+        if error_code is not None:
+            # Map ErrorCode to SDKErrorCategory
+            category = _ERROR_CODE_TO_CATEGORY.get(
+                error_code, SDKErrorCategory.UNKNOWN
+            )
+            return _build_classified(
+                category,
+                f"{type(exc).__name__}: {exc}",
+            )
+
+        # Fall back to string-based pattern matching for backward compatibility
         text = f"{type(exc).__name__}: {exc}"
         return self._classify_text(text)
 
