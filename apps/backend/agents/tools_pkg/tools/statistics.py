@@ -492,7 +492,7 @@ Phase Durations:"""
     # -------------------------------------------------------------------------
     @tool(
         "get_quality_metrics",
-        "Get quality metrics including completion rates, QA success, quality score, and failure rates.",
+        "Get quality metrics including completion rates, QA success, quality score, code coverage, and failure rates.",
         {},
     )
     async def get_quality_metrics(args: dict[str, Any]) -> dict[str, Any]:
@@ -515,6 +515,30 @@ Phase Durations:"""
             # Calculate quality metrics
             quality = _calculate_quality_metrics(plan)
 
+            # Read coverage data from quality_history.json if available
+            coverage_data = None
+            quality_history_file = spec_dir / "quality_history.json"
+            if quality_history_file.exists():
+                try:
+                    history = json.loads(quality_history_file.read_text(encoding="utf-8"))
+                    scores = history.get("scores", [])
+                    if scores:
+                        # Get the most recent score with coverage data
+                        for score in reversed(scores):
+                            coverage_percent = score.get("coverage_percent", 0.0)
+                            lines_covered = score.get("lines_covered", 0)
+                            lines_total = score.get("lines_total", 0)
+                            if coverage_percent > 0 or lines_total > 0:
+                                coverage_data = {
+                                    "coverage_percent": coverage_percent,
+                                    "lines_covered": lines_covered,
+                                    "lines_total": lines_total,
+                                }
+                                break
+                except Exception:
+                    # Silently ignore coverage data errors
+                    pass
+
             # Build output
             result = f"""Quality Metrics
 ===============
@@ -529,7 +553,17 @@ QA Performance:
   QA Status: {quality["qa_status"]}
   QA Iterations: {quality["qa_iterations"]}
   First-Attempt Success: {"Yes" if quality["first_attempt_success"] else "No"}
+"""
 
+            # Add coverage section if data is available
+            if coverage_data:
+                result += f"""
+Code Coverage:
+  Coverage: {coverage_data["coverage_percent"]:.1f}%
+  Lines Covered: {coverage_data["lines_covered"]}/{coverage_data["lines_total"]}
+"""
+
+            result += f"""
 Overall Quality Score: {quality["quality_score"]}/100
 
 Quality Score Breakdown:
