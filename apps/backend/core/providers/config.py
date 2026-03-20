@@ -48,6 +48,9 @@ Environment Variables:
     OLLAMA_MODEL: Model identifier (e.g., llama3, deepseek-r1, codellama)
     OLLAMA_BASE_URL: API base URL (default: http://localhost:11434)
     OLLAMA_API_KEY: Optional API key for authenticated Ollama instances
+
+    # Provider Fallback
+    PROVIDER_FALLBACK_CHAIN: Comma-separated list of providers for fallback (e.g., "claude,openai,google,ollama")
 """
 
 import os
@@ -119,6 +122,9 @@ class ProviderConfig:
     ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL
     ollama_api_key: str = ""
 
+    # Provider fallback chain
+    provider_fallback_chain: list[str] | None = None
+
     @classmethod
     def from_env(cls, agent_type: str | None = None) -> "ProviderConfig":
         """Create config from environment variables.
@@ -181,6 +187,23 @@ class ProviderConfig:
         ollama_base_url = os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
         ollama_api_key = os.environ.get("OLLAMA_API_KEY", "")
 
+        # Provider fallback chain (comma-separated list, e.g., "claude,openai,google,ollama")
+        provider_fallback_chain_str = os.environ.get("PROVIDER_FALLBACK_CHAIN", "")
+        provider_fallback_chain = None
+        if provider_fallback_chain_str:
+            # Parse comma-separated list and normalize provider names
+            provider_fallback_chain = [
+                p.strip().lower() for p in provider_fallback_chain_str.split(",") if p.strip()
+            ]
+            # Validate providers in chain
+            valid_providers = [p.value for p in AIEngineProvider]
+            provider_fallback_chain = [
+                p for p in provider_fallback_chain if p in valid_providers
+            ]
+            # Set to None if empty after validation
+            if not provider_fallback_chain:
+                provider_fallback_chain = None
+
         # Apply per-agent model override to the selected provider's model field
         if agent_model:
             if provider == AIEngineProvider.CLAUDE.value:
@@ -218,6 +241,7 @@ class ProviderConfig:
             ollama_model=ollama_model,
             ollama_base_url=ollama_base_url,
             ollama_api_key=ollama_api_key,
+            provider_fallback_chain=provider_fallback_chain,
         )
 
     def is_valid(self) -> bool:
