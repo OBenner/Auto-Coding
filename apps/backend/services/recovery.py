@@ -315,6 +315,8 @@ class RecoveryManager:
         except Exception as e:
             logger.warning(f"Failed to lookup recovery patterns: {e}")
             return []
+
+    def _init_attempt_history(self) -> None:
         """Initialize the attempt history file."""
         initial_data = {
             "subtasks": {},
@@ -373,6 +375,88 @@ class RecoveryManager:
         # Cap at maximum delay to prevent excessively long waits
         return min(delay, BACKOFF_MAX_DELAY)
 
+    def _select_adaptive_strategy(
+        self,
+        failure_type: FailureType,
+        attempt_count: int,
+        subtask_id: str,
+        default_strategies: list[tuple[str, str, bool, str]],
+    ) -> tuple[str, str, bool]:
+        """
+        Select the best strategy based on historical success rates.
+
+        Uses adaptive selection to choose strategies with proven track records:
+        - Analyzes historical success rates for each candidate strategy
+        - Prefers strategies with >70% success rate and 5+ uses
+        - Falls back to default strategies if no proven winner exists
+        - Balances success rate with usage count (confidence)
+
+        Args:
+            failure_type: Type of failure that occurred
+            attempt_count: Number of previous attempts
+            subtask_id: ID of the subtask that failed
+            default_strategies: List of (name, description, use_fallback, guidance) tuples
+
+        Returns:
+            Tuple of (strategy_name, strategy_description, use_model_fallback)
+        """
+        strategy_stats = self.metrics.get_strategy_statistics()
+
+        # Score each candidate strategy based on historical performance
+        scored_strategies = []
+        for name, desc, use_fallback, _ in default_strategies:
+            stats = strategy_stats.get(name, {})
+            success_rate = stats.get("success_rate_percent", 0.0)
+            total_uses = stats.get("total_uses", 0)
+
+            # Calculate strategy score
+            # High success rate + high usage = high confidence
+            if total_uses >= 5 and success_rate >= 70.0:
+                # Strong candidate: proven track record
+                score = success_rate + (total_uses * 0.5)
+                scored_strategies.append((name, desc, use_fallback, score, success_rate, total_uses))
+                logger.debug(
+                    f"Strategy '{name}': strong candidate (success: {success_rate:.1f}%, "
+                    f"uses: {total_uses}, score: {score:.1f})"
+                )
+            elif total_uses >= 3 and success_rate >= 50.0:
+                # Moderate candidate: some evidence of effectiveness
+                score = success_rate + (total_uses * 0.3)
+                scored_strategies.append((name, desc, use_fallback, score, success_rate, total_uses))
+                logger.debug(
+                    f"Strategy '{name}': moderate candidate (success: {success_rate:.1f}%, "
+                    f"uses: {total_uses}, score: {score:.1f})"
+                )
+            else:
+                # Weak or no data: use as fallback only
+                logger.debug(
+                    f"Strategy '{name}': insufficient data (success: {success_rate:.1f}%, "
+                    f"uses: {total_uses})"
+                )
+
+        # Select best strategy if we have strong evidence
+        if scored_strategies:
+            # Sort by score (descending)
+            scored_strategies.sort(key=lambda x: x[3], reverse=True)
+            best_name, best_desc, best_fallback, best_score, best_rate, best_uses = scored_strategies[0]
+
+            logger.info(
+                f"Adaptive strategy selection: chose '{best_name}' "
+                f"(success rate: {best_rate:.1f}%, uses: {best_uses}, score: {best_score:.1f}) "
+                f"for {failure_type.value} in {subtask_id}"
+            )
+
+            return best_name, best_desc, best_fallback
+
+        # No strong candidates: use default strategy
+        default_name, default_desc, default_fallback, _ = default_strategies[0]
+        logger.debug(
+            f"No proven strategy found, using default '{default_name}' "
+            f"for {failure_type.value} in {subtask_id}"
+        )
+
+        return default_name, default_desc, default_fallback
+
     def select_retry_strategy(
         self, failure_type: FailureType, attempt_count: int, subtask_id: str, error: str | None = None
     ) -> RetryStrategy | None:
@@ -389,10 +473,11 @@ class RecoveryManager:
         - Uses pattern recovery recommendations when available
         - Incorporates pattern confidence and frequency into strategy selection
 
-        Enhanced with success rate tracking:
-        - Queries RecoveryMetrics for historical strategy success rates
-        - Prefers strategies with higher success rates when multiple options available
-        - Records strategy usage for future learning
+        Enhanced with adaptive strategy selection:
+        - Analyzes historical success rates for each candidate strategy
+        - Prefers strategies with proven track records (>70% success, 5+ uses)
+        - Falls back to default strategies when no strong evidence exists
+        - Tracks strategy performance for continuous learning
 
         For BROKEN_BUILD failures, no retry strategy is returned since
         these require rollback instead.
@@ -417,10 +502,6 @@ class RecoveryManager:
         # CONTEXT_EXHAUSTED continues in next session (no retry strategy needed)
         if failure_type == FailureType.CONTEXT_EXHAUSTED:
             return None
-
-        # Get strategy success rates from metrics
-        strategy_stats = self.metrics.get_strategy_statistics()
-        most_successful = self.metrics.get_most_successful_strategy()
 
         # Look up historical patterns for this failure
         patterns = self._lookup_recovery_patterns(failure_type, subtask_id, error)
@@ -461,20 +542,16 @@ class RecoveryManager:
                     max_attempts=max_attempts,
                 )
             elif attempt_count == 1:
-                # Second attempt: try with model fallback
-                # Check if we have success rate data suggesting a better strategy
-                strategy_name = "model_fallback"
-                strategy_desc = "Retry with fallback model (opus→sonnet→haiku)"
+                # Second attempt: use adaptive strategy selection
+                candidate_strategies = [
+                    ("model_fallback", "Retry with fallback model (opus→sonnet→haiku)", True, ""),
+                    ("direct_retry", "Retry with same approach and corrections", False, ""),
+                    ("context_analysis", "Retry with deeper error analysis", False, ""),
+                ]
 
-                if most_successful and most_successful[1] > 60.0:
-                    # If we have a strategy with >60% success rate, use it
-                    strategy_name = most_successful[0]
-                    stats = strategy_stats.get(strategy_name, {})
-                    strategy_desc = f"Retry using proven strategy (success rate: {most_successful[1]:.1f}%)"
-                    logger.info(
-                        f"Using historically successful strategy '{strategy_name}' "
-                        f"({most_successful[1]:.1f}% success rate) for {subtask_id}"
-                    )
+                strategy_name, strategy_desc, use_fallback = self._select_adaptive_strategy(
+                    failure_type, attempt_count, subtask_id, candidate_strategies
+                )
 
                 guidance = "Use a different model which may handle this task better"
                 if pattern_guidance:
@@ -483,24 +560,22 @@ class RecoveryManager:
                 return RetryStrategy(
                     name=strategy_name,
                     description=strategy_desc,
-                    use_model_fallback=True,
+                    use_model_fallback=use_fallback,
                     guidance=guidance,
                     max_attempts=max_attempts,
                 )
             else:
                 # Third attempt: alternative approach with specific guidance
-                # Prefer most successful strategy if available
-                strategy_name = "alternative_approach"
-                strategy_desc = "Try a simpler or different approach"
+                # Use adaptive strategy selection
+                candidate_strategies = [
+                    ("alternative_approach", "Try a simpler or different approach", True, ""),
+                    ("incremental_fix", "Fix issues incrementally with testing", False, ""),
+                    ("model_fallback", "Retry with fallback model", True, ""),
+                ]
 
-                if most_successful and most_successful[1] > 50.0:
-                    strategy_name = most_successful[0]
-                    stats = strategy_stats.get(strategy_name, {})
-                    strategy_desc = f"Retry using proven strategy (success rate: {most_successful[1]:.1f}%)"
-                    logger.info(
-                        f"Using historically successful strategy '{strategy_name}' "
-                        f"({most_successful[1]:.1f}% success rate) for {subtask_id}"
-                    )
+                strategy_name, strategy_desc, use_fallback = self._select_adaptive_strategy(
+                    failure_type, attempt_count, subtask_id, candidate_strategies
+                )
 
                 guidance = (
                     "IMPORTANT: Try a DIFFERENT approach:\n"
@@ -515,7 +590,7 @@ class RecoveryManager:
                 return RetryStrategy(
                     name=strategy_name,
                     description=strategy_desc,
-                    use_model_fallback=True,
+                    use_model_fallback=use_fallback,
                     guidance=guidance,
                     max_attempts=max_attempts,
                 )
@@ -540,18 +615,16 @@ class RecoveryManager:
                     max_attempts=max_attempts,
                 )
             else:
-                # Second attempt: try with model fallback and alternative approach
-                # Check for historically successful strategy
-                strategy_name = "model_fallback_alternative"
-                strategy_desc = "Retry with fallback model and alternative approach"
+                # Second attempt: use adaptive strategy selection
+                candidate_strategies = [
+                    ("model_fallback_alternative", "Retry with fallback model and alternative approach", True, ""),
+                    ("direct_retry_enhanced", "Retry with enhanced error handling", False, ""),
+                    ("simplify_approach", "Simplify the implementation", False, ""),
+                ]
 
-                if most_successful and most_successful[1] > 50.0:
-                    strategy_name = most_successful[0]
-                    strategy_desc = f"Retry using proven strategy (success rate: {most_successful[1]:.1f}%)"
-                    logger.info(
-                        f"Using historically successful strategy '{strategy_name}' "
-                        f"({most_successful[1]:.1f}% success rate) for {subtask_id}"
-                    )
+                strategy_name, strategy_desc, use_fallback = self._select_adaptive_strategy(
+                    failure_type, attempt_count, subtask_id, candidate_strategies
+                )
 
                 guidance = (
                     "Unknown error - try a different approach:\n"
@@ -566,7 +639,7 @@ class RecoveryManager:
                 return RetryStrategy(
                     name=strategy_name,
                     description=strategy_desc,
-                    use_model_fallback=True,
+                    use_model_fallback=use_fallback,
                     guidance=guidance,
                     max_attempts=max_attempts,
                 )
