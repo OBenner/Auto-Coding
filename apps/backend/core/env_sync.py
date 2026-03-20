@@ -150,7 +150,7 @@ def run_env_sync(
         print("Auto Code Environment Sync")
         print("=" * 70)
         if dry_run:
-            print("\n[DRY-RUN MODE] No changes will be made\n")
+            print("\nDry-run mode: No changes will be made\n")
 
     try:
         # Phase 1: Package Manager Detection
