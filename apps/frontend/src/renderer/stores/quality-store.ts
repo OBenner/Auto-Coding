@@ -27,6 +27,11 @@ export interface QualityScore {
   met_criteria: number;
   user_approved: boolean;
 
+  // Code coverage
+  coverage_percent: number;
+  lines_covered: number;
+  lines_total: number;
+
   // Computed
   composite_score: number;
   is_high_quality: boolean;
