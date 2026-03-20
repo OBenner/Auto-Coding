@@ -418,6 +418,120 @@ def generate_patterns(
         print()
 
 
+def generate_all_patterns(
+    project_dir: Path,
+    output_dir: Path,
+    languages: list[str] | None = None,
+    source_dir: Path | None = None,
+    max_patterns: int = 50,
+) -> None:
+    """
+    Generate pattern library modules for multiple languages.
+
+    Args:
+        project_dir: Project root directory to analyze
+        output_dir: Directory where generated modules will be written
+        languages: List of languages to generate (default: all supported)
+        source_dir: Specific directory to analyze (default: project_dir)
+        max_patterns: Maximum patterns per category (default: 50)
+    """
+    from integrations.graphiti.pattern_library_generator import LANGUAGE_EXTENSIONS
+
+    print_banner()
+    print(f"\n{icon(Icons.BUILD)} Batch Pattern Library Generation\n")
+
+    print_key_value("Project", str(project_dir))
+    print_key_value("Output Dir", str(output_dir))
+    if source_dir:
+        print_key_value("Source", str(source_dir))
+    print()
+
+    # Determine languages to generate
+    if languages:
+        # Validate provided languages
+        supported = set(LANGUAGE_EXTENSIONS.keys())
+        invalid = [lang for lang in languages if lang not in supported]
+        if invalid:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} Unsupported languages: {', '.join(invalid)}"
+                )
+            )
+            print(muted(f"Supported: {', '.join(sorted(supported))}"))
+            print()
+            return
+        target_languages = languages
+    else:
+        # Generate for all supported languages
+        target_languages = sorted(LANGUAGE_EXTENSIONS.keys())
+
+    print_header(f"Generating libraries for {len(target_languages)} languages")
+    print()
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate library for each language
+    success_count = 0
+    failed_languages = []
+
+    for i, language in enumerate(target_languages, 1):
+        print(f"[{i}/{len(target_languages)}] {language}...")
+
+        # Determine output filename
+        output_path = output_dir / f"{language}_patterns.py"
+
+        try:
+            # Create generator
+            generator = PatternLibraryGenerator(project_dir)
+
+            # Prepare options
+            options = {
+                "max_patterns_per_category": max_patterns,
+                "include_line_numbers": False,
+            }
+            if source_dir:
+                options["source_dir"] = source_dir
+
+            # Generate library file
+            generator.generate_library_file(output_path, language, options)
+            print(muted(f"  ✓ Saved to: {output_path}"))
+            success_count += 1
+
+        except ValueError as e:
+            print(muted(f"  ⚠ Skipped: {e}"))
+            failed_languages.append((language, str(e)))
+        except Exception as e:
+            print(muted(f"  ✗ Failed: {e}"))
+            failed_languages.append((language, str(e)))
+
+        print()
+
+    # Print summary
+    print(divider())
+    print_header("Summary")
+    print()
+    print_key_value("Total Languages", str(len(target_languages)))
+    print_key_value("Successfully Generated", str(success_count))
+    print_key_value("Failed/Skipped", str(len(failed_languages)))
+    print()
+
+    if failed_languages:
+        print_header("Failed Languages")
+        print()
+        for lang, error in failed_languages:
+            print(f"  • {lang}: {error}")
+        print()
+
+    if success_count > 0:
+        print(success(f"{icon(Icons.SUCCESS)} Batch generation completed"))
+        print(muted(f"Libraries saved to: {output_dir}"))
+        print()
+    else:
+        print(warning(f"{icon(Icons.WARNING)} No libraries generated"))
+        print()
+
+
 def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
     """
     Handle the pattern management command.
@@ -476,6 +590,22 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
         generate_patterns(
             project_dir, args.language, Path(args.output), source_dir, max_patterns
         )
+    elif action == "generate-all":
+        if not args.output_dir:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} --output-dir required for 'generate-all' action"
+                )
+            )
+            return 1
+        # For generate-all, use parent directory of spec_dir as project_dir
+        project_dir = spec_dir.parent.parent.parent  # .auto-claude/specs/XXX -> project root
+        source_dir = Path(args.source) if args.source else None
+        max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
+        languages = args.languages.split(",") if args.languages else None
+        generate_all_patterns(
+            project_dir, Path(args.output_dir), languages, source_dir, max_patterns
+        )
     else:
         print(warning(f"{icon(Icons.WARNING)} Unknown action: {action}"))
         return 1
@@ -515,12 +645,18 @@ Examples:
 
   # Generate patterns from specific directory
   python pattern_commands.py generate --spec-dir .auto-claude/specs/001-feature --language javascript --output patterns/js_patterns.py --source apps/frontend
+
+  # Generate pattern libraries for all supported languages
+  python pattern_commands.py generate-all --spec-dir .auto-claude/specs/001-feature --output-dir patterns/
+
+  # Generate libraries for specific languages only
+  python pattern_commands.py generate-all --spec-dir .auto-claude/specs/001-feature --output-dir patterns/ --languages python,javascript,typescript
         """,
     )
 
     parser.add_argument(
         "action",
-        choices=["list", "show", "approve", "override", "delete", "generate"],
+        choices=["list", "show", "approve", "override", "delete", "generate", "generate-all"],
         help="Action to perform",
     )
 
@@ -572,6 +708,18 @@ Examples:
         type=int,
         default=50,
         help="Maximum patterns per category (for 'generate' action, default: 50)",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="Output directory for generated pattern libraries (for 'generate-all' action)",
+    )
+
+    parser.add_argument(
+        "--languages",
+        type=str,
+        help="Comma-separated list of languages to generate (for 'generate-all' action, default: all supported)",
     )
 
     args = parser.parse_args()
