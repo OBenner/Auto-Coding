@@ -5,6 +5,7 @@ Spec Commands
 CLI commands for managing specs (listing, finding, etc.)
 """
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -365,4 +366,253 @@ def preview_template_spec(
     print(preview)
     print()
     print("-" * 70)
+    print()
+
+
+def validate_template_command(
+    project_dir: Path, template_name: str, strict: bool = True
+) -> None:
+    """
+    Validate a spec template for security and correctness.
+
+    Args:
+        project_dir: Project root directory
+        template_name: Name of the template to validate
+        strict: If True, fail on warnings. If False, allow warnings.
+    """
+    # Import here to avoid import errors if template system is not available
+    try:
+        from spec.templates.library import TemplateLibrary
+        from spec.templates.validator import validate_template
+    except ImportError:
+        print("\nTemplate system not available.")
+        sys.exit(1)
+
+    library = TemplateLibrary()
+    template = library.get_template(template_name)
+
+    if not template:
+        print(f"\n✗ Template not found: {template_name}")
+        print("\nAvailable templates:")
+        templates = library.list_templates()
+        for tmpl in templates:
+            print(f"  • {tmpl['name']}")
+        sys.exit(1)
+
+    print("\n" + "=" * 80)
+    print(f"  VALIDATING TEMPLATE: {template_name}")
+    print("=" * 80)
+    print()
+
+    # Run validation
+    is_valid, errors = validate_template(template, strict=strict)
+
+    if is_valid:
+        print("✓ Template is valid!")
+        print()
+
+        # Show summary
+        print("Summary:")
+        print(f"  Name: {template.name}")
+        print(f"  Category: {template.category}")
+        print(f"  Description: {template.description[:80]}...")
+        if template.parameters:
+            print(f"  Parameters: {len(template.parameters)}")
+        if template.placeholders:
+            print(f"  Placeholders: {len(template.placeholders)}")
+        print()
+
+        # Show parameters
+        if template.parameters:
+            print("Parameters:")
+            for param_name, param_def in template.parameters.items():
+                param_type = param_def.get("type", str)
+                type_name = param_type.__name__ if hasattr(param_type, "__name__") else str(param_type)
+                required = param_def.get("required", False)
+                req_marker = " (required)" if required else " (optional)"
+                print(f"  • {param_name}: {type_name}{req_marker}")
+            print()
+
+        # Show placeholders
+        if template.placeholders:
+            print(f"Placeholders: {', '.join(template.placeholders)}")
+            print()
+
+        print("-" * 80)
+        print()
+        sys.exit(0)
+    else:
+        print("✗ Template validation failed!")
+        print()
+
+        # Show errors
+        print("Errors:")
+        for i, error in enumerate(errors, 1):
+            print(f"  {i}. {error}")
+        print()
+
+        print("-" * 80)
+        print()
+        sys.exit(1)
+
+
+def export_template_command(
+    project_dir: Path, template_name: str, output_file: str | None = None
+) -> None:
+    """
+    Export a spec template to JSON format.
+
+    Args:
+        project_dir: Project root directory
+        template_name: Name of the template to export
+        output_file: Optional output file path (defaults to template_name.json)
+    """
+    # Import here to avoid import errors if template system is not available
+    try:
+        from spec.templates.library import TemplateLibrary
+        from spec.templates.io import export_template
+    except ImportError:
+        print("\nTemplate system not available.")
+        sys.exit(1)
+
+    library = TemplateLibrary()
+    template = library.get_template(template_name)
+
+    if not template:
+        print(f"\n✗ Template not found: {template_name}")
+        print("\nAvailable templates:")
+        templates = library.list_templates()
+        for tmpl in templates:
+            print(f"  • {tmpl['name']}")
+        sys.exit(1)
+
+    print("\n" + "=" * 80)
+    print(f"  EXPORTING TEMPLATE: {template_name}")
+    print("=" * 80)
+    print()
+
+    # Export template to dictionary
+    try:
+        export_data = export_template(template)
+    except Exception as e:
+        print(f"✗ Failed to export template: {e}")
+        sys.exit(1)
+
+    # Determine output file path
+    if output_file:
+        output_path = Path(output_file)
+    else:
+        output_path = Path(f"{template_name}.json")
+
+    # Create parent directory if needed
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write to file
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(export_data, f, indent=2, ensure_ascii=False)
+        print(f"✓ Template exported successfully!")
+        print()
+        print(f"Output file: {output_path.absolute()}")
+        print(f"File size: {output_path.stat().st_size} bytes")
+        print()
+    except Exception as e:
+        print(f"✗ Failed to write export file: {e}")
+        sys.exit(1)
+
+    print("-" * 80)
+    print()
+
+
+def import_template_command(
+    project_dir: Path, input_file: str, validate: bool = True
+) -> None:
+    """
+    Import a spec template from JSON format.
+
+    Args:
+        project_dir: Project root directory
+        input_file: Path to the JSON file to import
+        validate: If True, validate template before importing
+    """
+    # Import here to avoid import errors if template system is not available
+    try:
+        from spec.templates.io import import_template
+        from spec.templates.validator import validate_import
+    except ImportError:
+        print("\nTemplate system not available.")
+        sys.exit(1)
+
+    input_path = Path(input_file)
+
+    if not input_path.exists():
+        print(f"\n✗ Template file not found: {input_file}")
+        sys.exit(1)
+
+    print("\n" + "=" * 80)
+    print(f"  IMPORTING TEMPLATE FROM: {input_path.name}")
+    print("=" * 80)
+    print()
+
+    # Read JSON file
+    try:
+        with open(input_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"✗ Invalid JSON format: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"✗ Failed to read file: {e}")
+        sys.exit(1)
+
+    # Validate template data before importing
+    if validate:
+        is_valid, errors = validate_import(data)
+        if not is_valid:
+            print("✗ Template validation failed!")
+            print()
+            print("Errors:")
+            for i, error in enumerate(errors, 1):
+                print(f"  {i}. {error}")
+            print()
+            print("-" * 80)
+            print()
+            sys.exit(1)
+
+    # Import template
+    try:
+        template = import_template(data)
+    except Exception as e:
+        print(f"✗ Failed to import template: {e}")
+        sys.exit(1)
+
+    print("✓ Template imported successfully!")
+    print()
+
+    # Show summary
+    print("Template details:")
+    print(f"  Name: {template.name}")
+    print(f"  Category: {template.category}")
+    print(f"  Description: {template.description[:80]}...")
+    if template.parameters:
+        print(f"  Parameters: {len(template.parameters)}")
+    if template.placeholders:
+        print(f"  Placeholders: {len(template.placeholders)}")
+    print()
+
+    # Save to custom templates directory
+    custom_templates_dir = project_dir / ".auto-claude" / "templates"
+    custom_templates_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = custom_templates_dir / f"{template.name}.json"
+
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        print(f"Saved to: {output_path.absolute()}")
+    except Exception as e:
+        print(f"Warning: Failed to save template to custom directory: {e}")
+
+    print()
+    print("-" * 80)
     print()
