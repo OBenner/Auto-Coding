@@ -22,6 +22,11 @@ on:
         required: false
         type: boolean
         default: false
+      notify:
+        description: 'Create GitHub issues for critical vulnerabilities'
+        required: false
+        type: boolean
+        default: true
   schedule:
     - cron: '0 0 * * 1' # Weekly on Monday at midnight UTC
 
@@ -33,6 +38,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: write
+  issues: write
 
 jobs:
   dependency-scan:
@@ -84,6 +90,81 @@ jobs:
             echo "::error::Dependency scan failed with exit code ${SCAN_EXIT}"
             exit 1
           fi
+
+      - name: Send vulnerability notifications
+        id: notify
+        working-directory: apps/backend
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/backend
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .venv/bin/activate
+
+          # Skip if notifications are disabled
+          if [ "${{ github.event.inputs.notify }}" = "false" ]; then
+            echo "::notice::Notifications disabled, skipping"
+            exit 0
+          fi
+
+          # Check if we have any security vulnerabilities
+          if [ ! -f "${{ github.workspace }}/.auto-claude/dependency-reports/dependency_report.json" ]; then
+            echo "::notice::No dependency report found, skipping notifications"
+            exit 0
+          fi
+
+          # Run notification module
+          echo "::group::Sending vulnerability notifications"
+          python -c "
+          import asyncio
+          import json
+          from pathlib import Path
+          from runners.dependency_notifications import DependencyNotifier
+          from analysis.dependency_scanner import DependencyScanResult
+
+          async def send_notifications():
+              # Load scan results
+              report_path = Path('${{ github.workspace }}/.auto-claude/dependency-reports/dependency_report.json')
+              with open(report_path) as f:
+                  report_data = json.load(f)
+
+              # Create DependencyScanResult from report data
+              scan_result = DependencyScanResult.from_dict(report_data)
+
+              # Initialize notifier
+              notifier = DependencyNotifier(
+                  project_dir=Path('${{ github.workspace }}')
+              )
+
+              # Send notifications for critical/high vulnerabilities
+              result = await notifier.notify_critical_vulnerabilities(
+                  scan_result,
+                  min_severity='high',
+                  create_issues=True
+              )
+
+              # Output results
+              if result.success:
+                  print(f'✅ Sent {result.summary_counts[\"total\"]} notifications')
+                  if result.summary_counts.get('critical', 0) > 0:
+                      print(f'  - Critical: {result.summary_counts[\"critical\"]}')
+                  if result.summary_counts.get('high', 0) > 0:
+                      print(f'  - High: {result.summary_counts[\"high\"]}')
+              else:
+                  print(f'⚠️ Notifications completed with errors')
+                  for error in result.errors:
+                      print(f'  Error: {error}')
+                  return 1
+
+              return 0
+
+          exit(asyncio.run(send_notifications()))
+          " || NOTIFY_EXIT=$?
+
+          if [ "${NOTIFY_EXIT:-0}" -gt 0 ]; then
+            echo "::warning::Notification step completed with errors (exit code ${NOTIFY_EXIT})"
+          fi
+          echo "::endgroup::"
 
       - name: Upload scan reports
         uses: actions/upload-artifact@v4
