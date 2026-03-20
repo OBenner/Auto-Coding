@@ -91,6 +91,81 @@ def load_config(project_dir: Path) -> dict[str, Any] | None:
         return None
 
 
+def is_auto_approved(
+    package_name: str,
+    update_type: str,
+    ecosystem: str,
+    is_security: bool,
+    config: dict[str, Any] | None,
+) -> bool:
+    """
+    Determine if a dependency update should be auto-approved based on configuration.
+
+    Auto-approval rules:
+    - If auto_approval is not enabled, nothing is auto-approved
+    - Blocklisted packages are never auto-approved
+    - Allowlisted packages use their specific approval level
+    - Security updates are never auto-approved (require manual review)
+    - Patch/minor updates follow global settings if not in allowlist/blocklist
+
+    Args:
+        package_name: Name of the package
+        update_type: Type of update (patch, minor, major)
+        ecosystem: Package ecosystem (python, node)
+        is_security: Whether this is a security update
+        config: Dependency updates configuration dictionary
+
+    Returns:
+        True if the update should be auto-approved, False otherwise
+    """
+    # No config = no auto-approval
+    if not config:
+        return False
+
+    auto_approval = config.get("auto_approval", {})
+    if not auto_approval.get("enabled", False):
+        return False
+
+    # Security updates are never auto-approved (require manual review)
+    if is_security:
+        return False
+
+    # Check blocklist first (blocklist has priority)
+    blocklist = auto_approval.get("blocklisted_packages", [])
+    for blocked in blocklist:
+        if (
+            blocked.get("name") == package_name
+            and blocked.get("ecosystem") == ecosystem
+        ):
+            return False
+
+    # Check allowlist (allowlist has priority over global settings)
+    allowlist = auto_approval.get("allowlisted_packages", [])
+    for allowed in allowlist:
+        if (
+            allowed.get("name") == package_name
+            and allowed.get("ecosystem") == ecosystem
+        ):
+            allowed_level = allowed.get("auto_approve", "none")
+            if allowed_level == "patch" and update_type == "patch":
+                return True
+            if allowed_level == "minor" and update_type in ("patch", "minor"):
+                return True
+            if allowed_level == "major":
+                return True
+            # Explicitly set to "none" or not matching
+            return False
+
+    # Use global settings for packages not in allowlist/blocklist
+    if update_type == "patch" and auto_approval.get("patch_updates", False):
+        return True
+    if update_type == "minor" and auto_approval.get("minor_updates", False):
+        return True
+
+    # Major updates are never auto-approved by global settings
+    return False
+
+
 def _generate_task_description(
     scan_result: any,
     batches: list,
@@ -185,6 +260,8 @@ def _generate_markdown_report(
     batches: list,
     project_dir: Path,
     ecosystems_filter: list[str] | None = None,
+    config: dict[str, Any] | None = None,
+    updates_to_process: list | None = None,
 ) -> str:
     """
     Generate a markdown report for dependency scan results.
@@ -194,6 +271,8 @@ def _generate_markdown_report(
         batches: List of UpdateBatch objects
         project_dir: Project directory path
         ecosystems_filter: Optional list of ecosystems that were scanned
+        config: Optional dependency updates configuration
+        updates_to_process: Optional list of updates being processed
 
     Returns:
         Markdown formatted report string
@@ -277,7 +356,33 @@ def _generate_markdown_report(
         )
         security_badge = " 🔒 **SECURITY**" if batch.is_security_batch else ""
 
-        lines.append(f"### Batch {i}: `{batch.batch_id}` {security_badge}")
+        # Determine auto-approval status for the batch
+        batch_auto_approved = False
+        if config and batch.update_type in ("patch", "minor") and updates_to_process:
+            all_approved = True
+            for pkg_name in batch.packages:
+                update = next(
+                    (u for u in updates_to_process if u.name == pkg_name), None
+                )
+                if update:
+                    pkg_approved = is_auto_approved(
+                        package_name=update.name,
+                        update_type=update.update_type,
+                        ecosystem=update.ecosystem,
+                        is_security=update.is_security,
+                        config=config,
+                    )
+                    if not pkg_approved:
+                        all_approved = False
+                        break
+                else:
+                    all_approved = False
+                    break
+            batch_auto_approved = all_approved
+
+        auto_approve_badge = " ✅ **AUTO-APPROVED**" if batch_auto_approved else ""
+
+        lines.append(f"### Batch {i}: `{batch.batch_id}` {security_badge}{auto_approve_badge}")
         lines.append("")
         lines.append(f"- **Risk Level**: {risk_icon} {batch.risk_level.title()}")
         lines.append(f"- **Priority**: {batch.priority}")
@@ -689,8 +794,37 @@ Examples:
             else "🟢"
         )
         security_marker = " [SECURITY]" if batch.is_security_batch else ""
+
+        # Determine auto-approval status for the batch
+        # A batch is auto-approved only if ALL packages in it are auto-approved
+        batch_auto_approved = False
+        if config and batch.update_type in ("patch", "minor"):
+            all_approved = True
+            for pkg_name in batch.packages:
+                # Find the update for this package
+                update = next(
+                    (u for u in updates_to_process if u.name == pkg_name), None
+                )
+                if update:
+                    pkg_approved = is_auto_approved(
+                        package_name=update.name,
+                        update_type=update.update_type,
+                        ecosystem=update.ecosystem,
+                        is_security=update.is_security,
+                        config=config,
+                    )
+                    if not pkg_approved:
+                        all_approved = False
+                        break
+                else:
+                    all_approved = False
+                    break
+            batch_auto_approved = all_approved
+
+        auto_approve_marker = " ✅ AUTO-APPROVED" if batch_auto_approved else ""
+
         print(
-            f"  {risk_icon} {batch.batch_id}: {len(batch.packages)} package(s){security_marker}"
+            f"  {risk_icon} {batch.batch_id}: {len(batch.packages)} package(s){security_marker}{auto_approve_marker}"
         )
         print(f"     Priority: {batch.priority} | Risk: {batch.risk_level}")
         print(f"     Packages: {', '.join(batch.packages[:5])}")
@@ -704,8 +838,33 @@ Examples:
         print("💾 Saving JSON report...")
         json_file = output_dir / "dependency_report.json"
         report_data = scanner.to_dict(scan_result)
-        report_data["batches"] = [
-            {
+        report_data["batches"] = []
+        for b in batches:
+            # Determine auto-approval status for the batch
+            batch_auto_approved = False
+            if config and b.update_type in ("patch", "minor"):
+                all_approved = True
+                for pkg_name in b.packages:
+                    update = next(
+                        (u for u in updates_to_process if u.name == pkg_name), None
+                    )
+                    if update:
+                        pkg_approved = is_auto_approved(
+                            package_name=update.name,
+                            update_type=update.update_type,
+                            ecosystem=update.ecosystem,
+                            is_security=update.is_security,
+                            config=config,
+                        )
+                        if not pkg_approved:
+                            all_approved = False
+                            break
+                    else:
+                        all_approved = False
+                        break
+                batch_auto_approved = all_approved
+
+            batch_dict = {
                 "batch_id": b.batch_id,
                 "update_type": b.update_type,
                 "ecosystem": b.ecosystem,
@@ -714,9 +873,9 @@ Examples:
                 "is_security_batch": b.is_security_batch,
                 "priority": b.priority,
                 "notes": b.notes,
+                "auto_approved": batch_auto_approved,
             }
-            for b in batches
-        ]
+            report_data["batches"].append(batch_dict)
         import json
 
         with open(json_file, "w", encoding="utf-8") as f:
@@ -731,6 +890,8 @@ Examples:
             batches=batches,
             project_dir=project_dir,
             ecosystems_filter=ecosystems_filter,
+            config=config,
+            updates_to_process=updates_to_process,
         )
         markdown_file.write_text(markdown_content, encoding="utf-8")
         print(f"   Saved to: {markdown_file}")
@@ -914,8 +1075,35 @@ Examples:
                 else "🟢"
             )
             security_badge = " 🔒 **SECURITY**" if batch.is_security_batch else ""
+
+            # Determine auto-approval status for the batch
+            batch_auto_approved = False
+            if config and batch.update_type in ("patch", "minor"):
+                all_approved = True
+                for pkg_name in batch.packages:
+                    update = next(
+                        (u for u in updates_to_process if u.name == pkg_name), None
+                    )
+                    if update:
+                        pkg_approved = is_auto_approved(
+                            package_name=update.name,
+                            update_type=update.update_type,
+                            ecosystem=update.ecosystem,
+                            is_security=update.is_security,
+                            config=config,
+                        )
+                        if not pkg_approved:
+                            all_approved = False
+                            break
+                    else:
+                        all_approved = False
+                        break
+                batch_auto_approved = all_approved
+
+            auto_approve_badge = " ✅ **AUTO-APPROVED**" if batch_auto_approved else ""
+
             pr_body_lines.extend([
-                f"#### Batch {i}: `{batch.batch_id}` {security_badge}",
+                f"#### Batch {i}: `{batch.batch_id}` {security_badge}{auto_approve_badge}",
                 f"- **Risk Level**: {risk_icon} {batch.risk_level.title()}",
                 f"- **Priority**: {batch.priority}",
                 f"- **Packages**: {len(batch.packages)}",
