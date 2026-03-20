@@ -1,0 +1,141 @@
+=== AUTO-BUILD PROGRESS ===
+
+Project: Merge Completion Recording
+Workspace: managed by orchestrator
+Started: 2026-03-20
+
+Workflow Type: simple
+Rationale: Single focused feature adding merge completion tracking to existing FileEvolutionTracker
+
+Session 1 (Planner):
+- Created implementation_plan.json
+- Phases: 5
+- Total subtasks: 8
+- Created init.sh
+
+Phase Summary:
+- Add Merge Completion Data Models: 1 subtask, depends on []
+- Add Tracker Methods: 2 subtasks, depends on [phase-1-data-models]
+- Add Storage Persistence: 1 subtask, depends on [phase-2-tracker-methods]
+- Implement Workspace Integration: 2 subtasks, depends on [phase-3-storage-persistence]
+- Testing and Verification: 2 subtasks, depends on [phase-4-workspace-integration]
+
+Services Involved:
+- backend: Implement merge completion recording in FileEvolutionTracker and workspace
+
+Parallelism Analysis:
+- Max parallel phases: 1
+- Recommended workers: 1
+- Parallel groups: None (sequential execution)
+
+Key Findings from Investigation:
+- MergeAnalyticsRecorder already records merge operations
+- FileEvolutionTracker exists but lacks merge completion tracking
+- TODO in workspace.py line 1638 for _record_merge_completion function
+- Need to add merge completion history to enable learning from past merges
+
+=== STARTUP COMMAND ===
+
+To continue building this spec, run:
+
+  source .auto-claude/.venv/bin/activate && python apps/backend/run.py --spec 156
+
+=== END SESSION 1 ===
+
+=== STARTUP COMMAND ===
+
+To continue building this spec, run:
+
+  source .auto-claude/.venv/bin/activate && python apps/backend/run.py --spec 156
+
+=== SESSION 2 (Coder) - Started 2026-03-20 ===
+
+Phase 1 (Add Merge Completion Data Models):
+- [✓] subtask-1-1: Create MergeCompletionRecord dataclass in file_evolution module
+  - Added @dataclass MergeCompletionRecord to apps/backend/merge/file_evolution/tracker.py
+  - Fields: merge_id, timestamp, task_ids, resolved_files, success, error
+  - Methods: to_dict(), from_dict(), properties (files_resolved_count, tasks_merged_count)
+  - Follows patterns from analytics_models.py
+  - Verification: All tests passed
+  - Committed: feat(merge): add MergeCompletionRecord dataclass
+
+Next subtask: subtask-2-1 (Add record_merge_completion method to FileEvolutionTracker)
+
+=== END SESSION 2 ===
+
+=== SESSION 3 (Coder) - Started 2026-03-20 ===
+
+Phase 2 (Add Tracker Methods):
+- [✓] subtask-2-1: Add record_merge_completion method to FileEvolutionTracker
+  - Added record_merge_completion method to FileEvolutionTracker class
+  - Generates unique merge_id: "merge_{timestamp}_{task_ids_hash}"
+  - Creates MergeCompletionRecord with merge details
+  - Loads existing history, appends new record, saves to merge_history.json
+  - Includes debug logging for success/failure cases
+  - Follows pattern from ModificationTracker
+  - Verification: All tests passed
+  - Committed: feat(merge): add record_merge_completion method to FileEvolutionTracker
+
+- [✓] subtask-2-2: Add get_merge_completion_history method to FileEvolutionTracker
+  - Added get_merge_completion_history method to FileEvolutionTracker class
+  - Loads merge history from storage (list of dicts)
+  - Converts dicts to MergeCompletionRecord objects using from_dict()
+  - Supports optional filtering by task_id
+  - Supports limiting number of records returned (default: 100)
+  - Returns list of MergeCompletionRecord objects (most recent first)
+  - Follows pattern from MergeAnalyticsRecorder.get_operation_history
+  - Verification: Syntax check passed, method exists in code
+  - Committed: feat(merge): add get_merge_completion_history method to FileEvolutionTracker
+
+Next subtask: subtask-3-1 (Add merge_completions.json file handling to EvolutionStorage)
+
+=== END SESSION 3 ===
+
+=== SESSION 4 (Coder) - Started 2026-03-20 ===
+
+Phase 3 (Add Storage Persistence):
+- [✓] subtask-3-1: Add merge_completions.json file handling to EvolutionStorage
+  - Added merge_completions_file attribute to EvolutionStorage.__init__
+  - Implemented load_merge_completions() method following load_merge_history() pattern
+  - Implemented save_merge_completions() method following save_merge_history() pattern
+  - Both methods handle errors gracefully with try/except blocks
+  - Returns empty list on load error (same pattern as load_merge_history)
+  - Uses same JSON format with indent=2 for readability
+  - Added debug logging for successful operations
+  - Added error logging for failed operations
+  - Follows existing storage patterns exactly
+  - Verification: Import test passed, methods exist and work correctly
+  - Committed: feat(merge): add merge_completions.json file handling to EvolutionStorage
+
+Next subtask: subtask-4-1 (Implement _record_merge_completion function in workspace.py)
+
+=== END SESSION 4 ===
+
+=== SESSION 5 (Coder) - Started 2026-03-20 ===
+
+Phase 4 (Implement Workspace Integration):
+- [✓] subtask-4-1: Implement _record_merge_completion function in workspace.py
+  - Added _record_merge_completion function to apps/backend/core/workspace.py (line 2157)
+  - Function records merge completion in Evolution Tracker for future context
+  - Creates FileEvolutionTracker instance and calls record_merge_completion()
+  - Parameters: project_dir (Path), spec_name (str), resolved_files (list[str])
+  - Calls tracker.record_merge_completion(task_ids=[spec_name], resolved_files, success=True)
+  - Non-blocking implementation with try/except error handling
+  - Includes debug_success logging on successful recording
+  - Includes debug_warning logging on failures
+  - Uncommented call to _record_merge_completion in _resolve_git_conflicts_with_ai (line 1637-1638)
+  - Removed _record_merge_completion from "remaining functions" comment at top of file
+  - Verification: Function exists in workspace.py, call is active
+  - Committed: feat(workspace): implement _record_merge_completion function
+
+- [✓] subtask-4-2: Uncomment and activate _record_merge_completion call in merge_existing_build
+  - Uncommented lines 1637-1638 in _resolve_git_conflicts_with_ai function
+  - Call now executes: _record_merge_completion(project_dir, spec_name, resolved_files)
+  - Activated merge completion recording after successful merge
+  - Updated comment to reflect function is now implemented
+  - Verification: Call is active and not commented out
+  - Included in same commit as subtask-4-1
+
+Next subtask: subtask-5-1 (Create test for merge completion recording)
+
+=== END SESSION 5 ===
