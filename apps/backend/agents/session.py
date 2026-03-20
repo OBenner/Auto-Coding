@@ -26,7 +26,9 @@ from debug import (
     debug_success,
     debug_warning,
 )
+from analysis.failure_pattern_extractor import FailurePatternExtractor
 from insight_extractor import extract_session_insights
+from integrations.graphiti.failure_pattern_store import FailurePatternStore
 from linear_updater import (
     linear_subtask_completed,
     linear_subtask_failed,
@@ -449,6 +451,101 @@ def save_token_stats(
         return False
 
 
+async def extract_and_store_failure_patterns(
+    spec_dir: Path,
+    project_dir: Path,
+    subtask_id: str,
+    recovery_manager: RecoveryManager,
+) -> int:
+    """
+    Extract failure patterns from attempt history and store in Graphiti.
+
+    This analyzes the recovery attempt history to identify recurring patterns
+    and stores them in Graphiti for cross-session learning and improved recovery.
+
+    Args:
+        spec_dir: Spec directory containing attempt history
+        project_dir: Project root directory
+        subtask_id: Subtask to analyze
+        recovery_manager: Recovery manager instance
+
+    Returns:
+        Number of patterns extracted and stored
+    """
+    try:
+        # Extract patterns from attempt history
+        extractor = FailurePatternExtractor(spec_dir)
+        analysis = extractor.extract_patterns(subtask_id)
+
+        if not analysis.patterns:
+            debug("session", "No failure patterns detected for subtask", subtask_id=subtask_id)
+            return 0
+
+        debug(
+            "session",
+            f"Extracted {len(analysis.patterns)} failure patterns",
+            subtask_id=subtask_id,
+            pattern_types=[p.pattern_type.value for p in analysis.patterns],
+        )
+
+        # Get Graphiti memory instance
+        from .memory_manager import get_graphiti_memory
+
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if not memory or not memory.is_enabled:
+            debug_warning("session", "Graphiti not enabled, skipping pattern storage")
+            return 0
+
+        # Create failure pattern store
+        pattern_store = FailurePatternStore(
+            client=memory.client,
+            group_id=memory.group_id,
+            spec_context_id=memory.spec_context_id,
+            group_id_mode=memory.group_id_mode,
+            project_dir=project_dir,
+        )
+
+        # Store each pattern
+        stored_count = 0
+        for pattern in analysis.patterns:
+            try:
+                success = await pattern_store.store_failure_pattern(
+                    pattern_type=pattern.pattern_type.value,
+                    description=pattern.description,
+                    frequency=pattern.frequency,
+                    confidence=pattern.confidence,
+                    first_seen=pattern.first_seen,
+                    last_seen=pattern.last_seen,
+                    affected_subtasks=pattern.affected_subtasks,
+                    recovery_recommendations=analysis.recovery_recommendations,
+                    metadata=pattern.metadata,
+                )
+                if success:
+                    stored_count += 1
+                    debug(
+                        "session",
+                        f"Stored failure pattern: {pattern.pattern_type.value}",
+                        confidence=pattern.confidence,
+                        frequency=pattern.frequency,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to store failure pattern: {e}")
+                debug_error("session", "Pattern storage failed", error=str(e))
+
+        if stored_count > 0:
+            debug_success(
+                "session",
+                f"Stored {stored_count}/{len(analysis.patterns)} failure patterns to Graphiti",
+            )
+
+        return stored_count
+
+    except Exception as e:
+        logger.warning(f"Failure pattern extraction failed: {e}")
+        debug_error("session", "Pattern extraction failed", error=str(e))
+        return 0
+
+
 async def post_session_processing(
     spec_dir: Path,
     project_dir: Path,
@@ -578,6 +675,20 @@ async def post_session_processing(
             logger.warning(f"Insight extraction failed: {e}")
             extracted_insights = None
 
+        # Extract and store failure patterns from attempt history
+        try:
+            patterns_stored = await extract_and_store_failure_patterns(
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                subtask_id=subtask_id,
+                recovery_manager=recovery_manager,
+            )
+            if patterns_stored > 0:
+                print_status(f"Stored {patterns_stored} failure patterns to Graphiti", "success")
+        except Exception as e:
+            logger.warning(f"Failure pattern extraction failed: {e}")
+            debug_error("session", "Pattern extraction failed", error=str(e))
+
         # Save session memory (Graphiti=primary, file-based=fallback)
         try:
             save_success, storage_type = await save_session_memory(
@@ -658,6 +769,19 @@ async def post_session_processing(
             logger.debug(f"Insight extraction failed for incomplete session: {e}")
             extracted_insights = None
 
+        # Extract and store failure patterns from attempt history
+        try:
+            patterns_stored = await extract_and_store_failure_patterns(
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                subtask_id=subtask_id,
+                recovery_manager=recovery_manager,
+            )
+            if patterns_stored > 0:
+                print_status(f"Stored {patterns_stored} failure patterns to Graphiti", "info")
+        except Exception as e:
+            logger.debug(f"Failure pattern extraction failed for incomplete session: {e}")
+
         # Save failed session memory (to track what didn't work)
         try:
             await save_session_memory(
@@ -719,6 +843,19 @@ async def post_session_processing(
         except Exception as e:
             logger.debug(f"Insight extraction failed for failed session: {e}")
             extracted_insights = None
+
+        # Extract and store failure patterns from attempt history
+        try:
+            patterns_stored = await extract_and_store_failure_patterns(
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                subtask_id=subtask_id,
+                recovery_manager=recovery_manager,
+            )
+            if patterns_stored > 0:
+                print_status(f"Stored {patterns_stored} failure patterns to Graphiti", "info")
+        except Exception as e:
+            logger.debug(f"Failure pattern extraction failed for failed session: {e}")
 
         # Save failed session memory (to track what didn't work)
         try:
