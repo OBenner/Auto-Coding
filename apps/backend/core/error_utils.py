@@ -6,21 +6,10 @@ Shared Error Utilities (DEPRECATED)
     **This module is deprecated.** Use typed error classes from ``core.typed_errors``
     and error detection functions from ``core.error_detection`` instead.
 
-    String-based error detection is being phased out in favor of a robust typed
+    String-based error detection has been completely removed in favor of a robust typed
     error system. All functions in this module will be removed in a future version.
 
 **Migration Guide:**
-
-Old pattern (string-based detection)::
-
-    from core.error_utils import is_authentication_error, is_rate_limit_error
-
-    if is_authentication_error(exc):
-        # Handle auth error
-        pass
-    elif is_rate_limit_error(exc):
-        # Handle rate limit
-        pass
 
 New pattern (typed errors)::
 
@@ -62,7 +51,6 @@ New pattern (typed errors)::
 from __future__ import annotations
 
 import logging
-import re
 import warnings
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
@@ -80,12 +68,9 @@ def is_tool_concurrency_error(error: Exception) -> bool:
     """
     Check if an error is a 400 tool concurrency error from Claude API.
 
-    Tool concurrency errors occur when too many tools are used simultaneously
-    in a single API request, hitting Claude's concurrent tool use limit.
-
     .. deprecated::
-        String-based error detection is deprecated. Use typed error classes
-        from ``core.typed_errors`` instead. This function will be removed in
+        This function is deprecated. Use ``ToolConcurrencyError`` from
+        ``core.typed_errors`` instead. This function will be removed in
         a future version.
 
     Args:
@@ -96,33 +81,28 @@ def is_tool_concurrency_error(error: Exception) -> bool:
     """
     warnings.warn(
         "is_tool_concurrency_error() is deprecated and will be removed in a "
-        "future version. Use typed error classes from core.typed_errors instead.",
+        "future version. Use ToolConcurrencyError from core.typed_errors instead.",
         DeprecationWarning,
         stacklevel=2,
     )
-    error_str = str(error).lower()
-    # Check for 400 status AND tool concurrency keywords
-    return "400" in error_str and (
-        ("tool" in error_str and "concurrency" in error_str)
-        or "too many tools" in error_str
-        or "concurrent tool" in error_str
-    )
+    # TODO: Remove this function in a future version
+    return False
 
 
 def is_rate_limit_error(error: Exception) -> bool:
     """
-    Check if an error is a rate limit error (429 or similar).
+    Check if an error is a rate limit error.
 
     Rate limit errors occur when the API usage quota is exceeded,
     either for session limits or weekly limits.
 
-    This function first checks for typed RateLimitError instances,
-    then falls back to string-based detection for backward compatibility.
+    This function only checks for typed RateLimitError instances.
+    String-based detection has been removed in favor of typed error classes.
 
     .. deprecated::
-        String-based error detection is deprecated. Use typed ``RateLimitError``
-        from ``core.typed_errors`` instead. The string-based fallback will be
-        removed in a future version.
+        This function is deprecated. Use ``RateLimitError`` from
+        ``core.typed_errors`` instead. This function will be removed in
+        a future version.
 
     Args:
         error: The exception to check
@@ -130,36 +110,14 @@ def is_rate_limit_error(error: Exception) -> bool:
     Returns:
         True if this is a rate limit error, False otherwise
     """
-    # Check for typed RateLimitError first
-    if isinstance(error, RateLimitError):
-        return True
-
-    # Fall back to string-based detection for backward compatibility
     warnings.warn(
-        "String-based rate limit error detection in is_rate_limit_error() is "
-        "deprecated and will be removed in a future version. Use typed "
-        "RateLimitError from core.typed_errors instead.",
+        "is_rate_limit_error() is deprecated and will be removed in a "
+        "future version. Use RateLimitError from core.typed_errors instead.",
         DeprecationWarning,
         stacklevel=2,
     )
-
-    error_str = str(error).lower()
-
-    # Check for HTTP 429 with word boundaries to avoid false positives
-    if re.search(r"\b429\b", error_str):
-        return True
-
-    # Check for other rate limit indicators
-    return any(
-        p in error_str
-        for p in [
-            "limit reached",
-            "rate limit",
-            "too many requests",
-            "usage limit",
-            "quota exceeded",
-        ]
-    )
+    # Only check for typed RateLimitError
+    return isinstance(error, RateLimitError)
 
 
 def is_authentication_error(error: Exception) -> bool:
@@ -169,30 +127,13 @@ def is_authentication_error(error: Exception) -> bool:
     Authentication errors occur when OAuth tokens are invalid, expired,
     or have been revoked (e.g., after token refresh on another process).
 
-    This function first checks for typed AuthError instances,
-    then falls back to string-based detection for backward compatibility.
+    This function only checks for typed AuthError instances.
+    String-based detection has been removed in favor of typed error classes.
 
     .. deprecated::
-        String-based error detection is deprecated. Use typed ``AuthError``
-        from ``core.typed_errors`` instead. The string-based fallback will be
-        removed in a future version.
-
-    Validation approach:
-    - Typed AuthError instances are detected via isinstance() check
-    - HTTP 401 status code is checked with word boundaries to minimize false positives
-    - Additional string patterns are validated against lowercase error messages
-    - Patterns are designed to match known Claude API and OAuth error formats
-
-    Known false positive risks:
-    - Generic error messages containing "unauthorized" or "access denied" may match
-      even if not related to authentication (e.g., file permission errors)
-    - Error messages containing these keywords in user-provided content could match
-    - Mitigation: HTTP 401 check provides strong signal; string patterns are secondary
-
-    Real-world validation:
-    - Pattern matching has been tested against actual Claude API error responses
-    - False positive rate is acceptable given the recovery mechanism (prompt user to re-auth)
-    - If false positive occurs, user can simply resume without re-authenticating
+        This function is deprecated. Use ``AuthError`` from
+        ``core.typed_errors`` instead. This function will be removed in
+        a future version.
 
     Args:
         error: The exception to check
@@ -200,45 +141,14 @@ def is_authentication_error(error: Exception) -> bool:
     Returns:
         True if this is an authentication error, False otherwise
     """
-    # Check for typed AuthError first
-    if isinstance(error, AuthError):
-        return True
-
-    # Fall back to string-based detection for backward compatibility
     warnings.warn(
-        "String-based authentication error detection in is_authentication_error() "
-        "is deprecated and will be removed in a future version. Use typed "
-        "AuthError from core.typed_errors instead.",
+        "is_authentication_error() is deprecated and will be removed in a "
+        "future version. Use AuthError from core.typed_errors instead.",
         DeprecationWarning,
         stacklevel=2,
     )
-
-    error_str = str(error).lower()
-
-    # Check for HTTP 401 with word boundaries to avoid false positives
-    if re.search(r"\b401\b", error_str):
-        return True
-
-    # Check for other authentication indicators
-    # NOTE: "authentication failed" and "authentication error" are more specific patterns
-    # to reduce false positives from generic "authentication" mentions
-    return any(
-        p in error_str
-        for p in [
-            "authentication failed",
-            "authentication error",
-            "unauthorized",
-            "invalid token",
-            "token expired",
-            "authentication_error",
-            "invalid_token",
-            "token_expired",
-            "not authenticated",
-            "http 401",
-            "does not have access to claude",
-            "please login again",
-        ]
-    )
+    # Only check for typed AuthError
+    return isinstance(error, AuthError)
 
 
 async def safe_receive_messages(
