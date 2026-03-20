@@ -1,110 +1,84 @@
 {
   "files_to_modify": {
     "backend": [
-      "apps/backend/core/cost_tracking.py",
-      "apps/backend/phase_config.py",
+      "apps/backend/services/recovery.py",
+      "apps/backend/qa/recovery_metrics.py",
+      "apps/backend/agents/coder.py",
       "apps/backend/agents/session.py",
-      "apps/backend/cli/main.py",
-      "apps/backend/cli/build_commands.py",
-      "apps/backend/cli/utils.py"
+      "apps/backend/prompts/coder_recovery.md",
+      "apps/backend/cli/main.py"
     ],
-    "frontend": [
-      "apps/frontend/src/main/ipc-handlers/analytics-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/index.ts",
-      "apps/frontend/src/renderer/App.tsx",
-      "apps/frontend/src/renderer/pages/ProjectSettings.tsx",
-      "apps/frontend/src/shared/i18n/locales/en/settings.json"
-    ]
+    "frontend": []
   },
   "files_to_create": {
     "backend": [
-      "apps/backend/analysis/model_usage_analytics.py",
-      "apps/backend/scripts/model_locks_manager.py",
-      "apps/backend/cli/exit_codes.py",
-      "apps/backend/cli/json_output.py",
-      "apps/backend/cli/artifacts.py",
-      "tests/test_cli_exit_codes.py",
-      "tests/test_json_output.py",
-      "tests/test_artifacts.py"
+      "apps/backend/analysis/failure_pattern_extractor.py",
+      "apps/backend/integrations/graphiti/failure_pattern_store.py",
+      "apps/backend/cli/pattern_commands.py",
+      "tests/analysis/test_failure_pattern_extractor.py",
+      "tests/integrations/graphiti/test_failure_pattern_store.py"
     ],
-    "frontend": [
-      "apps/frontend/src/main/ipc-handlers/model-usage-handlers.ts",
-      "apps/frontend/src/renderer/components/model-usage/ModelUsageDashboard.tsx",
-      "apps/frontend/src/renderer/components/model-usage/ModelUsageCard.tsx",
-      "apps/frontend/src/renderer/components/model-usage/CostChart.tsx",
-      "apps/frontend/src/renderer/components/model-usage/AgentModelDisplay.tsx",
-      "apps/frontend/src/renderer/components/model-usage/ModelLockControl.tsx",
-      "apps/frontend/src/renderer/components/model-usage/ModelChangeConfirmationDialog.tsx",
-      "apps/frontend/src/shared/i18n/locales/en/model-usage.json",
-      "apps/frontend/src/shared/i18n/locales/fr/model-usage.json"
-    ],
-    "root": [
-      ".github/workflows/auto-claude-build.yml",
-      "guides/ci-cd-integration.md"
-    ]
+    "frontend": []
+  },
   },
   "files_to_reference": [
-    "apps/backend/core/cost_tracking.py",
-    "apps/backend/phase_config.py",
-    "apps/backend/analysis/productivity_analytics.py",
-    "apps/frontend/src/renderer/components/analytics/ProductivityDashboard.tsx",
-    "apps/frontend/src/renderer/components/analytics/MetricsSummaryCard.tsx",
-    "apps/frontend/src/renderer/components/analytics/TrendsChart.tsx",
-    "apps/frontend/src/renderer/components/project-settings/AgentConfigSection.tsx",
-    "apps/frontend/src/main/ipc-handlers/analytics-handlers.ts",
-    "apps/backend/cli/workspace_commands.py",
-    "apps/backend/ui/status.py",
-    "apps/backend/agents/utils.py",
-    ".github/workflows/ci.yml"
+    "apps/backend/analysis/failure_analyzer.py",
+    "apps/backend/analysis/failure_storage.py",
+    "apps/backend/services/recovery.py",
+    "apps/backend/integrations/graphiti/pattern_store.py",
+    "apps/backend/qa/recovery_metrics.py",
+    "apps/backend/cli/pattern_commands.py",
+    "apps/backend/agents/memory_manager.py",
+    "tests/integrations/graphiti/test_graphiti_memory.py"
   ],
   "patterns": {
-    "backend_analytics": "Productivity analytics pattern: create Python script in analysis/ directory, call via IPC handler using spawn(). Script outputs JSON with summary, trends, export options.",
-    "ipc_handler_pattern": "IPC handlers in main/ipc-handlers/ use ipcMain.handle() with IPC_CHANNELS constant. Execute Python scripts via spawn() with augmented env vars.",
-    "dashboard_component": "Dashboard components follow ProductivityDashboard pattern: useState for data, useCallback for loading, use Toast for notifications. Separate into card and chart components.",
-    "settings_component": "Settings components use CollapsibleSection with Label + Select pattern. All state changes via onUpdateSettings callback.",
-    "i18n_pattern": "Add translation keys to en/ and fr/ locales. Use namespace: t('namespace:key') pattern in components.",
-    "cli_argument_pattern": "All CLI flags are added to argparse.ArgumentParser in cli/main.py with proper help text and examples",
-    "exit_code_pattern": "Use sys.exit() with specific codes - currently using 0 (success), 1 (error), 130 (Ctrl+C)",
-    "json_output_pattern": "JSON output already used in workspace_commands.py: print(json.dumps(result))",
-    "env_var_pattern": "Environment variables read via os.getenv() in utils.py - e.g., DEFAULT_BRANCH, AUTO_BUILD_MODEL",
-    "artifact_pattern": "Status and build data tracked in ui/status.py with BuildState enum and StatusManager"
+    "failure_analysis": "FailureAnalyzer in analysis/failure_analyzer.py uses heuristics and optional Claude SDK for root cause analysis. Returns structured failure data.",
+    "pattern_storage": "PatternStore in integrations/graphiti/pattern_store.py manages pattern storage and retrieval with confidence tracking using Graphiti memory.",
+    "recovery_system": "RecoveryManager in services/recovery.py provides automatic rollback, circular fix detection, and attempt history tracking.",
+    "cli_commands": "CLI commands in cli/ use argparse subcommands pattern. Pattern commands in cli/pattern_commands.py use get_graphiti_memory() helper.",
+    "graphiti_integration": "Graphiti memory accessed via memory.graphiti_helpers.get_graphiti_memory(). Uses run_async() for async operations.",
+    "qa_metrics": "RecoveryMetrics in qa/recovery_metrics.py tracks recovery success rates and metrics for QA loop."
   },
   "existing_implementations": {
-    "cost_tracking": {
-      "description": "Found existing cost tracking system in apps/backend/core/cost_tracking.py",
+    "failure_analysis": {
+      "description": "Found FailureAnalyzer in apps/backend/analysis/failure_analyzer.py",
       "relevant_files": [
-        "apps/backend/core/cost_tracking.py",
-        "apps/backend/core/token_tracker.py"
+        "apps/backend/analysis/failure_analyzer.py",
+        "apps/backend/analysis/failure_storage.py"
       ],
-      "details": "CostTracker class logs usage records with agent_type, model, tokens, cost, timestamp. Reads MODEL_PRICING dict with per-1M-token pricing."
+      "details": "FailureAnalyzer extracts root causes from build failures using heuristics and optional Claude SDK. Returns structured failure data with type, root_cause, suggested_fix."
     },
-    "model_configuration": {
-      "description": "Found model configuration system in phase_config.py",
+    "pattern_storage": {
+      "description": "Found PatternStore in apps/backend/integrations/graphiti/pattern_store.py",
       "relevant_files": [
-        "apps/backend/phase_config.py"
+        "apps/backend/integrations/graphiti/pattern_store.py",
+        "apps/backend/integrations/graphiti/pattern_extractor.py",
+        "apps/backend/integrations/graphiti/pattern_learner.py"
       ],
-      "details": "AGENT_DEFAULT_MODELS dict maps agent types to default models. Supports environment variable overrides AGENT_MODEL_<AGENT_TYPE>. Task metadata agentModels field for per-agent config."
+      "details": "PatternStore manages pattern storage and retrieval with confidence tracking. Uses Graphiti memory for cross-session learning."
     },
-    "agent_session": {
-      "description": "Found agent session tracking in agents/session.py",
+    "recovery_system": {
+      "description": "Found RecoveryManager in apps/backend/services/recovery.py",
       "relevant_files": [
-        "apps/backend/agents/session.py"
+        "apps/backend/services/recovery.py",
+        "apps/backend/qa/recovery_metrics.py"
       ],
-      "details": "AgentSession class manages SDK client creation and agent execution. Logs model used per session."
+      "details": "RecoveryManager provides automatic rollback, circular fix detection, and attempt history tracking. Has FailureType enum and retry strategies."
     },
-    "dashboard_ui": {
-      "description": "Found analytics dashboard pattern",
+    "cli_pattern_commands": {
+      "description": "Found pattern commands in apps/backend/cli/pattern_commands.py",
       "relevant_files": [
-        "apps/frontend/src/renderer/components/analytics/ProductivityDashboard.tsx",
-        "apps/frontend/src/renderer/components/analytics/MetricsSummaryCard.tsx",
-        "apps/frontend/src/renderer/components/analytics/TrendsChart.tsx"
+        "apps/backend/cli/pattern_commands.py"
       ],
-      "details": "ProductivityDashboard uses summary cards and trends chart. IPC handlers call Python scripts via executePythonAnalytics()."
+      "details": "CLI commands for listing learned patterns. Uses get_graphiti_memory() helper and pattern categorization."
     },
-    "cli_structure": "CLI entry point is apps/backend/run.py which imports cli.main. argparse used for argument parsing in cli/main.py",
-    "exit_codes": "Current exit codes: 0 (success), 1 (various errors), 130 (KeyboardInterrupt). No specific codes for build/QA failure",
-    "json_output": "JSON output pattern exists in workspace_commands.py for --merge-preview and --create-pr commands",
-    "build_states": "BuildState enum in ui/status.py: IDLE, PLANNING, BUILDING, QA, COMPLETE, PAUSED, ERROR",
-    "github_actions": "Existing CI workflow: .github/workflows/ci.yml with cross-platform testing (Linux, Windows, macOS)"
+    "graphiti_helpers": {
+      "description": "Found Graphiti memory helpers in apps/backend/memory/graphiti_helpers.py",
+      "relevant_files": [
+        "apps/backend/memory/graphiti_helpers.py",
+        "apps/backend/memory/patterns.py"
+      ],
+      "details": "get_graphiti_memory() factory function. run_async() wrapper for async operations. File-based pattern storage as fallback."
+    }
   }
 }
