@@ -288,3 +288,103 @@ with open(history_file, "w") as f:
 
 # Also update implementation_plan.json status to "blocked"
 ```
+
+---
+
+## FAILURE PATTERN INTEGRATION
+
+### Automatic Failure Pattern Context (Enhanced Recovery)
+
+When a subtask is being retried (attempt_count > 0), the coder agent now automatically retrieves relevant failure patterns from Graphiti memory.
+
+**What this provides:**
+- Historical context from similar past failures
+- Root cause analyses from previous builds
+- Proven recovery strategies that worked before
+- Warnings about recurring failure patterns
+
+**How it works:**
+
+1. On retry attempts, `get_failure_patterns()` searches Graphiti for:
+   - Similar error types (qa_rejection, build_error, test_failure)
+   - Related task descriptions
+   - Files with similar failure patterns
+
+2. The failure patterns are formatted into a dedicated section:
+   ```markdown
+   ## Failure Pattern Analysis
+
+   _Similar failures from past builds (learn from history):_
+
+   ### QA Rejection
+
+   #### Integration Issues
+   - **Root Cause**: Missing import in newly added module
+     _Files_: apps/backend/api/routes.py, apps/backend/models/user.py
+     _Confidence_: 0.85 | _Relevance_: 0.92 | _From_: spec-145
+     _Recommendations_:
+     - Run linter before committing: `flake8 apps/backend/`
+     - Check imports: `python -c "from api.routes import *"`
+     - Use IDE autocomplete to verify imports
+
+   ### Build Error
+
+   #### Dependency Issues
+   - **Root Cause**: Incompatible package version
+     _Recurring_: ⚠️ Yes (seen in 3 builds)
+     _Recommendations_:
+     - Lock dependency versions in requirements.txt
+     - Use virtual environment isolation
+   ```
+
+3. The AI agent uses this context to:
+   - Avoid repeating the same mistakes
+   - Apply proven fixes from similar situations
+   - Check for recurring issues in the codebase
+   - Choose recovery strategies with higher success rates
+
+**When failure patterns are NOT included:**
+- First attempt at a subtask (attempt_count = 0)
+- Graphiti memory is disabled
+- No similar patterns found in history
+
+**Implementation details:**
+
+In `apps/backend/agents/coder.py`, the failure pattern retrieval is integrated into the main agent loop:
+
+```python
+# After pattern suggestions retrieval (line 1010-1016)
+if attempt_count > 0:
+    failure_patterns = await get_failure_patterns(
+        spec_dir=spec_dir,
+        project_dir=project_dir,
+        query=subtask_description,
+        num_results=3,  # Top 3 most relevant patterns
+    )
+    if failure_patterns:
+        print_status("Failure pattern context loaded for recovery", "success")
+
+# Then added to prompt after recovery strategy (line 1035-1037)
+if failure_patterns:
+    prompt += f"\n\n{failure_patterns}\n"
+```
+
+**Benefits:**
+- Faster recovery from failures (learn from past)
+- Reduced circular fix attempts (see what didn't work)
+- Higher success rate on retries (proven strategies)
+- Cross-session learning (patterns persist across builds)
+
+**Example impact:**
+
+Without failure patterns:
+- Attempt 1: Fails with import error
+- Attempt 2: Fails with same import error (circular fix)
+- Attempt 3: Still failing, marked as stuck
+
+With failure patterns:
+- Attempt 1: Fails with import error
+- Attempt 2: System shows "Similar to spec-145 import error - solution: check flake8"
+- Agent runs flake8, fixes all import issues
+- Attempt 2 succeeds ✓
+```
