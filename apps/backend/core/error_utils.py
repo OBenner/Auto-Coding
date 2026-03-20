@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -32,12 +33,23 @@ def is_tool_concurrency_error(error: Exception) -> bool:
     Tool concurrency errors occur when too many tools are used simultaneously
     in a single API request, hitting Claude's concurrent tool use limit.
 
+    .. deprecated::
+        String-based error detection is deprecated. Use typed error classes
+        from ``core.typed_errors`` instead. This function will be removed in
+        a future version.
+
     Args:
         error: The exception to check
 
     Returns:
         True if this is a tool concurrency error, False otherwise
     """
+    warnings.warn(
+        "is_tool_concurrency_error() is deprecated and will be removed in a "
+        "future version. Use typed error classes from core.typed_errors instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     error_str = str(error).lower()
     # Check for 400 status AND tool concurrency keywords
     return "400" in error_str and (
@@ -57,6 +69,11 @@ def is_rate_limit_error(error: Exception) -> bool:
     This function first checks for typed RateLimitError instances,
     then falls back to string-based detection for backward compatibility.
 
+    .. deprecated::
+        String-based error detection is deprecated. Use typed ``RateLimitError``
+        from ``core.typed_errors`` instead. The string-based fallback will be
+        removed in a future version.
+
     Args:
         error: The exception to check
 
@@ -68,6 +85,14 @@ def is_rate_limit_error(error: Exception) -> bool:
         return True
 
     # Fall back to string-based detection for backward compatibility
+    warnings.warn(
+        "String-based rate limit error detection in is_rate_limit_error() is "
+        "deprecated and will be removed in a future version. Use typed "
+        "RateLimitError from core.typed_errors instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     error_str = str(error).lower()
 
     # Check for HTTP 429 with word boundaries to avoid false positives
@@ -97,6 +122,11 @@ def is_authentication_error(error: Exception) -> bool:
     This function first checks for typed AuthError instances,
     then falls back to string-based detection for backward compatibility.
 
+    .. deprecated::
+        String-based error detection is deprecated. Use typed ``AuthError``
+        from ``core.typed_errors`` instead. The string-based fallback will be
+        removed in a future version.
+
     Validation approach:
     - Typed AuthError instances are detected via isinstance() check
     - HTTP 401 status code is checked with word boundaries to minimize false positives
@@ -125,6 +155,14 @@ def is_authentication_error(error: Exception) -> bool:
         return True
 
     # Fall back to string-based detection for backward compatibility
+    warnings.warn(
+        "String-based authentication error detection in is_authentication_error() "
+        "is deprecated and will be removed in a future version. Use typed "
+        "AuthError from core.typed_errors instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     error_str = str(error).lower()
 
     # Check for HTTP 401 with word boundaries to avoid false positives
