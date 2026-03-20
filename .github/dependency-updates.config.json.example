@@ -1,0 +1,85 @@
+{
+  "$schema": "./dependency-updates.schema.json",
+  "version": 1,
+  "description": "Configuration for automated dependency updates with security scanning",
+
+  "scan": {
+    "ecosystems": ["python", "node"],
+    "directories": {
+      "python": "apps/backend",
+      "node": ["apps/frontend", "apps/web-frontend"]
+    },
+    "schedule": {
+      "interval": "weekly",
+      "day": "monday",
+      "hour": 0
+    },
+    "security_only": false,
+    "severity_threshold": "high"
+  },
+
+  "auto_approval": {
+    "enabled": true,
+    "patch_updates": true,
+    "minor_updates": false,
+    "allowlisted_packages": [
+      {
+        "name": "pytest",
+        "ecosystem": "python",
+        "auto_approve": "minor"
+      },
+      {
+        "name": "lodash",
+        "ecosystem": "node",
+        "auto_approve": "patch"
+      }
+    ],
+    "blocklisted_packages": [
+      {
+        "name": "breaking-package",
+        "ecosystem": "python",
+        "reason": "Known breaking changes in major versions"
+      }
+    ]
+  },
+
+  "pull_requests": {
+    "enabled": true,
+    "labels": ["dependencies", "auto-update"],
+    "assignees": [],
+    "reviewers": [],
+    "draft": false,
+    "max_concurrent": 5,
+    "commit_message": {
+      "prefix": "chore(deps)",
+      "include_scope": true
+    }
+  },
+
+  "notifications": {
+    "enabled": true,
+    "min_severity": "high",
+    "create_issues": true,
+    "issue_labels": ["security", "vulnerability"],
+    "comment_on_pr": true
+  },
+
+  "limits": {
+    "max_updates_per_run": 20,
+    "max_prs_per_day": 10,
+    "timeout_minutes": 30
+  },
+
+  "groups": {
+    "security_updates": {
+      "name": "Security Vulnerability Fixes",
+      "description": "Automated security updates for critical vulnerabilities",
+      "exclude": []
+    },
+    "dev_dependencies": {
+      "name": "Development Dependencies",
+      "description": "Updates for development tools and testing libraries",
+      "patterns": ["@types/*", "*-dev", "*-test"]
+    }
+  }
+}
