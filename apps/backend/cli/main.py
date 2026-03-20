@@ -54,6 +54,11 @@ from .utils import (
     print_banner,
     setup_environment,
 )
+from .multi_repo_commands import (
+    handle_workspace_add_project_command,
+    handle_workspace_create_command,
+    handle_workspace_list_command,
+)
 from .workspace_commands import (
     handle_cleanup_worktrees_command,
     handle_create_pr_command,
@@ -543,6 +548,56 @@ Environment Variables:
         help="Output format for security audit report (default: both)",
     )
 
+    # Multi-repo workspace commands
+    parser.add_argument(
+        "--workspace-create",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help="Create a new multi-repo workspace with the given name",
+    )
+    parser.add_argument(
+        "--workspace-list",
+        action="store_true",
+        help="List all multi-repo workspaces",
+    )
+    parser.add_argument(
+        "--workspace-add-project",
+        type=str,
+        nargs=2,
+        default=None,
+        metavar=("WORKSPACE", "PATH"),
+        help="Add a project to a workspace: --workspace-add-project <workspace> <path>",
+    )
+    parser.add_argument(
+        "--workspace-description",
+        type=str,
+        default=None,
+        metavar="DESC",
+        help="With --workspace-create or --workspace-add-project: optional description",
+    )
+    parser.add_argument(
+        "--workspace-project-name",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help="With --workspace-add-project: override project name (default: directory name)",
+    )
+    parser.add_argument(
+        "--workspace-relationship",
+        type=str,
+        default="independent",
+        choices=["independent", "depends_on", "library", "monorepo_package"],
+        help="With --workspace-add-project: project relationship type (default: independent)",
+    )
+    parser.add_argument(
+        "--workspace-deps",
+        type=str,
+        default=None,
+        metavar="PROJECTS",
+        help="With --workspace-add-project: comma-separated project names this project depends on",
+    )
+
     return parser.parse_args()
 
 
@@ -596,6 +651,39 @@ def _run_cli() -> None:
 
     # Get provider from CLI arg (default: from env or claude)
     provider = args.provider
+
+    # Handle multi-repo workspace commands
+    if args.workspace_create:
+        success = handle_workspace_create_command(
+            name=args.workspace_create,
+            description=args.workspace_description,
+        )
+        if not success:
+            sys.exit(1)
+        return
+
+    if args.workspace_list:
+        handle_workspace_list_command()
+        return
+
+    if args.workspace_add_project:
+        workspace_name, project_path = args.workspace_add_project
+        deps = (
+            [d.strip() for d in args.workspace_deps.split(",") if d.strip()]
+            if args.workspace_deps
+            else None
+        )
+        success = handle_workspace_add_project_command(
+            workspace_name=workspace_name,
+            project_path=project_path,
+            project_name=args.workspace_project_name,
+            relationship=args.workspace_relationship,
+            dependencies=deps,
+            description=args.workspace_description,
+        )
+        if not success:
+            sys.exit(1)
+        return
 
     # Handle --list command
     if args.list:
