@@ -26,10 +26,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-try:
-    from .github.gh_client import GHClient, GHCommandError
-except ImportError:
-    from runners.github.gh_client import GHClient, GHCommandError
+# Import from runners.github module
+from runners.github.gh_client import GHClient, GHCommandError
 
 from analysis.dependency_scanner import DependencyScanResult, DependencyUpdate
 

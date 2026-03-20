@@ -28,9 +28,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Validate platform-specific dependencies BEFORE any imports that might
 # trigger graphiti_core -> real_ladybug -> pywintypes import chain (ACS-253)
+# NOTE: Validation is called in main() to avoid module-level side effects
 from core.dependency_validator import validate_platform_dependencies
-
-validate_platform_dependencies()
 
 # Load .env file with centralized error handling
 from cli.utils import import_dotenv
@@ -61,6 +60,9 @@ __all__ = [
 
 def main():
     """CLI entry point."""
+    # Validate platform-specific dependencies before any other operations
+    validate_platform_dependencies()
+
     import argparse
 
     parser = argparse.ArgumentParser(
