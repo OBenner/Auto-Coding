@@ -1,0 +1,291 @@
+{
+  "feature": "Merge Completion Recording",
+  "description": "Implement merge completion recording in Evolution Tracker for learning from past merges",
+  "workflow_type": "simple",
+  "workflow_rationale": "Single focused feature adding merge completion tracking to existing FileEvolutionTracker",
+  "phases": [
+    {
+      "id": "phase-1-data-models",
+      "name": "Add Merge Completion Data Models",
+      "type": "implementation",
+      "description": "Create data models for merge completion records",
+      "depends_on": [],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create MergeCompletionRecord dataclass in file_evolution module",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/merge/file_evolution/tracker.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/merge/analytics_models.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.merge.file_evolution.tracker import MergeCompletionRecord; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Add dataclass at top of tracker.py with fields: merge_id, timestamp, task_ids, resolved_files, success, error"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-tracker-methods",
+      "name": "Add Tracker Methods",
+      "type": "implementation",
+      "description": "Add methods to FileEvolutionTracker for merge completion recording",
+      "depends_on": [
+        "phase-1-data-models"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Add record_merge_completion method to FileEvolutionTracker",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/merge/file_evolution/tracker.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/merge/file_evolution/modification_tracker.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.merge.file_evolution.tracker import FileEvolutionTracker; print(hasattr(FileEvolutionTracker, 'record_merge_completion'))\"",
+            "expected": "True"
+          },
+          "status": "completed",
+          "notes": "Implemented record_merge_completion method with merge_id generation, MergeCompletionRecord creation, and persistence to merge_history.json"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Add get_merge_completion_history method to FileEvolutionTracker",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/merge/file_evolution/tracker.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/merge/analytics_recorder.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.merge.file_evolution.tracker import FileEvolutionTracker; print(hasattr(FileEvolutionTracker, 'get_merge_completion_history'))\"",
+            "expected": "True"
+          },
+          "status": "completed",
+          "notes": "Implemented get_merge_completion_history method that returns list of MergeCompletionRecord objects, with optional filtering by task_id and limit parameters"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-storage-persistence",
+      "name": "Add Storage Persistence",
+      "type": "implementation",
+      "description": "Update EvolutionStorage to persist merge completion data",
+      "depends_on": [
+        "phase-2-tracker-methods"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Add merge_completions.json file handling to EvolutionStorage",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/merge/file_evolution/storage.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/merge/file_evolution/storage.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.merge.file_evolution.storage import EvolutionStorage; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Added load_merge_completions and save_merge_completions methods following existing storage patterns. Implementation creates merge_completions.json file and follows same pattern as load_merge_history/save_merge_history."
+        }
+      ]
+    },
+    {
+      "id": "phase-4-workspace-integration",
+      "name": "Implement Workspace Integration",
+      "type": "implementation",
+      "description": "Implement _record_merge_completion in workspace.py",
+      "depends_on": [
+        "phase-3-storage-persistence"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Implement _record_merge_completion function in workspace.py",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/core/workspace.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/core/workspace.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.core.workspace import _record_merge_completion; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Implemented _record_merge_completion function that calls FileEvolutionTracker.record_merge_completion with task_ids=[spec_name], resolved_files, and success=True. Added error handling and debug logging. Removed from 'remaining functions' comment at top of file."
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Uncomment and activate _record_merge_completion call in merge_existing_build",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/core/workspace.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "grep -n '_record_merge_completion' apps/backend/core/workspace.py | grep -v 'def _record_merge_completion' | grep -v '#'",
+            "expected": "    _record_merge_completion(project_dir, spec_name, resolved_files)"
+          },
+          "status": "completed",
+          "notes": "Uncommented lines 1637-1638 in _resolve_git_conflicts_with_ai to activate merge completion recording after successful merge. Function is now called with project_dir, spec_name, and resolved_files."
+        }
+      ]
+    },
+    {
+      "id": "phase-5-verification",
+      "name": "Testing and Verification",
+      "type": "integration",
+      "description": "Verify merge completion recording works end-to-end",
+      "depends_on": [
+        "phase-4-workspace-integration"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create test for merge completion recording",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/tests/test_merge_completion_recording.py"
+          ],
+          "patterns_from": [
+            "apps/backend/tests"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -m pytest tests/test_merge_completion_recording.py -v",
+            "expected": "PASSED"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive test suite with 27 tests covering MergeCompletionRecord dataclass, record_merge_completion, get_merge_completion_history, and persistence across sessions. All tests passing."
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Verify merge completion data persists across sessions",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Run a merge, verify merge_completions.json is created in .auto-claude/file_evolution/, check it contains merge record"
+          },
+          "status": "pending",
+          "notes": "Manual verification that merge completions persist to disk and can be loaded after restart"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 5,
+    "total_subtasks": 8,
+    "services_involved": [
+      "backend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "Sequential execution - each phase depends on previous"
+    },
+    "startup_command": "source .auto-claude/.venv/bin/activate && python apps/backend/run.py --spec 156"
+  },
+  "verification_strategy": {
+    "risk_level": "low",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "Merge completion data is recorded to .auto-claude/file_evolution/merge_completions.json",
+      "FileEvolutionTracker has record_merge_completion and get_merge_completion_history methods",
+      "_record_merge_completion function is implemented and called in merge workflow",
+      "Merge completion history can be retrieved for learning from past merges"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests",
+        "command": "cd apps/backend && python -m pytest tests/test_merge_completion_recording.py -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Import Verification",
+        "command": "python -c \"from apps.backend.merge.file_evolution.tracker import FileEvolutionTracker, MergeCompletionRecord; from apps.backend.core.workspace import _record_merge_completion; print('All imports OK')\"",
+        "expected_outcome": "All imports OK",
+        "type": "command",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Low risk feature adding new functionality without modifying existing behavior. Unit tests sufficient for verification."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && python -m pytest tests/test_merge_completion_recording.py -v"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": false,
+      "commands": [],
+      "services_to_test": []
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-03-20T16:08:01.740Z"
+}
