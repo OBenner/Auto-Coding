@@ -1,0 +1,22 @@
+--- QA Fix Session 1 at 2026-03-20T09:00:00 ---
+Issues to fix: 3
+
+Fix Approach:
+Creating comprehensive unit tests for the code coverage tracking integration in tests/test_quality_tracker.py.
+The implementation is already complete and high-quality - tests are missing to verify functionality.
+
+Strategy:
+1. Create test file following existing test patterns (test_security.py structure)
+2. Test QualityScore dataclass with coverage fields (creation, serialization, deserialization)
+3. Test _calculate_coverage_metrics() function with all edge cases:
+   - Valid .coverage.json file
+   - Missing file
+   - Malformed JSON
+   - Missing totals section
+   - Zero lines case (division by zero)
+4. Test coverage integration in calculate_quality_score()
+5. Use temporary directories for file-based tests
+6. Follow pytest conventions with clear test names and docstrings
+7. Verify environment (pywin32) is working - appears to be resolved already
+
+Expected outcome: All tests pass, coverage ≥ 80% for modified files
