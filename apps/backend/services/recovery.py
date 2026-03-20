@@ -13,6 +13,7 @@ Key Features:
 - Escalation to human when stuck
 """
 
+import asyncio
 import json
 import logging
 import subprocess
@@ -22,6 +23,10 @@ from enum import Enum
 from pathlib import Path
 
 from core.file_utils import write_json_atomic
+from integrations.graphiti.config import is_graphiti_enabled
+from integrations.graphiti.failure_pattern_store import FailurePatternStore
+from integrations.graphiti.memory import get_graphiti_memory
+from integrations.graphiti.queries_pkg.schema import GroupIdMode
 from services.dead_letter_queue import DeadLetterQueue
 from services.notification_manager import NotificationManager
 
@@ -188,7 +193,122 @@ class RecoveryManager:
         # Initialize notification manager for user notifications
         self.notification_manager = NotificationManager(spec_dir)
 
-    def _init_attempt_history(self) -> None:
+        # Lazy initialization of pattern store (only if Graphiti enabled)
+        self._pattern_store: FailurePatternStore | None = None
+
+    def _get_pattern_store(self) -> FailurePatternStore | None:
+        """
+        Get or create the FailurePatternStore instance.
+
+        Returns None if Graphiti is not enabled or not configured.
+
+        Returns:
+            FailurePatternStore instance or None
+        """
+        if not is_graphiti_enabled():
+            return None
+
+        if self._pattern_store is None:
+            try:
+                # Get Graphiti memory instance
+                memory = get_graphiti_memory(
+                    spec_dir=self.spec_dir,
+                    project_dir=self.project_dir,
+                    group_id_mode=GroupIdMode.PROJECT,  # Use project-wide patterns
+                )
+
+                # Extract spec ID from spec_dir path
+                spec_id = self.spec_dir.name if self.spec_dir.name else "unknown_spec"
+
+                # Create pattern store
+                self._pattern_store = FailurePatternStore(
+                    client=memory,
+                    group_id=memory.group_id,
+                    spec_context_id=spec_id,
+                    group_id_mode=GroupIdMode.PROJECT,
+                    project_dir=self.project_dir,
+                )
+
+                logger.debug("Initialized FailurePatternStore for pattern-based recovery")
+
+            except Exception as e:
+                logger.warning(f"Failed to initialize FailurePatternStore: {e}")
+                return None
+
+        return self._pattern_store
+
+    def _lookup_recovery_patterns(
+        self, failure_type: FailureType, subtask_id: str, error: str | None = None
+    ) -> list[dict]:
+        """
+        Look up historical recovery patterns for similar failures.
+
+        Queries the FailurePatternStore for patterns that match the current
+        failure type and context. Returns pattern-based recovery recommendations.
+
+        Args:
+            failure_type: Type of failure that occurred
+            subtask_id: ID of the subtask that failed
+            error: Optional error message for similarity search
+
+        Returns:
+            List of pattern dictionaries with recovery recommendations:
+            [
+                {
+                    "pattern_type": "recurring_error",
+                    "description": "Pattern description",
+                    "frequency": 5,
+                    "confidence": 0.85,
+                    "recovery_recommendations": ["Try different approach"],
+                    "relevance_score": 0.92
+                },
+                ...
+            ]
+        """
+        pattern_store = self._get_pattern_store()
+
+        if not pattern_store:
+            return []
+
+        try:
+            # Build query for pattern search
+            query_parts = [
+                f"failure type: {failure_type.value}",
+                f"subtask: {subtask_id}",
+            ]
+
+            if error:
+                query_parts.append(f"error: {error[:200]}")  # Limit error length
+
+            query = " ".join(query_parts)
+
+            # Run async query in sync context
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                patterns = loop.run_until_complete(
+                    pattern_store.query_failure_patterns(
+                        query=query,
+                        pattern_type=failure_type.value,
+                        min_confidence=0.5,
+                        min_frequency=1,
+                        num_results=5,
+                        include_project_patterns=True,
+                    )
+                )
+            finally:
+                loop.close()
+
+            logger.debug(
+                f"Found {len(patterns)} recovery patterns for {failure_type.value} in {subtask_id}"
+            )
+
+            return patterns
+
+        except Exception as e:
+            logger.warning(f"Failed to lookup recovery patterns: {e}")
+            return []
         """Initialize the attempt history file."""
         initial_data = {
             "subtasks": {},
@@ -248,7 +368,7 @@ class RecoveryManager:
         return min(delay, BACKOFF_MAX_DELAY)
 
     def select_retry_strategy(
-        self, failure_type: FailureType, attempt_count: int, subtask_id: str
+        self, failure_type: FailureType, attempt_count: int, subtask_id: str, error: str | None = None
     ) -> RetryStrategy | None:
         """
         Select an appropriate retry strategy based on failure type and history.
@@ -258,6 +378,11 @@ class RecoveryManager:
         - Attempt 1: Model fallback (try different model)
         - Attempt 2+: Alternative approach with guidance
 
+        Enhanced with pattern-based recovery:
+        - Queries historical failure patterns for similar cases
+        - Uses pattern recovery recommendations when available
+        - Incorporates pattern confidence and frequency into strategy selection
+
         For BROKEN_BUILD failures, no retry strategy is returned since
         these require rollback instead.
 
@@ -265,6 +390,7 @@ class RecoveryManager:
             failure_type: Type of failure that occurred
             attempt_count: Number of previous attempts (0-indexed)
             subtask_id: ID of the subtask that failed
+            error: Optional error message for pattern matching
 
         Returns:
             RetryStrategy if retry should be attempted, None if should escalate/skip
@@ -281,6 +407,24 @@ class RecoveryManager:
         if failure_type == FailureType.CONTEXT_EXHAUSTED:
             return None
 
+        # Look up historical patterns for this failure
+        patterns = self._lookup_recovery_patterns(failure_type, subtask_id, error)
+
+        # Extract pattern-based recommendations if available
+        pattern_guidance = ""
+        pattern_confidence = 0.0
+        if patterns:
+            # Use the highest confidence pattern's recommendations
+            best_pattern = max(patterns, key=lambda p: p.get("confidence", 0.0))
+            pattern_recommendations = best_pattern.get("recovery_recommendations", [])
+            if pattern_recommendations:
+                pattern_guidance = "\n".join(f"• {rec}" for rec in pattern_recommendations[:3])
+                pattern_confidence = best_pattern.get("confidence", 0.0)
+                logger.info(
+                    f"Using pattern-based recovery guidance (confidence: {pattern_confidence:.2f}) "
+                    f"for {failure_type.value} in {subtask_id}"
+                )
+
         # For VERIFICATION_FAILED and UNKNOWN, select progressive strategies
         if failure_type == FailureType.VERIFICATION_FAILED:
             max_attempts = 3
@@ -290,35 +434,47 @@ class RecoveryManager:
 
             if attempt_count == 0:
                 # First attempt: direct retry
+                guidance = "Review the verification error and fix the issue"
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
                 return RetryStrategy(
                     name="direct_retry",
                     description="Retry with same approach",
                     use_model_fallback=False,
-                    guidance="Review the verification error and fix the issue",
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
             elif attempt_count == 1:
                 # Second attempt: try with model fallback
+                guidance = "Use a different model which may handle this task better"
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
                 return RetryStrategy(
                     name="model_fallback",
                     description="Retry with fallback model (opus→sonnet→haiku)",
                     use_model_fallback=True,
-                    guidance="Use a different model which may handle this task better",
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
             else:
                 # Third attempt: alternative approach with specific guidance
+                guidance = (
+                    "IMPORTANT: Try a DIFFERENT approach:\n"
+                    "- Use a simpler implementation\n"
+                    "- Try a different library or pattern\n"
+                    "- Break down into smaller steps\n"
+                    "- Review previous attempt errors carefully"
+                )
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
                 return RetryStrategy(
                     name="alternative_approach",
                     description="Try a simpler or different approach",
                     use_model_fallback=True,
-                    guidance=(
-                        "IMPORTANT: Try a DIFFERENT approach:\n"
-                        "- Use a simpler implementation\n"
-                        "- Try a different library or pattern\n"
-                        "- Break down into smaller steps\n"
-                        "- Review previous attempt errors carefully"
-                    ),
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
 
@@ -330,26 +486,34 @@ class RecoveryManager:
 
             if attempt_count == 0:
                 # First attempt: direct retry
+                guidance = "Review the error message and fix the issue"
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
                 return RetryStrategy(
                     name="direct_retry",
                     description="Retry with same approach",
                     use_model_fallback=False,
-                    guidance="Review the error message and fix the issue",
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
             else:
                 # Second attempt: try with model fallback and alternative approach
+                guidance = (
+                    "Unknown error - try a different approach:\n"
+                    "- Simplify the implementation\n"
+                    "- Add error handling\n"
+                    "- Check for edge cases\n"
+                    "- Verify dependencies are available"
+                )
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
                 return RetryStrategy(
                     name="model_fallback_alternative",
                     description="Retry with fallback model and alternative approach",
                     use_model_fallback=True,
-                    guidance=(
-                        "Unknown error - try a different approach:\n"
-                        "- Simplify the implementation\n"
-                        "- Add error handling\n"
-                        "- Check for edge cases\n"
-                        "- Verify dependencies are available"
-                    ),
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
 
@@ -680,7 +844,7 @@ class RecoveryManager:
         return similar_count >= 2
 
     def determine_recovery_action(
-        self, failure_type: FailureType, subtask_id: str
+        self, failure_type: FailureType, subtask_id: str, error: str | None = None
     ) -> RecoveryAction:
         """
         Decide what to do based on failure type and history.
@@ -688,6 +852,11 @@ class RecoveryManager:
         Uses select_retry_strategy() to choose appropriate retry strategies
         including model fallback, alternative approaches, and simpler implementations.
         Applies exponential backoff to prevent API rate limiting.
+
+        Enhanced with pattern-based recovery from FailurePatternStore:
+        - Queries historical patterns for similar failures
+        - Incorporates pattern-based recommendations into retry strategies
+        - Uses pattern confidence and frequency to guide recovery approach
 
         Integrates with NotificationManager to determine when to notify users:
         - Silent retries below retry_threshold (default: 3 attempts)
@@ -702,6 +871,7 @@ class RecoveryManager:
         Args:
             failure_type: Type of failure that occurred
             subtask_id: ID of the subtask that failed
+            error: Optional error message for pattern matching
 
         Returns:
             RecoveryAction describing what to do (includes wait_seconds, strategy,
@@ -782,7 +952,9 @@ class RecoveryManager:
             )
 
         # For other failure types, use strategy selection
-        strategy = self.select_retry_strategy(failure_type, attempt_count, subtask_id)
+        strategy = self.select_retry_strategy(
+            failure_type, attempt_count, subtask_id, error
+        )
 
         if strategy:
             # Retry with selected strategy
