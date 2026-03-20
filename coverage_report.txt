@@ -1,0 +1,10 @@
+Name                                        Stmts   Miss  Cover
+---------------------------------------------------------------
+apps\backend\core\dependency_installer.py      77     12    84%
+apps\backend\core\env_configurator.py         182     30    84%
+apps\backend\core\env_sync.py                 312    143    54%
+apps\backend\core\graphiti_validator.py       170     79    54%
+apps\backend\core\package_detector.py          52      5    90%
+apps\backend\core\provider_tester.py          230    134    42%
+---------------------------------------------------------------
+TOTAL                                        1023    403    61%

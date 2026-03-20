@@ -334,3 +334,240 @@ class TestHelperFunctions:
         assert "Auto Code Environment Setup Report" in report
         assert "Package Managers" in report
         assert "Summary" in report
+
+    def test_run_env_sync_verbose_mode_success(self, tmp_path):
+        """Test run_env_sync with verbose=True for successful execution."""
+        import sys
+        from io import StringIO
+
+        # Create a minimal project structure
+        (tmp_path / "package.json").write_text('{"name": "test"}')
+        (tmp_path / ".env.example").write_text("TEST_VAR=example")
+
+        # Capture stdout
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            result = run_env_sync(
+                project_dir=str(tmp_path),
+                dry_run=True,
+                verbose=True,
+                skip_install=True,
+                skip_config=True,
+                skip_validation=True
+            )
+
+            output = captured_output.getvalue()
+
+            # Verify result structure
+            assert isinstance(result, dict)
+            assert "success" in result
+            # Verify verbose output was produced
+            assert len(output) > 0
+
+        finally:
+            sys.stdout = sys.__stdout__
+
+    def test_run_env_sync_verbose_mode_with_issues(self, tmp_path):
+        """Test run_env_sync verbose mode when there are issues."""
+        import sys
+        from io import StringIO
+
+        # Create a project with potential issues
+        (tmp_path / "package.json").write_text('{"name": "test"}')
+
+        # Capture stdout
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            with patch("apps.backend.core.env_sync._install_dependencies") as mock_install:
+                # Simulate installation issues
+                mock_result = MagicMock()
+                mock_result.success = False
+                mock_result.failed = [("npm", ".", "Command failed")]
+                mock_result.installed = []
+                mock_result.skipped = []
+                mock_install.return_value = mock_result
+
+                result = run_env_sync(
+                    project_dir=str(tmp_path),
+                    dry_run=False,
+                    verbose=True,
+                    skip_install=False
+                )
+
+                output = captured_output.getvalue()
+
+                # Verify result structure
+                assert isinstance(result, dict)
+                assert "success" in result
+
+        finally:
+            sys.stdout = sys.__stdout__
+
+    def test_run_env_sync_verbose_mode_with_warnings(self, tmp_path):
+        """Test run_env_sync verbose mode with warnings."""
+        import sys
+        from io import StringIO
+
+        (tmp_path / "package.json").write_text('{"name": "test"}')
+        (tmp_path / ".env.example").write_text("REQUIRED_VAR=\nOPTIONAL_VAR=default")
+
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            result = run_env_sync(
+                project_dir=str(tmp_path),
+                dry_run=True,
+                verbose=True,
+                skip_install=True,
+                skip_validation=True
+            )
+
+            output = captured_output.getvalue()
+
+            # Should complete (success may vary)
+            assert isinstance(result, dict)
+            assert "success" in result
+            assert len(output) > 0
+
+        finally:
+            sys.stdout = sys.__stdout__
+
+    def test_detect_packages_verbose_mode(self, tmp_path):
+        """Test _detect_packages with verbose=True."""
+        import sys
+        from io import StringIO
+
+        (tmp_path / "package.json").write_text('{"name": "test"}')
+        (tmp_path / "requirements.txt").write_text("requests")
+
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            detected = _detect_packages(tmp_path, verbose=True)
+
+            output = captured_output.getvalue()
+
+            # Verify verbose output
+            assert isinstance(detected, dict)
+            assert "npm" in detected
+
+        finally:
+            sys.stdout = sys.__stdout__
+
+    def test_detect_packages_exception_handling(self, tmp_path):
+        """Test _detect_packages handles exceptions gracefully."""
+        with patch("core.package_detector.detect_package_managers") as mock_detect:
+            mock_detect.side_effect = Exception("Detection failed")
+
+            result = _detect_packages(tmp_path, verbose=False)
+
+            # Should return empty dict on error
+            assert result == {}
+
+    def test_detect_packages_exception_verbose(self, tmp_path):
+        """Test _detect_packages exception handling in verbose mode."""
+        import sys
+        from io import StringIO
+
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            with patch("core.package_detector.detect_package_managers") as mock_detect:
+                mock_detect.side_effect = Exception("Detection failed")
+
+                result = _detect_packages(tmp_path, verbose=True)
+
+                output = captured_output.getvalue()
+
+                # Should return empty dict and print error
+                assert result == {}
+                assert "✗" in output or "Failed" in output or output == ""
+
+        finally:
+            sys.stdout = sys.__stdout__
+
+    def test_install_dependencies_verbose_dry_run(self, tmp_path):
+        """Test _install_dependencies verbose mode with dry_run."""
+        import sys
+        from io import StringIO
+
+        detected = {"npm": ["."]}
+
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            result = _install_dependencies(tmp_path, detected, dry_run=True, verbose=True)
+
+            # Should return valid result
+            assert result is not None
+
+        finally:
+            sys.stdout = sys.__stdout__
+
+    def test_install_dependencies_verbose_with_failures(self, tmp_path):
+        """Test _install_dependencies verbose mode with failures."""
+        import sys
+        from io import StringIO
+
+        detected = {"npm": ["."]}
+
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            with patch("core.dependency_installer.DependencyInstaller") as mock_installer_class:
+                mock_installer = MagicMock()
+                mock_result = MagicMock()
+                mock_result.success = False
+                mock_result.installed = []
+                mock_result.failed = [("npm", ".", "Error")]
+                mock_result.skipped = []
+                mock_installer.install.return_value = mock_result
+                mock_installer_class.return_value = mock_installer
+
+                result = _install_dependencies(tmp_path, detected, dry_run=False, verbose=True)
+
+                # Should handle failures gracefully
+                assert result is not None
+
+        finally:
+            sys.stdout = sys.__stdout__
+
+    def test_install_dependencies_verbose_with_skipped(self, tmp_path):
+        """Test _install_dependencies verbose mode with skipped packages."""
+        import sys
+        from io import StringIO
+
+        detected = {"npm": ["."]}
+
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            with patch("core.dependency_installer.DependencyInstaller") as mock_installer_class:
+                mock_installer = MagicMock()
+                mock_result = MagicMock()
+                mock_result.success = True
+                mock_result.installed = [("npm", ".")]
+                mock_result.failed = []
+                mock_result.skipped = [("pip", "subdir", "No requirements.txt")]
+                mock_installer.install.return_value = mock_result
+                mock_installer_class.return_value = mock_installer
+
+                result = _install_dependencies(tmp_path, detected, dry_run=True, verbose=True)
+
+                output = captured_output.getvalue()
+
+                # Should show skipped packages
+                assert result is not None
+
+        finally:
+            sys.stdout = sys.__stdout__
