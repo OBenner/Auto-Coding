@@ -11,8 +11,13 @@ This module provides a centralized category mapping system used across all PR re
 from __future__ import annotations
 
 try:
-    from ..models import ReviewCategory
-except (ImportError, ValueError, SystemError):
+    from runners.github.models import ReviewCategory
+except ImportError:
+    # Fallback for when module is imported directly (e.g., in tests)
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
     from runners.github.models import ReviewCategory
 
 

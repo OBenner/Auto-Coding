@@ -272,6 +272,21 @@ export const IPC_CHANNELS = {
   ENV_CHECK_CLAUDE_AUTH: 'env:checkClaudeAuth',
   ENV_INVOKE_CLAUDE_SETUP: 'env:invokeClaudeSetup',
 
+  // Setup Wizard operations
+  SETUP_GET_STATUS: 'setup:get-status',
+  SETUP_MARK_COMPLETE: 'setup:mark-complete',
+  SETUP_RESET: 'setup:reset',
+  SETUP_CHECK_PYTHON: 'setup:check-python',
+  SETUP_GET_PYTHON_INFO: 'setup:get-python-info',
+  SETUP_CHECK_AUTH: 'setup:check-auth',
+  SETUP_VALIDATE_GRAPHITI: 'setup:validate-graphiti',
+  SETUP_GET_GRAPHITI_STATUS: 'setup:get-graphiti-status',
+  SETUP_CREATE_ENV: 'setup:create-env',
+  SETUP_ENV_EXISTS: 'setup:env-exists',
+  SETUP_GET_ENV_PATH: 'setup:get-env-path',
+  SETUP_RUN_TEST: 'setup:run-test',
+  SETUP_GET_TEST_INFO: 'setup:get-test-info',
+
   // Ideation operations
   IDEATION_GET: 'ideation:get',
   IDEATION_GENERATE: 'ideation:generate',

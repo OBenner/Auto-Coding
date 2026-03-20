@@ -16,6 +16,8 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 
+from setup.first_run_detector import detect_first_run
+
 from .analytics_commands import handle_analytics_command
 from .batch_commands import (
     handle_batch_cleanup_command,
@@ -46,6 +48,7 @@ from .scheduler_commands import (
     handle_schedule_stop_command,
 )
 from .security_commands import handle_security_audit_command
+from .setup_wizard import handle_setup_command
 from .spec_commands import print_specs_list
 from .utils import (
     DEFAULT_MODEL,
@@ -109,6 +112,12 @@ Environment Variables:
         "--list",
         action="store_true",
         help="List all available specs and their status",
+    )
+
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run interactive first-run setup wizard",
     )
 
     parser.add_argument(
@@ -597,10 +606,22 @@ def _run_cli() -> None:
     # Get provider from CLI arg (default: from env or claude)
     provider = args.provider
 
+    # Auto-launch setup wizard on first run (unless --setup already specified)
+    if not args.setup and detect_first_run():
+        print("\n🎉 Welcome to Auto Code!")
+        print("Detected first run - launching setup wizard...\n")
+        handle_setup_command(project_dir)
+        return
+
     # Handle --list command
     if args.list:
         print_banner()
         print_specs_list(project_dir)
+        return
+
+    # Handle --setup command
+    if args.setup:
+        handle_setup_command(project_dir)
         return
 
     # Handle --list-worktrees command

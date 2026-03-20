@@ -1,0 +1,273 @@
+"""
+Hello-world test runner for Auto Code setup wizard.
+
+Runs a minimal test to verify the Auto Code installation is working correctly:
+- Verifies Claude SDK is available and authentication is configured
+- Tests basic file system operations
+- Validates core module imports
+- Provides clear success/failure feedback
+
+This is the final step in the setup wizard to ensure everything works.
+"""
+
+import logging
+import tempfile
+from pathlib import Path
+from typing import TypedDict
+
+logger = logging.getLogger(__name__)
+
+
+class HelloWorldTestResult(TypedDict):
+    """Result of hello-world test execution."""
+
+    success: bool
+    steps_completed: list[str]
+    steps_failed: list[str]
+    error_message: str | None
+    summary: str
+
+
+def run_hello_world_test() -> HelloWorldTestResult:
+    """
+    Run a minimal hello-world test to verify Auto Code setup.
+
+    Returns:
+        HelloWorldTestResult: Dictionary containing:
+            - success: True if all tests passed, False otherwise
+            - steps_completed: List of test steps that succeeded
+            - steps_failed: List of test steps that failed
+            - error_message: Error message if test failed (None if success)
+            - summary: Human-readable summary of test results
+
+    The test validates:
+    1. Core module imports (Claude SDK, core modules)
+    2. Authentication token configuration
+    3. File system operations (read/write)
+    4. Basic environment setup
+
+    Example:
+        >>> result = run_hello_world_test()
+        >>> if result['success']:
+        ...     print(f"✓ Setup verified: {result['summary']}")
+        ... else:
+        ...     print(f"✗ Setup failed: {result['error_message']}")
+    """
+    steps_completed: list[str] = []
+    steps_failed: list[str] = []
+    error_message: str | None = None
+
+    try:
+        # Step 1: Verify core module imports
+        logger.info("Testing core module imports...")
+        try:
+            from core.auth import get_auth_token  # noqa: F401
+            from core.client import create_client  # noqa: F401
+
+            steps_completed.append("Core module imports")
+            logger.debug("✓ Core modules imported successfully")
+        except ImportError as e:
+            error_msg = f"Failed to import core modules: {e}"
+            steps_failed.append("Core module imports")
+            error_message = error_msg
+            logger.error(error_msg)
+            return _build_result(
+                False,
+                steps_completed,
+                steps_failed,
+                error_message,
+                "Module import failed",
+            )
+
+        # Step 2: Verify authentication token
+        logger.info("Checking Claude SDK authentication...")
+        try:
+            from core.auth import get_auth_token
+
+            token = get_auth_token()
+            if not token:
+                error_msg = (
+                    "No Claude OAuth token found. "
+                    "Please run 'claude setup-token' to authenticate."
+                )
+                steps_failed.append("Authentication check")
+                error_message = error_msg
+                logger.warning(error_msg)
+                return _build_result(
+                    False,
+                    steps_completed,
+                    steps_failed,
+                    error_message,
+                    "Authentication not configured",
+                )
+
+            steps_completed.append("Authentication check")
+            logger.debug("✓ Claude OAuth token found")
+        except Exception as e:
+            error_msg = f"Failed to check authentication: {e}"
+            steps_failed.append("Authentication check")
+            error_message = error_msg
+            logger.error(error_msg)
+            return _build_result(
+                False,
+                steps_completed,
+                steps_failed,
+                error_message,
+                "Authentication check failed",
+            )
+
+        # Step 3: Test file system operations
+        logger.info("Testing file system operations...")
+        try:
+            # Create a temporary directory for testing
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+
+                # Test write operation
+                test_file = temp_path / "hello_world_test.txt"
+                test_content = "Auto Code setup test - Hello World!"
+                test_file.write_text(test_content, encoding="utf-8")
+
+                # Test read operation
+                read_content = test_file.read_text(encoding="utf-8")
+
+                if read_content != test_content:
+                    error_msg = "File system test failed: content mismatch"
+                    steps_failed.append("File system operations")
+                    error_message = error_msg
+                    logger.error(error_msg)
+                    return _build_result(
+                        False,
+                        steps_completed,
+                        steps_failed,
+                        error_message,
+                        "File system test failed",
+                    )
+
+            steps_completed.append("File system operations")
+            logger.debug("✓ File system operations working")
+        except Exception as e:
+            error_msg = f"File system test failed: {e}"
+            steps_failed.append("File system operations")
+            error_message = error_msg
+            logger.error(error_msg)
+            return _build_result(
+                False,
+                steps_completed,
+                steps_failed,
+                error_message,
+                "File system test failed",
+            )
+
+        # Step 4: Verify environment variables (optional)
+        logger.info("Checking environment configuration...")
+        try:
+            # Check for backend directory existence
+            backend_dir = Path(__file__).parent.parent.resolve()
+            if not backend_dir.exists():
+                error_msg = f"Backend directory not found: {backend_dir}"
+                steps_failed.append("Environment check")
+                error_message = error_msg
+                logger.error(error_msg)
+                return _build_result(
+                    False,
+                    steps_completed,
+                    steps_failed,
+                    error_message,
+                    "Environment validation failed",
+                )
+
+            # Check if .env file exists (optional - not required for hello-world test)
+            env_file = backend_dir / ".env"
+            if env_file.exists():
+                logger.debug("✓ .env file found")
+            else:
+                logger.debug(
+                    "Note: .env file not found (will be created by setup wizard)"
+                )
+
+            steps_completed.append("Environment check")
+            logger.debug("✓ Environment configuration valid")
+        except Exception as e:
+            error_msg = f"Environment check failed: {e}"
+            steps_failed.append("Environment check")
+            error_message = error_msg
+            logger.error(error_msg)
+            return _build_result(
+                False,
+                steps_completed,
+                steps_failed,
+                error_message,
+                "Environment check failed",
+            )
+
+        # All tests passed!
+        summary = (
+            f"✓ Setup verified successfully! Completed {len(steps_completed)} tests:\n"
+            + "\n".join(f"  - {step}" for step in steps_completed)
+        )
+        logger.info("Hello-world test passed! Auto Code is ready to use.")
+
+        return _build_result(True, steps_completed, steps_failed, None, summary)
+
+    except Exception as e:
+        # Catch-all for unexpected errors
+        error_msg = f"Unexpected error during hello-world test: {e}"
+        logger.error(error_msg, exc_info=True)
+        return _build_result(
+            False,
+            steps_completed,
+            steps_failed,
+            error_msg,
+            "Unexpected error occurred",
+        )
+
+
+def _build_result(
+    success: bool,
+    steps_completed: list[str],
+    steps_failed: list[str],
+    error_message: str | None,
+    summary: str,
+) -> HelloWorldTestResult:
+    """
+    Build a standardized test result dictionary.
+
+    Args:
+        success: Whether the test succeeded
+        steps_completed: List of completed test steps
+        steps_failed: List of failed test steps
+        error_message: Error message if failed (None if success)
+        summary: Human-readable summary
+
+    Returns:
+        HelloWorldTestResult: Standardized test result
+    """
+    return {
+        "success": success,
+        "steps_completed": steps_completed,
+        "steps_failed": steps_failed,
+        "error_message": error_message,
+        "summary": summary,
+    }
+
+
+def get_test_info() -> dict[str, str | int]:
+    """
+    Get information about the hello-world test.
+
+    Returns:
+        dict: Dictionary containing:
+            - name: Test name
+            - description: Test description
+            - step_count: Number of validation steps
+            - estimated_duration: Estimated duration in seconds
+
+    Useful for displaying test information in setup wizard UI.
+    """
+    return {
+        "name": "Hello World Test",
+        "description": "Verifies Auto Code installation and basic functionality",
+        "step_count": 4,
+        "estimated_duration": 5,
+    }

@@ -48,6 +48,7 @@ import { registerWebhookHandlers } from './webhook-handlers';
 import { registerPatternHandlers } from './pattern-handlers';
 import { registerSessionReplayHandlers } from './session-replay-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
+import { registerSetupHandlers } from './setup-handlers';
 import { registerCollaborationHandlers } from './collaboration-handlers';
 import { notificationService } from '../notification-service';
 import { setAgentManagerRef } from './utils';
@@ -71,6 +72,9 @@ export function setupIpcHandlers(
 
   // Wire up agent manager for circuit breaker cleanup
   setAgentManagerRef(agentManager);
+
+  // Setup wizard handlers (first-run configuration)
+  registerSetupHandlers();
 
   // Project handlers (including Python environment setup)
   registerProjectHandlers(pythonEnvManager, agentManager, getMainWindow);
@@ -226,5 +230,6 @@ export { registerWebhookHandlers } from './webhook-handlers';
 export { registerPatternHandlers } from './pattern-handlers';
 export { registerSessionReplayHandlers } from './session-replay-handlers';
 export { registerFeedbackHandlers } from './feedback-handlers';
+export { registerSetupHandlers } from './setup-handlers';
 export { registerSchedulerHandlers } from './scheduler-handlers';
 export { registerCollaborationHandlers } from './collaboration-handlers';

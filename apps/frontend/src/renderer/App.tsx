@@ -61,6 +61,7 @@ import { SDKRateLimitModal } from './components/SDKRateLimitModal';
 import { AuthFailureModal } from './components/AuthFailureModal';
 import { VersionWarningModal } from './components/VersionWarningModal';
 import { OnboardingWizard } from './components/onboarding';
+import { SetupWizard } from './components/setup/SetupWizard';
 import { AppUpdateNotification } from './components/AppUpdateNotification';
 import { AgentAttentionNotification } from './components/AgentAttentionNotification';
 import { ProactiveSwapListener } from './components/ProactiveSwapListener';
@@ -157,6 +158,8 @@ export function App() {
   const [activeView, setActiveView] = useState<SidebarView>('kanban');
   const [sessionFilterSpecId, setSessionFilterSpecId] = useState<string | undefined>(undefined);
   const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+  const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
   const [isVersionWarningModalOpen, setIsVersionWarningModalOpen] = useState(false);
   const [isRefreshingTasks, setIsRefreshingTasks] = useState(false);
 
@@ -294,6 +297,30 @@ export function App() {
     }
   }, [settingsHaveLoaded, settings.onboardingCompleted, profiles, claudeProfiles]);
 
+  // First-run setup detection - show setup wizard if not completed
+  // Check after settings have been loaded to avoid race condition
+  useEffect(() => {
+    const checkSetupStatus = async () => {
+      try {
+        const result = await (window.electronAPI as any).setup.getSetupStatus();
+        if (result.success && result.data) {
+          setNeedsSetup(result.data.needsSetup);
+          if (result.data.needsSetup) {
+            setIsSetupWizardOpen(true);
+          }
+        }
+      } catch (error) {
+        debugLog('Failed to check setup status:', error);
+        // Default to showing setup wizard if check fails
+        setNeedsSetup(true);
+      }
+    };
+
+    if (settingsHaveLoaded) {
+      checkSetupStatus();
+    }
+  }, [settingsHaveLoaded]);
+
   // Version 2.7.5 warning - show once to notify users about reauthentication requirement
   useEffect(() => {
     const checkVersionWarning = async () => {
@@ -325,6 +352,25 @@ export function App() {
         seenVersionWarnings: [...seenWarnings, VERSION_WARNING_275]
       });
     }
+  };
+
+  // Setup wizard handlers
+  const handleSetupWizardComplete = async () => {
+    try {
+      // Mark setup as complete
+      await (window.electronAPI as any).setup.markSetupComplete();
+      setIsSetupWizardOpen(false);
+      setNeedsSetup(false);
+    } catch (error) {
+      debugLog('Failed to mark setup complete:', error);
+      // Close wizard anyway even if marking complete fails
+      setIsSetupWizardOpen(false);
+    }
+  };
+
+  const handleSetupWizardCancel = () => {
+    // Allow canceling setup wizard (will show again on next launch)
+    setIsSetupWizardOpen(false);
   };
 
   // Sync i18n language with settings
@@ -953,7 +999,11 @@ export function App() {
     <ViewStateProvider>
       <TooltipProvider>
         <ProactiveSwapListener />
-      <div className="flex h-screen bg-background">
+        {isSetupWizardOpen ? (
+          <SetupWizard onComplete={handleSetupWizardComplete} onCancel={handleSetupWizardCancel} />
+        ) : (
+          <>
+          <div className="flex h-screen bg-background">
         {/* Sidebar */}
         <Sidebar
           onSettingsClick={() => setIsSettingsDialogOpen(true)}
@@ -1354,7 +1404,8 @@ export function App() {
 
         {/* Toast notifications */}
         <Toaster />
-      </div>
+        </div>
+        </>)}
       </TooltipProvider>
     </ViewStateProvider>
   );
