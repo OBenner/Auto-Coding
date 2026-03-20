@@ -239,7 +239,7 @@ def _count_subtasks_by_status(
 
 def _parse_qa_metrics(plan: dict[str, Any]) -> tuple[int, str]:
     """Extract QA iterations and status from the plan's qa_signoff."""
-    qa_signoff = plan.get("qa_signoff", {})
+    qa_signoff = plan.get("qa_signoff") or {}
     raw_iterations = qa_signoff.get("qa_iterations", qa_signoff.get("qa_session", 0))
     try:
         qa_iterations = int(raw_iterations)
@@ -421,7 +421,7 @@ def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
             session_count = _count_unique_sessions(plan)
 
             # QA iterations
-            qa_signoff = plan.get("qa_signoff", {})
+            qa_signoff = plan.get("qa_signoff") or {}
             raw_iter = qa_signoff.get("qa_iterations", qa_signoff.get("qa_session", 0))
             try:
                 qa_iterations = int(raw_iter)
