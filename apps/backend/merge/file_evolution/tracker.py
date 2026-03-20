@@ -11,6 +11,7 @@ Main entry point that orchestrates the modular components:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -412,3 +413,70 @@ class FileEvolutionTracker:
             analyze_only_files=analyze_only_files,
         )
         self._save_evolutions()
+
+    def record_merge_completion(
+        self,
+        task_ids: list[str],
+        resolved_files: list[str],
+        success: bool = True,
+        error: str | None = None,
+    ) -> MergeCompletionRecord:
+        """
+        Record the completion of a merge operation.
+
+        This method captures the outcome of a merge for historical tracking
+        and learning from past merges.
+
+        Args:
+            task_ids: List of task IDs that were merged
+            resolved_files: List of file paths that were resolved
+            success: Whether the merge completed successfully
+            error: Optional error message if merge failed
+
+        Returns:
+            The created MergeCompletionRecord
+        """
+        # Generate unique merge ID
+        timestamp = datetime.now()
+        task_ids_hash = hashlib.md5(
+            ",".join(sorted(task_ids)).encode("utf-8")
+        ).hexdigest()[:8]
+        merge_id = f"merge_{int(timestamp.timestamp())}_{task_ids_hash}"
+
+        # Create merge completion record
+        record = MergeCompletionRecord(
+            merge_id=merge_id,
+            timestamp=timestamp,
+            task_ids=task_ids,
+            resolved_files=resolved_files,
+            success=success,
+            error=error,
+        )
+
+        # Load existing merge history
+        merge_history = self.storage.load_merge_history()
+
+        # Append new record
+        merge_history.append(record.to_dict())
+
+        # Save updated history
+        self.storage.save_merge_history(merge_history)
+
+        # Log the operation
+        if success:
+            debug_success(
+                MODULE,
+                f"Recorded successful merge {merge_id}",
+                tasks_merged=len(task_ids),
+                files_resolved=len(resolved_files),
+            )
+            logger.info(
+                f"Recorded successful merge {merge_id}: "
+                f"{len(task_ids)} tasks, {len(resolved_files)} files"
+            )
+        else:
+            logger.warning(
+                f"Recorded failed merge {merge_id}: {error}"
+            )
+
+        return record

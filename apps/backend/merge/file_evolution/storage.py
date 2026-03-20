@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from ..types import FileEvolution
 
@@ -45,6 +46,7 @@ class EvolutionStorage:
         self.storage_dir = Path(storage_dir).resolve()
         self.baselines_dir = self.storage_dir / "baselines"
         self.evolution_file = self.storage_dir / "file_evolution.json"
+        self.merge_history_file = self.storage_dir / "merge_history.json"
 
         # Ensure directories exist
         self.storage_dir.mkdir(parents=True, exist_ok=True)
@@ -185,3 +187,40 @@ class EvolutionStorage:
                 # Path is not under project_dir, return as-is
                 return path.as_posix()
         return path.as_posix()
+
+    def load_merge_history(self) -> list[dict[str, Any]]:
+        """
+        Load merge completion history from disk.
+
+        Returns:
+            List of merge completion record dictionaries
+        """
+        if not self.merge_history_file.exists():
+            return []
+
+        try:
+            with open(self.merge_history_file, encoding="utf-8") as f:
+                data = json.load(f)
+
+            logger.debug(f"Loaded merge history with {len(data)} records")
+            return data
+
+        except Exception as e:
+            logger.error(f"Failed to load merge history: {e}")
+            return []
+
+    def save_merge_history(self, merge_records: list[dict[str, Any]]) -> None:
+        """
+        Persist merge completion history to disk.
+
+        Args:
+            merge_records: List of merge completion record dictionaries
+        """
+        try:
+            with open(self.merge_history_file, "w", encoding="utf-8") as f:
+                json.dump(merge_records, f, indent=2)
+
+            logger.debug(f"Saved merge history with {len(merge_records)} records")
+
+        except Exception as e:
+            logger.error(f"Failed to save merge history: {e}")
