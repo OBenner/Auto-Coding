@@ -17,6 +17,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.provider_fallback import retry_with_provider_fallback
 from core.providers.config import ProviderConfig
 from core.providers.exceptions import ProviderError, ProviderNotInstalled
 
@@ -268,6 +269,9 @@ def create_agent_session(
     Consolidates the duplicated provider/session logic from planner.py,
     coder.py, qa/reviewer.py, and qa/fixer.py.
 
+    Includes automatic provider fallback when the primary provider fails.
+    Falls back through the chain: claude → openai → google → ollama.
+
     Args:
         agent_type: The agent type ('planner', 'coder', 'qa_reviewer', 'qa_fixer')
         project_dir: Root directory for the project
@@ -280,36 +284,58 @@ def create_agent_session(
 
     Raises:
         AttributeError: If the session object lacks a ``client`` attribute
-        ProviderError: If provider creation or session creation fails
+        ProviderError: If all providers in fallback chain fail
     """
     from core.providers.base import SessionConfig
 
-    config = ProviderConfig.from_env(agent_type=agent_type)
-    provider = create_engine_provider(config)
+    # Get initial provider from config
+    initial_config = ProviderConfig.from_env(agent_type=agent_type)
+    initial_provider = initial_config.provider
 
-    if provider.name == "claude":
-        session = provider.create_session(
-            config=SessionConfig(
-                name=f"{agent_type}-session",
-                model=model,
-            ),
-            project_dir=Path(project_dir),
-            spec_dir=Path(spec_dir),
-            agent_type=agent_type,
-            max_thinking_tokens=max_thinking_tokens,
-        )
-    else:
-        session = provider.create_session(
-            SessionConfig(
-                name=f"{agent_type}-session",
-                model=model,
+    # Define callable that creates session for a given provider
+    def _create_session_with_provider(provider_name: str) -> "AgentSession":
+        """Create session with specified provider."""
+        # Create config for this provider
+        config = ProviderConfig.from_env(agent_type=agent_type)
+        config.provider = provider_name
+
+        # Create provider
+        provider = create_engine_provider(config)
+
+        # Create session (Claude provider has additional parameters)
+        if provider.name == "claude":
+            session = provider.create_session(
+                config=SessionConfig(
+                    name=f"{agent_type}-session",
+                    model=model,
+                ),
+                project_dir=Path(project_dir),
+                spec_dir=Path(spec_dir),
+                agent_type=agent_type,
+                max_thinking_tokens=max_thinking_tokens,
             )
-        )
+        else:
+            session = provider.create_session(
+                SessionConfig(
+                    name=f"{agent_type}-session",
+                    model=model,
+                )
+            )
 
-    if not hasattr(session, "client"):
-        raise AttributeError(
-            f"Provider {provider.name} session missing 'client' attribute"
-        )
+        # Validate session has client attribute
+        if not hasattr(session, "client"):
+            raise AttributeError(
+                f"Provider {provider.name} session missing 'client' attribute"
+            )
+
+        return session
+
+    # Use provider fallback chain for resilience
+    session = retry_with_provider_fallback(
+        callable_fn=_create_session_with_provider,
+        provider=initial_provider,
+        max_retries_per_provider=1,
+    )
 
     return session
 
