@@ -424,9 +424,9 @@ def _validate_graphiti(verbose: bool) -> Any:
 def _test_providers(verbose: bool) -> dict[str, Any]:
     """Test LLM provider connections."""
     try:
-        from core.provider_tester import test_all_configured_providers
+        from core.provider_tester import check_all_configured_providers
 
-        provider_results = test_all_configured_providers()
+        provider_results = check_all_configured_providers()
 
         if verbose:
             if not provider_results:

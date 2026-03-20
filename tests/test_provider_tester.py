@@ -9,10 +9,10 @@ import pytest
 import os
 from unittest.mock import patch, MagicMock, AsyncMock
 from apps.backend.core.provider_tester import (
-    test_provider_connection,
+    check_provider_connection,
     ProviderTestResult,
     get_provider_from_env,
-    test_all_configured_providers,
+    check_all_configured_providers,
     _test_openai,
     _test_anthropic,
     _test_ollama,
@@ -39,8 +39,8 @@ class TestProviderTestResult:
         assert result.error_details == "None"
 
 
-class TestTestProviderConnection:
-    """Tests for test_provider_connection() function."""
+class TestCheckProviderConnection:
+    """Tests for check_provider_connection() function."""
 
     def test_openai_provider_success(self, monkeypatch):
         """Test OpenAI provider connection with mock successful connection."""
@@ -54,8 +54,8 @@ class TestTestProviderConnection:
                 provider="openai"
             )
 
-        with patch("apps.backend.core.provider_tester.test_provider_connection_async", side_effect=mock_test_openai_async):
-            result = test_provider_connection("openai", api_key="sk-test-key")
+        with patch("apps.backend.core.provider_tester.check_provider_connection_async", side_effect=mock_test_openai_async):
+            result = check_provider_connection("openai", api_key="sk-test-key")
 
             assert result.success is True
             assert result.provider == "openai"
@@ -74,8 +74,8 @@ class TestTestProviderConnection:
                 error_details="Invalid API key"
             )
 
-        with patch("apps.backend.core.provider_tester.test_provider_connection_async", side_effect=mock_test_anthropic_async):
-            result = test_provider_connection("anthropic", api_key="sk-ant-invalid")
+        with patch("apps.backend.core.provider_tester.check_provider_connection_async", side_effect=mock_test_anthropic_async):
+            result = check_provider_connection("anthropic", api_key="sk-ant-invalid")
 
             assert result.success is False
             assert "authentication failed" in result.message.lower()
@@ -83,7 +83,7 @@ class TestTestProviderConnection:
 
     def test_unsupported_provider_returns_error(self):
         """Test unsupported provider returns appropriate error."""
-        result = test_provider_connection("unsupported_provider")
+        result = check_provider_connection("unsupported_provider")
 
         assert result.success is False
         assert "Unknown provider" in result.message
@@ -102,11 +102,11 @@ class TestTestProviderConnection:
         assert "OPENAI_API_KEY" in result.fix_command
 
 
-class TestTestAllConfiguredProviders:
-    """Tests for test_all_configured_providers() function."""
+class TestCheckAllConfiguredProviders:
+    """Tests for check_all_configured_providers() function."""
 
     def test_auto_detects_from_env(self, monkeypatch):
-        """Test test_all_configured_providers() auto-detects from env variables."""
+        """Test check_all_configured_providers() auto-detects from env variables."""
         # Set env vars for multiple providers
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
@@ -121,7 +121,7 @@ class TestTestAllConfiguredProviders:
 
         with patch("apps.backend.core.provider_tester._test_openai", side_effect=mock_test):
             with patch("apps.backend.core.provider_tester._test_anthropic", side_effect=mock_test):
-                results = test_all_configured_providers()
+                results = check_all_configured_providers()
 
                 # Should have results for both providers
                 assert "openai" in results
@@ -133,7 +133,7 @@ class TestTestAllConfiguredProviders:
         for key in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "AZURE_OPENAI_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_LLM_MODEL", "OPENROUTER_API_KEY", "VOYAGE_API_KEY"]:
             monkeypatch.delenv(key, raising=False)
 
-        results = test_all_configured_providers()
+        results = check_all_configured_providers()
 
         # Should return empty dict when no providers configured
         assert results == {}

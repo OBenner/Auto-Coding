@@ -26,10 +26,10 @@ Supported Providers:
         - OpenRouter
 
 Usage:
-    from core.provider_tester import test_provider_connection, ProviderTestResult
+    from core.provider_tester import check_provider_connection, ProviderTestResult
 
     # Test OpenAI connection
-    result = test_provider_connection(
+    result = check_provider_connection(
         provider="openai",
         api_key="sk-...",
         model="gpt-4"
@@ -41,7 +41,7 @@ Usage:
         print(f"Fix: {result.fix_command}")
 
     # Test Anthropic connection
-    result = test_provider_connection(
+    result = check_provider_connection(
         provider="anthropic",
         api_key="sk-ant-...",
         model="claude-sonnet-4-5"
@@ -68,7 +68,7 @@ class ProviderTestResult:
     error_details: Optional[str] = None
 
 
-def test_provider_connection(
+def check_provider_connection(
     provider: str,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
@@ -76,10 +76,10 @@ def test_provider_connection(
     **kwargs,
 ) -> ProviderTestResult:
     """
-    Test LLM or embedder provider connection (synchronous).
+    Check LLM or embedder provider connection (synchronous).
 
-    This is a synchronous wrapper around async test functions for convenience.
-    For async contexts, use the async test functions directly.
+    This is a synchronous wrapper around async check functions for convenience.
+    For async contexts, use the async check functions directly.
 
     Args:
         provider: Provider name (openai, anthropic, azure_openai, google, ollama, openrouter)
@@ -92,16 +92,16 @@ def test_provider_connection(
         ProviderTestResult with test outcome
 
     Examples:
-        >>> result = test_provider_connection("openai", api_key="sk-...")
+        >>> result = check_provider_connection("openai", api_key="sk-...")
         >>> if result.success:
         ...     print(f"✓ {result.message}")
     """
-    # Run async test in event loop
+    # Run async check in event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         result = loop.run_until_complete(
-            test_provider_connection_async(provider, api_key, model, base_url, **kwargs)
+            check_provider_connection_async(provider, api_key, model, base_url, **kwargs)
         )
     finally:
         loop.close()
@@ -109,7 +109,7 @@ def test_provider_connection(
     return result
 
 
-async def test_provider_connection_async(
+async def check_provider_connection_async(
     provider: str,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
@@ -117,7 +117,7 @@ async def test_provider_connection_async(
     **kwargs,
 ) -> ProviderTestResult:
     """
-    Test LLM or embedder provider connection (asynchronous).
+    Check LLM or embedder provider connection (asynchronous).
 
     Args:
         provider: Provider name (openai, anthropic, azure_openai, google, ollama, openrouter)
@@ -712,35 +712,35 @@ def get_provider_from_env() -> Optional[str]:
         return None
 
 
-def test_all_configured_providers() -> dict[str, ProviderTestResult]:
+def check_all_configured_providers() -> dict[str, ProviderTestResult]:
     """
-    Test all providers that are configured in environment variables.
+    Check all providers that are configured in environment variables.
 
     Returns:
         Dict mapping provider name to ProviderTestResult
     """
     results = {}
 
-    # Test each provider if credentials are present
+    # Check each provider if credentials are present
     if os.environ.get("OPENAI_API_KEY"):
-        results["openai"] = test_provider_connection("openai")
+        results["openai"] = check_provider_connection("openai")
 
     if os.environ.get("ANTHROPIC_API_KEY"):
-        results["anthropic"] = test_provider_connection("anthropic")
+        results["anthropic"] = check_provider_connection("anthropic")
 
     if os.environ.get("AZURE_OPENAI_API_KEY"):
-        results["azure_openai"] = test_provider_connection("azure_openai")
+        results["azure_openai"] = check_provider_connection("azure_openai")
 
     if os.environ.get("GOOGLE_API_KEY"):
-        results["google"] = test_provider_connection("google")
+        results["google"] = check_provider_connection("google")
 
     if os.environ.get("OLLAMA_BASE_URL") or os.environ.get("OLLAMA_LLM_MODEL"):
-        results["ollama"] = test_provider_connection("ollama")
+        results["ollama"] = check_provider_connection("ollama")
 
     if os.environ.get("OPENROUTER_API_KEY"):
-        results["openrouter"] = test_provider_connection("openrouter")
+        results["openrouter"] = check_provider_connection("openrouter")
 
     if os.environ.get("VOYAGE_API_KEY"):
-        results["voyage"] = test_provider_connection("voyage")
+        results["voyage"] = check_provider_connection("voyage")
 
     return results
