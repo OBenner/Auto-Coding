@@ -6,11 +6,15 @@ Template library manager for browsing, searching, and managing templates.
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from .generator import SpecGenerator
 from .registry import Template, TemplateRegistry
+from .validator import validate_template
+
+logger = logging.getLogger(__name__)
 
 
 class TemplateLibrary:
@@ -126,6 +130,8 @@ class TemplateLibrary:
         """
         Create a spec from a template.
 
+        Validates the template before generation to ensure security and correctness.
+
         Args:
             template_name: Name of the template to use
             params: Template parameters
@@ -135,11 +141,20 @@ class TemplateLibrary:
             Generated spec content
 
         Raises:
-            ValueError: If template not found or parameters invalid
+            ValueError: If template not found, validation fails, or parameters invalid
         """
         template = self.get_template(template_name)
         if not template:
             raise ValueError(f"Template not found: {template_name}")
+
+        # Validate template before using it to generate specs
+        is_valid, errors = self.validate(template, strict=True)
+        if not is_valid:
+            error_msg = f"Template '{template_name}' validation failed:\n" + "\n".join(
+                f"  - {error}" for error in errors
+            )
+            logger.error("Failed to create spec from template '%s': %s", template_name, error_msg)
+            raise ValueError(error_msg)
 
         generator = SpecGenerator(template)
         return generator.generate_spec(params, spec_dir)
@@ -164,13 +179,50 @@ class TemplateLibrary:
         generator = SpecGenerator(template)
         return generator.preview_spec(params)
 
+    def validate(self, template: Template, strict: bool = True) -> tuple[bool, list[str]]:
+        """
+        Validate a template for security and correctness.
+
+        Performs comprehensive validation including:
+        - Basic field validation (name, description, category)
+        - Parameter validation (types, required fields)
+        - Placeholder validation (proper format, no duplicates)
+        - Content safety (no injection attacks)
+        - Generated content validation
+
+        Args:
+            template: Template instance to validate
+            strict: If True, fail on warnings. If False, allow warnings.
+
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+            - is_valid: True if template passes all checks
+            - list_of_errors: List of error/warning messages (empty if valid)
+        """
+        return validate_template(template, strict=strict)
+
     def save_custom_template(self, template: Template) -> None:
         """
         Save a custom user-created template.
 
+        Validates the template before saving to ensure it meets security
+        and correctness requirements.
+
         Args:
             template: Template to save
+
+        Raises:
+            ValueError: If template validation fails
         """
+        # Validate template before saving
+        is_valid, errors = self.validate(template, strict=True)
+        if not is_valid:
+            error_msg = "Template validation failed:\n" + "\n".join(
+                f"  - {error}" for error in errors
+            )
+            logger.error("Failed to save template '%s': %s", template.name, error_msg)
+            raise ValueError(error_msg)
+
         self.registry.register(template)
 
         if self.custom_templates_dir:
@@ -186,6 +238,8 @@ class TemplateLibrary:
 
             with open(template_file, "w", encoding="utf-8") as f:
                 json.dump(template_data, f, indent=2)
+
+            logger.info("Successfully saved custom template '%s' to %s", template.name, template_file)
 
     def _load_custom_templates(self) -> None:
         """Load custom templates from disk."""
