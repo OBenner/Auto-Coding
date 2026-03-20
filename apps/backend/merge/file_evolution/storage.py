@@ -47,6 +47,7 @@ class EvolutionStorage:
         self.baselines_dir = self.storage_dir / "baselines"
         self.evolution_file = self.storage_dir / "file_evolution.json"
         self.merge_history_file = self.storage_dir / "merge_history.json"
+        self.merge_completions_file = self.storage_dir / "merge_completions.json"
 
         # Ensure directories exist
         self.storage_dir.mkdir(parents=True, exist_ok=True)
@@ -224,3 +225,40 @@ class EvolutionStorage:
 
         except Exception as e:
             logger.error(f"Failed to save merge history: {e}")
+
+    def load_merge_completions(self) -> list[dict[str, Any]]:
+        """
+        Load merge completions data from disk.
+
+        Returns:
+            List of merge completion record dictionaries
+        """
+        if not self.merge_completions_file.exists():
+            return []
+
+        try:
+            with open(self.merge_completions_file, encoding="utf-8") as f:
+                data = json.load(f)
+
+            logger.debug(f"Loaded merge completions with {len(data)} records")
+            return data
+
+        except Exception as e:
+            logger.error(f"Failed to load merge completions: {e}")
+            return []
+
+    def save_merge_completions(self, merge_records: list[dict[str, Any]]) -> None:
+        """
+        Persist merge completions data to disk.
+
+        Args:
+            merge_records: List of merge completion record dictionaries
+        """
+        try:
+            with open(self.merge_completions_file, "w", encoding="utf-8") as f:
+                json.dump(merge_records, f, indent=2)
+
+            logger.debug(f"Saved merge completions with {len(merge_records)} records")
+
+        except Exception as e:
+            logger.error(f"Failed to save merge completions: {e}")
