@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: 'python,node'
+      create-pr:
+        description: 'Create pull request with dependency updates'
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: '0 0 * * 1' # Weekly on Monday at midnight UTC
 
@@ -27,6 +32,7 @@ concurrency:
 permissions:
   contents: read
   actions: read
+  pull-requests: write
 
 jobs:
   dependency-scan:
@@ -62,6 +68,10 @@ jobs:
 
           if [ -n "${{ github.event.inputs.ecosystems }}" ]; then
             SCAN_ARGS="$SCAN_ARGS --ecosystems ${{ github.event.inputs.ecosystems }}"
+          fi
+
+          if [ "${{ github.event.inputs.create-pr }}" = "true" ]; then
+            SCAN_ARGS="$SCAN_ARGS --create-pr"
           fi
 
           echo "::group::Running dependency scan"
