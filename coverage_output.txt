@@ -1,0 +1,259 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.9, pytest-8.4.2, pluggy-1.5.0 -- I:\anaconda3\python.exe
+cachedir: .pytest_cache
+rootdir: I:\git\Auto-Claude\.auto-claude\worktrees\tasks\200-spec-templates-with-placeholders\tests
+configfile: pytest.ini
+plugins: anyio-4.10.0, asyncio-1.3.0, cov-7.0.0, mock-3.15.1, timeout-2.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 207 items
+
+tests\test_spec_templates_import_export.py::TestExportTemplate::test_export_simple_template PASSED [  0%]
+tests\test_spec_templates_import_export.py::TestExportTemplate::test_export_template_with_placeholders PASSED [  0%]
+tests\test_spec_templates_import_export.py::TestExportTemplate::test_export_template_with_parameters PASSED [  1%]
+tests\test_spec_templates_import_export.py::TestExportTemplate::test_export_custom_template PASSED [  1%]
+tests\test_spec_templates_import_export.py::TestExportTemplate::test_export_version_included PASSED [  2%]
+tests\test_spec_templates_import_export.py::TestExportTemplate::test_export_preserves_all_fields PASSED [  2%]
+tests\test_spec_templates_import_export.py::TestImportTemplate::test_import_minimal_template PASSED [  3%]
+tests\test_spec_templates_import_export.py::TestImportTemplate::test_import_template_with_placeholders PASSED [  3%]
+tests\test_spec_templates_import_export.py::TestImportTemplate::test_import_template_with_parameters PASSED [  4%]
+tests\test_spec_templates_import_export.py::TestImportTemplate::test_import_template_with_content PASSED [  4%]
+tests\test_spec_templates_import_export.py::TestImportTemplate::test_import_missing_required_field PASSED [  5%]
+tests\test_spec_templates_import_export.py::TestImportTemplate::test_import_missing_multiple_required_fields PASSED [  5%]
+tests\test_spec_templates_import_export.py::TestImportTemplate::test_import_with_old_export_version PASSED [  6%]
+tests\test_spec_templates_import_export.py::TestImportTemplate::test_import_defaults_optional_fields PASSED [  6%]
+tests\test_spec_templates_import_export.py::TestRoundTripExportImport::test_round_trip_simple_template PASSED [  7%]
+tests\test_spec_templates_import_export.py::TestRoundTripExportImport::test_round_trip_preserves_placeholders PASSED [  7%]
+tests\test_spec_templates_import_export.py::TestRoundTripExportImport::test_round_trip_preserves_parameters PASSED [  8%]
+tests\test_spec_templates_import_export.py::TestRoundTripExportImport::test_round_trip_preserves_template_content PASSED [  8%]
+tests\test_spec_templates_import_export.py::TestRoundTripExportImport::test_round_trip_preserves_all_parameter_types PASSED [  9%]
+tests\test_spec_templates_import_export.py::TestParameterSerialization::test_serialize_empty_parameters PASSED [  9%]
+tests\test_spec_templates_import_export.py::TestParameterSerialization::test_serialize_string_type PASSED [ 10%]
+tests\test_spec_templates_import_export.py::TestParameterSerialization::test_serialize_all_basic_types PASSED [ 10%]
+tests\test_spec_templates_import_export.py::TestParameterSerialization::test_serialize_preserves_other_fields PASSED [ 11%]
+tests\test_spec_templates_import_export.py::TestParameterSerialization::test_serialize_already_string_type PASSED [ 11%]
+tests\test_spec_templates_import_export.py::TestParameterDeserialization::test_deserialize_empty_parameters PASSED [ 12%]
+tests\test_spec_templates_import_export.py::TestParameterDeserialization::test_deserialize_string_type PASSED [ 12%]
+tests\test_spec_templates_import_export.py::TestParameterDeserialization::test_deserialize_all_basic_types PASSED [ 13%]
+tests\test_spec_templates_import_export.py::TestParameterDeserialization::test_deserialize_preserves_other_fields PASSED [ 13%]
+tests\test_spec_templates_import_export.py::TestParameterDeserialization::test_deserialize_unknown_type_string PASSED [ 14%]
+tests\test_spec_templates_import_export.py::TestParameterDeserialization::test_deserialize_already_python_type PASSED [ 14%]
+tests\test_spec_templates_import_export.py::TestFileImportExport::test_export_to_file PASSED [ 14%]
+tests\test_spec_templates_import_export.py::TestFileImportExport::test_export_to_file_creates_directory PASSED [ 15%]
+tests\test_spec_templates_import_export.py::TestFileImportExport::test_import_from_file PASSED [ 15%]
+tests\test_spec_templates_import_export.py::TestFileImportExport::test_import_from_nonexistent_file PASSED [ 16%]
+tests\test_spec_templates_import_export.py::TestFileImportExport::test_import_from_invalid_json PASSED [ 16%]
+tests\test_spec_templates_import_export.py::TestFileImportExport::test_file_round_trip PASSED [ 17%]
+tests\test_spec_templates_import_export.py::TestTemplateLibraryIntegration::test_library_export_template PASSED [ 17%]
+tests\test_spec_templates_import_export.py::TestTemplateLibraryIntegration::test_library_export_nonexistent_template PASSED [ 18%]
+tests\test_spec_templates_import_export.py::TestTemplateLibraryIntegration::test_library_import_template_data PASSED [ 18%]
+tests\test_spec_templates_import_export.py::TestTemplateLibraryIntegration::test_library_import_invalid_template PASSED [ 19%]
+tests\test_spec_templates_import_export.py::TestTemplateLibraryIntegration::test_library_export_template_file PASSED [ 19%]
+tests\test_spec_templates_import_export.py::TestTemplateLibraryIntegration::test_library_import_template_file PASSED [ 20%]
+tests\test_spec_templates_import_export.py::TestTemplateLibraryIntegration::test_library_import_file_with_validation_error PASSED [ 20%]
+tests\test_spec_templates_import_export.py::TestCustomTemplate::test_custom_template_initialization PASSED [ 21%]
+tests\test_spec_templates_import_export.py::TestCustomTemplate::test_custom_template_generate PASSED [ 21%]
+tests\test_spec_templates_import_export.py::TestCustomTemplate::test_custom_template_default_content PASSED [ 22%]
+tests\test_spec_templates_import_export.py::TestEdgeCases::test_export_template_with_none_placeholders PASSED [ 22%]
+tests\test_spec_templates_import_export.py::TestEdgeCases::test_export_template_with_empty_parameters PASSED [ 23%]
+tests\test_spec_templates_import_export.py::TestEdgeCases::test_import_template_with_extra_fields PASSED [ 23%]
+tests\test_spec_templates_import_export.py::TestEdgeCases::test_round_trip_with_unicode PASSED [ 24%]
+tests\test_spec_templates_import_export.py::TestEdgeCases::test_round_trip_with_special_characters PASSED [ 24%]
+tests\test_spec_templates_import_export.py::TestEdgeCases::test_export_import_very_long_description PASSED [ 25%]
+tests\test_spec_templates_import_export.py::TestEdgeCases::test_export_import_many_placeholders PASSED [ 25%]
+tests\test_spec_templates_import_export.py::TestEdgeCases::test_export_import_complex_parameter_defaults PASSED [ 26%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_single_placeholder PASSED [ 26%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_multiple_placeholders PASSED [ 27%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_duplicate_placeholders PASSED [ 27%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_no_placeholders PASSED [ 28%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_from_empty_string PASSED [ 28%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_from_none PASSED [ 28%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_placeholder_with_numbers PASSED [ 29%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_placeholder_with_underscores PASSED [ 29%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_ignore_lowercase_placeholders PASSED [ 30%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_ignore_mixed_case_placeholders PASSED [ 30%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderExtraction::test_extract_from_multiline_text PASSED [ 31%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderValidation::test_validate_all_values_present PASSED [ 31%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderValidation::test_validate_missing_value PASSED [ 32%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderValidation::test_validate_multiple_missing_values PASSED [ 32%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderValidation::test_validate_empty_string_value PASSED [ 33%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderValidation::test_validate_none_value PASSED [ 33%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderValidation::test_validate_no_placeholders PASSED [ 34%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderValidation::test_validate_extra_values_ignored PASSED [ 34%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_single_placeholder PASSED [ 35%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_multiple_placeholders PASSED [ 35%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_duplicate_placeholders PASSED [ 36%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_with_numeric_value PASSED [ 36%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_empty_text PASSED [ 37%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_none_text PASSED [ 37%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_no_placeholders PASSED [ 38%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_missing_value_raises_error PASSED [ 38%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_empty_value_raises_error PASSED [ 39%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_multiline_text PASSED [ 39%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderReplacement::test_replace_extra_values_ignored PASSED [ 40%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderInfo::test_get_common_placeholder_info PASSED [ 40%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderInfo::test_get_unknown_placeholder_info PASSED [ 41%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderInfo::test_get_all_common_placeholders PASSED [ 41%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderInfo::test_common_placeholders_have_descriptions PASSED [ 42%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_project_name PASSED [ 42%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_author PASSED [ 42%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_version PASSED [ 43%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_email PASSED [ 43%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_license PASSED [ 44%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_repository PASSED [ 44%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_empty_text PASSED [ 45%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_none_text PASSED [ 45%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_no_matches PASSED [ 46%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderSuggestions::test_suggest_multiple_placeholders PASSED [ 46%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_valid_uppercase_name PASSED [ 47%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_valid_name_with_underscores PASSED [ 47%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_valid_name_with_numbers PASSED [ 48%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_valid_name_starting_with_underscore PASSED [ 48%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_invalid_lowercase_name PASSED [ 49%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_invalid_mixed_case_name PASSED [ 49%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_invalid_name_starting_with_number PASSED [ 50%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_invalid_name_with_special_chars PASSED [ 50%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_invalid_empty_name PASSED [ 51%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderNameValidation::test_invalid_none_name PASSED [ 51%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderPattern::test_pattern_matches_valid_placeholder PASSED [ 52%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderPattern::test_pattern_extracts_placeholder_name PASSED [ 52%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderPattern::test_pattern_ignores_single_braces PASSED [ 53%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderPattern::test_pattern_ignores_mismatched_braces PASSED [ 53%]
+tests\test_spec_templates_placeholders.py::TestPlaceholderPattern::test_pattern_requires_uppercase PASSED [ 54%]
+tests\test_spec_templates_placeholders.py::TestEdgeCases::test_placeholder_at_start_of_text PASSED [ 54%]
+tests\test_spec_templates_placeholders.py::TestEdgeCases::test_placeholder_at_end_of_text PASSED [ 55%]
+tests\test_spec_templates_placeholders.py::TestEdgeCases::test_adjacent_placeholders PASSED [ 55%]
+tests\test_spec_templates_placeholders.py::TestEdgeCases::test_placeholder_with_special_chars_in_value PASSED [ 56%]
+tests\test_spec_templates_placeholders.py::TestEdgeCases::test_placeholder_with_unicode_value PASSED [ 56%]
+tests\test_spec_templates_placeholders.py::TestEdgeCases::test_very_long_placeholder_name PASSED [ 57%]
+tests\test_spec_templates_placeholders.py::TestEdgeCases::test_placeholder_in_json_like_text PASSED [ 57%]
+tests\test_spec_templates_validation.py::TestValidateTemplate::test_validate_valid_template PASSED [ 57%]
+tests\test_spec_templates_validation.py::TestValidateTemplate::test_validate_invalid_name PASSED [ 58%]
+tests\test_spec_templates_validation.py::TestValidateTemplate::test_validate_empty_description PASSED [ 58%]
+tests\test_spec_templates_validation.py::TestValidateTemplate::test_validate_dangerous_template PASSED [ 59%]
+tests\test_spec_templates_validation.py::TestValidateTemplate::test_validate_minimal_template PASSED [ 59%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_valid_basic_fields PASSED [ 60%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_empty_name PASSED [ 60%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_whitespace_only_name PASSED [ 61%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_invalid_name_format PASSED [ 61%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_valid_name_with_underscores PASSED [ 62%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_valid_name_with_hyphens PASSED [ 62%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_empty_description PASSED [ 63%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_short_description PASSED [ 63%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_valid_description_minimum_length PASSED [ 64%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_empty_category PASSED [ 64%]
+tests\test_spec_templates_validation.py::TestValidateBasicFields::test_invalid_category_format PASSED [ 65%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_valid_parameters PASSED [ 65%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_empty_parameters PASSED [ 66%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_parameters_not_dict PASSED [ 66%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_invalid_parameter_name PASSED [ 67%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_parameter_name_with_uppercase PASSED [ 67%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_dangerous_parameter_name PASSED [ 68%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_parameter_definition_not_dict PASSED [ 68%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_missing_type_field PASSED [ 69%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_invalid_parameter_type PASSED [ 69%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_valid_parameter_types PASSED [ 70%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_dangerous_default_value PASSED [ 70%]
+tests\test_spec_templates_validation.py::TestValidateParameters::test_safe_default_value PASSED [ 71%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_valid_placeholders PASSED [ 71%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_empty_placeholders PASSED [ 71%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_placeholders_not_list PASSED [ 72%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_duplicate_placeholders PASSED [ 72%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_placeholder_not_string PASSED [ 73%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_invalid_placeholder_name PASSED [ 73%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_lowercase_placeholder_name PASSED [ 74%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_valid_placeholder_with_numbers PASSED [ 74%]
+tests\test_spec_templates_validation.py::TestValidatePlaceholders::test_valid_placeholder_with_underscores PASSED [ 75%]
+tests\test_spec_templates_validation.py::TestValidateGeneratedContent::test_valid_generated_content PASSED [ 75%]
+tests\test_spec_templates_validation.py::TestValidateGeneratedContent::test_dangerous_generated_content PASSED [ 76%]
+tests\test_spec_templates_validation.py::TestValidateGeneratedContent::test_generation_failure PASSED [ 76%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_safe_content PASSED [ 77%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_dangerous_command_patterns PASSED [ 77%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_import_statement_detection PASSED [ 78%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_dangerous_module_reference PASSED [ 78%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_prompt_injection_detection PASSED [ 79%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_path_traversal_detection PASSED [ 79%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_sql_injection_detection PASSED [ 80%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_placeholder_in_dangerous_pattern_allowed PASSED [ 80%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_recursive_validation_dict PASSED [ 81%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_recursive_validation_list PASSED [ 81%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_very_long_content PASSED [ 82%]
+tests\test_spec_templates_validation.py::TestValidateContentSafety::test_content_length_limit PASSED [ 82%]
+tests\test_spec_templates_validation.py::TestValidateImport::test_valid_import_data PASSED [ 83%]
+tests\test_spec_templates_validation.py::TestValidateImport::test_missing_required_field PASSED [ 83%]
+tests\test_spec_templates_validation.py::TestValidateImport::test_unexpected_field PASSED [ 84%]
+tests\test_spec_templates_validation.py::TestValidateImport::test_invalid_field_type PASSED [ 84%]
+tests\test_spec_templates_validation.py::TestValidateImport::test_invalid_parameters_type PASSED [ 85%]
+tests\test_spec_templates_validation.py::TestValidateImport::test_invalid_placeholders_type PASSED [ 85%]
+tests\test_spec_templates_validation.py::TestValidateImport::test_minimal_valid_import PASSED [ 85%]
+tests\test_spec_templates_validation.py::TestValidateTemplateForImport::test_valid_import_with_summary PASSED [ 86%]
+tests\test_spec_templates_validation.py::TestValidateTemplateForImport::test_invalid_import_with_summary PASSED [ 86%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_name_lowercase PASSED [ 87%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_name_with_underscores PASSED [ 87%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_name_with_hyphens PASSED [ 88%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_name_with_numbers PASSED [ 88%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_name_starting_with_number PASSED [ 89%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_name_with_uppercase PASSED [ 89%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_name_with_spaces PASSED [ 90%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_name_empty PASSED [ 90%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_category_lowercase PASSED [ 91%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_category_with_underscores PASSED [ 91%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_category_with_hyphens PASSED [ 92%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_category_with_uppercase PASSED [ 92%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_category_empty PASSED [ 93%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_param_name_lowercase PASSED [ 93%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_param_name_with_underscores PASSED [ 94%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_param_name_with_numbers PASSED [ 94%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_param_name_with_hyphens PASSED [ 95%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_param_name_with_uppercase PASSED [ 95%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_param_name_starting_with_number PASSED [ 96%]
+tests\test_spec_templates_validation.py::TestHelperFunctions::test_is_valid_param_name_empty PASSED [ 96%]
+tests\test_spec_templates_validation.py::TestEdgeCases::test_template_with_all_parameter_types PASSED [ 97%]
+tests\test_spec_templates_validation.py::TestEdgeCases::test_template_with_many_placeholders PASSED [ 97%]
+tests\test_spec_templates_validation.py::TestEdgeCases::test_unicode_in_description PASSED [ 98%]
+tests\test_spec_templates_validation.py::TestEdgeCases::test_very_long_description PASSED [ 98%]
+tests\test_spec_templates_validation.py::TestEdgeCases::test_multiple_validation_errors PASSED [ 99%]
+tests\test_spec_templates_validation.py::TestEdgeCases::test_none_parameters PASSED [ 99%]
+tests\test_spec_templates_validation.py::TestEdgeCases::test_none_placeholders PASSED [100%]
+
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.13.9-final-0 _______________
+
+Name                                                              Stmts   Miss  Cover   Missing
+-----------------------------------------------------------------------------------------------
+apps\backend\spec\templates\__init__.py                               4      0   100%
+apps\backend\spec\templates\builtin\__init__.py                      31      0   100%
+apps\backend\spec\templates\builtin\admin_panel.py                   10      4    60%   38-42
+apps\backend\spec\templates\builtin\api_integration.py               11      5    55%   42-47
+apps\backend\spec\templates\builtin\authentication.py                13      7    46%   58-66
+apps\backend\spec\templates\builtin\caching.py                       11      5    55%   43-48
+apps\backend\spec\templates\builtin\ci_cd_pipeline.py                10      4    60%   37-41
+apps\backend\spec\templates\builtin\crud_api.py                      13      7    46%   56-64
+apps\backend\spec\templates\builtin\dashboard_widget.py              11      5    55%   42-47
+apps\backend\spec\templates\builtin\database_migration.py            32     24    25%   49-56, 133-142, 148-157
+apps\backend\spec\templates\builtin\documentation.py                 10      4    60%   37-41
+apps\backend\spec\templates\builtin\email_notifications.py           10      4    60%   37-41
+apps\backend\spec\templates\builtin\error_handling.py                10      4    60%   38-42
+apps\backend\spec\templates\builtin\export_data.py                   10      4    60%   37-41
+apps\backend\spec\templates\builtin\file_upload.py                   11      5    55%   42-47
+apps\backend\spec\templates\builtin\import_data.py                   10      4    60%   37-41
+apps\backend\spec\templates\builtin\logging_system.py                10      4    60%   38-42
+apps\backend\spec\templates\builtin\monitoring_dashboard.py          10      4    60%   37-41
+apps\backend\spec\templates\builtin\pagination.py                    10      4    60%   38-42
+apps\backend\spec\templates\builtin\pdf_generation.py                10      4    60%   38-42
+apps\backend\spec\templates\builtin\performance_optimization.py      10      4    60%   36-40
+apps\backend\spec\templates\builtin\search_feature.py                11      5    55%   43-48
+apps\backend\spec\templates\builtin\security_audit.py                10      4    60%   38-42
+apps\backend\spec\templates\builtin\settings_page.py                 10      4    60%   37-41
+apps\backend\spec\templates\builtin\test_suite.py                    10      4    60%   37-41
+apps\backend\spec\templates\builtin\ui_component.py                  16      9    44%   56-64, 154-160
+apps\backend\spec\templates\builtin\user_profile.py                  10      4    60%   38-42
+apps\backend\spec\templates\generator.py                             83     69    17%   27-28, 44-66, 78-79, 89-100, 112-153, 165-179, 194-215
+apps\backend\spec\templates\io.py                                    78      0   100%
+apps\backend\spec\templates\library.py                              209    147    30%   73-99, 108, 120-131, 152-166, 181-186, 276, 357-374, 379, 382-389, 406-839, 854-859
+apps\backend\spec\templates\placeholders.py                          60      0   100%
+apps\backend\spec\templates\registry.py                              79     49    38%   50, 62-73, 88-128, 141-152, 196, 208, 217, 221
+apps\backend\spec\templates\validator.py                            199     20    90%   230-231, 361-375, 412, 420, 509, 514
+-----------------------------------------------------------------------------------------------
+TOTAL                                                              1032    421    59%
+Coverage JSON written to file .auto-claude/specs/200-spec-templates-with-placeholders/coverage.json
+============================= 207 passed in 1.37s =============================
