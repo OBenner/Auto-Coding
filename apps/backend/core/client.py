@@ -1310,4 +1310,16 @@ def create_client(
     if agents:
         options_kwargs["agents"] = agents
 
-    return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
+    # Create SDK client with error wrapping
+    # SDK errors during client initialization will be converted to typed errors
+    try:
+        client = ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
+    except Exception as e:
+        # Wrap raw SDK exceptions with typed errors for structured error handling
+        # This ensures consistent error types throughout the system
+        # Lazy import to avoid circular dependency
+        from core.error_detection import wrap_sdk_error
+
+        raise wrap_sdk_error(e) from e
+
+    return client
