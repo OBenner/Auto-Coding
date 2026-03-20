@@ -145,14 +145,14 @@ export async function exportAsImage(
     onProgress?.({ progress: 30, step: 'rendering' });
 
     // Configure html2canvas options
-    const canvasOptions: html2canvas.Options = {
+    const canvasOptions = {
       scale: config.scale,
       backgroundColor: config.backgroundColor,
       logging: false,
       useCORS: true,
       allowTaint: true,
       // Exclude interactive elements from export
-      ignoreElements: (element) => {
+      ignoreElements: (element: HTMLElement) => {
         const className = element.className;
         if (typeof className === 'string') {
           // Exclude zoom controls and pan buttons

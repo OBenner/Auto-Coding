@@ -8,6 +8,7 @@
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
+import { Download, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { TimelineViewState, TimelineConfig } from './types';
 
@@ -20,6 +21,10 @@ interface TimelineControlsProps {
   onZoomChange?: (zoom: number) => void;
   /** Callback when pan changes */
   onPanChange?: (scrollX: number, scrollY: number) => void;
+  /** Callback when export is requested */
+  onExport?: () => void;
+  /** Whether export is in progress */
+  isExporting?: boolean;
   /** Additional CSS classes */
   className?: string;
   /** Position variant for controls */
@@ -28,6 +33,8 @@ interface TimelineControlsProps {
   showPanControls?: boolean;
   /** Whether to show zoom controls */
   showZoomControls?: boolean;
+  /** Whether to show export button */
+  showExportButton?: boolean;
 }
 
 /**
@@ -39,10 +46,13 @@ export const TimelineControls = memo(function TimelineControls({
   config,
   onZoomChange,
   onPanChange,
+  onExport,
+  isExporting = false,
   className,
   position = 'top-right',
   showPanControls = false,
   showZoomControls = true,
+  showExportButton = true,
 }: TimelineControlsProps) {
   const { t } = useTranslation('timeline');
 
@@ -172,6 +182,39 @@ export const TimelineControls = memo(function TimelineControls({
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
             </svg>
+          </motion.button>
+        </motion.div>
+      )}
+
+      {/* Export button */}
+      {showExportButton && (
+        <motion.div
+          className="bg-background/80 backdrop-blur-sm border rounded-lg shadow-sm"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2, delay: 0.05 }}
+        >
+          <motion.button
+            whileHover={{ scale: isExporting ? 1 : 1.05 }}
+            whileTap={{ scale: isExporting ? 1 : 0.95 }}
+            onClick={onExport}
+            disabled={isExporting}
+            className={cn(
+              'p-2 rounded-md transition-colors flex items-center gap-1.5',
+              'hover:bg-accent',
+              'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent'
+            )}
+            title={t('controls.export') || 'Export as PNG'}
+            aria-label={t('controls.export') || 'Export as PNG'}
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            <span className="text-xs font-medium">
+              {isExporting ? (t('controls.exporting') || 'Exporting...') : (t('controls.export') || 'Export')}
+            </span>
           </motion.button>
         </motion.div>
       )}

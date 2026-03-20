@@ -5,11 +5,12 @@
  * with real-time progress updates, zoom/pan controls, and export functionality.
  */
 
-import { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { useState, useCallback, useRef, useEffect, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { useTimelineData } from './hooks/useTimelineData';
+import { useTimelineExport } from './hooks/useTimelineExport';
 import type {
   TimelineData,
   TimelineViewState,
@@ -29,6 +30,7 @@ import {
 import { DEFAULT_TIMELINE_CONFIG } from './types';
 import { PhaseSwimLane } from './PhaseSwimLane';
 import { TimelineControls } from './TimelineControls';
+import { DependencyConnector } from './DependencyConnector';
 
 interface BuildTimelineProps {
   /** Task ID to load implementation plan for */
@@ -89,6 +91,22 @@ export const BuildTimeline = memo(function BuildTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ x: number; y: number; scrollX: number; scrollY: number } | null>(null);
+
+  // Export functionality
+  const { exportAndDownload, isExporting } = useTimelineExport({
+    defaultOptions: {
+      filename: `timeline-${taskId}`,
+    },
+  });
+
+  /**
+   * Handle export button click
+   */
+  const handleExport = useCallback(() => {
+    if (timelineRef.current) {
+      exportAndDownload(timelineRef.current);
+    }
+  }, [exportAndDownload]);
 
   /**
    * Handle scroll change
@@ -219,31 +237,52 @@ export const BuildTimeline = memo(function BuildTimeline({
     return () => observer.disconnect();
   }, []);
 
-  // Calculate layouts
-  const phaseLayouts = timelineData
-    ? calculateAllPhaseLayouts(timelineData.phases, viewState, config)
-    : new Map();
+  // Calculate layouts (memoized for performance)
+  const phaseLayouts = useMemo(
+    () =>
+      timelineData
+        ? calculateAllPhaseLayouts(timelineData.phases, viewState, config)
+        : new Map(),
+    [timelineData, viewState, config]
+  );
 
-  const subtasksByPhase = timelineData
-    ? new Map(
-        timelineData.phases.map((phase) => [
-          `phase-${phase.phase}`,
-          getSubtasksForPhase(phase.phase),
-        ])
-      )
-    : new Map();
+  const subtasksByPhase = useMemo(
+    () =>
+      timelineData
+        ? new Map(
+            timelineData.phases.map((phase) => [
+              `phase-${phase.phase}`,
+              getSubtasksForPhase(phase.phase),
+            ])
+          )
+        : new Map(),
+    [timelineData, getSubtasksForPhase]
+  );
 
-  const subtaskLayouts = timelineData && phaseLayouts
-    ? calculateAllSubtaskLayouts(subtasksByPhase, phaseLayouts, viewState, config)
-    : new Map();
+  const subtaskLayouts = useMemo(
+    () =>
+      timelineData && phaseLayouts
+        ? calculateAllSubtaskLayouts(subtasksByPhase, phaseLayouts, viewState, config)
+        : new Map(),
+    [timelineData, phaseLayouts, subtasksByPhase, viewState, config]
+  );
 
-  // Calculate timeline dimensions
-  const timelineWidth = timelineData
-    ? calculateTimelineWidth(timelineData.subtasks, config, viewState.zoom)
-    : 0;
-  const timelineHeight = timelineData
-    ? calculateTimelineHeight(timelineData.phases.length, config, viewState.zoom)
-    : 0;
+  // Calculate timeline dimensions (memoized for performance)
+  const timelineWidth = useMemo(
+    () =>
+      timelineData
+        ? calculateTimelineWidth(timelineData.subtasks, config, viewState.zoom)
+        : 0,
+    [timelineData, config, viewState.zoom]
+  );
+
+  const timelineHeight = useMemo(
+    () =>
+      timelineData
+        ? calculateTimelineHeight(timelineData.phases.length, config, viewState.zoom)
+        : 0,
+    [timelineData, config, viewState.zoom]
+  );
 
   // Loading state
   if (isLoading) {
@@ -326,9 +365,12 @@ export const BuildTimeline = memo(function BuildTimeline({
         config={config}
         onZoomChange={(zoom) => setViewState((prev) => ({ ...prev, zoom }))}
         onPanChange={(scrollX, scrollY) => setViewState((prev) => ({ ...prev, scrollX, scrollY }))}
+        onExport={handleExport}
+        isExporting={isExporting}
         position="top-right"
         showPanControls={false}
         showZoomControls={true}
+        showExportButton={true}
       />
 
       {/* Scrollable timeline container */}
@@ -376,11 +418,15 @@ export const BuildTimeline = memo(function BuildTimeline({
             })}
           </div>
 
-          {/* SVG layer for dependency connectors placeholder */}
-          {/* This will be populated by DependencyConnector components in subtask-4-1 */}
-          <svg
+          {/* SVG layer for dependency connectors */}
+          <DependencyConnector
+            phases={timelineData.phases}
+            subtasks={timelineData.subtasks}
+            phaseLayouts={phaseLayouts}
+            subtaskLayouts={subtaskLayouts}
+            config={config}
+            viewState={viewState}
             className="absolute inset-0 pointer-events-none"
-            style={{ zIndex: 5 }}
           />
         </motion.div>
       </div>

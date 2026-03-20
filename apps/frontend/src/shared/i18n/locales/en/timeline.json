@@ -17,7 +17,9 @@
     "panLeft": "Pan left",
     "panRight": "Pan right",
     "zoomControls": "Zoom controls",
-    "panControls": "Pan controls"
+    "panControls": "Pan controls",
+    "export": "Export",
+    "exporting": "Exporting..."
   },
   "phases": {
     "planning": "Planning",
