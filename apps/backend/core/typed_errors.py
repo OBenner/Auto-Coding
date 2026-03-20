@@ -69,7 +69,7 @@ class RateLimitError(TypedError):
 
     def __init__(self, message: str = "Rate limit exceeded"):
         """Initialize RateLimitError with default error code."""
-        super().__init__(ErrorCode.RATE_LIMIT_ERROR, message)
+        super().__init__(ErrorCode.RATE_LIMITED, message)
 
 
 class ValidationError(TypedError):
@@ -109,7 +109,7 @@ class NetworkError(TypedError):
 
     def __init__(self, message: str = "Network error"):
         """Initialize NetworkError with default error code."""
-        super().__init__(ErrorCode.NETWORK_ERROR, message)
+        super().__init__(ErrorCode.NETWORK, message)
 
 
 class TimeoutError(TypedError):
@@ -117,4 +117,4 @@ class TimeoutError(TypedError):
 
     def __init__(self, message: str = "Operation timed out"):
         """Initialize TimeoutError with default error code."""
-        super().__init__(ErrorCode.TIMEOUT, message)
+        super().__init__(ErrorCode.NETWORK_TIMEOUT, message)
