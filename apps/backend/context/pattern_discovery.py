@@ -3,7 +3,8 @@ Pattern Discovery
 =================
 
 Discovers code patterns from reference files to guide implementation.
-Enhanced with Graphiti memory integration for semantic pattern search.
+Enhanced with Graphiti memory integration for semantic pattern search
+and auto-generated pattern libraries.
 """
 
 import logging
@@ -16,6 +17,81 @@ from .models import FileMatch
 logger = logging.getLogger(__name__)
 
 
+def _load_library_patterns(project_dir: Path) -> dict[str, str]:
+    """
+    Load patterns from auto-generated language-specific libraries.
+
+    Detects the project's programming languages and loads corresponding
+    pattern libraries (e.g., go_patterns, php_patterns, etc.)
+
+    Args:
+        project_dir: Project root directory
+
+    Returns:
+        Dictionary mapping pattern keys to code snippets from libraries
+    """
+    library_patterns = {}
+
+    def _extract_patterns(lang: str, category: str, patterns_dict: dict, prefix: str = ""):
+        """Recursively extract patterns from nested dictionaries."""
+        for pattern_name, pattern_value in patterns_dict.items():
+            if isinstance(pattern_value, dict):
+                # Nested category (e.g., frameworks.gin)
+                new_prefix = f"{prefix}_{pattern_name}" if prefix else pattern_name
+                _extract_patterns(lang, category, pattern_value, new_prefix)
+            elif isinstance(pattern_value, str):
+                # Actual pattern code
+                full_pattern_name = f"{prefix}_{pattern_name}" if prefix else pattern_name
+                pattern_key = f"library_{lang}_{category}_{full_pattern_name}"
+                pattern_text = (
+                    f"Language: {lang}\n"
+                    f"Category: {category}\n"
+                    f"Pattern: {full_pattern_name}\n\n"
+                    f"{pattern_value}"
+                )
+                library_patterns[pattern_key] = pattern_text
+
+    try:
+        from patterns import load_language_patterns
+        from project import get_or_create_profile
+
+        # Get project's detected languages
+        profile = get_or_create_profile(project_dir)
+        languages = profile.detected_stack.languages
+
+        if not languages:
+            logger.debug("No languages detected for library pattern loading")
+            return library_patterns
+
+        # Load patterns for each detected language
+        for language in languages:
+            lang_patterns = load_language_patterns(language)
+            if lang_patterns:
+                # Extract patterns from the library module
+                # Pattern libraries contain categorized dictionaries
+                for category_name, category_patterns in lang_patterns.items():
+                    if isinstance(category_patterns, dict):
+                        _extract_patterns(language, category_name, category_patterns)
+
+                pattern_count = len([k for k in library_patterns.keys() if f"library_{language}_" in k])
+                if pattern_count > 0:
+                    logger.info(
+                        f"Loaded {pattern_count} patterns from {language} library"
+                    )
+
+    except ImportError as e:
+        logger.debug(f"Pattern libraries not available: {e}")
+    except Exception as e:
+        logger.warning(f"Failed to load library patterns: {e}")
+        capture_exception(
+            e,
+            project_dir=str(project_dir),
+            operation="_load_library_patterns",
+        )
+
+    return library_patterns
+
+
 async def discover_with_memory(
     task: str,
     spec_dir: Path,
@@ -26,14 +102,16 @@ async def discover_with_memory(
     num_results: int = 5,
     min_score: float = 0.5,
     include_file_patterns: bool = True,
+    include_library_patterns: bool = True,
 ) -> dict[str, str]:
     """
-    Discover code patterns by querying Graphiti memory before file-based search.
+    Discover code patterns by querying Graphiti memory and pattern libraries.
 
-    This function provides memory-enhanced pattern discovery by:
+    This function provides comprehensive pattern discovery by:
     1. Querying Graphiti for semantically relevant patterns
-    2. Optionally combining with traditional file-based pattern discovery
-    3. Returning unified pattern suggestions
+    2. Loading auto-generated language-specific pattern libraries
+    3. Optionally combining with traditional file-based pattern discovery
+    4. Returning unified pattern suggestions
 
     Args:
         task: Task description to search for relevant patterns
@@ -45,12 +123,14 @@ async def discover_with_memory(
         num_results: Maximum number of Graphiti patterns to retrieve (default: 5)
         min_score: Minimum relevance score for Graphiti patterns 0.0-1.0 (default: 0.5)
         include_file_patterns: Whether to also include file-based patterns (default: True)
+        include_library_patterns: Whether to include auto-generated library patterns (default: True)
 
     Returns:
         Dictionary mapping pattern keys to pattern descriptions/snippets:
         {
             "graphiti_pattern_0": "Pattern: Use async/await for API calls\nCategory: api-usage\nConfidence: 0.95",
             "graphiti_pattern_1": "Pattern: Always log errors with context\nCategory: error-handling\nConfidence: 0.87",
+            "library_go_ERROR_HANDLING_PATTERNS_basic_error_check": "Language: go\nCategory: ERROR_HANDLING_PATTERNS\n...",
             "file_pattern_keyword": "From path/to/file.py:\n<code snippet>",
             ...
         }
@@ -112,6 +192,15 @@ async def discover_with_memory(
             operation="discover_with_memory",
         )
 
+    # Add auto-generated library patterns
+    if include_library_patterns:
+        library_patterns = _load_library_patterns(project_dir)
+        if library_patterns:
+            patterns.update(library_patterns)
+            logger.info(
+                f"Added {len(library_patterns)} patterns from language-specific libraries"
+            )
+
     # Optionally add file-based patterns
     if include_file_patterns and reference_files and keywords:
         discoverer = PatternDiscoverer(project_dir)
@@ -126,7 +215,7 @@ async def discover_with_memory(
 
 
 class PatternDiscoverer:
-    """Discovers code patterns from reference files."""
+    """Discovers code patterns from reference files and language libraries."""
 
     def __init__(self, project_dir: Path):
         self.project_dir = project_dir.resolve()
@@ -136,20 +225,28 @@ class PatternDiscoverer:
         reference_files: list[FileMatch],
         keywords: list[str],
         max_files: int = 5,
+        include_library_patterns: bool = True,
     ) -> dict[str, str]:
         """
-        Discover code patterns from reference files.
+        Discover code patterns from reference files and language libraries.
 
         Args:
             reference_files: List of FileMatch objects to analyze
             keywords: Keywords to look for in the code
             max_files: Maximum number of files to analyze
+            include_library_patterns: Whether to include auto-generated library patterns
 
         Returns:
             Dictionary mapping pattern keys to code snippets
         """
         patterns = {}
 
+        # Add auto-generated library patterns first
+        if include_library_patterns:
+            library_patterns = _load_library_patterns(self.project_dir)
+            patterns.update(library_patterns)
+
+        # Add file-based patterns
         for match in reference_files[:max_files]:
             try:
                 file_path = self.project_dir / match.path
