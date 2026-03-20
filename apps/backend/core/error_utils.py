@@ -1,12 +1,62 @@
 """
-Shared Error Utilities
-======================
+Shared Error Utilities (DEPRECATED)
+====================================
 
-Common error detection and classification functions used across
-agent sessions, QA, and other modules.
+.. deprecated::
+    **This module is deprecated.** Use typed error classes from ``core.typed_errors``
+    and error detection functions from ``core.error_detection`` instead.
 
-These functions now support typed error detection via TypedError subclasses
-while maintaining backward compatibility with string-based error detection.
+    String-based error detection is being phased out in favor of a robust typed
+    error system. All functions in this module will be removed in a future version.
+
+**Migration Guide:**
+
+Old pattern (string-based detection)::
+
+    from core.error_utils import is_authentication_error, is_rate_limit_error
+
+    if is_authentication_error(exc):
+        # Handle auth error
+        pass
+    elif is_rate_limit_error(exc):
+        # Handle rate limit
+        pass
+
+New pattern (typed errors)::
+
+    from core.typed_errors import AuthError, RateLimitError
+    from core.error_detection import get_error_code
+    from core.error_codes import ErrorCode
+
+    # Option 1: Direct isinstance checks
+    if isinstance(exc, AuthError):
+        # Handle auth error
+        pass
+    elif isinstance(exc, RateLimitError):
+        # Handle rate limit
+        pass
+
+    # Option 2: Using error_code enum for more control
+    error_code = get_error_code(exc)
+    if error_code == ErrorCode.AUTH_INVALID:
+        # Handle invalid auth
+        pass
+    elif error_code == ErrorCode.RATE_LIMITED:
+        # Handle rate limit
+        pass
+
+**Benefits of the new system:**
+- Type-safe error detection via ``isinstance()`` checks
+- Structured error codes (``ErrorCode`` enum) for programmatic handling
+- Rich metadata attached to errors (retry hints, user-friendly messages)
+- Better IDE support and autocomplete
+- Consistent error handling across the codebase
+
+**Remaining functions:**
+- ``is_tool_concurrency_error()`` - Deprecated, use ``ToolConcurrencyError``
+- ``is_rate_limit_error()`` - Deprecated, use ``RateLimitError``
+- ``is_authentication_error()`` - Deprecated, use ``AuthError``
+- ``safe_receive_messages()`` - Not deprecated (SDK resilience helper)
 """
 
 from __future__ import annotations

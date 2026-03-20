@@ -1,9 +1,72 @@
 """
-Error Classifier
-================
+Error Classifier (DEPRECATED)
+=============================
 
-Central error classifier for SDK exceptions and agent response text.
-Classifies errors into actionable categories with retry/fatality hints.
+.. deprecated::
+    **String-based error classification is deprecated.** Use typed error classes
+    from ``core.typed_errors`` combined with error codes from ``core.error_codes``
+    instead. The pattern-based classification system will be removed in a future
+    version.
+
+This module provides legacy string-based error classification using regex patterns.
+It has been superseded by the typed error system (``core.typed_errors``) which
+provides type-safe error detection via ``isinstance()`` checks.
+
+**Migration Guide:**
+
+Old pattern (string-based classification)::
+
+    from core.error_classifier import ErrorClassifier, SDKErrorCategory
+
+    classifier = ErrorClassifier()
+    error = classifier.classify_exception(exc)
+
+    if error.category == SDKErrorCategory.AUTH_INVALID:
+        # Handle auth error
+        pass
+    elif error.category == SDKErrorCategory.RATE_LIMITED:
+        # Handle rate limit
+        pass
+
+New pattern (typed errors with error codes)::
+
+    from core.typed_errors import AuthError, RateLimitError
+    from core.error_detection import get_error_code
+    from core.error_codes import ErrorCode
+
+    # Option 1: Direct isinstance checks (fastest, most type-safe)
+    if isinstance(exc, AuthError):
+        # exc.retry_hint, exc.user_message, exc.error_code available
+        pass
+    elif isinstance(exc, RateLimitError):
+        # exc.retry_after_seconds, exc.user_message available
+        pass
+
+    # Option 2: Using error_code for structured handling
+    error_code = get_error_code(exc)
+    if error_code == ErrorCode.AUTH_INVALID:
+        # Handle invalid auth
+        pass
+    elif error_code == ErrorCode.RATE_LIMITED:
+        # Handle rate limit (retry_after available via error_code.metadata)
+        pass
+
+**Benefits of the new system:**
+- Type-safe via ``isinstance()`` checks - no regex false positives
+- Rich metadata: ``retry_hint``, ``user_message``, ``retry_after_seconds``
+- Structured error codes (``ErrorCode`` enum) for programmatic handling
+- Better IDE support (autocomplete, type hints)
+- Consistent with Python best practices (exceptions over patterns)
+- Easier to test and maintain
+
+**Migration timeline:**
+- ``ErrorClassifier`` class - Deprecated, use ``isinstance()`` checks instead
+- ``SDKErrorCategory`` enum - Deprecated, use ``ErrorCode`` enum instead
+- ``ClassifiedError`` dataclass - Deprecated, use ``TypedError`` attributes instead
+
+**For stuck loop detection:**
+The ``check_stuck_loop()`` functionality is not deprecated and will be moved
+to a separate utility module in a future update.
 """
 
 import re
