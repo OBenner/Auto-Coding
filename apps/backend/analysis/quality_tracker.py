@@ -192,6 +192,9 @@ def calculate_quality_score(
     # Determine user approval
     user_approval_rate, user_approved = _calculate_user_approval(qa_history, iteration)
 
+    # Calculate coverage metrics
+    coverage_percent, lines_covered, lines_total = _calculate_coverage_metrics(spec_dir)
+
     # Skip persistence when no meaningful data is available
     has_qa_record = any(r.get("iteration") == iteration for r in qa_history)
     has_meaningful_data = total_tests > 0 or total_criteria > 0 or has_qa_record
@@ -213,6 +216,9 @@ def calculate_quality_score(
         total_criteria=total_criteria,
         met_criteria=met_criteria,
         user_approved=user_approved,
+        coverage_percent=coverage_percent,
+        lines_covered=lines_covered,
+        lines_total=lines_total,
     )
 
     # Only persist scores with meaningful data to avoid polluting trends
@@ -347,6 +353,51 @@ def _calculate_user_approval(
     approved = status == "approved"
 
     return 1.0 if approved else 0.0, approved
+
+
+def _calculate_coverage_metrics(spec_dir: Path) -> tuple[float, int, int]:
+    """
+    Calculate code coverage metrics from coverage report.
+
+    Looks for .coverage.json in the spec directory and extracts:
+    - Total coverage percentage
+    - Lines covered
+    - Total lines
+
+    Args:
+        spec_dir: Spec directory path
+
+    Returns:
+        Tuple of (coverage_percent, lines_covered, lines_total)
+    """
+    coverage_file = spec_dir / ".coverage.json"
+
+    if not coverage_file.exists():
+        return 0.0, 0, 0
+
+    try:
+        with open(coverage_file, encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Extract coverage data from JSON report
+        # Format matches pytest-cov JSON output
+        totals = data.get("totals", {})
+
+        # Get line coverage data
+        lines_covered = totals.get("covered_lines", 0)
+        lines_total = totals.get("num_statements", 0)
+
+        # Calculate percentage
+        if lines_total > 0:
+            coverage_percent = (lines_covered / lines_total) * 100.0
+        else:
+            coverage_percent = 0.0
+
+        return coverage_percent, lines_covered, lines_total
+
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, KeyError) as exc:
+        _logger.warning("Failed to read coverage report from %s: %s", coverage_file, exc)
+        return 0.0, 0, 0
 
 
 def _persist_quality_score(spec_dir: Path, score: QualityScore) -> None:
