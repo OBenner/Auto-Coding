@@ -35,6 +35,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 # Add apps/backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -55,6 +56,39 @@ if env_file.exists():
     load_dotenv(env_file)
 
 from phase_config import resolve_model_id
+
+# Dependency update configuration file
+DEPENDENCY_UPDATES_CONFIG = ".github/dependency-updates.config.json"
+
+
+def load_config(project_dir: Path) -> dict[str, Any] | None:
+    """
+    Load dependency updates configuration from project directory.
+
+    Args:
+        project_dir: Project root directory
+
+    Returns:
+        Configuration dictionary, or None if not found
+    """
+    config_file = project_dir / DEPENDENCY_UPDATES_CONFIG
+
+    if not config_file.exists():
+        # Try example config
+        example_config = project_dir / ".github" / "dependency-updates.config.json.example"
+        if example_config.exists():
+            try:
+                with open(example_config, encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                pass
+        return None
+
+    try:
+        with open(config_file, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
 
 
 def _generate_task_description(
@@ -513,6 +547,13 @@ Examples:
     if not project_dir.exists():
         print(f"✗ Error: Project directory does not exist: {project_dir}")
         return 1
+
+    # Load dependency updates configuration
+    config = load_config(project_dir)
+    if config:
+        print("⚙️  Loaded dependency updates configuration")
+    else:
+        print("ℹ️  No dependency updates configuration found, using defaults")
 
     # Parse ecosystems filter
     ecosystems_filter = None
