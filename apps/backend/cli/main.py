@@ -30,6 +30,14 @@ from .migration_commands import (
     handle_migration_command,
     handle_migration_status_command,
 )
+from .model_lock_commands import (
+    handle_model_lock_agent_command,
+    handle_model_lock_clear_command,
+    handle_model_lock_list_command,
+    handle_model_lock_phase_command,
+    handle_model_unlock_agent_command,
+    handle_model_unlock_phase_command,
+)
 from .predictive_scan_commands import (
     handle_predictive_scan_check_command,
     handle_predictive_scan_command,
@@ -546,6 +554,53 @@ Environment Variables:
         help="Output format for security audit report (default: both)",
     )
 
+    # Model lock commands
+    parser.add_argument(
+        "--model-lock-list",
+        action="store_true",
+        help="List all model locks for a spec",
+    )
+    parser.add_argument(
+        "--model-lock-phase",
+        type=str,
+        default=None,
+        metavar="PHASE",
+        help="Lock a phase to a specific model (requires --model-id)",
+    )
+    parser.add_argument(
+        "--model-lock-agent",
+        type=str,
+        default=None,
+        metavar="AGENT",
+        help="Lock an agent type to a specific model (requires --model-id)",
+    )
+    parser.add_argument(
+        "--model-unlock-phase",
+        type=str,
+        default=None,
+        metavar="PHASE",
+        help="Unlock a phase's model",
+    )
+    parser.add_argument(
+        "--model-unlock-agent",
+        type=str,
+        default=None,
+        metavar="AGENT",
+        help="Unlock an agent's model",
+    )
+    parser.add_argument(
+        "--model-lock-clear",
+        action="store_true",
+        help="Clear all model locks for a spec",
+    )
+    parser.add_argument(
+        "--model-id",
+        type=str,
+        default=None,
+        metavar="MODEL_ID",
+        help="Model ID to lock to (used with --model-lock-phase or --model-lock-agent)",
+    )
+
     return parser.parse_args()
 
 
@@ -822,6 +877,95 @@ def _run_cli() -> None:
             output_format=args.security_output_format,
             verbose=args.verbose,
         )
+        return
+
+    # Handle model lock commands
+    if args.model_lock_list:
+        if not args.spec:
+            print_banner()
+            print("\nError: --spec is required for --model-lock-list")
+            print("\nUsage:")
+            print("  python auto-claude/run.py --spec 001 --model-lock-list")
+            sys.exit(ExitCode.SYSTEM_ERROR)
+
+        handle_model_lock_list_command(project_dir, args.spec)
+        return
+
+    if args.model_lock_phase:
+        if not args.spec:
+            print_banner()
+            print("\nError: --spec is required for --model-lock-phase")
+            print("\nUsage:")
+            print(
+                "  python auto-claude/run.py --spec 001 --model-lock-phase coding --model-id claude-sonnet-4-5-20250929"
+            )
+            sys.exit(ExitCode.SYSTEM_ERROR)
+
+        if not args.model_id:
+            print_banner()
+            print("\nError: --model-id is required for --model-lock-phase")
+            print("\nUsage:")
+            print(
+                "  python auto-claude/run.py --spec 001 --model-lock-phase coding --model-id claude-sonnet-4-5-20250929"
+            )
+            sys.exit(ExitCode.SYSTEM_ERROR)
+
+        handle_model_lock_phase_command(project_dir, args.spec, args.model_lock_phase, args.model_id)
+        return
+
+    if args.model_lock_agent:
+        if not args.spec:
+            print_banner()
+            print("\nError: --spec is required for --model-lock-agent")
+            print("\nUsage:")
+            print(
+                "  python auto-claude/run.py --spec 001 --model-lock-agent coder --model-id claude-haiku-4-5-20251001"
+            )
+            sys.exit(ExitCode.SYSTEM_ERROR)
+
+        if not args.model_id:
+            print_banner()
+            print("\nError: --model-id is required for --model-lock-agent")
+            print("\nUsage:")
+            print(
+                "  python auto-claude/run.py --spec 001 --model-lock-agent coder --model-id claude-haiku-4-5-20251001"
+            )
+            sys.exit(ExitCode.SYSTEM_ERROR)
+
+        handle_model_lock_agent_command(project_dir, args.spec, args.model_lock_agent, args.model_id)
+        return
+
+    if args.model_unlock_phase:
+        if not args.spec:
+            print_banner()
+            print("\nError: --spec is required for --model-unlock-phase")
+            print("\nUsage:")
+            print("  python auto-claude/run.py --spec 001 --model-unlock-phase coding")
+            sys.exit(ExitCode.SYSTEM_ERROR)
+
+        handle_model_unlock_phase_command(project_dir, args.spec, args.model_unlock_phase)
+        return
+
+    if args.model_unlock_agent:
+        if not args.spec:
+            print_banner()
+            print("\nError: --spec is required for --model-unlock-agent")
+            print("\nUsage:")
+            print("  python auto-claude/run.py --spec 001 --model-unlock-agent coder")
+            sys.exit(ExitCode.SYSTEM_ERROR)
+
+        handle_model_unlock_agent_command(project_dir, args.spec, args.model_unlock_agent)
+        return
+
+    if args.model_lock_clear:
+        if not args.spec:
+            print_banner()
+            print("\nError: --spec is required for --model-lock-clear")
+            print("\nUsage:")
+            print("  python auto-claude/run.py --spec 001 --model-lock-clear")
+            sys.exit(ExitCode.SYSTEM_ERROR)
+
+        handle_model_lock_clear_command(project_dir, args.spec)
         return
 
     # Require --spec if not listing
