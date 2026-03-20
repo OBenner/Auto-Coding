@@ -14,6 +14,7 @@ from pathlib import Path
 
 from cli.utils import print_banner
 from integrations.graphiti.pattern_categorizer import get_pattern_categories
+from integrations.graphiti.pattern_library_generator import PatternLibraryGenerator
 from integrations.graphiti.pattern_suggester import get_patterns_by_category
 from memory.graphiti_helpers import (
     get_graphiti_memory,
@@ -361,6 +362,62 @@ def delete_pattern(spec_dir: Path, pattern_index: int) -> None:
     print()
 
 
+def generate_patterns(
+    project_dir: Path,
+    language: str,
+    output_path: Path,
+    source_dir: Path | None = None,
+    max_patterns: int = 50,
+) -> None:
+    """
+    Generate a pattern library module for the specified language.
+
+    Args:
+        project_dir: Project root directory to analyze
+        language: Programming language to generate patterns for
+        output_path: Path where the generated module will be written
+        source_dir: Specific directory to analyze (default: project_dir)
+        max_patterns: Maximum patterns per category (default: 50)
+    """
+    print_banner()
+    print(f"\n{icon(Icons.BUILD)} Generating Pattern Library\n")
+
+    print_key_value("Language", language)
+    print_key_value("Project", str(project_dir))
+    print_key_value("Output", str(output_path))
+    if source_dir:
+        print_key_value("Source", str(source_dir))
+    print()
+
+    try:
+        # Create generator
+        generator = PatternLibraryGenerator(project_dir)
+
+        # Prepare options
+        options = {
+            "max_patterns_per_category": max_patterns,
+            "include_line_numbers": False,
+        }
+        if source_dir:
+            options["source_dir"] = source_dir
+
+        # Generate library file
+        print(info("Analyzing codebase and extracting patterns..."))
+        generator.generate_library_file(output_path, language, options)
+
+        print()
+        print(success(f"{icon(Icons.SUCCESS)} Pattern library generated successfully"))
+        print(muted(f"Saved to: {output_path}"))
+        print()
+
+    except ValueError as e:
+        print(warning(f"{icon(Icons.WARNING)} {e}"))
+        print()
+    except Exception as e:
+        print(warning(f"{icon(Icons.WARNING)} Failed to generate patterns: {e}"))
+        print()
+
+
 def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
     """
     Handle the pattern management command.
@@ -404,6 +461,21 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
             )
             return 1
         delete_pattern(spec_dir, args.index)
+    elif action == "generate":
+        if not args.language or not args.output:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} --language and --output required for 'generate' action"
+                )
+            )
+            return 1
+        # For generate, use parent directory of spec_dir as project_dir
+        project_dir = spec_dir.parent.parent.parent  # .auto-claude/specs/XXX -> project root
+        source_dir = Path(args.source) if args.source else None
+        max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
+        generate_patterns(
+            project_dir, args.language, Path(args.output), source_dir, max_patterns
+        )
     else:
         print(warning(f"{icon(Icons.WARNING)} Unknown action: {action}"))
         return 1
@@ -437,12 +509,18 @@ Examples:
 
   # Delete a pattern
   python pattern_commands.py delete --spec-dir .auto-claude/specs/001-feature --index 7
+
+  # Generate pattern library for Python
+  python pattern_commands.py generate --spec-dir .auto-claude/specs/001-feature --language python --output patterns/python_patterns.py
+
+  # Generate patterns from specific directory
+  python pattern_commands.py generate --spec-dir .auto-claude/specs/001-feature --language javascript --output patterns/js_patterns.py --source apps/frontend
         """,
     )
 
     parser.add_argument(
         "action",
-        choices=["list", "show", "approve", "override", "delete"],
+        choices=["list", "show", "approve", "override", "delete", "generate"],
         help="Action to perform",
     )
 
@@ -469,6 +547,31 @@ Examples:
         "--text",
         type=str,
         help="New pattern text (for 'override' action)",
+    )
+
+    parser.add_argument(
+        "--language",
+        type=str,
+        help="Programming language to generate patterns for (for 'generate' action)",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Output path for generated pattern library (for 'generate' action)",
+    )
+
+    parser.add_argument(
+        "--source",
+        type=str,
+        help="Source directory to analyze (for 'generate' action, default: project root)",
+    )
+
+    parser.add_argument(
+        "--max-patterns",
+        type=int,
+        default=50,
+        help="Maximum patterns per category (for 'generate' action, default: 50)",
     )
 
     args = parser.parse_args()
