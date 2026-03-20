@@ -326,6 +326,74 @@ def _generate_markdown_report(
     return "\n".join(lines)
 
 
+async def _create_pull_request_async(
+    project_dir: Path,
+    pr_title: str,
+    pr_body: str,
+) -> bool:
+    """
+    Create a pull request using GHClient with proper error handling and retries.
+
+    Args:
+        project_dir: Project directory
+        pr_title: PR title
+        pr_body: PR body content
+
+    Returns:
+        True if PR created successfully, False otherwise
+    """
+    try:
+        # Detect default branch using git
+        default_branch = "main"  # Default fallback
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "origin/HEAD"],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=5.0,
+            )
+            if result.returncode == 0:
+                default_branch = result.stdout.strip().replace("origin/", "")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass  # Use fallback
+
+        # Initialize GHClient
+        client = GHClient(project_dir=project_dir)
+
+        # Create PR
+        pr_cmd = [
+            "pr",
+            "create",
+            "--title",
+            pr_title,
+            "--body",
+            pr_body,
+            "--base",
+            default_branch,
+        ]
+
+        print("🔧 Creating pull request...")
+        result = await client.run(pr_cmd)
+
+        print(f"\n✓ Pull request created successfully!")
+        print(f"📝 {result.stdout.strip() if result.stdout else 'PR created'}")
+
+        return True
+
+    except GHTimeoutError as e:
+        print(f"✗ GitHub CLI timed out: {e}")
+        return False
+    except GHCommandError as e:
+        print(f"✗ Failed to create PR: {e}")
+        print("\nNote: Branch has been pushed. You can create the PR manually via GitHub UI.")
+        return False
+    except Exception as e:
+        print(f"✗ Unexpected error creating PR: {e}")
+        print("\nNote: Branch has been pushed. You can create the PR manually via GitHub UI.")
+        return False
+
+
 def main() -> int:
     """CLI entry point."""
     import argparse
@@ -478,6 +546,7 @@ Examples:
     try:
         from analysis.analyzers.dependency_analyzer import DependencyAnalyzer
         from analysis.dependency_scanner import DependencyScanner
+        from runners.github.gh_client import GHClient, GHCommandError, GHTimeoutError
     except ImportError as e:
         print(f"✗ Error: Failed to import dependency modules: {e}")
         return 1
@@ -681,37 +750,6 @@ Examples:
     if args.create_pr:
         print("\n🔧 Creating pull request for dependency updates...")
 
-        # Check if gh CLI is available
-        try:
-            result = subprocess.run(
-                ["gh", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-            )
-            if result.returncode != 0:
-                print("✗ GitHub CLI (gh) not found. Install from https://cli.github.com/")
-                return 1
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            print(f"✗ GitHub CLI (gh) not found: {e}")
-            return 1
-
-        # Check if we're in a git repository
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
-                capture_output=True,
-                text=True,
-                timeout=5.0,
-                cwd=project_dir,
-            )
-            if result.returncode != 0:
-                print("✗ Not in a git repository")
-                return 1
-        except subprocess.TimeoutExpired as e:
-            print(f"✗ Git check failed: {e}")
-            return 1
-
         # Generate branch name if not provided
         if args.pr_branch:
             branch_name = args.pr_branch
@@ -858,49 +896,16 @@ Examples:
 
         pr_body = "\n".join(pr_body_lines)
 
-        # Create the PR
-        try:
-            print("🔧 Creating pull request...")
-            pr_cmd = [
-                "gh",
-                "pr",
-                "create",
-                "--title",
-                args.pr_title,
-                "--body",
-                pr_body,
-            ]
-
-            # Detect default branch
-            try:
-                result = subprocess.run(
-                    ["git", "rev-parse", "--abbrev-ref", "origin/HEAD"],
-                    cwd=project_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=5.0,
-                )
-                if result.returncode == 0:
-                    default_branch = result.stdout.strip().replace("origin/", "")
-                    pr_cmd.extend(["--base", default_branch])
-            except (subprocess.TimeoutExpired, CalledProcessError):
-                # Use "main" as fallback
-                pr_cmd.extend(["--base", "main"])
-
-            result = subprocess.run(
-                pr_cmd,
-                cwd=project_dir,
-                check=True,
-                capture_output=True,
-                text=True,
+        # Create the PR using async GHClient
+        pr_created = asyncio.run(
+            _create_pull_request_async(
+                project_dir=project_dir,
+                pr_title=args.pr_title,
+                pr_body=pr_body,
             )
+        )
 
-            print(f"\n✓ Pull request created successfully!")
-            print(f"📝 {result.stdout.strip() if result.stdout else 'PR created'}")
-
-        except subprocess.CalledProcessError as e:
-            print(f"✗ Failed to create PR: {e.stderr}")
-            print("\nNote: Branch has been pushed. You can create the PR manually via GitHub UI.")
+        if not pr_created:
             return 1
 
     print("\n✓ Dependency scan complete!")
