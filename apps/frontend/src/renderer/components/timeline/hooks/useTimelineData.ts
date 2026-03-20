@@ -74,9 +74,14 @@ function transformPhase(
   const completedSubtasks = phase.subtasks.filter((st) => st.status === 'completed').length;
   const totalSubtasks = phase.subtasks.length;
 
+  // Check if this is the current phase and identify current subtask
+  const isCurrentPhase = executionProgress?.phase === phase.type;
+  const currentSubtaskId = isCurrentPhase ? executionProgress?.currentSubtask : undefined;
+
   const progress: PhaseProgressData = {
     status: executionProgress?.phase || 'idle',
     progress: totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0,
+    currentSubtaskId,
     completedCount: completedSubtasks,
     totalCount: totalSubtasks,
   };

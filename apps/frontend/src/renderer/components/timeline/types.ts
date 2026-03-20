@@ -51,6 +51,12 @@ export interface TimelineSubtask extends PlanSubtask {
   files?: string[];
   /** Subtask dependencies (other subtask IDs) */
   dependsOn?: string[];
+  /** Files to create for this subtask */
+  filesToCreate?: string[];
+  /** Files to modify for this subtask */
+  filesToModify?: string[];
+  /** Additional notes for this subtask */
+  notes?: string;
 }
 
 /**

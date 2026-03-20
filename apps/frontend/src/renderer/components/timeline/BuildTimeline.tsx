@@ -66,6 +66,7 @@ export const BuildTimeline = memo(function BuildTimeline({
     timelineData,
     isLoading,
     error,
+    refresh,
     getPhase,
     getSubtask,
     getSubtasksForPhase,
@@ -98,6 +99,15 @@ export const BuildTimeline = memo(function BuildTimeline({
       filename: `timeline-${taskId}`,
     },
   });
+
+  /**
+   * Force refresh when executionProgress changes (for real-time updates)
+   */
+  useEffect(() => {
+    if (executionProgress) {
+      refresh();
+    }
+  }, [executionProgress, refresh]);
 
   /**
    * Handle export button click

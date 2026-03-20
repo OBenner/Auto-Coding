@@ -5,10 +5,10 @@
  * Displays status-based styling, time tracking, and supports click interactions.
  */
 
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
-import { Clock, AlertCircle, CheckCircle2, Loader2, Hourglass, TrendingUp, TrendingDown } from 'lucide-react';
+import { Clock, AlertCircle, CheckCircle2, Loader2, Hourglass, TrendingUp, TrendingDown, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type {
   TimelineSubtask,
@@ -107,6 +107,9 @@ export const SubtaskBlock = memo(function SubtaskBlock({
 }: SubtaskBlockProps) {
   const { t } = useTranslation('tasks');
 
+  // Expanded state for detail panel
+  const [expanded, setExpanded] = useState(false);
+
   // Get color scheme based on agent type and status
   const colorKey = getAgentColorKey(agentType);
   const subtaskStatus = getSubtaskStatus(subtask);
@@ -122,10 +125,14 @@ export const SubtaskBlock = memo(function SubtaskBlock({
     colorScheme = colors.inactive;
   }
 
-  // Handle click event
-  const handleClick = useCallback(() => {
-    onClick?.(subtask);
-  }, [subtask, onClick]);
+  // Handle click event - toggle expanded state
+  const handleClick = useCallback((e?: React.MouseEvent | React.KeyboardEvent) => {
+    // Distinguish click from drag - only expand if not dragging
+    if (layout.width > 0) {  // Ensure block is rendered
+      setExpanded(prev => !prev);
+      onClick?.(subtask);
+    }
+  }, [subtask, onClick, layout.width]);
 
   // Calculate time variance for visual indicator
   const timeVariance = useMemo(() => {
@@ -199,6 +206,75 @@ export const SubtaskBlock = memo(function SubtaskBlock({
       : subtask.description;
   }, [subtask.description]);
 
+  // Detail panel content (shown when expanded)
+  const detailPanel = expanded && (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      className="mt-2 p-3 bg-background/50 rounded border border-border text-xs space-y-2"
+    >
+      {/* Full description */}
+      <div>
+        <div className="font-semibold text-foreground mb-1">Description:</div>
+        <div className="text-muted-foreground">{subtask.description}</div>
+      </div>
+
+      {/* Files to create */}
+      {subtask.filesToCreate && subtask.filesToCreate.length > 0 && (
+        <div>
+          <div className="font-semibold text-foreground mb-1">Files to Create:</div>
+          <ul className="list-disc list-inside text-muted-foreground">
+            {subtask.filesToCreate.map((file, i) => (
+              <li key={i} className="font-mono text-[10px]">{file}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Files to modify */}
+      {subtask.filesToModify && subtask.filesToModify.length > 0 && (
+        <div>
+          <div className="font-semibold text-foreground mb-1">Files to Modify:</div>
+          <ul className="list-disc list-inside text-muted-foreground">
+            {subtask.filesToModify.map((file, i) => (
+              <li key={i} className="font-mono text-[10px]">{file}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Verification steps */}
+      {subtask.verification && (
+        <div>
+          <div className="font-semibold text-foreground mb-1">Verification:</div>
+          <div className="text-muted-foreground font-mono text-[10px]">
+            {subtask.verification.run || subtask.verification.scenario || subtask.verification.type}
+          </div>
+        </div>
+      )}
+
+      {/* Notes */}
+      {subtask.notes && (
+        <div>
+          <div className="font-semibold text-foreground mb-1">Notes:</div>
+          <div className="text-muted-foreground">{subtask.notes}</div>
+        </div>
+      )}
+    </motion.div>
+  );
+
+  // Expand icon (chevron that rotates)
+  const expandIcon = (
+    <motion.div
+      animate={{ rotate: expanded ? 180 : 0 }}
+      transition={{ duration: 0.2 }}
+      className="ml-auto"
+    >
+      <ChevronDown className="h-3 w-3" />
+    </motion.div>
+  );
+
   return (
     <motion.div
       className={cn(
@@ -268,10 +344,13 @@ export const SubtaskBlock = memo(function SubtaskBlock({
             {subtask.id}
           </span>
 
+          {/* Expand/collapse icon */}
+          {expandIcon}
+
           {/* Current indicator (pulsing dot) */}
           {isCurrent && enableAnimations && (
             <motion.div
-              className={cn('h-1.5 w-1.5 rounded-full ml-auto', colorScheme.primary)}
+              className={cn('h-1.5 w-1.5 rounded-full', colorScheme.primary)}
               animate={{
                 scale: [1, 1.5, 1],
                 opacity: [1, 0.5, 1],
@@ -300,6 +379,9 @@ export const SubtaskBlock = memo(function SubtaskBlock({
             {timeDisplay}
           </div>
         )}
+
+        {/* Detail panel (expandable) */}
+        {detailPanel}
       </div>
 
       {/* Hover effect overlay */}
