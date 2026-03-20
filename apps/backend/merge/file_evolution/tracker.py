@@ -12,7 +12,10 @@ Main entry point that orchestrates the modular components:
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from ..semantic_analyzer import SemanticAnalyzer
 from ..types import FileEvolution, TaskSnapshot
@@ -35,6 +38,63 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 MODULE = "merge.file_evolution"
+
+
+@dataclass
+class MergeCompletionRecord:
+    """
+    Record of a completed merge operation.
+
+    Captures the outcome of a merge operation for historical tracking
+    and learning from past merges.
+    """
+
+    # Unique identification
+    merge_id: str  # Format: "merge_{timestamp}_{task_ids_hash}"
+    timestamp: datetime
+
+    # Tasks involved
+    task_ids: list[str] = field(default_factory=list)
+
+    # Files resolved
+    resolved_files: list[str] = field(default_factory=list)
+
+    # Merge outcome
+    success: bool = True
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "merge_id": self.merge_id,
+            "timestamp": self.timestamp.isoformat(),
+            "task_ids": self.task_ids,
+            "resolved_files": self.resolved_files,
+            "success": self.success,
+            "error": self.error,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> MergeCompletionRecord:
+        """Create record from dictionary."""
+        return cls(
+            merge_id=data["merge_id"],
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            task_ids=data.get("task_ids", []),
+            resolved_files=data.get("resolved_files", []),
+            success=data.get("success", True),
+            error=data.get("error"),
+        )
+
+    @property
+    def files_resolved_count(self) -> int:
+        """Get number of files resolved in this merge."""
+        return len(self.resolved_files)
+
+    @property
+    def tasks_merged_count(self) -> int:
+        """Get number of tasks merged."""
+        return len(self.task_ids)
 
 
 class FileEvolutionTracker:
