@@ -10,6 +10,10 @@ use `create_simple_client()` from `core.simple_client`.
 
 The client factory now uses AGENT_CONFIGS from agents/tools_pkg/models.py as the
 single source of truth for phase-aware tool and MCP server configuration.
+
+Architecture Decision:
+    See ADR-001 (docs/architecture/adr/ADR-001-claude-agent-sdk.md) for rationale
+    on adopting the Claude Agent SDK for all AI interactions.
 """
 
 from __future__ import annotations
