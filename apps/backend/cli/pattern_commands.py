@@ -380,7 +380,7 @@ def generate_patterns(
         max_patterns: Maximum patterns per category (default: 50)
     """
     print_banner()
-    print(f"\n{icon(Icons.BUILD)} Generating Pattern Library\n")
+    print(f"\n{icon(Icons.GEAR)} Generating Pattern Library\n")
 
     print_key_value("Language", language)
     print_key_value("Project", str(project_dir))
@@ -438,7 +438,7 @@ def generate_all_patterns(
     from integrations.graphiti.pattern_library_generator import LANGUAGE_EXTENSIONS
 
     print_banner()
-    print(f"\n{icon(Icons.BUILD)} Batch Pattern Library Generation\n")
+    print(f"\n{icon(Icons.GEAR)} Batch Pattern Library Generation\n")
 
     print_key_value("Project", str(project_dir))
     print_key_value("Output Dir", str(output_dir))
