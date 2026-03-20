@@ -23,7 +23,9 @@ from .batch_commands import (
     handle_batch_status_command,
 )
 from .build_commands import handle_build_command
+from .exit_codes import ExitCode
 from .followup_commands import handle_followup_command
+from .json_output import format_build_result, print_json_output
 from .migration_commands import (
     handle_migration_command,
     handle_migration_status_command,
@@ -51,6 +53,7 @@ from .utils import (
     DEFAULT_MODEL,
     find_spec,
     get_project_dir,
+    is_json_output_enabled,
     print_banner,
     setup_environment,
 )
@@ -560,12 +563,25 @@ def main() -> None:
         _run_cli()
     except KeyboardInterrupt:
         # Clean exit on Ctrl+C
-        sys.exit(130)
+        sys.exit(ExitCode.INTERRUPTED)
     except Exception as e:
         # Capture unexpected errors to Sentry
         capture_exception(e)
-        print(f"\nUnexpected error: {e}")
-        sys.exit(1)
+        error_message = f"\nUnexpected error: {e}"
+
+        # Output JSON if enabled
+        if is_json_output_enabled():
+            result = format_build_result(
+                status=ExitCode.SYSTEM_ERROR,
+                spec_name="unknown",
+                exit_code=ExitCode.SYSTEM_ERROR,
+                error_message=str(e),
+            )
+            print_json_output(result)
+        else:
+            print(error_message)
+
+        sys.exit(ExitCode.SYSTEM_ERROR)
 
 
 def _run_cli() -> None:
@@ -711,16 +727,36 @@ def _run_cli() -> None:
 
     if args.predictive_status:
         if not args.spec:
-            print("Warning: --spec required for --predictive-status")
-            sys.exit(1)
+            error_message = "--spec required for --predictive-status"
+            if is_json_output_enabled():
+                result = format_build_result(
+                    status=ExitCode.SYSTEM_ERROR,
+                    spec_name="unknown",
+                    exit_code=ExitCode.SYSTEM_ERROR,
+                    error_message=error_message,
+                )
+                print_json_output(result)
+            else:
+                print(f"Warning: {error_message}")
+            sys.exit(ExitCode.SYSTEM_ERROR)
 
         spec_dir = find_spec(project_dir, args.spec)
         if not spec_dir:
-            print_banner()
-            print(f"\nError: Spec '{args.spec}' not found")
-            print("\nAvailable specs:")
-            print_specs_list(project_dir)
-            sys.exit(1)
+            error_message = f"Spec '{args.spec}' not found"
+            if is_json_output_enabled():
+                result = format_build_result(
+                    status=ExitCode.SYSTEM_ERROR,
+                    spec_name=args.spec,
+                    exit_code=ExitCode.SYSTEM_ERROR,
+                    error_message=error_message,
+                )
+                print_json_output(result)
+            else:
+                print_banner()
+                print(f"\nError: {error_message}")
+                print("\nAvailable specs:")
+                print_specs_list(project_dir)
+            sys.exit(ExitCode.SYSTEM_ERROR)
 
         handle_predictive_scan_status_command(
             project_dir=project_dir,
@@ -734,11 +770,21 @@ def _run_cli() -> None:
         if args.spec:
             spec_dir = find_spec(project_dir, args.spec)
             if not spec_dir:
-                print_banner()
-                print(f"\nError: Spec '{args.spec}' not found")
-                print("\nAvailable specs:")
-                print_specs_list(project_dir)
-                sys.exit(1)
+                error_message = f"Spec '{args.spec}' not found"
+                if is_json_output_enabled():
+                    result = format_build_result(
+                        status=ExitCode.SYSTEM_ERROR,
+                        spec_name=args.spec,
+                        exit_code=ExitCode.SYSTEM_ERROR,
+                        error_message=error_message,
+                    )
+                    print_json_output(result)
+                else:
+                    print_banner()
+                    print(f"\nError: {error_message}")
+                    print("\nAvailable specs:")
+                    print_specs_list(project_dir)
+                sys.exit(ExitCode.SYSTEM_ERROR)
 
         exit_code = handle_predictive_scan_check_command(
             project_dir=project_dir,
@@ -754,11 +800,21 @@ def _run_cli() -> None:
         if args.spec:
             spec_dir = find_spec(project_dir, args.spec)
             if not spec_dir:
-                print_banner()
-                print(f"\nError: Spec '{args.spec}' not found")
-                print("\nAvailable specs:")
-                print_specs_list(project_dir)
-                sys.exit(1)
+                error_message = f"Spec '{args.spec}' not found"
+                if is_json_output_enabled():
+                    result = format_build_result(
+                        status=ExitCode.SYSTEM_ERROR,
+                        spec_name=args.spec,
+                        exit_code=ExitCode.SYSTEM_ERROR,
+                        error_message=error_message,
+                    )
+                    print_json_output(result)
+                else:
+                    print_banner()
+                    print(f"\nError: {error_message}")
+                    print("\nAvailable specs:")
+                    print_specs_list(project_dir)
+                sys.exit(ExitCode.SYSTEM_ERROR)
 
         handle_security_audit_command(
             project_dir=project_dir,
@@ -770,25 +826,45 @@ def _run_cli() -> None:
 
     # Require --spec if not listing
     if not args.spec:
-        print_banner()
-        print("\nError: --spec is required")
-        print("\nUsage:")
-        print("  python auto-claude/run.py --list           # See all specs")
-        print("  python auto-claude/run.py --spec 001       # Run a spec")
-        print("\nCreate a new spec with:")
-        print("  claude /spec")
-        sys.exit(1)
+        error_message = "--spec is required"
+        if is_json_output_enabled():
+            result = format_build_result(
+                status=ExitCode.SYSTEM_ERROR,
+                spec_name="unknown",
+                exit_code=ExitCode.SYSTEM_ERROR,
+                error_message=error_message,
+            )
+            print_json_output(result)
+        else:
+            print_banner()
+            print("\nError: --spec is required")
+            print("\nUsage:")
+            print("  python auto-claude/run.py --list           # See all specs")
+            print("  python auto-claude/run.py --spec 001       # Run a spec")
+            print("\nCreate a new spec with:")
+            print("  claude /spec")
+        sys.exit(ExitCode.SYSTEM_ERROR)
 
     # Find the spec
     debug("run.py", "Finding spec", spec_identifier=args.spec)
     spec_dir = find_spec(project_dir, args.spec)
     if not spec_dir:
-        debug_error("run.py", "Spec not found", spec=args.spec)
-        print_banner()
-        print(f"\nError: Spec '{args.spec}' not found")
-        print("\nAvailable specs:")
-        print_specs_list(project_dir)
-        sys.exit(1)
+        error_message = f"Spec '{args.spec}' not found"
+        if is_json_output_enabled():
+            result = format_build_result(
+                status=ExitCode.SYSTEM_ERROR,
+                spec_name=args.spec,
+                exit_code=ExitCode.SYSTEM_ERROR,
+                error_message=error_message,
+            )
+            print_json_output(result)
+        else:
+            debug_error("run.py", "Spec not found", spec=args.spec)
+            print_banner()
+            print(f"\nError: {error_message}")
+            print("\nAvailable specs:")
+            print_specs_list(project_dir)
+        sys.exit(ExitCode.SYSTEM_ERROR)
 
     debug_success("run.py", "Spec found", spec_dir=str(spec_dir))
 
@@ -822,7 +898,15 @@ def _run_cli() -> None:
             base_branch=args.base_branch,
         )
         if not success:
-            sys.exit(1)
+            if is_json_output_enabled():
+                result = format_build_result(
+                    status=ExitCode.SYSTEM_ERROR,
+                    spec_name=spec_dir.name,
+                    exit_code=ExitCode.SYSTEM_ERROR,
+                    error_message="Merge failed",
+                )
+                print_json_output(result)
+            sys.exit(ExitCode.SYSTEM_ERROR)
         return
 
     if args.review:
@@ -845,7 +929,18 @@ def _run_cli() -> None:
         )
         # JSON output is already printed by handle_create_pr_command
         if not result.get("success"):
-            sys.exit(1)
+            if is_json_output_enabled():
+                # If JSON output but handle_create_pr_command didn't print JSON
+                # (e.g., early validation failure), print it here
+                error_msg = result.get("error", "Failed to create PR")
+                json_result = format_build_result(
+                    status=ExitCode.SYSTEM_ERROR,
+                    spec_name=spec_dir.name,
+                    exit_code=ExitCode.SYSTEM_ERROR,
+                    error_message=error_msg,
+                )
+                print_json_output(json_result)
+            sys.exit(ExitCode.SYSTEM_ERROR)
         return
 
     # Handle QA commands
