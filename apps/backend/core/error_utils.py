@@ -4,6 +4,9 @@ Shared Error Utilities
 
 Common error detection and classification functions used across
 agent sessions, QA, and other modules.
+
+These functions now support typed error detection via TypedError subclasses
+while maintaining backward compatibility with string-based error detection.
 """
 
 from __future__ import annotations
@@ -12,6 +15,8 @@ import logging
 import re
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
+
+from core.typed_errors import AuthError, RateLimitError
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeSDKClient
@@ -49,12 +54,20 @@ def is_rate_limit_error(error: Exception) -> bool:
     Rate limit errors occur when the API usage quota is exceeded,
     either for session limits or weekly limits.
 
+    This function first checks for typed RateLimitError instances,
+    then falls back to string-based detection for backward compatibility.
+
     Args:
         error: The exception to check
 
     Returns:
         True if this is a rate limit error, False otherwise
     """
+    # Check for typed RateLimitError first
+    if isinstance(error, RateLimitError):
+        return True
+
+    # Fall back to string-based detection for backward compatibility
     error_str = str(error).lower()
 
     # Check for HTTP 429 with word boundaries to avoid false positives
@@ -81,7 +94,11 @@ def is_authentication_error(error: Exception) -> bool:
     Authentication errors occur when OAuth tokens are invalid, expired,
     or have been revoked (e.g., after token refresh on another process).
 
+    This function first checks for typed AuthError instances,
+    then falls back to string-based detection for backward compatibility.
+
     Validation approach:
+    - Typed AuthError instances are detected via isinstance() check
     - HTTP 401 status code is checked with word boundaries to minimize false positives
     - Additional string patterns are validated against lowercase error messages
     - Patterns are designed to match known Claude API and OAuth error formats
@@ -103,6 +120,11 @@ def is_authentication_error(error: Exception) -> bool:
     Returns:
         True if this is an authentication error, False otherwise
     """
+    # Check for typed AuthError first
+    if isinstance(error, AuthError):
+        return True
+
+    # Fall back to string-based detection for backward compatibility
     error_str = str(error).lower()
 
     # Check for HTTP 401 with word boundaries to avoid false positives
