@@ -1,0 +1,186 @@
+{
+  "feature": "Extend Quality Metrics with Code Coverage Tracking",
+  "workflow_type": "simple",
+  "workflow_rationale": "Straightforward extension of existing quality tracking infrastructure. Adding coverage fields to existing data models and integrating with CoverageAnalyzer.",
+  "phases": [
+    {
+      "id": "phase-1-backend",
+      "name": "Backend Quality Models Extension",
+      "type": "implementation",
+      "description": "Extend QualityScore to include coverage data and integrate CoverageAnalyzer",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Add coverage fields to QualityScore dataclass",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/analysis/quality_models.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/analysis/quality_models.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from analysis.quality_models import QualityScore; import inspect; fields = [f.name for f in QualityScore.__dataclass_fields__.values()]; assert 'coverage_percent' in fields and 'lines_covered' in fields and 'lines_total' in fields, 'Missing coverage fields'; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Add coverage_percent (float 0-100), lines_covered (int), lines_total (int) fields. Update to_dict/from_dict methods."
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Update QualityTracker to integrate coverage data",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/analysis/quality_tracker.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/analysis/coverage_analyzer.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from analysis.quality_tracker import calculate_quality_score; from pathlib import Path; score = calculate_quality_score(Path('.auto-claude/specs/test'), 'test-session', 'coder'); assert hasattr(score, 'coverage_percent'), 'Missing coverage_percent'; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Add optional coverage_result parameter to calculate_quality_score. If provided, populate coverage fields from CoverageResult."
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Update get_quality_metrics MCP tool to include coverage",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/agents/tools_pkg/tools/statistics.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/agents/tools_pkg/tools/statistics.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.tools_pkg.tools.statistics import create_statistics_tools; from pathlib import Path; tools = create_statistics_tools(Path('.'), Path('.auto-claude/specs/test')); tool = [t for t in tools if t.name == 'get_quality_metrics'][0]; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Add coverage section to quality metrics output. Read coverage from quality_history.json if available."
+        }
+      ]
+    },
+    {
+      "id": "phase-2-frontend",
+      "name": "Frontend Quality Store Update",
+      "type": "implementation",
+      "description": "Update TypeScript interfaces to include coverage fields",
+      "depends_on": [
+        "phase-1-backend"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Add coverage fields to QualityScore interface",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/renderer/stores/quality-store.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/renderer/stores/quality-store.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "grep -q \"coverage_percent\" apps/frontend/src/renderer/stores/quality-store.ts && echo \"OK\" || echo \"FAIL\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Add coverage_percent?: number, lines_covered?: number, lines_total?: number to QualityScore interface. Fields are optional to support legacy data."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 2,
+    "total_subtasks": 4,
+    "services_involved": [
+      "backend",
+      "frontend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "Sequential execution required"
+    }
+  },
+  "verification_strategy": {
+    "risk_level": "low",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "QualityScore dataclass includes coverage fields",
+      "Quality history persists coverage data",
+      "MCP tool displays coverage metrics",
+      "Frontend interface matches backend structure",
+      "Existing quality tracking functionality unchanged"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests",
+        "command": "pytest tests/test_quality_tracker.py -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Import Check",
+        "command": "python -c \"from analysis.quality_models import QualityScore; from analysis.quality_tracker import calculate_quality_score; print('OK')\"",
+        "expected_outcome": "OK",
+        "type": "smoke",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Low risk change - extending existing data structures without breaking changes. Coverage fields are optional to maintain backward compatibility."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "pytest tests/test_quality_tracker.py -v"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": false,
+      "commands": [],
+      "services_to_test": []
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-03-20T08:44:34.346Z"
+}
