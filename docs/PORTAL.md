@@ -11,6 +11,11 @@
 Navigation hub for Auto Claude documentation, compatible with all deployment contexts.
 Links only to `README.md` and `shared_docs/` — present in every worktree and release package.
 
+### Overview
+
+This portal provides a single entry point to all Auto Claude documentation resources,
+organized by topic and audience for quick discovery.
+
 ---
 
 ## Quick Navigation
@@ -309,7 +314,7 @@ Following conventions in `docs/STYLE_GUIDE.md` (main repository):
 
 ## Contributing to Documentation
 
-> For code contributions, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+> For code contributions, see the main repository.
 
 ### How to Contribute
 
