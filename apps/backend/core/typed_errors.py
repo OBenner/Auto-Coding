@@ -54,3 +54,67 @@ class TypedError(Exception):
             JSON string representation of the error
         """
         return json.dumps(self.to_dict())
+
+
+class AuthError(TypedError):
+    """Raised when authentication fails or credentials are invalid."""
+
+    def __init__(self, message: str = "Authentication failed"):
+        """Initialize AuthError with default error code."""
+        super().__init__(ErrorCode.AUTH_INVALID, message)
+
+
+class RateLimitError(TypedError):
+    """Raised when API rate limits are exceeded."""
+
+    def __init__(self, message: str = "Rate limit exceeded"):
+        """Initialize RateLimitError with default error code."""
+        super().__init__(ErrorCode.RATE_LIMIT_ERROR, message)
+
+
+class ValidationError(TypedError):
+    """Raised when input validation fails."""
+
+    def __init__(self, message: str = "Validation failed"):
+        """Initialize ValidationError with default error code."""
+        super().__init__(ErrorCode.INVALID_REQUEST, message)
+
+
+class NotFoundError(TypedError):
+    """Raised when a requested resource is not found."""
+
+    def __init__(self, message: str = "Resource not found"):
+        """Initialize NotFoundError with default error code."""
+        super().__init__(ErrorCode.INVALID_REQUEST, message)
+
+
+class PermissionError(TypedError):
+    """Raised when user lacks permission to perform an action."""
+
+    def __init__(self, message: str = "Permission denied"):
+        """Initialize PermissionError with default error code."""
+        super().__init__(ErrorCode.AUTH_INVALID, message)
+
+
+class ConfigurationError(TypedError):
+    """Raised when configuration is invalid or missing."""
+
+    def __init__(self, message: str = "Configuration error"):
+        """Initialize ConfigurationError with default error code."""
+        super().__init__(ErrorCode.INVALID_REQUEST, message)
+
+
+class NetworkError(TypedError):
+    """Raised when network operations fail."""
+
+    def __init__(self, message: str = "Network error"):
+        """Initialize NetworkError with default error code."""
+        super().__init__(ErrorCode.NETWORK_ERROR, message)
+
+
+class TimeoutError(TypedError):
+    """Raised when an operation times out."""
+
+    def __init__(self, message: str = "Operation timed out"):
+        """Initialize TimeoutError with default error code."""
+        super().__init__(ErrorCode.TIMEOUT, message)
