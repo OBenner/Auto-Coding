@@ -16,6 +16,7 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 from progress import count_subtasks
+from ui import Icons, box, icon, muted, print_status
 from workspace import get_existing_build_worktree
 
 from .utils import get_specs_dir
@@ -616,3 +617,178 @@ def import_template_command(
     print()
     print("-" * 80)
     print()
+
+
+def prompt_for_template_parameters(template: Any) -> dict[str, Any] | None:
+    """
+    Interactively prompt the user for template parameter values.
+
+    Shows each parameter's description, type, default value, and whether it's required.
+    Validates input types and provides helpful error messages.
+
+    Args:
+        template: Template object with parameters to collect
+
+    Returns:
+        Dictionary of parameter values, or None if cancelled
+    """
+    print()
+    print("=" * 80)
+    print("  TEMPLATE PARAMETERS")
+    print("=" * 80)
+    print()
+    print(f"{icon(Icons.INFO)} Template: {template.name}")
+    print(f"{icon(Icons.INFO)} {template.description}")
+    print()
+
+    if not template.parameters:
+        print(f"{icon(Icons.INFO)} This template has no parameters.")
+        print()
+        return {}
+
+    print(
+        muted(
+            f"Please provide values for {len(template.parameters)} parameter(s). Press Ctrl+C to cancel."
+        )
+    )
+    print()
+
+    params = {}
+
+    for param_name, param_def in template.parameters.items():
+        param_type = param_def.get("type", str)
+        required = param_def.get("required", False)
+        default = param_def.get("default")
+        description = param_def.get("description", "")
+
+        # Display parameter info
+        print("-" * 80)
+        print()
+        print(f"{icon(Icons.POINTER)} {param_name}")
+        if description:
+            print(f"   {description}")
+        print(f"   Type: {param_type.__name__}")
+        if required:
+            print(f"   {icon(Icons.WARNING)} Required")
+        if default is not None:
+            print(f"   Default: {default}")
+        print()
+
+        # Prompt based on type
+        while True:
+            try:
+                if param_type == bool:
+                    # Boolean parameters - yes/no prompt
+                    default_str = "y" if default else "n"
+                    prompt = f"   {icon(Icons.EDIT)} Enter value (y/n)"
+                    if default is not None:
+                        prompt += f" [{default_str}]"
+                    prompt += ": "
+
+                    user_input = input(prompt).strip().lower()
+
+                    if not user_input and default is not None:
+                        params[param_name] = default
+                        break
+                    elif not user_input and not required:
+                        # Skip optional parameter with no default
+                        break
+                    elif user_input in ["y", "yes", "true", "1"]:
+                        params[param_name] = True
+                        break
+                    elif user_input in ["n", "no", "false", "0"]:
+                        params[param_name] = False
+                        break
+                    else:
+                        print(
+                            f"   {icon(Icons.WARNING)} Invalid input. Please enter 'y' or 'n'."
+                        )
+
+                elif param_type == int:
+                    # Integer parameters
+                    prompt = f"   {icon(Icons.EDIT)} Enter value"
+                    if default is not None:
+                        prompt += f" [{default}]"
+                    prompt += ": "
+
+                    user_input = input(prompt).strip()
+
+                    if not user_input and default is not None:
+                        params[param_name] = default
+                        break
+                    elif not user_input and not required:
+                        # Skip optional parameter with no default
+                        break
+                    else:
+                        try:
+                            params[param_name] = int(user_input)
+                            break
+                        except ValueError:
+                            print(
+                                f"   {icon(Icons.WARNING)} Invalid input. Please enter a number."
+                            )
+
+                elif param_type == list:
+                    # List parameters - comma-separated values
+                    prompt = f"   {icon(Icons.EDIT)} Enter values (comma-separated)"
+                    if default is not None:
+                        default_str = ", ".join(str(v) for v in default)
+                        prompt += f" [{default_str}]"
+                    prompt += ": "
+
+                    user_input = input(prompt).strip()
+
+                    if not user_input and default is not None:
+                        params[param_name] = default
+                        break
+                    elif not user_input and not required:
+                        # Skip optional parameter with no default
+                        break
+                    else:
+                        # Split by comma and strip whitespace
+                        values = [v.strip() for v in user_input.split(",") if v.strip()]
+                        params[param_name] = values
+                        break
+
+                else:  # Default to string
+                    # String parameters
+                    prompt = f"   {icon(Icons.EDIT)} Enter value"
+                    if default is not None:
+                        prompt += f" [{default}]"
+                    prompt += ": "
+
+                    user_input = input(prompt).strip()
+
+                    if not user_input and default is not None:
+                        params[param_name] = default
+                        break
+                    elif not user_input and not required:
+                        # Skip optional parameter with no default
+                        break
+                    elif user_input:
+                        params[param_name] = user_input
+                        break
+                    elif required:
+                        print(
+                            f"   {icon(Icons.WARNING)} This parameter is required. Please provide a value."
+                        )
+
+            except (KeyboardInterrupt, EOFError):
+                print()
+                print()
+                print_status("Parameter collection cancelled.", "warning")
+                return None
+
+        print()
+
+    print("=" * 80)
+    print(f"{icon(Icons.CHECK)} Parameters collected successfully!")
+    print()
+
+    # Show summary
+    print("Summary:")
+    for param_name, value in params.items():
+        print(f"  {param_name}: {value}")
+    print()
+
+    return params
