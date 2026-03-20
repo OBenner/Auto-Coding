@@ -17,7 +17,7 @@ from typing import Any
 
 from integrations.graphiti.pattern_categorizer import (
     PATTERN_CATEGORIES,
-    categorize_pattern,
+    categorize_pattern_sync,
 )
 from integrations.graphiti.pattern_extractor import PatternExtractor
 
@@ -198,7 +198,8 @@ class PatternLibraryGenerator:
             )
 
             # Categorize (synchronously - runs async internally)
-            category = categorize_pattern(pattern_desc, self.project_dir)
+            result = categorize_pattern_sync(pattern_desc, self.project_dir)
+            category = result["category"]
 
             # Use pattern type as fallback category
             if category == "uncategorized" and pattern["type"]:
