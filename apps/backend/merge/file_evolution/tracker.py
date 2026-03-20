@@ -480,3 +480,34 @@ class FileEvolutionTracker:
             )
 
         return record
+
+    def get_merge_completion_history(
+        self,
+        limit: int = 100,
+        task_id: str | None = None,
+    ) -> list[MergeCompletionRecord]:
+        """
+        Get merge completion history.
+
+        Args:
+            limit: Maximum number of records to return (default: 100)
+            task_id: Optional filter to only include merges involving this task
+
+        Returns:
+            List of merge completion records (most recent first)
+        """
+        # Load merge history from storage (returns list of dicts)
+        merge_history_dicts = self.storage.load_merge_history()
+
+        # Convert dicts to MergeCompletionRecord objects
+        records = [
+            MergeCompletionRecord.from_dict(record_dict)
+            for record_dict in merge_history_dicts
+        ]
+
+        # Filter by task if specified
+        if task_id:
+            records = [record for record in records if task_id in record.task_ids]
+
+        # Return limited results (already sorted by timestamp - most recent first)
+        return records[:limit]
