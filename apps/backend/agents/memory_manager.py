@@ -12,9 +12,6 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from agents.session_context import SessionContext
-
 from core.sentry import capture_exception
 from debug import (
     debug,
@@ -32,6 +29,9 @@ from memory.patterns import (
     save_detected_patterns_from_naming,
     save_detected_patterns_from_organization,
 )
+
+if TYPE_CHECKING:
+    from agents.session_context import SessionContext
 
 # Import from parent memory package
 # Now safe since this module is named memory_manager (not memory)

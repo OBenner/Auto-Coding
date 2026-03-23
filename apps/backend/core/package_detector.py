@@ -39,11 +39,12 @@ def _should_skip_directory(dir_path: Path, root: Path) -> bool:
     """
     # Skip if outside root
     try:
-        dir_path.relative_to(root)
+        rel = dir_path.relative_to(root)
     except ValueError:
         return True
 
-    return dir_path.name in _SKIP_DIRS
+    # Check if any component in the path is a skip directory
+    return any(part in _SKIP_DIRS for part in rel.parts)
 
 
 def detect_package_managers(project_dir: str) -> dict[str, list[str]]:
