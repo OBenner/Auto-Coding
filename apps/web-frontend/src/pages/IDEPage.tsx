@@ -273,7 +273,7 @@ export function IDEPage() {
 					defaultSize={initialSizes.explorer}
 					minSize={10}
 					maxSize={40}
-					onResize={(size) => handlePanelResize("explorer", size)}
+					onResize={(panelSize) => handlePanelResize("explorer", panelSize.asPercentage)}
 					className="flex flex-col overflow-hidden"
 				>
 					<div className="text-xs font-semibold uppercase tracking-wider px-3 py-2 text-muted-foreground border-b border-border shrink-0">
@@ -295,7 +295,7 @@ export function IDEPage() {
 				<Panel
 					defaultSize={initialSizes.editor}
 					minSize={20}
-					onResize={(size) => handlePanelResize("editor", size)}
+					onResize={(panelSize) => handlePanelResize("editor", panelSize.asPercentage)}
 					className="flex flex-col overflow-hidden"
 				>
 					{fetchError ? (
@@ -328,7 +328,7 @@ export function IDEPage() {
 				<Panel
 					defaultSize={initialSizes.right}
 					minSize={15}
-					onResize={(size) => handlePanelResize("right", size)}
+					onResize={(panelSize) => handlePanelResize("right", panelSize.asPercentage)}
 					className="flex flex-col overflow-hidden"
 				>
 					{/* Tab bar */}
