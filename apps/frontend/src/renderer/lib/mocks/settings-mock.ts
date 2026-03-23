@@ -30,6 +30,41 @@ export const settingsMock = {
     }
   }),
 
+  // AI Provider Configuration (mock - no backend in browser mode)
+  getProviderConfig: async () => ({
+    success: true,
+    data: {
+      provider: 'claude' as const,
+      anthropicApiKey: undefined,
+      claudeModel: undefined,
+      openaiApiKey: undefined,
+      googleApiKey: undefined,
+      openrouterApiKey: undefined,
+      zhipuaiApiKey: undefined,
+      zhipuaiModel: undefined,
+      plannerModel: undefined,
+      coderModel: undefined,
+      qaModel: undefined,
+    }
+  }),
+  updateProviderConfig: async () => ({ success: true }),
+  validateProviderConfig: async () => ({
+    success: true,
+    data: {
+      isValid: true,
+      errors: [],
+      availableProviders: [
+        'claude' as const,
+        'openai' as const,
+        'google' as const,
+        'litellm' as const,
+        'openrouter' as const,
+        'zhipuai' as const,
+        'ollama' as const
+      ]
+    }
+  }),
+
   // App Info
   getAppVersion: async () => '0.1.0-browser',
 

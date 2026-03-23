@@ -7,10 +7,12 @@ from core.phase_event import (
     PHASE_MARKER_PREFIX,
     ExecutionPhase,
     emit_phase,
+    init_webhooks,
 )
 
 __all__ = [
     "PHASE_MARKER_PREFIX",
     "ExecutionPhase",
     "emit_phase",
+    "init_webhooks",
 ]

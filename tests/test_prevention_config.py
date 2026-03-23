@@ -8,30 +8,31 @@ for the proactive issue prevention scanner system.
 """
 
 import os
-from unittest.mock import patch
-
-import pytest
 
 # Add apps/backend to path for imports
 import sys
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from analysis.prevention_config import (
-    PreventionConfig,
-    load_prevention_config,
-    is_prevention_enabled,
-    get_prevention_status,
-    validate_prevention_config,
-    DEFAULT_SECURITY_ENABLED,
-    DEFAULT_PERFORMANCE_ENABLED,
-    DEFAULT_BREAKING_CHANGES_ENABLED,
     DEFAULT_ARCHITECTURE_ENABLED,
     DEFAULT_BLOCK_ON_CRITICAL,
     DEFAULT_BLOCK_ON_HIGH,
-    DEFAULT_WARN_ON_MEDIUM,
+    DEFAULT_BREAKING_CHANGES_ENABLED,
     DEFAULT_FAIL_ON_SCAN_ERROR,
+    DEFAULT_PERFORMANCE_ENABLED,
     DEFAULT_SAVE_REPORTS,
+    DEFAULT_SECURITY_ENABLED,
+    DEFAULT_WARN_ON_MEDIUM,
+    PreventionConfig,
+    get_prevention_status,
+    is_prevention_enabled,
+    load_prevention_config,
+    validate_prevention_config,
 )
 
 

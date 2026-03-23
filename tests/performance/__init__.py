@@ -9,7 +9,6 @@ Test modules:
 - test_backend_performance: Backend operations performance tests
 - test_frontend_performance: Frontend bundle size and rendering tests
 - test_memory_performance: Memory usage and leak detection tests
-- test_api_performance: API response time benchmarks
 
 Run performance tests with:
     pytest tests/performance/

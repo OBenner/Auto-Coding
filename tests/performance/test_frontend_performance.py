@@ -128,16 +128,16 @@ class TestZustandOptimizationPatterns:
 
     @pytest.mark.benchmark
     def test_zustand_shallow_pattern_exists(self):
-        """Test that useShallow pattern exists in stores."""
+        """Test that useShallow pattern exists in components."""
         frontend_dir = Path(__file__).parent.parent.parent / "apps" / "frontend"
-        stores_dir = frontend_dir / "src" / "renderer" / "stores"
+        components_dir = frontend_dir / "src" / "renderer" / "components"
 
-        if stores_dir.exists():
-            # Check for useShallow imports and usage
-            ts_files = list(stores_dir.glob("**/*.ts"))
+        if components_dir.exists():
+            # Check for useShallow imports and usage in component files
+            tsx_files = list(components_dir.glob("**/*.tsx"))
 
             shallow_found = False
-            for file_path in ts_files:
+            for file_path in tsx_files:
                 content = file_path.read_text()
                 if "useShallow" in content:
                     shallow_found = True
@@ -194,7 +194,7 @@ class TestFrontendAssetOptimization:
     @pytest.mark.benchmark
     def test_minified_js_exists(self):
         """Test that JavaScript files are minified in production build."""
-        frontend_dir = Path(__file__).parent.parent / "apps" / "frontend"
+        frontend_dir = Path(__file__).parent.parent.parent / "apps" / "frontend"
         renderer_dir = frontend_dir / "out" / "renderer"
 
         if renderer_dir.exists():

@@ -12,6 +12,10 @@
     "changelog": "Journal des modifications",
     "scheduler": "Planificateur",
     "context": "Contexte",
+    "webhooks": "Webhooks",
+    "patterns": "Modèles",
+    "analytics": "Analytique",
+    "productivity": "Productivité",
     "sessionContext": "Contexte de session",
     "githubIssues": "Issues GitHub",
     "githubPRs": "PRs GitHub",
@@ -20,10 +24,10 @@
     "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "Aperçu MCP",
-    "analytics": "Analytique",
     "mergeAnalytics": "Analyse des fusions",
     "sessions": "Relecture de session",
-    "feedback": "Retour d'information"
+    "feedback": "Retour d'information",
+    "modelUsage": "Utilisation des Modèles"
   },
   "actions": {
     "settings": "Paramètres",

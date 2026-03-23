@@ -97,7 +97,7 @@ export default defineConfig({
       // Bundle analyzer - MUST be last in renderer plugins
       visualizer({
         filename: './out/renderer/stats.html',
-        open: true,
+        open: !process.env.CI,
         gzipSize: true,
         brotliSize: true
       })

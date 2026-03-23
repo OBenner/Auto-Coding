@@ -49,7 +49,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.80.0",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.11",
     "@codemirror/lang-javascript": "^6.2.4",
@@ -95,7 +95,7 @@
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
     "i18next": "^25.7.3",
-    "lucide-react": "^0.575.0",
+    "lucide-react": "^0.577.0",
     "minimatch": "^10.1.1",
     "motion": "^12.23.26",
     "proper-lockfile": "^4.1.2",
@@ -113,7 +113,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.3.11",
+    "@biomejs/biome": "2.4.8",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@electron/rebuild": "^4.0.2",
@@ -129,21 +129,21 @@
     "@types/react-dom": "^19.2.3",
     "@types/semver": "^7.7.1",
     "@types/uuid": "^11.0.0",
-    "@vitejs/plugin-react": "^5.1.2",
+    "@vitejs/plugin-react": "^6.0.1",
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.22",
     "cross-env": "^10.1.0",
-    "electron": "40.6.0",
+    "electron": "41.0.3",
     "electron-builder": "^26.5.0",
     "electron-vite": "^5.0.0",
     "husky": "^9.1.7",
-    "jsdom": "^28.1.0",
+    "jsdom": "^29.0.0",
     "lint-staged": "^16.2.7",
     "postcss": "^8.5.6",
     "rollup-plugin-visualizer": "^7.0.0",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
-    "vite": "^7.2.7",
+    "vite": "^8.0.1",
     "vitest": "^4.0.16"
   },
   "overrides": {

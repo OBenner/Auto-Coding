@@ -4,10 +4,16 @@ import path from 'path';
 import { EventEmitter } from 'events';
 import type { ImplementationPlan } from '../shared/types';
 
+/**
+ * Default debounce delay in milliseconds
+ */
+const DEFAULT_DEBOUNCE_DELAY = 300;
+
 interface WatcherInfo {
   taskId: string;
   watcher: FSWatcher;
   planPath: string;
+  changeHandler: () => void;
 }
 
 /**
@@ -15,6 +21,8 @@ interface WatcherInfo {
  */
 export class FileWatcher extends EventEmitter {
   private watchers: Map<string, WatcherInfo> = new Map();
+  private debounceTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private debounceDelay: number;
   // Maps taskId -> specDir for the in-flight watch() call.
   // Allows re-watch calls with a different specDir to proceed while
   // still preventing duplicate calls for the exact same specDir.
@@ -22,6 +30,11 @@ export class FileWatcher extends EventEmitter {
   // Tracks taskIds that had unwatch() called while watch() was in-flight.
   // Checked after each await point in watch() to avoid creating a leaked watcher.
   private cancelledWatches: Set<string> = new Set();
+
+  constructor(debounceDelay: number = DEFAULT_DEBOUNCE_DELAY) {
+    super();
+    this.debounceDelay = debounceDelay;
+  }
 
   /**
    * Start watching a task's implementation plan
@@ -45,6 +58,12 @@ export class FileWatcher extends EventEmitter {
       const existing = this.watchers.get(taskId);
       if (existing) {
         this.watchers.delete(taskId);
+        const pendingTimeout = this.debounceTimeouts.get(taskId);
+        if (pendingTimeout) {
+          clearTimeout(pendingTimeout);
+          this.debounceTimeouts.delete(taskId);
+        }
+        existing.watcher.removeListener('change', existing.changeHandler);
         await existing.watcher.close();
       }
 
@@ -86,24 +105,38 @@ export class FileWatcher extends EventEmitter {
         return;
       }
 
-      // Store watcher info
+      // Create debounced change handler
+      const changeHandler = () => {
+        const existingTimeout = this.debounceTimeouts.get(taskId);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+        }
+
+        const timeout = setTimeout(() => {
+          try {
+            const content = readFileSync(planPath, 'utf-8');
+            const plan: ImplementationPlan = JSON.parse(content);
+            this.emit('progress', taskId, plan);
+          } catch {
+            // File might be in the middle of being written
+            // Ignore parse errors, next change event will have complete file
+          }
+          this.debounceTimeouts.delete(taskId);
+        }, this.debounceDelay);
+
+        this.debounceTimeouts.set(taskId, timeout);
+      };
+
+      // Store watcher info with handler reference for cleanup
       this.watchers.set(taskId, {
         taskId,
         watcher,
-        planPath
+        planPath,
+        changeHandler,
       });
 
-      // Handle file changes
-      watcher.on('change', () => {
-        try {
-          const content = readFileSync(planPath, 'utf-8');
-          const plan: ImplementationPlan = JSON.parse(content);
-          this.emit('progress', taskId, plan);
-        } catch {
-          // File might be in the middle of being written
-          // Ignore parse errors, next change event will have complete file
-        }
-      });
+      // Handle file changes with debounce
+      watcher.on('change', changeHandler);
 
       // Handle errors
       watcher.on('error', (error: unknown) => {
@@ -138,6 +171,13 @@ export class FileWatcher extends EventEmitter {
    * Stop watching a task
    */
   async unwatch(taskId: string): Promise<void> {
+    // Clear any pending debounce timeout
+    const timeout = this.debounceTimeouts.get(taskId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.debounceTimeouts.delete(taskId);
+    }
+
     // If watch() is currently in-flight for this taskId, it is already closing the
     // existing watcher. Just set the cancellation flag and return to avoid a
     // double-close of the same FSWatcher.
@@ -145,8 +185,10 @@ export class FileWatcher extends EventEmitter {
       this.cancelledWatches.add(taskId);
       return;
     }
+
     const watcherInfo = this.watchers.get(taskId);
     if (watcherInfo) {
+      watcherInfo.watcher.removeListener('change', watcherInfo.changeHandler);
       await watcherInfo.watcher.close();
       this.watchers.delete(taskId);
     }
@@ -162,18 +204,23 @@ export class FileWatcher extends EventEmitter {
       this.cancelledWatches.add(taskId);
     }
     this.pendingWatches.clear();
-    // Clear cancellation flags now that pendingWatches is empty: the in-flight
-    // calls will bail via the supersession check (pendingWatches.get() returns
-    // undefined) and will not clean up cancelledWatches themselves. Clearing
-    // here ensures the instance is fully reset for subsequent use.
     this.cancelledWatches.clear();
+
+    // Remove change listeners first to prevent new debounce timeouts during teardown
     const closePromises = Array.from(this.watchers.values()).map(
       async (info) => {
+        info.watcher.removeListener('change', info.changeHandler);
         await info.watcher.close();
       }
     );
     await Promise.all(closePromises);
     this.watchers.clear();
+
+    // Clear all pending debounce timeouts after watchers are closed
+    for (const timeout of this.debounceTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+    this.debounceTimeouts.clear();
   }
 
   /**

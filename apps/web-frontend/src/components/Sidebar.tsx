@@ -6,6 +6,7 @@
 
 import {
 	BookOpen,
+	Code2,
 	FileText,
 	GitBranch,
 	LayoutGrid,
@@ -42,7 +43,8 @@ export type SidebarView =
 	| "changelog"
 	| "insights"
 	| "worktrees"
-	| "agent-tools";
+	| "agent-tools"
+	| "ide";
 
 interface SidebarProps {
 	onSettingsClick: () => void;
@@ -66,6 +68,7 @@ interface NavItem {
 const baseNavItems: NavItem[] = [
 	{ id: "kanban", label: "Kanban", icon: LayoutGrid, shortcut: "K" },
 	{ id: "terminals", label: "Terminals", icon: Terminal, shortcut: "A" },
+	{ id: "ide", label: "IDE", icon: Code2, shortcut: "E" },
 	{ id: "insights", label: "Insights", icon: Sparkles, shortcut: "N" },
 	{ id: "roadmap", label: "Roadmap", icon: Map, shortcut: "D" },
 	{ id: "ideation", label: "Ideation", icon: Lightbulb, shortcut: "I" },

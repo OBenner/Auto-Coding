@@ -24,7 +24,7 @@ import {
   SelectValue
 } from './ui/select';
 import { TaskModalLayout } from './task-form/TaskModalLayout';
-import { TaskFormFields } from './task-form/TaskFormFields';
+import { TaskFormFields, PROVIDER_MODELS } from './task-form/TaskFormFields';
 import { type FileReferenceData } from './task-form/useImageUpload';
 import { TaskFileExplorerDrawer } from './TaskFileExplorerDrawer';
 import { FileAutocomplete } from './FileAutocomplete';
@@ -32,7 +32,7 @@ import { createTask, saveDraft, loadDraft, clearDraft, isDraftEmpty } from '../s
 import { useProjectStore } from '../stores/project-store';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../lib/utils';
-import type { TaskCategory, TaskPriority, TaskComplexity, TaskImpact, TaskMetadata, ImageAttachment, TaskDraft, ModelType, ThinkingLevel, ReferencedFile } from '../../shared/types';
+import type { TaskCategory, TaskPriority, TaskComplexity, TaskImpact, TaskMetadata, ImageAttachment, TaskDraft, ModelType, ThinkingLevel, ReferencedFile, AIProvider } from '../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import {
   DEFAULT_AGENT_PROFILES,
@@ -109,6 +109,10 @@ export function TaskCreationWizard({
   const [complexity, setComplexity] = useState<TaskComplexity | ''>('');
   const [impact, setImpact] = useState<TaskImpact | ''>('');
 
+  // AI Provider selection
+  const [provider, setProvider] = useState<AIProvider>('claude');
+  const [providerModel, setProviderModel] = useState<string>('claude-sonnet-4-5-20250929'); // Default to Sonnet
+
   // Model configuration
   const [profileId, setProfileId] = useState<string>(settings.selectedAgentProfile || 'auto');
   const [model, setModel] = useState<ModelType | ''>(selectedProfile.model);
@@ -174,6 +178,8 @@ export function TaskCreationWizard({
         setReferencedFiles(draft.referencedFiles ?? []);
         setRequireReviewBeforeCoding(draft.requireReviewBeforeCoding ?? false);
         setAgentModels(draft.agentModels || {});
+        setProvider(draft.provider || 'claude');
+        setProviderModel(draft.providerModel || 'claude-sonnet-4-5-20250929');
         setSelectedCustomTemplateId(draft.customTemplateId || '');
         setIsDraftRestored(true);
 
@@ -201,6 +207,7 @@ export function TaskCreationWizard({
         setReferencedFiles([]);
         setRequireReviewBeforeCoding(false);
         setAgentModels({});
+        setProvider('claude');
         setSelectedCustomTemplateId('');
         setBaseBranch(PROJECT_DEFAULT_BRANCH);
         setUseWorktree(true);
@@ -260,6 +267,17 @@ export function TaskCreationWizard({
     };
   }, [open, projectPath, projectId]);
 
+  // Update provider model when provider changes
+  // Uses the authoritative PROVIDER_MODELS from TaskFormFields to check model membership
+  useEffect(() => {
+    const models = PROVIDER_MODELS[provider] ?? [];
+    const currentModelBelongsToProvider = models.some(m => m.value === providerModel);
+
+    if (!currentModelBelongsToProvider) {
+      setProviderModel(models[0]?.value ?? '');
+    }
+  }, [provider, providerModel]);
+
   /**
    * Get current form state as a draft
    */
@@ -280,9 +298,11 @@ export function TaskCreationWizard({
     referencedFiles,
     requireReviewBeforeCoding,
     agentModels,
+    provider,
+    providerModel,
     customTemplateId: selectedCustomTemplateId,
     savedAt: new Date()
-  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels, selectedCustomTemplateId]);
+  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels, provider, providerModel, selectedCustomTemplateId]);
 
   /**
    * Detect @ mention being typed and show autocomplete
@@ -453,6 +473,9 @@ export function TaskCreationWizard({
       if (requireReviewBeforeCoding) metadata.requireReviewBeforeCoding = true;
       // Include agent models if configured
       if (Object.keys(agentModels).length > 0) metadata.agentModels = agentModels;
+      // Include provider and model if non-default
+      if (provider && provider !== 'claude') metadata.provider = provider;
+      if (providerModel) metadata.providerModel = providerModel;
       // Include custom template if selected
       if (selectedCustomTemplateId) metadata.customTemplateId = selectedCustomTemplateId;
       // Always include baseBranch - resolve PROJECT_DEFAULT_BRANCH to actual branch name
@@ -497,6 +520,7 @@ export function TaskCreationWizard({
     setReferencedFiles([]);
     setRequireReviewBeforeCoding(false);
     setAgentModels({});
+    setProvider('claude');
     setSelectedCustomTemplateId('');
     setBaseBranch(PROJECT_DEFAULT_BRANCH);
     setUseWorktree(true);
@@ -669,6 +693,10 @@ export function TaskCreationWizard({
           onThinkingLevelChange={setThinkingLevel}
           onPhaseModelsChange={setPhaseModels}
           onPhaseThinkingChange={setPhaseThinking}
+          provider={provider}
+          onProviderChange={setProvider}
+          providerModel={providerModel}
+          onProviderModelChange={setProviderModel}
           category={category}
           priority={priority}
           complexity={complexity}
@@ -771,10 +799,10 @@ export function TaskCreationWizard({
         >
           <span className="flex items-center gap-2">
             <Brain className="h-4 w-4" />
-            Custom Template
+            {t('tasks:wizard.customTemplate')}
             {selectedCustomTemplateId && (
               <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                Selected
+                {t('tasks:wizard.selected')}
               </span>
             )}
           </span>
@@ -816,10 +844,10 @@ export function TaskCreationWizard({
         >
           <span className="flex items-center gap-2">
             <Brain className="h-4 w-4" />
-            Agent Models
+            {t('tasks:wizard.agentModels')}
             {Object.keys(agentModels).length > 0 && (
               <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                {Object.keys(agentModels).length} configured
+                {t('tasks:wizard.agentModelsConfigured', { count: Object.keys(agentModels).length })}
               </span>
             )}
           </span>
@@ -834,14 +862,14 @@ export function TaskCreationWizard({
         {showAgentModels && (
           <div id="agent-models-section" className="space-y-4 p-4 rounded-lg border border-border bg-muted/30">
             <p className="text-xs text-muted-foreground mb-3">
-              Configure which model to use for specific agent types. Leave empty to use defaults.
+              {t('tasks:wizard.agentModelsDescription')}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Coder Agent */}
               <div className="space-y-2">
                 <Label htmlFor="agent-model-coder" className="text-sm font-medium text-foreground">
-                  Coder Agent
+                  {t('tasks:wizard.coderAgent')}
                 </Label>
                 <Select
                   value={agentModels.coder || ''}
@@ -856,10 +884,10 @@ export function TaskCreationWizard({
                   disabled={isCreating}
                 >
                   <SelectTrigger id="agent-model-coder">
-                    <SelectValue placeholder="Use default" />
+                    <SelectValue placeholder={t('tasks:wizard.useDefault')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Use default</SelectItem>
+                    <SelectItem value="">{t('tasks:wizard.useDefault')}</SelectItem>
                     {AVAILABLE_MODELS.map((model) => (
                       <SelectItem key={model.value} value={model.value}>
                         {model.label}
@@ -872,7 +900,7 @@ export function TaskCreationWizard({
               {/* Planner Agent */}
               <div className="space-y-2">
                 <Label htmlFor="agent-model-planner" className="text-sm font-medium text-foreground">
-                  Planner Agent
+                  {t('tasks:wizard.plannerAgent')}
                 </Label>
                 <Select
                   value={agentModels.planner || ''}
@@ -887,10 +915,10 @@ export function TaskCreationWizard({
                   disabled={isCreating}
                 >
                   <SelectTrigger id="agent-model-planner">
-                    <SelectValue placeholder="Use default" />
+                    <SelectValue placeholder={t('tasks:wizard.useDefault')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Use default</SelectItem>
+                    <SelectItem value="">{t('tasks:wizard.useDefault')}</SelectItem>
                     {AVAILABLE_MODELS.map((model) => (
                       <SelectItem key={model.value} value={model.value}>
                         {model.label}
@@ -903,7 +931,7 @@ export function TaskCreationWizard({
               {/* QA Reviewer Agent */}
               <div className="space-y-2">
                 <Label htmlFor="agent-model-qa-reviewer" className="text-sm font-medium text-foreground">
-                  QA Reviewer Agent
+                  {t('tasks:wizard.qaReviewerAgent')}
                 </Label>
                 <Select
                   value={agentModels.qa_reviewer || ''}
@@ -918,10 +946,10 @@ export function TaskCreationWizard({
                   disabled={isCreating}
                 >
                   <SelectTrigger id="agent-model-qa-reviewer">
-                    <SelectValue placeholder="Use default" />
+                    <SelectValue placeholder={t('tasks:wizard.useDefault')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Use default</SelectItem>
+                    <SelectItem value="">{t('tasks:wizard.useDefault')}</SelectItem>
                     {AVAILABLE_MODELS.map((model) => (
                       <SelectItem key={model.value} value={model.value}>
                         {model.label}

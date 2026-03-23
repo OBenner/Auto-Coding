@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel, PhaseModelConfig, PhaseThinkingConfig } from './settings';
 import type { ExecutionPhase as ExecutionPhaseType, CompletablePhase } from '../constants/phase-protocol';
+import type { AIProvider } from './common';
 
 export type TaskStatus = 'backlog' | 'queue' | 'in_progress' | 'ai_review' | 'human_review' | 'done' | 'pr_created' | 'error';
 
@@ -225,6 +226,8 @@ export interface TaskDraft {
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
+  provider?: AIProvider;  // AI provider selection
+  providerModel?: string;  // Provider-specific model ID
   customTemplateId?: string;  // Custom agent template ID
   savedAt: Date;
 }
@@ -315,6 +318,10 @@ export interface TaskMetadata {
   // Multi-model agent orchestration
   agentModels?: Record<string, string>;  // Agent-specific model overrides (e.g., { coder: 'haiku', planner: 'sonnet' })
 
+  // Provider selection
+  provider?: AIProvider;  // AI engine provider (claude, litellm, openrouter, zhipuai)
+  providerModel?: string;  // Provider-specific model ID
+
   // Archive status
   archivedAt?: string;  // ISO date when task was archived
   archivedInVersion?: string;  // Version in which task was archived (from changelog)
@@ -378,6 +385,23 @@ export interface PlanSubtask {
     run?: string;
     scenario?: string;
   };
+}
+
+// Cost tracking types (from cost_tracking.py)
+export interface UsageRecord {
+  agent_type: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+  timestamp: string;
+}
+
+export interface CostReport {
+  spec_dir: string;
+  total_cost: number;
+  records: UsageRecord[];
+  last_updated: string;
 }
 
 // Workspace management types (for human review)
@@ -586,4 +610,112 @@ export interface TaskTokenStats {
   total_tokens: number;
   created_at: string;
   updated_at: string;
+}
+
+// Background task types (long-running commands)
+export type BackgroundTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface BackgroundTask {
+  id: string;
+  command: string;
+  workingDir: string;
+  status: BackgroundTaskStatus;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  timeout: number;
+  output: string;
+  error: string | null;
+  exitCode: number | null;
+  pid: number | null;
+  memoryStats?: {
+    percent: number;
+    availableMb: number;
+    totalMb: number;
+    usedMb: number;
+  };
+}
+
+// ============================================================================
+// Multi-User Spec Collaboration Types
+// ============================================================================
+
+export type PermissionLevel = 'read' | 'write' | 'admin';
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface CollaborationUser {
+  user_id: string;
+  username: string;
+  email?: string;
+}
+
+export interface SpecPermission {
+  spec_id: string;
+  user: CollaborationUser;
+  level: PermissionLevel;
+  granted_by: string;
+  granted_at: string;
+}
+
+export interface Comment {
+  comment_id: string;
+  spec_id: string;
+  author: CollaborationUser;
+  content: string;
+  created_at: string;
+  parent_id?: string;
+  mentions: string[];
+  resolved: boolean;
+  updated_at?: string;
+}
+
+export interface Approval {
+  approval_id: string;
+  spec_id: string;
+  approver: CollaborationUser;
+  status: ApprovalStatus;
+  reason?: string;
+  created_at: string;
+  reviewed_at?: string;
+}
+
+export type NotificationType =
+  | 'mention'
+  | 'permission_granted'
+  | 'permission_revoked'
+  | 'approval_requested'
+  | 'approval_approved'
+  | 'approval_rejected'
+  | 'spec_modified';
+
+export type ChangeType =
+  | 'comment_added'
+  | 'comment_edited'
+  | 'comment_resolved'
+  | 'permission_granted'
+  | 'permission_revoked'
+  | 'approval_requested'
+  | 'approval_approved'
+  | 'approval_rejected'
+  | 'spec_edited';
+
+export interface Notification {
+  notification_id: string;
+  spec_id: string;
+  notification_type: NotificationType;
+  target_user: string;
+  actor_user: string;
+  created_at: string;
+  read: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ChangeRecord {
+  change_id: string;
+  spec_id: string;
+  change_type: ChangeType;
+  actor_user: string;
+  created_at: string;
+  details?: Record<string, unknown>;
 }

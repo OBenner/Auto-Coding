@@ -95,13 +95,27 @@
     "showMore": "Show more",
     "showLess": "Show less",
     "merge": "Merge",
+    "export": "Export",
+    "filter": "Filter",
+    "all": "All",
+    "allowed": "Allowed",
+    "blocked": "Blocked",
+    "clear": "Clear",
+    "clearFilters": "Clear Filters",
+    "command": "Command",
+    "path": "Path",
+    "agent": "Agent",
+    "project": "Project",
+    "session": "Session",
+    "context": "Context",
+    "status": "Status",
+    "events": "events",
     "discard": "Discard",
     "switch": "Switch",
     "add": "Add",
     "gotIt": "Got it",
     "continue": "Continue",
     "saving": "Saving...",
-    "export": "Export",
     "load": "Load"
   },
   "actions": {
@@ -788,6 +802,13 @@
       "commentByAuthor": "Comment by {{author}}"
     }
   },
+  "cost": {
+    "breakdown": "Cost Breakdown by Provider",
+    "total": "total",
+    "tokens": "tokens",
+    "noCosts": "No costs recorded yet",
+    "localModelsNote": "Local models (Ollama) run on your machine at no API cost"
+  },
   "memory": {
     "graphView": "Graph View",
     "deleteMemory": "Delete Memory",
@@ -909,6 +930,36 @@
     "score": "Quality Score",
     "trend": "Trend",
     "alert": "Quality Alert"
+  },
+  "failureAnalysis": {
+    "title": "Failure Analysis Trends",
+    "loading": "Loading failure analysis...",
+    "noData": "No failure trend data available",
+    "noDataHint": "Complete more QA iterations to see failure trends",
+    "chartFooter": "Failure trends over the last 7 days - Lower recurrence rate indicates improved learning",
+    "chartAriaLabel": "Failure analysis trends chart showing failures, root cause rate, and recurrence rate over time",
+    "chartTitle": "Failure Analysis Trends Chart",
+    "totalFailures": "Total Failures",
+    "rootCauseRate": "Root Cause Rate",
+    "recurrenceRate": "Recurrence Rate",
+    "metrics": {
+      "failures": "Failures",
+      "rootCauseRatePercent": "Root Cause Rate (%)",
+      "recurrenceRatePercent": "Recurrence Rate (%)"
+    }
+  },
+  "failurePatterns": {
+    "title": "Failure Patterns",
+    "failureCount": "{{count}} failure",
+    "failureCount_plural": "{{count}} failures",
+    "loading": "Loading failure analysis...",
+    "noData": "No failure data recorded yet",
+    "noDataHint": "Failure analysis will appear here after QA iterations",
+    "totalFailures": "Total Failures",
+    "rootCauseRate": "Root Cause Rate",
+    "patternDetection": "Pattern Detection",
+    "recurrenceRate": "Recurrence Rate",
+    "commonCategories": "Common Failure Categories"
   },
   "patternReview": {
     "title": "Learned Patterns",

@@ -31,6 +31,9 @@ from linear_updater import (
     linear_subtask_completed,
     linear_subtask_failed,
 )
+from plugins.base import PluginType
+from plugins.registry import PluginRegistry
+from plugins.sdk.agent import AgentContext
 from progress import (
     count_subtasks_detailed,
     is_build_complete,
@@ -99,6 +102,7 @@ class ConversationRound:
         phase: Execution phase (planning, coding, validation)
         input_tokens: Number of input tokens used
         output_tokens: Number of output tokens used
+        model: The AI model used for this round (e.g., "claude-sonnet-4-5-20250929")
     """
 
     def __init__(
@@ -107,6 +111,7 @@ class ConversationRound:
         user_message: str,
         timestamp: datetime | None = None,
         phase: str = "coding",
+        model: str = "",
     ):
         self.round_number = round_number
         self.timestamp = timestamp or datetime.now()
@@ -117,6 +122,7 @@ class ConversationRound:
         self.phase = phase
         self.input_tokens = 0
         self.output_tokens = 0
+        self.model = model
 
     def add_text(self, text: str) -> None:
         """Add text to assistant response."""
@@ -130,9 +136,8 @@ class ConversationRound:
         if "file_path" in tool_input:
             self.code_references.add(tool_input["file_path"])
         elif "path" in tool_input:
-            self.code_references.add(tool_input["path"])
-        elif "pattern" in tool_input and "path" in tool_input:
-            # Grep/Glob operations
+            # Covers both direct path access and Grep/Glob operations
+            # (which also have a "pattern" key alongside "path")
             self.code_references.add(tool_input["path"])
 
     def set_usage(self, input_tokens: int, output_tokens: int) -> None:
@@ -152,6 +157,7 @@ class ConversationRound:
             "code_references": list(self.code_references),
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
+            "model": self.model,
         }
 
     @classmethod
@@ -162,6 +168,7 @@ class ConversationRound:
             user_message=data["user_message"],
             timestamp=datetime.fromisoformat(data["timestamp"]),
             phase=data.get("phase", "coding"),
+            model=data.get("model", ""),
         )
         round_obj.assistant_response = data["assistant_response"]
         round_obj.tool_calls = data.get("tool_calls", [])
@@ -188,11 +195,16 @@ class ConversationHistory:
         self.session_start = datetime.now()
         self.session_id = f"{subtask_id}_{self.session_start.strftime('%Y%m%d_%H%M%S')}"
 
-    def add_round(self, user_message: str, phase: str = "coding") -> ConversationRound:
+    def add_round(
+        self, user_message: str, phase: str = "coding", model: str = ""
+    ) -> ConversationRound:
         """Start a new conversation round."""
         round_number = len(self.rounds) + 1
         round_obj = ConversationRound(
-            round_number=round_number, user_message=user_message, phase=phase
+            round_number=round_number,
+            user_message=user_message,
+            phase=phase,
+            model=model,
         )
         self.rounds.append(round_obj)
         return round_obj
@@ -867,6 +879,7 @@ async def run_agent_session(
         phase: Current execution phase for logging
         conversation_history: Optional existing history for resuming sessions
         subtask_id: Optional subtask ID for session tracking
+        model: The AI model being used (e.g., "claude-sonnet-4-5-20250929")
 
     Returns:
         (status, response_text, usage_metadata, decision_tracker) where:
@@ -885,6 +898,60 @@ async def run_agent_session(
         prompt_preview=message[:200] + "..." if len(message) > 200 else message,
     )
     print("Sending prompt to Claude Agent SDK...\n")
+
+    # Derive project_dir from spec_dir
+    # Spec dir is typically: <project>/.auto-claude/specs/<spec-name>/
+    # So project_dir is: spec_dir.parent.parent
+    project_dir = spec_dir.parent.parent
+
+    # Initialize plugins - get enabled agent plugins from registry
+    enabled_agent_plugins = []
+    try:
+        registry = PluginRegistry.get_instance()
+        if registry.is_plugin_loaded("hello-world-agent"):
+            # Registry is initialized, get enabled agent plugins
+            enabled_agent_plugins = registry.list_plugins(
+                plugin_type=PluginType.AGENT, enabled_only=True
+            )
+            debug(
+                "session",
+                f"Found {len(enabled_agent_plugins)} enabled agent plugin(s)",
+            )
+    except Exception as e:
+        # Plugin system not available or not initialized
+        debug_detailed("session", f"Plugin system not available: {e}")
+        enabled_agent_plugins = []
+
+    # Create agent context for plugin hooks
+    session_id = f"{phase.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    agent_context = AgentContext(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        session_id=session_id,
+        client=client,
+        phase=phase.value,
+        metadata={"verbose": verbose},
+    )
+
+    # Call before_session hooks on enabled agent plugins
+    for plugin in enabled_agent_plugins:
+        try:
+            if hasattr(plugin, "before_session"):
+                plugin.before_session(agent_context)
+                debug(
+                    "session",
+                    f"Called before_session hook for plugin: {plugin.name}",
+                )
+        except Exception as e:
+            logger.warning(
+                f"before_session hook failed for plugin {plugin.name}: {e}",
+                exc_info=True,
+            )
+            debug_error(
+                "session",
+                f"before_session hook failed for plugin: {plugin.name}",
+                error=str(e),
+            )
 
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
@@ -920,7 +987,7 @@ async def run_agent_session(
         )
 
     current_round = conversation_history.add_round(
-        user_message=message, phase=phase.value
+        user_message=message, phase=phase.value, model=""
     )
     debug(
         "session", "Created conversation round", round_number=current_round.round_number
@@ -967,6 +1034,17 @@ async def run_agent_session(
                 f"Received message #{message_count}",
                 msg_type=msg_type,
             )
+
+            # Call on_message hook for agent plugins (for monitoring/analytics)
+            for plugin in enabled_agent_plugins:
+                try:
+                    if hasattr(plugin, "on_message"):
+                        plugin.on_message(agent_context, msg)
+                except Exception as e:
+                    # Don't let plugin errors break the session
+                    logger.debug(
+                        f"on_message hook failed for plugin {plugin.name}: {e}"
+                    )
 
             # Session bounds safety check
             if SessionBounds.check(current_round.round_number, message_count):
@@ -1277,6 +1355,22 @@ async def run_agent_session(
                 tool_count=tool_count,
                 response_length=len(response_text),
             )
+
+            # Call after_session hooks (success case)
+            for plugin in enabled_agent_plugins:
+                try:
+                    if hasattr(plugin, "after_session"):
+                        plugin.after_session(agent_context, success=True)
+                        debug(
+                            "session",
+                            f"Called after_session hook for plugin: {plugin.name}",
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"after_session hook failed for plugin {plugin.name}: {e}",
+                        exc_info=True,
+                    )
+
             return "complete", response_text, usage_metadata, decision_tracker
 
         debug_success(
@@ -1286,6 +1380,22 @@ async def run_agent_session(
             tool_count=tool_count,
             response_length=len(response_text),
         )
+
+        # Call after_session hooks (success case)
+        for plugin in enabled_agent_plugins:
+            try:
+                if hasattr(plugin, "after_session"):
+                    plugin.after_session(agent_context, success=True)
+                    debug(
+                        "session",
+                        f"Called after_session hook for plugin: {plugin.name}",
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"after_session hook failed for plugin {plugin.name}: {e}",
+                    exc_info=True,
+                )
+
         return "continue", response_text, usage_metadata, decision_tracker
 
     except Exception as e:
@@ -1313,6 +1423,21 @@ async def run_agent_session(
             task_logger.log_error(
                 f"[{classified.category.value.upper()}] {error_msg}", phase
             )
+
+        # Call after_session hooks (error case)
+        for plugin in enabled_agent_plugins:
+            try:
+                if hasattr(plugin, "after_session"):
+                    plugin.after_session(agent_context, success=False)
+                    debug(
+                        "session",
+                        f"Called after_session hook for plugin: {plugin.name}",
+                    )
+            except Exception as hook_error:
+                logger.warning(
+                    f"after_session hook failed for plugin {plugin.name}: {hook_error}",
+                    exc_info=True,
+                )
 
         # Save conversation history even on error for debugging
         try:

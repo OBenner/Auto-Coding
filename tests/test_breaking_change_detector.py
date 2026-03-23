@@ -8,19 +8,20 @@ to detect breaking API contract violations.
 """
 
 import json
+
+# Add apps/backend to path for imports
+import sys
 from pathlib import Path
 
 import pytest
 
-# Add apps/backend to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from analysis.breaking_change_detector import (
-    BreakingChange,
-    BreakingChangeResult,
     ApiElement,
+    BreakingChange,
     BreakingChangeDetector,
+    BreakingChangeResult,
     detect_breaking_changes,
     has_breaking_changes,
 )
@@ -96,13 +97,13 @@ class TestBreakingChangeDetector:
 
     def test_extract_api_elements_from_simple_function(self):
         """Test extracting API elements from simple function."""
-        code = '''
+        code = """
 def public_func():
     pass
 
 def _private_func():
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         api_elements = detector._extract_api_elements(code)
 
@@ -113,10 +114,10 @@ def _private_func():
 
     def test_extract_api_elements_from_function_with_params(self):
         """Test extracting API elements from function with parameters."""
-        code = '''
+        code = """
 def process_data(data: str, count: int = 10) -> str:
     return data * count
-'''
+"""
         detector = BreakingChangeDetector()
         api_elements = detector._extract_api_elements(code)
 
@@ -159,10 +160,10 @@ class _PrivateClass:
 
     def test_extract_api_elements_from_async_function(self):
         """Test extracting async function."""
-        code = '''
+        code = """
 async def async_func(param: int) -> str:
     return str(param)
-'''
+"""
         detector = BreakingChangeDetector()
         api_elements = detector._extract_api_elements(code)
 
@@ -182,14 +183,14 @@ async def async_func(param: int) -> str:
 
     def test_analyze_file_change_with_no_changes(self):
         """Test analyzing file with no changes."""
-        old_code = '''
+        old_code = """
 def func():
     pass
-'''
-        new_code = '''
+"""
+        new_code = """
 def func():
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         changes = detector.analyze_file_change(old_code, new_code, "test.py")
 
@@ -197,10 +198,10 @@ def func():
 
     def test_analyze_file_change_with_removed_function(self):
         """Test detecting removed function."""
-        old_code = '''
+        old_code = """
 def public_func():
     pass
-'''
+"""
         new_code = ""
 
         detector = BreakingChangeDetector()
@@ -213,14 +214,14 @@ def public_func():
 
     def test_analyze_file_change_with_parameter_change(self):
         """Test detecting parameter changes."""
-        old_code = '''
+        old_code = """
 def func(a, b):
     pass
-'''
-        new_code = '''
+"""
+        new_code = """
 def func(a, b, c):
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         changes = detector.analyze_file_change(old_code, new_code, "test.py")
 
@@ -229,14 +230,14 @@ def func(a, b, c):
 
     def test_analyze_file_change_with_removed_parameter(self):
         """Test detecting removed parameters (critical)."""
-        old_code = '''
+        old_code = """
 def func(a, b, c):
     pass
-'''
-        new_code = '''
+"""
+        new_code = """
 def func(a, b):
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         changes = detector.analyze_file_change(old_code, new_code, "test.py")
 
@@ -248,14 +249,14 @@ def func(a, b):
 
     def test_analyze_file_change_with_return_type_change(self):
         """Test detecting return type changes."""
-        old_code = '''
+        old_code = """
 def func() -> int:
     return 1
-'''
-        new_code = '''
+"""
+        new_code = """
 def func() -> str:
     return "1"
-'''
+"""
         detector = BreakingChangeDetector()
         changes = detector.analyze_file_change(old_code, new_code, "test.py")
 
@@ -266,14 +267,14 @@ def func() -> str:
 
     def test_analyze_file_change_with_async_sync_change(self):
         """Test detecting async/sync changes."""
-        old_code = '''
+        old_code = """
 def func():
     pass
-'''
-        new_code = '''
+"""
+        new_code = """
 async def func():
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         changes = detector.analyze_file_change(old_code, new_code, "test.py")
 
@@ -284,33 +285,35 @@ async def func():
 
     def test_analyze_file_change_with_added_optional_parameter(self):
         """Test adding optional parameter (lower severity)."""
-        old_code = '''
+        old_code = """
 def func(a):
     pass
-'''
-        new_code = '''
+"""
+        new_code = """
 def func(a, b=10):
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         changes = detector.analyze_file_change(old_code, new_code, "test.py")
 
         # Adding optional param should be medium severity
         if len(changes) > 0:
-            signature_changes = [c for c in changes if c.change_type == "signature_change"]
+            signature_changes = [
+                c for c in changes if c.change_type == "signature_change"
+            ]
             if len(signature_changes) > 0:
                 assert signature_changes[0].severity in ["medium", "high"]
 
     def test_analyze_file_change_with_added_required_parameter(self):
         """Test adding required parameter (high severity)."""
-        old_code = '''
+        old_code = """
 def func(a):
     pass
-'''
-        new_code = '''
+"""
+        new_code = """
 def func(a, b):
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         changes = detector.analyze_file_change(old_code, new_code, "test.py")
 
@@ -322,12 +325,8 @@ def func(a, b):
 
     def test_analyze_with_file_dict_mode(self):
         """Test analyze using file dict mode."""
-        old_files = {
-            "module.py": "def func(): pass"
-        }
-        new_files = {
-            "module.py": "def func(param): pass"
-        }
+        old_files = {"module.py": "def func(): pass"}
+        new_files = {"module.py": "def func(param): pass"}
 
         detector = BreakingChangeDetector()
         result = detector.analyze(old_files=old_files, new_files=new_files)
@@ -338,9 +337,7 @@ def func(a, b):
 
     def test_analyze_with_removed_file(self):
         """Test detecting removed file."""
-        old_files = {
-            "module.py": "def public_func(): pass"
-        }
+        old_files = {"module.py": "def public_func(): pass"}
         new_files = {}
 
         detector = BreakingChangeDetector()
@@ -348,16 +345,18 @@ def func(a, b):
 
         # Should detect removed file with public API
         assert len(result.breaking_changes) >= 1
-        removed = [c for c in result.breaking_changes if c.change_type == "removed_file"]
+        removed = [
+            c for c in result.breaking_changes if c.change_type == "removed_file"
+        ]
         assert len(removed) > 0
         assert removed[0].severity == "critical"
 
     def test_analyze_with_removed_class(self):
         """Test detecting removed class."""
-        old_code = '''
+        old_code = """
 class PublicClass:
     pass
-'''
+"""
         new_code = ""
 
         detector = BreakingChangeDetector()
@@ -618,12 +617,12 @@ class Child(Parent, Mixin):
 
     def test_function_with_decorators(self):
         """Test extracting function with decorators."""
-        code = '''
+        code = """
 @decorator
 @another_decorator
 def decorated_func():
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         api_elements = detector._extract_api_elements(code)
 
@@ -632,10 +631,10 @@ def decorated_func():
 
     def test_keyword_only_arguments(self):
         """Test extracting function with keyword-only arguments."""
-        code = '''
+        code = """
 def func(a, *, b, c=10):
     pass
-'''
+"""
         detector = BreakingChangeDetector()
         api_elements = detector._extract_api_elements(code)
 

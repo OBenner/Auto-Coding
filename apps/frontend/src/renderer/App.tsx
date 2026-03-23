@@ -38,6 +38,7 @@ import { Roadmap } from './components/Roadmap';
 import { Context } from './components/Context';
 import { Ideation } from './components/Ideation';
 import { Insights } from './components/Insights';
+import { Analytics } from './components/Analytics';
 import { GitHubIssues } from './components/GitHubIssues';
 import { GitLabIssues } from './components/GitLabIssues';
 import { GitHubPRs } from './components/github-prs';
@@ -48,7 +49,10 @@ import { QueueView } from './components/Scheduler/QueueView';
 import { Worktrees } from './components/Worktrees';
 import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
+import { WebhooksPage } from './components/WebhooksPage';
+import { PatternsPage } from './pages/PatternsPage';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
+import { ModelUsageDashboard } from './components/model-usage/ModelUsageDashboard';
 import { MergeAnalyticsDashboard } from './components/merge-analytics/MergeAnalyticsDashboard';
 import { FeedbackDashboard } from './components/FeedbackDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -1036,11 +1040,17 @@ export function App() {
                 {activeView === 'context' && (activeProjectId || selectedProjectId) && (
                   <Context projectId={activeProjectId || selectedProjectId!} />
                 )}
+                {activeView === 'webhooks' && (activeProjectId || selectedProjectId) && (
+                  <WebhooksPage projectId={activeProjectId || selectedProjectId!} />
+                )}
                 {activeView === 'ideation' && (activeProjectId || selectedProjectId) && (
                   <Ideation projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
                 )}
                 {activeView === 'insights' && (activeProjectId || selectedProjectId) && (
                   <Insights projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
+                  <Analytics projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'github-issues' && (activeProjectId || selectedProjectId) && (
                   <GitHubIssues
@@ -1087,6 +1097,9 @@ export function App() {
                 {activeView === 'worktrees' && (activeProjectId || selectedProjectId) && (
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
+                {activeView === 'patterns' && (activeProjectId || selectedProjectId) && (
+                  <PatternsPage projectId={activeProjectId || selectedProjectId!} />
+                )}
                 {activeView === 'agent-tools' && <AgentTools />}
                 {activeView === 'sessions' && (
                   <SessionList
@@ -1094,8 +1107,11 @@ export function App() {
                     specId={sessionFilterSpecId}
                   />
                 )}
-                {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
+                {activeView === 'productivity' && (activeProjectId || selectedProjectId) && (
                   <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'model-usage' && (activeProjectId || selectedProjectId) && (
+                  <ModelUsageDashboard projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'merge-analytics' && (activeProjectId || selectedProjectId) && (
                   <MergeAnalyticsDashboard projectId={activeProjectId || selectedProjectId!} />

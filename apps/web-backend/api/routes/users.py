@@ -21,8 +21,38 @@ from api.models.user import (
 
 logger = logging.getLogger(__name__)
 
+# OAuth2 standard token type constant (not a credential)
+_BEARER = "bearer"
+
 # Create router for user endpoints
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+
+def _build_token_response(user: "User") -> "TokenResponse":
+    """Create an access token and wrap it with user info in a TokenResponse.
+
+    Encapsulates the repeated pattern of: create token → build UserResponse →
+    return TokenResponse that appears in both register and login handlers.
+
+    Args:
+        user: The authenticated or newly created User ORM object.
+
+    Returns:
+        TokenResponse containing the JWT access token and public user info.
+    """
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
+    user_response = UserResponse(
+        id=user.id,
+        email=user.email,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        created_at=user.created_at,
+    )
+    return TokenResponse(
+        access_token=access_token,
+        token_type=_BEARER,
+        user=user_response,
+    )
 
 
 @router.post(
@@ -73,25 +103,9 @@ async def register_user(
     db.commit()
     db.refresh(user)
 
-    logger.info("New user registered: %s", user.email)
+    logger.info("New user registered: id=%s", user.id)
 
-    # Create access token
-    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
-
-    # Create user response
-    user_response = UserResponse(
-        id=user.id,
-        email=user.email,
-        is_active=user.is_active,
-        is_verified=user.is_verified,
-        created_at=user.created_at,
-    )
-
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",  # nosec B106 - OAuth2 standard token type, not a password
-        user=user_response,
-    )
+    return _build_token_response(user)
 
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
@@ -143,20 +157,4 @@ async def login_user(
 
     logger.info("User logged in: %s", user.email)
 
-    # Create access token
-    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
-
-    # Create user response
-    user_response = UserResponse(
-        id=user.id,
-        email=user.email,
-        is_active=user.is_active,
-        is_verified=user.is_verified,
-        created_at=user.created_at,
-    )
-
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",  # nosec B106 - OAuth2 standard token type, not a password
-        user=user_response,
-    )
+    return _build_token_response(user)

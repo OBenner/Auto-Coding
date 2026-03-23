@@ -12,15 +12,19 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from .config import settings
 
 # Create SQLAlchemy engine with optimized connection pool settings
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,  # Enable connection health checks
-    pool_size=settings.DB_POOL_SIZE,  # Maximum number of connections in the pool
-    max_overflow=settings.DB_MAX_OVERFLOW,  # Maximum overflow connections beyond pool_size
-    pool_timeout=settings.DB_POOL_TIMEOUT,  # Seconds to wait before giving up on getting a connection
-    pool_recycle=settings.DB_POOL_RECYCLE,  # Seconds after which a connection is automatically recycled
-    echo=settings.DB_ECHO,  # Log SQL queries (useful for debugging, disable in production)
-)
+# SQLite doesn't support pool_size/max_overflow/pool_timeout/pool_recycle
+_engine_kwargs: dict = {"pool_pre_ping": True}
+if settings.DATABASE_URL.startswith("sqlite"):
+    # SQLite requires check_same_thread=False for use across multiple threads
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    _engine_kwargs["pool_size"] = settings.DB_POOL_SIZE
+    _engine_kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
+    _engine_kwargs["pool_timeout"] = settings.DB_POOL_TIMEOUT
+    _engine_kwargs["pool_recycle"] = settings.DB_POOL_RECYCLE
+    _engine_kwargs["echo"] = settings.DB_ECHO
+
+engine = create_engine(settings.DATABASE_URL, **_engine_kwargs)
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -620,8 +620,11 @@ class TestImportOrderPreventsEarlyFailure:
             lines[validate_env_lineno - 1 : validate_env_end_lineno]
         )
         assert (
-            "from integrations.graphiti.config import get_graphiti_status" in validate_env_block
-        ), "integrations.graphiti.config should be imported inside validate_environment()"
+            "from integrations.graphiti.config import get_graphiti_status"
+            in validate_env_block
+        ), (
+            "integrations.graphiti.config should be imported inside validate_environment()"
+        )
 
     def test_entry_points_validate_before_cli_imports(self):
         """

@@ -22,6 +22,9 @@ from agents.memory_manager import get_graphiti_context, save_session_memory
 from agents.session import save_token_stats
 from analysis.coverage_analyzer import CoverageAnalyzer, parse_coverage_json
 from claude_agent_sdk import ClaudeSDKClient
+from core.providers import create_engine_provider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from prompts_pkg import get_qa_reviewer_prompt
 from security.tool_input_validator import get_safe_tool_input
@@ -32,6 +35,16 @@ from task_logger import (
     get_task_logger,
 )
 from ui import print_status
+
+# Import plugin system for agent lifecycle hooks
+try:
+    from plugins.base import PluginType
+    from plugins.registry import PluginRegistry
+    from plugins.sdk.agent import AgentContext
+
+    PLUGINS_AVAILABLE = True
+except ImportError:
+    PLUGINS_AVAILABLE = False
 
 from .coverage_validator import (
     format_coverage_report,
@@ -693,6 +706,43 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
             except Exception as e:
                 logger.warning(f"Failed to persist validation phase token stats: {e}")
 
+        # Call after_session hook for enabled agent plugins
+        if PLUGINS_AVAILABLE:
+            try:
+                registry = PluginRegistry.get_instance()
+                agent_plugins = registry.list_plugins(
+                    plugin_type=PluginType.AGENT, enabled_only=True
+                )
+
+                if agent_plugins:
+                    # Create agent context for plugins
+                    agent_context = AgentContext(
+                        project_dir=project_dir,
+                        spec_dir=spec_dir,
+                        session_id=f"qa_reviewer_{qa_session}",
+                        client=client,
+                        phase="validation",
+                        metadata={"qa_session": qa_session},
+                    )
+
+                    # Determine session success (will be updated after status check)
+                    # For now, assume success - will be recalculated after status check
+                    session_success = True
+
+                    # Call after_session for each enabled agent plugin
+                    for plugin in agent_plugins:
+                        try:
+                            plugin.after_session(agent_context, success=session_success)
+                            logger.debug(
+                                f"Called after_session for plugin: {plugin.name}"
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin {plugin.name} after_session hook failed: {e}"
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to call after_session hooks: {e}")
+
         # Check the QA result from implementation_plan.json
         status = get_qa_signoff_status(spec_dir)
         debug(
@@ -792,4 +842,151 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
         print(f"Error during QA session: {e}")
         if task_logger:
             task_logger.log_error(f"QA session error: {e}", LogPhase.VALIDATION)
+
+        # Call after_session hook for enabled agent plugins (error case)
+        if PLUGINS_AVAILABLE:
+            try:
+                registry = PluginRegistry.get_instance()
+                agent_plugins = registry.list_plugins(
+                    plugin_type=PluginType.AGENT, enabled_only=True
+                )
+
+                if agent_plugins:
+                    # Create agent context for plugins
+                    agent_context = AgentContext(
+                        project_dir=project_dir,
+                        spec_dir=spec_dir,
+                        session_id=f"qa_reviewer_{qa_session}",
+                        client=client,
+                        phase="validation",
+                        metadata={"qa_session": qa_session, "error": str(e)},
+                    )
+
+                    # Call after_session for each enabled agent plugin (error case)
+                    for plugin in agent_plugins:
+                        try:
+                            plugin.after_session(agent_context, success=False)
+                            logger.debug(
+                                f"Called after_session for plugin: {plugin.name}"
+                            )
+                        except Exception as hook_error:
+                            logger.warning(
+                                f"Plugin {plugin.name} after_session hook failed: {hook_error}"
+                            )
+            except Exception as hook_error:
+                logger.warning(f"Failed to call after_session hooks: {hook_error}")
+
         return "error", str(e)
+
+
+# =============================================================================
+# QA REVIEWER FACTORY FUNCTION (Provider Pattern)
+# =============================================================================
+
+
+def create_qa_reviewer_session(
+    project_dir: Path,
+    spec_dir: Path,
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
+):
+    """
+    Create a QA reviewer agent session using the configured AI engine provider.
+
+    This function is used by the QA validation loop to create reviewer sessions
+    with the appropriate AI backend (Claude, LiteLLM, or OpenRouter).
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        ProviderError: If provider creation or session creation fails
+    """
+    # Create provider from environment configuration (with per-agent overrides)
+    config = ProviderConfig.from_env(agent_type="qa_reviewer")
+    provider = create_engine_provider(config)
+
+    # For Claude provider, pass provider-specific kwargs
+    if provider.name == "claude":
+        session = provider.create_session(
+            config=SessionConfig(
+                name="qa-reviewer-session",
+                model=model,
+            ),
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="qa_reviewer",
+            max_thinking_tokens=max_thinking_tokens,
+        )
+    else:
+        session = provider.create_session(
+            SessionConfig(
+                name="qa-reviewer-session",
+                model=model,
+            )
+        )
+
+    return session
+
+
+async def run_qa_reviewer(
+    project_dir: Path,
+    spec_dir: Path,
+    qa_session: int,
+    max_iterations: int,
+    model: str | None = None,
+    verbose: bool = False,
+    previous_error: dict | None = None,
+    max_thinking_tokens: int | None = None,
+) -> tuple[str, str]:
+    """
+    Run a QA reviewer session using the configured AI engine provider.
+
+    This is the main entry point for running QA reviews with provider abstraction.
+    Creates a session using the factory pattern and delegates to run_qa_agent_session.
+
+    Args:
+        project_dir: Project root directory
+        spec_dir: Spec directory
+        qa_session: QA iteration number
+        max_iterations: Maximum number of QA iterations
+        model: Model to use (overrides provider config)
+        verbose: Whether to show detailed output
+        previous_error: Error context from previous iteration for self-correction
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        (status, response_text) where status is:
+        - "approved" if QA approves
+        - "rejected" if QA finds issues
+        - "error" if an error occurred
+    """
+    # Create session using provider factory
+    session = create_qa_reviewer_session(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        model=model,
+        max_thinking_tokens=max_thinking_tokens,
+    )
+
+    # Get the underlying client from the session
+    # For Claude provider, this is a ClaudeSDKClient
+    client = session.client
+
+    # Use async context manager for proper cleanup
+    async with client:
+        return await run_qa_agent_session(
+            client=client,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            qa_session=qa_session,
+            max_iterations=max_iterations,
+            verbose=verbose,
+            previous_error=previous_error,
+        )

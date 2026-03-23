@@ -4,6 +4,7 @@
   "author": "Auto-Coding Team",
   "description": "Example UI plugin that adds a custom dashboard widget showing project statistics, demonstrating React component integration and IPC communication",
   "plugin_type": "ui",
+  "auto_claude_version": ">=1.0.0",
   "required_permissions": [
     "read_files"
   ],

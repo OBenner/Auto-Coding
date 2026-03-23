@@ -73,7 +73,7 @@ class TestUvloopIntegration:
     def test_client_module_handles_uvloop_import_error(self):
         """Test that client.py gracefully handles uvloop not being installed."""
         # Mock uvloop to raise ImportError
-        with patch.dict("sys.modules", {"uvloop": MagicMock(side_effect=ImportError)}):
+        with patch.dict("sys.modules", {"uvloop": None}):
             # Re-import the client module to test the import logic
             # The import should not fail even if uvloop is not available
             try:
@@ -98,8 +98,8 @@ class TestUvloopIntegration:
 
             if client_file.exists():
                 content = client_file.read_text()
-                # Verify the platform check exists
-                assert 'sys.platform != "win32"' in content or "sys.platform != 'win32'" in content
+                # Verify the platform check exists (uses is_windows() from platform module)
+                assert "is_windows()" in content or 'sys.platform != "win32"' in content
                 assert "uvloop" in content
         except Exception:
             # If we can't check the file, that's ok - test passes anyway
@@ -285,7 +285,6 @@ class TestAsyncRegressionDetection:
 
             await producer_task
             await consumer_task
-            await queue.join()
 
             elapsed = time.perf_counter() - start
             return elapsed

@@ -10,14 +10,22 @@ Memory Integration:
 """
 
 import asyncio
+import logging
 import time
 from pathlib import Path
 
 # Memory integration for cross-session learning
-from agents.memory_manager import get_graphiti_context, save_session_memory
+from agents.memory_manager import (
+    get_failure_patterns,
+    get_graphiti_context,
+    save_session_memory,
+)
 from claude_agent_sdk import ClaudeSDKClient
 from core.client import create_client
 from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.providers import create_engine_provider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from phase_config import resolve_model_id
 from security.tool_input_validator import get_safe_tool_input
@@ -28,9 +36,21 @@ from task_logger import (
     get_task_logger,
 )
 
+# Import plugin system for agent lifecycle hooks
+try:
+    from plugins.base import PluginType
+    from plugins.registry import PluginRegistry
+    from plugins.sdk.agent import AgentContext
+
+    PLUGINS_AVAILABLE = True
+except ImportError:
+    PLUGINS_AVAILABLE = False
+
 # Configuration
 QA_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 MAX_FIXER_ITERATIONS = 10  # Max recovery attempts for a single QA fix session
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -161,6 +181,22 @@ async def run_qa_fixer_session(
         print("✓ Memory context loaded for QA fixer")
         debug_success("qa_fixer", "Graphiti memory context loaded for fixer")
 
+    # Retrieve failure patterns from past QA rejections and errors
+    # This provides root cause analyses from similar failures
+    fix_request_content = fix_request_file.read_text(encoding="utf-8")
+    failure_patterns = await get_failure_patterns(
+        spec_dir,
+        project_dir,
+        query=fix_request_content[:500],  # Use first 500 chars of fix request as query
+        failure_types=["qa_rejection", "build_error", "test_failure"],
+        num_results=5,
+        min_score=0.5,
+    )
+    if failure_patterns:
+        prompt += "\n\n" + failure_patterns
+        print("✓ Failure patterns loaded for QA fixer")
+        debug_success("qa_fixer", "Failure patterns loaded for fixer")
+
     # Add session context - use full path so agent can find files
     prompt += f"\n\n---\n\n**Fix Session**: {fix_session}\n"
     prompt += f"**Spec Directory**: {spec_dir}\n"
@@ -172,7 +208,7 @@ async def run_qa_fixer_session(
     base_prompt = prompt
 
     # Check for circular fixes (same fix attempted multiple times)
-    fix_request_content = fix_request_file.read_text(encoding="utf-8")
+    # Note: fix_request_content already loaded above for failure pattern analysis
     if recovery_manager.is_circular_fix(fixer_subtask_id, fix_request_content):
         attempt_count = recovery_manager.get_attempt_count(fixer_subtask_id)
         debug_error(
@@ -449,6 +485,48 @@ async def run_qa_fixer_session(
                 "gotchas_encountered": [],
             }
 
+            # Call after_session hook for enabled agent plugins
+            if PLUGINS_AVAILABLE:
+                try:
+                    registry = PluginRegistry.get_instance()
+                    agent_plugins = registry.list_plugins(
+                        plugin_type=PluginType.AGENT, enabled_only=True
+                    )
+
+                    if agent_plugins:
+                        # Create agent context for plugins
+                        agent_context = AgentContext(
+                            project_dir=project_dir,
+                            spec_dir=spec_dir,
+                            session_id=f"qa_fixer_{fix_session}",
+                            client=client,
+                            phase="validation",
+                            metadata={
+                                "fix_session": fix_session,
+                                "iteration": fixer_iteration,
+                            },
+                        )
+
+                        # Determine session success (will be updated after validation)
+                        # For now, assume success based on fixes_ready
+                        session_success = fixes_ready
+
+                        # Call after_session for each enabled agent plugin
+                        for plugin in agent_plugins:
+                            try:
+                                plugin.after_session(
+                                    agent_context, success=session_success
+                                )
+                                logger.debug(
+                                    f"Called after_session for plugin: {plugin.name}"
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    f"Plugin {plugin.name} after_session hook failed: {e}"
+                                )
+                except Exception as e:
+                    logger.warning(f"Failed to call after_session hooks: {e}")
+
             # Robust validation: check both status and ready flag
             if fixes_ready:
                 # Calculate iteration duration
@@ -534,6 +612,43 @@ async def run_qa_fixer_session(
             print(f"  Duration: {iteration_duration:.1f}s\n")
             if task_logger:
                 task_logger.log_error(f"QA fixer error: {e}", LogPhase.VALIDATION)
+
+            # Call after_session hook for enabled agent plugins (error case)
+            if PLUGINS_AVAILABLE:
+                try:
+                    registry = PluginRegistry.get_instance()
+                    agent_plugins = registry.list_plugins(
+                        plugin_type=PluginType.AGENT, enabled_only=True
+                    )
+
+                    if agent_plugins:
+                        # Create agent context for plugins
+                        agent_context = AgentContext(
+                            project_dir=project_dir,
+                            spec_dir=spec_dir,
+                            session_id=f"qa_fixer_{fix_session}",
+                            client=client,
+                            phase="validation",
+                            metadata={
+                                "fix_session": fix_session,
+                                "iteration": fixer_iteration,
+                                "error": str(e),
+                            },
+                        )
+
+                        # Call after_session for each enabled agent plugin (error case)
+                        for plugin in agent_plugins:
+                            try:
+                                plugin.after_session(agent_context, success=False)
+                                logger.debug(
+                                    f"Called after_session for plugin: {plugin.name}"
+                                )
+                            except Exception as hook_error:
+                                logger.warning(
+                                    f"Plugin {plugin.name} after_session hook failed: {hook_error}"
+                                )
+                except Exception as hook_error:
+                    logger.warning(f"Failed to call after_session hooks: {hook_error}")
 
             # Record failed iteration
             error_issue = {
@@ -691,3 +806,86 @@ async def run_qa_fixer_session(
         error=final_error,
     )
     return "stuck", f"Fixer stuck after exhausting all recovery attempts: {final_error}"
+
+
+# =============================================================================
+# QA FIXER FACTORY FUNCTION (Provider Pattern)
+# =============================================================================
+
+
+def create_qa_fixer_session(
+    project_dir: Path,
+    spec_dir: Path,
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
+):
+    """
+    Create a QA fixer agent session using the configured AI engine provider.
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        ProviderError: If provider creation or session creation fails
+    """
+    config = ProviderConfig.from_env(agent_type="qa_fixer")
+    provider = create_engine_provider(config)
+
+    if provider.name == "claude":
+        session = provider.create_session(
+            config=SessionConfig(
+                name="qa-fixer-session",
+                model=model,
+            ),
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="qa_fixer",
+            max_thinking_tokens=max_thinking_tokens,
+        )
+    else:
+        session = provider.create_session(
+            SessionConfig(
+                name="qa-fixer-session",
+                model=model,
+            )
+        )
+
+    return session
+
+
+async def run_qa_fixer(
+    project_dir: Path,
+    spec_dir: Path,
+    fix_session: int,
+    model: str | None = None,
+    verbose: bool = False,
+    max_thinking_tokens: int | None = None,
+) -> tuple[str, str]:
+    """
+    Run a QA fixer session using the configured AI engine provider.
+
+    Creates a session using the factory pattern and delegates to run_qa_fixer_session.
+    """
+    session = create_qa_fixer_session(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        model=model,
+        max_thinking_tokens=max_thinking_tokens,
+    )
+
+    client = session.client
+
+    async with client:
+        return await run_qa_fixer_session(
+            client=client,
+            spec_dir=spec_dir,
+            fix_session=fix_session,
+            verbose=verbose,
+            project_dir=project_dir,
+        )

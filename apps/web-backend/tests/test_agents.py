@@ -119,7 +119,9 @@ class TestAgentRoutes:
         data = response.json()
         assert data["status"] == "ok"
         assert data["endpoint"] == "agents"
-        assert "project_dir" in data
+        assert "project_dir" not in data, (
+            "Health endpoint must not expose filesystem paths"
+        )
 
     @patch("api.routes.agents.start_agent_task")
     @patch("api.routes.agents.cleanup_completed_tasks")
@@ -258,12 +260,12 @@ class TestAgentRoutes:
 
         response = test_client.post("/api/agents/cancel/nonexistent:task")
 
-        assert response.status_code == 200
+        assert response.status_code == 404
         data = response.json()
-        assert data["cancelled"] is False
+        assert "detail" in data
         assert (
-            "not found" in data["message"].lower()
-            or "completed" in data["message"].lower()
+            "not found" in data["detail"].lower()
+            or "completed" in data["detail"].lower()
         )
 
     @patch("api.routes.agents.cancel_task")

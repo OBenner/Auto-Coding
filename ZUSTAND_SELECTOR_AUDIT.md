@@ -284,7 +284,7 @@ const { items, status } = useStore(
 | Selectors returning filtered/mapped tasks | `Task[]` (array) | Throughout | CRITICAL |
 
 **Recommended Actions:**
-- This is a HIGH PRIORITY store - tasks array is used extensively
+- This is a HIGH-PRIORITY store - tasks array is used extensively
 - All task list operations need useShallow optimization
 
 ---

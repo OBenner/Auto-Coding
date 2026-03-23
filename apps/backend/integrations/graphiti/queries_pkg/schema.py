@@ -20,8 +20,13 @@ EPISODE_TYPE_IMPORT_DEPENDENCY = "import_dependency"
 EPISODE_TYPE_CLASS_INHERITANCE = "class_inheritance"
 EPISODE_TYPE_CODE_PURPOSE = "code_purpose"
 EPISODE_TYPE_PREFERENCE_PROFILE = "preference_profile"
+EPISODE_TYPE_ERROR_PATTERN = "error_pattern"
 EPISODE_TYPE_USER_FEEDBACK = "user_feedback"
 EPISODE_TYPE_IMPROVEMENT = "improvement"
+EPISODE_TYPE_COMMENT = "comment"
+EPISODE_TYPE_APPROVAL = "approval"
+EPISODE_TYPE_NOTIFICATION = "notification"
+EPISODE_TYPE_CHANGE_HISTORY = "change_history"
 
 # Maximum results to return for context queries (avoid overwhelming agent context)
 MAX_CONTEXT_RESULTS = 10

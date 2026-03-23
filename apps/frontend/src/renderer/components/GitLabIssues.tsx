@@ -17,7 +17,7 @@ import type { GitLabIssuesProps } from "./gitlab-issues/types";
 
 export function GitLabIssues({ onOpenSettings, onNavigateToTask }: GitLabIssuesProps) {
   const { t } = useTranslation("gitlab");
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore(useShallow((state) => state.projects));
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const tasks = useTaskStore(useShallow((state) => state.tasks));

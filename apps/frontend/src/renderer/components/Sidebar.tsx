@@ -25,10 +25,14 @@ import {
   PanelLeftClose,
   Puzzle,
   BarChart3,
+  Webhook,
+  TrendingUp,
   Play,
   Calendar,
   Activity,
-  MessageSquare
+  Database,
+  MessageSquare,
+  Code
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -65,7 +69,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'webhooks' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'patterns' | 'model-usage';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -91,19 +95,23 @@ const baseNavItems: NavItem[] = [
   { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L' },
   { id: 'scheduler', labelKey: 'navigation:items.scheduler', icon: Calendar, shortcut: 'S' },
   { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C' },
+  { id: 'webhooks', labelKey: 'navigation:items.webhooks', icon: Webhook },
+  { id: 'analytics', labelKey: 'navigation:items.analytics', icon: BarChart3, shortcut: 'Y' },
+  { id: 'productivity', labelKey: 'navigation:items.productivity', icon: TrendingUp, shortcut: 'P' },
+  { id: 'patterns', labelKey: 'navigation:items.patterns', icon: Code, shortcut: 'Z' },
   { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M' },
   { id: 'plugins', labelKey: 'navigation:items.plugins', icon: Puzzle, shortcut: 'U' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
-  { id: 'analytics', labelKey: 'navigation:items.analytics', icon: Activity, shortcut: 'T' },
-  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' },
+  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: Activity, shortcut: 'T' },
   { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play },
-  { id: 'feedback', labelKey: 'navigation:items.feedback', icon: MessageSquare, shortcut: 'F' }
+  { id: 'feedback', labelKey: 'navigation:items.feedback', icon: MessageSquare, shortcut: 'F' },
+  { id: 'model-usage', labelKey: 'navigation:items.modelUsage', icon: Database, shortcut: 'O' }
 ];
 
 // GitHub nav items shown when GitHub is enabled
 const githubNavItems: NavItem[] = [
   { id: 'github-issues', labelKey: 'navigation:items.githubIssues', icon: Github, shortcut: 'G' },
-  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'P' }
+  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'H' }
 ];
 
 // GitLab nav items shown when GitLab is enabled

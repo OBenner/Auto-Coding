@@ -22,6 +22,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from analysis.analytics_utils import (
+    normalize_boundary,
+    parse_timestamp,
+)
+
 # =============================================================================
 # DATA MODELS
 # =============================================================================
@@ -207,36 +212,8 @@ class ProductivitySummary:
 # =============================================================================
 
 
-def _parse_timestamp(ts: str | None) -> datetime | None:
-    """Parse ISO timestamp string to timezone-aware UTC datetime.
-
-    Returns None for invalid or missing timestamps.
-    """
-    if not ts:
-        return None
-    try:
-        if ts.endswith("Z"):
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        else:
-            dt = datetime.fromisoformat(ts)
-
-        # Ensure timezone-aware in UTC
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        else:
-            dt = dt.astimezone(UTC)
-        return dt
-    except (ValueError, AttributeError):
-        return None
-
-
-def _normalize_boundary(dt: datetime | None) -> datetime | None:
-    """Normalize start/end boundary datetimes to timezone-aware UTC."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
+_parse_timestamp = parse_timestamp
+_normalize_boundary = normalize_boundary
 
 
 def _count_unique_sessions(plan: dict[str, Any]) -> int:
@@ -667,83 +644,23 @@ def main() -> None:
     import argparse
     import sys
 
+    from analysis.analytics_utils import add_common_cli_args, parse_date_args
+
     parser = argparse.ArgumentParser(description="Productivity Analytics Aggregator")
     parser.add_argument(
-        "--get-summary",
-        action="store_true",
-        help="Get productivity summary",
+        "--get-summary", action="store_true", help="Get productivity summary"
     )
     parser.add_argument(
-        "--get-trends",
-        action="store_true",
-        help="Get productivity trends over time",
+        "--get-trends", action="store_true", help="Get productivity trends over time"
     )
     parser.add_argument(
-        "--export",
-        action="store_true",
-        help="Export productivity data to file",
+        "--export", action="store_true", help="Export productivity data to file"
     )
-    parser.add_argument(
-        "--format",
-        choices=["json", "csv"],
-        default="json",
-        help="Export format (default: json)",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        help="Output file path (default: auto-generated in analytics dir)",
-    )
-    parser.add_argument(
-        "--start-date",
-        type=str,
-        help="Start date filter (ISO format)",
-    )
-    parser.add_argument(
-        "--end-date",
-        type=str,
-        help="End date filter (ISO format)",
-    )
-    parser.add_argument(
-        "--window-days",
-        type=int,
-        default=30,
-        help="Number of days to look back for trends (default: 30)",
-    )
-    parser.add_argument(
-        "--granularity",
-        choices=["daily", "weekly", "monthly"],
-        default="daily",
-        help="Time granularity for trends (default: daily)",
-    )
+    add_common_cli_args(parser)
 
     args = parser.parse_args()
-
-    # Determine project directory (current working directory)
     project_dir = Path.cwd()
-
-    # Parse date filters
-    start_date = None
-    end_date = None
-    if args.start_date:
-        try:
-            start_date = datetime.fromisoformat(args.start_date)
-        except ValueError:
-            print(
-                f"Error: Invalid start date format: {args.start_date}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-    if args.end_date:
-        try:
-            end_date = datetime.fromisoformat(args.end_date)
-        except ValueError:
-            print(
-                f"Error: Invalid end date format: {args.end_date}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+    start_date, end_date = parse_date_args(args)
 
     # Execute requested operation
     if args.get_summary:

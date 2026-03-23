@@ -57,12 +57,24 @@ vi.stubGlobal("WebSocket", MockWebSocket);
 
 // Mock ResizeObserver
 class MockResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { /* intentional no-op mock */ }
+	unobserve(): void { /* intentional no-op mock */ }
+	disconnect(): void { /* intentional no-op mock */ }
 }
 
 vi.stubGlobal("ResizeObserver", MockResizeObserver);
+
+// Mock IntersectionObserver
+class MockIntersectionObserver {
+	disconnect(): void { /* intentional no-op mock */ }
+	observe(): void { /* intentional no-op mock */ }
+	takeRecords(): IntersectionObserverEntry[] {
+		return [];
+	}
+	unobserve(): void { /* intentional no-op mock */ }
+}
+
+vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
 
 // Mock matchMedia
 Object.defineProperty(window, "matchMedia", {

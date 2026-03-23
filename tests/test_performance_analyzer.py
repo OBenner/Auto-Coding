@@ -8,27 +8,28 @@ issues including N+1 queries and missing indexes.
 """
 
 import json
+
+# Add apps/backend to path for imports
+import sys
 from pathlib import Path
 
 import pytest
 
-# Add apps/backend to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from analysis.performance_analyzer import (
-    PerformanceIssue,
     PerformanceAnalysisResult,
     PerformanceAnalyzer,
+    ProjectPerformanceIssue,
 )
 
 
 class TestPerformanceIssue:
-    """Test PerformanceIssue dataclass."""
+    """Test ProjectPerformanceIssue dataclass."""
 
     def test_create_issue(self):
         """Test creating a performance issue."""
-        issue = PerformanceIssue(
+        issue = ProjectPerformanceIssue(
             severity="high",
             issue_type="n_plus_one",
             title="N+1 Query Detected",
@@ -96,7 +97,7 @@ class TestPerformanceAnalyzer:
 
     def test_detect_n_plus_one_query_in_loop(self, tmp_path):
         """Test N+1 query pattern detection runs without error."""
-        code = 'for user in users:\n    posts = session.query(Post).filter(Post.user_id == user.id).all()\n'
+        code = "for user in users:\n    posts = session.query(Post).filter(Post.user_id == user.id).all()\n"
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -109,7 +110,7 @@ class TestPerformanceAnalyzer:
 
     def test_detect_orm_relationship_in_loop(self, tmp_path):
         """Test detecting ORM relationship access in loop."""
-        code = 'for user in users:\n    user_posts = user.posts.all()\n'
+        code = "for user in users:\n    user_posts = user.posts.all()\n"
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -120,10 +121,10 @@ class TestPerformanceAnalyzer:
 
     def test_detect_missing_index_on_where_clause(self, tmp_path):
         """Test detecting potential missing index on WHERE clause."""
-        code = '''
+        code = """
 query = "SELECT * FROM users WHERE email = 'test@example.com'"
 result = execute(query)
-'''
+"""
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -135,10 +136,10 @@ result = execute(query)
 
     def test_detect_order_by_without_index(self, tmp_path):
         """Test detecting ORDER BY that may need index."""
-        code = '''
+        code = """
 query = "SELECT * FROM users ORDER BY created_at"
 result = execute(query)
-'''
+"""
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -150,7 +151,7 @@ result = execute(query)
 
     def test_detect_nested_loops(self, tmp_path):
         """Test nested loop detection runs without error."""
-        code = 'for i in items:\n    for j in other_items:\n        process(i, j)\n'
+        code = "for i in items:\n    for j in other_items:\n        process(i, j)\n"
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -163,10 +164,10 @@ result = execute(query)
 
     def test_skip_checks_when_disabled(self, tmp_path):
         """Test that checks are skipped when disabled."""
-        code = '''
+        code = """
 for user in users:
     posts = session.query(Post).filter(Post.user_id == user.id).all()
-'''
+"""
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -202,7 +203,7 @@ for user in users:
 
     def test_has_critical_issues_detection(self, tmp_path):
         """Test has_critical_issues flag is set correctly."""
-        code = 'for user in users:\n    posts = session.query(Post).filter(Post.user_id == user.id).all()\n'
+        code = "for user in users:\n    posts = session.query(Post).filter(Post.user_id == user.id).all()\n"
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -214,7 +215,7 @@ for user in users:
 
     def test_should_warn_detection(self, tmp_path):
         """Test should_warn flag is set correctly."""
-        code = 'for i in items:\n    for j in other_items:\n        process(i, j)\n'
+        code = "for i in items:\n    for j in other_items:\n        process(i, j)\n"
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -246,7 +247,7 @@ for user in users:
         result = PerformanceAnalysisResult(
             files_analyzed=10,
             issues=[
-                PerformanceIssue(
+                ProjectPerformanceIssue(
                     severity="high",
                     issue_type="n_plus_one",
                     title="N+1 Query",
@@ -265,6 +266,7 @@ for user in users:
         assert "Files Analyzed: 10" in report
         assert "N+1 Query" in report
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="chmod not effective on Windows")
     def test_analyze_handles_file_read_errors_gracefully(self, tmp_path):
         """Test that file read errors are handled gracefully."""
         # Create a file but make it unreadable
@@ -285,7 +287,7 @@ for user in users:
 
     def test_django_orm_patterns(self, tmp_path):
         """Test Django ORM pattern analysis runs."""
-        code = 'for user in users:\n    posts = user.posts.filter(published=True)\n'
+        code = "for user in users:\n    posts = user.posts.filter(published=True)\n"
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -297,10 +299,10 @@ for user in users:
 
     def test_sqlalchemy_patterns(self, tmp_path):
         """Test detecting SQLAlchemy patterns."""
-        code = '''
+        code = """
 for user_id in user_ids:
     user = session.query(User).get(user_id)
-'''
+"""
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -334,10 +336,10 @@ class TestEdgeCases:
 
     def test_loop_without_queries(self, tmp_path):
         """Test that regular loops without queries don't trigger N+1 warnings."""
-        code = '''
+        code = """
 for item in items:
     result = process(item)
-'''
+"""
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -349,10 +351,10 @@ for item in items:
 
     def test_single_loop_is_ok(self, tmp_path):
         """Test that single loop doesn't trigger nested loop warning."""
-        code = '''
+        code = """
 for item in items:
     process(item)
-'''
+"""
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -364,7 +366,7 @@ for item in items:
 
     def test_triple_nested_loops(self, tmp_path):
         """Test triple nested loop analysis runs."""
-        code = 'for i in items:\n    for j in other_items:\n        for k in third_items:\n            process(i, j, k)\n'
+        code = "for i in items:\n    for j in other_items:\n        for k in third_items:\n            process(i, j, k)\n"
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -376,9 +378,9 @@ for item in items:
 
     def test_skip_primary_key_columns_for_index_warnings(self, tmp_path):
         """Test that id/pk columns don't trigger index warnings."""
-        code = '''
+        code = """
 query = "SELECT * FROM users WHERE id = 123"
-'''
+"""
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -392,10 +394,10 @@ query = "SELECT * FROM users WHERE id = 123"
 
     def test_while_loop_detection(self, tmp_path):
         """Test detecting while loops."""
-        code = '''
+        code = """
 while condition:
     result = session.query(Data).first()
-'''
+"""
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()
@@ -431,7 +433,7 @@ while condition:
 
     def test_indentation_detection_for_loop_exit(self, tmp_path):
         """Test loop exit detection with indentation."""
-        code = 'for item in items:\n    query = session.query(Data).filter(Data.id == item.id).first()\n\n# This is outside the loop\nfinal_query = session.query(Summary).all()\n'
+        code = "for item in items:\n    query = session.query(Data).filter(Data.id == item.id).first()\n\n# This is outside the loop\nfinal_query = session.query(Summary).all()\n"
         (tmp_path / "module.py").write_text(code)
 
         analyzer = PerformanceAnalyzer()

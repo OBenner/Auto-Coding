@@ -880,7 +880,7 @@ async def run_test_generator_session(
         task_logger.start_phase(LogPhase.CODING, "Starting test generation...")
         task_logger.log_info(
             f"Analyzing {len(analysis_results.get('functions', []))} functions, "
-            f"{len(analysis_results.get('classes', []))} classes"
+            f"{len(analysis_results.get('classes', []))} classes",
         )
 
     # Load coverage configuration

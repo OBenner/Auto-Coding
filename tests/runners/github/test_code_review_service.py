@@ -261,9 +261,7 @@ class TestVulnerabilityConversion:
         project_dir, github_dir = test_env
         service = CodeReviewService(project_dir, github_dir, mock_config)
 
-        finding = service._convert_vulnerability_to_finding(
-            sample_vulnerability
-        )
+        finding = service._convert_vulnerability_to_finding(sample_vulnerability)
 
         assert finding.title == "SQL Injection Vulnerability"
         assert "Unsafe SQL query construction" in finding.description
@@ -284,12 +282,8 @@ class TestVulnerabilityConversion:
         project_dir, github_dir = test_env
         service = CodeReviewService(project_dir, github_dir, mock_config)
 
-        finding1 = service._convert_vulnerability_to_finding(
-            sample_vulnerability
-        )
-        finding2 = service._convert_vulnerability_to_finding(
-            sample_vulnerability
-        )
+        finding1 = service._convert_vulnerability_to_finding(sample_vulnerability)
+        finding2 = service._convert_vulnerability_to_finding(sample_vulnerability)
 
         # Same vulnerability should produce same ID
         assert finding1.id == finding2.id
@@ -298,9 +292,7 @@ class TestVulnerabilityConversion:
         assert len(finding1.id) == 12
         assert isinstance(finding1.id, str)
 
-    def test_vulnerability_without_file_uses_project_wide(
-        self, test_env, mock_config
-    ):
+    def test_vulnerability_without_file_uses_project_wide(self, test_env, mock_config):
         """Test that vulnerability without file uses 'project-wide'."""
         from analysis.security_scanner import SecurityVulnerability
         from runners.github.services.code_review_service import (
@@ -405,9 +397,7 @@ class TestReviewCodeChanges:
             assert findings[0].file == "app/database.py"
 
     @pytest.mark.asyncio
-    async def test_review_code_changes_no_vulnerabilities(
-        self, test_env, mock_config
-    ):
+    async def test_review_code_changes_no_vulnerabilities(self, test_env, mock_config):
         """Test review_code_changes with no vulnerabilities found."""
         from runners.github.services.code_review_service import (
             CodeReviewService,
@@ -442,9 +432,7 @@ class TestPostReviewToGitHub:
     """Tests for post_review_to_github method."""
 
     @pytest.mark.asyncio
-    async def test_post_review_with_critical_findings(
-        self, test_env, mock_config
-    ):
+    async def test_post_review_with_critical_findings(self, test_env, mock_config):
         """Test that critical findings result in REQUEST_CHANGES event."""
         from runners.github.models import PRReviewFinding, ReviewSeverity
         from runners.github.services.code_review_service import (
@@ -476,9 +464,7 @@ class TestPostReviewToGitHub:
             service = CodeReviewService(project_dir, github_dir, mock_config)
             service.gh_client = mock_gh_instance
 
-            await service.post_review_to_github(
-                mock_context, [critical_finding]
-            )
+            await service.post_review_to_github(mock_context, [critical_finding])
 
             # Verify review was posted
             mock_gh_instance.pr_review.assert_called_once()
@@ -530,9 +516,7 @@ class TestPostReviewToGitHub:
             mock_gh_instance.pr_review.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_post_review_no_findings_approves(
-        self, test_env, mock_config
-    ):
+    async def test_post_review_no_findings_approves(self, test_env, mock_config):
         """Test that no findings results in APPROVE event."""
         from runners.github.services.code_review_service import (
             CodeReviewService,
@@ -560,9 +544,10 @@ class TestPostReviewToGitHub:
             call_args = mock_gh_instance.pr_review.call_args
 
             # Should be APPROVE for no issues
-            assert "APPROVE" in str(call_args) or call_args[1].get(
-                "event"
-            ) in ["APPROVE", "approve"]
+            assert "APPROVE" in str(call_args) or call_args[1].get("event") in [
+                "APPROVE",
+                "approve",
+            ]
 
 
 # =============================================================================

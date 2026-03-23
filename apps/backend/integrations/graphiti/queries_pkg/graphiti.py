@@ -229,6 +229,11 @@ class GraphitiMemory:
             self._code_relationships = None
 
     @property
+    def client(self) -> "GraphitiClient | None":
+        """Get the underlying GraphitiClient (must be initialized first)."""
+        return self._client
+
+    @property
     def code_relationships(self) -> CodeRelationshipQueries | None:
         """
         Get the code relationship queries module.

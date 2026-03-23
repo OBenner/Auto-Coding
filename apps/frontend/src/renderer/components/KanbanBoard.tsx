@@ -39,6 +39,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
+import { KanbanFilters } from './KanbanFilters';
 import type { Task, TaskStatus, TaskOrderState } from '../../shared/types';
 
 // Type guard for valid drop column targets - preserves literal type from TASK_STATUS_COLUMNS
@@ -99,6 +100,8 @@ interface DroppableColumnProps {
   onToggleLocked?: () => void;
   // Loading state
   isLoading?: boolean;
+  // Drag disabled when auto-sort is active
+  isDragDisabled?: boolean;
 }
 
 /**
@@ -142,7 +145,8 @@ function droppableColumnPropsAreEqual(
     isCollapsed: prevProps.isCollapsed,
     columnWidth: prevProps.columnWidth,
     isResizing: prevProps.isResizing,
-    isLocked: prevProps.isLocked
+    isLocked: prevProps.isLocked,
+    isDragDisabled: prevProps.isDragDisabled
   };
 
   const nextSimpleProps = {
@@ -154,7 +158,8 @@ function droppableColumnPropsAreEqual(
     isCollapsed: nextProps.isCollapsed,
     columnWidth: nextProps.columnWidth,
     isResizing: nextProps.isResizing,
-    isLocked: nextProps.isLocked
+    isLocked: nextProps.isLocked,
+    isDragDisabled: nextProps.isDragDisabled
   };
 
   if (!shallowEqual(simpleProps, nextSimpleProps)) return false;
@@ -245,7 +250,7 @@ const getEmptyStateContent = (status: TaskStatus, t: (key: string) => string): {
   }
 };
 
-const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskClick, onStatusChange, isOver, onAddClick, onArchiveAll, onQueueSettings, onQueueAll, maxParallelTasks, archivedCount, showArchived, onToggleArchived, selectedTaskIds, onSelectAll, onDeselectAll, onToggleSelect, isCollapsed, onToggleCollapsed, columnWidth, isResizing, onResizeStart, onResizeEnd, isLocked, onToggleLocked, isLoading }: DroppableColumnProps) {
+const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskClick, onStatusChange, isOver, onAddClick, onArchiveAll, onQueueSettings, onQueueAll, maxParallelTasks, archivedCount, showArchived, onToggleArchived, selectedTaskIds, onSelectAll, onDeselectAll, onToggleSelect, isCollapsed, onToggleCollapsed, columnWidth, isResizing, onResizeStart, onResizeEnd, isLocked, onToggleLocked, isLoading, isDragDisabled }: DroppableColumnProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const { setNodeRef } = useDroppable({
     id: status
@@ -325,9 +330,10 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
         isSelectable={isSelectable}
         isSelected={isSelectable ? selectedTaskIds?.has(task.id) : undefined}
         onToggleSelect={onToggleSelectHandlers.current?.get(task.id)}
+        isDragDisabled={isDragDisabled}
       />
     ));
-  }, [tasks, selectedTaskIds]);
+  }, [tasks, selectedTaskIds, isDragDisabled]);
 
   const getColumnBorderColor = (): string => {
     switch (status) {
@@ -674,6 +680,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   // Kanban settings store for column preferences (collapse state, width, lock state)
   const columnPreferences = useKanbanSettingsStore(useShallow((state) => state.columnPreferences));
+  const filters = useKanbanSettingsStore(useShallow((state) => state.filters));
   const loadKanbanPreferences = useKanbanSettingsStore((state) => state.loadPreferences);
   const saveKanbanPreferences = useKanbanSettingsStore((state) => state.savePreferences);
   const toggleColumnCollapsed = useKanbanSettingsStore((state) => state.toggleColumnCollapsed);
@@ -765,7 +772,23 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Get task order from store for custom ordering
   const taskOrder = useTaskStore(useShallow((state) => state.taskOrder));
 
+  // Check if auto-sort is active (drag-and-drop should be disabled)
+  const isAutoSortActive = useMemo(() => {
+    const sortBy = filters?.sortBy ?? 'manual';
+    return sortBy !== 'manual';
+  }, [filters?.sortBy]);
+
   const tasksByStatus = useMemo(() => {
+    // Apply search filter (case-insensitive)
+    const searchQuery = filters?.searchQuery?.trim().toLowerCase() ?? '';
+    const searchFilteredTasks = searchQuery
+      ? filteredTasks.filter((task) => {
+          const title = (task.title ?? '').toLowerCase();
+          const description = (task.description ?? '').toLowerCase();
+          return title.includes(searchQuery) || description.includes(searchQuery);
+        })
+      : filteredTasks;
+
     // Note: pr_created tasks are shown in the 'done' column since they're essentially complete
     // Note: error tasks are shown in the 'human_review' column since they need human attention
     const grouped: Record<typeof TASK_STATUS_COLUMNS[number], Task[]> = {
@@ -777,7 +800,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       done: []
     };
 
-    filteredTasks.forEach((task) => {
+    searchFilteredTasks.forEach((task) => {
       // Map pr_created tasks to the done column, error tasks to human_review
       const targetColumn = getVisualColumn(task.status);
       if (grouped[targetColumn]) {
@@ -785,13 +808,15 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       }
     });
 
-    // Sort tasks within each column
+    // Sort tasks within each column based on sortBy filter
     Object.keys(grouped).forEach((status) => {
       const statusKey = status as typeof TASK_STATUS_COLUMNS[number];
       const columnTasks = grouped[statusKey];
       const columnOrder = taskOrder?.[statusKey];
+      const sortBy = filters?.sortBy ?? 'manual';
 
-      if (columnOrder && columnOrder.length > 0) {
+      // Manual sort: use drag-drop order
+      if (sortBy === 'manual' && columnOrder && columnOrder.length > 0) {
         // Custom order exists: sort by order index
         // 1. Create a set of current task IDs for fast lookup (filters stale IDs)
         const currentTaskIds = new Set(columnTasks.map(t => t.id));
@@ -819,17 +844,49 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         // 5. Prepend new tasks at top, then ordered tasks
         grouped[statusKey] = [...newTasks, ...orderedTasks];
       } else {
-        // No custom order: fallback to createdAt sort (newest first)
+        // Auto-sort mode: sort by selected criteria
+        const sortOrder = filters?.sortOrder ?? 'desc';
+        const multiplier = sortOrder === 'asc' ? -1 : 1;
+
         grouped[statusKey].sort((a, b) => {
-          const dateA = new Date(a.createdAt).getTime();
-          const dateB = new Date(b.createdAt).getTime();
-          return dateB - dateA;
+          let comparison = 0;
+
+          switch (sortBy) {
+            case 'priority': {
+              // Priority order: urgent > high > medium > low (no priority treated as lowest)
+              const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
+              const aPriority = priorityOrder[a.metadata?.priority ?? 'low'] ?? 0;
+              const bPriority = priorityOrder[b.metadata?.priority ?? 'low'] ?? 0;
+              comparison = (bPriority - aPriority) * multiplier; // Apply multiplier
+              break;
+            }
+            case 'created': {
+              const dateA = new Date(a.createdAt).getTime();
+              const dateB = new Date(b.createdAt).getTime();
+              comparison = (dateB - dateA) * multiplier; // Apply multiplier
+              break;
+            }
+            case 'updated': {
+              const dateA = new Date(a.updatedAt).getTime();
+              const dateB = new Date(b.updatedAt).getTime();
+              comparison = (dateB - dateA) * multiplier; // Apply multiplier
+              break;
+            }
+            default: {
+              // Fallback to createdAt for manual mode without custom order
+              const dateA = new Date(a.createdAt).getTime();
+              const dateB = new Date(b.createdAt).getTime();
+              comparison = dateB - dateA;
+            }
+          }
+
+          return comparison;
         });
       }
     });
 
     return grouped;
-  }, [filteredTasks, taskOrder]);
+  }, [filteredTasks, taskOrder, filters]);
 
   // Prune stale IDs when tasks move out of human_review column
   useEffect(() => {
@@ -1424,6 +1481,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   return (
     <div className="flex h-full flex-col">
+      {/* Kanban filters (sort mode, sort order, clear) */}
+      <KanbanFilters projectId={projectId} />
+
       {/* Kanban header with search, filters, refresh button and expand all */}
       <div className="px-6 pt-4 pb-2 space-y-2">
         {/* Search and filters */}
@@ -1487,9 +1547,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
+        onDragStart={isAutoSortActive ? undefined : handleDragStart}
+        onDragOver={isAutoSortActive ? undefined : handleDragOver}
+        onDragEnd={isAutoSortActive ? undefined : handleDragEnd}
       >
         <div className="flex flex-1 gap-4 overflow-x-auto p-6">
           {TASK_STATUS_COLUMNS.map((status) => (
@@ -1526,6 +1586,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               isLocked={columnPreferences?.[status]?.isLocked}
               onToggleLocked={() => handleToggleColumnLocked(status)}
               isLoading={isRefreshing}
+              isDragDisabled={isAutoSortActive}
             />
           ))}
         </div>

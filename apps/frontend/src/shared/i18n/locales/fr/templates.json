@@ -22,7 +22,18 @@
       "descriptionRequired": "La description est requise",
       "categoryRequired": "La catégorie est requise",
       "promptTooShort": "L'invite personnalisée doit contenir au moins 20 caractères",
-      "invalidVersion": "Format de version invalide (utilisez le versionnage sémantique comme 1.0.0)"
+      "invalidVersion": "Format de version invalide (utilisez le versionnage sémantique comme 1.0.0)",
+      "invalidNameFormat": "Le nom doit être en minuscules alphanumériques avec des tirets uniquement",
+      "exportFailed": "L'exportation a échoué"
+    },
+    "updateAvailable": "Mise à jour disponible",
+    "update": "Mettre à jour",
+    "upToDate": "À jour",
+    "currentVersion": "Version actuelle",
+    "newVersionAvailable": "Nouvelle version {{version}} disponible",
+    "hints": {
+      "versionFormat": "Versionnage sémantique (ex : 1.0.0)",
+      "customPrompt": "Cette invite remplacera l'invite système par défaut de l'agent. Utilisez des instructions claires pour définir le comportement et les capacités de l'agent."
     },
     "actions": {
       "save": "Enregistrer le modèle",
@@ -31,8 +42,16 @@
       "import": "Importer le modèle",
       "export": "Exporter le modèle",
       "importing": "Importation...",
-      "exporting": "Exportation..."
+      "exporting": "Exportation...",
+      "saving": "Enregistrement...",
+      "testing": "Test en cours..."
     }
+  },
+  "selector": {
+    "noneOption": "Aucun",
+    "useDefaultAgentHint": "(Utiliser l'agent par défaut)",
+    "category": "Catégorie :",
+    "toolsConfigured": "Outils configurés"
   },
   "toolSelector": {
     "title": "Configuration des outils",
@@ -123,7 +142,8 @@
     "runTest": "Exécuter le test",
     "running": "Test en cours...",
     "testFailed": "Le test du modèle a échoué. Vérifiez la configuration du modèle et réessayez.",
-    "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :"
+    "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :",
+    "apiNotAvailable": "API non disponible"
   },
   "marketplace": {
     "title": "Marketplace des modèles",

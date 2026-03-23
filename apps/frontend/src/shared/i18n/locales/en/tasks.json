@@ -1,4 +1,7 @@
 {
+  "tabs": {
+    "collaboration": "Collaboration"
+  },
   "refreshTasks": "Refresh Tasks",
   "status": {
     "backlog": "Backlog",
@@ -38,6 +41,8 @@
     "recovering": "Recovering...",
     "needsRecovery": "Needs Recovery",
     "needsResume": "Needs Resume",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
     "moreInfo": "More"
   },
   "reviewReason": {
@@ -114,7 +119,14 @@
     "unlockColumn": "Unlock column width",
     "columnLocked": "Column width is locked",
     "expandAll": "Expand all columns",
+    "dragDisabledAutoSort": "Drag-and-drop disabled when auto-sort is active",
+    "searchTasks": "Search tasks...",
     "searchPlaceholder": "Search tasks...",
+    "allStatuses": "All statuses",
+    "category": "Category",
+    "allCategories": "All categories",
+    "priority": "Priority",
+    "allPriorities": "All priorities",
     "clearFilters": "Clear Filters"
   },
   "queue": {
@@ -222,6 +234,17 @@
     "removeImageAriaLabel": "Remove image {{filename}}",
     "pasteHint": "Tip: Paste screenshots directly with {{shortcut}} to add reference images."
   },
+  "backgroundTask": {
+    "duration": "Duration:",
+    "memory": "Memory:",
+    "exitCode": "Exit Code:",
+    "timeout": "Timeout:",
+    "cancelTitle": "Cancel Task",
+    "cancelConfirmation": "Are you sure you want to cancel this running task?",
+    "cancelWarning": "This will terminate the process immediately. Any unsaved progress will be lost.",
+    "cancelling": "Cancelling...",
+    "cancelAction": "Cancel Task"
+  },
   "notifications": {
     "backgroundTaskTitle": "Task continues in background",
     "backgroundTaskDescription": "The task is still running. You can reopen this dialog to monitor progress.",
@@ -288,7 +311,16 @@
     },
     "errors": {
       "createFailed": "Failed to create task. Please try again."
-    }
+    },
+    "customTemplate": "Custom Template",
+    "selected": "Selected",
+    "agentModels": "Agent Models",
+    "agentModelsConfigured": "{{count}} configured",
+    "agentModelsDescription": "Configure which model to use for specific agent types. Leave empty to use defaults.",
+    "coderAgent": "Coder Agent",
+    "plannerAgent": "Planner Agent",
+    "qaReviewerAgent": "QA Reviewer Agent",
+    "useDefault": "Use default"
   },
   "feedback": {
     "dragDropHint": "Drag & drop images or paste screenshots",
@@ -363,6 +395,43 @@
           "high": "High Impact",
           "critical": "Critical Impact"
         }
+      }
+    },
+    "provider": {
+      "label": "AI Provider",
+      "helpText": "Select the AI provider for this task. Different providers offer various models and capabilities.",
+      "claude": "Claude (Anthropic)",
+      "claudeDescription": "Official Anthropic API with Claude models",
+      "litellm": "LiteLLM",
+      "litellmDescription": "Unified interface for multiple LLM providers",
+      "openrouter": "OpenRouter",
+      "openrouterDescription": "Access to multiple LLM models through one API",
+      "zhipuai": "GLM (Zhipu AI)",
+      "zhipuaiDescription": "Chinese language models with strong multilingual support"
+    },
+    "model": {
+      "label": "Model",
+      "helpText": "Select the specific model to use for this task. Available models depend on the selected provider.",
+      "selectModel": "Select a model",
+      "claude": {
+        "opus": "Claude Opus 4.5 (Most Capable)",
+        "sonnet": "Claude Sonnet 4.5 (Balanced)",
+        "haiku": "Claude Haiku 4.5 (Fast)"
+      },
+      "litellm": {
+        "opus": "GPT-4o / Llama 405B (Most Capable)",
+        "sonnet": "GPT-4 Turbo / Llama 70B (Balanced)",
+        "haiku": "GPT-4o Mini / Llama 8B (Fast)"
+      },
+      "openrouter": {
+        "opus": "Claude Opus 4 / GPT-4o / O1 Preview",
+        "sonnet": "Claude Sonnet 4 / GPT-4 Turbo / Gemini 2.0",
+        "haiku": "Claude Haiku 4 / GPT-4o Mini / Mistral Small"
+      },
+      "zhipuai": {
+        "opus": "GLM-4 Plus (Most Capable)",
+        "sonnet": "GLM-4 (Balanced)",
+        "haiku": "GLM-4 Flash / Air (Fast)"
       }
     }
   },

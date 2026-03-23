@@ -1,4 +1,7 @@
 {
+  "tabs": {
+    "collaboration": "Collaboration"
+  },
   "refreshTasks": "Actualiser les tâches",
   "status": {
     "backlog": "Backlog",
@@ -38,6 +41,8 @@
     "recovering": "Récupération...",
     "needsRecovery": "Récupération requise",
     "needsResume": "Reprise requise",
+    "failed": "Échoué",
+    "cancelled": "Annulé",
     "moreInfo": "Plus"
   },
   "reviewReason": {
@@ -114,7 +119,14 @@
     "unlockColumn": "Déverrouiller la largeur de la colonne",
     "columnLocked": "La largeur de la colonne est verrouillée",
     "expandAll": "Développer toutes les colonnes",
+    "dragDisabledAutoSort": "Glisser-déposer désactivé lorsque le tri automatique est actif",
+    "searchTasks": "Rechercher des tâches...",
     "searchPlaceholder": "Rechercher des tâches...",
+    "allStatuses": "Tous les statuts",
+    "category": "Catégorie",
+    "allCategories": "Toutes les catégories",
+    "priority": "Priorité",
+    "allPriorities": "Toutes les priorités",
     "clearFilters": "Effacer les filtres"
   },
   "queue": {
@@ -222,6 +234,17 @@
     "removeImageAriaLabel": "Supprimer l'image {{filename}}",
     "pasteHint": "Astuce : Collez des captures d'écran directement avec {{shortcut}} pour ajouter des images de référence."
   },
+  "backgroundTask": {
+    "duration": "Durée :",
+    "memory": "Mémoire :",
+    "exitCode": "Code de sortie :",
+    "timeout": "Délai d'expiration :",
+    "cancelTitle": "Annuler la tâche",
+    "cancelConfirmation": "Êtes-vous sûr de vouloir annuler cette tâche en cours ?",
+    "cancelWarning": "Cela terminera le processus immédiatement. Toute progression non sauvegardée sera perdue.",
+    "cancelling": "Annulation...",
+    "cancelAction": "Annuler la tâche"
+  },
   "notifications": {
     "backgroundTaskTitle": "La tâche continue en arrière-plan",
     "backgroundTaskDescription": "La tâche est toujours en cours. Vous pouvez rouvrir cette boîte de dialogue pour suivre la progression.",
@@ -288,7 +311,16 @@
     },
     "errors": {
       "createFailed": "Échec de la création de la tâche. Veuillez réessayer."
-    }
+    },
+    "customTemplate": "Modèle personnalisé",
+    "selected": "Sélectionné",
+    "agentModels": "Modèles d'agents",
+    "agentModelsConfigured": "{{count}} configuré(s)",
+    "agentModelsDescription": "Configurez le modèle à utiliser pour chaque type d'agent. Laissez vide pour utiliser les valeurs par défaut.",
+    "coderAgent": "Agent Codeur",
+    "plannerAgent": "Agent Planificateur",
+    "qaReviewerAgent": "Agent Réviseur QA",
+    "useDefault": "Utiliser par défaut"
   },
   "feedback": {
     "dragDropHint": "Glissez-déposez des images ou collez des captures d'écran",
@@ -363,6 +395,43 @@
           "high": "Impact élevé",
           "critical": "Impact critique"
         }
+      }
+    },
+    "provider": {
+      "label": "Fournisseur IA",
+      "helpText": "Sélectionnez le fournisseur IA pour cette tâche. Différents fournisseurs offrent divers modèles et capacités.",
+      "claude": "Claude (Anthropic)",
+      "claudeDescription": "API Anthropic officielle avec modèles Claude",
+      "litellm": "LiteLLM",
+      "litellmDescription": "Interface unifiée pour plusieurs fournisseurs LLM",
+      "openrouter": "OpenRouter",
+      "openrouterDescription": "Accès à plusieurs modèles LLM via une seule API",
+      "zhipuai": "GLM (Zhipu AI)",
+      "zhipuaiDescription": "Modèles linguistiques chinois avec un fort support multilingue"
+    },
+    "model": {
+      "label": "Modèle",
+      "helpText": "Sélectionnez le modèle spécifique à utiliser pour cette tâche. Les modèles disponibles dépendent du fournisseur sélectionné.",
+      "selectModel": "Sélectionner un modèle",
+      "claude": {
+        "opus": "Claude Opus 4.5 (Plus Capable)",
+        "sonnet": "Claude Sonnet 4.5 (Équilibré)",
+        "haiku": "Claude Haiku 4.5 (Rapide)"
+      },
+      "litellm": {
+        "opus": "GPT-4o / Llama 405B (Plus Capable)",
+        "sonnet": "GPT-4 Turbo / Llama 70B (Équilibré)",
+        "haiku": "GPT-4o Mini / Llama 8B (Rapide)"
+      },
+      "openrouter": {
+        "opus": "Claude Opus 4 / GPT-4o / O1 Preview",
+        "sonnet": "Claude Sonnet 4 / GPT-4 Turbo / Gemini 2.0",
+        "haiku": "Claude Haiku 4 / GPT-4o Mini / Mistral Small"
+      },
+      "zhipuai": {
+        "opus": "GLM-4 Plus (Plus Capable)",
+        "sonnet": "GLM-4 (Équilibré)",
+        "haiku": "GLM-4 Flash / Air (Rapide)"
       }
     }
   },

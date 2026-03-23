@@ -111,6 +111,44 @@ class TemplateTestResult:
 
 
 # =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def _extract_usage_metadata(client: Any) -> dict[str, int] | None:
+    """Extract usage metadata from client via public API or private fallback.
+
+    Note: the _usage fallback accesses a private attribute and may break
+    on SDK upgrades. It is isolated here so future changes are easy to track.
+    """
+    # Prefer public API
+    metadata = getattr(client, "usage_metadata", None)
+    if (
+        metadata
+        and hasattr(metadata, "input_tokens")
+        and hasattr(metadata, "output_tokens")
+    ):
+        return {
+            "input_tokens": metadata.input_tokens,
+            "output_tokens": metadata.output_tokens,
+            "total_tokens": metadata.input_tokens + metadata.output_tokens,
+        }
+    # Fallback: private _usage dict (fragile, may change with SDK upgrades)
+    usage = getattr(client, "_usage", None)
+    if isinstance(usage, dict) and "input_tokens" in usage and "output_tokens" in usage:
+        debug(
+            "test_runner",
+            "Using internal _usage fallback for token metadata (may break on SDK upgrade)",
+        )
+        return {
+            "input_tokens": usage["input_tokens"],
+            "output_tokens": usage["output_tokens"],
+            "total_tokens": usage["input_tokens"] + usage["output_tokens"],
+        }
+    return None
+
+
+# =============================================================================
 # Test Runner Functions
 # =============================================================================
 
@@ -230,34 +268,35 @@ async def run_template_test(
     print("  [3/4] Running test session...")
 
     try:
-        # Send test query
-        debug("test_runner", "Sending test query to agent...")
-        await client.query(test_prompt)
-        debug_success("test_runner", "Test query sent")
+        async with client:
+            # Send test query
+            debug("test_runner", "Sending test query to agent...")
+            await client.query(test_prompt)
+            debug_success("test_runner", "Test query sent")
 
-        # Collect response
-        response_text = ""
-        message_count = 0
-        debug("test_runner", "Collecting agent response...")
+            # Collect response
+            response_text = ""
+            message_count = 0
+            debug("test_runner", "Collecting agent response...")
 
-        async for msg in client.receive_response():
-            msg_type = type(msg).__name__
-            message_count += 1
-            debug_detailed(
-                "test_runner",
-                f"Received message #{message_count}",
-                msg_type=msg_type,
-            )
+            async for msg in client.receive_response():
+                msg_type = type(msg).__name__
+                message_count += 1
+                debug_detailed(
+                    "test_runner",
+                    f"Received message #{message_count}",
+                    msg_type=msg_type,
+                )
 
-            # Extract text from AssistantMessage
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
-                    if block_type == "TextBlock" and hasattr(block, "text"):
-                        response_text += block.text
-                        # Print response preview (first 500 chars)
-                        if len(response_text) <= 500:
-                            print(block.text, end="", flush=True)
+                # Extract text from AssistantMessage
+                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+                        if block_type == "TextBlock" and hasattr(block, "text"):
+                            response_text += block.text
+                            # Print response preview (first 500 chars)
+                            if len(response_text) <= 500:
+                                print(block.text, end="", flush=True)
 
         print()  # New line after response
 
@@ -313,48 +352,18 @@ async def run_template_test(
 
     usage_metadata = None
     try:
-        # Try to get usage metadata from client
-        if hasattr(client, "usage_metadata"):
-            metadata = client.usage_metadata
-            if (
-                metadata
-                and hasattr(metadata, "input_tokens")
-                and hasattr(metadata, "output_tokens")
-            ):
-                usage_metadata = {
-                    "input_tokens": metadata.input_tokens,
-                    "output_tokens": metadata.output_tokens,
-                    "total_tokens": metadata.input_tokens + metadata.output_tokens,
-                }
-                debug_success(
-                    "test_runner",
-                    "Usage metadata extracted",
-                    input_tokens=metadata.input_tokens,
-                    output_tokens=metadata.output_tokens,
-                )
-                print_key_value(
-                    "Token usage",
-                    f"{usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out",
-                )
-        elif hasattr(client, "_usage"):
-            # Alternative: some SDKs store usage in a _usage attribute
-            usage = client._usage
-            if (
-                isinstance(usage, dict)
-                and "input_tokens" in usage
-                and "output_tokens" in usage
-            ):
-                usage_metadata = {
-                    "input_tokens": usage["input_tokens"],
-                    "output_tokens": usage["output_tokens"],
-                    "total_tokens": usage["input_tokens"] + usage["output_tokens"],
-                }
-                debug_success(
-                    "test_runner",
-                    "Usage metadata extracted from _usage",
-                    input_tokens=usage["input_tokens"],
-                    output_tokens=usage["output_tokens"],
-                )
+        usage_metadata = _extract_usage_metadata(client)
+        if usage_metadata:
+            debug_success(
+                "test_runner",
+                "Usage metadata extracted",
+                input_tokens=usage_metadata["input_tokens"],
+                output_tokens=usage_metadata["output_tokens"],
+            )
+            print_key_value(
+                "Token usage",
+                f"{usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out",
+            )
     except Exception as e:
         debug(
             "test_runner",
@@ -399,15 +408,25 @@ def create_test_prompt(
         Returns:
             Test prompt string
     """
+    custom_prompt = template.custom_prompt or ""
+    tools = template.tools or []
+    custom_prompt_line = (
+        "Custom Prompt: " + custom_prompt[:200] + "..."
+        if len(custom_prompt) > 200
+        else "Custom Prompt: " + custom_prompt
+        if custom_prompt
+        else "No custom prompt (using base agent behavior)"
+    )
+
     base_prompt = f"""You are testing a custom agent template called '{template.name}'.
 
 Template Configuration:
 - Category: {template.category}
-- Tools: {", ".join(template.tools)}
+- Tools: {", ".join(tools)}
 - MCP Servers: {", ".join(template.mcp_servers) if template.mcp_servers else "None"}
 - Thinking Level: {template.thinking_level}
 
-{"Custom Prompt: " + template.custom_prompt[:200] + "..." if len(template.custom_prompt) > 200 else "Custom Prompt: " + template.custom_prompt if template.custom_prompt else "No custom prompt (using base agent behavior)"}
+{custom_prompt_line}
 
 Please respond with:
 1. Confirm you understand your role and configuration

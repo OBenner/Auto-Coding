@@ -46,6 +46,9 @@ import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
 import { TaskOverview } from './TaskOverview';
 import { ResourceUsageIndicator } from '../ResourceUsageIndicator';
+import { PermissionsPanel } from '../collaboration/PermissionsPanel';
+import { CommentThread } from '../collaboration/CommentThread';
+import { ApprovalWorkflow } from '../collaboration/ApprovalWorkflow';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -514,6 +517,12 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       {t('tasks:files.tab')}
                     </TabsTrigger>
                   )}
+                  <TabsTrigger
+                    value="collaboration"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                  >
+                    {t('tasks:tabs.collaboration')}
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Overview Tab */}
@@ -620,6 +629,45 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     <TaskFiles task={task} />
                   </TabsContent>
                 )}
+
+                {/* Collaboration Tab */}
+                <TabsContent value="collaboration" className="flex-1 min-h-0 overflow-hidden mt-0">
+                  <ScrollArea className="h-full">
+                    <div className="p-5 space-y-6">
+                      {/* Permissions Panel */}
+                      <PermissionsPanel
+                        specId={task.specId}
+                        onPermissionGranted={() => {}}
+                        onPermissionUpdated={() => {}}
+                        onPermissionRevoked={() => {}}
+                      />
+
+                      <Separator />
+
+                      {/* Comment Thread */}
+                      <CommentThread
+                        specId={task.specId}
+                        onCommentAdded={() => {}}
+                        onCommentUpdated={() => {}}
+                        onCommentDeleted={() => {}}
+                        onCommentResolved={() => {}}
+                        onReplyAdded={() => {}}
+                      />
+
+                      <Separator />
+
+                      {/* Approval Workflow */}
+                      <ApprovalWorkflow
+                        specId={task.specId}
+                        currentUserId="" // TODO: wire to authenticated user context
+                        userRole="read"
+                        onApprovalRequested={() => {}}
+                        onApprovalApproved={() => {}}
+                        onApprovalRejected={() => {}}
+                      />
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
               </Tabs>
             </div>
 

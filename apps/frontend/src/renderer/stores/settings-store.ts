@@ -331,19 +331,33 @@ function migrateOnboardingCompleted(settings: AppSettings): AppSettings {
  * Populates default values for new agent preference fields if not already set.
  */
 function migrateAgentPreferences(settings: AppSettings): AppSettings {
-  // Skip if already migrated (any agent preference field is set)
-  if (settings.agentVerbosity !== undefined) {
-    return settings;
+  // Populate each missing agent preference field individually
+  // so that adding new fields later doesn't skip them
+  const migrated = { ...settings };
+  let changed = false;
+
+  if (migrated.agentVerbosity === undefined) {
+    migrated.agentVerbosity = 'normal';
+    changed = true;
+  }
+  if (migrated.agentRiskTolerance === undefined) {
+    migrated.agentRiskTolerance = 'balanced';
+    changed = true;
+  }
+  if (migrated.agentProjectType === undefined) {
+    migrated.agentProjectType = 'established';
+    changed = true;
+  }
+  if (migrated.agentCodingStyle === undefined) {
+    migrated.agentCodingStyle = {};
+    changed = true;
+  }
+  if (migrated.agentUserInstructions === undefined) {
+    migrated.agentUserInstructions = [];
+    changed = true;
   }
 
-  return {
-    ...settings,
-    agentVerbosity: 'normal',
-    agentRiskTolerance: 'balanced',
-    agentProjectType: 'established',
-    agentCodingStyle: {},
-    agentUserInstructions: [],
-  };
+  return changed ? migrated : settings;
 }
 
 /**
@@ -361,11 +375,28 @@ export async function loadSettings(): Promise<void> {
       migratedSettings = migrateAgentPreferences(migratedSettings);
       store.setSettings(migratedSettings);
 
-      // If migration changed the settings, persist them
+      // Persist any migration changes back to disk
+      const migrationUpdates: Partial<AppSettings> = {};
       if (migratedSettings.onboardingCompleted !== result.data.onboardingCompleted) {
-        await window.electronAPI.saveSettings({
-          onboardingCompleted: migratedSettings.onboardingCompleted
-        });
+        migrationUpdates.onboardingCompleted = migratedSettings.onboardingCompleted;
+      }
+      if (migratedSettings.agentVerbosity !== result.data.agentVerbosity) {
+        migrationUpdates.agentVerbosity = migratedSettings.agentVerbosity;
+      }
+      if (migratedSettings.agentRiskTolerance !== result.data.agentRiskTolerance) {
+        migrationUpdates.agentRiskTolerance = migratedSettings.agentRiskTolerance;
+      }
+      if (migratedSettings.agentProjectType !== result.data.agentProjectType) {
+        migrationUpdates.agentProjectType = migratedSettings.agentProjectType;
+      }
+      if (migratedSettings.agentCodingStyle !== result.data.agentCodingStyle) {
+        migrationUpdates.agentCodingStyle = migratedSettings.agentCodingStyle;
+      }
+      if (migratedSettings.agentUserInstructions !== result.data.agentUserInstructions) {
+        migrationUpdates.agentUserInstructions = migratedSettings.agentUserInstructions;
+      }
+      if (Object.keys(migrationUpdates).length > 0) {
+        await window.electronAPI.saveSettings(migrationUpdates);
       }
 
       // Initialize keyboard shortcuts from localStorage

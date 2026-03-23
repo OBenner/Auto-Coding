@@ -15,7 +15,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-# WebSocket broadcast functions (optional - will be imported lazily)
+# WebSocket broadcast functions (imported lazily to avoid circular imports)
 _broadcast_execution_event = None
 _broadcast_log_event = None
 _broadcast_error_event = None
@@ -34,7 +34,6 @@ def _init_websocket_broadcast():
         return  # Already initialized
 
     try:
-        # Lazy import to avoid circular dependencies
         from api.websocket import (
             broadcast_error_event,
             broadcast_execution_event,
@@ -47,7 +46,6 @@ def _init_websocket_broadcast():
         logger.debug("WebSocket broadcast functions initialized")
     except ImportError as e:
         logger.warning(f"WebSocket broadcast functions not available: {e}")
-        # Set to no-op functions if import fails
         _broadcast_execution_event = _noop_broadcast
         _broadcast_log_event = _noop_broadcast
         _broadcast_error_event = _noop_broadcast
@@ -55,13 +53,9 @@ def _init_websocket_broadcast():
 
 async def _noop_broadcast(*args, **kwargs):
     """No-op broadcast function when WebSocket module is unavailable."""
-    pass
 
 
-def _sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
-
+from core import sanitize_log as _sanitize_log
 
 # Keep track of running agent tasks
 _running_tasks: dict[str, asyncio.Task] = {}
@@ -74,7 +68,6 @@ def _get_backend_path() -> Path:
     Returns:
         Path to the backend directory
     """
-    # Assuming web-backend and backend are siblings under apps/
     web_backend_dir = Path(__file__).parent.parent
     backend_dir = web_backend_dir.parent / "backend"
 
@@ -136,7 +129,6 @@ async def run_agent_async(
 
     # Determine project directory
     if project_dir is None:
-        # Default: parent of web-backend (assumes standard layout)
         project_dir = Path(__file__).parent.parent.parent.parent
 
     # Find spec directory
@@ -150,7 +142,6 @@ async def run_agent_async(
     for candidate in specs_dir.iterdir():
         if candidate.is_dir():
             folder_name = candidate.name
-            # Match by number prefix or exact name
             if folder_name.startswith(f"{spec_id}-") or folder_name == spec_id:
                 spec_dir = candidate
                 break
@@ -167,13 +158,13 @@ async def run_agent_async(
     )
 
     # Broadcast agent start event
+    phase_map = {
+        "planner": "planning",
+        "coder": "coding",
+        "qa_reviewer": "qa_review",
+        "qa_fixer": "qa_fixing",
+    }
     if _broadcast_execution_event is not None:
-        phase_map = {
-            "planner": "planning",
-            "coder": "coding",
-            "qa_reviewer": "qa_review",
-            "qa_fixer": "qa_fixing",
-        }
         await _broadcast_execution_event(
             spec_id=canonical_spec_id,
             phase=phase_map.get(agent_type, "idle"),
@@ -184,9 +175,7 @@ async def run_agent_async(
         )
 
     try:
-        # Execute agent based on type
         if agent_type == "planner":
-            # Run planner agent
             if _broadcast_log_event:
                 await _broadcast_log_event(
                     spec_id=canonical_spec_id,
@@ -232,7 +221,6 @@ async def run_agent_async(
             }
 
         elif agent_type in ["coder", "qa_reviewer", "qa_fixer"]:
-            # Run main autonomous agent (handles coder + QA flow)
             if _broadcast_log_event:
                 await _broadcast_log_event(
                     spec_id=canonical_spec_id,
@@ -244,9 +232,9 @@ async def run_agent_async(
                 project_dir=project_dir,
                 spec_dir=spec_dir,
                 model=model,
-                max_iterations=None,  # Unlimited iterations
+                max_iterations=None,
                 verbose=verbose,
-                source_spec_dir=None,  # Not using worktree in web mode
+                source_spec_dir=None,
             )
 
             if _broadcast_execution_event:
@@ -272,19 +260,22 @@ async def run_agent_async(
     except Exception as e:
         logger.error(f"Agent execution failed: {e}", exc_info=True)
 
-        # Broadcast error event
+        # Use canonical_spec_id (always defined) instead of spec_dir.name
+        # to avoid UnboundLocalError if spec_dir lookup failed
+        error_spec_id = canonical_spec_id if "canonical_spec_id" in dir() else spec_id
+
         if _broadcast_error_event is not None:
             await _broadcast_error_event(
-                spec_id=canonical_spec_id,
+                spec_id=error_spec_id,
                 error_message=str(e),
                 error_type=type(e).__name__,
-                traceback=None,  # Could add traceback if needed
+                traceback=None,
             )
 
         return {
             "success": False,
             "agent_type": agent_type,
-            "spec_id": canonical_spec_id,
+            "spec_id": error_spec_id,
             "error": str(e),
             "message": f"Agent execution failed: {e}",
         }
@@ -313,18 +304,15 @@ def start_agent_task(
     Raises:
         RuntimeError: If task already running for this spec
     """
-    # Initialize WebSocket broadcast functions (for broadcasting task start)
     _init_websocket_broadcast()
 
     task_id = f"{spec_id}:{agent_type}"
 
-    # Check if already running
     if task_id in _running_tasks and not _running_tasks[task_id].done():
         raise RuntimeError(
             f"Agent task already running for spec {spec_id} (type: {agent_type})"
         )
 
-    # Create and store task
     task = asyncio.create_task(
         run_agent_async(
             spec_id=spec_id,

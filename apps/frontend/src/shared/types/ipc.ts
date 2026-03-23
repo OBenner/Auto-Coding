@@ -46,7 +46,9 @@ import type {
   TaskMetadata,
   TaskLogs,
   TaskLogStreamChunk,
-  ImageAttachment
+  ImageAttachment,
+  BackgroundTask,
+  BackgroundTaskStatus
 } from './task';
 import type {
   MergeOperationRecord,
@@ -59,8 +61,16 @@ import type {
   ProductivitySummary,
   ProductivityTrendPoint,
   ProductivityAnalyticsFilter,
-  ProductivityAnalyticsExportOptions
+  ProductivityAnalyticsExportOptions,
+  FailureMetrics
 } from './productivity-analytics';
+import type {
+  ModelUsageSummary,
+  ModelUsageTrendPoint,
+  ModelUsageExportOptions,
+  ModelUsageFilter,
+  ModelLockConfig
+} from './model-usage';
 import type {
   TerminalCreateOptions,
   TerminalSession,
@@ -85,7 +95,7 @@ import type {
   AllProfilesUsage,
   TerminalProfileChangedEvent
 } from './agent';
-import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult } from './settings';
+import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult, AIProviderConfig, ProviderConfigValidation } from './settings';
 import type { AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent } from './app-update';
 import type {
   ChangelogTask,
@@ -153,6 +163,14 @@ import type {
 } from './integrations';
 import type { APIProfile, ProfilesFile, TestConnectionResult, DiscoverModelsResult } from './profile';
 import type { TemplateInfo, TemplateCategory, GeneratedSpec } from './template';
+import type {
+  WebhookConfig,
+  WebhookDelivery,
+  WebhookDeliveryStats,
+  WebhookTestResult,
+  WebhookEventTypeMeta,
+  WebhookTemplateMeta
+} from './webhook';
 import type { FeedbackSummary, ImprovementData } from '../../preload/api/feedback-api';
 
 // Electron API exposed via contextBridge
@@ -209,6 +227,14 @@ export interface ElectronAPI {
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
   exportTask: (projectId: string, taskId: string) => Promise<IPCResult<string>>;
 
+  // Background task operations (long-running commands)
+  backgroundTaskStart: (command: string, workingDir: string, timeout?: number) => Promise<IPCResult<{ taskId: string }>>;
+  backgroundTaskCancel: (taskId: string) => Promise<IPCResult<{ cancelled: boolean }>>;
+  backgroundTaskGetStatus: (taskId: string) => Promise<IPCResult<BackgroundTask>>;
+  backgroundTaskGetOutput: (taskId: string) => Promise<IPCResult<{ output: string }>>;
+  backgroundTaskListRunning: () => Promise<IPCResult<BackgroundTask[]>>;
+  backgroundTaskListByStatus: (status: BackgroundTaskStatus) => Promise<IPCResult<BackgroundTask[]>>;
+
   // Merge analytics operations
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
   getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeAnalytics>>;
@@ -221,6 +247,11 @@ export interface ElectronAPI {
   onTaskLog: (callback: (taskId: string, log: string) => void) => () => void;
   onTaskStatusChange: (callback: (taskId: string, status: TaskStatus) => void) => () => void;
   onTaskExecutionProgress: (callback: (taskId: string, progress: ExecutionProgress) => void) => () => void;
+
+  // Background task event listeners
+  onBackgroundTaskProgress?: (callback: (taskId: string, output: string) => void) => () => void;
+  onBackgroundTaskComplete?: (callback: (taskId: string) => void) => () => void;
+  onBackgroundTaskError?: (callback: (taskId: string, error: string) => void) => () => void;
 
   // Terminal operations
   createTerminal: (options: TerminalCreateOptions) => Promise<IPCResult>;
@@ -359,6 +390,11 @@ export interface ElectronAPI {
   // App settings
   getSettings: () => Promise<IPCResult<AppSettings>>;
   saveSettings: (settings: Partial<AppSettings>) => Promise<IPCResult>;
+
+  // AI Provider Configuration (backend .env sync)
+  getProviderConfig: () => Promise<IPCResult<AIProviderConfig>>;
+  updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
+  validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
 
   // Sentry error reporting
   notifySentryStateChanged: (enabled: boolean) => void;
@@ -781,6 +817,14 @@ export interface ElectronAPI {
     callback: (projectId: string, error: string) => void
   ) => () => void;
 
+  // Analytics operations
+  analytics: {
+    getSummary: (projectId: string) => Promise<IPCResult<import('./analytics').MetricsSummary>>;
+    getAgentStats: (projectId: string) => Promise<IPCResult<Record<string, import('./analytics').AgentStats>>>;
+    getTrends: (projectId: string, days?: number) => Promise<IPCResult<import('./analytics').TrendDataPoint[]>>;
+    getReport: (projectId: string) => Promise<IPCResult<import('./analytics').AnalyticsReport>>;
+  };
+
   // Task logs operations
   getTaskLogs: (projectId: string, specId: string) => Promise<IPCResult<TaskLogs | null>>;
   watchTaskLogs: (projectId: string, specId: string) => Promise<IPCResult>;
@@ -926,7 +970,21 @@ export interface ElectronAPI {
   // Productivity analytics operations
   getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
   getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
+  getFailureMetrics: (projectId: string) => Promise<IPCResult<FailureMetrics>>;
   exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<string>>;
+
+  // Model usage analytics operations
+  getModelUsageSummary: (projectId: string, filter?: ModelUsageFilter) => Promise<IPCResult<ModelUsageSummary>>;
+  getModelUsageTrends: (projectId: string, filter?: ModelUsageFilter) => Promise<IPCResult<ModelUsageTrendPoint[]>>;
+  exportModelUsageAnalytics: (projectId: string, options: ModelUsageExportOptions) => Promise<IPCResult<string>>;
+
+  // Model lock operations
+  listModelLocks: (projectId: string) => Promise<IPCResult<ModelLockConfig>>;
+  lockPhaseModel: (projectId: string, phase: string, modelId: string) => Promise<IPCResult<{ success: boolean }>>;
+  lockAgentModel: (projectId: string, agentType: string, modelId: string) => Promise<IPCResult<{ success: boolean }>>;
+  unlockPhaseModel: (projectId: string, phase: string) => Promise<IPCResult<{ success: boolean }>>;
+  unlockAgentModel: (projectId: string, agentType: string) => Promise<IPCResult<{ success: boolean }>>;
+  clearModelLocks: (projectId: string) => Promise<IPCResult<{ success: boolean }>>;
 
   // Template library operations
   listTemplates: (projectId: string, options?: { category?: TemplateCategory | 'all'; tags?: string[] }) => Promise<IPCResult<TemplateInfo[]>>;
@@ -941,6 +999,29 @@ export interface ElectronAPI {
     specId?: string
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
+
+  // Webhook operations
+  /** List all webhook configurations for a spec */
+  listWebhooks: (specId: string) => Promise<IPCResult<WebhookConfig[]>>;
+  /** Get a single webhook configuration */
+  getWebhook: (specId: string, webhookId: string) => Promise<IPCResult<WebhookConfig>>;
+  /** Create a new webhook configuration */
+  createWebhook: (specId: string, webhook: Omit<WebhookConfig, 'webhook_id' | 'created_at' | 'updated_at'>) => Promise<IPCResult<WebhookConfig>>;
+  /** Update an existing webhook configuration */
+  updateWebhook: (specId: string, webhookId: string, updates: Partial<WebhookConfig>) => Promise<IPCResult<WebhookConfig>>;
+  /** Delete a webhook configuration */
+  deleteWebhook: (specId: string, webhookId: string) => Promise<IPCResult<{ success: boolean }>>;
+  /** Test a webhook by sending a test event */
+  testWebhook: (specId: string, webhookId: string) => Promise<IPCResult<WebhookTestResult>>;
+  /** Get webhook delivery history */
+  getWebhookDeliveryHistory: (specId: string, options?: { webhookId?: string; event?: string; limit?: number }) => Promise<IPCResult<WebhookDelivery[]>>;
+  /** Get webhook delivery statistics */
+  getWebhookDeliveryStats: (specId: string, webhookId?: string) => Promise<IPCResult<WebhookDeliveryStats>>;
+  /** Get all available webhook event types */
+  getWebhookEventTypes: () => Promise<IPCResult<WebhookEventTypeMeta[]>>;
+  /** Get all available webhook templates */
+  getWebhookTemplates: () => Promise<IPCResult<WebhookTemplateMeta[]>>;
+
   // Custom agent template operations (user-created templates)
   listCustomTemplates: () => Promise<IPCResult<import('./template').CustomTemplate[]>>;
   saveCustomTemplate: (template: Omit<import('./template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
@@ -959,7 +1040,6 @@ export interface ElectronAPI {
     context?: string;
   }) => Promise<IPCResult<{ recorded: boolean; reason?: string }>>;
 
-
   // Feedback analytics operations
   getFeedbackSummary?: (projectId: string, days: number) => Promise<IPCResult<FeedbackSummary>>;
   exportFeedbackData?: (projectId: string, format: 'json' | 'csv', days: number) => Promise<IPCResult<string>>;
@@ -974,6 +1054,34 @@ export interface ElectronAPI {
   sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
   // Scheduler API for build scheduling and queue management
   scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
+
+  // Security API (nested access for security store, flat access for components)
+  security: import('../../preload/api/security-api').SecurityAPI;
+  getProfile?: () => Promise<IPCResult<import('./security').SecurityProfile>>;
+  saveProfile?: (profile: Partial<import('./security').SecurityProfile>) => Promise<IPCResult<import('./security').SecurityProfile>>;
+  resetToDefault?: () => Promise<IPCResult<import('./security').SecurityProfile>>;
+  getAuditLogs?: (options?: {
+    limit?: number;
+    offset?: number;
+    category?: string;
+    severity?: string;
+    startDate?: number;
+    endDate?: number;
+  }) => Promise<IPCResult<{
+    logs: import('./security').SecurityAuditLog[];
+    total: number;
+    hasMore: boolean;
+  }>>;
+  exportConfig?: (options?: {
+    includeAuditLogs?: boolean;
+    auditLogLimit?: number;
+    reason?: string;
+  }) => Promise<IPCResult<import('./security').SecurityExport>>;
+  validateCommand?: (command: string) => Promise<IPCResult<{
+    allowed: boolean;
+    reason?: string;
+    ruleId?: string;
+  }>>;
 }
 
 declare global {

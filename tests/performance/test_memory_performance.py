@@ -34,8 +34,6 @@ class TestMemoryMonitorPerformance:
     @pytest.mark.benchmark
     def test_memory_monitor_initialization(self):
         """Test that MemoryMonitor initializes quickly."""
-        import time
-
         start = time.perf_counter()
         monitor = MemoryMonitor()
         elapsed = time.perf_counter() - start
@@ -436,8 +434,6 @@ class TestWithMemoryThresholds:
         mock_process = MagicMock()
         mock_process.memory_info.return_value = MagicMock(rss=1024 * 1024 * 500)
         monitor._process = mock_process
-
-        import time
 
         start = time.perf_counter()
         for _ in range(10000):

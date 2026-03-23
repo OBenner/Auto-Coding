@@ -12,9 +12,10 @@ import os
 from pathlib import Path
 
 from context.constants import SKIP_DIRS
-from core.client import create_client
 from core.file_utils import write_json_atomic
 from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.providers.config import ProviderConfig
+from core.providers.factory import create_engine_provider
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -42,7 +43,6 @@ from prompts_pkg.prompt_generator import (
     generate_subtask_prompt,
     load_subtask_context,
 )
-from prompts_pkg.prompts import is_first_run
 from recovery import RecoveryAction, RecoveryManager
 from security.constants import PROJECT_DIR_ENV_VAR
 from task_logger import (
@@ -82,6 +82,16 @@ from .utils import (
     load_implementation_plan,
     sync_spec_to_source,
 )
+
+# Import plugin system for agent lifecycle hooks
+try:
+    from plugins.base import PluginType
+    from plugins.registry import PluginRegistry
+    from plugins.sdk.agent import AgentContext
+
+    PLUGINS_AVAILABLE = True
+except ImportError:
+    PLUGINS_AVAILABLE = False
 
 # Import for context window usage display
 try:
@@ -573,6 +583,7 @@ async def run_autonomous_agent(
     max_iterations: int | None = None,
     verbose: bool = False,
     source_spec_dir: Path | None = None,
+    restart_from: str | None = None,
 ) -> None:
     """
     Run the autonomous agent loop with automatic memory management.
@@ -587,6 +598,7 @@ async def run_autonomous_agent(
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Whether to show detailed output
         source_spec_dir: Original spec directory in main project (for syncing from worktree)
+        restart_from: Subtask ID to restart from (None for normal execution)
     """
     # Set environment variable for security hooks to find the correct project directory
     # This is needed because os.getcwd() may return the wrong directory in worktree mode
@@ -627,7 +639,45 @@ async def run_autonomous_agent(
             print()
 
     # Check if this is a fresh start or continuation
+    # Lazy import to avoid circular import: prompts_pkg → agents → coder → prompts_pkg
+    from prompts_pkg.prompts import is_first_run
+
     first_run = is_first_run(spec_dir)
+
+    # Restore provider config if restarting
+    if restart_from:
+        try:
+            from core.providers.config import get_provider_config
+            from implementation_plan import ImplementationPlan
+
+            plan_file = spec_dir / "implementation_plan.json"
+            if plan_file.exists():
+                plan = ImplementationPlan.load(plan_file)
+                if plan.provider_config:
+                    # Restore provider and model from saved config
+                    provider_config = get_provider_config()
+                    saved_provider = plan.provider_config.get("provider")
+                    saved_model = plan.provider_config.get("model")
+
+                    if saved_provider:
+                        os.environ["AI_ENGINE_PROVIDER"] = saved_provider
+                        logger.info(f"Restored provider from config: {saved_provider}")
+                    if saved_model:
+                        # Restore model via provider-specific env var
+                        model_env_map = {
+                            "claude": "CLAUDE_MODEL",
+                            "litellm": "LITELLM_MODEL",
+                            "openrouter": "OPENROUTER_MODEL",
+                            "zhipuai": "ZHIPUAI_MODEL",
+                        }
+                        env_key = model_env_map.get(
+                            saved_provider or provider_config.provider
+                        )
+                        if env_key:
+                            os.environ[env_key] = saved_model
+                        logger.info(f"Restored model from config: {saved_model}")
+        except Exception as e:
+            logger.warning(f"Failed to restore provider config: {e}")
 
     # Track which phase we're in for logging
     current_log_phase = LogPhase.CODING
@@ -720,6 +770,10 @@ async def run_autonomous_agent(
     while True:
         iteration += 1
 
+        # Clear restart_from after first iteration to continue normally
+        if iteration > 1 and restart_from:
+            restart_from = None
+
         # Check for human intervention (PAUSE file)
         pause_file = spec_dir / HUMAN_INTERVENTION_FILE
         if pause_file.exists():
@@ -744,7 +798,7 @@ async def run_autonomous_agent(
             break
 
         # Get the next subtask to work on (planner sessions shouldn't bind to a subtask)
-        next_subtask = None if first_run else get_next_subtask(spec_dir)
+        next_subtask = None if first_run else get_next_subtask(spec_dir, restart_from)
         subtask_id = next_subtask.get("id") if next_subtask else None
 
         # Update status for this session
@@ -821,15 +875,13 @@ async def run_autonomous_agent(
 
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
-        # Create client (fresh context) with phase-specific model and thinking
         # Use appropriate agent_type for correct tool permissions and thinking budget
-        client = create_client(
-            project_dir,
-            spec_dir,
-            phase_model,
-            agent_type="planner" if first_run else "coder",
-            max_thinking_tokens=phase_thinking_budget,
-        )
+        agent_type_for_session = "planner" if first_run else "coder"
+
+        # Defer provider/session creation until we know process isolation is not used.
+        # When process isolation is enabled the subprocess creates its own client,
+        # so building one here would be wasted work.
+        client = None
 
         # Generate appropriate prompt
         if first_run:
@@ -891,7 +943,7 @@ async def run_autonomous_agent(
                     for retry_attempt in range(3):
                         delay = (retry_attempt + 1) * 2  # 2s, 4s, 6s
                         await asyncio.sleep(delay)
-                        next_subtask = get_next_subtask(spec_dir)
+                        next_subtask = get_next_subtask(spec_dir, restart_from)
                         if next_subtask:
                             # Update subtask_id after successful retry
                             subtask_id = next_subtask.get("id")
@@ -1007,6 +1059,46 @@ async def run_autonomous_agent(
             task_logger.set_subtask(subtask_id)
             task_logger.set_session(iteration)
 
+        # Call before_session hook for enabled agent plugins
+        if PLUGINS_AVAILABLE:
+            try:
+                registry = PluginRegistry.get_instance()
+                agent_plugins = registry.list_plugins(
+                    plugin_type=PluginType.AGENT, enabled_only=True
+                )
+
+                if agent_plugins:
+                    # Create agent context for plugins
+                    agent_context = AgentContext(
+                        project_dir=project_dir,
+                        spec_dir=spec_dir,
+                        session_id=f"session-{iteration}",
+                        client=client,
+                        phase="planning" if is_planning_phase else "coding",
+                        metadata={
+                            "subtask_id": subtask_id,
+                            "iteration": iteration,
+                            "attempt": recovery_manager.get_attempt_count(subtask_id)
+                            + 1
+                            if subtask_id
+                            else 1,
+                        },
+                    )
+
+                    # Call before_session for each enabled agent plugin
+                    for plugin in agent_plugins:
+                        try:
+                            plugin.before_session(agent_context)
+                            logger.debug(
+                                f"Called before_session for plugin: {plugin.name}"
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin {plugin.name} before_session hook failed: {e}"
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to call before_session hooks: {e}")
+
         # Check if process isolation is enabled
         use_process_isolation = (
             os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
@@ -1031,6 +1123,40 @@ async def run_autonomous_agent(
                 limits=None,  # Use default ResourceLimits
             )
         else:
+            # Create provider/session now (deferred to avoid wasted work when
+            # process isolation is enabled).
+            provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
+            provider = create_engine_provider(provider_config)
+
+            from core.providers.base import SessionConfig
+
+            session_config = SessionConfig(
+                name=f"{agent_type_for_session}-session-{iteration}",
+                model=phase_model,
+                extra={
+                    "agent_type": agent_type_for_session,
+                    "max_thinking_tokens": phase_thinking_budget,
+                },
+            )
+
+            if provider.name == "claude":
+                session = provider.create_session(
+                    session_config,
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    agent_type=agent_type_for_session,
+                    max_thinking_tokens=phase_thinking_budget,
+                )
+            else:
+                session = provider.create_session(session_config)
+
+            if not hasattr(session, "client"):
+                raise AttributeError(
+                    f"Provider {provider.name} session missing 'client' attribute"
+                )
+
+            client = session.client
+
             # Run in current process (legacy mode)
             async with client:
                 (
@@ -1041,6 +1167,44 @@ async def run_autonomous_agent(
                 ) = await run_agent_session(
                     client, prompt, spec_dir, verbose, phase=current_log_phase
                 )
+
+        # Call after_session hook for enabled agent plugins
+        if PLUGINS_AVAILABLE:
+            try:
+                registry = PluginRegistry.get_instance()
+                agent_plugins = registry.list_plugins(
+                    plugin_type=PluginType.AGENT, enabled_only=True
+                )
+
+                if agent_plugins:
+                    # Create agent context for plugins
+                    agent_context = AgentContext(
+                        project_dir=project_dir,
+                        spec_dir=spec_dir,
+                        session_id=f"session-{iteration}",
+                        client=client,
+                        phase="planning" if is_planning_phase else "coding",
+                        metadata={
+                            "subtask_id": subtask_id,
+                            "session": iteration,
+                            "status": status,
+                        },
+                    )
+
+                    # Call after_session for each enabled agent plugin
+                    session_success = status != "error"
+                    for plugin in agent_plugins:
+                        try:
+                            plugin.after_session(agent_context, success=session_success)
+                            logger.debug(
+                                f"Called after_session for plugin: {plugin.name}"
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin {plugin.name} after_session hook failed: {e}"
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to call after_session hooks: {e}")
 
         # Save token statistics for coding phase
         if usage_metadata and current_log_phase == LogPhase.CODING:
@@ -1063,6 +1227,27 @@ async def run_autonomous_agent(
         if is_planning_phase and status != "error":
             valid, errors = _validate_and_fix_implementation_plan()
             if valid:
+                # Persist provider configuration to implementation plan
+                try:
+                    from core.providers.config import get_provider_config
+                    from implementation_plan import ImplementationPlan
+
+                    plan_file = spec_dir / "implementation_plan.json"
+                    if plan_file.exists():
+                        plan = ImplementationPlan.load(plan_file)
+                        provider_config = get_provider_config()
+                        if provider_config and not plan.provider_config:
+                            plan.provider_config = {
+                                "provider": provider_config.provider,
+                                "model": provider_config.get_model_for_provider(),
+                            }
+                            await plan.async_save(plan_file)
+                            logger.debug(
+                                "Provider config persisted to implementation_plan.json"
+                            )
+                except Exception as e:
+                    logger.warning(f"Failed to persist provider config to plan: {e}")
+
                 # Validate file paths in the newly created plan
                 path_issues = _validate_plan_file_paths(spec_dir, project_dir)
                 if (
@@ -1339,7 +1524,7 @@ async def run_autonomous_agent(
             )
 
             # Show next subtask info
-            next_subtask = get_next_subtask(spec_dir)
+            next_subtask = get_next_subtask(spec_dir, restart_from)
             if next_subtask:
                 subtask_id = next_subtask.get("id")
                 print(

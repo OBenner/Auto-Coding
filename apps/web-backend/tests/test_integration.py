@@ -56,13 +56,17 @@ class TestAgentExecutionFlowIntegration:
 
     @patch("api.routes.agents.start_agent_task")
     @patch("api.routes.agents.cleanup_completed_tasks")
-    def test_start_agent_and_get_status(self, mock_cleanup, mock_start, test_client):
+    def test_start_agent_and_get_status(
+        self, mock_cleanup, mock_start, test_client, auth_headers
+    ):
         """Test starting an agent and then checking its status."""
         # Start agent
         mock_start.return_value = "001:planner"
 
         start_response = test_client.post(
-            "/api/agents/run", json={"spec_id": "001", "agent_type": "planner"}
+            "/api/agents/run",
+            json={"spec_id": "001", "agent_type": "planner"},
+            headers=auth_headers,
         )
 
         assert start_response.status_code == 202
@@ -73,7 +77,9 @@ class TestAgentExecutionFlowIntegration:
         with patch("api.routes.agents.get_task_status") as mock_status:
             mock_status.return_value = {"status": "running"}
 
-            status_response = test_client.get(f"/api/agents/status/{task_id}")
+            status_response = test_client.get(
+                f"/api/agents/status/{task_id}", headers=auth_headers
+            )
 
             assert status_response.status_code == 200
             assert status_response.json()["status"] == "running"
@@ -82,14 +88,16 @@ class TestAgentExecutionFlowIntegration:
     @patch("api.routes.agents.cleanup_completed_tasks")
     @patch("api.routes.agents.cancel_task")
     def test_start_agent_and_cancel(
-        self, mock_cancel, mock_cleanup, mock_start, test_client
+        self, mock_cancel, mock_cleanup, mock_start, test_client, auth_headers
     ):
         """Test starting an agent and then cancelling it."""
         # Start agent
         mock_start.return_value = "001:coder"
 
         start_response = test_client.post(
-            "/api/agents/run", json={"spec_id": "001", "agent_type": "coder"}
+            "/api/agents/run",
+            json={"spec_id": "001", "agent_type": "coder"},
+            headers=auth_headers,
         )
 
         assert start_response.status_code == 202
@@ -98,20 +106,26 @@ class TestAgentExecutionFlowIntegration:
         # Cancel agent
         mock_cancel.return_value = True
 
-        cancel_response = test_client.post(f"/api/agents/cancel/{task_id}")
+        cancel_response = test_client.post(
+            f"/api/agents/cancel/{task_id}", headers=auth_headers
+        )
 
         assert cancel_response.status_code == 200
         assert cancel_response.json()["cancelled"] is True
 
     @patch("api.routes.agents.start_agent_task")
     @patch("api.routes.agents.cleanup_completed_tasks")
-    def test_agent_flow_with_completion(self, mock_cleanup, mock_start, test_client):
+    def test_agent_flow_with_completion(
+        self, mock_cleanup, mock_start, test_client, auth_headers
+    ):
         """Test full agent flow from start to completion."""
         mock_start.return_value = "001:qa_reviewer"
 
         # Start agent
         start_response = test_client.post(
-            "/api/agents/run", json={"spec_id": "001", "agent_type": "qa_reviewer"}
+            "/api/agents/run",
+            json={"spec_id": "001", "agent_type": "qa_reviewer"},
+            headers=auth_headers,
         )
 
         assert start_response.status_code == 202
@@ -124,21 +138,25 @@ class TestAgentExecutionFlowIntegration:
                 "result": {"success": True, "message": "QA review passed"},
             }
 
-            status_response = test_client.get(f"/api/agents/status/{task_id}")
+            status_response = test_client.get(
+                f"/api/agents/status/{task_id}", headers=auth_headers
+            )
 
             assert status_response.status_code == 200
             data = status_response.json()
             assert data["status"] == "completed"
             assert data["result"]["success"] is True
 
-    def test_multiple_agents_different_specs(self, test_client):
+    def test_multiple_agents_different_specs(self, test_client, auth_headers):
         """Test running agents for different specs concurrently."""
         with patch("api.routes.agents.start_agent_task") as mock_start:
             with patch("api.routes.agents.cleanup_completed_tasks"):
                 # Start first agent
                 mock_start.return_value = "001:planner"
                 resp1 = test_client.post(
-                    "/api/agents/run", json={"spec_id": "001", "agent_type": "planner"}
+                    "/api/agents/run",
+                    json={"spec_id": "001", "agent_type": "planner"},
+                    headers=auth_headers,
                 )
                 assert resp1.status_code == 202
                 assert resp1.json()["task_id"] == "001:planner"
@@ -146,7 +164,9 @@ class TestAgentExecutionFlowIntegration:
                 # Start second agent for different spec
                 mock_start.return_value = "002:planner"
                 resp2 = test_client.post(
-                    "/api/agents/run", json={"spec_id": "002", "agent_type": "planner"}
+                    "/api/agents/run",
+                    json={"spec_id": "002", "agent_type": "planner"},
+                    headers=auth_headers,
                 )
                 assert resp2.status_code == 202
                 assert resp2.json()["task_id"] == "002:planner"
@@ -644,19 +664,21 @@ class TestAgentErrorHandlingIntegration:
     Verifies proper error propagation through API and WebSocket.
     """
 
-    def test_agent_spec_not_found_error_flow(self, test_client):
+    def test_agent_spec_not_found_error_flow(self, test_client, auth_headers):
         """Test error flow when spec is not found."""
         with patch("api.routes.agents.start_agent_task") as mock_start:
             mock_start.side_effect = FileNotFoundError("Spec not found: 999")
 
             response = test_client.post(
-                "/api/agents/run", json={"spec_id": "999", "agent_type": "planner"}
+                "/api/agents/run",
+                json={"spec_id": "999", "agent_type": "planner"},
+                headers=auth_headers,
             )
 
             assert response.status_code == 404
             assert "not found" in response.json()["detail"].lower()
 
-    def test_agent_conflict_error_flow(self, test_client):
+    def test_agent_conflict_error_flow(self, test_client, auth_headers):
         """Test error flow when agent is already running."""
         with patch("api.routes.agents.start_agent_task") as mock_start:
             mock_start.side_effect = RuntimeError(
@@ -664,7 +686,9 @@ class TestAgentErrorHandlingIntegration:
             )
 
             response = test_client.post(
-                "/api/agents/run", json={"spec_id": "001", "agent_type": "coder"}
+                "/api/agents/run",
+                json={"spec_id": "001", "agent_type": "coder"},
+                headers=auth_headers,
             )
 
             assert response.status_code == 409
@@ -713,7 +737,7 @@ class TestAgentTypeIntegration:
     Verifies the flow between planner, coder, qa_reviewer, and qa_fixer.
     """
 
-    def test_all_agent_types_can_be_started(self, test_client):
+    def test_all_agent_types_can_be_started(self, test_client, auth_headers):
         """Test that all agent types can be started via API."""
         agent_types = ["planner", "coder", "qa_reviewer", "qa_fixer"]
 
@@ -725,6 +749,7 @@ class TestAgentTypeIntegration:
                     response = test_client.post(
                         "/api/agents/run",
                         json={"spec_id": "001", "agent_type": agent_type},
+                        headers=auth_headers,
                     )
 
                     assert response.status_code == 202, f"Failed for {agent_type}"

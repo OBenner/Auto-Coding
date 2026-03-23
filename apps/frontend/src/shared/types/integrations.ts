@@ -478,3 +478,89 @@ export interface RoadmapProviderConfig {
  * Canny-specific status values
  */
 export type CannyStatus = 'open' | 'under review' | 'planned' | 'in progress' | 'complete' | 'closed';
+
+// ============================================
+// Webhook Integration Types (develop-side)
+// Note: Core webhook types (WebhookConfig, WebhookDelivery, etc.)
+// are defined in ./webhook.ts (PR's authoritative types)
+// ============================================
+
+/**
+ * Type of webhook integration (incoming/outgoing)
+ */
+export type WebhookType = 'incoming' | 'outgoing';
+
+/**
+ * Pre-built webhook integrations
+ */
+export type WebhookIntegration = 'slack' | 'discord' | 'teams' | 'jira' | 'github' | 'gitlab' | 'generic';
+
+/**
+ * Authentication type for webhook endpoints
+ */
+export type WebhookAuthType = 'none' | 'api_key' | 'bearer_token' | 'basic_auth' | 'signature';
+
+/**
+ * Signature hash algorithm
+ */
+export type WebhookSignatureAlgorithm = 'hmac_sha256' | 'hmac_sha512';
+
+/**
+ * Authentication configuration for webhook endpoints
+ */
+export interface WebhookAuthenticationConfig {
+  auth_type: WebhookAuthType;
+  api_key?: string;
+  api_key_header?: string;
+  username?: string;
+  password?: string;
+  secret?: string;
+  signature_algorithm: WebhookSignatureAlgorithm;
+  signature_header?: string;
+}
+
+/**
+ * Audit log entry for webhook delivery attempts
+ */
+export interface WebhookLog {
+  id: string;
+  webhook_id: string;
+  event_type: import('./webhook').WebhookEventType;
+  event_data: Record<string, unknown>;
+  status: import('./webhook').WebhookDeliveryStatus;
+  request_url?: string;
+  request_method: string;
+  request_headers: Record<string, string>;
+  request_body?: Record<string, unknown> | null;
+  response_status_code?: number | null;
+  response_headers: Record<string, string>;
+  response_body?: string | null;
+  error_message?: string | null;
+  error_type?: string | null;
+  attempt_number: number;
+  max_retries: number;
+  created_at: string;
+  completed_at?: string | null;
+  duration_ms?: number | null;
+}
+
+/**
+ * Event that can trigger outgoing webhooks
+ */
+export interface WebhookEvent {
+  type: import('./webhook').WebhookEventType;
+  data: Record<string, unknown>;
+  timestamp: string;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Connection status for a webhook integration
+ */
+export interface WebhookIntegrationStatus {
+  integration: WebhookIntegration;
+  connected: boolean;
+  enabled: boolean;
+  last_tested?: string;
+  error?: string;
+}

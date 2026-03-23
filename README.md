@@ -65,8 +65,8 @@ Run up to 12 agent terminals simultaneously. The Coder agent can spawn subagents
 ### GitHub, GitLab & Linear Integration
 Import issues, create PRs, and sync progress with your existing project management tools.
 
-### Multi-Provider LLM Support
-Works with Claude, OpenAI, Google Gemini, Azure OpenAI, Ollama, and more -- not locked to a single model.
+### Migration Assistant
+Safely migrate frameworks, libraries, and languages with incremental validation and rollback. [See docs](docs/migration-assistant.md).
 
 ### Cross-Platform
 Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also available.

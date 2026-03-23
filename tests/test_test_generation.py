@@ -179,7 +179,11 @@ class Calculator:
 
 @pytest.fixture
 def sample_test_file(temp_dir: Path) -> Path:
-    """Create a sample test file for validation testing."""
+    """Create a sample test file for validation testing.
+
+    Uses inline arithmetic (no external imports) so pytest collection works
+    without needing a 'calculator' module installed.
+    """
     test_content = '''"""
 Tests for Calculator Module
 ============================
@@ -188,7 +192,6 @@ Generated tests for the calculator module.
 """
 
 import pytest
-from calculator import add, divide, is_even, Calculator
 
 
 class TestAddFunction:
@@ -196,15 +199,15 @@ class TestAddFunction:
 
     def test_add_positive_numbers(self):
         """Add two positive numbers."""
-        assert add(2, 3) == 5
+        assert 2 + 3 == 5
 
     def test_add_negative_numbers(self):
         """Add two negative numbers."""
-        assert add(-2, -3) == -5
+        assert -2 + -3 == -5
 
     def test_add_zero(self):
         """Add with zero."""
-        assert add(5, 0) == 5
+        assert 5 + 0 == 5
 
 
 class TestDivideFunction:
@@ -212,59 +215,42 @@ class TestDivideFunction:
 
     def test_divide_positive_numbers(self):
         """Divide two positive numbers."""
-        assert divide(6, 2) == 3.0
+        assert 6 / 2 == 3.0
 
     def test_divide_by_zero_raises_error(self):
-        """Dividing by zero raises ValueError."""
-        with pytest.raises(ValueError, match="Cannot divide by zero"):
-            divide(5, 0)
+        """Dividing by zero raises ZeroDivisionError."""
+        with pytest.raises(ZeroDivisionError):
+            _ = 5 / 0
 
 
 class TestIsEvenFunction:
     """Tests for is_even() function."""
 
     def test_even_number_returns_true(self):
-        """Even numbers return True."""
-        assert is_even(4) is True
+        """Even numbers are divisible by 2."""
+        assert 4 % 2 == 0
 
     def test_odd_number_returns_false(self):
-        """Odd numbers return False."""
-        assert is_even(3) is False
+        """Odd numbers are not divisible by 2."""
+        assert 3 % 2 != 0
 
 
 class TestCalculatorClass:
     """Tests for Calculator class."""
 
     def test_calculator_initialization(self):
-        """Calculator initializes with default precision."""
-        calc = Calculator()
-        assert calc.precision == 2
-        assert calc.history == []
+        """Calculator stores precision and starts with empty history."""
+        precision = 2
+        history = []
+        assert precision == 2
+        assert len(history) == 0
 
-    def test_calculate_addition(self):
-        """Calculator can add numbers."""
-        calc = Calculator()
-        result = calc.calculate("+", 2, 3)
-        assert result == 5.0
-
-    def test_calculate_division_by_zero(self):
-        """Calculator raises error on division by zero."""
-        calc = Calculator()
-        with pytest.raises(ValueError, match="Cannot divide by zero"):
-            calc.calculate("/", 5, 0)
-
-    def test_calculate_invalid_operation(self):
-        """Calculator raises error on invalid operation."""
-        calc = Calculator()
-        with pytest.raises(ValueError, match="Invalid operation"):
-            calc.calculate("^", 2, 3)
-
-    def test_clear_history(self):
-        """Calculator can clear history."""
-        calc = Calculator()
-        calc.calculate("+", 2, 3)
-        calc.clear_history()
-        assert calc.history == []
+    def test_calculator_history_tracking(self):
+        """Calculator records operations in history."""
+        history = []
+        history.append(("+", 1, 2, 3))
+        assert len(history) == 1
+        assert history[0][0] == "+"
 '''
 
     test_file = temp_dir / "test_calculator.py"
@@ -357,6 +343,9 @@ class TestCodeAnalyzer:
         assert "edge_cases" in result
 
         # Should detect error handling (raise ValueError)
+        assert all("type" in ec for ec in result["edge_cases"]), (
+            "Every edge case entry must have a 'type' key"
+        )
         edge_case_types = [ec["type"] for ec in result["edge_cases"]]
         assert "error_raising" in edge_case_types
 
@@ -515,6 +504,9 @@ def validate_input(data):
         assert "edge_cases" in result
         assert len(result["edge_cases"]) >= 3
 
+        assert all("type" in ec for ec in result["edge_cases"]), (
+            "Every edge case entry must have a 'type' key"
+        )
         edge_case_types = [ec["type"] for ec in result["edge_cases"]]
         assert "boundary_condition" in edge_case_types
         assert "type_validation" in edge_case_types
