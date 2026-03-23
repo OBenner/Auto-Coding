@@ -1,0 +1,247 @@
+name: Dependency Updates
+
+# Automated dependency scanning with security vulnerability detection
+# Runs weekly and on manual trigger to detect outdated dependencies and CVEs
+# Generates JSON and Markdown reports with recommended update batches
+
+on:
+  workflow_dispatch:
+    inputs:
+      security-only:
+        description: 'Scan security vulnerabilities only'
+        required: false
+        type: boolean
+        default: false
+      ecosystems:
+        description: 'Ecosystems to scan (python,node)'
+        required: false
+        type: string
+        default: 'python,node'
+      create-pr:
+        description: 'Create pull request with dependency updates'
+        required: false
+        type: boolean
+        default: false
+      notify:
+        description: 'Create GitHub issues for critical vulnerabilities'
+        required: false
+        type: boolean
+        default: true
+  schedule:
+    - cron: '0 0 * * 1' # Weekly on Monday at midnight UTC
+
+concurrency:
+  group: dependency-updates-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  dependency-scan:
+    name: Dependency Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Python backend
+        uses: ./.github/actions/setup-python-backend
+        with:
+          python-version: '3.12'
+          install-test-deps: 'false'
+
+      - name: Run dependency scan
+        id: scan
+        working-directory: apps/backend
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/backend
+        run: |
+          source .venv/bin/activate
+
+          # Build command arguments
+          SCAN_ARGS="--project ${{ github.workspace }} --dry-run --format both"
+
+          if [ "${{ github.event.inputs.security-only }}" = "true" ]; then
+            SCAN_ARGS="$SCAN_ARGS --security-only"
+          fi
+
+          if [ -n "${{ github.event.inputs.ecosystems }}" ]; then
+            SCAN_ARGS="$SCAN_ARGS --ecosystems ${{ github.event.inputs.ecosystems }}"
+          fi
+
+          if [ "${{ github.event.inputs.create-pr }}" = "true" ]; then
+            SCAN_ARGS="$SCAN_ARGS --create-pr"
+          fi
+
+          echo "::group::Running dependency scan"
+          echo "Command: python runners/dependency_update_runner.py $SCAN_ARGS"
+          python runners/dependency_update_runner.py $SCAN_ARGS || SCAN_EXIT=$?
+          echo "::endgroup::"
+
+          # Check if scan completed successfully (exit code 0) or found no updates
+          if [ "${SCAN_EXIT:-0}" -gt 1 ]; then
+            echo "::error::Dependency scan failed with exit code ${SCAN_EXIT}"
+            exit 1
+          fi
+
+      - name: Send vulnerability notifications
+        id: notify
+        working-directory: apps/backend
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/backend
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .venv/bin/activate
+
+          # Skip if notifications are disabled
+          if [ "${{ github.event.inputs.notify }}" = "false" ]; then
+            echo "::notice::Notifications disabled, skipping"
+            exit 0
+          fi
+
+          # Check if we have any security vulnerabilities
+          if [ ! -f "${{ github.workspace }}/.auto-claude/dependency-reports/dependency_report.json" ]; then
+            echo "::notice::No dependency report found, skipping notifications"
+            exit 0
+          fi
+
+          # Run notification module
+          echo "::group::Sending vulnerability notifications"
+          python -c "
+          import asyncio
+          import json
+          from pathlib import Path
+          from runners.dependency_notifications import DependencyNotifier
+          from analysis.dependency_scanner import DependencyScanResult
+
+          async def send_notifications():
+              # Load scan results
+              report_path = Path('${{ github.workspace }}/.auto-claude/dependency-reports/dependency_report.json')
+              with open(report_path) as f:
+                  report_data = json.load(f)
+
+              # Create DependencyScanResult from report data
+              scan_result = DependencyScanResult.from_dict(report_data)
+
+              # Initialize notifier
+              notifier = DependencyNotifier(
+                  project_dir=Path('${{ github.workspace }}')
+              )
+
+              # Send notifications for critical/high vulnerabilities
+              result = await notifier.notify_critical_vulnerabilities(
+                  scan_result,
+                  min_severity='high',
+                  create_issues=True
+              )
+
+              # Output results
+              if result.success:
+                  print(f'✅ Sent {result.summary_counts[\"total\"]} notifications')
+                  if result.summary_counts.get('critical', 0) > 0:
+                      print(f'  - Critical: {result.summary_counts[\"critical\"]}')
+                  if result.summary_counts.get('high', 0) > 0:
+                      print(f'  - High: {result.summary_counts[\"high\"]}')
+              else:
+                  print(f'⚠️ Notifications completed with errors')
+                  for error in result.errors:
+                      print(f'  Error: {error}')
+                  return 1
+
+              return 0
+
+          exit(asyncio.run(send_notifications()))
+          " || NOTIFY_EXIT=$?
+
+          if [ "${NOTIFY_EXIT:-0}" -gt 0 ]; then
+            echo "::warning::Notification step completed with errors (exit code ${NOTIFY_EXIT})"
+          fi
+          echo "::endgroup::"
+
+      - name: Upload scan reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-reports
+          path: .auto-claude/dependency-reports/
+          retention-days: 30
+
+      - name: Generate summary
+        uses: actions/github-script@v8
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Check for reports
+            const reportDir = '.auto-claude/dependency-reports';
+            let summary = '## Dependency Update Scan Results\n\n';
+
+            try {
+              if (fs.existsSync(reportDir)) {
+                // Read JSON report if available
+                const jsonFile = `${reportDir}/dependency_report.json`;
+                if (fs.existsSync(jsonFile)) {
+                  const report = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
+                  const updates = report.updates_available || [];
+                  const security = report.security_updates || [];
+
+                  summary += `| Metric | Count |\n`;
+                  summary += `|--------|-------|\n`;
+                  summary += `| Total Updates | ${updates.length} |\n`;
+                  summary += `| Security Updates | ${security.length} |\n`;
+                  summary += `| Ecosystems | ${report.scan_metadata?.scanned_ecosystems?.join(', ') || 'N/A'} |\n\n`;
+
+                  if (security.length > 0) {
+                    summary += `### 🔒 Security Vulnerabilities Found\n\n`;
+                    summary += `**Critical/High severity issues require immediate attention.**\n\n`;
+                  }
+
+                  // Count by severity
+                  const critical = security.filter(u => u.severity === 'critical').length;
+                  const high = security.filter(u => u.severity === 'high').length;
+
+                  if (critical > 0 || high > 0) {
+                    summary += `- 🚨 Critical: ${critical}\n`;
+                    summary += `- 🔴 High: ${high}\n\n`;
+                  }
+                }
+
+                // Check for markdown report
+                const mdFile = `${reportDir}/dependency_report.md`;
+                if (fs.existsSync(mdFile)) {
+                  summary += `### 📄 Full Report\n\n`;
+                  summary += `See [dependency_report.md](.auto-claude/dependency-reports/dependency_report.md) for detailed package information and update batches.\n\n`;
+                }
+              } else {
+                summary += 'No dependency reports generated.\n\n';
+              }
+            } catch (error) {
+              summary += `Error reading reports: ${error.message}\n\n`;
+            }
+
+            summary += `### 📦 Artifacts\n\n`;
+            summary += `Full scan reports have been uploaded as artifacts and will be retained for 30 days.\n`;
+
+            core.summary.addRaw(summary);
+            await core.summary.write();
+
+            // Fail workflow if critical/high vulnerabilities found
+            const jsonFile = `${reportDir}/dependency_report.json`;
+            if (fs.existsSync(jsonFile)) {
+              const report = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
+              const security = report.security_updates || [];
+              const criticalHigh = security.filter(u => u.severity === 'critical' || u.severity === 'high').length;
+
+              if (criticalHigh > 0) {
+                core.setFailed(`Found ${criticalHigh} critical/high severity security vulnerabilities`);
+              }
+            }

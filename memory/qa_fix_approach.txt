@@ -1,0 +1,16 @@
+--- QA Fix Session 1 at 2026-03-20T20:45:00Z ---
+Issues to fix: 3
+
+Fix Approach:
+1. Remove module-level validate_platform_dependencies() call from ideation_runner.py line 33
+2. Move the validation call into the if __name__ == "__main__": block
+3. Fix imports in dependency_notifications.py to use absolute imports
+4. Verify pytest can collect and run tests
+5. Add comprehensive test coverage to reach 80%+
+
+Root cause: Module-level side effects causing SystemExit during pytest collection,
+blocking all testing. Import errors compound the issue.
+
+Strategy: Minimal changes - move function calls to prevent side effects during import,
+fix imports to match project patterns, then verify tests can run.
+

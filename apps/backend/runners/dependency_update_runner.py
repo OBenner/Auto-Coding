@@ -30,9 +30,12 @@ Usage:
 """
 
 import asyncio
+import json
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 # Add apps/backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -53,6 +56,114 @@ if env_file.exists():
     load_dotenv(env_file)
 
 from phase_config import resolve_model_id
+
+# Dependency update configuration file
+DEPENDENCY_UPDATES_CONFIG = ".github/dependency-updates.config.json"
+
+
+def load_config(project_dir: Path) -> dict[str, Any] | None:
+    """
+    Load dependency updates configuration from project directory.
+
+    Args:
+        project_dir: Project root directory
+
+    Returns:
+        Configuration dictionary, or None if not found
+    """
+    config_file = project_dir / DEPENDENCY_UPDATES_CONFIG
+
+    if not config_file.exists():
+        # Try example config
+        example_config = project_dir / ".github" / "dependency-updates.config.json.example"
+        if example_config.exists():
+            try:
+                with open(example_config, encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                pass
+        return None
+
+    try:
+        with open(config_file, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def is_auto_approved(
+    package_name: str,
+    update_type: str,
+    ecosystem: str,
+    is_security: bool,
+    config: dict[str, Any] | None,
+) -> bool:
+    """
+    Determine if a dependency update should be auto-approved based on configuration.
+
+    Auto-approval rules:
+    - If auto_approval is not enabled, nothing is auto-approved
+    - Blocklisted packages are never auto-approved
+    - Allowlisted packages use their specific approval level
+    - Security updates are never auto-approved (require manual review)
+    - Patch/minor updates follow global settings if not in allowlist/blocklist
+
+    Args:
+        package_name: Name of the package
+        update_type: Type of update (patch, minor, major)
+        ecosystem: Package ecosystem (python, node)
+        is_security: Whether this is a security update
+        config: Dependency updates configuration dictionary
+
+    Returns:
+        True if the update should be auto-approved, False otherwise
+    """
+    # No config = no auto-approval
+    if not config:
+        return False
+
+    auto_approval = config.get("auto_approval", {})
+    if not auto_approval.get("enabled", False):
+        return False
+
+    # Security updates are never auto-approved (require manual review)
+    if is_security:
+        return False
+
+    # Check blocklist first (blocklist has priority)
+    blocklist = auto_approval.get("blocklisted_packages", [])
+    for blocked in blocklist:
+        if (
+            blocked.get("name") == package_name
+            and blocked.get("ecosystem") == ecosystem
+        ):
+            return False
+
+    # Check allowlist (allowlist has priority over global settings)
+    allowlist = auto_approval.get("allowlisted_packages", [])
+    for allowed in allowlist:
+        if (
+            allowed.get("name") == package_name
+            and allowed.get("ecosystem") == ecosystem
+        ):
+            allowed_level = allowed.get("auto_approve", "none")
+            if allowed_level == "patch" and update_type == "patch":
+                return True
+            if allowed_level == "minor" and update_type in ("patch", "minor"):
+                return True
+            if allowed_level == "major":
+                return True
+            # Explicitly set to "none" or not matching
+            return False
+
+    # Use global settings for packages not in allowlist/blocklist
+    if update_type == "patch" and auto_approval.get("patch_updates", False):
+        return True
+    if update_type == "minor" and auto_approval.get("minor_updates", False):
+        return True
+
+    # Major updates are never auto-approved by global settings
+    return False
 
 
 def _generate_task_description(
@@ -149,6 +260,8 @@ def _generate_markdown_report(
     batches: list,
     project_dir: Path,
     ecosystems_filter: list[str] | None = None,
+    config: dict[str, Any] | None = None,
+    updates_to_process: list | None = None,
 ) -> str:
     """
     Generate a markdown report for dependency scan results.
@@ -158,6 +271,8 @@ def _generate_markdown_report(
         batches: List of UpdateBatch objects
         project_dir: Project directory path
         ecosystems_filter: Optional list of ecosystems that were scanned
+        config: Optional dependency updates configuration
+        updates_to_process: Optional list of updates being processed
 
     Returns:
         Markdown formatted report string
@@ -241,7 +356,33 @@ def _generate_markdown_report(
         )
         security_badge = " 🔒 **SECURITY**" if batch.is_security_batch else ""
 
-        lines.append(f"### Batch {i}: `{batch.batch_id}` {security_badge}")
+        # Determine auto-approval status for the batch
+        batch_auto_approved = False
+        if config and batch.update_type in ("patch", "minor") and updates_to_process:
+            all_approved = True
+            for pkg_name in batch.packages:
+                update = next(
+                    (u for u in updates_to_process if u.name == pkg_name), None
+                )
+                if update:
+                    pkg_approved = is_auto_approved(
+                        package_name=update.name,
+                        update_type=update.update_type,
+                        ecosystem=update.ecosystem,
+                        is_security=update.is_security,
+                        config=config,
+                    )
+                    if not pkg_approved:
+                        all_approved = False
+                        break
+                else:
+                    all_approved = False
+                    break
+            batch_auto_approved = all_approved
+
+        auto_approve_badge = " ✅ **AUTO-APPROVED**" if batch_auto_approved else ""
+
+        lines.append(f"### Batch {i}: `{batch.batch_id}` {security_badge}{auto_approve_badge}")
         lines.append("")
         lines.append(f"- **Risk Level**: {risk_icon} {batch.risk_level.title()}")
         lines.append(f"- **Priority**: {batch.priority}")
@@ -324,6 +465,74 @@ def _generate_markdown_report(
     return "\n".join(lines)
 
 
+async def _create_pull_request_async(
+    project_dir: Path,
+    pr_title: str,
+    pr_body: str,
+) -> bool:
+    """
+    Create a pull request using GHClient with proper error handling and retries.
+
+    Args:
+        project_dir: Project directory
+        pr_title: PR title
+        pr_body: PR body content
+
+    Returns:
+        True if PR created successfully, False otherwise
+    """
+    try:
+        # Detect default branch using git
+        default_branch = "main"  # Default fallback
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "origin/HEAD"],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=5.0,
+            )
+            if result.returncode == 0:
+                default_branch = result.stdout.strip().replace("origin/", "")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass  # Use fallback
+
+        # Initialize GHClient
+        client = GHClient(project_dir=project_dir)
+
+        # Create PR
+        pr_cmd = [
+            "pr",
+            "create",
+            "--title",
+            pr_title,
+            "--body",
+            pr_body,
+            "--base",
+            default_branch,
+        ]
+
+        print("🔧 Creating pull request...")
+        result = await client.run(pr_cmd)
+
+        print(f"\n✓ Pull request created successfully!")
+        print(f"📝 {result.stdout.strip() if result.stdout else 'PR created'}")
+
+        return True
+
+    except GHTimeoutError as e:
+        print(f"✗ GitHub CLI timed out: {e}")
+        return False
+    except GHCommandError as e:
+        print(f"✗ Failed to create PR: {e}")
+        print("\nNote: Branch has been pushed. You can create the PR manually via GitHub UI.")
+        return False
+    except Exception as e:
+        print(f"✗ Unexpected error creating PR: {e}")
+        print("\nNote: Branch has been pushed. You can create the PR manually via GitHub UI.")
+        return False
+
+
 def main() -> int:
     """CLI entry point."""
     import argparse
@@ -403,6 +612,24 @@ Examples:
         help="Generate spec for specific batch ID",
     )
 
+    # PR creation
+    parser.add_argument(
+        "--create-pr",
+        action="store_true",
+        help="Create a pull request with dependency update proposals",
+    )
+    parser.add_argument(
+        "--pr-title",
+        type=str,
+        default="Dependency Updates",
+        help="Title for the PR (default: 'Dependency Updates')",
+    )
+    parser.add_argument(
+        "--pr-branch",
+        type=str,
+        help="Branch name for the PR (default: auto-generated)",
+    )
+
     # Advanced options
     parser.add_argument(
         "--model",
@@ -425,6 +652,13 @@ Examples:
     if not project_dir.exists():
         print(f"✗ Error: Project directory does not exist: {project_dir}")
         return 1
+
+    # Load dependency updates configuration
+    config = load_config(project_dir)
+    if config:
+        print("⚙️  Loaded dependency updates configuration")
+    else:
+        print("ℹ️  No dependency updates configuration found, using defaults")
 
     # Parse ecosystems filter
     ecosystems_filter = None
@@ -458,6 +692,7 @@ Examples:
     try:
         from analysis.analyzers.dependency_analyzer import DependencyAnalyzer
         from analysis.dependency_scanner import DependencyScanner
+        from runners.github.gh_client import GHClient, GHCommandError, GHTimeoutError
     except ImportError as e:
         print(f"✗ Error: Failed to import dependency modules: {e}")
         return 1
@@ -559,8 +794,37 @@ Examples:
             else "🟢"
         )
         security_marker = " [SECURITY]" if batch.is_security_batch else ""
+
+        # Determine auto-approval status for the batch
+        # A batch is auto-approved only if ALL packages in it are auto-approved
+        batch_auto_approved = False
+        if config and batch.update_type in ("patch", "minor"):
+            all_approved = True
+            for pkg_name in batch.packages:
+                # Find the update for this package
+                update = next(
+                    (u for u in updates_to_process if u.name == pkg_name), None
+                )
+                if update:
+                    pkg_approved = is_auto_approved(
+                        package_name=update.name,
+                        update_type=update.update_type,
+                        ecosystem=update.ecosystem,
+                        is_security=update.is_security,
+                        config=config,
+                    )
+                    if not pkg_approved:
+                        all_approved = False
+                        break
+                else:
+                    all_approved = False
+                    break
+            batch_auto_approved = all_approved
+
+        auto_approve_marker = " ✅ AUTO-APPROVED" if batch_auto_approved else ""
+
         print(
-            f"  {risk_icon} {batch.batch_id}: {len(batch.packages)} package(s){security_marker}"
+            f"  {risk_icon} {batch.batch_id}: {len(batch.packages)} package(s){security_marker}{auto_approve_marker}"
         )
         print(f"     Priority: {batch.priority} | Risk: {batch.risk_level}")
         print(f"     Packages: {', '.join(batch.packages[:5])}")
@@ -574,8 +838,33 @@ Examples:
         print("💾 Saving JSON report...")
         json_file = output_dir / "dependency_report.json"
         report_data = scanner.to_dict(scan_result)
-        report_data["batches"] = [
-            {
+        report_data["batches"] = []
+        for b in batches:
+            # Determine auto-approval status for the batch
+            batch_auto_approved = False
+            if config and b.update_type in ("patch", "minor"):
+                all_approved = True
+                for pkg_name in b.packages:
+                    update = next(
+                        (u for u in updates_to_process if u.name == pkg_name), None
+                    )
+                    if update:
+                        pkg_approved = is_auto_approved(
+                            package_name=update.name,
+                            update_type=update.update_type,
+                            ecosystem=update.ecosystem,
+                            is_security=update.is_security,
+                            config=config,
+                        )
+                        if not pkg_approved:
+                            all_approved = False
+                            break
+                    else:
+                        all_approved = False
+                        break
+                batch_auto_approved = all_approved
+
+            batch_dict = {
                 "batch_id": b.batch_id,
                 "update_type": b.update_type,
                 "ecosystem": b.ecosystem,
@@ -584,9 +873,9 @@ Examples:
                 "is_security_batch": b.is_security_batch,
                 "priority": b.priority,
                 "notes": b.notes,
+                "auto_approved": batch_auto_approved,
             }
-            for b in batches
-        ]
+            report_data["batches"].append(batch_dict)
         import json
 
         with open(json_file, "w", encoding="utf-8") as f:
@@ -601,6 +890,8 @@ Examples:
             batches=batches,
             project_dir=project_dir,
             ecosystems_filter=ecosystems_filter,
+            config=config,
+            updates_to_process=updates_to_process,
         )
         markdown_file.write_text(markdown_content, encoding="utf-8")
         print(f"   Saved to: {markdown_file}")
@@ -655,6 +946,195 @@ Examples:
             return 1
         except Exception as e:
             print(f"\n\nError during spec creation: {e}")
+            return 1
+
+    # PR creation
+    if args.create_pr:
+        print("\n🔧 Creating pull request for dependency updates...")
+
+        # Generate branch name if not provided
+        if args.pr_branch:
+            branch_name = args.pr_branch
+        else:
+            timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+            branch_name = f"dependency-updates-{timestamp}"
+
+        # Create and checkout new branch
+        try:
+            print(f"📂 Creating branch: {branch_name}")
+            subprocess.run(
+                ["git", "checkout", "-b", branch_name],
+                cwd=project_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"✗ Failed to create branch: {e.stderr}")
+            return 1
+
+        # Create a commit with the report
+        try:
+            # Add the report files
+            report_files = []
+            if args.format in ["json", "both"]:
+                json_file = output_dir / "dependency_report.json"
+                if json_file.exists():
+                    report_files.append(str(json_file))
+            if args.format in ["markdown", "both"]:
+                markdown_file = output_dir / "dependency_report.md"
+                if markdown_file.exists():
+                    report_files.append(str(markdown_file))
+
+            if report_files:
+                subprocess.run(
+                    ["git", "add"] + report_files,
+                    cwd=project_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+                subprocess.run(
+                    [
+                        "git",
+                        "commit",
+                        "-m",
+                        f"{args.pr_title}\n\nAutomated dependency update report generated by Auto-Claude.",
+                    ],
+                    cwd=project_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+                # Push to remote
+                print("📤 Pushing branch to remote...")
+                subprocess.run(
+                    ["git", "push", "-u", "origin", branch_name],
+                    cwd=project_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+        except subprocess.CalledProcessError as e:
+            print(f"✗ Failed to commit/push changes: {e.stderr}")
+            return 1
+
+        # Generate PR body
+        pr_body_lines = [
+            "## Automated Dependency Updates",
+            "",
+            f"**Generated**: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"**Project**: `{project_dir}`",
+            "",
+        ]
+
+        # Add summary
+        total_updates = len(scan_result.updates_available)
+        security_updates = len(scan_result.security_updates)
+        pr_body_lines.extend([
+            "### Summary",
+            "",
+            f"- **Total Updates**: {total_updates}",
+            f"- **Security Updates**: {security_updates}",
+            f"- **Update Batches**: {len(batches)}",
+            "",
+        ])
+
+        # Add security alerts
+        if scan_result.security_updates:
+            pr_body_lines.extend([
+                "### 🔒 Security Vulnerabilities",
+                "",
+                f"Found **{security_updates}** package(s) with security vulnerabilities:",
+                "",
+            ])
+            for update in scan_result.security_updates[:5]:
+                cve_info = f" (CVEs: {', '.join(update.cve_ids)})" if update.cve_ids else ""
+                pr_body_lines.append(
+                    f"- **{update.name}**: {update.current_version} → {update.latest_version}{cve_info}"
+                )
+            if len(scan_result.security_updates) > 5:
+                pr_body_lines.append(
+                    f"- ... and {len(scan_result.security_updates) - 5} more security updates"
+                )
+            pr_body_lines.append("")
+
+        # Add batches
+        pr_body_lines.extend([
+            "### 📦 Update Batches",
+            "",
+        ])
+        for i, batch in enumerate(batches, 1):
+            risk_icon = (
+                "🔴"
+                if batch.risk_level == "high"
+                else "🟡"
+                if batch.risk_level == "medium"
+                else "🟢"
+            )
+            security_badge = " 🔒 **SECURITY**" if batch.is_security_batch else ""
+
+            # Determine auto-approval status for the batch
+            batch_auto_approved = False
+            if config and batch.update_type in ("patch", "minor"):
+                all_approved = True
+                for pkg_name in batch.packages:
+                    update = next(
+                        (u for u in updates_to_process if u.name == pkg_name), None
+                    )
+                    if update:
+                        pkg_approved = is_auto_approved(
+                            package_name=update.name,
+                            update_type=update.update_type,
+                            ecosystem=update.ecosystem,
+                            is_security=update.is_security,
+                            config=config,
+                        )
+                        if not pkg_approved:
+                            all_approved = False
+                            break
+                    else:
+                        all_approved = False
+                        break
+                batch_auto_approved = all_approved
+
+            auto_approve_badge = " ✅ **AUTO-APPROVED**" if batch_auto_approved else ""
+
+            pr_body_lines.extend([
+                f"#### Batch {i}: `{batch.batch_id}` {security_badge}{auto_approve_badge}",
+                f"- **Risk Level**: {risk_icon} {batch.risk_level.title()}",
+                f"- **Priority**: {batch.priority}",
+                f"- **Packages**: {len(batch.packages)}",
+                "",
+            ])
+
+        # Add instructions
+        pr_body_lines.extend([
+            "### Next Steps",
+            "",
+            "1. Review the update batches and their risk levels",
+            "2. Test the updates in a development environment",
+            "3. Merge this PR to apply the updates",
+            "",
+            "---",
+            "",
+            "*Generated by [Auto-Claude Dependency Update Agent](https://github.com/OBenner/Auto-Coding)*",
+        ])
+
+        pr_body = "\n".join(pr_body_lines)
+
+        # Create the PR using async GHClient
+        pr_created = asyncio.run(
+            _create_pull_request_async(
+                project_dir=project_dir,
+                pr_title=args.pr_title,
+                pr_body=pr_body,
+            )
+        )
+
+        if not pr_created:
             return 1
 
     print("\n✓ Dependency scan complete!")

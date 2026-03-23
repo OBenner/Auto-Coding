@@ -1,0 +1,267 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/OBenner/Auto-Claude/dependency-updates.schema.json",
+  "title": "Dependency Updates Configuration",
+  "description": "Configuration schema for automated dependency updates with security scanning",
+  "type": "object",
+  "required": ["version", "scan"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Configuration schema version",
+      "minimum": 1
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this configuration"
+    },
+    "scan": {
+      "type": "object",
+      "description": "Scan configuration settings",
+      "required": ["ecosystems"],
+      "properties": {
+        "ecosystems": {
+          "type": "array",
+          "description": "Package ecosystems to scan",
+          "items": {
+            "type": "string",
+            "enum": ["python", "node", "github-actions"]
+          },
+          "minItems": 1
+        },
+        "directories": {
+          "type": "object",
+          "description": "Directories to scan for each ecosystem",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ]
+          }
+        },
+        "schedule": {
+          "type": "object",
+          "description": "Scan schedule configuration",
+          "properties": {
+            "interval": {
+              "type": "string",
+              "enum": ["daily", "weekly", "monthly"],
+              "default": "weekly"
+            },
+            "day": {
+              "type": "string",
+              "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+              "default": "monday"
+            },
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23,
+              "default": 0
+            }
+          }
+        },
+        "security_only": {
+          "type": "boolean",
+          "description": "Only scan for security vulnerabilities",
+          "default": false
+        },
+        "severity_threshold": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "description": "Minimum severity level to report",
+          "default": "high"
+        }
+      }
+    },
+    "auto_approval": {
+      "type": "object",
+      "description": "Automatic approval settings for dependency updates",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "patch_updates": {
+          "type": "boolean",
+          "description": "Auto-approve patch version updates (X.Y.Z -> X.Y.Z+1)",
+          "default": false
+        },
+        "minor_updates": {
+          "type": "boolean",
+          "description": "Auto-approve minor version updates (X.Y.Z -> X.Y+1.0)",
+          "default": false
+        },
+        "allowlisted_packages": {
+          "type": "array",
+          "description": "Packages that can be auto-approved with specific rules",
+          "items": {
+            "type": "object",
+            "required": ["name", "ecosystem"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Package name or pattern"
+              },
+              "ecosystem": {
+                "type": "string",
+                "enum": ["python", "node", "github-actions"]
+              },
+              "auto_approve": {
+                "type": "string",
+                "enum": ["patch", "minor", "major"],
+                "description": "Maximum version level to auto-approve"
+              }
+            }
+          }
+        },
+        "blocklisted_packages": {
+          "type": "array",
+          "description": "Packages that should never be auto-approved",
+          "items": {
+            "type": "object",
+            "required": ["name", "ecosystem"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Package name or pattern"
+              },
+              "ecosystem": {
+                "type": "string",
+                "enum": ["python", "node", "github-actions"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why this package is blocklisted"
+              }
+            }
+          }
+        }
+      }
+    },
+    "pull_requests": {
+      "type": "object",
+      "description": "Pull request creation settings",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "labels": {
+          "type": "array",
+          "description": "Labels to add to created PRs",
+          "items": { "type": "string" }
+        },
+        "assignees": {
+          "type": "array",
+          "description": "Users to assign to created PRs",
+          "items": { "type": "string" }
+        },
+        "reviewers": {
+          "type": "array",
+          "description": "Reviewers to request for created PRs",
+          "items": { "type": "string" }
+        },
+        "draft": {
+          "type": "boolean",
+          "description": "Create PRs as drafts",
+          "default": false
+        },
+        "max_concurrent": {
+          "type": "integer",
+          "description": "Maximum concurrent open PRs",
+          "minimum": 1,
+          "default": 5
+        },
+        "commit_message": {
+          "type": "object",
+          "properties": {
+            "prefix": {
+              "type": "string",
+              "default": "chore(deps)"
+            },
+            "include_scope": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "description": "Notification settings for vulnerabilities",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "min_severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "default": "high"
+        },
+        "create_issues": {
+          "type": "boolean",
+          "description": "Create GitHub issues for critical vulnerabilities",
+          "default": true
+        },
+        "issue_labels": {
+          "type": "array",
+          "description": "Labels to add to vulnerability issues",
+          "items": { "type": "string" }
+        },
+        "comment_on_pr": {
+          "type": "boolean",
+          "description": "Comment on PRs about security updates",
+          "default": true
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "description": "Resource limits and throttling",
+      "properties": {
+        "max_updates_per_run": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20
+        },
+        "max_prs_per_day": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        },
+        "timeout_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 30
+        }
+      }
+    },
+    "groups": {
+      "type": "object",
+      "description": "Update groups for batched PRs",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "exclude": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "patterns": {
+            "type": "array",
+            "description": "Package patterns to include in this group",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

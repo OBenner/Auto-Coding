@@ -630,6 +630,393 @@ python run.py --spec XXX-dependency-updates --merge
 python run.py --spec XXX-dependency-updates --discard
 ```
 
+## GitHub Actions Automation
+
+The Dependency Update Agent includes a GitHub Actions workflow for automated dependency scanning and vulnerability monitoring. This enables continuous security monitoring without manual intervention.
+
+### Workflow Features
+
+- **Scheduled scans**: Runs weekly on Mondays at midnight UTC
+- **Manual trigger**: Run on-demand with custom parameters via GitHub UI
+- **Security notifications**: Automatically creates GitHub issues for critical/high vulnerabilities
+- **Artifact uploads**: Stores scan reports for 30 days
+- **Workflow failure**: Fails when critical/high vulnerabilities are detected
+- **Customizable options**: Security-only scans, ecosystem filtering, PR creation
+
+### Enable the Workflow
+
+The workflow file is located at `.github/workflows/dependency-updates.yml`.
+
+**Step 1: Verify the workflow exists**
+
+```bash
+ls .github/workflows/dependency-updates.yml
+```
+
+**Step 2: Grant required permissions**
+
+The workflow is pre-configured with the necessary permissions:
+- `contents: read` - Read repository contents
+- `actions: read` - Read workflow runs
+- `pull-requests: write` - Create pull requests (if using `--create-pr`)
+- `issues: write` - Create issues for vulnerabilities
+
+**Step 3: Customize scheduling (optional)**
+
+Edit the workflow file to change the default schedule:
+
+```yaml
+schedule:
+  - cron: '0 0 * * 1'  # Weekly on Monday at midnight UTC
+  # Or daily: '0 0 * * *'
+  # Or monthly: '0 0 1 * *'
+```
+
+**Step 4: Enable GitHub Actions**
+
+Navigate to **Settings** → **Actions** → **General** in your repository and ensure "Allow all actions and reusable workflows" is selected.
+
+### Manual Workflow Trigger
+
+Run the dependency scan on-demand from the GitHub Actions UI:
+
+1. Navigate to **Actions** tab in your repository
+2. Select **"Dependency Updates"** workflow
+3. Click **"Run workflow"** button
+4. Configure options:
+   - **Security only**: Scan for vulnerabilities only (default: false)
+   - **Ecosystems**: Comma-separated list (default: "python,node")
+   - **Create pull request**: Generate PR with updates (default: false)
+   - **Notify**: Create issues for critical vulnerabilities (default: true)
+5. Click **"Run workflow"**
+
+### Workflow Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `security-only` | Boolean | `false` | Scan only for security vulnerabilities |
+| `ecosystems` | String | `python,node` | Comma-separated ecosystems to scan |
+| `create-pr` | Boolean | `false` | Create pull request with dependency updates |
+| `notify` | Boolean | `true` | Create GitHub issues for critical/high vulnerabilities |
+
+### Workflow Outputs
+
+The workflow generates several outputs:
+
+**1. Scan Artifacts**
+
+Full scan reports are uploaded as artifacts (retained for 30 days):
+- `dependency_report.json` - Machine-readable JSON report
+- `dependency_report.md` - Human-readable markdown report
+
+**2. GitHub Actions Summary**
+
+The workflow generates a summary with:
+- Total update count
+- Security vulnerability count
+- Scanned ecosystems
+- Severity breakdown (critical, high, medium, low)
+
+**3. GitHub Issues (if enabled)**
+
+For critical/high severity vulnerabilities:
+- Issue title: `[Security] <package-name> <severity> vulnerability`
+- Issue body includes:
+  - CVE IDs and severity
+  - Current and latest versions
+  - Affected ecosystems
+  - Recommended action
+
+**4. Workflow Status**
+
+- ✅ **Success**: No critical/high vulnerabilities found
+- ❌ **Failed**: Critical/high vulnerabilities detected (requires attention)
+
+### Example Workflow Runs
+
+**Scheduled Weekly Scan**
+
+Runs automatically every Monday at midnight UTC:
+
+```yaml
+schedule:
+  - cron: '0 0 * * 1'
+```
+
+The workflow will:
+1. Scan all Python and Node.js dependencies
+2. Generate reports and upload as artifacts
+3. Create GitHub issues for critical/high vulnerabilities
+4. Fail the workflow if critical/high vulnerabilities found
+
+**Manual Security-Only Scan**
+
+Trigger manually with "Security only" enabled:
+
+- Scans only for security vulnerabilities
+- Creates issues for critical/high severity CVEs
+- Skips non-security updates
+- Fails if critical/high vulnerabilities found
+
+**Manual Full Scan with PR**
+
+Trigger manually with "Create pull request" enabled:
+
+- Scans all dependencies
+- Generates Auto Code spec for updates
+- Creates pull request with dependency updates
+- Runs tests in isolated worktree
+- Merges only if tests pass
+
+### Customizing the Workflow
+
+You can customize the workflow by editing `.github/workflows/dependency-updates.yml`:
+
+**Change scan frequency:**
+
+```yaml
+schedule:
+  - cron: '0 0 * * 0'  # Weekly on Sunday
+  # Or daily at 9am UTC: '0 9 * * *'
+  # Or every 6 hours: '0 */6 * * *'
+```
+
+**Add path filters:**
+
+```yaml
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  pull_request:
+    paths:
+      - 'requirements.txt'
+      - 'package.json'
+      - 'pyproject.toml'
+```
+
+**Customize notification thresholds:**
+
+```python
+# In the workflow file, modify the min_severity parameter
+min_severity='critical'  # Only notify on critical
+# or
+min_severity='medium'     # Notify on medium and above
+```
+
+**Change artifact retention:**
+
+```yaml
+- name: Upload scan reports
+  uses: actions/upload-artifact@v4
+  with:
+    name: dependency-reports
+    path: .auto-claude/dependency-reports/
+    retention-days: 90  # Increase from 30 to 90 days
+```
+
+### Viewing Results
+
+**From GitHub Actions:**
+
+1. Navigate to **Actions** tab
+2. Select **"Dependency Updates"** workflow run
+3. View summary in the run page
+4. Download artifacts for detailed reports
+
+**From GitHub Issues:**
+
+1. Navigate to **Issues** tab
+2. Filter by label: `security`, `critical`, `high`
+3. Review vulnerability details and recommended actions
+
+**From Artifacts:**
+
+1. In workflow run, scroll to **Artifacts** section
+2. Download `dependency-reports` artifact
+3. Extract and view `dependency_report.md` or `dependency_report.json`
+
+### Integration with CI/CD Pipeline
+
+You can integrate dependency scanning into your existing CI/CD pipeline:
+
+**Before deployment:**
+
+```yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run tests
+        run: npm test
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run dependency scan
+        working-directory: apps/backend
+        run: |
+          pip install -r requirements.txt
+          python runners/dependency_update_runner.py \
+            --project . \
+            --security-only \
+            --dry-run \
+            --format json
+      # Fail deployment if critical vulnerabilities found
+      - name: Check for vulnerabilities
+        run: |
+          if grep -q '"severity": "critical"' .auto-claude/dependency-reports/dependency_report.json; then
+            echo "Critical vulnerabilities found!"
+            exit 1
+          fi
+```
+
+**Pull request validation:**
+
+```yaml
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run dependency scan
+        working-directory: apps/backend
+        run: |
+          python runners/dependency_update_runner.py \
+            --project . \
+            --format json \
+            --dry-run
+      - name: Comment on PR
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('.auto-claude/dependency-reports/dependency_report.json', 'utf8'));
+            const security = report.security_updates || [];
+            if (security.length > 0) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `⚠️ Found ${security.length} security vulnerabilities. See workflow logs for details.`
+              });
+            }
+```
+
+### Best Practices
+
+**1. Run scheduled scans weekly**
+
+Weekly scans balance staying current with avoiding alert fatigue:
+
+```yaml
+schedule:
+  - cron: '0 0 * * 1'  # Every Monday
+```
+
+**2. Enable notifications for critical/high**
+
+Always create issues for critical and high severity vulnerabilities:
+
+```yaml
+# In workflow_dispatch inputs
+notify:
+  description: 'Create GitHub issues for critical vulnerabilities'
+  default: true
+```
+
+**3. Review and triage issues weekly**
+
+Assign someone to review and address security issues weekly:
+
+- Critical: Fix within 24 hours
+- High: Fix within 1 week
+- Medium: Fix within 1 month
+- Low: Fix in next update cycle
+
+**4. Keep artifacts for audit trail**
+
+Increase retention if you need historical data:
+
+```yaml
+retention-days: 90  # Or 365 for long-term tracking
+```
+
+**5. Use security-only in CI/CD**
+
+In CI/CD pipelines, use `--security-only` to avoid noise:
+
+```bash
+python runners/dependency_update_runner.py \
+  --project . \
+  --security-only \
+  --dry-run
+```
+
+### Troubleshooting GitHub Actions
+
+**Workflow not running on schedule:**
+
+- Check if GitHub Actions is enabled in repository settings
+- Verify the cron expression is valid
+- Check the workflow file is in the correct location: `.github/workflows/dependency-updates.yml`
+- Review Actions tab for recent workflow runs and error messages
+
+**Permissions errors:**
+
+- Verify the workflow has the required permissions:
+  ```yaml
+  permissions:
+    contents: read
+    actions: read
+    pull-requests: write
+    issues: write
+  ```
+- Check repository settings → Actions → General → Workflow permissions
+
+**Scan fails in CI but works locally:**
+
+- Ensure all dependencies are installed in the workflow
+- Check that `PYTHONPATH` is set correctly
+- Verify the runner has access to the project directory
+- Review workflow logs for specific error messages
+
+**Issues not being created:**
+
+- Verify `issues: write` permission is granted
+- Check if `notify` parameter is set to `true`
+- Ensure vulnerabilities meet severity threshold (critical/high)
+- Review workflow logs for notification errors
+
+**Artifacts not uploading:**
+
+- Check that the report directory exists: `.auto-claude/dependency-reports/`
+- Verify the scan completed successfully
+- Check artifact retention period (default: 30 days)
+- Ensure sufficient storage quota in GitHub
+
 ## Comparison with Manual Updates
 
 | Manual Updates | Dependency Update Agent |
