@@ -152,6 +152,11 @@ playwright-report/
 playwright/.cache/
 
 # ===========================
+# MkDocs Documentation
+# ===========================
+site/
+
+# ===========================
 # Misc
 # ===========================
 *.local

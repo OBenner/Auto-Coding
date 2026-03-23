@@ -1,0 +1,144 @@
+site_name: Auto Code API Documentation
+site_description: Comprehensive API documentation for Auto Code - a multi-agent autonomous coding framework
+site_url: https://obenner.github.io/Auto-Coding/
+repo_url: https://github.com/OBenner/Auto-Coding
+repo_name: OBenner/Auto-Coding
+edit_uri: edit/main/docs/
+
+# Theme configuration with Material Design
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.instant      # Instant loading
+    - navigation.tracking     # URL updates with scroll
+    - navigation.tabs         # Top-level sections in tabs
+    - navigation.sections     # Sections in sidebar
+    - navigation.expand       # Expand all sections by default
+    - navigation.top          # Back to top button
+    - search.suggest          # Search suggestions
+    - search.highlight        # Highlight search terms
+    - search.share            # Share search results
+    - content.code.copy       # Copy code button
+    - content.code.annotate   # Code annotations
+  icon:
+    repo: fontawesome/brands/github
+
+# Plugins
+plugins:
+  - search:
+      lang: en
+      separator: '[\s\-\.]+'
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            docstring_section_style: table
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_object_full_path: false
+            show_category_heading: true
+            show_if_no_docstring: false
+            show_signature: true
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 80
+            merge_init_into_class: true
+            filters:
+              - "!^_"  # Exclude private members
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+# Navigation structure
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Start: guides/QUICK-START.md
+    - Installation: README.md
+    - Troubleshooting: guides/TROUBLESHOOTING.md
+  - Reference:
+    - CLI Commands: reference/cli.md
+    - Configuration: reference/configuration.md
+  - API Documentation:
+    - Agents: api/agents.md
+    - Memory System: api/memory.md
+    - Core APIs: api/core.md
+  - Architecture:
+    - Overview: architecture/OVERVIEW.md
+    - Security Model: architecture/SECURITY.md
+    - Multi-Agent System: architecture/MULTI-AGENT.md
+  - Contributing:
+    - Guidelines: CONTRIBUTING.md
+    - Release Process: RELEASE.md
+    - Documentation Style: docs/STYLE_GUIDE.md
+
+# Extra configuration
+extra:
+  version:
+    provider: mike
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/OBenner/Auto-Coding
+  analytics:
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/emoticon-happy-outline
+          name: This page was helpful
+          data: 1
+          note: >-
+            Thanks for your feedback!
+        - icon: material/emoticon-sad-outline
+          name: This page could be improved
+          data: 0
+          note: >-
+            Thanks for your feedback! Help us improve by
+            <a href="https://github.com/OBenner/Auto-Coding/issues/new" target="_blank" rel="noopener">opening an issue</a>.
+
+# Copyright
+copyright: Copyright &copy; 2024-2026 Auto Code Contributors
