@@ -78,6 +78,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Web Backend API")
 
+    # Cancel any running agent tasks before stopping
+    from services.agent_runner import get_graceful_shutdown_handler
+
+    shutdown_handler = get_graceful_shutdown_handler()
+    await shutdown_handler()
+
     if _daemon is not None:
         _daemon.remove_pid()
         _daemon = None

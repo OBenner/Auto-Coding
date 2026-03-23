@@ -399,3 +399,56 @@ def cleanup_completed_tasks():
 
     if completed:
         logger.debug(f"Cleaned up {len(completed)} completed tasks")
+
+
+async def _cancel_all_running_tasks() -> None:
+    """
+    Cancel all running agent tasks and wait for them to finish.
+
+    This is called during graceful shutdown to ensure no tasks are left
+    dangling after the server stops.
+    """
+    active_tasks = {
+        task_id: task
+        for task_id, task in _running_tasks.items()
+        if not task.done()
+    }
+
+    if not active_tasks:
+        logger.debug("No running agent tasks to cancel")
+        return
+
+    logger.info("Cancelling %d running agent task(s) for graceful shutdown", len(active_tasks))
+
+    for task_id, task in active_tasks.items():
+        task.cancel()
+        logger.debug("Cancelled agent task: %s", _sanitize_log(task_id))
+
+    # Wait for all cancelled tasks to acknowledge cancellation
+    results = await asyncio.gather(*active_tasks.values(), return_exceptions=True)
+
+    for task_id, result in zip(active_tasks.keys(), results):
+        if isinstance(result, asyncio.CancelledError):
+            logger.info("Agent task cancelled cleanly: %s", _sanitize_log(task_id))
+        elif isinstance(result, Exception):
+            logger.warning(
+                "Agent task raised exception during cancellation: %s – %s",
+                _sanitize_log(task_id),
+                result,
+            )
+
+    # Remove cancelled tasks from tracking
+    for task_id in active_tasks:
+        _running_tasks.pop(task_id, None)
+
+
+def get_graceful_shutdown_handler():
+    """
+    Return an async callable that cancels all running agent tasks.
+
+    Intended to be awaited during application shutdown (e.g., FastAPI lifespan).
+
+    Returns:
+        Coroutine function that performs graceful shutdown of agent tasks
+    """
+    return _cancel_all_running_tasks
