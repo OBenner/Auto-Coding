@@ -103,7 +103,7 @@ async def register_user(
     db.commit()
     db.refresh(user)
 
-    logger.info("New user registered: %s", user.email)
+    logger.info("New user registered: id=%s", user.id)
 
     return _build_token_response(user)
 

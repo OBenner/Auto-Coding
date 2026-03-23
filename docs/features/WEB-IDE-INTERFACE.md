@@ -22,7 +22,7 @@ The Web-Based IDE Interface provides browser-based access to Auto Code's project
 
 The Web IDE is split into two applications that communicate over HTTP and WebSocket:
 
-```
+```text
 Browser (web-frontend)
     |
     |  HTTP REST / WebSocket
@@ -41,7 +41,7 @@ Claude Agent SDK
 
 A FastAPI application providing REST API endpoints and WebSocket handlers.
 
-```
+```text
 apps/web-backend/
 +-- main.py                  # FastAPI app entry point, middleware, router registration
 +-- core/

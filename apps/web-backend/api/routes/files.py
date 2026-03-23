@@ -29,6 +29,9 @@ MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024
 # Binary/non-text MIME type prefixes that should not be returned as text
 _BINARY_MIME_PREFIXES = ("image/", "audio/", "video/", "application/octet-stream")
 
+# MIME types that match a binary prefix above but are actually text-readable
+_TEXT_MIME_EXCEPTIONS = ("image/svg+xml",)
+
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -176,8 +179,13 @@ def _build_safe_path(project_root: Path, components: list[str]) -> Path:
     contains only audited filename tokens, CodeQL sees the resulting ``Path``
     as constructed from trusted data.
 
+    The *non-resolved* joined path is returned so that symlinks within the
+    project directory are preserved for callers.  The resolved path is used
+    only for the containment check.
+
     Returns:
-        Resolved absolute ``Path`` guaranteed to reside inside ``project_root``.
+        Non-resolved absolute ``Path`` guaranteed to reside inside
+        ``project_root`` (verified via resolved containment check).
 
     Raises:
         HTTPException 403: If the resolved path escapes the project directory.
@@ -213,7 +221,8 @@ def _build_safe_path(project_root: Path, components: list[str]) -> Path:
             detail="Access denied: path is outside project directory",
         )
 
-    return resolved
+    # Return the non-resolved path so symlinks inside the project are preserved
+    return safe_path
 
 
 def _safe_relative_path(absolute: Path) -> str:
@@ -231,6 +240,8 @@ def _is_binary(file_path: Path) -> bool:
     """Heuristic check: return True if the file is likely binary."""
     mime, _ = mimetypes.guess_type(str(file_path))
     if mime:
+        if mime in _TEXT_MIME_EXCEPTIONS:
+            return False
         for prefix in _BINARY_MIME_PREFIXES:
             if mime.startswith(prefix):
                 return True

@@ -6,6 +6,7 @@ Provides endpoints for GitHub and GitLab OAuth authentication to access user rep
 
 import logging
 import secrets
+from urllib.parse import ParseResult, urlparse
 
 from core.config import settings
 from core.oauth import oauth
@@ -43,7 +44,7 @@ def _require_oauth_provider(provider_name: str, provider_obj) -> None:
         )
 
 
-def _initiate_oauth_authorize(
+async def _initiate_oauth_authorize(
     request: Request, provider, provider_name: str, redirect_uri: str
 ):
     """Generate a CSRF state token, store it in the session, and redirect to the
@@ -61,7 +62,7 @@ def _initiate_oauth_authorize(
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
     logger.debug("Initiating %s OAuth flow", provider_name)
-    return provider.authorize_redirect(request, redirect_uri, state=state)
+    return await provider.authorize_redirect(request, redirect_uri, state=state)
 
 
 async def _handle_oauth_callback(
@@ -135,13 +136,28 @@ async def _handle_oauth_callback(
 def _build_callback_uri(provider_slug: str) -> str:
     """Derive the callback URI for *provider_slug* from the configured base URI.
 
+    Uses ``urllib.parse`` for robust URI construction rather than fragile
+    string splitting.
+
     Args:
         provider_slug: Lower-case provider identifier, e.g. ``"github"``.
 
     Returns:
         Absolute callback URI string.
+
+    Example:
+        If ``OAUTH_REDIRECT_URI`` is ``"http://host/api/git/callback"`` and
+        ``provider_slug`` is ``"github"`` the result is
+        ``"http://host/api/git/github/callback"``.
     """
-    return f"{settings.OAUTH_REDIRECT_URI.rsplit('/callback', 1)[0]}/{provider_slug}/callback"
+    parsed: ParseResult = urlparse(settings.OAUTH_REDIRECT_URI)
+    # Strip the trailing "/callback" segment (or the last path component) to
+    # obtain the common base path, then append the provider-specific suffix.
+    base_path = parsed.path.rstrip("/")
+    if base_path.endswith("/callback"):
+        base_path = base_path[: -len("/callback")]
+    new_path = f"{base_path}/{provider_slug}/callback"
+    return parsed._replace(path=new_path).geturl()
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +225,7 @@ async def github_callback(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("GitHub OAuth callback error: %s", e)
+        logger.error("GitHub OAuth callback error: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OAuth authentication failed",
@@ -276,7 +292,7 @@ async def gitlab_callback(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("GitLab OAuth callback error: %s", e)
+        logger.error("GitLab OAuth callback error: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OAuth authentication failed",
