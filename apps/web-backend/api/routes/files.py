@@ -488,8 +488,16 @@ async def put_file_content(
 
         canonical.parent.mkdir(parents=True, exist_ok=True)
 
-        encoded = request.content.encode(request.encoding)
-        canonical.write_bytes(encoded)
+        # Validate encoding against allowlist to prevent encoding-based attacks
+        allowed_encodings = {"utf-8", "ascii", "latin-1", "utf-16", "utf-32"}
+        encoding = request.encoding.lower().strip()
+        if encoding not in allowed_encodings:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported encoding: {encoding}",
+            )
+        encoded = request.content.encode(encoding)
+        canonical.write_bytes(encoded)  # NOSONAR: content is user-provided text for file editor
 
         return FileWriteResponse(
             path=safe_path,
