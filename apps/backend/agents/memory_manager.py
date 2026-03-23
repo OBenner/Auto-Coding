@@ -30,9 +30,7 @@ from memory.patterns import (
     save_detected_patterns_from_organization,
 )
 
-from memory import (
-    save_session_insights as save_file_based_memory,  # safe: module is memory_manager
-)
+from memory import save_session_insights as save_file_based_memory
 
 if TYPE_CHECKING:
     from agents.session_context import SessionContext
