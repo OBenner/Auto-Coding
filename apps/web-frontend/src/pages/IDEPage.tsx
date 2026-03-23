@@ -14,9 +14,9 @@ import { Code2, Terminal as TerminalIcon, Bot } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	Panel,
-	PanelGroup,
-	PanelResizeHandle,
-	type ImperativePanelHandle,
+	Group as PanelGroup,
+	Separator as PanelResizeHandle,
+	type PanelImperativeHandle as ImperativePanelHandle,
 } from "react-resizable-panels";
 import { AgentOutput, type LogLine } from "../components/AgentOutput";
 import { CodeEditor } from "../components/CodeEditor";
@@ -164,7 +164,8 @@ export function IDEPage() {
 				if (!res.ok) {
 					throw new Error(`Failed to load file: ${res.statusText}`);
 				}
-				return res.text();
+				const data = await res.json() as { content: string };
+				return data.content;
 			})
 			.then((text) => {
 				if (!cancelled) {
@@ -263,22 +264,12 @@ export function IDEPage() {
 
 			{/* Resizable 3-panel body */}
 			<PanelGroup
-				direction="horizontal"
+				orientation="horizontal"
 				className="flex-1 overflow-hidden"
-				onLayout={(sizes) => {
-					// sizes = [explorer, editor, right]
-					if (sizes.length === 3) {
-						currentSizesRef.current = {
-							explorer: sizes[0],
-							editor: sizes[1],
-							right: sizes[2],
-						};
-					}
-				}}
 			>
 				{/* ── Panel 1: File Explorer ──────────────────────────────────── */}
 				<Panel
-					ref={explorerPanelRef}
+					panelRef={explorerPanelRef}
 					defaultSize={initialSizes.explorer}
 					minSize={10}
 					maxSize={40}
