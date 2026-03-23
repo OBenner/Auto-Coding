@@ -4,13 +4,17 @@ Agent Runner Service
 Service layer for executing Auto Code agents (planner, coder, qa_reviewer, qa_fixer).
 This service wraps the backend agent execution logic and provides async task management.
 Integrates with WebSocket event broadcasting for real-time progress updates.
+Integrates with ResourceManager for per-user quota enforcement.
 """
 
 import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from services.resource_manager import ResourceManager
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,27 @@ def _sanitize_log(value: str) -> str:
 # Keep track of running agent tasks
 _running_tasks: dict[str, asyncio.Task] = {}
 
+# Module-level ResourceManager singleton (created lazily)
+_resource_manager: "ResourceManager | None" = None
+
+
+def _get_resource_manager() -> "ResourceManager":
+    """
+    Get or lazily create the module-level ResourceManager instance.
+
+    Returns:
+        Shared ResourceManager instance
+    """
+    global _resource_manager
+
+    if _resource_manager is None:
+        from services.resource_manager import ResourceManager
+
+        _resource_manager = ResourceManager()
+        logger.debug("ResourceManager singleton created")
+
+    return _resource_manager
+
 
 def _get_backend_path() -> Path:
     """
@@ -96,9 +121,13 @@ async def run_agent_async(
     project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
+    user_id: int = 0,
 ) -> dict[str, Any]:
     """
     Run an agent asynchronously.
+
+    Releases the ResourceManager agent slot for the user (if user_id > 0)
+    when execution completes or fails, ensuring quota counters stay accurate.
 
     Args:
         spec_id: Spec ID (e.g., "001" or "001-feature-name")
@@ -106,6 +135,7 @@ async def run_agent_async(
         project_dir: Project directory (defaults to parent of web-backend)
         model: Claude model to use
         verbose: Enable verbose output
+        user_id: User ID for quota tracking (0 = no quota enforcement)
 
     Returns:
         Dict with execution result
@@ -178,110 +208,121 @@ async def run_agent_async(
         )
 
     try:
-        if agent_type == "planner":
-            if _broadcast_log_event:
-                await _broadcast_log_event(
-                    spec_id=canonical_spec_id,
-                    log_line=f"Running planner agent with model {model}",
-                    level="info",
+        try:
+            if agent_type == "planner":
+                if _broadcast_log_event:
+                    await _broadcast_log_event(
+                        spec_id=canonical_spec_id,
+                        log_line=f"Running planner agent with model {model}",
+                        level="info",
+                    )
+
+                success = await run_followup_planner(
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    model=model,
+                    verbose=verbose,
                 )
 
-            success = await run_followup_planner(
-                project_dir=project_dir,
-                spec_dir=spec_dir,
-                model=model,
-                verbose=verbose,
-            )
+                if success:
+                    if _broadcast_execution_event:
+                        await _broadcast_execution_event(
+                            spec_id=canonical_spec_id,
+                            phase="complete",
+                            phase_progress=100.0,
+                            overall_progress=100.0,
+                            message="Planner execution completed successfully",
+                            current_subtask=None,
+                        )
+                else:
+                    if _broadcast_execution_event:
+                        await _broadcast_execution_event(
+                            spec_id=canonical_spec_id,
+                            phase="failed",
+                            phase_progress=0.0,
+                            overall_progress=0.0,
+                            message="Planner execution failed",
+                            current_subtask=None,
+                        )
 
-            if success:
+                return {
+                    "success": success,
+                    "agent_type": agent_type,
+                    "spec_id": canonical_spec_id,
+                    "message": "Planner execution completed"
+                    if success
+                    else "Planner execution failed",
+                }
+
+            elif agent_type in ["coder", "qa_reviewer", "qa_fixer"]:
+                if _broadcast_log_event:
+                    await _broadcast_log_event(
+                        spec_id=canonical_spec_id,
+                        log_line=f"Running {agent_type} agent with model {model}",
+                        level="info",
+                    )
+
+                await run_autonomous_agent(
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    model=model,
+                    max_iterations=None,
+                    verbose=verbose,
+                    source_spec_dir=None,
+                )
+
                 if _broadcast_execution_event:
                     await _broadcast_execution_event(
                         spec_id=canonical_spec_id,
                         phase="complete",
                         phase_progress=100.0,
                         overall_progress=100.0,
-                        message="Planner execution completed successfully",
+                        message=f"{agent_type} execution completed successfully",
                         current_subtask=None,
                     )
+
+                return {
+                    "success": True,
+                    "agent_type": agent_type,
+                    "spec_id": canonical_spec_id,
+                    "message": f"{agent_type} execution completed",
+                }
+
             else:
-                if _broadcast_execution_event:
-                    await _broadcast_execution_event(
-                        spec_id=canonical_spec_id,
-                        phase="failed",
-                        phase_progress=0.0,
-                        overall_progress=0.0,
-                        message="Planner execution failed",
-                        current_subtask=None,
-                    )
+                raise ValueError(f"Unsupported agent type: {agent_type}")
 
-            return {
-                "success": success,
-                "agent_type": agent_type,
-                "spec_id": canonical_spec_id,
-                "message": "Planner execution completed"
-                if success
-                else "Planner execution failed",
-            }
+        except Exception as e:
+            logger.error(f"Agent execution failed: {e}", exc_info=True)
 
-        elif agent_type in ["coder", "qa_reviewer", "qa_fixer"]:
-            if _broadcast_log_event:
-                await _broadcast_log_event(
-                    spec_id=canonical_spec_id,
-                    log_line=f"Running {agent_type} agent with model {model}",
-                    level="info",
-                )
+            # Use canonical_spec_id (always defined) instead of spec_dir.name
+            # to avoid UnboundLocalError if spec_dir lookup failed
+            error_spec_id = canonical_spec_id if "canonical_spec_id" in dir() else spec_id
 
-            await run_autonomous_agent(
-                project_dir=project_dir,
-                spec_dir=spec_dir,
-                model=model,
-                max_iterations=None,
-                verbose=verbose,
-                source_spec_dir=None,
-            )
-
-            if _broadcast_execution_event:
-                await _broadcast_execution_event(
-                    spec_id=canonical_spec_id,
-                    phase="complete",
-                    phase_progress=100.0,
-                    overall_progress=100.0,
-                    message=f"{agent_type} execution completed successfully",
-                    current_subtask=None,
+            if _broadcast_error_event is not None:
+                await _broadcast_error_event(
+                    spec_id=error_spec_id,
+                    error_message=str(e),
+                    error_type=type(e).__name__,
+                    traceback=None,
                 )
 
             return {
-                "success": True,
+                "success": False,
                 "agent_type": agent_type,
-                "spec_id": canonical_spec_id,
-                "message": f"{agent_type} execution completed",
+                "spec_id": error_spec_id,
+                "error": str(e),
+                "message": f"Agent execution failed: {e}",
             }
 
-        else:
-            raise ValueError(f"Unsupported agent type: {agent_type}")
-
-    except Exception as e:
-        logger.error(f"Agent execution failed: {e}", exc_info=True)
-
-        # Use canonical_spec_id (always defined) instead of spec_dir.name
-        # to avoid UnboundLocalError if spec_dir lookup failed
-        error_spec_id = canonical_spec_id if "canonical_spec_id" in dir() else spec_id
-
-        if _broadcast_error_event is not None:
-            await _broadcast_error_event(
-                spec_id=error_spec_id,
-                error_message=str(e),
-                error_type=type(e).__name__,
-                traceback=None,
+    finally:
+        # Always release the agent slot so quota counters stay accurate
+        if user_id > 0:
+            resource_manager = _get_resource_manager()
+            resource_manager.release_agent_slot(user_id)
+            logger.debug(
+                f"Released agent slot for user {_sanitize_log(str(user_id))} "
+                f"after task {_sanitize_log(agent_type)} on spec {_sanitize_log(spec_id)}"
             )
-
-        return {
-            "success": False,
-            "agent_type": agent_type,
-            "spec_id": error_spec_id,
-            "error": str(e),
-            "message": f"Agent execution failed: {e}",
-        }
 
 
 def start_agent_task(
@@ -290,9 +331,13 @@ def start_agent_task(
     project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
+    user_id: int = 0,
 ) -> str:
     """
     Start an agent task in the background.
+
+    Checks per-user resource quota before starting the task and acquires an
+    agent slot. The slot is released automatically when the task completes.
 
     Args:
         spec_id: Spec ID
@@ -300,12 +345,14 @@ def start_agent_task(
         project_dir: Project directory
         model: Claude model to use
         verbose: Enable verbose output
+        user_id: User ID for quota tracking (0 = no quota enforcement)
 
     Returns:
         Task ID for tracking
 
     Raises:
         RuntimeError: If task already running for this spec
+        services.resource_manager.QuotaExceededError: If user quota is exceeded
     """
     _init_websocket_broadcast()
 
@@ -316,6 +363,28 @@ def start_agent_task(
             f"Agent task already running for spec {spec_id} (type: {agent_type})"
         )
 
+    # Enforce per-user quota before launching the task
+    if user_id > 0:
+        from services.resource_manager import QuotaExceededError
+
+        resource_manager = _get_resource_manager()
+        acquired = resource_manager.acquire_agent_slot(user_id)
+        if not acquired:
+            # Determine if quota was exceeded or a system error occurred
+            is_allowed, reason = resource_manager.check_agent_quota(user_id)
+            if not is_allowed:
+                usage = resource_manager.get_resource_usage(user_id)
+                quota = resource_manager.get_user_quota(user_id)
+                raise QuotaExceededError(
+                    resource="concurrent_agents",
+                    current=float(usage.concurrent_agents),
+                    limit=float(quota.max_concurrent_agents),
+                    user_id=user_id,
+                )
+            raise RuntimeError(
+                f"Failed to acquire agent slot for user {user_id}: resource unavailable"
+            )
+
     task = asyncio.create_task(
         run_agent_async(
             spec_id=spec_id,
@@ -323,6 +392,7 @@ def start_agent_task(
             project_dir=project_dir,
             model=model,
             verbose=verbose,
+            user_id=user_id,
         )
     )
 

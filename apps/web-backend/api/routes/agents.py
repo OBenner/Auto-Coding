@@ -16,6 +16,7 @@ from services.agent_runner import (
     get_task_status,
     start_agent_task,
 )
+from services.resource_manager import QuotaExceededError
 
 from api.routes.shared import get_project_dir, sanitize_log
 
@@ -105,6 +106,13 @@ async def run_agent(
             f"agent_type={sanitize_log(request.agent_type)}, model={sanitize_log(request.model)}"
         )
 
+        # Extract user ID from JWT claims (sub contains str(user.id))
+        user_id_str = auth.get("sub", "0")
+        try:
+            user_id = int(user_id_str)
+        except (TypeError, ValueError):
+            user_id = 0
+
         # Start the agent task
         project_dir = get_project_dir()
 
@@ -114,6 +122,7 @@ async def run_agent(
             project_dir=project_dir,
             model=request.model,
             verbose=request.verbose,
+            user_id=user_id,
         )
 
         # Clean up completed tasks
@@ -127,6 +136,12 @@ async def run_agent(
             message=f"Agent task started: {request.agent_type} for spec {request.spec_id}",
         )
 
+    except QuotaExceededError as e:
+        logger.warning(f"Quota exceeded for user {e.user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+        )
     except FileNotFoundError as e:
         logger.warning(f"Spec not found: {e}")
         raise HTTPException(
