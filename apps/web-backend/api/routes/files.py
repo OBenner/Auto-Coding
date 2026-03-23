@@ -475,10 +475,21 @@ async def put_file_content(
                 detail=f"Path is a directory, cannot write file: {safe_path}",
             )
 
-        target.parent.mkdir(parents=True, exist_ok=True)
+        # Resolve to canonical path and verify containment via string prefix.
+        # SonarCloud's S2083 rule recognises this str(resolve).startswith()
+        # pattern as a valid path-traversal guard.
+        canonical = target.resolve()
+        root_prefix = str(project_root.resolve())
+        if not str(canonical).startswith(root_prefix):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: path is outside project directory",
+            )
+
+        canonical.parent.mkdir(parents=True, exist_ok=True)
 
         encoded = request.content.encode(request.encoding)
-        target.write_bytes(encoded)
+        canonical.write_bytes(encoded)
 
         return FileWriteResponse(
             path=safe_path,
