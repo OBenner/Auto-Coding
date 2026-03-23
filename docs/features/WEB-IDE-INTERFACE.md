@@ -193,10 +193,12 @@ See `apps/START_SERVERS.md` for detailed startup instructions and troubleshootin
 
 All file operations are restricted to the configured project directory:
 
-1. **Path validation**: Every file endpoint calls `_validate_and_resolve_path()` which:
-   - Strips leading separators to treat all paths as relative
-   - Resolves the full path (expanding `..`, symlinks)
-   - Checks `Path.is_relative_to(project_root)` to block traversal
+1. **Path validation**: Every file endpoint calls `_sanitize_path_components()` + `_build_safe_path()` which:
+   - Decomposes user input into individual path components
+   - Rejects `..` traversal tokens with 403 (blocks path traversal)
+   - Filters out `.`, `/`, `\\` tokens and components with embedded separators
+   - Constructs the path from trusted project root + sanitised components only
+   - Resolves and checks `Path.is_relative_to(project_root)` as a secondary guard
    - Also validates the parent directory to catch symlink-based escapes
 2. **Error messages**: Use validated relative paths (never raw user input) in responses
 3. **Size limits**: File reads capped at 1 MB; binary files rejected

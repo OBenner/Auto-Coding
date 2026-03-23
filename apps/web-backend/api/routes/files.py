@@ -9,7 +9,7 @@ import logging
 import mimetypes
 import shutil
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Annotated
 
 from core.security import require_auth
@@ -114,58 +114,99 @@ class DeleteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _validate_and_resolve_path(user_path: str) -> Path:
-    """
-    Validate and resolve a user-provided path within the project directory.
+def _sanitize_path_components(user_path: str) -> list[str]:
+    """Extract and sanitise individual path components from user input.
 
-    This is the single security gate for all file operations.  Every endpoint
-    MUST call this function before touching the filesystem.
+    This is the taint-breaking boundary.  The function:
 
-    The function:
-    1. Resolves the project root to an absolute, symlink-free path.
-    2. Strips leading separators so the user path is always treated as relative.
-    3. Joins and resolves the candidate path (expanding ``..``, symlinks, etc.).
-    4. Checks containment with ``Path.is_relative_to`` to block traversal.
+    1. Normalises separators so both ``/`` and ``\\`` are handled.
+    2. Decomposes the string into individual components via ``PurePosixPath``.
+    3. **Rejects** paths containing ``..`` with a 403 (path traversal attempt).
+    4. Filters out ``.``, ``/``, and ``\\`` tokens.
+    5. Validates each remaining component contains no embedded separators.
 
-    Args:
-        user_path: Path supplied by the client (relative to project root).
-
-    Returns:
-        Resolved absolute ``Path`` guaranteed to reside inside the project
-        directory.
+    Returns a **new** list of plain filename strings that are safe to pass to
+    ``Path.joinpath``.  Returning validated component strings (rather than a
+    ``Path`` derived from user input) ensures that CodeQL's taint tracker no
+    longer considers the result as flowing from an untrusted source.
 
     Raises:
-        HTTPException 403: If the resolved path escapes the project directory.
+        HTTPException 403: If the path contains ``..`` traversal components.
     """
-    project_root = get_project_dir().resolve()
-
-    # Normalise: strip leading separators so the path is always relative
-    clean = user_path.lstrip("/\\").strip()
+    clean = user_path.strip().lstrip("/\\")
     if not clean:
-        return project_root
+        return []
 
-    resolved = (project_root / clean).resolve()
+    # Replace backslashes so Windows-style paths are decomposed properly
+    normalised = clean.replace("\\", "/")
+    parts = PurePosixPath(normalised).parts
 
-    # Primary containment check – blocks ../../../etc/passwd style attacks
-    if not resolved.is_relative_to(project_root):
+    # Reject any path that contains ".." -- this is always a traversal attempt
+    if ".." in parts:
         logger.warning(
-            "Path traversal attempt blocked: %s -> %s",
+            "Path traversal attempt blocked: %s",
             sanitize_log(user_path),
-            sanitize_log(str(resolved)),
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: path is outside project directory",
         )
 
-    # Also verify the parent is inside the project (catches edge cases where
-    # the leaf doesn't exist yet but the parent is a symlink outside the root)
+    safe: list[str] = []
+    for part in parts:
+        # Skip current-dir markers and root markers
+        if part in (".", "/", "\\"):
+            continue
+        # Extra guard: reject components that somehow contain separators
+        if "/" in part or "\\" in part:
+            continue
+        safe.append(part)
+
+    return safe
+
+
+def _build_safe_path(project_root: Path, components: list[str]) -> Path:
+    """Construct and validate an absolute path from trusted components.
+
+    ``components`` MUST come from ``_sanitize_path_components`` (i.e. they are
+    individually validated plain filename strings, **not** raw user input).
+
+    The function joins the components onto the *resolved* project root, then
+    resolves the result and verifies containment.  Because the input list
+    contains only audited filename tokens, CodeQL sees the resulting ``Path``
+    as constructed from trusted data.
+
+    Returns:
+        Resolved absolute ``Path`` guaranteed to reside inside ``project_root``.
+
+    Raises:
+        HTTPException 403: If the resolved path escapes the project directory.
+    """
+    if not components:
+        return project_root
+
+    safe_path = project_root.joinpath(*components)
+    resolved = safe_path.resolve()
+
+    # Primary containment check -- blocks any remaining traversal attempts
+    if not resolved.is_relative_to(project_root):
+        logger.warning(
+            "Path traversal attempt blocked: %s",
+            sanitize_log(str(safe_path)),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: path is outside project directory",
+        )
+
+    # Verify the parent is inside the project (catches edge cases where the
+    # leaf doesn't exist yet but the parent is a symlink outside the root)
     if resolved != project_root and not resolved.parent.resolve().is_relative_to(
         project_root
     ):
         logger.warning(
             "Path traversal via parent blocked: %s",
-            sanitize_log(user_path),
+            sanitize_log(str(safe_path)),
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -269,7 +310,9 @@ async def list_files(
     with _handle_file_errors("list directory"):
         logger.info("File list request: path=%s", sanitize_log(path))
 
-        target = _validate_and_resolve_path(path)
+        project_root = get_project_dir().resolve()
+        components = _sanitize_path_components(path)
+        target = _build_safe_path(project_root, components)
         safe_path = _safe_relative_path(target)
 
         if not target.exists():
@@ -333,7 +376,9 @@ async def get_file_content(
     with _handle_file_errors("read file"):
         logger.info("File content request: path=%s", sanitize_log(path))
 
-        target = _validate_and_resolve_path(path)
+        project_root = get_project_dir().resolve()
+        components = _sanitize_path_components(path)
+        target = _build_safe_path(project_root, components)
         safe_path = _safe_relative_path(target)
 
         if not target.exists():
@@ -405,22 +450,15 @@ async def put_file_content(
     with _handle_file_errors("write file"):
         logger.info("File write request: path=%s", sanitize_log(request.path))
 
-        target = _validate_and_resolve_path(request.path)
+        project_root = get_project_dir().resolve()
+        components = _sanitize_path_components(request.path)
+        target = _build_safe_path(project_root, components)
         safe_path = _safe_relative_path(target)
 
         if target.exists() and target.is_dir():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Path is a directory, cannot write file: {safe_path}",
-            )
-
-        # Validate parent is also within project before creating directories
-        parent = target.parent.resolve()
-        project_root = get_project_dir().resolve()
-        if not parent.is_relative_to(project_root):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: path is outside project directory",
             )
 
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -466,7 +504,9 @@ async def make_directory(
     with _handle_file_errors("create directory"):
         logger.info("Mkdir request: path=%s", sanitize_log(request.path))
 
-        target = _validate_and_resolve_path(request.path)
+        project_root = get_project_dir().resolve()
+        components = _sanitize_path_components(request.path)
+        target = _build_safe_path(project_root, components)
         safe_path = _safe_relative_path(target)
 
         if target.exists() and target.is_file():
@@ -514,8 +554,9 @@ async def delete_path(
     with _handle_file_errors("delete path"):
         logger.info("Delete request: path=%s", sanitize_log(path))
 
-        target = _validate_and_resolve_path(path)
         project_root = get_project_dir().resolve()
+        components = _sanitize_path_components(path)
+        target = _build_safe_path(project_root, components)
         safe_path = _safe_relative_path(target)
 
         # Prevent deleting the project root
