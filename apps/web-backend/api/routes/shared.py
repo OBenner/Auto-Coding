@@ -9,14 +9,13 @@ import json
 import logging
 from pathlib import Path
 
+from core import sanitize_log
 from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-
-def sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+# Re-export sanitize_log for backward compatibility
+__all__ = ["sanitize_log"]
 
 
 def get_project_dir() -> Path:

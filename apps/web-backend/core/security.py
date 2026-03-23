@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 from core.config import settings
 
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 # HTTP Bearer token scheme for FastAPI
 security = HTTPBearer()
+
+# Shared password hashing context (bcrypt, created once at module level)
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -137,10 +141,7 @@ def hash_password(password: str) -> str:
     Returns:
         Hashed password string
     """
-    from passlib.context import CryptContext
-
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    return pwd_context.hash(password)
+    return _pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -154,10 +155,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    from passlib.context import CryptContext
-
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    return pwd_context.verify(plain_password, hashed_password)
+    return _pwd_context.verify(plain_password, hashed_password)
 
 
 def verify_websocket_token(token: str) -> dict:
