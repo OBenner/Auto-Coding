@@ -13,6 +13,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from core.daemon import DaemonManager, get_daemon_manager
+
 # Load environment variables
 load_dotenv()
 
@@ -34,17 +36,29 @@ SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 WS_HEARTBEAT_INTERVAL = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 
+# Headless / daemon mode – enabled via HEADLESS=true or AUTO_CLAUDE_HEADLESS=true
+HEADLESS = (
+    os.getenv("HEADLESS", "false").lower() == "true"
+    or os.getenv("AUTO_CLAUDE_HEADLESS", "false").lower() == "true"
+)
+
+# Module-level daemon manager – initialised during lifespan startup when in headless mode
+_daemon: DaemonManager | None = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application lifespan handler for startup and shutdown events
     """
+    global _daemon  # noqa: PLW0603
+
     # Startup
     logger.info("Starting Web Backend API")
     logger.info(f"Server will run on {HOST}:{PORT}")
     logger.info(f"Debug mode: {DEBUG}")
     logger.info(f"CORS origins: {CORS_ORIGINS}")
+    logger.info(f"Headless mode: {HEADLESS}")
 
     # Validate required configuration
     if not SECRET_KEY:
@@ -52,10 +66,21 @@ async def lifespan(app: FastAPI):
             "⚠️  SECRET_KEY not configured! Using auto-generated key - DO NOT use in production!"
         )
 
+    # Initialise daemon management in headless mode
+    if HEADLESS:
+        _daemon = get_daemon_manager()
+        _daemon.write_pid()
+        _daemon.register_signal_handlers()
+        logger.info("Daemon mode active – PID file: %s", _daemon.pid_file)
+
     yield
 
     # Shutdown
     logger.info("Shutting down Web Backend API")
+
+    if _daemon is not None:
+        _daemon.remove_pid()
+        _daemon = None
 
 
 # Create FastAPI application
