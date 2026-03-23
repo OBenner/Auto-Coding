@@ -12,11 +12,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from core.sentry import capture_exception
-
 if TYPE_CHECKING:
     from agents.session_context import SessionContext
 
+from core.sentry import capture_exception
 from debug import (
     debug,
     debug_detailed,

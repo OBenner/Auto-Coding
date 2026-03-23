@@ -26,6 +26,26 @@ _SKIP_DIRS = {
 }
 
 
+def _should_skip_directory(dir_path: Path, root: Path) -> bool:
+    """
+    Check if a directory should be skipped during scanning.
+
+    Args:
+        dir_path: Path to check
+        root: Project root directory
+
+    Returns:
+        True if the directory should be skipped
+    """
+    # Skip if outside root
+    try:
+        dir_path.relative_to(root)
+    except ValueError:
+        return True
+
+    return dir_path.name in _SKIP_DIRS
+
+
 def detect_package_managers(project_dir: str) -> dict[str, list[str]]:
     """
     Detect all package managers in a project directory.
