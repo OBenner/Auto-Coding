@@ -354,7 +354,7 @@ def data():
     return {}
 """)
 
-        captured_message = None
+        captured_message = ""
 
         async def mock_run_session_with_capture(*args, **kwargs):
             nonlocal captured_message
@@ -391,7 +391,7 @@ def data():
         result = await generate_fixtures(project_dir, spec_dir, analysis)
 
         assert result["success"] is True
-        assert captured_message is not None
+        assert len(captured_message) > 0
         assert "Code Analysis Results" in captured_message
         assert "UserService" in captured_message
 
