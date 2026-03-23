@@ -37,6 +37,9 @@ alembic>=1.13.0
 # Redis for caching and usage tracking
 redis>=5.0.0
 
+# Prometheus metrics
+prometheus-client>=0.20.0
+
 # PTY handling for terminal WebSocket (Unix/Linux/macOS only - optional)
 # Windows uses subprocess fallback, Unix systems get full PTY support with ptyprocess
 ptyprocess>=0.7.0; sys_platform != "win32"

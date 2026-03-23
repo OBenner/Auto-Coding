@@ -1,0 +1,51 @@
+[Unit]
+Description=Auto Claude Web Backend Server
+Documentation=https://github.com/OBenner/Auto-Coding
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=auto-claude
+Group=auto-claude
+WorkingDirectory=/opt/auto-claude/apps/web-backend
+
+# Load environment from config file
+EnvironmentFile=/etc/auto-claude/auto-claude-server.conf
+
+# Use virtualenv python
+Environment="PATH=/opt/auto-claude/apps/web-backend/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+ExecStart=/opt/auto-claude/apps/web-backend/venv/bin/uvicorn main:app \
+    --host ${HOST} \
+    --port ${PORT} \
+    --workers ${WORKERS} \
+    --log-level ${LOG_LEVEL} \
+    --access-log
+
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/auto-claude /opt/auto-claude/.auto-claude /tmp
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=auto-claude-server
+
+[Install]
+WantedBy=multi-user.target

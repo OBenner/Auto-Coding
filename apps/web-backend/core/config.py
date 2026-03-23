@@ -75,6 +75,15 @@ class Settings:
         self.REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
         self.REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
 
+        # Logging configuration
+        self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+        self.LOG_FORMAT: str = os.getenv("LOG_FORMAT", "text")  # "text" or "json"
+
+        # Headless server mode configuration
+        self.HEADLESS_MODE: bool = os.getenv("HEADLESS_MODE", "false").lower() == "true"
+        self.MAX_CONCURRENT_AGENTS: int = int(os.getenv("MAX_CONCURRENT_AGENTS", "5"))
+        self.AGENT_TIMEOUT_SECONDS: int = int(os.getenv("AGENT_TIMEOUT_SECONDS", "3600"))
+
         # Validate critical settings
         self._validate()
 

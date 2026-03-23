@@ -45,6 +45,7 @@ from .scheduler_commands import (
     handle_schedule_status_command,
     handle_schedule_stop_command,
 )
+from .server_commands import handle_server_command
 from .security_commands import handle_security_audit_command
 from .spec_commands import print_specs_list
 from .utils import (
@@ -543,6 +544,34 @@ Environment Variables:
         help="Output format for security audit report (default: both)",
     )
 
+    # Server daemon commands
+    parser.add_argument(
+        "--server",
+        type=str,
+        default=None,
+        choices=["start", "stop", "status", "logs"],
+        metavar="CMD",
+        help="Manage the web-backend server daemon (start|stop|status|logs)",
+    )
+    parser.add_argument(
+        "--server-host",
+        type=str,
+        default="0.0.0.0",
+        help="Host for server start (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--server-port",
+        type=int,
+        default=8000,
+        help="Port for server start (default: 8000)",
+    )
+    parser.add_argument(
+        "--server-log-lines",
+        type=int,
+        default=50,
+        help="Number of log lines to show with 'server logs' (default: 50)",
+    )
+
     return parser.parse_args()
 
 
@@ -746,6 +775,17 @@ def _run_cli() -> None:
             fail_on_high=args.scan_fail_on_high,
         )
         sys.exit(exit_code)
+
+    # Handle server daemon commands
+    if args.server:
+        handle_server_command(
+            subcommand=args.server,
+            project_dir=str(project_dir),
+            host=args.server_host,
+            port=args.server_port,
+            log_lines=args.server_log_lines,
+        )
+        return
 
     # Handle security audit command
     if args.security_audit:
