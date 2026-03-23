@@ -75,6 +75,7 @@ export function useTimelineLayout({
   // Refs for drag tracking
   const dragStartRef = useRef<{ x: number; y: number; scrollX: number; scrollY: number } | null>(null);
   const dragDistanceRef = useRef(0);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   // Notify parent of view state changes
   useEffect(() => {
@@ -212,6 +213,7 @@ export function useTimelineLayout({
         scrollY: viewState.scrollY,
       };
       dragDistanceRef.current = 0;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
 
       updateViewState({ isDragging: true });
     }
@@ -226,8 +228,11 @@ export function useTimelineLayout({
     const deltaX = dragStartRef.current.x - e.clientX;
     const deltaY = dragStartRef.current.y - e.clientY;
 
-    // Track total drag distance
-    dragDistanceRef.current += Math.abs(deltaX) + Math.abs(deltaY);
+    // Track incremental drag distance (from last pointer position, not from start)
+    if (lastPointerRef.current) {
+      dragDistanceRef.current += Math.abs(e.clientX - lastPointerRef.current.x) + Math.abs(e.clientY - lastPointerRef.current.y);
+    }
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
 
     // Update scroll position
     setViewState({

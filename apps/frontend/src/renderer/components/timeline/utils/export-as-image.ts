@@ -64,10 +64,9 @@ function getTimestamp(): string {
 /**
  * Generate filename with timestamp
  */
-function generateFilename(baseFilename: string, format: 'png' | 'svg'): string {
+function generateFilename(baseFilename: string): string {
   const timestamp = getTimestamp();
-  const extension = format === 'png' ? 'png' : 'svg';
-  return `${baseFilename}-${timestamp}.${extension}`;
+  return `${baseFilename}-${timestamp}.png`;
 }
 
 /**
@@ -178,8 +177,8 @@ export async function exportAsImage(
     // Get data URL
     const dataUrl = canvas.toDataURL('image/png', 1.0);
 
-    // Generate filename
-    const filename = generateFilename(config.filename, config.format);
+    // Generate filename (always PNG - SVG export not supported)
+    const filename = generateFilename(config.filename);
 
     // Notify progress: complete
     onProgress?.({ progress: 100, step: 'complete' });

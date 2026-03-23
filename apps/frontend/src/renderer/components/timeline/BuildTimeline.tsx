@@ -12,12 +12,10 @@ import { cn } from '../../lib/utils';
 import { useTimelineData } from './hooks/useTimelineData';
 import { useTimelineExport } from './hooks/useTimelineExport';
 import type {
-  TimelineData,
   TimelineViewState,
   TimelineConfig,
   TimelineAnimationState,
   TimelinePhase,
-  TimelineSubtask,
 } from './types';
 import {
   calculateAllPhaseLayouts,
@@ -36,7 +34,7 @@ interface BuildTimelineProps {
   /** Task ID to load implementation plan for */
   taskId: string;
   /** Current execution progress for real-time updates */
-  executionProgress?: TimelineData['executionProgress'];
+  executionProgress?: import('./types').TimelineData['executionProgress'];
   /** Custom configuration options */
   config?: Partial<TimelineConfig>;
   /** Additional CSS classes */
@@ -53,7 +51,7 @@ export const BuildTimeline = memo(function BuildTimeline({
   config: customConfig,
   className,
 }: BuildTimelineProps) {
-  const { t } = useTranslation('tasks');
+  const { t } = useTranslation('timeline');
 
   // Merge custom config with defaults
   const config: TimelineConfig = {
@@ -67,11 +65,7 @@ export const BuildTimeline = memo(function BuildTimeline({
     isLoading,
     error,
     refresh,
-    getPhase,
-    getSubtask,
     getSubtasksForPhase,
-    getCurrentSubtask,
-    getOverallProgress,
   } = useTimelineData(taskId, executionProgress);
 
   // View state for zoom and pan
@@ -108,6 +102,21 @@ export const BuildTimeline = memo(function BuildTimeline({
       refresh();
     }
   }, [executionProgress, refresh]);
+
+  /**
+   * Sync viewState scroll positions back into the scrollable container
+   */
+  useEffect(() => {
+    const element = timelineRef.current;
+    if (!element) return;
+
+    if (Math.abs(element.scrollLeft - viewState.scrollX) > 1) {
+      element.scrollLeft = viewState.scrollX;
+    }
+    if (Math.abs(element.scrollTop - viewState.scrollY) > 1) {
+      element.scrollTop = viewState.scrollY;
+    }
+  }, [viewState.scrollX, viewState.scrollY]);
 
   /**
    * Handle export button click
@@ -166,11 +175,10 @@ export const BuildTimeline = memo(function BuildTimeline({
   );
 
   /**
-   * Handle mouse down for drag-to-pan
+   * Handle mouse down for drag-to-pan (middle mouse button only)
    */
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only start drag on middle mouse button or space+left click
-    if (e.button === 1 || (e.button === 0 && false)) {
+    if (e.button === 1) {
       e.preventDefault();
       setViewState((prev) => ({
         ...prev,
@@ -213,14 +221,6 @@ export const BuildTimeline = memo(function BuildTimeline({
   }, []);
 
   /**
-   * Handle subtask click
-   */
-  const handleSubtaskClick = useCallback((subtask: TimelineSubtask) => {
-    // TODO: Will be implemented when SubtaskBlock is created
-    console.log('[BuildTimeline] Subtask clicked:', subtask.id);
-  }, []);
-
-  /**
    * Handle phase click
    */
   const handlePhaseClick = useCallback((phase: TimelinePhase) => {
@@ -247,11 +247,11 @@ export const BuildTimeline = memo(function BuildTimeline({
     return () => observer.disconnect();
   }, []);
 
-  // Calculate layouts (memoized for performance)
+  // Calculate layouts at zoom=1, CSS transform handles visual scaling
   const phaseLayouts = useMemo(
     () =>
       timelineData
-        ? calculateAllPhaseLayouts(timelineData.phases, viewState, config)
+        ? calculateAllPhaseLayouts(timelineData.phases, { ...viewState, zoom: 1 }, config)
         : new Map(),
     [timelineData, viewState, config]
   );
@@ -272,26 +272,26 @@ export const BuildTimeline = memo(function BuildTimeline({
   const subtaskLayouts = useMemo(
     () =>
       timelineData && phaseLayouts
-        ? calculateAllSubtaskLayouts(subtasksByPhase, phaseLayouts, viewState, config)
+        ? calculateAllSubtaskLayouts(subtasksByPhase, phaseLayouts, { ...viewState, zoom: 1 }, config)
         : new Map(),
     [timelineData, phaseLayouts, subtasksByPhase, viewState, config]
   );
 
-  // Calculate timeline dimensions (memoized for performance)
+  // Calculate timeline dimensions at base zoom (CSS transform handles visual scaling)
   const timelineWidth = useMemo(
     () =>
       timelineData
-        ? calculateTimelineWidth(timelineData.subtasks, config, viewState.zoom)
+        ? calculateTimelineWidth(timelineData.subtasks, config, 1)
         : 0,
-    [timelineData, config, viewState.zoom]
+    [timelineData, config]
   );
 
   const timelineHeight = useMemo(
     () =>
       timelineData
-        ? calculateTimelineHeight(timelineData.phases.length, config, viewState.zoom)
+        ? calculateTimelineHeight(timelineData.phases.length, config, 1)
         : 0,
-    [timelineData, config, viewState.zoom]
+    [timelineData, config]
   );
 
   // Loading state
@@ -305,7 +305,7 @@ export const BuildTimeline = memo(function BuildTimeline({
         >
           <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           <p className="text-sm text-muted-foreground">
-            {t('timeline.loading') || 'Loading timeline...'}
+            {t('loading')}
           </p>
         </motion.div>
       </div>
@@ -328,7 +328,7 @@ export const BuildTimeline = memo(function BuildTimeline({
           </div>
           <div>
             <p className="text-sm font-medium text-foreground">
-              {t('timeline.error') || 'Failed to load timeline'}
+              {t('error')}
             </p>
             <p className="text-xs text-muted-foreground mt-1">{error}</p>
           </div>
@@ -352,7 +352,7 @@ export const BuildTimeline = memo(function BuildTimeline({
             </svg>
           </div>
           <p className="text-sm text-muted-foreground">
-            {t('timeline.noData') || 'No timeline data available'}
+            {t('noData')}
           </p>
         </motion.div>
       </div>
@@ -394,12 +394,12 @@ export const BuildTimeline = memo(function BuildTimeline({
           handleScrollChange(e.currentTarget.scrollLeft, e.currentTarget.scrollTop);
         }}
       >
-        {/* Timeline content with zoom transform */}
+        {/* Timeline content with zoom transform applied via CSS only */}
         <motion.div
           className="relative"
           style={{
-            width: timelineWidth,
-            height: timelineHeight,
+            width: timelineWidth * viewState.zoom,
+            height: timelineHeight * viewState.zoom,
             transform: `scale(${viewState.zoom})`,
             transformOrigin: 'top left',
           }}
@@ -435,7 +435,7 @@ export const BuildTimeline = memo(function BuildTimeline({
             phaseLayouts={phaseLayouts}
             subtaskLayouts={subtaskLayouts}
             config={config}
-            viewState={viewState}
+            viewState={{ ...viewState, zoom: 1 }}
             className="absolute inset-0 pointer-events-none"
           />
         </motion.div>
@@ -444,7 +444,7 @@ export const BuildTimeline = memo(function BuildTimeline({
       {/* Cursor hint for drag-to-pan */}
       {viewState.isDragging && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-background/80 backdrop-blur-sm border rounded-lg px-3 py-1.5 text-xs text-muted-foreground pointer-events-none">
-          {t('timeline.dragHint') || 'Drag to pan'}
+          {t('dragHint')}
         </div>
       )}
     </div>

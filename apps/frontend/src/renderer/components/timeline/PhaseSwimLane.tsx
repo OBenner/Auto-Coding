@@ -50,7 +50,7 @@ function getAgentColorKey(agentType?: TimelineAgentType): keyof TimelineColorSch
  * Get phase status for color coding
  */
 function getPhaseStatus(
-  phase: TimelinePhase,
+  _phase: TimelinePhase,
   progress?: PhaseProgressData
 ): 'active' | 'complete' | 'pending' | 'error' {
   if (progress?.status === 'failed') return 'error';
@@ -72,7 +72,7 @@ export const PhaseSwimLane = memo(function PhaseSwimLane({
   onClick,
   className,
 }: PhaseSwimLaneProps) {
-  const { t } = useTranslation('tasks');
+  const { t } = useTranslation('timeline');
 
   // Get color scheme based on agent type and status
   const colorKey = getAgentColorKey(phase.agentType);
@@ -111,7 +111,7 @@ export const PhaseSwimLane = memo(function PhaseSwimLane({
         duration: 0.3,
       }}
       onClick={handleClick}
-      role="button"
+      role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={(e) => {
         if (onClick && (e.key === 'Enter' || e.key === ' ')) {
@@ -119,7 +119,7 @@ export const PhaseSwimLane = memo(function PhaseSwimLane({
           handleClick();
         }
       }}
-      aria-label={`${phase.name} phase`}
+      aria-label={t('phaseAriaLabel', { name: phase.name })}
     >
       {/* Background with agent-based color */}
       <div

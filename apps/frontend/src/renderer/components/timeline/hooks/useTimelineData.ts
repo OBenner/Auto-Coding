@@ -130,7 +130,8 @@ function transformSubtask(
 function calculateMetadata(
   phases: TimelinePhase[],
   subtasks: TimelineSubtask[],
-  executionProgress?: ExecutionProgress
+  executionProgress?: ExecutionProgress,
+  plan?: ImplementationPlan
 ): TimelineMetadata {
   const completedSubtasks = subtasks.filter((st) => st.status === 'completed').length;
   const totalSubtasks = subtasks.length;
@@ -146,8 +147,8 @@ function calculateMetadata(
     completedSubtasks,
     totalSubtasks,
     overallProgress,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: plan?.created_at ? new Date(plan.created_at) : new Date(),
+    updatedAt: plan?.updated_at ? new Date(plan.updated_at) : new Date(),
   };
 }
 
@@ -201,7 +202,7 @@ export function useTimelineData(taskId: string, executionProgress?: ExecutionPro
     );
 
     // Calculate metadata
-    const metadata = calculateMetadata(phases, subtasks, executionProgress);
+    const metadata = calculateMetadata(phases, subtasks, executionProgress, implementationPlan);
 
     return {
       phases,

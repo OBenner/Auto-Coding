@@ -36,18 +36,19 @@ export function calculatePhaseLayout(
   config: TimelineConfig,
   zoom: number
 ): PhaseLayout {
-  const { phaseHeight, subtaskHeight, subtaskSpacing } = config;
+  const { phaseHeight, subtaskHeight } = config;
 
   // Calculate Y position with zoom applied
   const y = phaseIndex * (phaseHeight * zoom);
 
-  // Calculate height with subtask vertical padding
+  // Calculate height: use configured phaseHeight if larger than subtask + padding
   const verticalPadding = 20;
-  const height = (subtaskHeight + verticalPadding * 2) * zoom;
+  const calculatedHeight = (subtaskHeight + verticalPadding * 2) * zoom;
+  const height = Math.max(calculatedHeight, phaseHeight * zoom);
 
-  // Width will be determined by content (subtasks)
-  const width = 0;
-  const totalWidth = 0;
+  // Width is full container width (phases span entire timeline)
+  const width = phaseHeight * zoom;
+  const totalWidth = width;
 
   return {
     y,
@@ -326,8 +327,6 @@ export function calculateBezierPath(
 
   // Control points offset based on distance
   const controlOffsetX = Math.abs(dx) * curvature;
-  const controlOffsetY = Math.abs(dy) * curvature;
-
   // Determine direction for control points
   const cp1x = fromX + controlOffsetX;
   const cp1y = fromY;

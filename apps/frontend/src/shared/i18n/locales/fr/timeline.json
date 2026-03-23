@@ -1,0 +1,70 @@
+{
+  "title": "Chronologie de construction",
+  "description": "Visualisation interactive de la chronologie des phases et sous-tâches des agents",
+  "loading": "Chargement de la chronologie...",
+  "error": "Échec du chargement de la chronologie",
+  "noData": "Aucune donnée de chronologie disponible",
+  "zoomIn": "Zoom avant",
+  "zoomOut": "Zoom arrière",
+  "reset": "Réinitialiser le zoom",
+  "dragHint": "Glisser pour naviguer",
+  "phaseAriaLabel": "Phase {{name}}",
+  "subtaskAriaLabel": "{{description}} - {{status}}",
+  "controls": {
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "reset": "Réinitialiser le zoom",
+    "panUp": "Déplacer vers le haut",
+    "panDown": "Déplacer vers le bas",
+    "panLeft": "Déplacer vers la gauche",
+    "panRight": "Déplacer vers la droite",
+    "zoomControls": "Contrôles de zoom",
+    "panControls": "Contrôles de navigation",
+    "export": "Exporter",
+    "exporting": "Exportation..."
+  },
+  "phases": {
+    "planning": "Planification",
+    "coding": "Développement",
+    "qa_review": "Vérification",
+    "qa_fixing": "Correction"
+  },
+  "status": {
+    "pending": "En attente",
+    "in_progress": "En cours",
+    "completed": "Terminé",
+    "failed": "Échoué"
+  },
+  "time": {
+    "estimated": "Est.",
+    "actual": "Réel",
+    "remaining": "Restant"
+  },
+  "subtask": {
+    "expand": "Développer les détails de la sous-tâche",
+    "collapse": "Réduire les détails de la sous-tâche",
+    "files": "Fichiers",
+    "noFiles": "Aucun fichier associé",
+    "dependencies": "Dépendances"
+  },
+  "detail": {
+    "description": "Description",
+    "filesToCreate": "Fichiers à créer",
+    "filesToModify": "Fichiers à modifier",
+    "verification": "Vérification",
+    "notes": "Notes"
+  },
+  "export": {
+    "button": "Exporter en image",
+    "buttonLabel": "Exporter en PNG",
+    "downloading": "Exportation...",
+    "copying": "Copie dans le presse-papiers...",
+    "success": "Chronologie exportée avec succès",
+    "copySuccess": "Chronologie copiée dans le presse-papiers",
+    "error": "Échec de l'exportation de la chronologie",
+    "copyError": "Échec de la copie dans le presse-papiers",
+    "defaultFilename": "chronologie",
+    "clipboardFilename": "presse-papiers",
+    "copyToClipboard": "Copier dans le presse-papiers"
+  }
+}

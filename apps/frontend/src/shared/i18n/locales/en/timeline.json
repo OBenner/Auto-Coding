@@ -8,6 +8,8 @@
   "zoomOut": "Zoom out",
   "reset": "Reset zoom",
   "dragHint": "Drag to pan",
+  "phaseAriaLabel": "{{name}} phase",
+  "subtaskAriaLabel": "{{description}} - {{status}}",
   "controls": {
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
@@ -44,6 +46,13 @@
     "files": "Files",
     "noFiles": "No files associated",
     "dependencies": "Dependencies"
+  },
+  "detail": {
+    "description": "Description",
+    "filesToCreate": "Files to Create",
+    "filesToModify": "Files to Modify",
+    "verification": "Verification",
+    "notes": "Notes"
   },
   "export": {
     "button": "Export as image",

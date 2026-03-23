@@ -175,8 +175,8 @@ export interface TimelineDependency {
  * Export options for timeline snapshot
  */
 export interface TimelineExportOptions {
-  /** Export format */
-  format: 'png' | 'svg';
+  /** Export format (only PNG supported via html2canvas) */
+  format: 'png';
   /** Scale factor for high-DPI displays (default: 2) */
   scale?: number;
   /** Background color (default: transparent) */
