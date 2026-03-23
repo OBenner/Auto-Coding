@@ -59,7 +59,7 @@ The timeline fully supports internationalization:
 
 ### Component Structure
 
-```
+```text
 timeline/
 ├── BuildTimeline.tsx          # Main container with zoom/pan state
 ├── PhaseSwimLane.tsx          # Phase row with color coding

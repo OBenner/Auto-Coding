@@ -11,7 +11,6 @@ import type { TimelineExportOptions } from '../types';
 import {
   exportAsImage,
   downloadImage,
-  copyImageToClipboard,
   isClipboardAvailable,
   getOptimalScale,
   type ExportProgress,
@@ -256,19 +255,23 @@ export function useTimelineExport(
           scale: defaultOptions.scale || getOptimalScale(),
         };
 
-        // Copy to clipboard
-        await copyImageToClipboard(element, exportOptions, handleProgress);
+        // Render image first to get dimensions, then copy blob to clipboard
+        const result = await exportAsImage(element, exportOptions, handleProgress);
+
+        // Copy to clipboard using the rendered blob
+        const clipboardItem = new ClipboardItem({ 'image/png': result.blob });
+        await navigator.clipboard.write([clipboardItem]);
 
         // Check if aborted
         if (exportRef.current.aborted) {
           return;
         }
 
-        // Notify success (without filename for clipboard)
+        // Notify success with actual dimensions
         onExportSuccess?.({
           filename: t('export.clipboardFilename', { defaultValue: 'clipboard' }),
-          width: 0,
-          height: 0,
+          width: result.width,
+          height: result.height,
         });
       } catch (error) {
         const err = error instanceof Error ? error : new Error('Copy to clipboard failed');

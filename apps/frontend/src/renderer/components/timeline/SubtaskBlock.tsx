@@ -91,6 +91,15 @@ function getTimeVariance(
 }
 
 /**
+ * Get CSS class for time variance color
+ */
+function getTimeColorClass(timeVariance: 'over' | 'under' | null): string {
+  if (timeVariance === 'over') return 'text-destructive';
+  if (timeVariance === 'under') return 'text-green-600 dark:text-green-400';
+  return 'text-muted-foreground';
+}
+
+/**
  * SubtaskBlock renders a colored block for a timeline subtask
  * Shows status-based colors, time tracking, and click interaction
  */
@@ -151,11 +160,7 @@ export const SubtaskBlock = memo(function SubtaskBlock({
     const showBoth = subtask.actualTime !== undefined && subtask.estimatedTime !== undefined;
 
     // Determine color based on time variance
-    const timeColorClass = timeVariance === 'over'
-      ? 'text-destructive'
-      : timeVariance === 'under'
-      ? 'text-green-600 dark:text-green-400'
-      : 'text-muted-foreground';
+    const timeColorClass = getTimeColorClass(timeVariance);
 
     return (
       <div className="flex items-center gap-1.5 text-[10px]">
@@ -225,8 +230,8 @@ export const SubtaskBlock = memo(function SubtaskBlock({
         <div>
           <div className="font-semibold text-foreground mb-1">{t('detail.filesToCreate')}</div>
           <ul className="list-disc list-inside text-muted-foreground">
-            {subtask.filesToCreate.map((file, i) => (
-              <li key={i} className="font-mono text-[10px]">{file}</li>
+            {subtask.filesToCreate.map((file) => (
+              <li key={file} className="font-mono text-[10px]">{file}</li>
             ))}
           </ul>
         </div>
@@ -237,8 +242,8 @@ export const SubtaskBlock = memo(function SubtaskBlock({
         <div>
           <div className="font-semibold text-foreground mb-1">{t('detail.filesToModify')}</div>
           <ul className="list-disc list-inside text-muted-foreground">
-            {subtask.filesToModify.map((file, i) => (
-              <li key={i} className="font-mono text-[10px]">{file}</li>
+            {subtask.filesToModify.map((file) => (
+              <li key={file} className="font-mono text-[10px]">{file}</li>
             ))}
           </ul>
         </div>

@@ -27,7 +27,8 @@
     "planning": "Planning",
     "coding": "Coding",
     "qa_review": "Reviewing",
-    "qa_fixing": "Fixing"
+    "qa_fixing": "Fixing",
+    "unknown": "Unknown"
   },
   "status": {
     "pending": "Pending",
@@ -53,6 +54,10 @@
     "filesToModify": "Files to Modify",
     "verification": "Verification",
     "notes": "Notes"
+  },
+  "errors": {
+    "loadPlan": "Failed to load implementation plan",
+    "loadData": "Failed to load timeline data"
   },
   "export": {
     "button": "Export as image",

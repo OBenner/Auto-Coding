@@ -214,7 +214,7 @@ export const PhaseSwimLane = memo(function PhaseSwimLane({
           colorScheme.text
         )}
       >
-        {phase.agentType || 'unknown'}
+        {phase.agentType || t('phases.unknown')}
       </div>
 
       {/* Hover effect overlay */}

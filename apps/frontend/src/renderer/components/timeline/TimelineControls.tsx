@@ -129,7 +129,7 @@ export const TimelineControls = memo(function TimelineControls({
       {/* Zoom controls */}
       {showZoomControls && (
         <motion.div
-          className="flex items-center gap-1 bg-background/80 backdrop-blur-sm border rounded-lg p-1 shadow-sm"
+          className="zoom-controls flex items-center gap-1 bg-background/80 backdrop-blur-sm border rounded-lg p-1 shadow-sm"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2 }}
@@ -189,7 +189,7 @@ export const TimelineControls = memo(function TimelineControls({
       {/* Export button */}
       {showExportButton && (
         <motion.div
-          className="bg-background/80 backdrop-blur-sm border rounded-lg shadow-sm"
+          className="export-controls bg-background/80 backdrop-blur-sm border rounded-lg shadow-sm"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, delay: 0.05 }}
@@ -222,7 +222,7 @@ export const TimelineControls = memo(function TimelineControls({
       {/* Pan controls */}
       {showPanControls && (
         <motion.div
-          className="bg-background/80 backdrop-blur-sm border rounded-lg p-1.5 shadow-sm"
+          className="pan-controls bg-background/80 backdrop-blur-sm border rounded-lg p-1.5 shadow-sm"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, delay: 0.05 }}

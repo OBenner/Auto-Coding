@@ -27,7 +27,8 @@
     "planning": "Planification",
     "coding": "Développement",
     "qa_review": "Vérification",
-    "qa_fixing": "Correction"
+    "qa_fixing": "Correction",
+    "unknown": "Inconnu"
   },
   "status": {
     "pending": "En attente",
@@ -53,6 +54,10 @@
     "filesToModify": "Fichiers à modifier",
     "verification": "Vérification",
     "notes": "Notes"
+  },
+  "errors": {
+    "loadPlan": "Échec du chargement du plan d'implémentation",
+    "loadData": "Échec du chargement des données de la chronologie"
   },
   "export": {
     "button": "Exporter en image",

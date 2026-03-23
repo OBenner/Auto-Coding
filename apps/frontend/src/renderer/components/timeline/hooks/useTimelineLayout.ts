@@ -175,27 +175,27 @@ export function useTimelineLayout({
 
       // Calculate zoom delta (negative delta = zoom in, positive = zoom out)
       const delta = e.deltaY > 0 ? -1 : 1;
-      const newZoom = clampZoom(viewState.zoom + delta * ZOOM_STEP, config);
 
-      // Calculate new scroll position to maintain focus point
-      const newScroll = calculateScrollAfterZoom(
-        viewState.scrollX,
-        viewState.scrollY,
-        viewState.zoom,
-        newZoom,
-        focusX,
-        focusY
-      );
-
-      setViewState({
-        ...viewState,
-        zoom: newZoom,
-        scrollX: newScroll.scrollX,
-        scrollY: newScroll.scrollY,
+      setViewState((prev) => {
+        const newZoom = clampZoom(prev.zoom + delta * ZOOM_STEP, config);
+        const newScroll = calculateScrollAfterZoom(
+          prev.scrollX,
+          prev.scrollY,
+          prev.zoom,
+          newZoom,
+          focusX,
+          focusY
+        );
+        return {
+          ...prev,
+          zoom: newZoom,
+          scrollX: newScroll.scrollX,
+          scrollY: newScroll.scrollY,
+        };
       });
     }
     // Regular wheel scrolling is handled by container's native scroll behavior
-  }, [viewState, config, containerRef]);
+  }, [config, containerRef]);
 
   /**
    * Handle mouse down for drag-to-pan
@@ -206,27 +206,25 @@ export function useTimelineLayout({
     if (e.button === 1 || e.button === 0) {
       e.preventDefault();
 
-      dragStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        scrollX: viewState.scrollX,
-        scrollY: viewState.scrollY,
-      };
-      dragDistanceRef.current = 0;
-      lastPointerRef.current = { x: e.clientX, y: e.clientY };
-
-      updateViewState({ isDragging: true });
+      setViewState((prev) => {
+        dragStartRef.current = {
+          x: e.clientX,
+          y: e.clientY,
+          scrollX: prev.scrollX,
+          scrollY: prev.scrollY,
+        };
+        dragDistanceRef.current = 0;
+        lastPointerRef.current = { x: e.clientX, y: e.clientY };
+        return { ...prev, isDragging: true };
+      });
     }
-  }, [viewState, updateViewState]);
+  }, []);
 
   /**
    * Handle mouse move for dragging
    */
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!viewState.isDragging || !dragStartRef.current) return;
-
-    const deltaX = dragStartRef.current.x - e.clientX;
-    const deltaY = dragStartRef.current.y - e.clientY;
+    if (!dragStartRef.current) return;
 
     // Track incremental drag distance (from last pointer position, not from start)
     if (lastPointerRef.current) {
@@ -234,35 +232,41 @@ export function useTimelineLayout({
     }
     lastPointerRef.current = { x: e.clientX, y: e.clientY };
 
-    // Update scroll position
-    setViewState({
-      ...viewState,
-      scrollX: dragStartRef.current.scrollX + deltaX,
-      scrollY: dragStartRef.current.scrollY + deltaY,
+    const deltaX = dragStartRef.current.x - e.clientX;
+    const deltaY = dragStartRef.current.y - e.clientY;
+    const startScrollX = dragStartRef.current.scrollX;
+    const startScrollY = dragStartRef.current.scrollY;
+
+    // Update scroll position using functional form
+    setViewState((prev) => {
+      if (!prev.isDragging) return prev;
+      return {
+        ...prev,
+        scrollX: startScrollX + deltaX,
+        scrollY: startScrollY + deltaY,
+      };
     });
-  }, [viewState]);
+  }, []);
 
   /**
    * Handle mouse up to end drag
    */
   const handleMouseUp = useCallback(() => {
     // Only end drag if we moved beyond threshold (prevents accidental clicks)
-    if (dragDistanceRef.current < DRAG_THRESHOLD) {
-      // Reset scroll position if this was a click, not a drag
-      if (dragStartRef.current) {
-        setViewState({
-          ...viewState,
-          scrollX: dragStartRef.current.scrollX,
-          scrollY: dragStartRef.current.scrollY,
-        });
-      }
-    }
+    const dragStart = dragStartRef.current;
+    const belowThreshold = dragDistanceRef.current < DRAG_THRESHOLD;
 
     dragStartRef.current = null;
     dragDistanceRef.current = 0;
 
-    updateViewState({ isDragging: false });
-  }, [viewState, updateViewState]);
+    setViewState((prev) => {
+      if (belowThreshold && dragStart) {
+        // Reset scroll position if this was a click, not a drag
+        return { ...prev, isDragging: false, scrollX: dragStart.scrollX, scrollY: dragStart.scrollY };
+      }
+      return { ...prev, isDragging: false };
+    });
+  }, []);
 
   /**
    * Calculate CSS transform string for applying zoom

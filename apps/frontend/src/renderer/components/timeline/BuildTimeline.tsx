@@ -223,9 +223,43 @@ export const BuildTimeline = memo(function BuildTimeline({
   /**
    * Handle phase click
    */
-  const handlePhaseClick = useCallback((phase: TimelinePhase) => {
+  const handlePhaseClick = useCallback((_phase: TimelinePhase) => {
     // Phase click handler - can be extended for phase selection/filtering
-    console.log('[BuildTimeline] Phase clicked:', `phase-${phase.phase}`, phase.name);
+  }, []);
+
+  /**
+   * Handle keyboard navigation for panning
+   */
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const PAN_STEP = 50;
+    const LARGE_PAN_STEP = 200;
+
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        setViewState((prev) => ({ ...prev, scrollX: prev.scrollX - PAN_STEP }));
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        setViewState((prev) => ({ ...prev, scrollX: prev.scrollX + PAN_STEP }));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setViewState((prev) => ({ ...prev, scrollY: prev.scrollY - PAN_STEP }));
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        setViewState((prev) => ({ ...prev, scrollY: prev.scrollY + PAN_STEP }));
+        break;
+      case 'PageUp':
+        e.preventDefault();
+        setViewState((prev) => ({ ...prev, scrollY: prev.scrollY - LARGE_PAN_STEP }));
+        break;
+      case 'PageDown':
+        e.preventDefault();
+        setViewState((prev) => ({ ...prev, scrollY: prev.scrollY + LARGE_PAN_STEP }));
+        break;
+    }
   }, []);
 
   // IntersectionObserver for performance optimization
@@ -330,7 +364,7 @@ export const BuildTimeline = memo(function BuildTimeline({
             <p className="text-sm font-medium text-foreground">
               {t('error')}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{error}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t(error, { defaultValue: error })}</p>
           </div>
         </motion.div>
       </div>
@@ -362,12 +396,16 @@ export const BuildTimeline = memo(function BuildTimeline({
   return (
     <div
       ref={containerRef}
-      className={cn('relative w-full h-full overflow-hidden', className)}
+      className={cn('relative w-full h-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-ring', className)}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      role="application"
+      aria-label={t('title')}
     >
       {/* Timeline controls overlay */}
       <TimelineControls
@@ -398,8 +436,8 @@ export const BuildTimeline = memo(function BuildTimeline({
         <motion.div
           className="relative"
           style={{
-            width: timelineWidth * viewState.zoom,
-            height: timelineHeight * viewState.zoom,
+            width: timelineWidth,
+            height: timelineHeight,
             transform: `scale(${viewState.zoom})`,
             transformOrigin: 'top left',
           }}

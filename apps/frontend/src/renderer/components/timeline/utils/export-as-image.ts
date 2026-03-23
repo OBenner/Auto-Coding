@@ -158,6 +158,7 @@ export async function exportAsImage(
           return (
             className.includes('zoom-controls') ||
             className.includes('pan-controls') ||
+            className.includes('export-controls') ||
             className.includes('cursor-hint')
           );
         }
@@ -221,7 +222,7 @@ export function downloadImage(dataUrl: string, filename: string): void {
     // Append to document, click, and remove
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
 
     // Revoke the object URL to free memory
     if (link.href.startsWith('blob:')) {

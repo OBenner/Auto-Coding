@@ -34,9 +34,10 @@ export function getPhaseId(phaseNumber: number): string {
 export function calculatePhaseLayout(
   phaseIndex: number,
   config: TimelineConfig,
-  zoom: number
+  zoom: number,
+  subtaskCount: number = 0
 ): PhaseLayout {
-  const { phaseHeight, subtaskHeight } = config;
+  const { phaseHeight, subtaskHeight, minSubtaskWidth, subtaskSpacing } = config;
 
   // Calculate Y position with zoom applied
   const y = phaseIndex * (phaseHeight * zoom);
@@ -46,9 +47,12 @@ export function calculatePhaseLayout(
   const calculatedHeight = (subtaskHeight + verticalPadding * 2) * zoom;
   const height = Math.max(calculatedHeight, phaseHeight * zoom);
 
-  // Width is full container width (phases span entire timeline)
-  const width = phaseHeight * zoom;
-  const totalWidth = width;
+  // Width derived from subtask content (subtask count * (width + spacing) + spacing)
+  const contentWidth = subtaskCount > 0
+    ? (subtaskCount * (minSubtaskWidth + subtaskSpacing) + subtaskSpacing) * zoom
+    : minSubtaskWidth * zoom;
+  const width = contentWidth;
+  const totalWidth = contentWidth;
 
   return {
     y,
@@ -112,7 +116,8 @@ export function calculateAllPhaseLayouts(
   const layouts = new Map<string, PhaseLayout>();
 
   phases.forEach((phase, index) => {
-    const layout = calculatePhaseLayout(index, config, viewState.zoom);
+    const subtaskCount = phase.subtasks?.length ?? 0;
+    const layout = calculatePhaseLayout(index, config, viewState.zoom, subtaskCount);
     const phaseId = getPhaseId(phase.phase);
     layouts.set(phaseId, layout);
   });
