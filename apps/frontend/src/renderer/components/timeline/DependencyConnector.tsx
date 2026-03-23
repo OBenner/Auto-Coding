@@ -43,6 +43,31 @@ const DEPENDENCY_COLORS = {
 };
 
 /**
+ * Get agent type and color for a dependency based on its target
+ */
+function getDependencyInfo(
+  dep: TimelineDependency,
+  phases: TimelinePhase[],
+  subtasks: TimelineSubtask[]
+): { color: string; agentType: string } {
+  let agentType: string = 'inactive';
+
+  if (dep.type === 'phase') {
+    const targetPhase = phases.find(p => `phase-${p.phase}` === dep.toId);
+    agentType = targetPhase?.agentType || 'inactive';
+  } else {
+    const targetSubtask = subtasks.find(s => s.id === dep.toId);
+    if (targetSubtask) {
+      const targetPhase = phases.find(p => `phase-${p.phase}` === targetSubtask.phaseId);
+      agentType = targetPhase?.agentType || 'inactive';
+    }
+  }
+
+  const color = DEPENDENCY_COLORS[agentType as keyof typeof DEPENDENCY_COLORS] || DEPENDENCY_COLORS.inactive;
+  return { color, agentType };
+}
+
+/**
  * Renders dependency connections as SVG bezier curves with arrow markers
  * Integrates with BuildTimeline's SVG overlay layer for visual relationship display
  */
@@ -69,46 +94,6 @@ export const DependencyConnector = memo(function DependencyConnector({
   if (dependencyPaths.length === 0) {
     return null;
   }
-
-  /**
-   * Get color for dependency line based on target's agent type
-   */
-  const getDependencyColor = (dep: TimelineDependency): string => {
-    if (dep.type === 'phase') {
-      // For phase dependencies, find target phase by ID
-      const targetPhase = phases.find(p => `phase-${p.phase}` === dep.toId);
-      if (targetPhase) {
-        return DEPENDENCY_COLORS[targetPhase.agentType] || DEPENDENCY_COLORS.inactive;
-      }
-    } else {
-      // For subtask dependencies, find target subtask's phase
-      const targetSubtask = subtasks.find(s => s.id === dep.toId);
-      if (targetSubtask) {
-        const targetPhase = phases.find(p => `phase-${p.phase}` === targetSubtask.phaseId);
-        if (targetPhase) {
-          return DEPENDENCY_COLORS[targetPhase.agentType] || DEPENDENCY_COLORS.inactive;
-        }
-      }
-    }
-    return DEPENDENCY_COLORS.inactive;
-  };
-
-  /**
-   * Get agent type for dependency (for arrow marker selection)
-   */
-  const getDependencyAgentType = (dep: TimelineDependency): string => {
-    if (dep.type === 'phase') {
-      const targetPhase = phases.find(p => `phase-${p.phase}` === dep.toId);
-      return targetPhase?.agentType || 'inactive';
-    } else {
-      const targetSubtask = subtasks.find(s => s.id === dep.toId);
-      if (targetSubtask) {
-        const targetPhase = phases.find(p => `phase-${p.phase}` === targetSubtask.phaseId);
-        return targetPhase?.agentType || 'inactive';
-      }
-    }
-    return 'inactive';
-  };
 
   return (
     <svg
@@ -195,8 +180,7 @@ export const DependencyConnector = memo(function DependencyConnector({
         // Skip if no path calculated
         if (!dep.path) return null;
 
-        const color = getDependencyColor(dep);
-        const agentType = getDependencyAgentType(dep);
+        const { color, agentType } = getDependencyInfo(dep, phases, subtasks);
         const markerId = `arrow-${agentType}`;
 
         return (

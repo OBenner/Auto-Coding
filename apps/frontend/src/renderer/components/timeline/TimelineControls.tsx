@@ -129,7 +129,7 @@ export const TimelineControls = memo(function TimelineControls({
       {/* Zoom controls */}
       {showZoomControls && (
         <motion.div
-          className="flex items-center gap-1 bg-background/80 backdrop-blur-sm border rounded-lg p-1 shadow-sm"
+          className="zoom-controls flex items-center gap-1 bg-background/80 backdrop-blur-sm border rounded-lg p-1 shadow-sm"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2 }}
@@ -145,8 +145,8 @@ export const TimelineControls = memo(function TimelineControls({
               'hover:bg-accent',
               'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent'
             )}
-            title={t('controls.zoomIn') || 'Zoom in'}
-            aria-label={t('controls.zoomIn') || 'Zoom in'}
+            title={t('controls.zoomIn')}
+            aria-label={t('controls.zoomIn')}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -159,8 +159,8 @@ export const TimelineControls = memo(function TimelineControls({
             whileTap={{ scale: 0.95 }}
             onClick={handleZoomReset}
             className="p-1.5 rounded-md hover:bg-accent transition-colors text-xs font-medium min-w-[3.5rem]"
-            title={t('controls.reset') || 'Reset zoom'}
-            aria-label={t('controls.reset') || 'Reset zoom'}
+            title={t('controls.reset')}
+            aria-label={t('controls.reset')}
           >
             {Math.round(viewState.zoom * 100)}%
           </motion.button>
@@ -176,8 +176,8 @@ export const TimelineControls = memo(function TimelineControls({
               'hover:bg-accent',
               'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent'
             )}
-            title={t('controls.zoomOut') || 'Zoom out'}
-            aria-label={t('controls.zoomOut') || 'Zoom out'}
+            title={t('controls.zoomOut')}
+            aria-label={t('controls.zoomOut')}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
@@ -189,7 +189,7 @@ export const TimelineControls = memo(function TimelineControls({
       {/* Export button */}
       {showExportButton && (
         <motion.div
-          className="bg-background/80 backdrop-blur-sm border rounded-lg shadow-sm"
+          className="export-controls bg-background/80 backdrop-blur-sm border rounded-lg shadow-sm"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, delay: 0.05 }}
@@ -204,8 +204,8 @@ export const TimelineControls = memo(function TimelineControls({
               'hover:bg-accent',
               'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent'
             )}
-            title={t('controls.export') || 'Export as PNG'}
-            aria-label={t('controls.export') || 'Export as PNG'}
+            title={t('controls.export')}
+            aria-label={t('controls.export')}
           >
             {isExporting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -213,7 +213,7 @@ export const TimelineControls = memo(function TimelineControls({
               <Download className="h-4 w-4" />
             )}
             <span className="text-xs font-medium">
-              {isExporting ? (t('controls.exporting') || 'Exporting...') : (t('controls.export') || 'Export')}
+              {isExporting ? t('controls.exporting') : t('controls.export')}
             </span>
           </motion.button>
         </motion.div>
@@ -222,7 +222,7 @@ export const TimelineControls = memo(function TimelineControls({
       {/* Pan controls */}
       {showPanControls && (
         <motion.div
-          className="bg-background/80 backdrop-blur-sm border rounded-lg p-1.5 shadow-sm"
+          className="pan-controls bg-background/80 backdrop-blur-sm border rounded-lg p-1.5 shadow-sm"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, delay: 0.05 }}
@@ -237,8 +237,8 @@ export const TimelineControls = memo(function TimelineControls({
               whileTap={{ scale: 0.95 }}
               onClick={handlePanUp}
               className="p-1.5 rounded-md hover:bg-accent transition-colors"
-              title={t('controls.panUp') || 'Pan up'}
-              aria-label={t('controls.panUp') || 'Pan up'}
+              title={t('controls.panUp')}
+              aria-label={t('controls.panUp')}
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
@@ -254,8 +254,8 @@ export const TimelineControls = memo(function TimelineControls({
               whileTap={{ scale: 0.95 }}
               onClick={handlePanLeft}
               className="p-1.5 rounded-md hover:bg-accent transition-colors"
-              title={t('controls.panLeft') || 'Pan left'}
-              aria-label={t('controls.panLeft') || 'Pan left'}
+              title={t('controls.panLeft')}
+              aria-label={t('controls.panLeft')}
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -273,8 +273,8 @@ export const TimelineControls = memo(function TimelineControls({
               whileTap={{ scale: 0.95 }}
               onClick={handlePanRight}
               className="p-1.5 rounded-md hover:bg-accent transition-colors"
-              title={t('controls.panRight') || 'Pan right'}
-              aria-label={t('controls.panRight') || 'Pan right'}
+              title={t('controls.panRight')}
+              aria-label={t('controls.panRight')}
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -290,8 +290,8 @@ export const TimelineControls = memo(function TimelineControls({
               whileTap={{ scale: 0.95 }}
               onClick={handlePanDown}
               className="p-1.5 rounded-md hover:bg-accent transition-colors"
-              title={t('controls.panDown') || 'Pan down'}
-              aria-label={t('controls.panDown') || 'Pan down'}
+              title={t('controls.panDown')}
+              aria-label={t('controls.panDown')}
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />

@@ -91,6 +91,15 @@ function getTimeVariance(
 }
 
 /**
+ * Get CSS class for time variance color
+ */
+function getTimeColorClass(timeVariance: 'over' | 'under' | null): string {
+  if (timeVariance === 'over') return 'text-destructive';
+  if (timeVariance === 'under') return 'text-green-600 dark:text-green-400';
+  return 'text-muted-foreground';
+}
+
+/**
  * SubtaskBlock renders a colored block for a timeline subtask
  * Shows status-based colors, time tracking, and click interaction
  */
@@ -105,7 +114,7 @@ export const SubtaskBlock = memo(function SubtaskBlock({
   onClick,
   className,
 }: SubtaskBlockProps) {
-  const { t } = useTranslation('tasks');
+  const { t } = useTranslation('timeline');
 
   // Expanded state for detail panel
   const [expanded, setExpanded] = useState(false);
@@ -126,9 +135,9 @@ export const SubtaskBlock = memo(function SubtaskBlock({
   }
 
   // Handle click event - toggle expanded state
-  const handleClick = useCallback((e?: React.MouseEvent | React.KeyboardEvent) => {
-    // Distinguish click from drag - only expand if not dragging
-    if (layout.width > 0) {  // Ensure block is rendered
+  const handleClick = useCallback((_e?: React.MouseEvent | React.KeyboardEvent) => {
+    // Distinguish click from drag - only expand if block is rendered
+    if (layout.width > 0) {
       setExpanded(prev => !prev);
       onClick?.(subtask);
     }
@@ -151,11 +160,7 @@ export const SubtaskBlock = memo(function SubtaskBlock({
     const showBoth = subtask.actualTime !== undefined && subtask.estimatedTime !== undefined;
 
     // Determine color based on time variance
-    const timeColorClass = timeVariance === 'over'
-      ? 'text-destructive'
-      : timeVariance === 'under'
-      ? 'text-green-600 dark:text-green-400'
-      : 'text-muted-foreground';
+    const timeColorClass = getTimeColorClass(timeVariance);
 
     return (
       <div className="flex items-center gap-1.5 text-[10px]">
@@ -216,17 +221,17 @@ export const SubtaskBlock = memo(function SubtaskBlock({
     >
       {/* Full description */}
       <div>
-        <div className="font-semibold text-foreground mb-1">Description:</div>
+        <div className="font-semibold text-foreground mb-1">{t('detail.description')}</div>
         <div className="text-muted-foreground">{subtask.description}</div>
       </div>
 
       {/* Files to create */}
       {subtask.filesToCreate && subtask.filesToCreate.length > 0 && (
         <div>
-          <div className="font-semibold text-foreground mb-1">Files to Create:</div>
+          <div className="font-semibold text-foreground mb-1">{t('detail.filesToCreate')}</div>
           <ul className="list-disc list-inside text-muted-foreground">
-            {subtask.filesToCreate.map((file, i) => (
-              <li key={i} className="font-mono text-[10px]">{file}</li>
+            {subtask.filesToCreate.map((file) => (
+              <li key={file} className="font-mono text-[10px]">{file}</li>
             ))}
           </ul>
         </div>
@@ -235,10 +240,10 @@ export const SubtaskBlock = memo(function SubtaskBlock({
       {/* Files to modify */}
       {subtask.filesToModify && subtask.filesToModify.length > 0 && (
         <div>
-          <div className="font-semibold text-foreground mb-1">Files to Modify:</div>
+          <div className="font-semibold text-foreground mb-1">{t('detail.filesToModify')}</div>
           <ul className="list-disc list-inside text-muted-foreground">
-            {subtask.filesToModify.map((file, i) => (
-              <li key={i} className="font-mono text-[10px]">{file}</li>
+            {subtask.filesToModify.map((file) => (
+              <li key={file} className="font-mono text-[10px]">{file}</li>
             ))}
           </ul>
         </div>
@@ -247,7 +252,7 @@ export const SubtaskBlock = memo(function SubtaskBlock({
       {/* Verification steps */}
       {subtask.verification && (
         <div>
-          <div className="font-semibold text-foreground mb-1">Verification:</div>
+          <div className="font-semibold text-foreground mb-1">{t('detail.verification')}</div>
           <div className="text-muted-foreground font-mono text-[10px]">
             {subtask.verification.run || subtask.verification.scenario || subtask.verification.type}
           </div>
@@ -257,7 +262,7 @@ export const SubtaskBlock = memo(function SubtaskBlock({
       {/* Notes */}
       {subtask.notes && (
         <div>
-          <div className="font-semibold text-foreground mb-1">Notes:</div>
+          <div className="font-semibold text-foreground mb-1">{t('detail.notes')}</div>
           <div className="text-muted-foreground">{subtask.notes}</div>
         </div>
       )}
@@ -278,7 +283,8 @@ export const SubtaskBlock = memo(function SubtaskBlock({
   return (
     <motion.div
       className={cn(
-        'absolute rounded border shadow-sm overflow-hidden',
+        'absolute rounded border shadow-sm',
+        expanded ? 'overflow-visible' : 'overflow-hidden',
         'hover:shadow-md transition-shadow',
         onClick && 'cursor-pointer',
         isCurrent && 'ring-2 ring-ring ring-offset-1',
@@ -288,8 +294,8 @@ export const SubtaskBlock = memo(function SubtaskBlock({
         left: layout.x,
         top: layout.y,
         width: layout.width,
-        height: layout.height,
-        zIndex: layout.zIndex,
+        minHeight: layout.height,
+        zIndex: expanded ? layout.zIndex + 10 : layout.zIndex,
       }}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -298,7 +304,7 @@ export const SubtaskBlock = memo(function SubtaskBlock({
         duration: 0.2,
       }}
       onClick={handleClick}
-      role="button"
+      role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={(e) => {
         if (onClick && (e.key === 'Enter' || e.key === ' ')) {
@@ -306,7 +312,10 @@ export const SubtaskBlock = memo(function SubtaskBlock({
           handleClick();
         }
       }}
-      aria-label={`${subtask.description || subtask.id} - ${subtaskStatus}`}
+      aria-label={t('subtaskAriaLabel', {
+        description: subtask.description || subtask.id,
+        status: t(`status.${subtaskStatus}`),
+      })}
     >
       {/* Background with status-based color */}
       <div

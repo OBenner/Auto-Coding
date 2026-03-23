@@ -34,20 +34,25 @@ export function getPhaseId(phaseNumber: number): string {
 export function calculatePhaseLayout(
   phaseIndex: number,
   config: TimelineConfig,
-  zoom: number
+  zoom: number,
+  subtaskCount: number = 0
 ): PhaseLayout {
-  const { phaseHeight, subtaskHeight, subtaskSpacing } = config;
+  const { phaseHeight, subtaskHeight, minSubtaskWidth, subtaskSpacing } = config;
 
   // Calculate Y position with zoom applied
   const y = phaseIndex * (phaseHeight * zoom);
 
-  // Calculate height with subtask vertical padding
+  // Calculate height: use configured phaseHeight if larger than subtask + padding
   const verticalPadding = 20;
-  const height = (subtaskHeight + verticalPadding * 2) * zoom;
+  const calculatedHeight = (subtaskHeight + verticalPadding * 2) * zoom;
+  const height = Math.max(calculatedHeight, phaseHeight * zoom);
 
-  // Width will be determined by content (subtasks)
-  const width = 0;
-  const totalWidth = 0;
+  // Width derived from subtask content (subtask count * (width + spacing) + spacing)
+  const contentWidth = subtaskCount > 0
+    ? (subtaskCount * (minSubtaskWidth + subtaskSpacing) + subtaskSpacing) * zoom
+    : minSubtaskWidth * zoom;
+  const width = contentWidth;
+  const totalWidth = contentWidth;
 
   return {
     y,
@@ -111,7 +116,8 @@ export function calculateAllPhaseLayouts(
   const layouts = new Map<string, PhaseLayout>();
 
   phases.forEach((phase, index) => {
-    const layout = calculatePhaseLayout(index, config, viewState.zoom);
+    const subtaskCount = phase.subtasks?.length ?? 0;
+    const layout = calculatePhaseLayout(index, config, viewState.zoom, subtaskCount);
     const phaseId = getPhaseId(phase.phase);
     layouts.set(phaseId, layout);
   });
@@ -326,8 +332,6 @@ export function calculateBezierPath(
 
   // Control points offset based on distance
   const controlOffsetX = Math.abs(dx) * curvature;
-  const controlOffsetY = Math.abs(dy) * curvature;
-
   // Determine direction for control points
   const cp1x = fromX + controlOffsetX;
   const cp1y = fromY;

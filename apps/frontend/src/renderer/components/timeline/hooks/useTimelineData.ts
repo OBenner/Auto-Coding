@@ -5,7 +5,7 @@
  * data into TimelineData format for visual timeline component.
  */
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import type {
   ImplementationPlan,
   Phase,
@@ -78,8 +78,13 @@ function transformPhase(
   const isCurrentPhase = executionProgress?.phase === phase.type;
   const currentSubtaskId = isCurrentPhase ? executionProgress?.currentSubtask : undefined;
 
+  // Only the active phase gets the execution status; others derive from subtask completion
+  const status = isCurrentPhase
+    ? (executionProgress?.phase || 'idle')
+    : (completedSubtasks === totalSubtasks && totalSubtasks > 0 ? 'complete' : 'idle');
+
   const progress: PhaseProgressData = {
-    status: executionProgress?.phase || 'idle',
+    status,
     progress: totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0,
     currentSubtaskId,
     completedCount: completedSubtasks,
@@ -130,7 +135,8 @@ function transformSubtask(
 function calculateMetadata(
   phases: TimelinePhase[],
   subtasks: TimelineSubtask[],
-  executionProgress?: ExecutionProgress
+  executionProgress?: ExecutionProgress,
+  plan?: ImplementationPlan
 ): TimelineMetadata {
   const completedSubtasks = subtasks.filter((st) => st.status === 'completed').length;
   const totalSubtasks = subtasks.length;
@@ -146,8 +152,8 @@ function calculateMetadata(
     completedSubtasks,
     totalSubtasks,
     overallProgress,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: plan?.created_at ? new Date(plan.created_at) : new Date(),
+    updatedAt: plan?.updated_at ? new Date(plan.updated_at) : new Date(),
   };
 }
 
@@ -159,24 +165,37 @@ export function useTimelineData(taskId: string, executionProgress?: ExecutionPro
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Request token to ignore stale async responses
+  const requestIdRef = useRef(0);
+
   /**
    * Load implementation plan
    */
   const loadData = useCallback(async () => {
+    const currentRequestId = ++requestIdRef.current;
+
     setIsLoading(true);
     setError(null);
 
     try {
       // Load implementation plan
       const planResult = await window.electronAPI.getImplementationPlan(taskId);
+
+      // Ignore stale response if taskId changed during await
+      if (currentRequestId !== requestIdRef.current) return;
+
       if (!planResult.success || !planResult.data) {
-        throw new Error(planResult.error || 'Failed to load implementation plan');
+        throw new Error(planResult.error || 'timeline:errors.loadPlan');
       }
       setImplementationPlan(planResult.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load timeline data');
+      // Ignore stale errors
+      if (currentRequestId !== requestIdRef.current) return;
+      setError(err instanceof Error ? err.message : 'timeline:errors.loadData');
     } finally {
-      setIsLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [taskId]);
 
@@ -201,7 +220,7 @@ export function useTimelineData(taskId: string, executionProgress?: ExecutionPro
     );
 
     // Calculate metadata
-    const metadata = calculateMetadata(phases, subtasks, executionProgress);
+    const metadata = calculateMetadata(phases, subtasks, executionProgress, implementationPlan);
 
     return {
       phases,

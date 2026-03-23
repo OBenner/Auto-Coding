@@ -11,8 +11,6 @@ import type { TimelineExportOptions } from '../types';
 import {
   exportAsImage,
   downloadImage,
-  exportAndDownloadImage,
-  copyImageToClipboard,
   isClipboardAvailable,
   getOptimalScale,
   type ExportProgress,
@@ -67,39 +65,6 @@ export interface UseTimelineExportResult {
 
 /**
  * React hook for timeline export functionality
- *
- * @param options - Hook options
- * @returns Export functions and state
- *
- * @example
- * ```tsx
- * function TimelineComponent() {
- *   const timelineRef = useRef<HTMLDivElement>(null);
- *   const { exportAndDownload, isExporting, exportProgress } = useTimelineExport({
- *     defaultOptions: {
- *       filename: 'my-timeline',
- *       scale: 2,
- *     },
- *     onExportSuccess: (result) => {
- *       console.log('Exported:', result.filename);
- *     },
- *   });
- *
- *   return (
- *     <div>
- *       <div ref={timelineRef}>
- *         {/* Timeline content *\/}
- *       </div>
- *       <button
- *         onClick={() => timelineRef.current && exportAndDownload(timelineRef.current)}
- *         disabled={isExporting}
- *       >
- *         {isExporting ? `Exporting... ${exportProgress}%` : 'Export as PNG'}
- *       </button>
- *     </div>
- *   );
- * }
- * ```
  */
 export function useTimelineExport(
   options: UseTimelineExportOptions = {}
@@ -169,22 +134,22 @@ export function useTimelineExport(
           scale: defaultOptions.scale || getOptimalScale(),
         };
 
-        // Export and download
-        await exportAndDownloadImage(element, exportOptions, handleProgress);
+        // Single export pass: render, then download
+        const result = await exportAsImage(element, exportOptions, handleProgress);
 
         // Check if aborted
         if (exportRef.current.aborted) {
           return;
         }
 
-        // Get result for callback
-        const canvas = await exportAsImage(element, exportOptions);
+        // Download the image
+        downloadImage(result.dataUrl, result.filename);
 
         // Notify success
         onExportSuccess?.({
-          filename: canvas.filename,
-          width: canvas.width,
-          height: canvas.height,
+          filename: result.filename,
+          width: result.width,
+          height: result.height,
         });
       } catch (error) {
         const err = error instanceof Error ? error : new Error('Export failed');
@@ -290,19 +255,23 @@ export function useTimelineExport(
           scale: defaultOptions.scale || getOptimalScale(),
         };
 
-        // Copy to clipboard
-        await copyImageToClipboard(element, exportOptions, handleProgress);
+        // Render image first to get dimensions, then copy blob to clipboard
+        const result = await exportAsImage(element, exportOptions, handleProgress);
+
+        // Copy to clipboard using the rendered blob
+        const clipboardItem = new ClipboardItem({ 'image/png': result.blob });
+        await navigator.clipboard.write([clipboardItem]);
 
         // Check if aborted
         if (exportRef.current.aborted) {
           return;
         }
 
-        // Notify success (without filename for clipboard)
+        // Notify success with actual dimensions
         onExportSuccess?.({
           filename: t('export.clipboardFilename', { defaultValue: 'clipboard' }),
-          width: 0,
-          height: 0,
+          width: result.width,
+          height: result.height,
         });
       } catch (error) {
         const err = error instanceof Error ? error : new Error('Copy to clipboard failed');

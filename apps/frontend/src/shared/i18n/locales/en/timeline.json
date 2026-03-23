@@ -8,6 +8,8 @@
   "zoomOut": "Zoom out",
   "reset": "Reset zoom",
   "dragHint": "Drag to pan",
+  "phaseAriaLabel": "{{name}} phase",
+  "subtaskAriaLabel": "{{description}} - {{status}}",
   "controls": {
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
@@ -25,7 +27,8 @@
     "planning": "Planning",
     "coding": "Coding",
     "qa_review": "Reviewing",
-    "qa_fixing": "Fixing"
+    "qa_fixing": "Fixing",
+    "unknown": "Unknown"
   },
   "status": {
     "pending": "Pending",
@@ -44,6 +47,17 @@
     "files": "Files",
     "noFiles": "No files associated",
     "dependencies": "Dependencies"
+  },
+  "detail": {
+    "description": "Description",
+    "filesToCreate": "Files to Create",
+    "filesToModify": "Files to Modify",
+    "verification": "Verification",
+    "notes": "Notes"
+  },
+  "errors": {
+    "loadPlan": "Failed to load implementation plan",
+    "loadData": "Failed to load timeline data"
   },
   "export": {
     "button": "Export as image",
