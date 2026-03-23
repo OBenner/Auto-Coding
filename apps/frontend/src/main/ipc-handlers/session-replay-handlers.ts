@@ -391,7 +391,11 @@ function extractThoughts(logs: TaskLogs, sessionId?: string): AgentThinkingBlock
  * Shared helper used by both GET_TOOL_CALLS and GET_INSPECTOR_DATA handlers.
  */
 function extractToolCalls(logs: TaskLogs, sessionId?: string): AgentInspectorToolCall[] {
-  const toolCallsMap = new Map<string, AgentInspectorToolCall>();
+  // Use per-tool FIFO queues with unique IDs to avoid composite key collisions
+  let nextId = 0;
+  const completedCalls: AgentInspectorToolCall[] = [];
+  // Per-tool-name queue of pending (unmatched) tool_start entries
+  const pendingByTool = new Map<string, AgentInspectorToolCall[]>();
 
   for (const phaseData of Object.values(logs.phases)) {
     for (const entry of phaseData.entries) {
@@ -405,7 +409,7 @@ function extractToolCalls(logs: TaskLogs, sessionId?: string): AgentInspectorToo
 
       // Process tool_start entries
       if (entry.type === 'tool_start' && entry.tool_name) {
-        const toolId = `${entry.tool_name}-${entry.timestamp}`;
+        const toolId = `tool-${nextId++}`;
 
         let parsedInput: Record<string, unknown> = {};
         if (entry.tool_input) {
@@ -418,7 +422,7 @@ function extractToolCalls(logs: TaskLogs, sessionId?: string): AgentInspectorToo
           }
         }
 
-        toolCallsMap.set(toolId, {
+        const toolCall: AgentInspectorToolCall = {
           id: toolId,
           name: entry.tool_name,
           input: parsedInput,
@@ -430,17 +434,19 @@ function extractToolCalls(logs: TaskLogs, sessionId?: string): AgentInspectorToo
           output: undefined,
           error: undefined,
           duration_ms: undefined,
-        });
+        };
+
+        // Add to per-tool pending queue
+        const queue = pendingByTool.get(entry.tool_name) || [];
+        queue.push(toolCall);
+        pendingByTool.set(entry.tool_name, queue);
       }
 
-      // Process tool_end entries to match with tool_start
+      // Process tool_end entries — match FIFO from the same tool's pending queue
       if (entry.type === 'tool_end' && entry.tool_name) {
-        const matchingToolId = Array.from(toolCallsMap.keys())
-          .reverse()
-          .find((id) => id.startsWith(`${entry.tool_name}-`));
-
-        if (matchingToolId) {
-          const toolCall = toolCallsMap.get(matchingToolId)!;
+        const queue = pendingByTool.get(entry.tool_name);
+        if (queue && queue.length > 0) {
+          const toolCall = queue.shift()!;
 
           let parsedOutput: Record<string, unknown> | string | undefined;
           if (entry.content) {
@@ -457,32 +463,35 @@ function extractToolCalls(logs: TaskLogs, sessionId?: string): AgentInspectorToo
           const startTime = new Date(toolCall.timestamp).getTime();
           const endTime = new Date(entry.timestamp).getTime();
           toolCall.duration_ms = endTime - startTime;
+
+          completedCalls.push(toolCall);
         }
       }
 
       // Process error entries for tool calls
       if (entry.type === 'error' && entry.tool_name) {
-        const matchingToolId = Array.from(toolCallsMap.keys())
-          .reverse()
-          .find((id) => id.startsWith(`${entry.tool_name}-`));
-
-        if (matchingToolId) {
-          const toolCall = toolCallsMap.get(matchingToolId)!;
+        const queue = pendingByTool.get(entry.tool_name);
+        if (queue && queue.length > 0) {
+          const toolCall = queue.shift()!;
           toolCall.success = false;
           toolCall.error = entry.content;
+          completedCalls.push(toolCall);
         }
       }
     }
   }
 
-  const toolCalls = Array.from(toolCallsMap.values());
+  // Add any still-pending calls (no matching end/error) to results
+  for (const queue of pendingByTool.values()) {
+    completedCalls.push(...queue);
+  }
 
   // Sort by timestamp (newest first)
-  toolCalls.sort(
+  completedCalls.sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  return toolCalls;
+  return completedCalls;
 }
 
 /** Guard to prevent double-registration of IPC handlers */
