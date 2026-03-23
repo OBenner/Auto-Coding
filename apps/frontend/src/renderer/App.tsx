@@ -1109,7 +1109,7 @@ export function App() {
                   />
                 )}
                 {activeView === 'agent-inspector' && (activeProjectId || selectedProjectId) && (
-                  <ThoughtInspector projectId={activeProjectId || selectedProjectId!} />
+                  <ThoughtInspector projectPath={selectedProject?.path ?? ''} specId={sessionFilterSpecId} />
                 )}
                 {activeView === 'productivity' && (activeProjectId || selectedProjectId) && (
                   <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />

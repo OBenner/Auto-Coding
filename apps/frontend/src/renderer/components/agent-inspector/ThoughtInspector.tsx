@@ -34,8 +34,10 @@ interface TimelineEntry {
 }
 
 interface ThoughtInspectorProps {
-  /** Project ID to load thoughts for */
-  projectId: string;
+  /** Path to the project directory */
+  projectPath: string;
+  /** Spec ID to load thoughts for (optional, loads all if not provided) */
+  specId?: string;
   /** Optional session ID to filter by */
   sessionId?: string;
   /** Callback when thought is selected */
@@ -48,7 +50,8 @@ interface ThoughtInspectorProps {
  * Main ThoughtInspector component
  */
 export function ThoughtInspector({
-  projectId,
+  projectPath,
+  specId,
   sessionId,
   onThoughtSelect,
   onToolCallSelect,
@@ -70,8 +73,8 @@ export function ThoughtInspector({
       setError(null);
 
       // Use electronAPI if available (Electron), otherwise use mock data (browser)
-      if (!window.electronAPI?.agentInspector) {
-        // In browser mode, use empty arrays
+      if (!window.electronAPI?.agentInspector || !specId) {
+        // In browser mode or without specId, use empty arrays
         setThoughts([]);
         setToolCalls([]);
         setLoading(false);
@@ -81,8 +84,8 @@ export function ThoughtInspector({
 
       // Get combined inspector data from backend
       const result = await window.electronAPI.agentInspector.getInspectorData(
-        projectId,
-        projectId, // Using projectId as specId for now
+        projectPath,
+        specId,
         sessionId
       );
 
@@ -98,7 +101,7 @@ export function ThoughtInspector({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [projectId, sessionId]);
+  }, [projectPath, specId, sessionId]);
 
   // Initial load
   useEffect(() => {
@@ -159,7 +162,7 @@ export function ThoughtInspector({
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
           <p className="text-sm text-muted-foreground">
-            {t('agent-inspector:errors.loadFailed')}
+            {t('agent-inspector:loading')}
           </p>
         </div>
       </div>
@@ -228,7 +231,7 @@ export function ThoughtInspector({
             onClick={() => setCurrentView('timeline')}
           >
             <List className="w-4 h-4 mr-2" />
-            Timeline
+            {t('agent-inspector:views.timeline')}
             <span className="ml-2 text-xs opacity-70">({stats.totalEntries})</span>
           </Button>
           <Button
@@ -237,7 +240,7 @@ export function ThoughtInspector({
             onClick={() => setCurrentView('thoughts')}
           >
             <Brain className="w-4 h-4 mr-2" />
-            Thoughts
+            {t('agent-inspector:views.thoughts')}
             <span className="ml-2 text-xs opacity-70">({stats.totalThoughts})</span>
           </Button>
           <Button
@@ -246,7 +249,7 @@ export function ThoughtInspector({
             onClick={() => setCurrentView('tools')}
           >
             <Wrench className="w-4 h-4 mr-2" />
-            Tool Calls
+            {t('agent-inspector:views.toolCalls')}
             <span className="ml-2 text-xs opacity-70">({stats.totalToolCalls})</span>
           </Button>
         </div>

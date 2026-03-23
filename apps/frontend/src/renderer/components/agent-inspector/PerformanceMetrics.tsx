@@ -15,7 +15,7 @@ import { cn } from '../../lib/utils';
 /**
  * Performance metrics data structure
  */
-export interface PerformanceMetrics {
+export interface PerformanceMetricsData {
   /** Total input tokens used */
   inputTokens: number;
   /** Total output tokens used */
@@ -42,15 +42,12 @@ export interface PerformanceMetrics {
 
 interface PerformanceMetricsProps {
   /** Performance metrics to display */
-  metrics: PerformanceMetrics;
+  metrics: PerformanceMetricsData;
   /** Optional CSS class name */
   className?: string;
   /** Whether to show detailed breakdown */
   showDetails?: boolean;
 }
-
-// Reuse a single formatter to avoid repeated Intl.NumberFormat allocation
-const numberFormatter = new Intl.NumberFormat('en-US');
 
 /**
  * PerformanceMetrics component
@@ -61,7 +58,7 @@ export function PerformanceMetrics({
   className,
   showDetails = true,
 }: PerformanceMetricsProps) {
-  const { t } = useTranslation(['agent-inspector', 'common']);
+  const { t, i18n } = useTranslation(['agent-inspector', 'common']);
 
   // Calculate derived metrics
   const totalTokens = useMemo(
@@ -75,16 +72,19 @@ export function PerformanceMetrics({
   );
 
   // Format helpers
-  const formatNumber = useMemo(() => (num: number) => numberFormatter.format(num), []);
+  const formatNumber = useMemo(() => {
+    const formatter = new Intl.NumberFormat(i18n.language);
+    return (num: number) => formatter.format(num);
+  }, [i18n.language]);
 
   const formatDuration = useMemo(
     () => (ms: number) => {
-      if (ms < 1000) return `${ms.toFixed(0)}ms`;
-      if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
-      if (ms < 3600000) return `${(ms / 60000).toFixed(2)}m`;
-      return `${(ms / 3600000).toFixed(2)}h`;
+      if (ms < 1000) return `${ms.toFixed(0)}${t('agent-inspector:units.milliseconds')}`;
+      if (ms < 60000) return `${(ms / 1000).toFixed(2)}${t('agent-inspector:units.seconds')}`;
+      if (ms < 3600000) return `${(ms / 60000).toFixed(2)}${t('agent-inspector:units.minutes')}`;
+      return `${(ms / 3600000).toFixed(2)}${t('agent-inspector:units.hours')}`;
     },
-    []
+    [t]
   );
 
   const formatPercentage = useMemo(

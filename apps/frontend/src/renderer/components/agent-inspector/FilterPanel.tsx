@@ -142,7 +142,7 @@ export function FilterPanel({
                 onClick={handleSelectAll}
                 className="h-8 text-xs"
               >
-                {t('common:actions.selectAll', 'Select All')}
+                {t('common:actions.selectAll')}
               </Button>
             )}
             {!noneSelected && (

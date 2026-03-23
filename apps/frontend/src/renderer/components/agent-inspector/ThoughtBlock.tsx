@@ -52,11 +52,13 @@ function thoughtBlockPropsAreEqual(prevProps: ThoughtBlockProps, nextProps: Thou
 
   // Compare only the fields that affect rendering
   return (
+    prevProps.className === nextProps.className &&
     prevThought.id === nextThought.id &&
     prevThought.content === nextThought.content &&
     prevThought.phase === nextThought.phase &&
     prevThought.timestamp === nextThought.timestamp &&
-    prevThought.subtask === nextThought.subtask
+    prevThought.subtask === nextThought.subtask &&
+    prevThought.session === nextThought.session
   );
 }
 
@@ -99,6 +101,7 @@ export const ThoughtBlock = memo(function ThoughtBlock({
     <div className={cn('border border-primary/30 rounded-lg bg-primary/5 overflow-hidden', className)}>
       {/* Header - Always Visible */}
       <button
+        type="button"
         onClick={toggleExpanded}
         className="w-full px-4 py-3 flex items-center gap-3 hover:bg-primary/10 transition-colors text-left"
         aria-expanded={isExpanded}

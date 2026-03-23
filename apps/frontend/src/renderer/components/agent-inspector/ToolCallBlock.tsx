@@ -59,16 +59,26 @@ function toolCallBlockPropsAreEqual(
   const nextToolCall = nextProps.toolCall;
 
   // Fast path: same reference
-  if (prevToolCall === nextToolCall && prevProps.className === nextProps.className) {
+  if (
+    prevToolCall === nextToolCall &&
+    prevProps.className === nextProps.className &&
+    prevProps.defaultExpanded === nextProps.defaultExpanded
+  ) {
     return true;
   }
 
   // Compare only the fields that affect rendering
   return (
+    prevProps.className === nextProps.className &&
+    prevProps.defaultExpanded === nextProps.defaultExpanded &&
     prevToolCall.id === nextToolCall.id &&
     prevToolCall.name === nextToolCall.name &&
     prevToolCall.timestamp === nextToolCall.timestamp &&
     prevToolCall.success === nextToolCall.success &&
+    prevToolCall.phase === nextToolCall.phase &&
+    prevToolCall.subtask === nextToolCall.subtask &&
+    prevToolCall.error === nextToolCall.error &&
+    prevToolCall.duration_ms === nextToolCall.duration_ms &&
     JSON.stringify(prevToolCall.input) === JSON.stringify(nextToolCall.input) &&
     JSON.stringify(prevToolCall.output) === JSON.stringify(nextToolCall.output)
   );
@@ -91,13 +101,10 @@ export const ToolCallBlock = memo(function ToolCallBlock({
     setIsExpanded((prev) => !prev);
   }, []);
 
-  // Detect dark mode from DOM
-  const isDarkMode = useMemo(() => {
-    if (typeof document !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  }, []);
+  // Detect dark mode from DOM - no memoization so it responds to theme changes
+  const isDarkMode = typeof document !== 'undefined'
+    ? document.documentElement.classList.contains('dark')
+    : false;
 
   // Memoize status badge color
   const statusBadgeColor = useMemo(() => {
@@ -161,7 +168,7 @@ export const ToolCallBlock = memo(function ToolCallBlock({
           <div className="flex items-center gap-2 mb-1">
             <span className="text-sm font-medium font-mono">{toolCall.name}</span>
             <Badge variant="outline" className={cn('gap-1 text-xs', statusBadgeColor)}>
-              {toolCall.error ? 'Error' : toolCall.success === false ? 'Failed' : 'Success'}
+              {toolCall.error ? t('toolStatus.error') : toolCall.success === false ? t('toolStatus.failed') : t('toolStatus.success')}
             </Badge>
             {toolCall.phase && (
               <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">

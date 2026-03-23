@@ -1,4 +1,6 @@
 {
+  "title": "Agent Inspector",
+  "subtitle": "View agent reasoning and tool calls in real-time",
   "thinkingContent": "Thinking Process",
   "collapseThought": "Collapse thinking details",
   "expandThought": "Expand thinking details",
@@ -10,6 +12,7 @@
   "timestamp": "Timestamp",
   "phase": "Phase",
   "subtask": "Subtask",
+  "loading": "Loading agent thoughts...",
   "noThoughtsYet": "No thoughts captured yet",
   "noThoughtsDescription": "Agent thoughts will appear here in real-time as they work.",
   "filterByToolType": "Filter by tool type",
@@ -17,15 +20,31 @@
   "searchLabel": "Search agent logs",
   "searchResults": "{{count}} of {{total}}",
   "totalItems": "{{count}} items",
+  "totalSteps": "total steps",
   "clearFilters": "Clear filters",
   "exportSession": "Export Session Log",
   "performanceMetrics": "Performance Metrics",
   "tokenUsage": "Token Usage",
   "timePerStep": "Time per Step",
-  "totalSteps": "Total Steps",
   "suspiciousPatterns": "Suspicious Patterns Detected",
   "infiniteLoop": "Potential infinite loop detected",
   "repeatedFailures": "Repeated failures detected",
+  "views": {
+    "timeline": "Timeline",
+    "thoughts": "Thoughts",
+    "toolCalls": "Tool Calls"
+  },
+  "toolStatus": {
+    "error": "Error",
+    "failed": "Failed",
+    "success": "Success"
+  },
+  "units": {
+    "milliseconds": "ms",
+    "seconds": "s",
+    "minutes": "m",
+    "hours": "h"
+  },
   "export": {
     "title": "Export Session Log",
     "description": "Export agent thought process with all details",
@@ -70,7 +89,27 @@
     "issuesDetected": "Suspicious Patterns Detected",
     "issuesCount": "Found {{count}} potential issues that may require attention.",
     "occurrences": "Occurrences",
-    "affectedItems": "Affected items"
+    "affectedItems": "Affected items",
+    "infiniteLoop": {
+      "description": "Tool \"{{tool}}\" called {{count}} times in sequence",
+      "suggestion": "Agent may be stuck in a loop. Consider interrupting and providing guidance."
+    },
+    "repeatedFailure": {
+      "description": "{{count}} consecutive tool call failures",
+      "suggestion": "Agent is repeatedly failing. Check error messages and consider adjusting the task."
+    },
+    "rapidExecution": {
+      "description": "{{count}} tool calls per second",
+      "suggestion": "Agent is making rapid tool calls. May indicate inefficient approach or runaway behavior."
+    },
+    "sameError": {
+      "description": "Same error occurred {{count}} times: \"{{error}}...\"",
+      "suggestion": "Agent is encountering the same error repeatedly. Consider fixing the underlying issue."
+    },
+    "noProgress": {
+      "description": "No activity for {{minutes}} minutes",
+      "suggestion": "Agent appears to be stuck or waiting. Consider checking the task status."
+    }
   },
   "errors": {
     "loadFailed": "Failed to load agent thoughts",

@@ -60,8 +60,8 @@ interface ExportDialogProps {
  * Format options for export
  */
 const FORMAT_OPTIONS = [
-  { value: 'json' as const, label: 'JSON', icon: Code, description: 'export.formatJsonDesc' },
-  { value: 'markdown' as const, label: 'Markdown', icon: FileText, description: 'export.formatMarkdownDesc' }
+  { value: 'json' as const, labelKey: 'export.formatJson', icon: Code, description: 'export.formatJsonDesc' },
+  { value: 'markdown' as const, labelKey: 'export.formatMarkdown', icon: FileText, description: 'export.formatMarkdownDesc' }
 ] as const;
 
 export function ExportDialog({
@@ -149,7 +149,7 @@ export function ExportDialog({
               {t('agent-inspector:export.format')}
             </Label>
             <div className="grid grid-cols-2 gap-3">
-              {FORMAT_OPTIONS.map(({ value, label, icon: Icon }) => (
+              {FORMAT_OPTIONS.map(({ value, labelKey, icon: Icon }) => (
                 <button
                   key={value}
                   type="button"
@@ -166,7 +166,7 @@ export function ExportDialog({
                 >
                   <Icon className={`h-5 w-5 ${format === value ? 'text-primary' : 'text-muted-foreground'}`} />
                   <span className={`font-medium ${format === value ? 'text-foreground' : 'text-muted-foreground'}`}>
-                    {label}
+                    {t(`agent-inspector:${labelKey}`)}
                   </span>
                 </button>
               ))}

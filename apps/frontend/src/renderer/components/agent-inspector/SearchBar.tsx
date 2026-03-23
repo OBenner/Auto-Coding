@@ -63,11 +63,16 @@ export function SearchBar({
   const { t } = useTranslation(['agent-inspector', 'common']);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Handle keyboard shortcut (Cmd/Ctrl+K) to focus search
+  // Detect platform for keyboard shortcut hints
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
+
+  // Handle keyboard shortcut (Cmd/Ctrl+Shift+K) to focus search
+  // Uses Shift modifier to avoid conflict with global command palette (Cmd/Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'k') {
         e.preventDefault();
+        e.stopPropagation();
         inputRef.current?.focus();
       }
     };
@@ -178,7 +183,7 @@ export function SearchBar({
         {/* Keyboard Shortcut Hint (only shown when not searching) */}
         {!isSearchActive && (
           <div className="shrink-0 hidden md:flex items-center gap-1 text-xs text-muted-foreground border border-border rounded px-2 py-1">
-            <kbd className="font-sans">⌘K</kbd>
+            <kbd className="font-sans">{isMac ? '⌘⇧K' : 'Ctrl+Shift+K'}</kbd>
           </div>
         )}
       </div>

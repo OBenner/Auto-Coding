@@ -9,8 +9,8 @@
 
 import { useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, RefreshCw, XCircle, TrendingDown, AlertCircle } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
+import { AlertTriangle, RefreshCw, XCircle, TrendingDown, AlertCircle, CheckCircle } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import type { AgentToolCall } from './ToolCallBlock';
@@ -82,32 +82,38 @@ const DETECTION_THRESHOLDS = {
 };
 
 /**
+ * Translation function type for pattern detection
+ */
+type TFunc = (key: string, options?: Record<string, unknown>) => string;
+
+/**
  * Analyze tool calls and thoughts for suspicious patterns
  */
 function detectPatterns(
   toolCalls: AgentToolCall[],
-  thoughts: AgentThinkingBlock[]
+  thoughts: AgentThinkingBlock[],
+  t: TFunc
 ): DetectedPattern[] {
   const patterns: DetectedPattern[] = [];
 
   // Pattern 1: Infinite loops (same tool called repeatedly)
-  const infiniteLoopPattern = detectInfiniteLoop(toolCalls);
+  const infiniteLoopPattern = detectInfiniteLoop(toolCalls, t);
   if (infiniteLoopPattern) patterns.push(infiniteLoopPattern);
 
   // Pattern 2: Repeated failures
-  const repeatedFailuresPattern = detectRepeatedFailures(toolCalls);
+  const repeatedFailuresPattern = detectRepeatedFailures(toolCalls, t);
   if (repeatedFailuresPattern) patterns.push(repeatedFailuresPattern);
 
   // Pattern 3: Rapid tool calls (potential runaway agent)
-  const rapidCallsPattern = detectRapidToolCalls(toolCalls);
+  const rapidCallsPattern = detectRapidToolCalls(toolCalls, t);
   if (rapidCallsPattern) patterns.push(rapidCallsPattern);
 
   // Pattern 4: Same error repeated
-  const sameErrorPattern = detectSameErrorRepeated(toolCalls);
+  const sameErrorPattern = detectSameErrorRepeated(toolCalls, t);
   if (sameErrorPattern) patterns.push(sameErrorPattern);
 
   // Pattern 5: No progress (stuck agent)
-  const noProgressPattern = detectNoProgress(toolCalls, thoughts);
+  const noProgressPattern = detectNoProgress(toolCalls, thoughts, t);
   if (noProgressPattern) patterns.push(noProgressPattern);
 
   return patterns;
@@ -116,7 +122,7 @@ function detectPatterns(
 /**
  * Detect infinite loop pattern (same tool called repeatedly)
  */
-function detectInfiniteLoop(toolCalls: AgentToolCall[]): DetectedPattern | null {
+function detectInfiniteLoop(toolCalls: AgentToolCall[], t: TFunc): DetectedPattern | null {
   if (toolCalls.length < DETECTION_THRESHOLDS.INFINITE_LOOP_THRESHOLD) return null;
 
   // Track consecutive same tool calls
@@ -124,21 +130,22 @@ function detectInfiniteLoop(toolCalls: AgentToolCall[]): DetectedPattern | null 
   let consecutiveCount = 0;
   let maxConsecutive = 0;
   let maxConsecutiveTool = '';
-  const affectedItems: string[] = [];
+  let currentAffectedItems: string[] = [];
+  let maxAffectedItems: string[] = [];
 
   for (const call of toolCalls) {
     if (call.name === currentTool) {
       consecutiveCount++;
-      affectedItems.push(call.id);
+      currentAffectedItems.push(call.id);
       if (consecutiveCount > maxConsecutive) {
         maxConsecutive = consecutiveCount;
         maxConsecutiveTool = currentTool;
+        maxAffectedItems = [...currentAffectedItems];
       }
     } else {
       currentTool = call.name;
       consecutiveCount = 1;
-      affectedItems.length = 0;
-      affectedItems.push(call.id);
+      currentAffectedItems = [call.id];
     }
   }
 
@@ -146,10 +153,10 @@ function detectInfiniteLoop(toolCalls: AgentToolCall[]): DetectedPattern | null 
     return {
       type: PatternType.INFINITE_LOOP,
       severity: PatternSeverity.CRITICAL,
-      description: `Tool "${maxConsecutiveTool}" called ${maxConsecutive} times in sequence`,
-      suggestion: 'Agent may be stuck in a loop. Consider interrupting and providing guidance.',
+      description: t('patterns.infiniteLoop.description', { tool: maxConsecutiveTool, count: maxConsecutive }),
+      suggestion: t('patterns.infiniteLoop.suggestion'),
       occurrences: maxConsecutive,
-      affectedItems: affectedItems.slice(-maxConsecutive),
+      affectedItems: maxAffectedItems,
     };
   }
 
@@ -159,7 +166,7 @@ function detectInfiniteLoop(toolCalls: AgentToolCall[]): DetectedPattern | null 
 /**
  * Detect repeated failures pattern
  */
-function detectRepeatedFailures(toolCalls: AgentToolCall[]): DetectedPattern | null {
+function detectRepeatedFailures(toolCalls: AgentToolCall[], t: TFunc): DetectedPattern | null {
   if (toolCalls.length < DETECTION_THRESHOLDS.REPEATED_FAILURES_THRESHOLD) return null;
 
   let consecutiveFailures = 0;
@@ -179,8 +186,8 @@ function detectRepeatedFailures(toolCalls: AgentToolCall[]): DetectedPattern | n
     return {
       type: PatternType.REPEATED_FAILURES,
       severity: PatternSeverity.ERROR,
-      description: `${consecutiveFailures} consecutive tool call failures`,
-      suggestion: 'Agent is repeatedly failing. Check error messages and consider adjusting the task.',
+      description: t('patterns.repeatedFailure.description', { count: consecutiveFailures }),
+      suggestion: t('patterns.repeatedFailure.suggestion'),
       occurrences: consecutiveFailures,
       affectedItems: affectedItems.slice(-consecutiveFailures),
     };
@@ -192,7 +199,7 @@ function detectRepeatedFailures(toolCalls: AgentToolCall[]): DetectedPattern | n
 /**
  * Detect rapid tool calls pattern (potential runaway agent)
  */
-function detectRapidToolCalls(toolCalls: AgentToolCall[]): DetectedPattern | null {
+function detectRapidToolCalls(toolCalls: AgentToolCall[], t: TFunc): DetectedPattern | null {
   if (toolCalls.length < 10) return null;
 
   // Calculate calls per second in recent window (last 10 calls)
@@ -208,8 +215,8 @@ function detectRapidToolCalls(toolCalls: AgentToolCall[]): DetectedPattern | nul
     return {
       type: PatternType.RAPID_TOOL_CALLS,
       severity: PatternSeverity.WARNING,
-      description: `${Math.round(callsPerSecond)} tool calls per second`,
-      suggestion: 'Agent is making rapid tool calls. May indicate inefficient approach or runaway behavior.',
+      description: t('patterns.rapidExecution.description', { count: Math.round(callsPerSecond) }),
+      suggestion: t('patterns.rapidExecution.suggestion'),
       occurrences: Math.round(callsPerSecond),
       affectedItems: recentCalls.map((c) => c.id),
     };
@@ -221,7 +228,7 @@ function detectRapidToolCalls(toolCalls: AgentToolCall[]): DetectedPattern | nul
 /**
  * Detect same error repeated pattern
  */
-function detectSameErrorRepeated(toolCalls: AgentToolCall[]): DetectedPattern | null {
+function detectSameErrorRepeated(toolCalls: AgentToolCall[], t: TFunc): DetectedPattern | null {
   if (toolCalls.length < DETECTION_THRESHOLDS.SAME_ERROR_THRESHOLD) return null;
 
   // Count error occurrences
@@ -256,8 +263,8 @@ function detectSameErrorRepeated(toolCalls: AgentToolCall[]): DetectedPattern | 
     return {
       type: PatternType.SAME_ERROR_REPEATED,
       severity: PatternSeverity.ERROR,
-      description: `Same error occurred ${maxErrorCount} times: "${maxErrorMessage}..."`,
-      suggestion: 'Agent is encountering the same error repeatedly. Consider fixing the underlying issue.',
+      description: t('patterns.sameError.description', { count: maxErrorCount, error: maxErrorMessage }),
+      suggestion: t('patterns.sameError.suggestion'),
       occurrences: maxErrorCount,
       affectedItems: maxErrorIds,
     };
@@ -271,7 +278,8 @@ function detectSameErrorRepeated(toolCalls: AgentToolCall[]): DetectedPattern | 
  */
 function detectNoProgress(
   toolCalls: AgentToolCall[],
-  thoughts: AgentThinkingBlock[]
+  thoughts: AgentThinkingBlock[],
+  t: TFunc
 ): DetectedPattern | null {
   const allItems = [...toolCalls, ...thoughts].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
@@ -289,8 +297,8 @@ function detectNoProgress(
     return {
       type: PatternType.NO_PROGRESS,
       severity: PatternSeverity.WARNING,
-      description: `No activity for ${Math.round(timeSinceLastActivity / 60000)} minutes`,
-      suggestion: 'Agent appears to be stuck or waiting. Consider checking the task status.',
+      description: t('patterns.noProgress.description', { minutes: Math.round(timeSinceLastActivity / 60000) }),
+      suggestion: t('patterns.noProgress.suggestion'),
       occurrences: 1,
       affectedItems: itemIds.slice(-5), // Last 5 items
     };
@@ -381,8 +389,8 @@ export const PatternDetector = memo(function PatternDetector({
 
   // Detect patterns
   const detectedPatterns = useMemo(() => {
-    return detectPatterns(toolCalls, thoughts);
-  }, [toolCalls, thoughts]);
+    return detectPatterns(toolCalls, thoughts, t);
+  }, [toolCalls, thoughts, t]);
 
   // If no patterns detected, show success state
   if (detectedPatterns.length === 0) {
@@ -390,7 +398,7 @@ export const PatternDetector = memo(function PatternDetector({
       <Card className={cn('border-green-500/50 bg-green-500/10', className)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <AlertCircle className="h-5 w-5 text-green-500" />
+            <CheckCircle className="h-5 w-5 text-green-500" />
             {t('patterns.noIssues', 'No Issues Detected')}
           </CardTitle>
           <CardDescription>
