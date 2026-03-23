@@ -192,8 +192,8 @@ Begin by loading context (Phase 0 in your prompt).
         )
         return {
             "generated_files": [],
-            "success": True,
-            "error": None,
+            "success": False,
+            "error": "No fixture files were generated",
             "framework": framework,
         }
 
@@ -216,6 +216,12 @@ Begin by loading context (Phase 0 in your prompt).
     if not validation_success:
         print()
         print_status("Fixture validation failed - check syntax and imports", "warning")
+        return {
+            "generated_files": [str(f) for f in fixture_files],
+            "success": False,
+            "error": "Fixture validation failed - check syntax and imports",
+            "framework": framework,
+        }
 
     return {
         "generated_files": [str(f) for f in fixture_files],

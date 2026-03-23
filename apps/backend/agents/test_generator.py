@@ -53,6 +53,46 @@ from .vitest_generator import generate_vitest_tests, validate_vitest_tests
 
 logger = logging.getLogger(__name__)
 
+# Template for the integration test generator agent starting message.
+# Formatted with analysis_json at runtime.
+_INTEGRATION_TEST_STARTING_MESSAGE = """You are the Integration Test Generator Agent. Your task is to generate comprehensive integration tests for API endpoints and multi-component interactions.
+
+## Code Analysis Results
+
+{analysis_json}
+
+## Your Task
+
+1. Read the spec.md to understand what API endpoints and services were implemented
+2. Review the implementation_plan.json to see what integrations were built
+3. Study existing integration test patterns in tests/integration/test_*.py (if they exist)
+4. Identify API endpoints, routes, and service integrations that need testing
+5. Generate integration test files that validate:
+   - API endpoint functionality (request/response validation)
+   - Database interactions (CRUD operations)
+   - Service layer integration
+   - Authentication and authorization
+   - Error handling and edge cases
+6. Follow the project's testing conventions
+7. Use appropriate mocking for external dependencies
+
+## Integration Test Pattern (pytest)
+
+Your tests should:
+- Use pytest as the test framework
+- Test multiple components working together (not isolated units)
+- Validate API endpoints with different inputs
+- Test database operations (create, read, update, delete)
+- Verify service layer logic
+- Handle authentication/authorization scenarios
+- Test error conditions and edge cases
+- Use fixtures for test data setup and teardown
+
+Generate test files in the tests/integration/ directory following the naming convention test_integration_*.py.
+
+Begin by loading context (Phase 0 in your prompt).
+"""
+
 
 def detect_test_framework(analysis_results: dict[str, Any]) -> str:
     """
@@ -885,18 +925,21 @@ def detect_edge_cases_from_analysis(
     edge_cases = []
 
     # If we have analyzed_files in the results, detect edge cases from Python sources
-    analyzed_files = analysis_results.get("analyzed_files", [])
+    analyzed_files = list(analysis_results.get("analyzed_files", []))
     if not analyzed_files:
         # Try to extract file paths from functions/classes
+        seen_files: set[str] = set()
         for func in analysis_results.get("functions", []):
             if "file" in func:
                 file_path = func["file"]
-                if file_path not in analyzed_files:
+                if file_path not in seen_files:
+                    seen_files.add(file_path)
                     analyzed_files.append(file_path)
         for cls in analysis_results.get("classes", []):
             if "file" in cls:
                 file_path = cls["file"]
-                if file_path not in analyzed_files:
+                if file_path not in seen_files:
+                    seen_files.add(file_path)
                     analyzed_files.append(file_path)
 
     # Detect edge cases from Python source files
@@ -940,119 +983,138 @@ def _detect_edge_cases_from_ast(tree: ast.AST, file_path: str) -> list[dict[str,
     Returns:
         List of edge case dictionaries
     """
-    edge_cases = []
+    edge_cases: list[dict[str, Any]] = []
 
     for node in ast.walk(tree):
-        # Detect try/except blocks (error handling)
         if isinstance(node, ast.Try):
-            for handler in node.handlers:
-                exc_type = "Exception"
-                if handler.type:
-                    if isinstance(handler.type, ast.Name):
-                        exc_type = handler.type.id
-                    elif isinstance(handler.type, ast.Attribute):
-                        exc_type = ast.unparse(handler.type)
-
-                edge_cases.append(
-                    {
-                        "type": "error_handling",
-                        "pattern": f"try/except {exc_type}",
-                        "lineno": node.lineno,
-                        "description": f"Handles {exc_type} exceptions",
-                        "file": file_path,
-                    }
-                )
-
-        # Detect boundary checks and None checks
+            edge_cases.extend(_detect_try_except_patterns(node, file_path))
         elif isinstance(node, ast.Compare):
-            code = ast.unparse(node)
-
-            # Check for None comparisons
-            if "None" in code:
-                edge_cases.append(
-                    {
-                        "type": "boundary_condition",
-                        "pattern": "none_check",
-                        "lineno": node.lineno,
-                        "description": f"None check: {code}",
-                        "file": file_path,
-                    }
-                )
-
-            # Check for numeric boundary conditions
-            elif any(op in code for op in ["< 0", "> 0", "== 0", "<= 0", ">= 0"]):
-                edge_cases.append(
-                    {
-                        "type": "boundary_condition",
-                        "pattern": "numeric_boundary",
-                        "lineno": node.lineno,
-                        "description": f"Numeric boundary: {code}",
-                        "file": file_path,
-                    }
-                )
-
-            # Check for empty/length checks
-            elif "len(" in code and any(op in code for op in ["== 0", "> 0", "< 1"]):
-                edge_cases.append(
-                    {
-                        "type": "boundary_condition",
-                        "pattern": "empty_check",
-                        "lineno": node.lineno,
-                        "description": f"Empty check: {code}",
-                        "file": file_path,
-                    }
-                )
-
-        # Detect isinstance type checks
+            edge_cases.extend(_detect_comparison_patterns(node, file_path))
         elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id == "isinstance":
-                if len(node.args) >= 2:
-                    type_check = (
-                        ast.unparse(node.args[1]) if len(node.args) > 1 else "unknown"
-                    )
-                    edge_cases.append(
-                        {
-                            "type": "type_validation",
-                            "pattern": "isinstance_check",
-                            "lineno": node.lineno,
-                            "description": f"Type check: isinstance(..., {type_check})",
-                            "file": file_path,
-                        }
-                    )
-
-        # Detect raise statements (explicit errors)
+            edge_cases.extend(_detect_isinstance_patterns(node, file_path))
         elif isinstance(node, ast.Raise):
-            exc_type = "Exception"
-            if node.exc:
-                if isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name):
-                    exc_type = node.exc.func.id
-                elif isinstance(node.exc, ast.Name):
-                    exc_type = node.exc.id
-
-            edge_cases.append(
-                {
-                    "type": "error_raising",
-                    "pattern": f"raise {exc_type}",
-                    "lineno": node.lineno,
-                    "description": f"Raises {exc_type}",
-                    "file": file_path,
-                }
-            )
-
-        # Detect assertions
+            edge_cases.extend(_detect_raise_patterns(node, file_path))
         elif isinstance(node, ast.Assert):
-            test_code = ast.unparse(node.test)
-            edge_cases.append(
-                {
-                    "type": "assertion",
-                    "pattern": "assert",
-                    "lineno": node.lineno,
-                    "description": f"Assertion: {test_code}",
-                    "file": file_path,
-                }
-            )
+            edge_cases.extend(_detect_assert_patterns(node, file_path))
 
     return edge_cases
+
+
+def _detect_try_except_patterns(node: ast.Try, file_path: str) -> list[dict[str, Any]]:
+    """Detect error handling patterns from try/except blocks."""
+    results = []
+    for handler in node.handlers:
+        exc_type = "Exception"
+        if handler.type:
+            if isinstance(handler.type, ast.Name):
+                exc_type = handler.type.id
+            elif isinstance(handler.type, ast.Attribute):
+                exc_type = ast.unparse(handler.type)
+        results.append(
+            {
+                "type": "error_handling",
+                "pattern": f"try/except {exc_type}",
+                "lineno": node.lineno,
+                "description": f"Handles {exc_type} exceptions",
+                "file": file_path,
+            }
+        )
+    return results
+
+
+def _detect_comparison_patterns(
+    node: ast.Compare, file_path: str
+) -> list[dict[str, Any]]:
+    """Detect boundary conditions from comparison nodes."""
+    code = ast.unparse(node)
+
+    if "None" in code:
+        return [
+            {
+                "type": "boundary_condition",
+                "pattern": "none_check",
+                "lineno": node.lineno,
+                "description": f"None check: {code}",
+                "file": file_path,
+            }
+        ]
+
+    if any(op in code for op in ["< 0", "> 0", "== 0", "<= 0", ">= 0"]):
+        return [
+            {
+                "type": "boundary_condition",
+                "pattern": "numeric_boundary",
+                "lineno": node.lineno,
+                "description": f"Numeric boundary: {code}",
+                "file": file_path,
+            }
+        ]
+
+    if "len(" in code and any(op in code for op in ["== 0", "> 0", "< 1"]):
+        return [
+            {
+                "type": "boundary_condition",
+                "pattern": "empty_check",
+                "lineno": node.lineno,
+                "description": f"Empty check: {code}",
+                "file": file_path,
+            }
+        ]
+
+    return []
+
+
+def _detect_isinstance_patterns(node: ast.Call, file_path: str) -> list[dict[str, Any]]:
+    """Detect isinstance type validation calls."""
+    if not (isinstance(node.func, ast.Name) and node.func.id == "isinstance"):
+        return []
+    if len(node.args) < 2:
+        return []
+
+    type_check = ast.unparse(node.args[1])
+    return [
+        {
+            "type": "type_validation",
+            "pattern": "isinstance_check",
+            "lineno": node.lineno,
+            "description": f"Type check: isinstance(..., {type_check})",
+            "file": file_path,
+        }
+    ]
+
+
+def _detect_raise_patterns(node: ast.Raise, file_path: str) -> list[dict[str, Any]]:
+    """Detect explicit error raising patterns."""
+    exc_type = "Exception"
+    if node.exc:
+        if isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name):
+            exc_type = node.exc.func.id
+        elif isinstance(node.exc, ast.Name):
+            exc_type = node.exc.id
+
+    return [
+        {
+            "type": "error_raising",
+            "pattern": f"raise {exc_type}",
+            "lineno": node.lineno,
+            "description": f"Raises {exc_type}",
+            "file": file_path,
+        }
+    ]
+
+
+def _detect_assert_patterns(node: ast.Assert, file_path: str) -> list[dict[str, Any]]:
+    """Detect assertion patterns."""
+    test_code = ast.unparse(node.test)
+    return [
+        {
+            "type": "assertion",
+            "pattern": "assert",
+            "lineno": node.lineno,
+            "description": f"Assertion: {test_code}",
+            "file": file_path,
+        }
+    ]
 
 
 def _check_edge_case_coverage(node: ast.FunctionDef, source: str) -> dict[str, Any]:
@@ -1244,43 +1306,9 @@ async def generate_integration_tests(
         - error: Error message if failed
         - framework: Test framework used ("integration-pytest")
     """
-    starting_message = f"""You are the Integration Test Generator Agent. Your task is to generate comprehensive integration tests for API endpoints and multi-component interactions.
-
-## Code Analysis Results
-
-{json.dumps(analysis_results, indent=2)}
-
-## Your Task
-
-1. Read the spec.md to understand what API endpoints and services were implemented
-2. Review the implementation_plan.json to see what integrations were built
-3. Study existing integration test patterns in tests/integration/test_*.py (if they exist)
-4. Identify API endpoints, routes, and service integrations that need testing
-5. Generate integration test files that validate:
-   - API endpoint functionality (request/response validation)
-   - Database interactions (CRUD operations)
-   - Service layer integration
-   - Authentication and authorization
-   - Error handling and edge cases
-6. Follow the project's testing conventions
-7. Use appropriate mocking for external dependencies
-
-## Integration Test Pattern (pytest)
-
-Your tests should:
-- Use pytest as the test framework
-- Test multiple components working together (not isolated units)
-- Validate API endpoints with different inputs
-- Test database operations (create, read, update, delete)
-- Verify service layer logic
-- Handle authentication/authorization scenarios
-- Test error conditions and edge cases
-- Use fixtures for test data setup and teardown
-
-Generate test files in the tests/integration/ directory following the naming convention test_integration_*.py.
-
-Begin by loading context (Phase 0 in your prompt).
-"""
+    starting_message = _INTEGRATION_TEST_STARTING_MESSAGE.format(
+        analysis_json=json.dumps(analysis_results, indent=2)
+    )
 
     # Run the shared generator session boilerplate
     endpoints_count = len(analysis_results.get("endpoints", []))

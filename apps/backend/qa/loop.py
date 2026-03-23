@@ -714,8 +714,8 @@ async def run_qa_validation_loop(
     # Check if coverage meets minimum threshold before proceeding with QA
     if coverage_report and hasattr(coverage_report, "overall_coverage"):
         coverage_percentage = (
-            coverage_report.overall_coverage * 100
-        )  # Convert to percentage
+            coverage_report.overall_coverage
+        )  # Already a percentage (0-100) from coverage parsers
 
         if coverage_percentage < MINIMUM_COVERAGE_THRESHOLD:
             # Coverage too low - fail validation immediately
@@ -757,7 +757,7 @@ async def run_qa_validation_loop(
                 uncovered_files_list = [
                     {
                         "file_path": f.file_path,
-                        "coverage_percent": f.coverage_percentage * 100,
+                        "coverage_percent": f.coverage_percentage,
                         "lines_missed": f.lines_missed,
                         "lines_total": f.lines_total,
                     }

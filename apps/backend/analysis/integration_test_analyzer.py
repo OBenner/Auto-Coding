@@ -309,14 +309,13 @@ class IntegrationTestAnalyzer:
                     elif alias.name == "django":
                         return "django"
 
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    if node.module.startswith("fastapi"):
-                        return "fastapi"
-                    elif node.module.startswith("flask"):
-                        return "flask"
-                    elif node.module.startswith("django"):
-                        return "django"
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                if node.module.startswith("fastapi"):
+                    return "fastapi"
+                elif node.module.startswith("flask"):
+                    return "flask"
+                elif node.module.startswith("django"):
+                    return "django"
 
         return None
 
@@ -544,54 +543,58 @@ class IntegrationTestAnalyzer:
         for child in ast.walk(node):
             # Check for awaited HTTP calls
             if isinstance(child, ast.Await):
-                # DEBUG: Print await info
-                import sys
-                print(f"DEBUG: Found ast.Await at line {child.lineno}", file=sys.stderr)
-                print(f"DEBUG: child.value type: {type(child.value)}", file=sys.stderr)
-                if isinstance(child.value, ast.Call):
-                    print(f"DEBUG: child.value.func type: {type(child.value.func)}", file=sys.stderr)
-                    if hasattr(child.value.func, 'attr'):
-                        print(f"DEBUG: method name: {child.value.func.attr}", file=sys.stderr)
-                
-                if isinstance(child.value, ast.Call):
-                    call = child.value
-                    if isinstance(call.func, ast.Attribute):
-                        method_name = call.func.attr.lower()
-                        print(f"DEBUG: Method '{method_name}' in HTTP_CLIENT_METHODS: {method_name in self.HTTP_CLIENT_METHODS}", file=sys.stderr)
-
-                        if method_name in self.HTTP_CLIENT_METHODS:
-                            # Try to extract service name from URL or variable
-                            service_name = self._extract_service_name(call)
-
-                            external_calls.append(
-                                ExternalServiceInfo(
-                                    service_name=service_name or "external_api",
-                                    function_name=node.name,
-                                    lineno=child.lineno,
-                                    method=method_name.upper(),
-                                    is_async=True,  # Mark as async
-                                )
-                            )
-            # Keep existing sync detection
+                info = self._try_create_http_service_info(
+                    child.value, node.name, child.lineno, is_async=True
+                )
+                if info:
+                    external_calls.append(info)
+            # Sync HTTP calls
             elif isinstance(child, ast.Call):
-                if isinstance(child.func, ast.Attribute):
-                    method_name = child.func.attr.lower()
-
-                    if method_name in self.HTTP_CLIENT_METHODS:
-                        # Try to extract service name from URL or variable
-                        service_name = self._extract_service_name(child)
-
-                        external_calls.append(
-                            ExternalServiceInfo(
-                                service_name=service_name or "external_api",
-                                function_name=node.name,
-                                lineno=child.lineno,
-                                method=method_name.upper(),
-                                is_async=is_async,
-                            )
-                        )
+                info = self._try_create_http_service_info(
+                    child, node.name, child.lineno, is_async=is_async
+                )
+                if info:
+                    external_calls.append(info)
 
         return external_calls
+
+    def _try_create_http_service_info(
+        self,
+        call_node: ast.AST,
+        function_name: str,
+        lineno: int,
+        *,
+        is_async: bool,
+    ) -> ExternalServiceInfo | None:
+        """
+        Try to create an ExternalServiceInfo from a call node if it's an HTTP method.
+
+        Args:
+            call_node: AST node (Call or other)
+            function_name: Name of the enclosing function
+            lineno: Line number of the call
+            is_async: Whether the call is async
+
+        Returns:
+            ExternalServiceInfo if HTTP call detected, None otherwise
+        """
+        if not isinstance(call_node, ast.Call):
+            return None
+        if not isinstance(call_node.func, ast.Attribute):
+            return None
+
+        method_name = call_node.func.attr.lower()
+        if method_name not in self.HTTP_CLIENT_METHODS:
+            return None
+
+        service_name = self._extract_service_name(call_node)
+        return ExternalServiceInfo(
+            service_name=service_name or "external_api",
+            function_name=function_name,
+            lineno=lineno,
+            method=method_name.upper(),
+            is_async=is_async,
+        )
 
     def _get_decorator_name(self, decorator: ast.expr) -> str:
         """
@@ -752,8 +755,10 @@ class IntegrationTestAnalyzer:
             return "SELECT"
         elif method_name in {"insert", "create"}:
             return "INSERT"
-        elif method_name in {"update", "save"}:
+        elif method_name == "update":
             return "UPDATE"
+        elif method_name == "save":
+            return "UPSERT"
         elif method_name in {"delete"}:
             return "DELETE"
         else:

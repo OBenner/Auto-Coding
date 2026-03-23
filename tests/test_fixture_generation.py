@@ -70,6 +70,7 @@ def cleanup_mocked_modules():
 class TestFixtureValidation:
     """Tests for fixture file validation."""
 
+    @pytest.mark.asyncio
     async def test_validate_fixture_files_valid_syntax(self, temp_dir: Path):
         """validate_fixture_files accepts syntactically correct fixtures."""
         # Create a valid conftest.py
@@ -88,6 +89,7 @@ def sample_data():
 
         assert result is True
 
+    @pytest.mark.asyncio
     async def test_validate_fixture_files_invalid_syntax(self, temp_dir: Path):
         """validate_fixture_files rejects invalid syntax."""
         # Create fixture file with syntax error
@@ -104,11 +106,13 @@ def broken_fixture(
 
         assert result is False
 
+    @pytest.mark.asyncio
     async def test_validate_fixture_files_empty_list(self, temp_dir: Path):
         """validate_fixture_files handles empty file list."""
         result = await validate_fixture_files([], temp_dir)
         assert result is False
 
+    @pytest.mark.asyncio
     async def test_validate_fixture_files_missing_file(self, temp_dir: Path):
         """validate_fixture_files handles missing file."""
         missing_file = Path("tests/fixtures/missing.py")
@@ -210,8 +214,9 @@ def sample_data():
         analysis = {"classes": [], "functions": [], "models": []}
         result = await generate_fixtures(project_dir, spec_dir, analysis)
 
-        # Should succeed but warn about no fixtures
-        assert result["success"] is True
+        # Should fail since no fixture files were generated
+        assert result["success"] is False
+        assert result["error"] == "No fixture files were generated"
         assert len(result["generated_files"]) == 0
 
     @pytest.mark.asyncio
@@ -238,8 +243,8 @@ def sample_data():
         analysis = {"classes": [], "functions": [], "models": []}
         result = await generate_fixtures(project_dir, spec_dir, analysis)
 
-        assert result["success"] is True  # Generation succeeded
-        # But validation would have been attempted
+        assert result["success"] is False  # Validation failure propagated
+        assert "validation failed" in result["error"].lower()
 
     @pytest.mark.asyncio
     async def test_multiple_fixture_files(self, temp_dir: Path, monkeypatch):
