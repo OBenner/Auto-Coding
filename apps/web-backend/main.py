@@ -123,12 +123,13 @@ app.add_middleware(
 )
 
 # Import and register API routes
-from api.routes import agents, auth, git, specs, tasks, usage, users
+from api.routes import agents, auth, git, health, specs, tasks, usage, users
 from api.websocket import router as websocket_router
 
 app.include_router(agents.router)
 app.include_router(auth.router)
 app.include_router(git.router)
+app.include_router(health.router)
 app.include_router(specs.router)
 app.include_router(tasks.router)
 app.include_router(usage.router)
