@@ -37,6 +37,27 @@ sudo dnf install python3.12
 
 ## Setup
 
+### Automated Setup (Recommended)
+
+Use the `--setup` command to automatically detect, install, and configure everything:
+
+```bash
+cd apps/backend
+
+# Interactive setup — detects packages, installs deps, configures .env, validates providers
+python run.py --setup
+
+# Preview what would be done without making changes
+python run.py --setup --dry-run
+
+# Non-interactive (for CI/automation)
+python run.py --setup --non-interactive --json
+```
+
+The setup wizard runs 5 phases: package detection, dependency installation, `.env` configuration, Graphiti validation, and LLM provider connectivity testing. See [Environment Sync docs](../docs/features/ENVIRONMENT-SYNC.md) for details.
+
+### Manual Setup
+
 **Step 1:** Navigate to the backend directory
 
 ```bash
