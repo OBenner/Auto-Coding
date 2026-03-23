@@ -75,6 +75,10 @@ class Settings:
         self.REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
         self.REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
 
+        # Logging configuration
+        self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+        self.LOG_FORMAT: str = os.getenv("LOG_FORMAT", "text")  # "text" or "json"
+
         # Validate critical settings
         self._validate()
 

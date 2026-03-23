@@ -3,6 +3,7 @@ Web Backend - FastAPI Application
 Main entry point for the FastAPI web service
 """
 
+import json
 import logging
 import os
 import secrets
@@ -20,10 +21,38 @@ load_dotenv()
 
 # Configure logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL.upper()),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+LOG_FORMAT = os.getenv("LOG_FORMAT", "text")
+
+
+class _JsonFormatter(logging.Formatter):
+    """JSON log formatter – emits one JSON object per log record."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
+
+
+def _configure_logging() -> None:
+    """Set up root logging handler based on LOG_FORMAT env var."""
+    level = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
+    handler = logging.StreamHandler()
+    if LOG_FORMAT.lower() == "json":
+        handler.setFormatter(_JsonFormatter())
+    else:
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
+    logging.basicConfig(level=level, handlers=[handler], force=True)
+
+
+_configure_logging()
 logger = logging.getLogger(__name__)
 
 # Application configuration
