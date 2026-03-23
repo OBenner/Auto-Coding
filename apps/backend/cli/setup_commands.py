@@ -5,13 +5,7 @@ Setup Commands
 CLI commands for environment setup and synchronization.
 """
 
-import sys
 from pathlib import Path
-
-# Ensure parent directory is in path for imports (before other imports)
-_PARENT_DIR = Path(__file__).parent.parent
-if str(_PARENT_DIR) not in sys.path:
-    sys.path.insert(0, str(_PARENT_DIR))
 
 from ui import (
     Icons,
@@ -97,43 +91,7 @@ def handle_setup_command(
 
         # Display summary
         if verbose:
-            if result["success"]:
-                print(f"\n{icon(Icons.SUCCESS)} Environment setup completed successfully!")
-                print(f"   Duration: {result['duration']}")
-            else:
-                print(f"\n{icon(Icons.WARNING)} Environment setup completed with issues")
-                print(f"   Duration: {result['duration']}")
-                print(f"   Summary: {result['summary']}")
-
-            # Show critical issues
-            if result.get("issues"):
-                print(f"\n{icon(Icons.ERROR)} Critical Issues:")
-                for issue in result["issues"]:
-                    print(f"  • {issue}")
-
-            # Show warnings
-            if result.get("warnings"):
-                print(f"\n{icon(Icons.WARNING)} Warnings:")
-                for warning in result["warnings"]:
-                    print(f"  • {warning}")
-
-            # Show recommended fixes
-            if result.get("fixes"):
-                print(f"\n{icon(Icons.INFO)} Recommended Fixes:")
-                for i, fix in enumerate(result["fixes"], 1):
-                    print(f"  {i}. {fix}")
-
-            # Show next steps
-            if result["success"]:
-                print(f"\n{icon(Icons.SUCCESS)} Next Steps:")
-                print("  1. Review the setup report above")
-                print("  2. Run your first build: python run.py --task 'your task'")
-                print("  3. Check the Quick Start Guide for more information")
-            else:
-                print(f"\n{icon(Icons.INFO)} Next Steps:")
-                print("  1. Review the issues and warnings above")
-                print("  2. Apply the recommended fixes")
-                print("  3. Run --setup again to verify")
+            _display_result(result)
 
         return result
 
@@ -151,7 +109,53 @@ def handle_setup_command(
         if verbose:
             print(f"\n{icon(Icons.ERROR)} Setup failed with exception: {e}")
             import traceback
+
             print("\nTraceback:")
             traceback.print_exc()
 
         return error_result
+
+
+def _display_result(result: dict) -> None:
+    """Display verbose setup result output.
+
+    Args:
+        result: Dictionary with setup results from run_env_sync.
+    """
+    if result["success"]:
+        print(f"\n{icon(Icons.SUCCESS)} Environment setup completed successfully!")
+        print(f"   Duration: {result['duration']}")
+    else:
+        print(f"\n{icon(Icons.WARNING)} Environment setup completed with issues")
+        print(f"   Duration: {result['duration']}")
+        print(f"   Summary: {result['summary']}")
+
+    # Show critical issues
+    if result.get("issues"):
+        print(f"\n{icon(Icons.ERROR)} Critical Issues:")
+        for issue in result["issues"]:
+            print(f"  - {issue}")
+
+    # Show warnings
+    if result.get("warnings"):
+        print(f"\n{icon(Icons.WARNING)} Warnings:")
+        for warning in result["warnings"]:
+            print(f"  - {warning}")
+
+    # Show recommended fixes
+    if result.get("fixes"):
+        print(f"\n{icon(Icons.INFO)} Recommended Fixes:")
+        for i, fix in enumerate(result["fixes"], 1):
+            print(f"  {i}. {fix}")
+
+    # Show next steps
+    if result["success"]:
+        print(f"\n{icon(Icons.SUCCESS)} Next Steps:")
+        print("  1. Review the setup report above")
+        print("  2. Run your first build: python run.py --task 'your task'")
+        print("  3. Check the Quick Start Guide for more information")
+    else:
+        print(f"\n{icon(Icons.INFO)} Next Steps:")
+        print("  1. Review the issues and warnings above")
+        print("  2. Apply the recommended fixes")
+        print("  3. Run --setup again to verify")

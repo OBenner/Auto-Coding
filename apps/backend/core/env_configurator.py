@@ -6,9 +6,7 @@ Handles .env file setup with interactive prompts for environment variables.
 """
 
 import logging
-import os
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -93,6 +91,34 @@ class EnvConfigurator:
                     current_description = []
                     continue
 
+                # Commented-out variable lines (e.g., "# VAR=value")
+                if line.startswith("#") and "=" in line:
+                    # Check if it looks like a commented-out variable assignment
+                    stripped = line.lstrip("# ").strip()
+                    if re.match(r"^[A-Z_][A-Z0-9_]*\s*=", stripped):
+                        parts = stripped.split("=", 1)
+                        var_name = parts[0].strip()
+                        description = (
+                            " ".join(current_description)
+                            if current_description
+                            else None
+                        )
+                        required = (
+                            current_section is not None
+                            and "REQUIRED" in current_section
+                        )
+                        variables.append(
+                            EnvVariable(
+                                name=var_name,
+                                value=None,
+                                description=description,
+                                required=required,
+                                section=current_section,
+                            )
+                        )
+                        current_description = []
+                        continue
+
                 # Comment lines (descriptions)
                 if line.startswith("#"):
                     comment = line.lstrip("#").strip()
@@ -106,12 +132,8 @@ class EnvConfigurator:
                     continue
 
                 # Variable assignment (e.g., "VAR_NAME=value")
-                if "=" in line and not line.startswith("#"):
-                    # Check if it's a commented-out variable
-                    is_commented = line.lstrip().startswith("#")
-                    clean_line = line.lstrip("#").strip()
-
-                    parts = clean_line.split("=", 1)
+                if "=" in line:
+                    parts = line.split("=", 1)
                     var_name = parts[0].strip()
                     var_value = parts[1].strip() if len(parts) > 1 else None
 
@@ -128,7 +150,7 @@ class EnvConfigurator:
                     variables.append(
                         EnvVariable(
                             name=var_name,
-                            value=var_value if not is_commented else None,
+                            value=var_value,
                             description=description,
                             required=required,
                             section=current_section,
@@ -286,15 +308,42 @@ class EnvConfigurator:
             # Write file (unless dry-run)
             if dry_run:
                 print("\n[DRY RUN] Would write to .env:")
-                print("".join(new_env_content[:500]))  # Show first 500 chars
-                if len(new_env_content) > 500:
+                # Mask secret values in dry-run output
+                masked_lines = []
+                for env_line in new_env_content:
+                    if "=" in env_line and not env_line.startswith("#"):
+                        key, _, val = env_line.partition("=")
+                        if val.strip():
+                            masked_lines.append(f"{key}=****\n")
+                        else:
+                            masked_lines.append(env_line)
+                    else:
+                        masked_lines.append(env_line)
+                full_content = "".join(masked_lines)
+                print(full_content[:500])  # Show first 500 characters
+                if len(full_content) > 500:
                     print("... (truncated)")
             else:
                 with open(self.env_file, "w", encoding="utf-8") as f:
                     f.write("".join(new_env_content))
                 logger.info(f"Created .env file at {self.env_file}")
 
-            result["success"] = True
+            # Check for missing required variables in non-interactive mode
+            missing_required = []
+            if not interactive:
+                for var in variables:
+                    if var.required:
+                        val = existing_values.get(var.name) or var.value
+                        if not val:
+                            missing_required.append(var.name)
+
+            if missing_required:
+                result["success"] = False
+                result["errors"].append(
+                    f"Missing required variables: {', '.join(missing_required)}"
+                )
+            else:
+                result["success"] = True
             result["variables_configured"] = configured_count
 
         except FileNotFoundError as e:

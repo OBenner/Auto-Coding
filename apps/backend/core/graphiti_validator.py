@@ -6,12 +6,16 @@ Comprehensive validation for Graphiti memory system setup.
 Tests configuration, database connectivity, and provider connections.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import sys
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from integrations.graphiti.config import GraphitiConfig
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +26,7 @@ class ValidationResult:
 
     success: bool
     message: str
-    fix_command: Optional[str] = None
+    fix_command: str | None = None
 
 
 @dataclass
@@ -41,9 +45,7 @@ class GraphitiValidationReport:
     def is_operational(self) -> bool:
         """Check if Graphiti is fully operational."""
         return (
-            self.enabled
-            and self.config_valid
-            and self.database_available
+            self.enabled and self.config_valid and self.database_available
             # Embedder is optional - keyword search works without it
         )
 
@@ -231,7 +233,7 @@ def _validate_database_backend(verbose: bool = False) -> ValidationResult:
 
 
 def _test_embedder_connection(
-    config: "GraphitiConfig", verbose: bool = False
+    config: GraphitiConfig, verbose: bool = False
 ) -> ValidationResult:
     """
     Test embedder provider connection.
@@ -256,35 +258,30 @@ def _test_embedder_connection(
             fix_command="pip install -r requirements.txt",
         )
 
-    # Special handling for Ollama - test server connection first
-    if config.embedder_provider == "ollama":
-        if verbose:
-            print(f"Testing Ollama connection at {config.ollama_base_url}...")
-
-        # Run async test
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            success, message = loop.run_until_complete(
-                test_ollama_connection(config.ollama_base_url)
-            )
-        finally:
-            loop.close()
-
-        if not success:
-            return ValidationResult(
-                success=False,
-                message=f"Ollama server not reachable: {message}",
-                fix_command="Start Ollama server: ollama serve",
-            )
-
-    # Test embedder connection
-    if verbose:
-        print(f"Testing {config.embedder_provider} embedder connection...")
-
+    # Create a single event loop for all async operations
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
+        # Special handling for Ollama - test server connection first
+        if config.embedder_provider == "ollama":
+            if verbose:
+                print(f"Testing Ollama connection at {config.ollama_base_url}...")
+
+            success, message = loop.run_until_complete(
+                test_ollama_connection(config.ollama_base_url)
+            )
+
+            if not success:
+                return ValidationResult(
+                    success=False,
+                    message=f"Ollama server not reachable: {message}",
+                    fix_command="Start Ollama server: ollama serve",
+                )
+
+        # Test embedder connection
+        if verbose:
+            print(f"Testing {config.embedder_provider} embedder connection...")
+
         success, message = loop.run_until_complete(test_embedder_connection(config))
     finally:
         loop.close()
@@ -297,7 +294,7 @@ def _test_embedder_connection(
     return ValidationResult(success=True, message=message)
 
 
-def _get_embedder_fix_command(config: "GraphitiConfig") -> str:
+def _get_embedder_fix_command(config: GraphitiConfig) -> str:
     """
     Get provider-specific fix command for embedder setup.
 
@@ -321,7 +318,7 @@ def _get_embedder_fix_command(config: "GraphitiConfig") -> str:
     elif provider == "ollama":
         return (
             "1. Start Ollama: ollama serve\n"
-            "2. Pull embedding model: ollama pull {config.ollama_embedding_model}\n"
+            f"2. Pull embedding model: ollama pull {config.ollama_embedding_model}\n"
             "3. Set OLLAMA_EMBEDDING_DIM in your .env file"
         )
     elif provider == "google":
@@ -343,14 +340,16 @@ def print_validation_report(report: GraphitiValidationReport) -> None:
     print("Graphiti Memory System Validation Report")
     print("=" * 60)
 
-    print(f"\nStatus: {'✓ OPERATIONAL' if report.is_operational() else '✗ NOT OPERATIONAL'}")
+    print(
+        f"\nStatus: {'✓ OPERATIONAL' if report.is_operational() else '✗ NOT OPERATIONAL'}"
+    )
 
     print("\nChecks:")
     print(f"  Enabled:              {'✓' if report.enabled else '✗'}")
     print(f"  Configuration:        {'✓' if report.config_valid else '✗'}")
     print(f"  Database Backend:     {'✓' if report.database_available else '✗'}")
-    print(f"  Embedder Config:      {'✓' if report.embedder_valid else '!' if not report.embedder_valid else '✗'}")
-    print(f"  Embedder Connection:  {'✓' if report.embedder_connected else '!' if not report.embedder_connected else '✗'}")
+    print(f"  Embedder Config:      {'✓' if report.embedder_valid else '!'}")
+    print(f"  Embedder Connection:  {'✓' if report.embedder_connected else '!'}")
 
     if report.errors:
         print(f"\n✗ Errors ({len(report.errors)}):")
@@ -363,7 +362,7 @@ def print_validation_report(report: GraphitiValidationReport) -> None:
             print(f"  - {warning}")
 
     if report.fixes:
-        print(f"\n📋 Recommended Fixes:")
+        print("\nRecommended Fixes:")
         for i, fix in enumerate(report.fixes, 1):
             print(f"  {i}. {fix}")
 

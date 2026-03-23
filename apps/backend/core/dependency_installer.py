@@ -7,9 +7,7 @@ Handles monorepo scenarios with multiple services using different package manage
 """
 
 import subprocess
-import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 
 class InstallResult:
@@ -26,9 +24,9 @@ class InstallResult:
 
     def __init__(self, dry_run: bool = False):
         self.success = True
-        self.installed: List[Tuple[str, str]] = []
-        self.failed: List[Tuple[str, str, str]] = []
-        self.skipped: List[Tuple[str, str, str]] = []
+        self.installed: list[tuple[str, str]] = []
+        self.failed: list[tuple[str, str, str]] = []
+        self.skipped: list[tuple[str, str, str]] = []
         self.dry_run = dry_run
 
     def add_installed(self, package_manager: str, directory: str) -> None:
@@ -45,7 +43,9 @@ class InstallResult:
         self.skipped.append((package_manager, directory, reason))
 
     def __repr__(self) -> str:
-        status = "DRY-RUN" if self.dry_run else ("SUCCESS" if self.success else "FAILED")
+        status = (
+            "DRY-RUN" if self.dry_run else ("SUCCESS" if self.success else "FAILED")
+        )
         return (
             f"InstallResult({status}, "
             f"installed={len(self.installed)}, "
@@ -82,6 +82,13 @@ class DependencyInstaller:
         "go": ["go", "mod", "download"],
     }
 
+    # Alternative pip install commands for different project types
+    PIP_INSTALL_VARIANTS = {
+        "requirements.txt": ["pip", "install", "-r", "requirements.txt"],
+        "pyproject.toml": ["pip", "install", "."],
+        "setup.py": ["pip", "install", "."],
+    }
+
     # Installation order (dependencies first)
     INSTALL_ORDER = ["pip", "npm", "go", "cargo"]
 
@@ -103,7 +110,7 @@ class DependencyInstaller:
         self.timeout = timeout
 
     def install(
-        self, detected: Dict[str, List[str]], dry_run: bool = False
+        self, detected: dict[str, list[str]], dry_run: bool = False
     ) -> InstallResult:
         """
         Install dependencies for detected package managers.
@@ -174,6 +181,10 @@ class DependencyInstaller:
             )
             return
 
+        # For pip, choose the correct install command based on available files
+        if package_manager == "pip":
+            install_cmd = self._get_pip_command(target_dir)
+
         if dry_run:
             # Dry-run: just record what would be done
             result.add_installed(package_manager, directory)
@@ -220,7 +231,25 @@ class DependencyInstaller:
         except Exception as e:
             result.add_failed(package_manager, directory, str(e))
 
-    def get_install_command(self, package_manager: str, directory: str) -> Optional[str]:
+    def _get_pip_command(self, target_dir: Path) -> list[str]:
+        """
+        Determine the correct pip install command based on available project files.
+
+        Checks for requirements.txt first, then pyproject.toml, then setup.py.
+
+        Args:
+            target_dir: Directory containing the Python project
+
+        Returns:
+            List of command arguments for pip install
+        """
+        for filename, cmd in self.PIP_INSTALL_VARIANTS.items():
+            if (target_dir / filename).exists():
+                return list(cmd)
+        # Default fallback
+        return list(self.INSTALL_COMMANDS["pip"])
+
+    def get_install_command(self, package_manager: str, directory: str) -> str | None:
         """
         Get the full install command for a package manager in a directory.
 
@@ -247,7 +276,7 @@ class DependencyInstaller:
 
 def install_dependencies(
     project_dir: str,
-    detected: Dict[str, List[str]],
+    detected: dict[str, list[str]],
     dry_run: bool = False,
     timeout: int = 300,
 ) -> InstallResult:

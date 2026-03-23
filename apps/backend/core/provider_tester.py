@@ -52,7 +52,6 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -64,15 +63,15 @@ class ProviderTestResult:
     success: bool
     message: str
     provider: str
-    fix_command: Optional[str] = None
-    error_details: Optional[str] = None
+    fix_command: str | None = None
+    error_details: str | None = None
 
 
 def check_provider_connection(
     provider: str,
-    api_key: Optional[str] = None,
-    model: Optional[str] = None,
-    base_url: Optional[str] = None,
+    api_key: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
     **kwargs,
 ) -> ProviderTestResult:
     """
@@ -101,7 +100,9 @@ def check_provider_connection(
     asyncio.set_event_loop(loop)
     try:
         result = loop.run_until_complete(
-            check_provider_connection_async(provider, api_key, model, base_url, **kwargs)
+            check_provider_connection_async(
+                provider, api_key, model, base_url, **kwargs
+            )
         )
     finally:
         loop.close()
@@ -111,9 +112,9 @@ def check_provider_connection(
 
 async def check_provider_connection_async(
     provider: str,
-    api_key: Optional[str] = None,
-    model: Optional[str] = None,
-    base_url: Optional[str] = None,
+    api_key: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
     **kwargs,
 ) -> ProviderTestResult:
     """
@@ -143,7 +144,7 @@ async def check_provider_connection_async(
     elif provider_lower == "ollama":
         return await _test_ollama(base_url, model, **kwargs)
     elif provider_lower == "openrouter":
-        return await _test_openrouter(api_key, model, **kwargs)
+        return await _test_openrouter(api_key, model, base_url=base_url, **kwargs)
     elif provider_lower == "voyage":
         return await _test_voyage(api_key, model, **kwargs)
     else:
@@ -156,7 +157,7 @@ async def check_provider_connection_async(
 
 
 async def _test_openai(
-    api_key: Optional[str] = None, model: Optional[str] = None, **kwargs
+    api_key: str | None = None, model: str | None = None, **kwargs
 ) -> ProviderTestResult:
     """Test OpenAI API connection."""
     # Get API key from parameter or environment
@@ -222,7 +223,7 @@ async def _test_openai(
 
 
 async def _test_anthropic(
-    api_key: Optional[str] = None, model: Optional[str] = None, **kwargs
+    api_key: str | None = None, model: str | None = None, **kwargs
 ) -> ProviderTestResult:
     """Test Anthropic API connection."""
     # Get API key from parameter or environment
@@ -300,9 +301,9 @@ async def _test_anthropic(
 
 
 async def _test_azure_openai(
-    api_key: Optional[str] = None,
-    base_url: Optional[str] = None,
-    deployment: Optional[str] = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    deployment: str | None = None,
     **kwargs,
 ) -> ProviderTestResult:
     """Test Azure OpenAI connection."""
@@ -391,7 +392,7 @@ async def _test_azure_openai(
 
 
 async def _test_google(
-    api_key: Optional[str] = None, model: Optional[str] = None, **kwargs
+    api_key: str | None = None, model: str | None = None, **kwargs
 ) -> ProviderTestResult:
     """Test Google AI (Gemini) connection."""
     # Get API key from parameter or environment
@@ -465,7 +466,7 @@ async def _test_google(
 
 
 async def _test_ollama(
-    base_url: Optional[str] = None, model: Optional[str] = None, **kwargs
+    base_url: str | None = None, model: str | None = None, **kwargs
 ) -> ProviderTestResult:
     """Test Ollama connection."""
     # Get base URL from parameter or environment
@@ -517,7 +518,9 @@ async def _test_ollama(
                         error_details=f"Available models: {', '.join(model_names)}",
                     )
 
-            model_info = f" (model: {model})" if model else f" ({len(models)} models available)"
+            model_info = (
+                f" (model: {model})" if model else f" ({len(models)} models available)"
+            )
             return ProviderTestResult(
                 success=True,
                 message=f"Ollama connection successful{model_info}",
@@ -550,7 +553,10 @@ async def _test_ollama(
 
 
 async def _test_openrouter(
-    api_key: Optional[str] = None, model: Optional[str] = None, **kwargs
+    api_key: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    **kwargs,
 ) -> ProviderTestResult:
     """Test OpenRouter connection."""
     # Get API key from parameter or environment
@@ -577,10 +583,10 @@ async def _test_openrouter(
 
     try:
         # Create client with OpenRouter endpoint
-        base_url = os.environ.get(
+        effective_base_url = base_url or os.environ.get(
             "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
         )
-        client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
+        client = openai.AsyncOpenAI(api_key=api_key, base_url=effective_base_url)
 
         # Test with models list
         await client.models.list()
@@ -618,7 +624,7 @@ async def _test_openrouter(
 
 
 async def _test_voyage(
-    api_key: Optional[str] = None, model: Optional[str] = None, **kwargs
+    api_key: str | None = None, model: str | None = None, **kwargs
 ) -> ProviderTestResult:
     """Test Voyage AI connection."""
     # Get API key from parameter or environment
@@ -687,7 +693,7 @@ async def _test_voyage(
             )
 
 
-def get_provider_from_env() -> Optional[str]:
+def get_provider_from_env() -> str | None:
     """
     Detect which provider is configured in environment variables.
 

@@ -657,6 +657,11 @@ def _run_cli() -> None:
             interactive=not args.non_interactive,
             verbose=args.verbose or not args.json,
         )
+        # Output JSON if --json flag is set
+        if args.json:
+            import json
+
+            print(json.dumps(result, indent=2, default=str))
         # Exit with appropriate code
         sys.exit(0 if result["success"] else 1)
 

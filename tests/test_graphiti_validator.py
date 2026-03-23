@@ -334,13 +334,6 @@ class TestEmbedderConnection:
         mock_config.embedder_provider = "ollama"
         mock_config.ollama_base_url = "http://localhost:11434"
 
-        # Mock the async validators to return success
-        async def mock_test_ollama_connection(base_url):
-            return (True, "Ollama server reachable")
-
-        async def mock_test_embedder_connection(config):
-            return (True, "Embedder connected successfully")
-
         # Patch the imports and functions
         with patch("apps.backend.core.graphiti_validator.asyncio") as mock_asyncio:
             mock_loop = MagicMock()

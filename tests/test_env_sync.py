@@ -75,75 +75,74 @@ class TestEnvSyncResult:
 class TestRunEnvSync:
     """Tests for run_env_sync() orchestrator function."""
 
-    def test_run_env_sync_dry_run_no_modifications(self, tmp_path):
+    @patch("apps.backend.core.env_sync._test_providers", return_value={})
+    @patch("apps.backend.core.env_sync._validate_graphiti")
+    @patch("apps.backend.core.env_sync._configure_environment",
+           return_value={"success": True, "variables_configured": 0, "errors": []})
+    @patch("apps.backend.core.env_sync._install_dependencies")
+    @patch("apps.backend.core.env_sync._detect_packages",
+           return_value={"npm": [], "pip": [], "cargo": [], "go": []})
+    def test_run_env_sync_dry_run_no_modifications(
+        self, mock_detect, mock_install, mock_config, mock_graphiti, mock_providers, tmp_path
+    ):
         """Test dry-run mode doesn't make file modifications."""
-        # Mock all phase functions
-        with patch("apps.backend.core.env_sync._detect_packages") as mock_detect:
-            mock_detect.return_value = {"npm": [], "pip": [], "cargo": [], "go": []}
+        mock_install_result = MagicMock()
+        mock_install_result.dry_run = True
+        mock_install_result.installed = []
+        mock_install_result.failed = []
+        mock_install_result.skipped = []
+        mock_install.return_value = mock_install_result
 
-            with patch("apps.backend.core.env_sync._install_dependencies") as mock_install:
-                mock_install_result = MagicMock()
-                mock_install_result.dry_run = True
-                mock_install_result.installed = []
-                mock_install_result.failed = []
-                mock_install_result.skipped = []
-                mock_install.return_value = mock_install_result
+        mock_graphiti_result = MagicMock()
+        mock_graphiti_result.errors = []
+        mock_graphiti_result.warnings = []
+        mock_graphiti_result.fixes = []
+        mock_graphiti.return_value = mock_graphiti_result
 
-                with patch("apps.backend.core.env_sync._configure_environment") as mock_config:
-                    mock_config.return_value = {"success": True, "variables_configured": 0, "errors": []}
+        with patch("builtins.print"):
+            result = run_env_sync(
+                project_dir=str(tmp_path),
+                dry_run=True,
+                verbose=False
+            )
 
-                    with patch("apps.backend.core.env_sync._validate_graphiti") as mock_graphiti:
-                        mock_graphiti_result = MagicMock()
-                        mock_graphiti_result.errors = []
-                        mock_graphiti_result.warnings = []
-                        mock_graphiti_result.fixes = []
-                        mock_graphiti.return_value = mock_graphiti_result
+        # Verify dry-run was passed to install (3rd positional arg)
+        mock_install.assert_called_once()
+        _, kwargs = mock_install.call_args
+        # dry_run is passed as 3rd positional arg
+        args = mock_install.call_args.args
+        assert args[2] is True  # dry_run=True
 
-                        with patch("apps.backend.core.env_sync._test_providers") as mock_providers:
-                            mock_providers.return_value = {}
+        # Result should be successful
+        assert result["success"] is True
 
-                            # Suppress print output
-                            with patch("builtins.print"):
-                                result = run_env_sync(
-                                    project_dir=str(tmp_path),
-                                    dry_run=True,
-                                    verbose=False
-                                )
-
-                            # Verify dry-run was passed to install
-                            mock_install.assert_called_once()
-                            call_args = mock_install.call_args
-                            assert call_args[0][2] is True  # dry_run=True
-
-                            # Result should be successful
-                            assert result["success"] is True
-
-    def test_run_env_sync_skip_flags(self, tmp_path):
+    @patch("apps.backend.core.env_sync._test_providers")
+    @patch("apps.backend.core.env_sync._validate_graphiti")
+    @patch("apps.backend.core.env_sync._configure_environment")
+    @patch("apps.backend.core.env_sync._install_dependencies")
+    @patch("apps.backend.core.env_sync._detect_packages",
+           return_value={"npm": [], "pip": [], "cargo": [], "go": []})
+    def test_run_env_sync_skip_flags(
+        self, mock_detect, mock_install, mock_config, mock_graphiti, mock_providers, tmp_path
+    ):
         """Test skip flags (skip_install, skip_config, skip_validation) work correctly."""
-        with patch("apps.backend.core.env_sync._detect_packages") as mock_detect:
-            mock_detect.return_value = {"npm": [], "pip": [], "cargo": [], "go": []}
+        with patch("builtins.print"):
+            result = run_env_sync(
+                project_dir=str(tmp_path),
+                skip_install=True,
+                skip_config=True,
+                skip_validation=True,
+                verbose=False
+            )
 
-            with patch("apps.backend.core.env_sync._install_dependencies") as mock_install:
-                with patch("apps.backend.core.env_sync._configure_environment") as mock_config:
-                    with patch("apps.backend.core.env_sync._validate_graphiti") as mock_graphiti:
-                        with patch("apps.backend.core.env_sync._test_providers") as mock_providers:
-                            with patch("builtins.print"):
-                                result = run_env_sync(
-                                    project_dir=str(tmp_path),
-                                    skip_install=True,
-                                    skip_config=True,
-                                    skip_validation=True,
-                                    verbose=False
-                                )
+        # Verify skipped phases were not called
+        mock_install.assert_not_called()
+        mock_config.assert_not_called()
+        mock_graphiti.assert_not_called()
+        mock_providers.assert_not_called()
 
-                            # Verify skipped phases were not called
-                            mock_install.assert_not_called()
-                            mock_config.assert_not_called()
-                            mock_graphiti.assert_not_called()
-                            mock_providers.assert_not_called()
-
-                            # Should still succeed
-                            assert result["success"] is True
+        # Should still succeed
+        assert result["success"] is True
 
     def test_run_env_sync_result_structure(self, tmp_path):
         """Test result structure includes all phases."""
@@ -397,8 +396,6 @@ class TestHelperFunctions:
                     verbose=True,
                     skip_install=False
                 )
-
-                output = captured_output.getvalue()
 
                 # Verify result structure
                 assert isinstance(result, dict)

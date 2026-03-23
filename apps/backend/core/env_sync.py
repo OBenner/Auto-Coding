@@ -81,18 +81,26 @@ class EnvSyncResult:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
+        installation = None
+        if self.installation_result:
+            installation = {
+                "dry_run": self.installation_result.dry_run,
+                "installed": len(self.installation_result.installed),
+                "failed": len(self.installation_result.failed),
+                "skipped": len(self.installation_result.skipped),
+            }
+
+        graphiti = None
+        if self.graphiti_result and hasattr(self.graphiti_result, "to_dict"):
+            graphiti = self.graphiti_result.to_dict()
+
         return {
             "success": self.success,
             "duration": self.get_duration(),
             "detection": self.detection_result,
-            "installation": {
-                "dry_run": self.installation_result.dry_run if self.installation_result else None,
-                "installed": len(self.installation_result.installed) if self.installation_result else 0,
-                "failed": len(self.installation_result.failed) if self.installation_result else 0,
-                "skipped": len(self.installation_result.skipped) if self.installation_result else 0,
-            } if self.installation_result else None,
+            "installation": installation,
             "configuration": self.configuration_result,
-            "graphiti": self.graphiti_result.to_dict() if self.graphiti_result and hasattr(self.graphiti_result, 'to_dict') else None,
+            "graphiti": graphiti,
             "providers": self.provider_results,
             "issues": self.issues,
             "warnings": self.warnings,
@@ -174,7 +182,9 @@ def run_env_sync(
             # Collect installation issues
             if result.installation_result and result.installation_result.failed:
                 for pm, directory, error in result.installation_result.failed:
-                    result.issues.append(f"Failed to install {pm} in {directory}: {error}")
+                    result.issues.append(
+                        f"Failed to install {pm} in {directory}: {error}"
+                    )
         else:
             if verbose:
                 print("\n[2/5] Skipping dependency installation (--skip-install)")
@@ -192,7 +202,9 @@ def run_env_sync(
             )
 
             # Collect configuration issues
-            if result.configuration_result and not result.configuration_result.get("success"):
+            if result.configuration_result and not result.configuration_result.get(
+                "success"
+            ):
                 for error in result.configuration_result.get("errors", []):
                     result.issues.append(f"Configuration error: {error}")
         else:
@@ -242,9 +254,13 @@ def run_env_sync(
         if verbose:
             print("\n" + "=" * 70)
             if result.success:
-                print(f"✓ Environment sync completed successfully ({result.get_duration()})")
+                print(
+                    f"✓ Environment sync completed successfully ({result.get_duration()})"
+                )
             else:
-                print(f"✗ Environment sync completed with issues ({result.get_duration()})")
+                print(
+                    f"✗ Environment sync completed with issues ({result.get_duration()})"
+                )
             print("=" * 70)
 
             if result.issues:
@@ -258,7 +274,7 @@ def run_env_sync(
                     print(f"  - {warning}")
 
             if result.fixes:
-                print(f"\n📋 Recommended Fixes:")
+                print("\nRecommended Fixes:")
                 for i, fix in enumerate(result.fixes, 1):
                     print(f"  {i}. {fix}")
 
@@ -278,9 +294,15 @@ def run_env_sync(
             "success": False,
             "duration": result.get_duration(),
             "summary": f"Failed: {str(e)}",
+            "detection": result.detection_result,
+            "installation": None,
+            "configuration": result.configuration_result,
+            "graphiti": None,
+            "providers": result.provider_results,
             "issues": result.issues,
             "warnings": result.warnings,
             "fixes": result.fixes,
+            "report": "",
         }
 
 
@@ -322,27 +344,7 @@ def _install_dependencies(
         install_result = installer.install(detected, dry_run=dry_run)
 
         if verbose:
-            if dry_run:
-                print(f"  Would install {len(install_result.installed)} package manager(s)")
-            else:
-                if install_result.success:
-                    print(f"  ✓ Installed {len(install_result.installed)} package manager(s)")
-                else:
-                    print(f"  ✗ Installation issues: {len(install_result.failed)} failed")
-
-            # Show details
-            for pm, directory in install_result.installed:
-                status = "Would install" if dry_run else "Installed"
-                print(f"    - {status}: {pm} in {directory}")
-
-            for pm, directory, reason in install_result.skipped:
-                print(f"    - Skipped: {pm} in {directory} ({reason})")
-
-            for pm, directory, error in install_result.failed:
-                print(f"    - Failed: {pm} in {directory}")
-                # Truncate long errors
-                error_short = error[:100] + "..." if len(error) > 100 else error
-                print(f"      Error: {error_short}")
+            _log_install_result(install_result, dry_run)
 
         return install_result
 
@@ -351,6 +353,33 @@ def _install_dependencies(
         if verbose:
             print(f"  ✗ Failed: {e}")
         return None
+
+
+def _log_install_result(install_result: Any, dry_run: bool) -> None:
+    """Display verbose installation result details.
+
+    Args:
+        install_result: InstallResult from DependencyInstaller.
+        dry_run: Whether this was a dry-run.
+    """
+    if dry_run:
+        print(f"  Would install {len(install_result.installed)} package manager(s)")
+    elif install_result.success:
+        print(f"  ✓ Installed {len(install_result.installed)} package manager(s)")
+    else:
+        print(f"  ✗ Installation issues: {len(install_result.failed)} failed")
+
+    for pm, directory in install_result.installed:
+        status = "Would install" if dry_run else "Installed"
+        print(f"    - {status}: {pm} in {directory}")
+
+    for pm, directory, reason in install_result.skipped:
+        print(f"    - Skipped: {pm} in {directory} ({reason})")
+
+    for pm, directory, error in install_result.failed:
+        print(f"    - Failed: {pm} in {directory}")
+        error_short = error[:100] + "..." if len(error) > 100 else error
+        print(f"      Error: {error_short}")
 
 
 def _configure_environment(
@@ -380,11 +409,15 @@ def _configure_environment(
         if verbose:
             if config_result["success"]:
                 if dry_run:
-                    print(f"  Would configure {config_result['variables_configured']} variables")
+                    print(
+                        f"  Would configure {config_result['variables_configured']} variables"
+                    )
                 else:
-                    print(f"  ✓ Configured {config_result['variables_configured']} variables")
+                    print(
+                        f"  ✓ Configured {config_result['variables_configured']} variables"
+                    )
             else:
-                print(f"  ✗ Configuration failed")
+                print("  ✗ Configuration failed")
                 for error in config_result.get("errors", []):
                     print(f"    - {error}")
 
@@ -456,7 +489,7 @@ def _generate_report(result: EnvSyncResult, project_path: Path, dry_run: bool) -
     lines.append(f"**Duration:** {result.get_duration()}")
     lines.append(f"**Status:** {'✓ SUCCESS' if result.success else '✗ ISSUES FOUND'}")
     if dry_run:
-        lines.append(f"**Mode:** DRY-RUN (no changes made)")
+        lines.append("**Mode:** DRY-RUN (no changes made)")
     lines.append("")
 
     # Environment section
@@ -490,9 +523,9 @@ def _generate_report(result: EnvSyncResult, project_path: Path, dry_run: bool) -
             for pm, directory, error in inst.failed:
                 lines.append(f"- **{pm}** in `{directory}`")
                 error_short = error[:200] + "..." if len(error) > 200 else error
-                lines.append(f"  ```")
+                lines.append("  ```")
                 lines.append(f"  {error_short}")
-                lines.append(f"  ```")
+                lines.append("  ```")
             lines.append("")
 
     # Configuration section
@@ -501,9 +534,11 @@ def _generate_report(result: EnvSyncResult, project_path: Path, dry_run: bool) -
         lines.append("")
         config = result.configuration_result
         if config.get("success"):
-            lines.append(f"- ✓ Environment variables: {config.get('variables_configured', 0)} configured")
+            lines.append(
+                f"- ✓ Environment variables: {config.get('variables_configured', 0)} configured"
+            )
         else:
-            lines.append(f"- ✗ Configuration failed")
+            lines.append("- ✗ Configuration failed")
             for error in config.get("errors", []):
                 lines.append(f"  - {error}")
         lines.append("")
@@ -516,8 +551,8 @@ def _generate_report(result: EnvSyncResult, project_path: Path, dry_run: bool) -
         lines.append(f"- Enabled: {'✓' if gr.enabled else '✗'}")
         lines.append(f"- Configuration: {'✓' if gr.config_valid else '✗'}")
         lines.append(f"- Database: {'✓' if gr.database_available else '✗'}")
-        lines.append(f"- Embedder: {'✓' if gr.embedder_valid else '!' if not gr.embedder_valid else '✗'}")
-        lines.append(f"- Connection: {'✓' if gr.embedder_connected else '!' if not gr.embedder_connected else '✗'}")
+        lines.append(f"- Embedder: {'✓' if gr.embedder_valid else '!'}")
+        lines.append(f"- Connection: {'✓' if gr.embedder_connected else '!'}")
         lines.append("")
 
     # Providers section

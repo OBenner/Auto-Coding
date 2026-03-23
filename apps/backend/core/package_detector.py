@@ -6,11 +6,27 @@ Detects package managers and their locations in a project directory.
 Supports monorepos with multiple services using different package managers.
 """
 
+import os
 from pathlib import Path
-from typing import Dict, List
+
+# Directories to skip (common ignore patterns)
+_SKIP_DIRS = {
+    "node_modules",
+    ".venv",
+    "venv",
+    ".env",
+    ".git",
+    "dist",
+    "build",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    "target",  # Rust build output
+    "vendor",  # Go vendor directory
+}
 
 
-def detect_package_managers(project_dir: str) -> Dict[str, List[str]]:
+def detect_package_managers(project_dir: str) -> dict[str, list[str]]:
     """
     Detect all package managers in a project directory.
 
@@ -48,31 +64,35 @@ def detect_package_managers(project_dir: str) -> Dict[str, List[str]]:
         "go": ("go.mod", "Go module manager"),
     }
 
-    results: Dict[str, List[str]] = {pm: [] for pm in package_files}
+    results: dict[str, list[str]] = {pm: [] for pm in package_files}
 
     # Additional Python package files to check (lower priority than requirements.txt)
     python_files = ["setup.py", "pyproject.toml"]
 
-    # Scan for package manager files
-    for pm_name, (filename, _) in package_files.items():
-        matches = root.rglob(filename)
-        for match in matches:
-            # Skip node_modules, venv, .git, and other common ignore dirs
-            if _should_skip_directory(match, root):
-                continue
+    # Build a set of all filenames to look for in a single walk
+    target_filenames = {filename for filename, _ in package_files.values()}
+    filename_to_pm = {filename: pm for pm, (filename, _) in package_files.items()}
 
-            # Get directory containing the manifest file
-            manifest_dir = match.parent
-            # Convert to relative path from root
-            try:
-                rel_path = manifest_dir.relative_to(root)
-                # Use "." for root directory
-                rel_str = "." if str(rel_path) == "." else str(rel_path).replace("\\", "/")
-                if rel_str not in results[pm_name]:
-                    results[pm_name].append(rel_str)
-            except ValueError:
-                # Path is not relative to root, skip it
-                continue
+    # Walk directory tree, pruning ignored directories
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Prune ignored directories in-place to prevent descending into them
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+
+        for filename in filenames:
+            if filename in target_filenames:
+                pm_name = filename_to_pm[filename]
+                manifest_dir = Path(dirpath)
+                try:
+                    rel_path = manifest_dir.relative_to(root)
+                    rel_str = (
+                        "."
+                        if str(rel_path) == "."
+                        else str(rel_path).replace("\\", "/")
+                    )
+                    if rel_str not in results[pm_name]:
+                        results[pm_name].append(rel_str)
+                except ValueError:
+                    continue
 
     # Add Python projects without requirements.txt but with setup.py or pyproject.toml
     _detect_additional_python_projects(root, results, python_files)
@@ -84,55 +104,10 @@ def detect_package_managers(project_dir: str) -> Dict[str, List[str]]:
     return results
 
 
-def _should_skip_directory(path: Path, root: Path) -> bool:
-    """
-    Check if a directory should be skipped during package detection.
-
-    Only checks path components between root and path (not parent directories
-    above root). This allows detection to work even when run from inside
-    normally-ignored directories like .auto-claude.
-
-    Args:
-        path: Path to check
-        root: Project root directory
-
-    Returns:
-        True if the directory should be skipped, False otherwise
-    """
-    # Directories to skip (common ignore patterns)
-    skip_dirs = {
-        "node_modules",
-        ".venv",
-        "venv",
-        ".env",
-        ".git",
-        "dist",
-        "build",
-        "__pycache__",
-        ".pytest_cache",
-        ".mypy_cache",
-        "target",  # Rust build output
-        "vendor",  # Go vendor directory
-    }
-
-    # Only check path components between root and path
-    try:
-        rel_path = path.relative_to(root)
-        # Check each component in the relative path
-        for part in rel_path.parts:
-            if part in skip_dirs:
-                return True
-    except ValueError:
-        # Path is not relative to root, skip it
-        return True
-
-    return False
-
-
 def _detect_additional_python_projects(
     root: Path,
-    results: Dict[str, List[str]],
-    python_files: List[str],
+    results: dict[str, list[str]],
+    python_files: list[str],
 ) -> None:
     """
     Detect Python projects without requirements.txt.
@@ -146,22 +121,26 @@ def _detect_additional_python_projects(
         python_files: List of additional Python manifest files to check
     """
     existing_pip_dirs = set(results["pip"])
+    target_set = set(python_files)
 
-    for filename in python_files:
-        matches = root.rglob(filename)
-        for match in matches:
-            if _should_skip_directory(match, root):
-                continue
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Prune ignored directories in-place
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
 
-            manifest_dir = match.parent
-            try:
-                rel_path = manifest_dir.relative_to(root)
-                rel_str = "." if str(rel_path) == "." else str(rel_path).replace("\\", "/")
+        for filename in filenames:
+            if filename in target_set:
+                manifest_dir = Path(dirpath)
+                try:
+                    rel_path = manifest_dir.relative_to(root)
+                    rel_str = (
+                        "."
+                        if str(rel_path) == "."
+                        else str(rel_path).replace("\\", "/")
+                    )
 
-                # Only add if not already detected via requirements.txt
-                if rel_str not in existing_pip_dirs:
-                    results["pip"].append(rel_str)
-                    existing_pip_dirs.add(rel_str)
-            except ValueError:
-                # Path is not relative to root, skip it
-                continue
+                    # Only add if not already detected via requirements.txt
+                    if rel_str not in existing_pip_dirs:
+                        results["pip"].append(rel_str)
+                        existing_pip_dirs.add(rel_str)
+                except ValueError:
+                    continue

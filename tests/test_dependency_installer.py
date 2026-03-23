@@ -152,9 +152,6 @@ class TestDependencyInstaller:
         """Test that unknown package managers are skipped."""
         installer = DependencyInstaller(str(tmp_path))
 
-        # Create directory for unknown package manager
-        (tmp_path / ".").mkdir(exist_ok=True)
-
         # Create detected dict with unknown package manager
         detected = {"unknown_pm": ["."], "npm": [], "pip": [], "cargo": [], "go": []}
 
