@@ -164,13 +164,20 @@ async def run_agent_async(
     if project_dir is None:
         project_dir = Path(__file__).parent.parent.parent.parent
 
-    # Find spec directory
-    specs_dir = project_dir / ".auto-claude" / "specs"
+    # Find spec directory - scoped to per-user workspace when user_id is provided
+    if user_id > 0:
+        specs_dir = project_dir / ".auto-claude" / "users" / str(user_id) / "specs"
+    else:
+        specs_dir = project_dir / ".auto-claude" / "specs"
 
     if not specs_dir.exists():
-        raise FileNotFoundError(f"Specs directory not found: {specs_dir}")
+        raise FileNotFoundError(
+            f"Specs directory not found for user {user_id}: {specs_dir}"
+            if user_id > 0
+            else f"Specs directory not found: {specs_dir}"
+        )
 
-    # Find matching spec directory
+    # Find matching spec directory within the user's workspace
     spec_dir = None
     for candidate in specs_dir.iterdir():
         if candidate.is_dir():
@@ -180,7 +187,11 @@ async def run_agent_async(
                 break
 
     if spec_dir is None:
-        raise FileNotFoundError(f"Spec not found: {spec_id}")
+        raise FileNotFoundError(
+            f"Spec not found for user {user_id}: {spec_id}"
+            if user_id > 0
+            else f"Spec not found: {spec_id}"
+        )
 
     # Use spec_dir.name as the canonical spec_id for broadcasting
     canonical_spec_id = spec_dir.name
