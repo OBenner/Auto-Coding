@@ -12,17 +12,13 @@ Security:
 
 import logging
 import mimetypes
-import os
 import shutil
 from pathlib import Path
 from typing import Any
 
+from core import sanitize_log as _sanitize_log
+
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 class FileSystemError(Exception):
@@ -93,7 +89,9 @@ class FileSystemService:
             )
 
         self.sandbox_root = root_path
-        logger.info(f"FileSystemService initialized with sandbox root: {_sanitize_log(str(root_path))}")
+        logger.info(
+            f"FileSystemService initialized with sandbox root: {_sanitize_log(str(root_path))}"
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -263,7 +261,9 @@ class FileSystemService:
             raise FileNotFoundError(f"File not found: {_sanitize_log(path)}")
 
         if abs_path.is_dir():
-            raise FileSystemError(f"Path is a directory, not a file: {_sanitize_log(path)}")
+            raise FileSystemError(
+                f"Path is a directory, not a file: {_sanitize_log(path)}"
+            )
 
         size = abs_path.stat().st_size
         if size > self.MAX_FILE_SIZE_BYTES:
@@ -277,7 +277,9 @@ class FileSystemService:
         rel = abs_path.relative_to(self.sandbox_root)
 
         if is_binary:
-            logger.debug("Skipping content read for binary file '%s'", _sanitize_log(path))
+            logger.debug(
+                "Skipping content read for binary file '%s'", _sanitize_log(path)
+            )
             return {
                 "path": rel.as_posix(),
                 "content": None,
@@ -301,7 +303,9 @@ class FileSystemService:
             "mime_type": mime_type or "text/plain",
         }
 
-    def write_file(self, path: str, content: str, create_parents: bool = True) -> dict[str, Any]:
+    def write_file(
+        self, path: str, content: str, create_parents: bool = True
+    ) -> dict[str, Any]:
         """
         Write content to a file within the sandbox.
 
@@ -362,9 +366,7 @@ class FileSystemService:
         abs_path = self._resolve_path(path)
 
         if abs_path.exists():
-            raise FileAlreadyExistsError(
-                f"File already exists: {_sanitize_log(path)}"
-            )
+            raise FileAlreadyExistsError(f"File already exists: {_sanitize_log(path)}")
 
         abs_path.parent.mkdir(parents=True, exist_ok=True)
 

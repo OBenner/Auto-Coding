@@ -12,6 +12,7 @@ import logging
 import os
 from datetime import datetime
 
+from core import sanitize_log as _sanitize_log
 from core.security import verify_websocket_token
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
@@ -22,11 +23,6 @@ from api.models.agent_event import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 router = APIRouter()

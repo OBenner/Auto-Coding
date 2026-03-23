@@ -7,6 +7,8 @@ All operations are restricted to the project directory to prevent path traversal
 
 import logging
 import mimetypes
+import shutil
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -39,15 +41,23 @@ class FileEntry(BaseModel):
     name: str = Field(..., description="File or directory name")
     path: str = Field(..., description="Relative path from project root")
     type: str = Field(..., description="'file' or 'directory'")
-    size: int | None = Field(None, description="File size in bytes (None for directories)")
-    extension: str | None = Field(None, description="File extension (e.g. '.py'), None for directories")
+    size: int | None = Field(
+        None, description="File size in bytes (None for directories)"
+    )
+    extension: str | None = Field(
+        None, description="File extension (e.g. '.py'), None for directories"
+    )
 
 
 class FileListResponse(BaseModel):
     """Response for listing files in a directory."""
 
-    path: str = Field(..., description="Requested directory path (relative to project root)")
-    entries: list[FileEntry] = Field(..., description="Files and directories in the requested path")
+    path: str = Field(
+        ..., description="Requested directory path (relative to project root)"
+    )
+    entries: list[FileEntry] = Field(
+        ..., description="Files and directories in the requested path"
+    )
 
 
 class FileContentResponse(BaseModel):
@@ -64,7 +74,9 @@ class FileWriteRequest(BaseModel):
 
     path: str = Field(..., description="File path relative to project root")
     content: str = Field(..., description="New file content")
-    encoding: str = Field(default="utf-8", description="Text encoding to use when writing")
+    encoding: str = Field(
+        default="utf-8", description="Text encoding to use when writing"
+    )
 
 
 class FileWriteResponse(BaseModel):
@@ -78,7 +90,9 @@ class FileWriteResponse(BaseModel):
 class MkdirRequest(BaseModel):
     """Request to create a directory."""
 
-    path: str = Field(..., description="Directory path relative to project root to create")
+    path: str = Field(
+        ..., description="Directory path relative to project root to create"
+    )
 
 
 class MkdirResponse(BaseModel):
@@ -100,53 +114,76 @@ class DeleteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _resolve_safe_path(relative_path: str) -> Path:
+def _validate_and_resolve_path(user_path: str) -> Path:
     """
-    Resolve a relative path safely within the project directory.
+    Validate and resolve a user-provided path within the project directory.
+
+    This is the single security gate for all file operations.  Every endpoint
+    MUST call this function before touching the filesystem.
+
+    The function:
+    1. Resolves the project root to an absolute, symlink-free path.
+    2. Strips leading separators so the user path is always treated as relative.
+    3. Joins and resolves the candidate path (expanding ``..``, symlinks, etc.).
+    4. Checks containment with ``Path.is_relative_to`` to block traversal.
 
     Args:
-        relative_path: Path relative to project root (may start with '/')
+        user_path: Path supplied by the client (relative to project root).
 
     Returns:
-        Resolved absolute Path guaranteed to be inside the project directory
+        Resolved absolute ``Path`` guaranteed to reside inside the project
+        directory.
 
     Raises:
-        HTTPException: 400 if the path is empty, 403 if path traversal is detected
+        HTTPException 403: If the resolved path escapes the project directory.
     """
-    project_dir = get_project_dir().resolve()
+    project_root = get_project_dir().resolve()
 
-    # Strip leading slashes so Path joining works as expected
-    clean = relative_path.lstrip("/\\").strip()
+    # Normalise: strip leading separators so the path is always relative
+    clean = user_path.lstrip("/\\").strip()
     if not clean:
-        # Empty path means the project root itself
-        return project_dir
+        return project_root
 
-    target = (project_dir / clean).resolve()
+    resolved = (project_root / clean).resolve()
 
-    # Guard against path traversal
-    try:
-        target.relative_to(project_dir)
-    except ValueError:
+    # Primary containment check – blocks ../../../etc/passwd style attacks
+    if not resolved.is_relative_to(project_root):
         logger.warning(
             "Path traversal attempt blocked: %s -> %s",
-            sanitize_log(relative_path),
-            sanitize_log(str(target)),
+            sanitize_log(user_path),
+            sanitize_log(str(resolved)),
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: path is outside project directory",
         )
 
-    return target
+    # Also verify the parent is inside the project (catches edge cases where
+    # the leaf doesn't exist yet but the parent is a symlink outside the root)
+    if resolved != project_root and not resolved.parent.resolve().is_relative_to(
+        project_root
+    ):
+        logger.warning(
+            "Path traversal via parent blocked: %s",
+            sanitize_log(user_path),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: path is outside project directory",
+        )
+
+    return resolved
 
 
-def _relative_str(absolute: Path) -> str:
-    """Return the path relative to the project root as a forward-slash string."""
-    project_dir = get_project_dir().resolve()
-    try:
-        return absolute.relative_to(project_dir).as_posix()
-    except ValueError:
-        return absolute.as_posix()
+def _safe_relative_path(absolute: Path) -> str:
+    """Return the path relative to the project root as a forward-slash string.
+
+    Uses only the validated *absolute* path -- never raw user input.
+    """
+    project_root = get_project_dir().resolve()
+    if absolute.is_relative_to(project_root):
+        return absolute.relative_to(project_root).as_posix()
+    return absolute.as_posix()
 
 
 def _is_binary(file_path: Path) -> bool:
@@ -159,6 +196,45 @@ def _is_binary(file_path: Path) -> bool:
     return False
 
 
+@contextmanager
+def _handle_file_errors(operation: str):
+    """Context manager that catches common filesystem exceptions and converts
+    them into appropriate ``HTTPException`` responses.
+
+    ``HTTPException`` instances raised inside the block propagate unchanged.
+
+    Args:
+        operation: Human-readable operation name used in generic error messages
+                   (e.g. ``"list directory"``, ``"read file"``).
+    """
+    try:
+        yield
+    except HTTPException:
+        raise
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File is not valid UTF-8 text",
+        )
+    except (LookupError, UnicodeEncodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Encoding error: {exc}",
+        )
+    except OSError as exc:
+        logger.error("OS error during %s: %s", operation, exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to {operation} due to a filesystem error",
+        )
+    except Exception as exc:
+        logger.error("Unexpected error during %s: %s", operation, exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to {operation} due to an internal error",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -166,7 +242,9 @@ def _is_binary(file_path: Path) -> bool:
 
 @router.get("/list", response_model=FileListResponse, status_code=status.HTTP_200_OK)
 async def list_files(
-    path: str = Query(default="", description="Directory path relative to project root"),
+    path: str = Query(
+        default="", description="Directory path relative to project root"
+    ),
     auth: Annotated[dict, Depends(require_auth)] = None,
 ):
     """
@@ -188,60 +266,47 @@ async def list_files(
         # Returns: {"path": "apps/web-backend", "entries": [...]}
         ```
     """
-    try:
+    with _handle_file_errors("list directory"):
         logger.info("File list request: path=%s", sanitize_log(path))
 
-        target = _resolve_safe_path(path)
+        target = _validate_and_resolve_path(path)
+        safe_path = _safe_relative_path(target)
 
         if not target.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Path not found: {path}",
+                detail=f"Path not found: {safe_path}",
             )
 
         if not target.is_dir():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Path is not a directory: {path}",
+                detail=f"Path is not a directory: {safe_path}",
             )
 
         entries: list[FileEntry] = []
-        for child in sorted(target.iterdir(), key=lambda p: (p.is_file(), p.name.lower())):
+        for child in sorted(
+            target.iterdir(), key=lambda p: (p.is_file(), p.name.lower())
+        ):
             entry_type = "file" if child.is_file() else "directory"
             size = child.stat().st_size if child.is_file() else None
             extension = child.suffix if child.is_file() else None
             entries.append(
                 FileEntry(
                     name=child.name,
-                    path=_relative_str(child),
+                    path=_safe_relative_path(child),
                     type=entry_type,
                     size=size,
                     extension=extension if extension else None,
                 )
             )
 
-        return FileListResponse(
-            path=_relative_str(target),
-            entries=entries,
-        )
-
-    except HTTPException:
-        raise
-    except OSError as e:
-        logger.error("OS error listing files: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list directory due to a filesystem error",
-        )
-    except Exception as e:
-        logger.error("Unexpected error listing files: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list directory due to an internal error",
-        )
+        return FileListResponse(path=safe_path, entries=entries)
 
 
-@router.get("/content", response_model=FileContentResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/content", response_model=FileContentResponse, status_code=status.HTTP_200_OK
+)
 async def get_file_content(
     path: str = Query(..., description="File path relative to project root"),
     auth: Annotated[dict, Depends(require_auth)] = None,
@@ -265,67 +330,53 @@ async def get_file_content(
         # Returns: {"path": "...", "content": "...", "size": 1234}
         ```
     """
-    try:
+    with _handle_file_errors("read file"):
         logger.info("File content request: path=%s", sanitize_log(path))
 
-        target = _resolve_safe_path(path)
+        target = _validate_and_resolve_path(path)
+        safe_path = _safe_relative_path(target)
 
         if not target.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"File not found: {path}",
+                detail=f"File not found: {safe_path}",
             )
 
         if not target.is_file():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Path is not a file: {path}",
+                detail=f"Path is not a file: {safe_path}",
             )
 
         file_size = target.stat().st_size
         if file_size > MAX_FILE_SIZE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File too large ({file_size} bytes). Maximum allowed size is {MAX_FILE_SIZE_BYTES} bytes.",
+                detail=(
+                    f"File too large ({file_size} bytes). "
+                    f"Maximum allowed size is {MAX_FILE_SIZE_BYTES} bytes."
+                ),
             )
 
         if _is_binary(target):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File appears to be binary and cannot be returned as text: {path}",
+                detail=f"File appears to be binary and cannot be returned as text: {safe_path}",
             )
 
         content = target.read_text(encoding="utf-8")
 
         return FileContentResponse(
-            path=_relative_str(target),
+            path=safe_path,
             content=content,
             size=file_size,
             encoding="utf-8",
         )
 
-    except HTTPException:
-        raise
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File is not valid UTF-8 text: {path}",
-        )
-    except OSError as e:
-        logger.error("OS error reading file: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to read file due to a filesystem error",
-        )
-    except Exception as e:
-        logger.error("Unexpected error reading file: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to read file due to an internal error",
-        )
 
-
-@router.put("/content", response_model=FileWriteResponse, status_code=status.HTTP_200_OK)
+@router.put(
+    "/content", response_model=FileWriteResponse, status_code=status.HTTP_200_OK
+)
 async def put_file_content(
     request: FileWriteRequest,
     auth: Annotated[dict, Depends(require_auth)] = None,
@@ -351,51 +402,42 @@ async def put_file_content(
         # Returns: {"path": "...", "size": 7, "message": "File written successfully"}
         ```
     """
-    try:
+    with _handle_file_errors("write file"):
         logger.info("File write request: path=%s", sanitize_log(request.path))
 
-        target = _resolve_safe_path(request.path)
+        target = _validate_and_resolve_path(request.path)
+        safe_path = _safe_relative_path(target)
 
         if target.exists() and target.is_dir():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Path is a directory, cannot write file: {request.path}",
+                detail=f"Path is a directory, cannot write file: {safe_path}",
             )
 
-        # Ensure parent directory exists
+        # Validate parent is also within project before creating directories
+        parent = target.parent.resolve()
+        project_root = get_project_dir().resolve()
+        if not parent.is_relative_to(project_root):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: path is outside project directory",
+            )
+
         target.parent.mkdir(parents=True, exist_ok=True)
 
         encoded = request.content.encode(request.encoding)
         target.write_bytes(encoded)
 
         return FileWriteResponse(
-            path=_relative_str(target),
+            path=safe_path,
             size=len(encoded),
             message="File written successfully",
         )
 
-    except HTTPException:
-        raise
-    except (LookupError, UnicodeEncodeError) as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Encoding error: {e}",
-        )
-    except OSError as e:
-        logger.error("OS error writing file: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to write file due to a filesystem error",
-        )
-    except Exception as e:
-        logger.error("Unexpected error writing file: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to write file due to an internal error",
-        )
 
-
-@router.post("/mkdir", response_model=MkdirResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/mkdir", response_model=MkdirResponse, status_code=status.HTTP_201_CREATED
+)
 async def make_directory(
     request: MkdirRequest,
     auth: Annotated[dict, Depends(require_auth)] = None,
@@ -421,43 +463,31 @@ async def make_directory(
         # Returns: {"path": "...", "message": "Directory created successfully"}
         ```
     """
-    try:
+    with _handle_file_errors("create directory"):
         logger.info("Mkdir request: path=%s", sanitize_log(request.path))
 
-        target = _resolve_safe_path(request.path)
+        target = _validate_and_resolve_path(request.path)
+        safe_path = _safe_relative_path(target)
 
         if target.exists() and target.is_file():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Path already exists as a file: {request.path}",
+                detail=f"Path already exists as a file: {safe_path}",
             )
 
         target.mkdir(parents=True, exist_ok=True)
 
         return MkdirResponse(
-            path=_relative_str(target),
+            path=safe_path,
             message="Directory created successfully",
-        )
-
-    except HTTPException:
-        raise
-    except OSError as e:
-        logger.error("OS error creating directory: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create directory due to a filesystem error",
-        )
-    except Exception as e:
-        logger.error("Unexpected error creating directory: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create directory due to an internal error",
         )
 
 
 @router.delete("", response_model=DeleteResponse, status_code=status.HTTP_200_OK)
 async def delete_path(
-    path: str = Query(..., description="File or directory path relative to project root"),
+    path: str = Query(
+        ..., description="File or directory path relative to project root"
+    ),
     auth: Annotated[dict, Depends(require_auth)] = None,
 ):
     """
@@ -481,14 +511,15 @@ async def delete_path(
         # Returns: {"path": "...", "message": "Deleted successfully"}
         ```
     """
-    try:
+    with _handle_file_errors("delete path"):
         logger.info("Delete request: path=%s", sanitize_log(path))
 
-        target = _resolve_safe_path(path)
-        project_dir = get_project_dir().resolve()
+        target = _validate_and_resolve_path(path)
+        project_root = get_project_dir().resolve()
+        safe_path = _safe_relative_path(target)
 
         # Prevent deleting the project root
-        if target == project_dir:
+        if target == project_root:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Deletion of the project root directory is not permitted",
@@ -497,33 +528,17 @@ async def delete_path(
         if not target.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Path not found: {path}",
+                detail=f"Path not found: {safe_path}",
             )
 
         if target.is_file():
             target.unlink()
         else:
-            import shutil
             shutil.rmtree(target)
 
         return DeleteResponse(
-            path=_relative_str(target),
+            path=safe_path,
             message="Deleted successfully",
-        )
-
-    except HTTPException:
-        raise
-    except OSError as e:
-        logger.error("OS error deleting path: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete path due to a filesystem error",
-        )
-    except Exception as e:
-        logger.error("Unexpected error deleting path: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete path due to an internal error",
         )
 
 

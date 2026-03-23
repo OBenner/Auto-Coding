@@ -8,7 +8,6 @@ error handling, path traversal prevention, and response formats.
 import pytest
 from httpx import AsyncClient
 
-
 # ---------------------------------------------------------------------------
 # Health endpoint (no auth required)
 # ---------------------------------------------------------------------------
@@ -262,7 +261,7 @@ async def test_get_file_content_success(
     data = response.json()
     assert data["path"] == "hello.txt"
     assert data["content"] == "Hello, world!"
-    assert data["size"] == len("Hello, world!".encode("utf-8"))
+    assert data["size"] == len(b"Hello, world!")
     assert data["encoding"] == "utf-8"
 
 
@@ -559,7 +558,9 @@ async def test_delete_path_with_expired_token(
 ):
     """Test that delete_path rejects expired tokens"""
     headers = {"Authorization": f"Bearer {expired_token}"}
-    response = await async_client.delete("/api/files?path=somefile.txt", headers=headers)
+    response = await async_client.delete(
+        "/api/files?path=somefile.txt", headers=headers
+    )
     assert response.status_code == 401
 
 
@@ -567,7 +568,9 @@ async def test_delete_path_with_expired_token(
 async def test_delete_path_with_invalid_token(async_client: AsyncClient):
     """Test that delete_path rejects invalid tokens"""
     headers = {"Authorization": "Bearer bad-token"}
-    response = await async_client.delete("/api/files?path=somefile.txt", headers=headers)
+    response = await async_client.delete(
+        "/api/files?path=somefile.txt", headers=headers
+    )
     assert response.status_code == 401
 
 
@@ -677,9 +680,7 @@ async def test_delete_project_root_forbidden(
 
 
 @pytest.mark.asyncio
-async def test_delete_missing_path_param(
-    async_client: AsyncClient, auth_headers: dict
-):
+async def test_delete_missing_path_param(async_client: AsyncClient, auth_headers: dict):
     """Test delete with missing required path query parameter"""
     response = await async_client.delete("/api/files", headers=auth_headers)
     assert response.status_code == 422
@@ -693,9 +694,7 @@ async def test_delete_missing_path_param(
 @pytest.mark.asyncio
 async def test_mkdir_without_auth(async_client: AsyncClient):
     """Test that mkdir requires authentication"""
-    response = await async_client.post(
-        "/api/files/mkdir", json={"path": "newdir"}
-    )
+    response = await async_client.post("/api/files/mkdir", json={"path": "newdir"})
     assert response.status_code == 401
     data = response.json()
     assert "detail" in data
@@ -703,9 +702,7 @@ async def test_mkdir_without_auth(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_mkdir_with_expired_token(
-    async_client: AsyncClient, expired_token: str
-):
+async def test_mkdir_with_expired_token(async_client: AsyncClient, expired_token: str):
     """Test that mkdir rejects expired tokens"""
     headers = {"Authorization": f"Bearer {expired_token}"}
     response = await async_client.post(

@@ -55,10 +55,7 @@ async def _noop_broadcast(*args, **kwargs):
     """No-op broadcast function when WebSocket module is unavailable."""
 
 
-def _sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
-
+from core import sanitize_log as _sanitize_log
 
 # Keep track of running agent tasks
 _running_tasks: dict[str, asyncio.Task] = {}
