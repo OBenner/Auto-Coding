@@ -94,6 +94,9 @@ htmlcov/
 .tox/
 .nox/
 coverage.xml
+coverage.json
+coverage_report.txt
+coverage_*.txt
 *.cover
 *.py,cover
 .hypothesis/
