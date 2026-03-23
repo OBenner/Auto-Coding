@@ -41,6 +41,23 @@ class EnvVariable:
         self.section = section
 
 
+def _mask_secret(value: str) -> str:
+    """Mask a secret value for safe display.
+
+    Shows only the first 4 characters followed by '***' for longer values,
+    or '(hidden, length=N)' for short values (4 chars or fewer).
+
+    Args:
+        value: The secret value to mask.
+
+    Returns:
+        Masked string safe for printing.
+    """
+    if len(value) <= 4:
+        return f"(hidden, length={len(value)})"
+    return value[:4] + "***"
+
+
 class EnvConfigurator:
     """Manages environment configuration from .env.example to .env."""
 
@@ -98,6 +115,16 @@ class EnvConfigurator:
                     if re.match(r"^[A-Z_][A-Z0-9_]*\s*=", stripped):
                         parts = stripped.split("=", 1)
                         var_name = parts[0].strip()
+                        # Extract the default value from the right-hand side
+                        raw_default = parts[1].strip() if len(parts) > 1 else ""
+                        # Remove surrounding quotes if present
+                        if (
+                            len(raw_default) >= 2
+                            and raw_default[0] in ('"', "'")
+                            and raw_default[-1] == raw_default[0]
+                        ):
+                            raw_default = raw_default[1:-1]
+                        default_value = raw_default or None
                         description = (
                             " ".join(current_description)
                             if current_description
@@ -110,7 +137,7 @@ class EnvConfigurator:
                         variables.append(
                             EnvVariable(
                                 name=var_name,
-                                value=None,
+                                value=default_value,
                                 description=description,
                                 required=required,
                                 section=current_section,
@@ -213,9 +240,9 @@ class EnvConfigurator:
         if var.description:
             print(f"\n{var.description}")
 
-        # Show current value if exists
+        # Show current value if exists (masked to avoid leaking secrets)
         if existing_value:
-            print(f"Current value: {existing_value}")
+            print(f"Current value: {_mask_secret(existing_value)}")
 
         # Show default from .env.example
         if var.value and var.value != existing_value:

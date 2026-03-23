@@ -30,12 +30,12 @@ from memory.patterns import (
     save_detected_patterns_from_organization,
 )
 
+from memory import (
+    save_session_insights as save_file_based_memory,  # safe: module is memory_manager
+)
+
 if TYPE_CHECKING:
     from agents.session_context import SessionContext
-
-# Import from parent memory package
-# Now safe since this module is named memory_manager (not memory)
-from memory import save_session_insights as save_file_based_memory
 
 logger = logging.getLogger(__name__)
 

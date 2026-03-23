@@ -11,7 +11,8 @@ The `--setup` command orchestrates a complete environment synchronization pipeli
 3. **Environment Configuration** - Creates/updates `.env` from `.env.example` with interactive prompting
 4. **Graphiti Validation** - Validates memory system configuration (LLM + embedder providers)
 5. **Provider Testing** - Tests connectivity to configured LLM/embedder providers
-6. **Report Generation** - Produces a summary with actionable fix recommendations
+
+*Post-processing:* **Report Generation** - Produces a summary with actionable fix recommendations
 
 ## Quick Start
 
@@ -102,9 +103,9 @@ Tests actual connections to configured providers:
 - Embedder provider - tests embedding generation
 - Reports latency and error details for failed connections
 
-### Phase 6: Report Generation
+### Post-processing: Report Generation
 
-Generates a markdown-formatted report with:
+After the 5 phases complete, a markdown-formatted report is generated with:
 
 - Overall status (pass/fail)
 - Per-phase results with timing

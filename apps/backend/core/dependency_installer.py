@@ -191,6 +191,8 @@ class DependencyInstaller:
             return
 
         # Execute install command
+        # TODO: migrate to platform abstraction (core/platform/) for cross-platform
+        # executable resolution (e.g., .cmd/.bat wrappers on Windows).
         try:
             proc_result = subprocess.run(
                 install_cmd,

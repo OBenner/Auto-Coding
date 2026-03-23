@@ -5,6 +5,8 @@ Unit Tests for Env Sync Orchestrator
 Tests for apps/backend/core/env_sync.py
 """
 
+import json
+
 import pytest
 import time
 from pathlib import Path
@@ -20,6 +22,7 @@ from apps.backend.core.env_sync import (
     _generate_report,
     _get_summary,
 )
+from apps.backend.core.provider_tester import ProviderTestResult
 
 
 class TestEnvSyncResult:
@@ -170,10 +173,12 @@ class TestRunEnvSync:
                         mock_graphiti.return_value = mock_graphiti_result
 
                         with patch("apps.backend.core.env_sync._test_providers") as mock_providers:
-                            mock_provider_result = MagicMock()
-                            mock_provider_result.success = True
-                            mock_provider_result.message = "Connected"
-                            mock_providers.return_value = {"openai": mock_provider_result}
+                            real_provider_result = ProviderTestResult(
+                                success=True,
+                                message="Connected",
+                                provider="openai",
+                            )
+                            mock_providers.return_value = {"openai": real_provider_result}
 
                             with patch("builtins.print"):
                                 result = run_env_sync(project_dir=str(tmp_path), verbose=False)
@@ -190,6 +195,9 @@ class TestRunEnvSync:
                             assert "warnings" in result
                             assert "fixes" in result
                             assert "report" in result
+
+                            # Verify result is fully JSON-serializable
+                            json.dumps(result, default=str)
 
     def test_run_env_sync_error_handling(self, tmp_path):
         """Test error handling when dependencies fail."""

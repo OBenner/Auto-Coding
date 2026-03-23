@@ -553,7 +553,8 @@ Environment Variables:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="With --setup: show what would be done without executing (dry-run mode)",
+        help="Preview mode: with --setup shows planned changes without executing; "
+        "with --batch-cleanup previews deletions (opposite of --no-dry-run)",
     )
     parser.add_argument(
         "--skip-install",

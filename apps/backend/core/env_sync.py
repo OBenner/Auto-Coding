@@ -4,13 +4,14 @@ Environment Sync Orchestrator
 
 One-command environment setup for Auto Code projects.
 
-Orchestrates:
+Orchestrates 5 phases:
 1. Package manager detection
 2. Dependency installation
 3. Environment configuration (.env setup)
 4. Graphiti memory validation
 5. LLM provider connection testing
-6. Setup report generation
+
+Post-processing: Setup report generation
 
 Usage:
     from core.env_sync import run_env_sync
@@ -36,6 +37,28 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _serialize_provider_results(
+    results: dict[str, Any],
+) -> dict[str, Any]:
+    """Convert ProviderTestResult objects to plain dicts for JSON serialization.
+
+    Args:
+        results: Dict mapping provider name to ProviderTestResult (or already-dict).
+
+    Returns:
+        Dict of plain dicts safe for ``json.dumps()``.
+    """
+    serialized: dict[str, Any] = {}
+    for key, value in results.items():
+        if hasattr(value, "__dict__"):
+            serialized[key] = vars(value)
+        elif isinstance(value, dict):
+            serialized[key] = value
+        else:
+            serialized[key] = str(value)
+    return serialized
 
 
 class EnvSyncResult:
@@ -101,7 +124,7 @@ class EnvSyncResult:
             "installation": installation,
             "configuration": self.configuration_result,
             "graphiti": graphiti,
-            "providers": self.provider_results,
+            "providers": _serialize_provider_results(self.provider_results),
             "issues": self.issues,
             "warnings": self.warnings,
             "fixes": self.fixes,
@@ -166,6 +189,11 @@ def run_env_sync(
             print("\n[1/5] Detecting package managers...")
 
         result.detection_result = _detect_packages(project_path, verbose)
+        if not result.detection_result:
+            result.issues.append(
+                "Package detection returned no results — "
+                "verify the project directory is correct"
+            )
 
         # Phase 2: Dependency Installation
         if not skip_install:
@@ -178,6 +206,10 @@ def run_env_sync(
                 dry_run,
                 verbose,
             )
+            if result.installation_result is None:
+                result.issues.append(
+                    "Dependency installation phase failed to produce a result"
+                )
 
             # Collect installation issues
             if result.installation_result and result.installation_result.failed:
@@ -200,6 +232,10 @@ def run_env_sync(
                 dry_run,
                 verbose,
             )
+            if not result.configuration_result:
+                result.issues.append(
+                    "Environment configuration phase failed to produce a result"
+                )
 
             # Collect configuration issues
             if result.configuration_result and not result.configuration_result.get(
@@ -217,6 +253,11 @@ def run_env_sync(
                 print("\n[4/5] Validating Graphiti memory system...")
 
             result.graphiti_result = _validate_graphiti(verbose)
+            if result.graphiti_result is None:
+                result.warnings.append(
+                    "Graphiti validation phase returned no result — "
+                    "memory system status unknown"
+                )
 
             # Collect Graphiti issues
             if result.graphiti_result:
@@ -298,7 +339,7 @@ def run_env_sync(
             "installation": None,
             "configuration": result.configuration_result,
             "graphiti": None,
-            "providers": result.provider_results,
+            "providers": _serialize_provider_results(result.provider_results),
             "issues": result.issues,
             "warnings": result.warnings,
             "fixes": result.fixes,
@@ -398,6 +439,17 @@ def _configure_environment(
         if configurator.env_file.exists() and not interactive:
             if verbose:
                 print("  ✓ .env file already exists")
+            # Still validate that required vars are present in the existing file
+            validation = configurator.validate_required_vars()
+            if not validation["valid"]:
+                missing = validation["missing_required"]
+                return {
+                    "success": False,
+                    "variables_configured": 0,
+                    "errors": [
+                        f"Existing .env is missing required variables: {', '.join(missing)}"
+                    ],
+                }
             return {"success": True, "variables_configured": 0, "errors": []}
 
         # Create or update .env

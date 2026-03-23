@@ -483,13 +483,8 @@ async def _test_ollama(
             error_details="Standard library import failed",
         )
 
-    try:
-        # Normalize URL (remove /v1 suffix if present)
-        url = base_url.rstrip("/")
-        if url.endswith("/v1"):
-            url = url[:-3]
-
-        # Test server connectivity with /api/tags endpoint
+    def _blocking_ollama_request(url: str, model: str | None) -> ProviderTestResult:
+        """Synchronous Ollama connectivity check (run in a thread)."""
         req = urllib.request.Request(f"{url}/api/tags", method="GET")
         with urllib.request.urlopen(req, timeout=5) as response:
             if response.status != 200:
@@ -500,13 +495,11 @@ async def _test_ollama(
                     fix_command="Check Ollama server is running: ollama serve",
                 )
 
-            # Parse response to get available models
-            import json
+            import json as _json
 
-            data = json.loads(response.read())
+            data = _json.loads(response.read())
             models = data.get("models", [])
 
-            # If specific model requested, check if available
             if model:
                 model_names = [m.get("name", "") for m in models]
                 if model not in model_names:
@@ -526,6 +519,15 @@ async def _test_ollama(
                 message=f"Ollama connection successful{model_info}",
                 provider="ollama",
             )
+
+    try:
+        # Normalize URL (remove /v1 suffix if present)
+        url = base_url.rstrip("/")
+        if url.endswith("/v1"):
+            url = url[:-3]
+
+        # Run the blocking urllib call in a thread to avoid blocking the event loop
+        return await asyncio.to_thread(_blocking_ollama_request, url, model)
 
     except urllib.error.URLError as e:
         return ProviderTestResult(
@@ -708,7 +710,11 @@ def get_provider_from_env() -> str | None:
         return "azure_openai"
     elif os.environ.get("GOOGLE_API_KEY"):
         return "google"
-    elif os.environ.get("OLLAMA_BASE_URL") or os.environ.get("OLLAMA_LLM_MODEL"):
+    elif (
+        os.environ.get("OLLAMA_BASE_URL")
+        or os.environ.get("OLLAMA_LLM_MODEL")
+        or os.environ.get("OLLAMA_EMBEDDING_MODEL")
+    ):
         return "ollama"
     elif os.environ.get("OPENROUTER_API_KEY"):
         return "openrouter"
@@ -740,7 +746,11 @@ def check_all_configured_providers() -> dict[str, ProviderTestResult]:
     if os.environ.get("GOOGLE_API_KEY"):
         results["google"] = check_provider_connection("google")
 
-    if os.environ.get("OLLAMA_BASE_URL") or os.environ.get("OLLAMA_LLM_MODEL"):
+    if (
+        os.environ.get("OLLAMA_BASE_URL")
+        or os.environ.get("OLLAMA_LLM_MODEL")
+        or os.environ.get("OLLAMA_EMBEDDING_MODEL")
+    ):
         results["ollama"] = check_provider_connection("ollama")
 
     if os.environ.get("OPENROUTER_API_KEY"):

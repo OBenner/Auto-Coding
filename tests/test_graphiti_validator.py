@@ -263,12 +263,10 @@ class TestValidateDatabaseBackend:
                 raise ImportError(f"Unknown module {name}")
 
             with patch("builtins.__import__", side_effect=mock_import):
-                # We need to patch the actual import statements
-                with patch.dict("sys.modules", {"kuzu": MagicMock()}):
-                    result = _validate_database_backend(verbose=False)
+                result = _validate_database_backend(verbose=False)
 
-                    assert result.success is True
-                    assert "Kuzu available" in result.message
+                assert result.success is True
+                assert "Kuzu available" in result.message
 
     def test_validate_database_backend_old_python_version(self):
         """Test validation fails on Python < 3.12."""

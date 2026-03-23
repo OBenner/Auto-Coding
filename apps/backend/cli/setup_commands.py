@@ -96,6 +96,13 @@ def handle_setup_command(
         return result
 
     except Exception as e:
+        # Re-raise fatal exceptions that should not be caught
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+
+        # Broad catch is intentional: run_env_sync may raise diverse errors
+        # from subprocess calls, file I/O, network requests, etc. We convert
+        # them into a structured error result for the caller / JSON output.
         error_result = {
             "success": False,
             "duration": "0s",

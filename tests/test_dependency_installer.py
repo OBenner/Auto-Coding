@@ -103,9 +103,10 @@ class TestDependencyInstaller:
 
             # Verify both package managers were installed
             assert result.success is True
-            assert ("npm", ".") in result.installed or ("pip", "backend") in result.installed
-            # At least one subprocess call should have been made
-            assert mock_run.call_count >= 1
+            assert ("npm", ".") in result.installed
+            assert ("pip", "backend") in result.installed
+            # Both package managers should trigger a subprocess call
+            assert mock_run.call_count == 2
 
     def test_install_timeout_handling(self, tmp_path):
         """Test timeout handling for long-running installation."""

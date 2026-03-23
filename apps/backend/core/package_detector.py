@@ -26,6 +26,26 @@ _SKIP_DIRS = {
 }
 
 
+def _normalize_rel_path(manifest_dir: Path, root: Path) -> str:
+    """Normalize a manifest directory to a forward-slash relative path string.
+
+    Args:
+        manifest_dir: Absolute path to the directory containing a manifest.
+        root: Project root directory.
+
+    Returns:
+        Relative path string using forward slashes, or "." for the root itself.
+
+    Raises:
+        ValueError: If manifest_dir is not relative to root.
+    """
+    rel_path = manifest_dir.relative_to(root)
+    rel_str = str(rel_path)
+    if rel_str == ".":
+        return "."
+    return rel_str.replace("\\", "/")
+
+
 def _should_skip_directory(dir_path: Path, root: Path) -> bool:
     """
     Check if a directory should be skipped during scanning.
@@ -104,12 +124,7 @@ def detect_package_managers(project_dir: str) -> dict[str, list[str]]:
                 pm_name = filename_to_pm[filename]
                 manifest_dir = Path(dirpath)
                 try:
-                    rel_path = manifest_dir.relative_to(root)
-                    rel_str = (
-                        "."
-                        if str(rel_path) == "."
-                        else str(rel_path).replace("\\", "/")
-                    )
+                    rel_str = _normalize_rel_path(manifest_dir, root)
                     if rel_str not in results[pm_name]:
                         results[pm_name].append(rel_str)
                 except ValueError:
@@ -152,12 +167,7 @@ def _detect_additional_python_projects(
             if filename in target_set:
                 manifest_dir = Path(dirpath)
                 try:
-                    rel_path = manifest_dir.relative_to(root)
-                    rel_str = (
-                        "."
-                        if str(rel_path) == "."
-                        else str(rel_path).replace("\\", "/")
-                    )
+                    rel_str = _normalize_rel_path(manifest_dir, root)
 
                     # Only add if not already detected via requirements.txt
                     if rel_str not in existing_pip_dirs:
