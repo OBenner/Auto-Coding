@@ -29,8 +29,7 @@ from memory.patterns import (
     save_detected_patterns_from_naming,
     save_detected_patterns_from_organization,
 )
-
-from memory import save_session_insights as save_file_based_memory
+from memory.sessions import save_session_insights as save_file_based_memory
 
 if TYPE_CHECKING:
     from agents.session_context import SessionContext
