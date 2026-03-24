@@ -483,7 +483,7 @@ class TestPatternLibraryGenerator:
         generator = PatternLibraryGenerator(temp_project_dir)
 
         assert generator is not None
-        assert generator.project_dir == temp_project_dir
+        assert generator.project_dir == temp_project_dir.resolve()
 
     def test_generator_creates_valid_module(self, temp_project_dir, temp_output_dir):
         """Generated module is valid Python code."""
