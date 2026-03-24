@@ -758,6 +758,12 @@ export const IPC_CHANNELS = {
   SESSION_REPLAY_EXPORT_SESSION: 'sessionReplay:exportSession',
   SESSION_REPLAY_EXPORT_ALL: 'sessionReplay:exportAll',
 
+  // Agent Inspector operations (thought process transparency)
+  AGENT_INSPECTOR_GET_THOUGHTS: 'agentInspector:getThoughts',
+  AGENT_INSPECTOR_GET_TOOL_CALLS: 'agentInspector:getToolCalls',
+  AGENT_INSPECTOR_GET_INSPECTOR_DATA: 'agentInspector:getInspectorData',
+  AGENT_INSPECTOR_EXPORT_SESSION: 'agentInspector:exportSession',
+
   // Feedback submission (adaptive agent learning)
   FEEDBACK_SUBMIT: 'feedback:submit',
 

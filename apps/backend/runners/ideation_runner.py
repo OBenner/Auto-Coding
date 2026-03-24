@@ -59,6 +59,10 @@ __all__ = [
 
 def main():
     """CLI entry point."""
+    # Validate platform-specific dependencies before running
+    # This is called here (not at module level) to avoid blocking pytest collection
+    validate_platform_dependencies()
+
     import argparse
 
     # Validate platform-specific dependencies before running

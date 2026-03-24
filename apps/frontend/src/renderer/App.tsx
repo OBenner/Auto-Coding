@@ -48,6 +48,7 @@ import { CalendarView } from './components/Scheduler/CalendarView';
 import { QueueView } from './components/Scheduler/QueueView';
 import { Worktrees } from './components/Worktrees';
 import { SessionList } from './components/session-replay/SessionList';
+import { ThoughtInspector } from './components/agent-inspector/ThoughtInspector';
 import { AgentTools } from './components/AgentTools';
 import { WebhooksPage } from './components/WebhooksPage';
 import { PatternsPage } from './pages/PatternsPage';
@@ -1110,6 +1111,9 @@ export function App() {
                     projectId={activeProjectId || selectedProjectId!}
                     specId={sessionFilterSpecId}
                   />
+                )}
+                {activeView === 'agent-inspector' && (activeProjectId || selectedProjectId) && (
+                  <ThoughtInspector projectPath={selectedProject?.path ?? ''} specId={sessionFilterSpecId} />
                 )}
                 {activeView === 'productivity' && (activeProjectId || selectedProjectId) && (
                   <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />

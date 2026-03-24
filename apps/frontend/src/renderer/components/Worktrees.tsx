@@ -46,6 +46,7 @@ import {
 } from './ui/alert-dialog';
 import { useProjectStore } from '../stores/project-store';
 import { useTaskStore } from '../stores/task-store';
+import { useShallow } from 'zustand/react/shallow';
 import type { WorktreeListItem, WorktreeMergeResult, TerminalWorktreeConfig, WorktreeStatus, Task, WorktreeCreatePROptions, WorktreeCreatePRResult } from '../../shared/types';
 import { CreatePRDialog } from './task-detail/task-review/CreatePRDialog';
 
@@ -59,9 +60,9 @@ interface WorktreesProps {
 
 export function Worktrees({ projectId }: WorktreesProps) {
   const { t } = useTranslation(['common', 'dialogs']);
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore(useShallow((state) => state.projects));
   const selectedProject = projects.find((p) => p.id === projectId);
-  const tasks = useTaskStore((state) => state.tasks);
+  const tasks = useTaskStore(useShallow((state) => state.tasks));
 
   const [worktrees, setWorktrees] = useState<WorktreeListItem[]>([]);
   const [terminalWorktrees, setTerminalWorktrees] = useState<TerminalWorktreeConfig[]>([]);

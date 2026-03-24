@@ -1,6 +1,6 @@
 # Auto Code CLI Usage
 
-This document covers terminal-only usage of Auto Code. **For most users, we recommend using the [Desktop UI](#) instead** - it provides a better experience with visual task management, progress tracking, and automatic Python environment setup.
+This document covers terminal-only usage of Auto Code. **For most users, we recommend using the [Desktop UI](#) or the [Web-Based IDE Interface](../docs/features/WEB-IDE-INTERFACE.md) instead** - they provide a better experience with visual task management, progress tracking, and automatic Python environment setup.
 
 ## When to Use CLI
 
@@ -36,6 +36,27 @@ sudo dnf install python3.12
 ```
 
 ## Setup
+
+### Automated Setup (Recommended)
+
+Use the `--setup` command to automatically detect, install, and configure everything:
+
+```bash
+cd apps/backend
+
+# Interactive setup — detects packages, installs deps, configures .env, validates providers
+python run.py --setup
+
+# Preview what would be done without making changes
+python run.py --setup --dry-run
+
+# Non-interactive (for CI/automation)
+python run.py --setup --non-interactive --json
+```
+
+The setup wizard runs 5 phases: package detection, dependency installation, `.env` configuration, Graphiti validation, and LLM provider connectivity testing. See [Environment Sync docs](../docs/features/ENVIRONMENT-SYNC.md) for details.
+
+### Manual Setup
 
 **Step 1:** Navigate to the backend directory
 
@@ -214,3 +235,19 @@ cp .env.example .env
 | `GRAPHITI_EMBEDDER_PROVIDER` | No | Embedder: openai, voyage, ollama, google, openrouter |
 
 See `.env.example` for complete configuration options including provider-specific settings.
+
+## Web-Based IDE Alternative
+
+Auto Code also provides a web-based IDE interface for browser-based access. This is useful when you want a graphical interface without installing the Electron desktop app.
+
+```bash
+# Start the web backend
+cd apps/web-backend
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Start the web frontend (in a separate terminal)
+cd apps/web-frontend
+npm run dev
+```
+
+The web IDE provides file browsing, code editing, agent execution, real-time progress monitoring, and a web terminal. See [Web IDE Interface documentation](../docs/features/WEB-IDE-INTERFACE.md) for details.

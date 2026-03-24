@@ -1052,6 +1052,8 @@ export interface ElectronAPI {
   pattern: import('../../preload/api/modules/pattern-api').PatternAPI;
   // Session Replay API for learning and review
   sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
+  // Agent Inspector API for thought process transparency
+  agentInspector: import('../../preload/api/modules/agent-inspector-api').AgentInspectorAPI;
   // Scheduler API for build scheduling and queue management
   scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
   // Code Search API for codebase search and saved searches

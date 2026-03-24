@@ -56,6 +56,8 @@ interface LogEntry {
   subtask_id?: string;
   session?: number;
   tool_name?: string;
+  tool_input?: string | Record<string, unknown>;
+  thinking_block?: string;
   is_decision_point?: boolean;
   decision_point?: ReplayDecisionPoint;
 }
@@ -313,6 +315,183 @@ function exportAllAsMarkdown(logs: TaskLogs): string {
   }
 
   return markdown;
+}
+
+/**
+ * Agent thinking block data structure used by inspector handlers
+ */
+interface AgentThinkingBlock {
+  id: string;
+  timestamp: string;
+  phase: string;
+  subtask?: string;
+  content: string;
+  session?: number;
+}
+
+/**
+ * Agent tool call data structure used by inspector handlers
+ */
+interface AgentInspectorToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  output?: Record<string, unknown> | string;
+  timestamp: string;
+  phase?: string;
+  subtask?: string;
+  session?: number;
+  success?: boolean;
+  error?: string;
+  duration_ms?: number;
+}
+
+/**
+ * Extract thinking blocks from task logs, optionally filtered by session
+ */
+function extractThoughts(logs: TaskLogs, sessionId?: string): AgentThinkingBlock[] {
+  const thoughts: AgentThinkingBlock[] = [];
+  let thoughtIdCounter = 0;
+
+  for (const phaseData of Object.values(logs.phases)) {
+    for (const entry of phaseData.entries) {
+      if (
+        entry.type === 'thinking' ||
+        (entry.thinking_block && entry.thinking_block.trim() !== '')
+      ) {
+        if (sessionId !== undefined) {
+          const numericSessionId = Number.parseInt(sessionId, 10);
+          if (entry.session !== numericSessionId) {
+            continue;
+          }
+        }
+
+        thoughts.push({
+          id: `thought-${thoughtIdCounter++}`,
+          timestamp: entry.timestamp,
+          phase: entry.phase,
+          subtask: entry.subtask_id,
+          content: entry.thinking_block || entry.content,
+          session: entry.session,
+        });
+      }
+    }
+  }
+
+  // Sort by timestamp (newest first)
+  thoughts.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  return thoughts;
+}
+
+/**
+ * Extract tool calls from task logs, optionally filtered by session.
+ * Shared helper used by both GET_TOOL_CALLS and GET_INSPECTOR_DATA handlers.
+ */
+function extractToolCalls(logs: TaskLogs, sessionId?: string): AgentInspectorToolCall[] {
+  // Use per-tool FIFO queues with unique IDs to avoid composite key collisions
+  let nextId = 0;
+  const completedCalls: AgentInspectorToolCall[] = [];
+  // Per-tool-name queue of pending (unmatched) tool_start entries
+  const pendingByTool = new Map<string, AgentInspectorToolCall[]>();
+
+  for (const phaseData of Object.values(logs.phases)) {
+    for (const entry of phaseData.entries) {
+      // Filter by session if provided
+      if (sessionId !== undefined) {
+        const numericSessionId = Number.parseInt(sessionId, 10);
+        if (entry.session !== numericSessionId) {
+          continue;
+        }
+      }
+
+      // Process tool_start entries
+      if (entry.type === 'tool_start' && entry.tool_name) {
+        const toolId = `tool-${nextId++}`;
+
+        let parsedInput: Record<string, unknown> = {};
+        if (entry.tool_input) {
+          try {
+            parsedInput = typeof entry.tool_input === 'string'
+              ? JSON.parse(entry.tool_input)
+              : entry.tool_input;
+          } catch {
+            parsedInput = { raw: entry.tool_input };
+          }
+        }
+
+        const toolCall: AgentInspectorToolCall = {
+          id: toolId,
+          name: entry.tool_name,
+          input: parsedInput,
+          timestamp: entry.timestamp,
+          phase: entry.phase,
+          subtask: entry.subtask_id,
+          session: entry.session,
+          success: undefined,
+          output: undefined,
+          error: undefined,
+          duration_ms: undefined,
+        };
+
+        // Add to per-tool pending queue
+        const queue = pendingByTool.get(entry.tool_name) || [];
+        queue.push(toolCall);
+        pendingByTool.set(entry.tool_name, queue);
+      }
+
+      // Process tool_end entries — match FIFO from the same tool's pending queue
+      if (entry.type === 'tool_end' && entry.tool_name) {
+        const queue = pendingByTool.get(entry.tool_name);
+        if (queue && queue.length > 0) {
+          const toolCall = queue.shift()!;
+
+          let parsedOutput: Record<string, unknown> | string | undefined;
+          if (entry.content) {
+            try {
+              parsedOutput = JSON.parse(entry.content);
+            } catch {
+              parsedOutput = entry.content;
+            }
+          }
+
+          toolCall.output = parsedOutput;
+          toolCall.success = true;
+
+          const startTime = new Date(toolCall.timestamp).getTime();
+          const endTime = new Date(entry.timestamp).getTime();
+          toolCall.duration_ms = endTime - startTime;
+
+          completedCalls.push(toolCall);
+        }
+      }
+
+      // Process error entries for tool calls
+      if (entry.type === 'error' && entry.tool_name) {
+        const queue = pendingByTool.get(entry.tool_name);
+        if (queue && queue.length > 0) {
+          const toolCall = queue.shift()!;
+          toolCall.success = false;
+          toolCall.error = entry.content;
+          completedCalls.push(toolCall);
+        }
+      }
+    }
+  }
+
+  // Add any still-pending calls (no matching end/error) to results
+  for (const queue of pendingByTool.values()) {
+    completedCalls.push(...queue);
+  }
+
+  // Sort by timestamp (newest first)
+  completedCalls.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  return completedCalls;
 }
 
 /** Guard to prevent double-registration of IPC handlers */
@@ -847,6 +1026,97 @@ export function registerSessionReplayHandlers(): void {
           error: error instanceof Error ? error.message : 'Unknown error',
         };
       }
+    }
+  );
+
+  // ============================================
+  // Agent Inspector Operations
+  // ============================================
+
+  /**
+   * Load task logs for a given project/spec, returning an error IPCResult on failure.
+   * Shared helper to eliminate duplication across inspector handlers.
+   */
+  async function loadSpecLogs(
+    projectPath: string,
+    specId: string,
+    context: string
+  ): Promise<{ logs: TaskLogs | null; errorResult?: IPCResult<never> }> {
+    try {
+      const specDir = path.join(projectPath, AUTO_BUILD_PATHS.SPECS_DIR, specId);
+      const logs = await loadTaskLogs(specDir);
+      return { logs };
+    } catch (error) {
+      debugError(`[Agent Inspector] ${context}:`, error);
+      return {
+        logs: null,
+        errorResult: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
+   * Get agent thinking blocks from task logs
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_INSPECTOR_GET_THOUGHTS,
+    async (_, projectPath: string, specId: string, sessionId?: string): Promise<IPCResult<AgentThinkingBlock[]>> => {
+      const { logs, errorResult } = await loadSpecLogs(projectPath, specId, 'Failed to get thoughts');
+      if (errorResult) return errorResult;
+      if (!logs?.phases) return { success: true, data: [] };
+      return { success: true, data: extractThoughts(logs, sessionId) };
+    }
+  );
+
+  /**
+   * Get agent tool calls from task logs
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_INSPECTOR_GET_TOOL_CALLS,
+    async (_, projectPath: string, specId: string, sessionId?: string): Promise<IPCResult<AgentInspectorToolCall[]>> => {
+      const { logs, errorResult } = await loadSpecLogs(projectPath, specId, 'Failed to get tool calls');
+      if (errorResult) return errorResult;
+      if (!logs?.phases) return { success: true, data: [] };
+      return { success: true, data: extractToolCalls(logs, sessionId) };
+    }
+  );
+
+  /**
+   * Get combined inspector data (thoughts + tool calls)
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_INSPECTOR_GET_INSPECTOR_DATA,
+    async (_, projectPath: string, specId: string, sessionId?: string): Promise<IPCResult<{ thoughts: AgentThinkingBlock[]; toolCalls: AgentInspectorToolCall[] }>> => {
+      const { logs, errorResult } = await loadSpecLogs(projectPath, specId, 'Failed to get inspector data');
+      if (errorResult) return errorResult;
+      if (!logs?.phases) return { success: true, data: { thoughts: [], toolCalls: [] } };
+      return {
+        success: true,
+        data: {
+          thoughts: extractThoughts(logs, sessionId),
+          toolCalls: extractToolCalls(logs, sessionId),
+        },
+      };
+    }
+  );
+
+  /**
+   * Export agent inspector session data as JSON or Markdown
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.AGENT_INSPECTOR_EXPORT_SESSION,
+    async (_, projectPath: string, specId: string, sessionId: string, format: 'json' | 'markdown'): Promise<IPCResult<string>> => {
+      const { logs, errorResult } = await loadSpecLogs(projectPath, specId, 'Failed to export session');
+      if (errorResult) return errorResult;
+      if (!logs) return { success: false, error: 'No logs found to export' };
+
+      const numericSessionId = Number.parseInt(sessionId, 10);
+      return format === 'json'
+        ? exportSessionAsJson(logs, numericSessionId)
+        : exportSessionAsMarkdown(logs, numericSessionId);
     }
   );
 }
