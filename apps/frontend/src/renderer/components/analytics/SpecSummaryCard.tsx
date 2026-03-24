@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   CheckCircle2,
@@ -12,16 +13,32 @@ import { Badge } from '../ui/badge';
 import type { ProductivitySummary } from '../../../shared/types/productivity-analytics';
 
 interface SpecSummaryCardProps {
-  analytics: ProductivitySummary | null;
-  isLoading?: boolean;
+  readonly analytics: ProductivitySummary | null;
+  readonly isLoading?: boolean;
 }
 
 interface StatCardProps {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string | number;
-  subValue?: string;
-  variant?: 'default' | 'success' | 'warning' | 'error';
+  readonly icon: React.ComponentType<{ className?: string }>;
+  readonly label: string;
+  readonly value: string | number;
+  readonly subValue?: string;
+  readonly variant?: 'default' | 'success' | 'warning' | 'error';
+}
+
+interface WorkflowBreakdownProps {
+  readonly specsByType: Record<string, number>;
+}
+
+function getCompletionVariant(rate: number): 'success' | 'warning' | 'default' {
+  if (rate >= 0.8) return 'success';
+  if (rate >= 0.5) return 'warning';
+  return 'default';
+}
+
+function getQAVariant(iterations: number): 'success' | 'warning' | 'error' {
+  if (iterations <= 1) return 'success';
+  if (iterations <= 2) return 'warning';
+  return 'error';
 }
 
 function StatCard({ icon: Icon, label, value, subValue, variant = 'default' }: StatCardProps) {
@@ -52,11 +69,8 @@ function StatCard({ icon: Icon, label, value, subValue, variant = 'default' }: S
   );
 }
 
-interface WorkflowBreakdownProps {
-  specsByType: Record<string, number>;
-}
-
 function WorkflowBreakdown({ specsByType }: WorkflowBreakdownProps) {
+  const { t } = useTranslation('analytics');
   const workflowEntries = Object.entries(specsByType).sort(([, a], [, b]) => b - a);
 
   if (workflowEntries.length === 0) {
@@ -67,7 +81,7 @@ function WorkflowBreakdown({ specsByType }: WorkflowBreakdownProps) {
     <div className="mt-4 p-4 rounded-lg bg-muted/30 border border-border/50">
       <div className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
         <GitBranch className="h-4 w-4 text-accent" />
-        Workflow Type Breakdown
+        {t('specSummary.workflowBreakdown')}
       </div>
       <div className="flex flex-wrap gap-2">
         {workflowEntries.map(([type, count]) => (
@@ -85,6 +99,8 @@ function formatPercentage(rate: number): string {
 }
 
 export function SpecSummaryCard({ analytics, isLoading = false }: SpecSummaryCardProps) {
+  const { t } = useTranslation('analytics');
+
   const stats = useMemo(() => {
     if (!analytics) {
       return {
@@ -112,20 +128,8 @@ export function SpecSummaryCard({ analytics, isLoading = false }: SpecSummaryCar
   }, [analytics]);
 
   const hasData = analytics && analytics.total_specs > 0;
-
-  // Determine completion rate variant
-  const completionVariant = stats.completionRate >= 0.8
-    ? 'success'
-    : stats.completionRate >= 0.5
-      ? 'warning'
-      : 'default';
-
-  // Determine QA iterations variant (lower is better)
-  const qaVariant = stats.averageQAIterations <= 1
-    ? 'success'
-    : stats.averageQAIterations <= 2
-      ? 'warning'
-      : 'error';
+  const completionVariant = getCompletionVariant(stats.completionRate);
+  const qaVariant = getQAVariant(stats.averageQAIterations);
 
   return (
     <Card className="bg-muted/30 border-border/50">
@@ -133,11 +137,11 @@ export function SpecSummaryCard({ analytics, isLoading = false }: SpecSummaryCar
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <FileText className="h-5 w-5 text-accent" />
-            Spec Overview
+            {t('specSummary.title')}
           </CardTitle>
           {hasData && (
             <Badge variant="outline" className="text-xs">
-              {stats.totalSpecs} {stats.totalSpecs === 1 ? 'spec' : 'specs'}
+              {t('specSummary.specCount', { count: stats.totalSpecs })}
             </Badge>
           )}
         </div>
@@ -146,47 +150,47 @@ export function SpecSummaryCard({ analytics, isLoading = false }: SpecSummaryCar
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
             <Clock className="h-5 w-5 animate-spin mr-2" />
-            Loading spec data...
+            {t('specSummary.loading')}
           </div>
-        ) : !hasData ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <FileText className="h-12 w-12 text-muted-foreground/50 mb-3" />
-            <p className="text-sm text-muted-foreground">No specs tracked yet</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              Spec statistics will appear here after creating your first spec
-            </p>
-          </div>
-        ) : (
+        ) : hasData ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
                 icon={BarChart3}
-                label="Total Specs"
+                label={t('specSummary.totalSpecs')}
                 value={stats.totalSpecs}
                 variant="default"
               />
               <StatCard
                 icon={CheckCircle2}
-                label="Completed"
+                label={t('specSummary.completed')}
                 value={stats.completedSpecs}
                 subValue={formatPercentage(stats.completionRate)}
                 variant={completionVariant}
               />
               <StatCard
                 icon={Clock}
-                label="In Progress"
+                label={t('specSummary.inProgress')}
                 value={stats.inProgressSpecs}
                 variant={stats.inProgressSpecs > 0 ? 'warning' : 'default'}
               />
               <StatCard
                 icon={RefreshCw}
-                label="Avg QA Iterations"
+                label={t('specSummary.avgQAIterations')}
                 value={stats.averageQAIterations.toFixed(1)}
                 variant={qaVariant}
               />
             </div>
             <WorkflowBreakdown specsByType={stats.specsByType} />
           </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <FileText className="h-12 w-12 text-muted-foreground/50 mb-3" />
+            <p className="text-sm text-muted-foreground">{t('specSummary.noData')}</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              {t('specSummary.noDataHint')}
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>
