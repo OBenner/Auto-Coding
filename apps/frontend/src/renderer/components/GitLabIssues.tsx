@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useProjectStore } from "../stores/project-store";
 import { useTaskStore } from "../stores/task-store";
+import { useShallow } from 'zustand/react/shallow';
 import { useGitLabIssues, useGitLabInvestigation, useIssueFiltering } from "./gitlab-issues/hooks";
 import {
   NotConnectedState,
@@ -16,10 +17,10 @@ import type { GitLabIssuesProps } from "./gitlab-issues/types";
 
 export function GitLabIssues({ onOpenSettings, onNavigateToTask }: GitLabIssuesProps) {
   const { t } = useTranslation("gitlab");
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore(useShallow((state) => state.projects));
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
-  const tasks = useTaskStore((state) => state.tasks);
+  const tasks = useTaskStore(useShallow((state) => state.tasks));
 
   const {
     syncStatus,

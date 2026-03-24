@@ -10,6 +10,10 @@ use `create_simple_client()` from `core.simple_client`.
 
 The client factory now uses AGENT_CONFIGS from agents/tools_pkg/models.py as the
 single source of truth for phase-aware tool and MCP server configuration.
+
+Architecture Decision:
+    See ADR-001 (docs/architecture/adr/ADR-001-claude-agent-sdk.md) for rationale
+    on adopting the Claude Agent SDK for all AI interactions.
 """
 
 from __future__ import annotations
@@ -29,6 +33,24 @@ from core.platform import (
 )
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Async Event Loop Optimization
+# =============================================================================
+# uvloop provides significantly faster event loop implementation for asyncio.
+# On Linux/macOS it can improve async performance by 2-4x. Windows uses proactor
+# event loop which is already optimized, so we skip uvloop installation there.
+
+if not is_windows():
+    try:
+        import uvloop
+
+        uvloop.install()
+        logger.debug("uvloop installed for improved async performance")
+    except ImportError:
+        logger.debug("uvloop not available, using default asyncio event loop")
+    except Exception as e:
+        logger.warning(f"Failed to install uvloop: {e}")
 
 # =============================================================================
 # Windows System Prompt Limits
@@ -1310,4 +1332,16 @@ def create_client(
     if agents:
         options_kwargs["agents"] = agents
 
-    return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
+    # Create SDK client with error wrapping
+    # SDK errors during client initialization will be converted to typed errors
+    try:
+        client = ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
+    except Exception as e:
+        # Wrap raw SDK exceptions with typed errors for structured error handling
+        # This ensures consistent error types throughout the system
+        # Lazy import to avoid circular dependency
+        from core.error_detection import wrap_sdk_error
+
+        raise wrap_sdk_error(e) from e
+
+    return client

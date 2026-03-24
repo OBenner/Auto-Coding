@@ -55,6 +55,20 @@
     "successRate": "Success Rate (%)"
   },
 
+  "specSummary": {
+    "title": "Spec Overview",
+    "specCount": "{{count}} spec",
+    "specCount_other": "{{count}} specs",
+    "loading": "Loading spec data...",
+    "noData": "No specs tracked yet",
+    "noDataHint": "Spec statistics will appear here after creating your first spec",
+    "totalSpecs": "Total Specs",
+    "completed": "Completed",
+    "inProgress": "In Progress",
+    "avgQAIterations": "Avg QA Iterations",
+    "workflowBreakdown": "Workflow Type Breakdown"
+  },
+
   "qa": {
     "totalReviews": "Total Reviews",
     "approved": "Approved",

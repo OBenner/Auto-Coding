@@ -45,6 +45,7 @@ import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
 import { TaskOverview } from './TaskOverview';
+import { BuildTimeline } from '../timeline/BuildTimeline';
 import { ResourceUsageIndicator } from '../ResourceUsageIndicator';
 import { PermissionsPanel } from '../collaboration/PermissionsPanel';
 import { CommentThread } from '../collaboration/CommentThread';
@@ -518,6 +519,12 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     </TabsTrigger>
                   )}
                   <TabsTrigger
+                    value="timeline"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                  >
+                    {t('tasks:tabs.timeline')}
+                  </TabsTrigger>
+                  <TabsTrigger
                     value="collaboration"
                     className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
                   >
@@ -629,6 +636,16 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     <TaskFiles task={task} />
                   </TabsContent>
                 )}
+
+                {/* Timeline Tab */}
+                <TabsContent value="timeline" className="flex-1 min-h-0 overflow-hidden mt-0">
+                  <div className="h-full w-full">
+                    <BuildTimeline
+                      taskId={task.id}
+                      executionProgress={task.executionProgress}
+                    />
+                  </div>
+                </TabsContent>
 
                 {/* Collaboration Tab */}
                 <TabsContent value="collaboration" className="flex-1 min-h-0 overflow-hidden mt-0">
