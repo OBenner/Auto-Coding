@@ -1,0 +1,51 @@
+{{- if .Values.webFrontend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.webFrontend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.webFrontend.replicas }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "auto-code.webFrontend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "auto-code.webFrontend.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: web-frontend
+        image: "{{ .Values.images.webFrontend.repository }}:{{ .Values.images.webFrontend.tag }}"
+        imagePullPolicy: {{ .Values.images.webFrontend.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        env:
+        # API backend URL - using Kubernetes service DNS
+        - name: VITE_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: vite-api-url
+              optional: true
+        - name: VITE_WS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: auto-claude-config
+              key: vite-ws-url
+              optional: true
+        livenessProbe:
+          {{- toYaml .Values.webFrontend.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.webFrontend.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.webFrontend.resources | nindent 10 }}
+      restartPolicy: Always
+{{- end }}

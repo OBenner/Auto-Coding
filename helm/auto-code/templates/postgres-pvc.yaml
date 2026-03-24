@@ -1,0 +1,59 @@
+{{- if and .Values.postgres.enabled .Values.postgres.backup.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backup-pvc
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.postgres.labels" . | nindent 4 }}
+    purpose: backup
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgres.backup.size }}
+  {{- if .Values.postgres.backup.storageClass }}
+  storageClassName: {{ .Values.postgres.backup.storageClass }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.backend.enabled .Values.backend.persistence.data.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-data-pvc
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.backend.labels" . | nindent 4 }}
+    purpose: data
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.backend.persistence.data.size }}
+  {{- if .Values.backend.persistence.data.storageClass }}
+  storageClassName: {{ .Values.backend.persistence.data.storageClass }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.backend.enabled .Values.backend.persistence.worktrees.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-worktrees-pvc
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.backend.labels" . | nindent 4 }}
+    purpose: worktrees
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.backend.persistence.worktrees.size }}
+  {{- if .Values.backend.persistence.worktrees.storageClass }}
+  storageClassName: {{ .Values.backend.persistence.worktrees.storageClass }}
+  {{- end }}
+{{- end }}

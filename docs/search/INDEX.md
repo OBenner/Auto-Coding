@@ -48,6 +48,19 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 
 ---
 
+## Architecture Decision Records (ADR)
+
+| Document | Location | Keywords |
+|----------|----------|----------|
+| **[ADR Index](../architecture/adr/README.md)** | `docs/architecture/adr/` | adr, decisions, index, architecture, history |
+| **[ADR Template](../architecture/adr/template.md)** | `docs/architecture/adr/` | adr, template, format, structure |
+| **[ADR-001: Claude Agent SDK](../architecture/adr/ADR-001-claude-agent-sdk.md)** | `docs/architecture/adr/` | adr, claude, agent-sdk, anthropic, ai-client, decision |
+| **[ADR-002: Graphiti Memory](../architecture/adr/ADR-002-graphiti-memory.md)** | `docs/architecture/adr/` | adr, graphiti, memory, knowledge-graph, ladybugdb, decision |
+| **[ADR-003: Worktree Isolation](../architecture/adr/ADR-003-worktree-isolation.md)** | `docs/architecture/adr/` | adr, worktree, isolation, git, safety, branching, decision |
+| **[ADR-004: Multi-Provider Support](../architecture/adr/ADR-004-multi-provider-support.md)** | `docs/architecture/adr/` | adr, multi-provider, llm, openai, anthropic, azure, ollama, decision |
+
+---
+
 ## Features
 
 | Document | Location | Keywords |
@@ -234,6 +247,11 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 - Location: `docs/modules/`
 - Template: [Module Architecture Template](../templates/architecture/module-architecture.md)
 
+### Architecture Decision Records (ADR)
+- Location: `docs/architecture/adr/`
+- Template: [ADR Template](../architecture/adr/template.md)
+- Index: [ADR README](../architecture/adr/README.md)
+
 ### API Docs
 - Location: `docs/api/`
 - Templates: [Endpoint](../templates/api/endpoint-documentation.md) | [Component](../templates/api/component-api.md)
@@ -252,6 +270,7 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 | **Run from command line** | [CLI-USAGE.md](../../guides/CLI-USAGE.md) |
 | **Create a new spec** | [Spec Creation Pipeline](../../guides/SPEC-CREATION-PIPELINE.md) |
 | **Understand the architecture** | [CLAUDE.md](../../CLAUDE.md) |
+| **Find architectural decisions** | [ADR Index](../architecture/adr/README.md) |
 | **Customize agents** | [Agent Customization](../../guides/AGENT-CUSTOMIZATION.md) |
 | **Contribute code** | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
 | **Write documentation** | [STYLE_GUIDE.md](../STYLE_GUIDE.md) |
@@ -281,6 +300,7 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 | **`guides/`** | User and developer guides | `QUICK-START.md`, `CLI-USAGE.md` |
 | **`docs/`** | Templates, architecture, features | `docs/README.md`, `docs/STYLE_GUIDE.md` |
 | **`docs/modules/`** | Module architecture | `backend-architecture.md` |
+| **`docs/architecture/adr/`** | Architecture Decision Records | `ADR-001-claude-agent-sdk.md` |
 | **`docs/features/`** | Feature documentation | `MEMORY-SYSTEM.md` |
 | **`docs/api/`** | API documentation | `backend-api.md` |
 | **`docs/templates/`** | Documentation templates | `spec.md`, `implementation-guide.md` |

@@ -223,6 +223,35 @@ export interface ApiError {
 }
 
 // ============================================
+// FILE SYSTEM TYPES
+// ============================================
+
+export type FileType = "file" | "directory";
+
+export interface FileEntry {
+	name: string;
+	path: string;
+	type: FileType;
+	size?: number;
+	modified?: string;
+	children?: FileEntry[];
+}
+
+export interface FileContent {
+	path: string;
+	content: string;
+	language?: string;
+	size: number;
+	modified?: string;
+}
+
+export interface FileListResponse {
+	files: FileEntry[];
+	total: number;
+	path: string;
+}
+
+// ============================================
 // CONFIGURATION TYPES
 // ============================================
 

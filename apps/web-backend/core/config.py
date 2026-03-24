@@ -58,6 +58,13 @@ class Settings:
         # Database configuration
         self.DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
+        # Database connection pool settings
+        self.DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
+        self.DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+        self.DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+        self.DB_POOL_RECYCLE: int = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+        self.DB_ECHO: bool = os.getenv("DB_ECHO", "false").lower() == "true"
+
         # OAuth configuration - GitHub
         self.GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
         self.GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")

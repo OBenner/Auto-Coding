@@ -16,8 +16,16 @@ from typing import Any
 from claude_agent_sdk import ClaudeSDKClient
 from core.circuit_breaker import CircuitBreaker
 from core.error_classifier import ErrorClassifier
+from core.error_codes import ErrorCode
 from core.memory_monitor import MemoryMonitor, MemoryPressure, SessionBounds
 from core.token_stats import PhaseTokenStats, PhaseType, TaskTokenStats
+from core.typed_errors import (
+    AuthError,
+    NetworkError,
+    NotFoundError,
+    OperationTimeoutError,
+    TypedError,
+)
 from debug import (
     debug,
     debug_detailed,
@@ -99,6 +107,7 @@ class ConversationRound:
         assistant_response: The complete text response from the agent
         tool_calls: List of tools called during this round
         code_references: List of file paths referenced in this round
+        thinking_blocks: List of thinking/reasoning blocks from extended thinking
         phase: Execution phase (planning, coding, validation)
         input_tokens: Number of input tokens used
         output_tokens: Number of output tokens used
@@ -119,6 +128,7 @@ class ConversationRound:
         self.assistant_response = ""
         self.tool_calls: list[dict[str, Any]] = []
         self.code_references: set[str] = set()
+        self.thinking_blocks: list[str] = []
         self.phase = phase
         self.input_tokens = 0
         self.output_tokens = 0
@@ -140,6 +150,11 @@ class ConversationRound:
             # (which also have a "pattern" key alongside "path")
             self.code_references.add(tool_input["path"])
 
+    def add_thinking_block(self, thinking: str) -> None:
+        """Record a thinking block from extended thinking."""
+        if thinking and thinking.strip():
+            self.thinking_blocks.append(thinking)
+
     def set_usage(self, input_tokens: int, output_tokens: int) -> None:
         """Set token usage for this round."""
         self.input_tokens = input_tokens
@@ -155,6 +170,7 @@ class ConversationRound:
             "assistant_response": self.assistant_response,
             "tool_calls": self.tool_calls,
             "code_references": list(self.code_references),
+            "thinking_blocks": self.thinking_blocks,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "model": self.model,
@@ -173,6 +189,7 @@ class ConversationRound:
         round_obj.assistant_response = data["assistant_response"]
         round_obj.tool_calls = data.get("tool_calls", [])
         round_obj.code_references = set(data.get("code_references", []))
+        round_obj.thinking_blocks = data.get("thinking_blocks", [])
         round_obj.input_tokens = data.get("input_tokens", 0)
         round_obj.output_tokens = data.get("output_tokens", 0)
         return round_obj
@@ -1003,7 +1020,8 @@ async def run_agent_session(
         debug_error("session", msg, usage_mb=_memory_monitor.get_usage_mb())
         if task_logger:
             task_logger.log_error(msg, phase)
-        return "error", msg, None, decision_tracker
+        # Raise typed error for critical memory pressure
+        raise TypedError(ErrorCode.MEMORY_ERROR, msg)
 
     # Check circuit breaker
     if not _api_circuit_breaker.can_execute():
@@ -1014,7 +1032,8 @@ async def run_agent_session(
         debug_error("session", msg)
         if task_logger:
             task_logger.log_error(msg, phase)
-        return "error", msg, None, decision_tracker
+        # Raise typed error for circuit breaker failures
+        raise NetworkError(msg)
 
     try:
         # Send the query
@@ -1053,7 +1072,8 @@ async def run_agent_session(
                 if task_logger:
                     task_logger.log_error(reason, phase)
                 _memory_monitor.maybe_gc()
-                return "error", reason, None, decision_tracker
+                # Raise typed error for session bounds exceeded
+                raise OperationTimeoutError(reason)
 
             # Periodic GC under memory pressure
             if message_count % _GC_MESSAGE_INTERVAL == 0:
@@ -1267,6 +1287,9 @@ async def run_agent_session(
                 task_logger.log_error(
                     f"[{classified.category.value.upper()}] {error_msg}", phase
                 )
+            # Raise typed error for authentication failures
+            if classified.category.name.startswith("AUTH_"):
+                raise AuthError(error_msg)
             return "error", error_msg, None, decision_tracker
 
         # Extract usage metadata from Claude SDK client
@@ -1533,7 +1556,8 @@ async def run_agent_session_isolated(
     if pressure == MemoryPressure.CRITICAL:
         msg = "Cannot start isolated session: memory pressure is CRITICAL"
         debug_error("session", msg, usage_mb=_memory_monitor.get_usage_mb())
-        return "error", msg, None
+        # Raise typed error for critical memory pressure
+        raise TypedError(ErrorCode.MEMORY_ERROR, msg)
 
     if not _api_circuit_breaker.can_execute():
         msg = (
@@ -1541,7 +1565,8 @@ async def run_agent_session_isolated(
             "Too many consecutive failures — waiting for recovery."
         )
         debug_error("session", msg)
-        return "error", msg, None
+        # Raise typed error for circuit breaker failures
+        raise NetworkError(msg)
 
     # Initialize recovery manager for automatic crash recovery
     recovery_manager = RecoveryManager(spec_dir=spec_dir, project_dir=project_dir)
@@ -1555,7 +1580,8 @@ async def run_agent_session_isolated(
     if not agent_script.exists():
         error_msg = f"Agent subprocess script not found: {agent_script}"
         debug_error("session", error_msg)
-        return "error", error_msg, None
+        # Raise typed error for missing file
+        raise NotFoundError(error_msg)
 
     # Track retry attempts and conversation history for state restoration
     attempt = 0

@@ -9,14 +9,10 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import redis
+from core import sanitize_log as _sanitize_log
 from core.config import settings
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 class UsageTracker:

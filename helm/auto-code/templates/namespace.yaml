@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.labels" . | nindent 4 }}
+    app: auto-claude
+    environment: {{ .Values.global.environment }}
