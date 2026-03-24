@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from analysis.failure_pattern_extractor import FailurePatternExtractor
 from claude_agent_sdk import ClaudeSDKClient
 from core.circuit_breaker import CircuitBreaker
 from core.error_classifier import ErrorClassifier
@@ -34,7 +35,6 @@ from debug import (
     debug_success,
     debug_warning,
 )
-from analysis.failure_pattern_extractor import FailurePatternExtractor
 from insight_extractor import extract_session_insights
 from integrations.graphiti.failure_pattern_store import FailurePatternStore
 from linear_updater import (
@@ -495,7 +495,11 @@ async def extract_and_store_failure_patterns(
         analysis = extractor.extract_patterns(subtask_id)
 
         if not analysis.patterns:
-            debug("session", "No failure patterns detected for subtask", subtask_id=subtask_id)
+            debug(
+                "session",
+                "No failure patterns detected for subtask",
+                subtask_id=subtask_id,
+            )
             return 0
 
         debug(
@@ -701,7 +705,9 @@ async def post_session_processing(
                 recovery_manager=recovery_manager,
             )
             if patterns_stored > 0:
-                print_status(f"Stored {patterns_stored} failure patterns to Graphiti", "success")
+                print_status(
+                    f"Stored {patterns_stored} failure patterns to Graphiti", "success"
+                )
         except Exception as e:
             logger.warning(f"Failure pattern extraction failed: {e}")
             debug_error("session", "Pattern extraction failed", error=str(e))
@@ -795,9 +801,13 @@ async def post_session_processing(
                 recovery_manager=recovery_manager,
             )
             if patterns_stored > 0:
-                print_status(f"Stored {patterns_stored} failure patterns to Graphiti", "info")
+                print_status(
+                    f"Stored {patterns_stored} failure patterns to Graphiti", "info"
+                )
         except Exception as e:
-            logger.debug(f"Failure pattern extraction failed for incomplete session: {e}")
+            logger.debug(
+                f"Failure pattern extraction failed for incomplete session: {e}"
+            )
 
         # Save failed session memory (to track what didn't work)
         try:
@@ -870,7 +880,9 @@ async def post_session_processing(
                 recovery_manager=recovery_manager,
             )
             if patterns_stored > 0:
-                print_status(f"Stored {patterns_stored} failure patterns to Graphiti", "info")
+                print_status(
+                    f"Stored {patterns_stored} failure patterns to Graphiti", "info"
+                )
         except Exception as e:
             logger.debug(f"Failure pattern extraction failed for failed session: {e}")
 
