@@ -33,6 +33,15 @@ wheels/
 .installed.cfg
 *.egg
 
+# Puppeteer / Browser automation
+puppeteer_logs/
+puppeteer-*.log
+*.screenshot.png
+screenshots/
+.puppeteerrc.*
+chrome-profile/
+chromium-profile/
+
 # IDE
 .idea/
 .vscode/
@@ -48,30 +57,31 @@ Thumbs.db
 .gitignore
 .gitattributes
 
+# Git worktrees (used by parallel mode)
+.worktrees/
+
+# Claude Code settings (project-specific)
+.claude_settings.json
+.auto-build-security.json
+
 # Tests (development only)
 tests/
 *.test.py
 test_*.py
-pytest.ini
-.pytest_cache/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Auto Code data directory
+.auto-claude/
 
-# Alembic
-alembic.ini
+# Auto Code generated files
+.auto-claude-security.json
+.migration-checkpoints/
+.auto-claude-status
+.security-key
+logs/security/
 
 # Documentation
 *.md
 !README.md
 
 # Docker files
-Dockerfile
-.dockerignore
 docker-compose*.yml
-
-# Logs
-logs/
-*.log

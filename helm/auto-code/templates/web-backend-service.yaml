@@ -1,0 +1,27 @@
+{{- if .Values.webBackend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-backend
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.webBackend.labels" . | nindent 4 }}
+  {{- with .Values.webBackend.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.webBackend.service.type }}
+  selector:
+    {{- include "auto-code.webBackend.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: http
+    port: {{ .Values.webBackend.service.port }}
+    targetPort: http
+    protocol: TCP
+  {{- if .Values.webBackend.service.sessionAffinity }}
+  sessionAffinity: {{ .Values.webBackend.service.sessionAffinity }}
+  sessionAffinityConfig:
+    {{- toYaml .Values.webBackend.service.sessionAffinityConfig | nindent 4 }}
+  {{- end }}
+{{- end }}

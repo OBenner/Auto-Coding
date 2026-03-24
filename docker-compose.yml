@@ -21,6 +21,11 @@ services:
     networks:
       - autoclaude-network
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Redis for usage tracking and caching
   redis:
@@ -38,25 +43,72 @@ services:
     networks:
       - autoclaude-network
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Auto Code backend CLI service
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: autoclaude-backend
+    environment:
+      # Claude API configuration
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-5-20250929}
+
+      # Graphiti memory configuration
+      GRAPHITI_ENABLED: ${GRAPHITI_ENABLED:-true}
+      GRAPHITI_LLM_PROVIDER: ${GRAPHITI_LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+      # GitHub integration
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+
+      # Linear integration
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-}
+
+      # Project configuration
+      PROJECT_DIR: /app
+      AUTO_CLAUDE_CI: ${AUTO_CLAUDE_CI:-false}
+      AUTO_CLAUDE_JSON_OUTPUT: ${AUTO_CLAUDE_JSON_OUTPUT:-false}
+    volumes:
+      - backend_data:/app/.auto-claude
+      - backend_worktrees:/app/.worktrees
+      # Mount local code for development (comment out in production)
+      - ./apps/backend:/app:ro
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Auto Code web backend API
   web-backend:
     build:
       context: ./apps/web-backend
       dockerfile: Dockerfile
-    container_name: autoclaude-backend
+    container_name: autoclaude-web-backend
     environment:
       # Server configuration
       HOST: 0.0.0.0
       PORT: 8000
-      DEBUG: "false"
-      LOG_LEVEL: INFO
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
       # CORS configuration
-      CORS_ORIGINS: http://localhost:3000,http://localhost:80,${FRONTEND_URL:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,https://autoclaude.app}
 
       # Authentication
-      SECRET_KEY: ${SECRET_KEY:?required}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
 
       # Database configuration (connect to postgres service)
@@ -77,8 +129,13 @@ services:
 
       # WebSocket configuration
       WS_HEARTBEAT_INTERVAL: 30
+
+      # Backend directory for agent execution
+      AUTO_CLAUDE_BACKEND_DIR: ${AUTO_CLAUDE_BACKEND_DIR:-/app/backend}
     ports:
       - "8000:8000"
+    # condition: service_healthy requires Docker Compose v2 (Compose Spec).
+    # See https://docs.docker.com/compose/how-tos/startup-order/
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,29 +147,36 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    volumes:
+      # Mount auto-claude backend directory if available locally
+      # Comment out in production deployment
+      - ${AUTO_CLAUDE_BACKEND_DIR:-./apps/backend}:/app/backend:ro
     networks:
       - autoclaude-network
     restart: unless-stopped
-    volumes:
-      - ${AUTO_CLAUDE_BACKEND_DIR:-/app/backend}:/app/backend:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # Auto Code web frontend
+  # Auto Code web frontend (Vite + React + nginx)
   web-frontend:
     build:
       context: ./apps/web-frontend
       dockerfile: Dockerfile
-    container_name: autoclaude-frontend
+    container_name: autoclaude-web-frontend
     environment:
-      # API URL for frontend to connect to the backend
+      # API backend URL
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
       VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       web-backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -120,6 +184,11 @@ services:
     networks:
       - autoclaude-network
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   autoclaude-network:
@@ -129,4 +198,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  backend_data:
+    driver: local
+  backend_worktrees:
     driver: local
