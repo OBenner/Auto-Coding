@@ -81,6 +81,9 @@ function ResultItem({ icon: Icon, title, subtitle, metadata, score, children, on
     <div
       className={`p-4 rounded-lg bg-muted/30 border border-border/50 hover:bg-muted/50 transition-colors ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
     >
       <div className="flex items-start gap-3">
         <div className="p-2 rounded-lg bg-accent/10 text-accent shrink-0">

@@ -409,9 +409,9 @@ class TestFindSimilarPatterns:
 
         # Should combine patterns and gotchas, sorted by score
         assert len(result) == 3
-        assert result[0]["score"] == 0.92  # OAuth2 pattern
-        assert result[1]["score"] == 0.88  # Token gotcha
-        assert result[2]["score"] == 0.85  # Validate pattern
+        assert result[0]["score"] == pytest.approx(0.92)  # OAuth2 pattern
+        assert result[1]["score"] == pytest.approx(0.88)  # Token gotcha
+        assert result[2]["score"] == pytest.approx(0.85)  # Validate pattern
 
     @pytest.mark.asyncio
     async def test_find_similar_patterns_without_graphiti(
@@ -471,10 +471,10 @@ class TestFindSimilarPatterns:
         result = await enhanced_search.find_similar_patterns("test")
 
         # Verify sorted order (highest score first)
-        assert result[0]["score"] == 0.95  # Gotcha A
-        assert result[1]["score"] == 0.9  # Pattern A
-        assert result[2]["score"] == 0.8  # Pattern B
-        assert result[3]["score"] == 0.7  # Pattern C
+        assert result[0]["score"] == pytest.approx(0.95)  # Gotcha A
+        assert result[1]["score"] == pytest.approx(0.9)  # Pattern A
+        assert result[2]["score"] == pytest.approx(0.8)  # Pattern B
+        assert result[3]["score"] == pytest.approx(0.7)  # Pattern C
 
 
 # =============================================================================

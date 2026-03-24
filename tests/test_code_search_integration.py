@@ -242,7 +242,7 @@ class TestEnhancedCodeSearchGraphitiMethods:
         assert len(results) == 1
         assert results[0]["entity_name"] == "authenticate_user"
         assert results[0]["entity_type"] == "function"
-        assert results[0]["score"] == 0.95
+        assert results[0]["score"] == pytest.approx(0.95)
 
     @pytest.mark.asyncio
     async def test_search_by_purpose_without_graphiti(self, temp_project_dir):
@@ -1016,20 +1016,16 @@ class TestSearchIntegration:
         ]
 
         # Export results
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            results_path = Path(f.name)
+        results_path = temp_project_dir / "export_results.json"
 
-        try:
-            searcher.export_search_results(
-                results=results, output_path=results_path, format="json"
-            )
+        searcher.export_search_results(
+            results=results, output_path=results_path, format="json"
+        )
 
-            # Verify export
-            assert results_path.exists()
-            exported_data = json.loads(results_path.read_text(encoding="utf-8"))
-            assert exported_data == results
-        finally:
-            results_path.unlink(missing_ok=True)
+        # Verify export
+        assert results_path.exists()
+        exported_data = json.loads(results_path.read_text(encoding="utf-8"))
+        assert exported_data == results
 
 
 if __name__ == "__main__":
