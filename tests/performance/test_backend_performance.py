@@ -85,10 +85,7 @@ class TestFileIOPerformance:
     @pytest.mark.benchmark
     def test_yaml_read_performance(self, tmp_path):
         """Test YAML file reading performance."""
-        try:
-            import yaml
-        except ImportError:
-            pytest.skip("PyYAML not installed")
+        yaml = pytest.importorskip("yaml")
 
         # Create a YAML file with multiple specs
         yaml_content = """
