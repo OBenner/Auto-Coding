@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from analysis.failure_pattern_extractor import (
     FailurePattern,
     FailurePatternExtractor,
@@ -232,9 +231,17 @@ def test_similarity_calculation(extractor: FailurePatternExtractor):
     """Test 2: Verify Jaccard similarity calculations."""
     test_cases = [
         # Identical texts
-        ("Implement authentication using async", "Implement authentication using async", 1.0),
+        (
+            "Implement authentication using async",
+            "Implement authentication using async",
+            1.0,
+        ),
         # Similar texts (high overlap)
-        ("Fix authentication with async pattern", "Fix authentication using async approach", 0.7),
+        (
+            "Fix authentication with async pattern",
+            "Fix authentication using async approach",
+            0.7,
+        ),
         # Partially similar
         ("Implement feature X", "Implement feature Y", 0.6),
         # Completely different
@@ -266,11 +273,15 @@ def test_recurring_error_detection(extractor: FailurePatternExtractor):
 
     pattern = recurring_patterns[0]
     assert pattern.frequency >= 2, f"Expected frequency >= 2, got {pattern.frequency}"
-    assert pattern.confidence >= 0.5, f"Expected confidence >= 0.5, got {pattern.confidence}"
+    assert pattern.confidence >= 0.5, (
+        f"Expected confidence >= 0.5, got {pattern.confidence}"
+    )
 
     # Check metadata
     error_category = pattern.metadata.get("error_category")
-    assert error_category == "syntax_error", f"Expected 'syntax_error', got '{error_category}'"
+    assert error_category == "syntax_error", (
+        f"Expected 'syntax_error', got '{error_category}'"
+    )
 
 
 def test_escalating_complexity_detection(extractor: FailurePatternExtractor):
@@ -280,7 +291,9 @@ def test_escalating_complexity_detection(extractor: FailurePatternExtractor):
 
     # Should detect ESCALATING_COMPLEXITY pattern
     complexity_patterns = [
-        p for p in analysis.patterns if p.pattern_type == PatternType.ESCALATING_COMPLEXITY
+        p
+        for p in analysis.patterns
+        if p.pattern_type == PatternType.ESCALATING_COMPLEXITY
     ]
 
     assert len(complexity_patterns) > 0, "No escalating complexity pattern detected"
@@ -289,10 +302,14 @@ def test_escalating_complexity_detection(extractor: FailurePatternExtractor):
 
     # Check unique error categories
     unique_categories = pattern.metadata.get("unique_error_categories", [])
-    assert len(unique_categories) >= 3, f"Expected >= 3 unique categories, got {len(unique_categories)}"
+    assert len(unique_categories) >= 3, (
+        f"Expected >= 3 unique categories, got {len(unique_categories)}"
+    )
 
     # Verify confidence
-    assert pattern.confidence >= 0.7, f"Expected confidence >= 0.7, got {pattern.confidence:.2f}"
+    assert pattern.confidence >= 0.7, (
+        f"Expected confidence >= 0.7, got {pattern.confidence:.2f}"
+    )
 
 
 def test_circular_fix_detection(extractor: FailurePatternExtractor):
@@ -315,10 +332,14 @@ def test_circular_fix_detection(extractor: FailurePatternExtractor):
         assert similar_pairs >= 1, f"Expected >= 1 similar pair, got {similar_pairs}"
 
         # Verify confidence
-        assert pattern.confidence >= 0.8, f"Expected confidence >= 0.8, got {pattern.confidence:.2f}"
+        assert pattern.confidence >= 0.8, (
+            f"Expected confidence >= 0.8, got {pattern.confidence:.2f}"
+        )
     else:
         # If not detected, at least verify the subtask has attempts
-        assert analysis.total_attempts >= 3, f"Expected >= 3 attempts for circular fix test, got {analysis.total_attempts}"
+        assert analysis.total_attempts >= 3, (
+            f"Expected >= 3 attempts for circular fix test, got {analysis.total_attempts}"
+        )
 
 
 def test_model_limitation_detection(extractor: FailurePatternExtractor):
@@ -339,7 +360,9 @@ def test_model_limitation_detection(extractor: FailurePatternExtractor):
     timeout_count = pattern.metadata.get("timeout_count", 0)
     context_count = pattern.metadata.get("context_exhaustion_count", 0)
 
-    assert timeout_count > 0 or context_count > 0, "No timeout or context errors detected"
+    assert timeout_count > 0 or context_count > 0, (
+        "No timeout or context errors detected"
+    )
 
     # Verify total limitation count
     limitation_count = timeout_count + context_count
@@ -365,7 +388,9 @@ def test_context_exhaustion_detection(extractor: FailurePatternExtractor):
     assert context_count >= 2, f"Expected >= 2 context exhaustions, got {context_count}"
 
     # Verify high confidence
-    assert pattern.confidence >= 0.85, f"Expected confidence >= 0.85, got {pattern.confidence:.2f}"
+    assert pattern.confidence >= 0.85, (
+        f"Expected confidence >= 0.85, got {pattern.confidence:.2f}"
+    )
 
 
 def test_successful_subtask_analysis(extractor: FailurePatternExtractor):
@@ -374,15 +399,25 @@ def test_successful_subtask_analysis(extractor: FailurePatternExtractor):
     analysis = extractor.extract_patterns(subtask_id)
 
     # Should have no patterns (successful attempt)
-    assert len(analysis.patterns) == 0, f"Unexpected patterns found: {[p.pattern_type.value for p in analysis.patterns]}"
+    assert len(analysis.patterns) == 0, (
+        f"Unexpected patterns found: {[p.pattern_type.value for p in analysis.patterns]}"
+    )
 
     # Verify counts
-    assert analysis.total_attempts == 1, f"Expected 1 attempt, got {analysis.total_attempts}"
-    assert analysis.successful_attempts == 1, f"Expected 1 success, got {analysis.successful_attempts}"
-    assert analysis.failed_attempts == 0, f"Expected 0 failures, got {analysis.failed_attempts}"
+    assert analysis.total_attempts == 1, (
+        f"Expected 1 attempt, got {analysis.total_attempts}"
+    )
+    assert analysis.successful_attempts == 1, (
+        f"Expected 1 success, got {analysis.successful_attempts}"
+    )
+    assert analysis.failed_attempts == 0, (
+        f"Expected 0 failures, got {analysis.failed_attempts}"
+    )
 
     # Verify no dominant failure
-    assert analysis.dominant_failure_type is None, f"Unexpected failure type: {analysis.dominant_failure_type}"
+    assert analysis.dominant_failure_type is None, (
+        f"Unexpected failure type: {analysis.dominant_failure_type}"
+    )
 
 
 def test_no_history_subtask_analysis(extractor: FailurePatternExtractor):
@@ -391,12 +426,18 @@ def test_no_history_subtask_analysis(extractor: FailurePatternExtractor):
     analysis = extractor.extract_patterns(subtask_id)
 
     # Should return empty analysis
-    assert analysis.total_attempts == 0, f"Expected 0 attempts, got {analysis.total_attempts}"
-    assert len(analysis.patterns) == 0, f"Unexpected patterns: {[p.pattern_type.value for p in analysis.patterns]}"
+    assert analysis.total_attempts == 0, (
+        f"Expected 0 attempts, got {analysis.total_attempts}"
+    )
+    assert len(analysis.patterns) == 0, (
+        f"Unexpected patterns: {[p.pattern_type.value for p in analysis.patterns]}"
+    )
 
     # Verify recommendations mention no history
     assert len(analysis.recovery_recommendations) > 0, "No recommendations provided"
-    assert "no attempt history" in analysis.recovery_recommendations[0].lower(), "Expected 'no attempt history' in recommendation"
+    assert "no attempt history" in analysis.recovery_recommendations[0].lower(), (
+        "Expected 'no attempt history' in recommendation"
+    )
 
 
 def test_recovery_recommendations(extractor: FailurePatternExtractor):
@@ -427,7 +468,9 @@ def test_recovery_recommendations(extractor: FailurePatternExtractor):
     for subtask_id, pattern_name, expected_keywords in test_cases:
         analysis = extractor.extract_patterns(subtask_id)
 
-        assert len(analysis.recovery_recommendations) > 0, f"{pattern_name}: No recommendations generated"
+        assert len(analysis.recovery_recommendations) > 0, (
+            f"{pattern_name}: No recommendations generated"
+        )
 
         recommendations_text = " ".join(analysis.recovery_recommendations).lower()
 
@@ -436,7 +479,9 @@ def test_recovery_recommendations(extractor: FailurePatternExtractor):
             keyword.lower() in recommendations_text for keyword in expected_keywords
         )
 
-        assert keyword_found, f"{pattern_name}: Expected keywords not found in recommendations"
+        assert keyword_found, (
+            f"{pattern_name}: Expected keywords not found in recommendations"
+        )
 
 
 def test_dominant_failure_type(extractor: FailurePatternExtractor):
@@ -469,7 +514,9 @@ def test_global_patterns_analysis(extractor: FailurePatternExtractor):
     )
 
     # Verify pattern detection across subtasks
-    assert global_patterns["total_patterns_detected"] > 0, "No patterns detected across all subtasks"
+    assert global_patterns["total_patterns_detected"] > 0, (
+        "No patterns detected across all subtasks"
+    )
 
     # Check patterns_by_type structure
     patterns_by_type = global_patterns.get("patterns_by_type", {})
@@ -484,8 +531,14 @@ def test_global_patterns_analysis(extractor: FailurePatternExtractor):
         "context_exhaustion",
     ]
 
-    found_types = [ptype for ptype in expected_types if ptype in patterns_by_type and patterns_by_type[ptype] > 0]
-    assert len(found_types) >= 3, f"Only found {len(found_types)}/5 expected pattern types"
+    found_types = [
+        ptype
+        for ptype in expected_types
+        if ptype in patterns_by_type and patterns_by_type[ptype] > 0
+    ]
+    assert len(found_types) >= 3, (
+        f"Only found {len(found_types)}/5 expected pattern types"
+    )
 
     # Verify escalating complexity count (this should always be detected)
     complexity_count = global_patterns.get("subtasks_with_escalating_complexity", 0)
@@ -497,17 +550,23 @@ def test_subtask_summary(extractor: FailurePatternExtractor):
     # Test successful subtask
     summary = extractor.get_subtask_summary("successful-subtask")
     assert summary["attempts"] == 1, f"Expected 1 attempt, got {summary['attempts']}"
-    assert summary["status"] == "completed", f"Expected status 'completed', got '{summary['status']}'"
+    assert summary["status"] == "completed", (
+        f"Expected status 'completed', got '{summary['status']}'"
+    )
 
     # Test recurring error subtask
     summary = extractor.get_subtask_summary("recurring-error-subtask")
     assert summary["attempts"] == 3, f"Expected 3 attempts, got {summary['attempts']}"
-    assert summary["status"] == "failed", f"Expected status 'failed', got '{summary['status']}'"
+    assert summary["status"] == "failed", (
+        f"Expected status 'failed', got '{summary['status']}'"
+    )
 
     # Test no history subtask
     summary = extractor.get_subtask_summary("no-history-subtask")
     assert summary["attempts"] == 0, f"Expected 0 attempts, got {summary['attempts']}"
-    assert summary["status"] == "no_history", f"Expected status 'no_history', got '{summary['status']}'"
+    assert summary["status"] == "no_history", (
+        f"Expected status 'no_history', got '{summary['status']}'"
+    )
 
 
 def test_analysis_timestamp(extractor: FailurePatternExtractor):
@@ -518,7 +577,9 @@ def test_analysis_timestamp(extractor: FailurePatternExtractor):
     analysis = extractor.extract_patterns(subtask_id)
 
     # Check timestamp format
-    timestamp = datetime.fromisoformat(analysis.analysis_timestamp.replace("Z", "+00:00"))
+    timestamp = datetime.fromisoformat(
+        analysis.analysis_timestamp.replace("Z", "+00:00")
+    )
 
     # Check timestamp is recent (within last minute)
     now = datetime.now(UTC)

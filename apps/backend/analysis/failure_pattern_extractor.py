@@ -19,7 +19,7 @@ import json
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -53,8 +53,12 @@ class FailurePattern:
     confidence: float  # Confidence score 0.0-1.0
     first_seen: str  # ISO timestamp of first occurrence
     last_seen: str  # ISO timestamp of most recent occurrence
-    affected_subtasks: list[str] = field(default_factory=list)  # Subtask IDs where pattern appears
-    metadata: dict[str, Any] = field(default_factory=dict)  # Additional pattern-specific data
+    affected_subtasks: list[str] = field(
+        default_factory=list
+    )  # Subtask IDs where pattern appears
+    metadata: dict[str, Any] = field(
+        default_factory=dict
+    )  # Additional pattern-specific data
 
 
 @dataclass
@@ -172,7 +176,9 @@ class FailurePatternExtractor:
                 failed_attempts=0,
                 dominant_failure_type=None,
                 patterns=[],
-                recovery_recommendations=["No attempt history available for this subtask"],
+                recovery_recommendations=[
+                    "No attempt history available for this subtask"
+                ],
                 last_attempt=None,
                 analysis_timestamp=datetime.now(UTC).isoformat(),
             )
@@ -587,7 +593,12 @@ class FailurePatternExtractor:
         """Check if error is a context exhaustion error."""
         return any(
             keyword in error.lower()
-            for keyword in ["context", "token limit", "maximum length", "context window"]
+            for keyword in [
+                "context",
+                "token limit",
+                "maximum length",
+                "context window",
+            ]
         )
 
     def _calculate_similarity(self, text1: str, text2: str) -> float:
@@ -717,13 +728,21 @@ class FailurePatternExtractor:
         # Add failure-type specific recommendations if no patterns found
         if not patterns and dominant_failure:
             if dominant_failure == "syntax_error":
-                recommendations.append("Syntax errors recurring: review code structure carefully")
+                recommendations.append(
+                    "Syntax errors recurring: review code structure carefully"
+                )
             elif dominant_failure == "dependency_error":
-                recommendations.append("Dependency issues: verify all imports and packages")
+                recommendations.append(
+                    "Dependency issues: verify all imports and packages"
+                )
             elif dominant_failure == "build_error":
-                recommendations.append("Build errors: check type definitions and build config")
+                recommendations.append(
+                    "Build errors: check type definitions and build config"
+                )
             elif dominant_failure == "test_or_timeout_error":
-                recommendations.append("Test/timeout failures: verify implementation matches requirements")
+                recommendations.append(
+                    "Test/timeout failures: verify implementation matches requirements"
+                )
 
         # Add general guidance based on attempt count
         failed_count = sum(1 for a in attempts if not a.get("success", False))
@@ -791,9 +810,7 @@ class FailurePatternExtractor:
                 else None
             ),
             "subtasks_with_circular_fixes": sum(
-                1
-                for p in all_patterns
-                if p.pattern_type == PatternType.CIRCULAR_FIX
+                1 for p in all_patterns if p.pattern_type == PatternType.CIRCULAR_FIX
             ),
             "subtasks_with_escalating_complexity": sum(
                 1

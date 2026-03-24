@@ -879,9 +879,7 @@ def handle_pattern_analyze_command(
 
             attempt_history = extractor.load_attempt_history()
             if not attempt_history.get("attempts"):
-                print(
-                    muted(f"  {icon(Icons.MINUS)} No attempts recorded, skipping")
-                )
+                print(muted(f"  {icon(Icons.MINUS)} No attempts recorded, skipping"))
                 continue
 
             # Extract patterns
@@ -916,7 +914,9 @@ def _display_failure_pattern_analysis(spec_name: str, analysis: dict) -> None:
     failed_attempts = analysis.get("failed_attempts", 0)
     patterns = analysis.get("patterns", [])
 
-    print(f"  {icon(Icons.CHART)} Attempts: {total_attempts} ({failed_attempts} failed)")
+    print(
+        f"  {icon(Icons.CHART)} Attempts: {total_attempts} ({failed_attempts} failed)"
+    )
 
     if not patterns:
         print(muted(f"  {icon(Icons.MINUS)} No failure patterns detected"))
@@ -935,7 +935,7 @@ def _display_failure_pattern_analysis(spec_name: str, analysis: dict) -> None:
 
         recommendations = pattern.get("recovery_recommendations", [])
         if recommendations:
-            print(f"    Recommendations:")
+            print("    Recommendations:")
             for rec in recommendations[:3]:  # Show top 3
                 print(f"      • {rec}")
         print()
@@ -1046,7 +1046,9 @@ def _display_failure_pattern_query_results(patterns: list[dict], query: str) -> 
 
         print(f"{i}. [{pattern_type.upper()}]")
         print(f"   {description}")
-        print(f"   Frequency: {frequency}x | Confidence: {confidence:.0%} | Relevance: {relevance:.0%}")
+        print(
+            f"   Frequency: {frequency}x | Confidence: {confidence:.0%} | Relevance: {relevance:.0%}"
+        )
 
         affected_subtasks = pattern.get("affected_subtasks", [])
         if affected_subtasks:
@@ -1054,7 +1056,7 @@ def _display_failure_pattern_query_results(patterns: list[dict], query: str) -> 
 
         recommendations = pattern.get("recovery_recommendations", [])
         if recommendations:
-            print(f"   Recovery strategies:")
+            print("   Recovery strategies:")
             for rec in recommendations[:2]:
                 print(f"     • {rec}")
         print()

@@ -37,8 +37,8 @@ backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
 # Mock graphiti_core before importing FailurePatternStore
-sys.modules['graphiti_core'] = MagicMock()
-sys.modules['graphiti_core.nodes'] = MagicMock()
+sys.modules["graphiti_core"] = MagicMock()
+sys.modules["graphiti_core.nodes"] = MagicMock()
 
 from integrations.graphiti.failure_pattern_store import FailurePatternStore
 from integrations.graphiti.queries_pkg.schema import GroupIdMode
@@ -97,7 +97,9 @@ class TestStorePattern:
         assert "group_id" in call_args.kwargs
 
     @pytest.mark.asyncio
-    async def test_store_pattern_with_metadata(self, failure_pattern_store, mock_client):
+    async def test_store_pattern_with_metadata(
+        self, failure_pattern_store, mock_client
+    ):
         """Test storing a pattern with custom metadata."""
         mock_client.graphiti.add_episode = AsyncMock()
 
@@ -116,7 +118,9 @@ class TestStorePattern:
         assert mock_client.graphiti.add_episode.called
 
     @pytest.mark.asyncio
-    async def test_store_pattern_normalizes_confidence(self, failure_pattern_store, mock_client):
+    async def test_store_pattern_normalizes_confidence(
+        self, failure_pattern_store, mock_client
+    ):
         """Test that confidence is normalized to 0.0-1.0 range."""
         mock_client.graphiti.add_episode = AsyncMock()
 
@@ -132,7 +136,7 @@ class TestStorePattern:
         import json
 
         episode_body = json.loads(call_args.kwargs["episode_body"])
-        assert episode_body["confidence"] == 1.0
+        assert episode_body["confidence"] == pytest.approx(1.0)
 
     @pytest.mark.asyncio
     async def test_store_batch_patterns(self, failure_pattern_store, mock_client):
@@ -154,7 +158,9 @@ class TestStorePattern:
             },
         ]
 
-        stored_count = await failure_pattern_store.store_failure_patterns_batch(patterns)
+        stored_count = await failure_pattern_store.store_failure_patterns_batch(
+            patterns
+        )
 
         assert stored_count == 2
         assert mock_client.graphiti.add_episode.call_count == 2
@@ -201,7 +207,9 @@ class TestQueryPatterns:
         assert patterns[0]["pattern_type"] == "test_failure"
 
     @pytest.mark.asyncio
-    async def test_query_with_confidence_filter(self, failure_pattern_store, mock_client):
+    async def test_query_with_confidence_filter(
+        self, failure_pattern_store, mock_client
+    ):
         """Test querying with minimum confidence filter."""
         # Create two mock results with different confidence levels
         high_conf_result = MagicMock()
@@ -212,7 +220,9 @@ class TestQueryPatterns:
         low_conf_result.content = '{"type": "failure_pattern", "pattern_type": "error", "description": "Low confidence", "frequency": 1, "confidence": 0.5, "first_seen": "2024-01-01T00:00:00Z", "last_seen": "2024-01-05T00:00:00Z", "affected_subtasks": [], "recovery_recommendations": [], "timestamp": "2024-01-01T00:00:00Z", "spec_id": "test"}'
         low_conf_result.score = 0.5
 
-        mock_client.graphiti.search = AsyncMock(return_value=[high_conf_result, low_conf_result])
+        mock_client.graphiti.search = AsyncMock(
+            return_value=[high_conf_result, low_conf_result]
+        )
 
         patterns = await failure_pattern_store.query_failure_patterns(
             query="error",
@@ -222,10 +232,12 @@ class TestQueryPatterns:
 
         # Should only return high confidence pattern
         assert len(patterns) == 1
-        assert patterns[0]["confidence"] == 0.9
+        assert patterns[0]["confidence"] == pytest.approx(0.9)
 
     @pytest.mark.asyncio
-    async def test_query_with_frequency_filter(self, failure_pattern_store, mock_client):
+    async def test_query_with_frequency_filter(
+        self, failure_pattern_store, mock_client
+    ):
         """Test querying with minimum frequency filter."""
         mock_result = MagicMock()
         mock_result.content = '{"type": "failure_pattern", "pattern_type": "recurring", "description": "Frequent error", "frequency": 5, "confidence": 0.8, "first_seen": "2024-01-01T00:00:00Z", "last_seen": "2024-01-05T00:00:00Z", "affected_subtasks": [], "recovery_recommendations": [], "timestamp": "2024-01-01T00:00:00Z", "spec_id": "test"}'
@@ -303,7 +315,9 @@ class TestUpdatePatterns:
         assert mock_client.graphiti.add_episode.called
 
     @pytest.mark.asyncio
-    async def test_update_creates_new_pattern_if_not_exists(self, failure_pattern_store, mock_client):
+    async def test_update_creates_new_pattern_if_not_exists(
+        self, failure_pattern_store, mock_client
+    ):
         """Test that update creates a new pattern if it doesn't exist."""
         mock_client.graphiti.search = AsyncMock(return_value=[])
         mock_client.graphiti.add_episode = AsyncMock()
@@ -323,7 +337,9 @@ class TestRecommendations:
     """Test recovery recommendations."""
 
     @pytest.mark.asyncio
-    async def test_get_recovery_recommendations(self, failure_pattern_store, mock_client):
+    async def test_get_recovery_recommendations(
+        self, failure_pattern_store, mock_client
+    ):
         """Test getting recovery recommendations."""
         # Mock patterns with recommendations
         mock_result = MagicMock()
@@ -381,7 +397,9 @@ class TestStatistics:
         assert stats["average_confidence"] > 0
 
     @pytest.mark.asyncio
-    async def test_get_pattern_statistics_empty(self, failure_pattern_store, mock_client):
+    async def test_get_pattern_statistics_empty(
+        self, failure_pattern_store, mock_client
+    ):
         """Test statistics with no patterns."""
         mock_client.graphiti.search = AsyncMock(return_value=[])
 
@@ -391,14 +409,16 @@ class TestStatistics:
         assert stats["patterns_by_type"] == {}
         assert stats["most_common_patterns"] == []
         assert stats["high_frequency_patterns"] == 0
-        assert stats["average_confidence"] == 0.0
+        assert stats["average_confidence"] == pytest.approx(0.0)
 
 
 class TestHighFrequencyPatterns:
     """Test high-frequency pattern queries."""
 
     @pytest.mark.asyncio
-    async def test_get_high_frequency_patterns(self, failure_pattern_store, mock_client):
+    async def test_get_high_frequency_patterns(
+        self, failure_pattern_store, mock_client
+    ):
         """Test getting high-frequency patterns."""
         mock_result = MagicMock()
         mock_result.content = '{"type": "failure_pattern", "pattern_type": "recurring_error", "description": "Frequent error", "frequency": 5, "confidence": 0.8, "first_seen": "2024-01-01T00:00:00Z", "last_seen": "2024-01-05T00:00:00Z", "affected_subtasks": [], "recovery_recommendations": [], "timestamp": "2024-01-01T00:00:00Z", "spec_id": "test"}'
@@ -420,11 +440,15 @@ class TestEdgeCases:
     """Test edge cases and error handling."""
 
     @pytest.mark.asyncio
-    async def test_query_filters_non_pattern_results(self, failure_pattern_store, mock_client):
+    async def test_query_filters_non_pattern_results(
+        self, failure_pattern_store, mock_client
+    ):
         """Test that non-failure-pattern results are filtered out."""
         # Mock result with wrong type
         mock_result = MagicMock()
-        mock_result.content = '{"type": "other_type", "description": "Not a failure pattern"}'
+        mock_result.content = (
+            '{"type": "other_type", "description": "Not a failure pattern"}'
+        )
         mock_result.score = 0.5
 
         mock_client.graphiti.search = AsyncMock(return_value=[mock_result])
@@ -455,7 +479,9 @@ class TestEdgeCases:
         assert len(patterns) == 0
 
     @pytest.mark.asyncio
-    async def test_query_handles_empty_content(self, failure_pattern_store, mock_client):
+    async def test_query_handles_empty_content(
+        self, failure_pattern_store, mock_client
+    ):
         """Test that empty content is handled gracefully."""
         mock_result = MagicMock()
         mock_result.content = None

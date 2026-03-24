@@ -429,9 +429,7 @@ class FailurePatternStore:
 
             # Filter to patterns that include this subtask
             filtered_patterns = [
-                p
-                for p in patterns
-                if subtask_id in p.get("affected_subtasks", [])
+                p for p in patterns if subtask_id in p.get("affected_subtasks", [])
             ]
 
             return filtered_patterns[:num_results]
@@ -672,7 +670,9 @@ class FailurePatternStore:
                     for p in most_common
                 ],
                 "high_frequency_patterns": high_frequency_count,
-                "average_confidence": total_confidence / len(all_patterns) if all_patterns else 0.0,
+                "average_confidence": total_confidence / len(all_patterns)
+                if all_patterns
+                else 0.0,
             }
 
         except Exception as e:

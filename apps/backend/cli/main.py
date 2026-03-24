@@ -886,7 +886,9 @@ def _run_cli() -> None:
             print_banner()
             print("\nError: --spec is required for --failure-pattern-query")
             print("\nUsage:")
-            print("  python auto-claude/run.py --spec 001 --failure-pattern-query 'error type'")
+            print(
+                "  python auto-claude/run.py --spec 001 --failure-pattern-query 'error type'"
+            )
             sys.exit(1)
 
         spec_dir = find_spec(project_dir, args.spec)

@@ -235,7 +235,9 @@ class RecoveryManager:
                     project_dir=self.project_dir,
                 )
 
-                logger.debug("Initialized FailurePatternStore for pattern-based recovery")
+                logger.debug(
+                    "Initialized FailurePatternStore for pattern-based recovery"
+                )
 
             except Exception as e:
                 logger.warning(f"Failed to initialize FailurePatternStore: {e}")
@@ -414,7 +416,9 @@ class RecoveryManager:
             if total_uses >= 5 and success_rate >= 70.0:
                 # Strong candidate: proven track record
                 score = success_rate + (total_uses * 0.5)
-                scored_strategies.append((name, desc, use_fallback, score, success_rate, total_uses))
+                scored_strategies.append(
+                    (name, desc, use_fallback, score, success_rate, total_uses)
+                )
                 logger.debug(
                     f"Strategy '{name}': strong candidate (success: {success_rate:.1f}%, "
                     f"uses: {total_uses}, score: {score:.1f})"
@@ -422,7 +426,9 @@ class RecoveryManager:
             elif total_uses >= 3 and success_rate >= 50.0:
                 # Moderate candidate: some evidence of effectiveness
                 score = success_rate + (total_uses * 0.3)
-                scored_strategies.append((name, desc, use_fallback, score, success_rate, total_uses))
+                scored_strategies.append(
+                    (name, desc, use_fallback, score, success_rate, total_uses)
+                )
                 logger.debug(
                     f"Strategy '{name}': moderate candidate (success: {success_rate:.1f}%, "
                     f"uses: {total_uses}, score: {score:.1f})"
@@ -438,7 +444,9 @@ class RecoveryManager:
         if scored_strategies:
             # Sort by score (descending)
             scored_strategies.sort(key=lambda x: x[3], reverse=True)
-            best_name, best_desc, best_fallback, best_score, best_rate, best_uses = scored_strategies[0]
+            best_name, best_desc, best_fallback, best_score, best_rate, best_uses = (
+                scored_strategies[0]
+            )
 
             logger.info(
                 f"Adaptive strategy selection: chose '{best_name}' "
@@ -458,7 +466,11 @@ class RecoveryManager:
         return default_name, default_desc, default_fallback
 
     def select_retry_strategy(
-        self, failure_type: FailureType, attempt_count: int, subtask_id: str, error: str | None = None
+        self,
+        failure_type: FailureType,
+        attempt_count: int,
+        subtask_id: str,
+        error: str | None = None,
     ) -> RetryStrategy | None:
         """
         Select an appropriate retry strategy based on failure type and history.
@@ -508,13 +520,14 @@ class RecoveryManager:
 
         # Extract pattern-based recommendations if available
         pattern_guidance = ""
-        pattern_confidence = 0.0
         if patterns:
             # Use the highest confidence pattern's recommendations
             best_pattern = max(patterns, key=lambda p: p.get("confidence", 0.0))
             pattern_recommendations = best_pattern.get("recovery_recommendations", [])
             if pattern_recommendations:
-                pattern_guidance = "\n".join(f"• {rec}" for rec in pattern_recommendations[:3])
+                pattern_guidance = "\n".join(
+                    f"• {rec}" for rec in pattern_recommendations[:3]
+                )
                 pattern_confidence = best_pattern.get("confidence", 0.0)
                 logger.info(
                     f"Using pattern-based recovery guidance (confidence: {pattern_confidence:.2f}) "
@@ -544,13 +557,25 @@ class RecoveryManager:
             elif attempt_count == 1:
                 # Second attempt: use adaptive strategy selection
                 candidate_strategies = [
-                    ("model_fallback", "Retry with fallback model (opus→sonnet→haiku)", True, ""),
-                    ("direct_retry", "Retry with same approach and corrections", False, ""),
+                    (
+                        "model_fallback",
+                        "Retry with fallback model (opus→sonnet→haiku)",
+                        True,
+                        "",
+                    ),
+                    (
+                        "direct_retry",
+                        "Retry with same approach and corrections",
+                        False,
+                        "",
+                    ),
                     ("context_analysis", "Retry with deeper error analysis", False, ""),
                 ]
 
-                strategy_name, strategy_desc, use_fallback = self._select_adaptive_strategy(
-                    failure_type, attempt_count, subtask_id, candidate_strategies
+                strategy_name, strategy_desc, use_fallback = (
+                    self._select_adaptive_strategy(
+                        failure_type, attempt_count, subtask_id, candidate_strategies
+                    )
                 )
 
                 guidance = "Use a different model which may handle this task better"
@@ -568,13 +593,25 @@ class RecoveryManager:
                 # Third attempt: alternative approach with specific guidance
                 # Use adaptive strategy selection
                 candidate_strategies = [
-                    ("alternative_approach", "Try a simpler or different approach", True, ""),
-                    ("incremental_fix", "Fix issues incrementally with testing", False, ""),
+                    (
+                        "alternative_approach",
+                        "Try a simpler or different approach",
+                        True,
+                        "",
+                    ),
+                    (
+                        "incremental_fix",
+                        "Fix issues incrementally with testing",
+                        False,
+                        "",
+                    ),
                     ("model_fallback", "Retry with fallback model", True, ""),
                 ]
 
-                strategy_name, strategy_desc, use_fallback = self._select_adaptive_strategy(
-                    failure_type, attempt_count, subtask_id, candidate_strategies
+                strategy_name, strategy_desc, use_fallback = (
+                    self._select_adaptive_strategy(
+                        failure_type, attempt_count, subtask_id, candidate_strategies
+                    )
                 )
 
                 guidance = (
@@ -617,13 +654,25 @@ class RecoveryManager:
             else:
                 # Second attempt: use adaptive strategy selection
                 candidate_strategies = [
-                    ("model_fallback_alternative", "Retry with fallback model and alternative approach", True, ""),
-                    ("direct_retry_enhanced", "Retry with enhanced error handling", False, ""),
+                    (
+                        "model_fallback_alternative",
+                        "Retry with fallback model and alternative approach",
+                        True,
+                        "",
+                    ),
+                    (
+                        "direct_retry_enhanced",
+                        "Retry with enhanced error handling",
+                        False,
+                        "",
+                    ),
                     ("simplify_approach", "Simplify the implementation", False, ""),
                 ]
 
-                strategy_name, strategy_desc, use_fallback = self._select_adaptive_strategy(
-                    failure_type, attempt_count, subtask_id, candidate_strategies
+                strategy_name, strategy_desc, use_fallback = (
+                    self._select_adaptive_strategy(
+                        failure_type, attempt_count, subtask_id, candidate_strategies
+                    )
                 )
 
                 guidance = (
