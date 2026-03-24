@@ -79,6 +79,9 @@ class ErrorCode(Enum):
     INVALID_PARAMETER = auto()
     """Parameter value is invalid."""
 
+    NOT_FOUND = auto()
+    """Requested resource not found."""
+
     # Agent & Session Errors
     STUCK_LOOP = auto()
     """Agent stuck in a repetitive loop."""

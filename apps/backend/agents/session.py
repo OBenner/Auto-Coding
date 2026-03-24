@@ -18,8 +18,14 @@ from core.circuit_breaker import CircuitBreaker
 from core.error_classifier import ErrorClassifier
 from core.error_codes import ErrorCode
 from core.memory_monitor import MemoryMonitor, MemoryPressure, SessionBounds
-from core.typed_errors import AuthError, ConfigurationError, NetworkError, NotFoundError, TimeoutError, TypedError
 from core.token_stats import PhaseTokenStats, PhaseType, TaskTokenStats
+from core.typed_errors import (
+    AuthError,
+    NetworkError,
+    NotFoundError,
+    OperationTimeoutError,
+    TypedError,
+)
 from debug import (
     debug,
     debug_detailed,
@@ -1067,7 +1073,7 @@ async def run_agent_session(
                     task_logger.log_error(reason, phase)
                 _memory_monitor.maybe_gc()
                 # Raise typed error for session bounds exceeded
-                raise TimeoutError(reason)
+                raise OperationTimeoutError(reason)
 
             # Periodic GC under memory pressure
             if message_count % _GC_MESSAGE_INTERVAL == 0:
@@ -1282,7 +1288,7 @@ async def run_agent_session(
                     f"[{classified.category.value.upper()}] {error_msg}", phase
                 )
             # Raise typed error for authentication failures
-            if classified.category.value == "auth":
+            if classified.category.name.startswith("AUTH_"):
                 raise AuthError(error_msg)
             return "error", error_msg, None, decision_tracker
 

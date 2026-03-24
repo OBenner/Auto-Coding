@@ -44,7 +44,7 @@ def get_error_code(error: Exception) -> ErrorCode | None:
     if hasattr(error, "error_code"):
         from core.error_codes import ErrorCode
 
-        error_code = getattr(error, "error_code")
+        error_code = error.error_code
         # Validate that it's actually an ErrorCode enum value
         if isinstance(error_code, ErrorCode):
             return error_code
@@ -129,8 +129,6 @@ def _classify_error_message(error_message: str) -> ErrorCode:
     """
     from core.error_codes import ErrorCode
 
-    error_lower = error_message.lower()
-
     # Try each pattern category in order of specificity
     pattern_groups = [
         (_AUTH_EXPIRED_PATTERNS, ErrorCode.AUTH_EXPIRED),
@@ -191,8 +189,8 @@ def wrap_sdk_error(error: Exception) -> Exception:
     from core.typed_errors import (
         AuthError,
         NetworkError,
+        OperationTimeoutError,
         TypedError,
-        TimeoutError,
     )
 
     # If it's already a TypedError, return as-is
@@ -216,7 +214,7 @@ def wrap_sdk_error(error: Exception) -> Exception:
         ErrorCode.RATE_LIMIT_HARD: TypedError,
         ErrorCode.NETWORK: NetworkError,
         ErrorCode.NETWORK_UNREACHABLE: NetworkError,
-        ErrorCode.NETWORK_TIMEOUT: TimeoutError,
+        ErrorCode.NETWORK_TIMEOUT: OperationTimeoutError,
         ErrorCode.OVERLOADED: TypedError,
         ErrorCode.SERVICE_UNAVAILABLE: TypedError,
         ErrorCode.INTERNAL_ERROR: TypedError,
@@ -231,10 +229,8 @@ def wrap_sdk_error(error: Exception) -> Exception:
     error_class = error_class_mapping.get(error_code, TypedError)
 
     # Create and return the typed error
-    # Specific TypedError subclasses (AuthError, NetworkError, etc.) only take message
-    # The base TypedError class takes both error_code and message
     if error_class is TypedError:
         return error_class(error_code, error_message)
     else:
-        # Subclasses have their own error_code defaults, just pass message
-        return error_class(error_message)
+        # Subclasses accept an explicit error_code to preserve the derived code
+        return error_class(error_message, error_code=error_code)

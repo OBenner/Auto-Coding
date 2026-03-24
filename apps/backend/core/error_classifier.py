@@ -207,9 +207,7 @@ class ErrorClassifier:
         error_code = get_error_code(exc)
         if error_code is not None:
             # Map ErrorCode to SDKErrorCategory
-            category = _ERROR_CODE_TO_CATEGORY.get(
-                error_code, SDKErrorCategory.UNKNOWN
-            )
+            category = _ERROR_CODE_TO_CATEGORY.get(error_code, SDKErrorCategory.UNKNOWN)
             return _build_classified(
                 category,
                 f"{type(exc).__name__}: {exc}",
@@ -221,7 +219,7 @@ class ErrorClassifier:
         text = str(exc).lower()
 
         # Common HTTP status codes and patterns
-        if "401" in text or "unauthorized" in text:
+        if "401" in text or "unauthorized" in text or "invalid_api_key" in text:
             return _build_classified(
                 SDKErrorCategory.AUTH_INVALID,
                 f"authentication error: {text[:100]}",
@@ -241,18 +239,16 @@ class ErrorClassifier:
                 SDKErrorCategory.OVERLOADED,
                 f"API overloaded: {text[:100]}",
             )
-        elif "invalid_api_key" in text:
-            return _build_classified(
-                SDKErrorCategory.AUTH_INVALID,
-                f"authentication error: {text[:100]}",
-            )
         elif "oauth" in text and "expired" in text:
             return _build_classified(
                 SDKErrorCategory.AUTH_EXPIRED,
                 f"authentication error: {text[:100]}",
             )
-        elif re.search(r"context\s*(window|length)\s*(exceeded|overflow)", text) or \
-             "maximum tokens exceeded" in text or "token limit" in text:
+        elif (
+            re.search(r"context\s*(window|length)\s*(exceeded|overflow)", text)
+            or "maximum tokens exceeded" in text
+            or "token limit" in text
+        ):
             return _build_classified(
                 SDKErrorCategory.CONTEXT_OVERFLOW,
                 f"context overflow: {text[:100]}",
@@ -277,9 +273,12 @@ class ErrorClassifier:
             )
 
         # Check for JSON error responses
-        if 'error' in text.lower():
+        if "error" in text.lower():
             # Simple JSON error detection
-            if 'authentication_error' in text.lower() or 'invalid_api_key' in text.lower():
+            if (
+                "authentication_error" in text.lower()
+                or "invalid_api_key" in text.lower()
+            ):
                 return _build_classified(
                     SDKErrorCategory.AUTH_INVALID,
                     f"authentication error: {text[:100]}",
@@ -306,5 +305,3 @@ class ErrorClassifier:
 
     # -- private helpers ----------------------------------------------------
     # String-based text classification removed - only typed errors and stuck loop detection remain
-
-    

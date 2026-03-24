@@ -216,7 +216,7 @@ class NetworkError(TypedError):
     def __init__(self, message: str = "Network error"):
         super().__init__(ErrorCode.NETWORK, message)
 
-class TimeoutError(TypedError):
+class OperationTimeoutError(TypedError):
     """Raised when an operation times out."""
 
     def __init__(self, message: str = "Operation timed out"):
@@ -232,7 +232,7 @@ class NotFoundError(TypedError):
     """Raised when a requested resource is not found."""
 
     def __init__(self, message: str = "Resource not found"):
-        super().__init__(ErrorCode.INVALID_REQUEST, message)
+        super().__init__(ErrorCode.NOT_FOUND, message)
 
 class ConfigurationError(TypedError):
     """Raised when configuration is invalid or missing."""
@@ -390,8 +390,8 @@ def wrap_sdk_error(error: Exception) -> Exception:
     from core.typed_errors import (
         AuthError,
         NetworkError,
+        OperationTimeoutError,
         TypedError,
-        TimeoutError,
     )
 
     # If it's already a TypedError, return as-is
@@ -415,7 +415,7 @@ def wrap_sdk_error(error: Exception) -> Exception:
         ErrorCode.RATE_LIMIT_HARD: TypedError,
         ErrorCode.NETWORK: NetworkError,
         ErrorCode.NETWORK_UNREACHABLE: NetworkError,
-        ErrorCode.NETWORK_TIMEOUT: TimeoutError,
+        ErrorCode.NETWORK_TIMEOUT: OperationTimeoutError,
         ErrorCode.OVERLOADED: TypedError,
         ErrorCode.SERVICE_UNAVAILABLE: TypedError,
         ErrorCode.INTERNAL_ERROR: TypedError,
@@ -558,7 +558,7 @@ except AuthError as e:
 except NetworkError as e:
     print(f"Network error: {e}")
     # Show offline mode or retry
-except TimeoutError as e:
+except OperationTimeoutError as e:
     print(f"Operation timed out: {e}")
     # Increase timeout or split into smaller operations
 except TypedError as e:
@@ -849,7 +849,6 @@ try:
 except ValidationError as e:
     raise ValidationError(
         f"Invalid user data: {e}",
-        ErrorCode.INVALID_PARAMETER
     ) from e
 ```
 
@@ -976,7 +975,7 @@ RateLimitError(error_code=ErrorCode.RATE_LIMITED)
 ```python
 # Connection refused, timeout, unreachable
 NetworkError(error_code=ErrorCode.NETWORK)
-TimeoutError(error_code=ErrorCode.NETWORK_TIMEOUT)
+OperationTimeoutError(error_code=ErrorCode.NETWORK_TIMEOUT)
 ```
 
 #### Context Errors

@@ -9,9 +9,9 @@ from core.error_codes import ErrorCode
 from core.error_detection import get_error_code
 from core.typed_errors import (
     AuthError,
-    RateLimitError,
     NetworkError,
-    TimeoutError,
+    OperationTimeoutError,
+    RateLimitError,
     TypedError,
 )
 
@@ -69,7 +69,7 @@ class TestClassifyException:
         assert result.is_retryable is True
 
     def test_network_timeout(self, classifier):
-        exc = TimeoutError("Connection timed out")
+        exc = OperationTimeoutError("Connection timed out")
         result = classifier.classify_exception(exc)
         assert result.category == SDKErrorCategory.NETWORK
         assert result.is_retryable is True
@@ -175,8 +175,8 @@ class TestTypedErrors:
         assert result.is_retryable is True
 
     def test_timeout_error_classification(self, classifier):
-        """Test TimeoutError is classified as NETWORK."""
-        exc = TimeoutError("Request timed out")
+        """Test OperationTimeoutError is classified as NETWORK."""
+        exc = OperationTimeoutError("Request timed out")
         result = classifier.classify_exception(exc)
         assert result.category == SDKErrorCategory.NETWORK
         assert result.is_fatal is False

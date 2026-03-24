@@ -1,20 +1,18 @@
 """Tests for SDK error wrapping functionality."""
 
-import pytest
 from core.error_codes import ErrorCode
-from core.error_detection import wrap_sdk_error, get_error_code
+from core.error_detection import get_error_code, wrap_sdk_error
 from core.typed_errors import (
+    AccessDeniedError,
     AuthError,
-    RateLimitError,
+    ConfigurationError,
     NetworkError,
-    TimeoutError,
+    NotFoundError,
+    OperationTimeoutError,
+    RateLimitError,
     TypedError,
     ValidationError,
-    NotFoundError,
-    PermissionError,
-    ConfigurationError,
 )
-
 
 # ---------------------------------------------------------------------------
 # wrap_sdk_error - Authentication Errors
@@ -146,10 +144,10 @@ class TestWrapNetworkErrors:
 
     def test_connection_timeout(self):
         """Test wrapping connection timeout errors."""
-        exc = TimeoutError("connection timed out after 30s")
+        exc = OperationTimeoutError("connection timed out after 30s")
         wrapped = wrap_sdk_error(exc)
 
-        assert isinstance(wrapped, TimeoutError)
+        assert isinstance(wrapped, OperationTimeoutError)
         assert get_error_code(wrapped) == ErrorCode.NETWORK_TIMEOUT
 
     def test_network_unreachable(self):
@@ -277,8 +275,8 @@ class TestTypedErrorPreservation:
         assert get_error_code(wrapped) == ErrorCode.NETWORK
 
     def test_timeout_error_preserved(self):
-        """Test that TimeoutError instances are returned unchanged."""
-        original = TimeoutError("Request timed out")
+        """Test that OperationTimeoutError instances are returned unchanged."""
+        original = OperationTimeoutError("Request timed out")
         wrapped = wrap_sdk_error(original)
 
         assert wrapped is original  # Same object reference
@@ -306,11 +304,11 @@ class TestTypedErrorPreservation:
         wrapped = wrap_sdk_error(original)
 
         assert wrapped is original
-        assert get_error_code(wrapped) == ErrorCode.INVALID_REQUEST
+        assert get_error_code(wrapped) == ErrorCode.NOT_FOUND
 
-    def test_permission_error_preserved(self):
-        """Test that PermissionError instances are returned unchanged."""
-        original = PermissionError("Access denied")
+    def test_access_denied_error_preserved(self):
+        """Test that AccessDeniedError instances are returned unchanged."""
+        original = AccessDeniedError("Access denied")
         wrapped = wrap_sdk_error(original)
 
         assert wrapped is original
@@ -441,13 +439,13 @@ class TestIntegrationScenarios:
     def test_sdk_network_error_handling_flow(self):
         """Test complete flow of SDK network error detection and wrapping."""
         # Simulate SDK throwing a network error
-        sdk_error = TimeoutError("connection timed out after 30s")
+        sdk_error = OperationTimeoutError("connection timed out after 30s")
 
         # Wrap the error
         typed_error = wrap_sdk_error(sdk_error)
 
         # Verify it's now a typed error with correct classification
-        assert isinstance(typed_error, TimeoutError)
+        assert isinstance(typed_error, OperationTimeoutError)
         error_code = get_error_code(typed_error)
         assert error_code == ErrorCode.NETWORK_TIMEOUT
 
