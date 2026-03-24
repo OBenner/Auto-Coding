@@ -15,6 +15,7 @@ import { Insights } from "./pages/Insights"
 import { Kanban } from "./pages/Kanban"
 import { Roadmap } from "./pages/Roadmap"
 import { TaskCreate } from "./pages/TaskCreate"
+import { IDEPage } from "./pages/IDEPage"
 import { TerminalPage } from "./pages/TerminalPage"
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -138,6 +139,9 @@ function App() {
               <Route path="/roadmap" element={<Roadmap />} />
               <Route path="/changelog" element={<Changelog />} />
               <Route path="/insights" element={<Insights />} />
+
+              {/* IDE route */}
+              <Route path="/ide" element={<IDEPage />} />
 
               {/* Terminal and file management */}
               <Route path="/terminal" element={<TerminalPage />} />

@@ -1,5 +1,6 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
+import { visualizer } from 'rollup-plugin-visualizer';
 import { resolve } from 'path';
 
 /**
@@ -91,7 +92,16 @@ export default defineConfig({
         }
       }
     },
-    plugins: [react()],
+    plugins: [
+      react(),
+      // Bundle analyzer - MUST be last in renderer plugins
+      visualizer({
+        filename: './out/renderer/stats.html',
+        open: !process.env.CI,
+        gzipSize: true,
+        brotliSize: true
+      })
+    ],
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/renderer'),

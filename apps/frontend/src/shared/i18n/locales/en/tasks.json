@@ -1,6 +1,7 @@
 {
   "tabs": {
-    "collaboration": "Collaboration"
+    "collaboration": "Collaboration",
+    "timeline": "Timeline"
   },
   "refreshTasks": "Refresh Tasks",
   "status": {

@@ -1,9 +1,11 @@
 /**
  * Files Page - Displays file explorer for browsing project files
+ * Integrates CodeEditor for viewing/editing selected files.
  */
 
-import { ArrowLeft } from "lucide-react";
-import { useCallback } from "react";
+import { ArrowLeft, Code2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { CodeEditor } from "../components/CodeEditor";
 import { FileExplorer, type FileNode } from "../components/FileExplorer";
 import { Button } from "../components/ui/button";
 
@@ -14,11 +16,92 @@ interface FilesPageProps {
 export function FilesPage({ onBack }: FilesPageProps) {
 	const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+	const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
+	const [fileContent, setFileContent] = useState<string>("");
+	const [isFetchingFile, setIsFetchingFile] = useState(false);
+	const [fetchError, setFetchError] = useState<string | null>(null);
+
+	// Fetch file content whenever the selected file changes
+	useEffect(() => {
+		if (!selectedFile || selectedFile.isDirectory) {
+			setFileContent("");
+			setFetchError(null);
+			return;
+		}
+
+		let cancelled = false;
+		setIsFetchingFile(true);
+		setFetchError(null);
+
+		const token = (() => {
+			try {
+				return localStorage.getItem("auth_token") ?? "";
+			} catch {
+				return "";
+			}
+		})();
+
+		fetch(`${apiUrl}/api/files/content?path=${encodeURIComponent(selectedFile.path)}`, {
+			headers: token ? { Authorization: `Bearer ${token}` } : {},
+		})
+			.then(async (res) => {
+				if (!res.ok) {
+					throw new Error(`Failed to load file: ${res.statusText}`);
+				}
+				return res.text();
+			})
+			.then((text) => {
+				if (!cancelled) {
+					setFileContent(text);
+				}
+			})
+			.catch((err: unknown) => {
+				if (!cancelled) {
+					setFetchError(err instanceof Error ? err.message : "Failed to load file");
+					setFileContent("");
+				}
+			})
+			.finally(() => {
+				if (!cancelled) {
+					setIsFetchingFile(false);
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [selectedFile, apiUrl]);
+
 	const handleFileSelect = useCallback((file: FileNode) => {
-		// For now, just log the selected file
-		// In future, this could open a file viewer or editor
-		alert(`Selected file: ${file.name}\nPath: ${file.path}`);
+		if (!file.isDirectory) {
+			setSelectedFile(file);
+		}
 	}, []);
+
+	const handleSave = useCallback(
+		async (content: string, filePath?: string) => {
+			const path = filePath ?? selectedFile?.path;
+			if (!path) return;
+
+			const token = (() => {
+				try {
+					return localStorage.getItem("auth_token") ?? "";
+				} catch {
+					return "";
+				}
+			})();
+
+			await fetch(`${apiUrl}/api/files/content`, {
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				body: JSON.stringify({ path, content }),
+			});
+		},
+		[selectedFile, apiUrl],
+	);
 
 	const handleBack = useCallback(() => {
 		if (onBack) {
@@ -47,18 +130,52 @@ export function FilesPage({ onBack }: FilesPageProps) {
 							Browse and explore project files
 						</p>
 					</div>
+					{selectedFile && (
+						<span className="ml-2 text-sm font-mono text-muted-foreground truncate max-w-xs">
+							{selectedFile.path}
+						</span>
+					)}
 				</div>
 			</header>
 
 			{/* Main Content */}
 			<main className="flex-1 container mx-auto px-4 py-6">
-				<div className="bg-card rounded-lg border shadow-sm h-[calc(100vh-180px)]">
-					<FileExplorer
-						rootPath="/"
-						apiUrl={apiUrl}
-						onFileSelect={handleFileSelect}
-						className="h-full"
-					/>
+				<div className="flex gap-4 h-[calc(100vh-180px)]">
+					{/* File explorer panel */}
+					<div className="w-64 shrink-0 bg-card rounded-lg border shadow-sm overflow-hidden">
+						<FileExplorer
+							rootPath="/"
+							apiUrl={apiUrl}
+							onFileSelect={handleFileSelect}
+							className="h-full"
+						/>
+					</div>
+
+					{/* Editor panel */}
+					<div className="flex-1 bg-card rounded-lg border shadow-sm overflow-hidden">
+						{fetchError ? (
+							<div className="flex items-center justify-center h-full text-destructive text-sm p-4">
+								{fetchError}
+							</div>
+						) : isFetchingFile ? (
+							<div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+								Loading…
+							</div>
+						) : selectedFile ? (
+							<CodeEditor
+								filePath={selectedFile.path}
+								content={fileContent}
+								onSave={handleSave}
+								isActive
+								className="h-full"
+							/>
+						) : (
+							<div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+								<Code2 className="h-12 w-12 opacity-20" />
+								<p className="text-sm">Select a file from the explorer to view or edit it</p>
+							</div>
+						)}
+					</div>
 				</div>
 			</main>
 		</div>

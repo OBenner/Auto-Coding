@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from '../../hooks/use-toast';
 import { MetricsSummaryCard } from './MetricsSummaryCard';
+import { SpecSummaryCard } from './SpecSummaryCard';
 import { TrendsChart } from './TrendsChart';
 import { SpecBreakdownTable } from './SpecBreakdownTable';
 import { FailureAnalysisDashboard } from './FailureAnalysisDashboard';
@@ -254,6 +255,9 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
 
           {/* Summary Metrics */}
           <MetricsSummaryCard analytics={summary} isLoading={isLoading} />
+
+          {/* Spec Summary */}
+          <SpecSummaryCard analytics={summary} isLoading={isLoading} />
 
           {/* Secondary Metrics */}
           {summary && summary.total_specs > 0 && (

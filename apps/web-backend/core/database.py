@@ -11,14 +11,18 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from .config import settings
 
-# Create SQLAlchemy engine (SQLite doesn't support pool_size/max_overflow)
+# Create SQLAlchemy engine with optimized connection pool settings
+# SQLite doesn't support pool_size/max_overflow/pool_timeout/pool_recycle
 _engine_kwargs: dict = {"pool_pre_ping": True}
 if settings.DATABASE_URL.startswith("sqlite"):
     # SQLite requires check_same_thread=False for use across multiple threads
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
-    _engine_kwargs["pool_size"] = 10
-    _engine_kwargs["max_overflow"] = 20
+    _engine_kwargs["pool_size"] = settings.DB_POOL_SIZE
+    _engine_kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
+    _engine_kwargs["pool_timeout"] = settings.DB_POOL_TIMEOUT
+    _engine_kwargs["pool_recycle"] = settings.DB_POOL_RECYCLE
+    _engine_kwargs["echo"] = settings.DB_ECHO
 
 engine = create_engine(settings.DATABASE_URL, **_engine_kwargs)
 

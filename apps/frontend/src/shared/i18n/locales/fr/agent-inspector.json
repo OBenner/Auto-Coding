@@ -1,0 +1,123 @@
+{
+  "title": "Inspecteur d'Agent",
+  "subtitle": "Voir le raisonnement et les appels d'outils de l'agent en temps réel",
+  "thinkingContent": "Processus de Réflexion",
+  "collapseThought": "Réduire les détails de réflexion",
+  "expandThought": "Développer les détails de réflexion",
+  "session": "Session",
+  "toolCall": "Appel d'Outil",
+  "input": "Entrée",
+  "output": "Sortie",
+  "duration": "Durée",
+  "timestamp": "Horodatage",
+  "phase": "Phase",
+  "subtask": "Sous-tâche",
+  "loading": "Chargement des pensées de l'agent...",
+  "noThoughtsYet": "Aucune pensée capturée pour le moment",
+  "noThoughtsDescription": "Les pensées de l'agent apparaîtront ici en temps réel pendant qu'il travaille.",
+  "filterByToolType": "Filtrer par type d'outil",
+  "searchPlaceholder": "Rechercher des pensées et des appels d'outils...",
+  "searchLabel": "Rechercher dans les journaux de l'agent",
+  "searchResults": "{{count}} sur {{total}}",
+  "totalItems": "{{count}} éléments",
+  "totalSteps": "étapes au total",
+  "clearFilters": "Effacer les filtres",
+  "exportSession": "Exporter le Journal de Session",
+  "performanceMetrics": "Métriques de Performance",
+  "tokenUsage": "Utilisation des Jetons",
+  "timePerStep": "Temps par Étape",
+  "suspiciousPatterns": "Modèles Suspects Détectés",
+  "infiniteLoop": "Boucle infinie potentielle détectée",
+  "repeatedFailures": "Échecs répétés détectés",
+  "views": {
+    "timeline": "Chronologie",
+    "thoughts": "Pensées",
+    "toolCalls": "Appels d'Outils"
+  },
+  "toolStatus": {
+    "error": "Erreur",
+    "failed": "Échoué",
+    "success": "Succès"
+  },
+  "units": {
+    "milliseconds": "ms",
+    "seconds": "s",
+    "minutes": "m",
+    "hours": "h"
+  },
+  "export": {
+    "title": "Exporter le Journal de Session",
+    "description": "Exporter le processus de réflexion de l'agent avec tous les détails",
+    "format": "Format",
+    "formatJson": "JSON",
+    "formatMarkdown": "Markdown",
+    "formatJsonDesc": "Format lisible par machine avec données complètes",
+    "formatMarkdownDesc": "Format lisible par humain pour la documentation",
+    "formatJsonInfo": "Exporte les données de session au format JSON, y compris toutes les pensées, appels d'outils et métriques de performance. Adapté au traitement programmatique.",
+    "formatMarkdownInfo": "Exporte les données de session au format Markdown avec sections formatées. Adapté à la documentation et au partage.",
+    "export": "Exporter",
+    "exporting": "Exportation...",
+    "cancel": "Annuler",
+    "exportSuccess": "Session exportée avec succès"
+  },
+  "metrics": {
+    "totalTokens": "Total des Jetons",
+    "input": "Entrée",
+    "output": "Sortie",
+    "thinking": "Réflexion",
+    "totalDuration": "Durée Totale",
+    "totalSteps": "Total des Étapes",
+    "efficiency": "Efficacité",
+    "tokensPerStep": "Jetons par étape",
+    "breakdown": "Répartition des Performances",
+    "tokenDistribution": "Distribution des Jetons",
+    "timingStats": "Statistiques de Temps",
+    "fastest": "Le Plus Rapide",
+    "average": "Moyenne",
+    "slowest": "Le Plus Lent",
+    "sessionTimeline": "Chronologie de Session",
+    "started": "Démarré",
+    "completed": "Terminé",
+    "inProgress": "En Cours",
+    "avgPerStep": "Moy. par étape",
+    "toolCalls": "Appels d'outils",
+    "thoughts": "Pensées"
+  },
+  "patterns": {
+    "noIssues": "Aucun Problème Détecté",
+    "noIssuesDescription": "Le comportement de l'agent semble normal sans modèles suspects.",
+    "issuesDetected": "Modèles Suspects Détectés",
+    "issuesCount": "{{count}} problèmes potentiels trouvés nécessitant une attention.",
+    "occurrences": "Occurrences",
+    "affectedItems": "Éléments affectés",
+    "infiniteLoop": {
+      "description": "L'outil \"{{tool}}\" appelé {{count}} fois de suite",
+      "suggestion": "L'agent est peut-être bloqué dans une boucle. Envisagez de l'interrompre et de fournir des directives."
+    },
+    "repeatedFailure": {
+      "description": "{{count}} échecs consécutifs d'appels d'outils",
+      "suggestion": "L'agent échoue de manière répétée. Vérifiez les messages d'erreur et envisagez d'ajuster la tâche."
+    },
+    "rapidExecution": {
+      "description": "{{count}} appels d'outils par seconde",
+      "suggestion": "L'agent effectue des appels d'outils rapides. Cela peut indiquer une approche inefficace ou un comportement incontrôlé."
+    },
+    "sameError": {
+      "description": "La même erreur s'est produite {{count}} fois : \"{{error}}...\"",
+      "suggestion": "L'agent rencontre la même erreur de manière répétée. Envisagez de corriger le problème sous-jacent."
+    },
+    "noProgress": {
+      "description": "Aucune activité depuis {{minutes}} minutes",
+      "suggestion": "L'agent semble bloqué ou en attente. Envisagez de vérifier l'état de la tâche."
+    }
+  },
+  "noToolCallsYet": "Aucun appel d'outil pour le moment",
+  "noToolCallsDescription": "Les appels d'outils apparaîtront ici lorsque l'agent exécutera des actions.",
+  "noEntriesYet": "Aucune entrée pour le moment",
+  "noEntriesDescription": "Les entrées de la chronologie apparaîtront ici pendant que l'agent travaille.",
+  "errors": {
+    "loadFailed": "Échec du chargement des pensées de l'agent",
+    "exportFailed": "Échec de l'exportation du journal de session",
+    "refreshFailed": "Échec de l'actualisation : {{error}}"
+  }
+}
