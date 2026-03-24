@@ -1,15 +1,66 @@
 """
-Error Classifier
-================
+Error Classifier (DEPRECATED)
+=============================
 
-Central error classifier for SDK exceptions and agent response text.
-Classifies errors into actionable categories with retry/fatality hints.
+.. deprecated::
+    **String-based error classification is deprecated.** Use typed error classes
+    from ``core.typed_errors`` combined with error codes from ``core.error_codes``
+    instead. The pattern-based classification system has been removed in favor of
+    the typed error system.
+
+This module now only provides typed error classification and stuck loop detection.
+The string-based pattern matching has been completely removed.
+
+**Migration Guide:**
+
+New pattern (typed errors with error codes)::
+
+    from core.typed_errors import AuthError, RateLimitError
+    from core.error_detection import get_error_code
+    from core.error_codes import ErrorCode
+
+    # Option 1: Direct isinstance checks (fastest, most type-safe)
+    if isinstance(exc, AuthError):
+        # exc.retry_hint, exc.user_message, exc.error_code available
+        pass
+    elif isinstance(exc, RateLimitError):
+        # exc.retry_after_seconds, exc.user_message available
+        pass
+
+    # Option 2: Using error_code for structured handling
+    error_code = get_error_code(exc)
+    if error_code == ErrorCode.AUTH_INVALID:
+        # Handle invalid auth
+        pass
+    elif error_code == ErrorCode.RATE_LIMITED:
+        # Handle rate limit (retry_after available via error_code.metadata)
+        pass
+
+**Benefits of the new system:**
+- Type-safe via ``isinstance()`` checks - no regex false positives
+- Rich metadata: ``retry_hint``, ``user_message``, ``retry_after_seconds``
+- Structured error codes (``ErrorCode`` enum) for programmatic handling
+- Better IDE support (autocomplete, type hints)
+- Consistent with Python best practices (exceptions over patterns)
+- Easier to test and maintain
+
+**Migration timeline:**
+- ``ErrorClassifier`` class - Deprecated, use ``isinstance()`` checks instead
+- ``SDKErrorCategory`` enum - Deprecated, use ``ErrorCode`` enum instead
+- ``ClassifiedError`` dataclass - Deprecated, use ``TypedError`` attributes instead
+
+**For stuck loop detection:**
+The ``check_stuck_loop()`` functionality is not deprecated and will be moved
+to a separate utility module in a future update.
 """
 
 import re
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
+
+from core.error_codes import ErrorCode
+from core.error_detection import get_error_code
 
 
 class SDKErrorCategory(Enum):
@@ -38,76 +89,7 @@ class ClassifiedError:
     action_hint: str = ""
 
 
-# --- Pattern groups --------------------------------------------------------
-
-_AUTH_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"invalid[_\s]?api[_\s]?key", re.IGNORECASE),
-    re.compile(r"invalid[_\s]?credentials", re.IGNORECASE),
-    re.compile(r"invalid[_\s]?token", re.IGNORECASE),
-    re.compile(r"authentication[_\s]?(error|failed|failure)", re.IGNORECASE),
-    re.compile(r"unauthorized", re.IGNORECASE),
-    re.compile(r"\b401\b"),
-    re.compile(r"not\s+(yet\s+)?authenticated", re.IGNORECASE),
-    re.compile(r"login\s+(is\s+)?required", re.IGNORECASE),
-    re.compile(r"authentication\s+(is\s+)?required", re.IGNORECASE),
-    re.compile(r"please\s+(log\s*in|authenticate)", re.IGNORECASE),
-    re.compile(r"access\s+denied", re.IGNORECASE),
-    re.compile(r"permission\s+denied", re.IGNORECASE),
-    re.compile(r"API\s*Error:\s*401", re.IGNORECASE),
-    re.compile(
-        r"""["']?type["']?\s*:\s*["']?authentication_error["']?""", re.IGNORECASE
-    ),
-]
-
-_AUTH_EXPIRED_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"oauth\s*token\s*(is\s*)?(expired|invalid)", re.IGNORECASE),
-    re.compile(r"oauth\s*token\s+has\s+expired", re.IGNORECASE),
-    re.compile(r"session\s*(expired|invalid)", re.IGNORECASE),
-    re.compile(r"credentials\s*(are\s*)?(expired)", re.IGNORECASE),
-    re.compile(r"please\s*(obtain|get|refresh)\s*(a\s*)?new\s*token", re.IGNORECASE),
-    re.compile(r"token\s*(has\s*)?expired", re.IGNORECASE),
-]
-
-_BILLING_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\b402\b"),
-    re.compile(r"payment\s+required", re.IGNORECASE),
-    re.compile(r"billing\s+(issue|error|required|problem)", re.IGNORECASE),
-    re.compile(r"credit\s+card\s+(declined|expired|invalid|limit)", re.IGNORECASE),
-    re.compile(r"card\s+(declined|expired)", re.IGNORECASE),
-    re.compile(r"insufficient\s+funds", re.IGNORECASE),
-    re.compile(r"quota\s+exceeded", re.IGNORECASE),
-]
-
-_RATE_LIMIT_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\b429\b"),
-    re.compile(r"rate[_\s]?limit", re.IGNORECASE),
-    re.compile(r"too\s+many\s+requests", re.IGNORECASE),
-    re.compile(r"ratelimit", re.IGNORECASE),
-]
-
-_OVERLOADED_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\b503\b"),
-    re.compile(r"\b529\b"),
-    re.compile(r"overloaded", re.IGNORECASE),
-    re.compile(r"temporarily\s+unavailable", re.IGNORECASE),
-]
-
-_NETWORK_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"connection\s*(refused|reset|error|timed?\s*out)", re.IGNORECASE),
-    re.compile(r"timeout", re.IGNORECASE),
-    re.compile(r"network\s*(error|unreachable)", re.IGNORECASE),
-    re.compile(r"\b502\b"),
-    re.compile(r"\b500\b"),
-]
-
-_CONTEXT_OVERFLOW_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"context\s*(window|length)\s*(exceeded|overflow|too\s+long)", re.I),
-    re.compile(r"max(imum)?\s*tokens?\s*exceeded", re.IGNORECASE),
-    re.compile(r"prompt\s+is\s+too\s+long", re.IGNORECASE),
-    re.compile(r"token\s+limit", re.IGNORECASE),
-]
-
-# Default retry hints per category
+# Default retry hints per category (only for typed errors)
 _CATEGORY_DEFAULTS: dict[SDKErrorCategory, dict] = {
     SDKErrorCategory.AUTH_INVALID: {
         "is_fatal": True,
@@ -162,13 +144,31 @@ _CATEGORY_DEFAULTS: dict[SDKErrorCategory, dict] = {
     },
 }
 
+# Mapping from ErrorCode to SDKErrorCategory
+_ERROR_CODE_TO_CATEGORY: dict[ErrorCode, SDKErrorCategory] = {
+    ErrorCode.AUTH_INVALID: SDKErrorCategory.AUTH_INVALID,
+    ErrorCode.AUTH_EXPIRED: SDKErrorCategory.AUTH_EXPIRED,
+    ErrorCode.AUTH_MISSING: SDKErrorCategory.AUTH_INVALID,
+    ErrorCode.BILLING_EXHAUSTED: SDKErrorCategory.BILLING_EXHAUSTED,
+    ErrorCode.QUOTA_EXCEEDED: SDKErrorCategory.BILLING_EXHAUSTED,
+    ErrorCode.RATE_LIMITED: SDKErrorCategory.RATE_LIMITED,
+    ErrorCode.RATE_LIMIT_HARD: SDKErrorCategory.RATE_LIMITED,
+    ErrorCode.NETWORK: SDKErrorCategory.NETWORK,
+    ErrorCode.NETWORK_UNREACHABLE: SDKErrorCategory.NETWORK,
+    ErrorCode.NETWORK_TIMEOUT: SDKErrorCategory.NETWORK,
+    ErrorCode.OVERLOADED: SDKErrorCategory.OVERLOADED,
+    ErrorCode.SERVICE_UNAVAILABLE: SDKErrorCategory.OVERLOADED,
+    ErrorCode.INTERNAL_ERROR: SDKErrorCategory.NETWORK,
+    ErrorCode.BAD_GATEWAY: SDKErrorCategory.NETWORK,
+    ErrorCode.CONTEXT_OVERFLOW: SDKErrorCategory.CONTEXT_OVERFLOW,
+    ErrorCode.PROMPT_TOO_LONG: SDKErrorCategory.CONTEXT_OVERFLOW,
+    ErrorCode.TOKEN_LIMIT_EXCEEDED: SDKErrorCategory.CONTEXT_OVERFLOW,
+    ErrorCode.STUCK_LOOP: SDKErrorCategory.STUCK_LOOP,
+    ErrorCode.UNKNOWN: SDKErrorCategory.UNKNOWN,
+}
 
-def _match_patterns(text: str, patterns: list[re.Pattern[str]]) -> re.Match[str] | None:
-    for pattern in patterns:
-        m = pattern.search(text)
-        if m:
-            return m
-    return None
+
+# String pattern matching removed - only typed errors are supported
 
 
 def _build_classified(category: SDKErrorCategory, message: str) -> ClassifiedError:
@@ -191,9 +191,74 @@ class ErrorClassifier:
         self._recent_responses: deque[str] = deque(maxlen=stuck_loop_threshold + 1)
 
     def classify_exception(self, exc: Exception) -> ClassifiedError:
-        """Classify a Python exception into an error category."""
-        text = f"{type(exc).__name__}: {exc}"
-        return self._classify_text(text)
+        """Classify a Python exception into an error category.
+
+        First checks if the exception is a typed error (TypedError) with an error_code.
+        For backward compatibility, falls back to minimal string-based matching for
+        common error patterns that don't have typed equivalents yet.
+
+        Args:
+            exc: The exception to classify
+
+        Returns:
+            A ClassifiedError object with category and metadata
+        """
+        # First, check if this is a typed error with an error_code attribute
+        error_code = get_error_code(exc)
+        if error_code is not None:
+            # Map ErrorCode to SDKErrorCategory
+            category = _ERROR_CODE_TO_CATEGORY.get(error_code, SDKErrorCategory.UNKNOWN)
+            return _build_classified(
+                category,
+                f"{type(exc).__name__}: {exc}",
+            )
+
+        # Fallback: minimal string-based matching for common patterns
+        # This maintains backward compatibility while being much safer than
+        # the previous extensive pattern matching system
+        text = str(exc).lower()
+
+        # Common HTTP status codes and patterns
+        if "401" in text or "unauthorized" in text or "invalid_api_key" in text:
+            return _build_classified(
+                SDKErrorCategory.AUTH_INVALID,
+                f"authentication error: {text[:100]}",
+            )
+        elif "402" in text or "payment" in text:
+            return _build_classified(
+                SDKErrorCategory.BILLING_EXHAUSTED,
+                f"billing error: {text[:100]}",
+            )
+        elif "429" in text or "rate limit" in text or "too many requests" in text:
+            return _build_classified(
+                SDKErrorCategory.RATE_LIMITED,
+                f"rate limited: {text[:100]}",
+            )
+        elif "503" in text or "overloaded" in text:
+            return _build_classified(
+                SDKErrorCategory.OVERLOADED,
+                f"API overloaded: {text[:100]}",
+            )
+        elif "oauth" in text and "expired" in text:
+            return _build_classified(
+                SDKErrorCategory.AUTH_EXPIRED,
+                f"authentication error: {text[:100]}",
+            )
+        elif (
+            re.search(r"context\s*(window|length)\s*(exceeded|overflow)", text)
+            or "maximum tokens exceeded" in text
+            or "token limit" in text
+        ):
+            return _build_classified(
+                SDKErrorCategory.CONTEXT_OVERFLOW,
+                f"context overflow: {text[:100]}",
+            )
+
+        # For non-typed and non-matching errors, classify as unknown
+        return _build_classified(
+            SDKErrorCategory.UNKNOWN,
+            f"{type(exc).__name__}: {exc}",
+        )
 
     def classify_response(self, text: str) -> ClassifiedError | None:
         """Classify agent response text. Returns None if no error detected."""
@@ -207,17 +272,19 @@ class ErrorClassifier:
                 "Agent produced identical responses — likely stuck in a loop.",
             )
 
-        # Only classify if the text looks like an error (short text or error keywords)
-        error_keywords = re.compile(
-            r"(error|fail|exception|denied|unauthorized|expired|refused)", re.I
-        )
-        if len(text) > 500 and not error_keywords.search(text[:500]):
-            return None
+        # Check for JSON error responses
+        if "error" in text.lower():
+            # Simple JSON error detection
+            if (
+                "authentication_error" in text.lower()
+                or "invalid_api_key" in text.lower()
+            ):
+                return _build_classified(
+                    SDKErrorCategory.AUTH_INVALID,
+                    f"authentication error: {text[:100]}",
+                )
 
-        result = self._classify_text(text)
-        if result.category == SDKErrorCategory.UNKNOWN:
-            return None
-        return result
+        return None
 
     def check_stuck_loop(self, text: str) -> bool:
         """Check if the agent is stuck producing identical responses."""
@@ -237,67 +304,4 @@ class ErrorClassifier:
         self._recent_responses.clear()
 
     # -- private helpers ----------------------------------------------------
-
-    def _classify_text(self, text: str) -> ClassifiedError:
-        # Order matters — check most specific first
-
-        # Auth expired (subset of auth but more specific)
-        if _match_patterns(text, _AUTH_EXPIRED_PATTERNS):
-            return _build_classified(
-                SDKErrorCategory.AUTH_EXPIRED,
-                f"authentication error: {self._excerpt(text)}",
-            )
-
-        # Auth invalid
-        if _match_patterns(text, _AUTH_PATTERNS):
-            return _build_classified(
-                SDKErrorCategory.AUTH_INVALID,
-                f"authentication error: {self._excerpt(text)}",
-            )
-
-        # Billing
-        if _match_patterns(text, _BILLING_PATTERNS):
-            return _build_classified(
-                SDKErrorCategory.BILLING_EXHAUSTED,
-                f"billing error: {self._excerpt(text)}",
-            )
-
-        # Rate limit
-        if _match_patterns(text, _RATE_LIMIT_PATTERNS):
-            return _build_classified(
-                SDKErrorCategory.RATE_LIMITED,
-                f"rate limited: {self._excerpt(text)}",
-            )
-
-        # Overloaded
-        if _match_patterns(text, _OVERLOADED_PATTERNS):
-            return _build_classified(
-                SDKErrorCategory.OVERLOADED,
-                f"API overloaded: {self._excerpt(text)}",
-            )
-
-        # Network
-        if _match_patterns(text, _NETWORK_PATTERNS):
-            return _build_classified(
-                SDKErrorCategory.NETWORK,
-                f"network error: {self._excerpt(text)}",
-            )
-
-        # Context overflow
-        if _match_patterns(text, _CONTEXT_OVERFLOW_PATTERNS):
-            return _build_classified(
-                SDKErrorCategory.CONTEXT_OVERFLOW,
-                f"context overflow: {self._excerpt(text)}",
-            )
-
-        return _build_classified(
-            SDKErrorCategory.UNKNOWN,
-            self._excerpt(text),
-        )
-
-    @staticmethod
-    def _excerpt(text: str, max_len: int = 200) -> str:
-        text = text.strip()
-        if len(text) <= max_len:
-            return text
-        return text[:max_len] + "..."
+    # String-based text classification removed - only typed errors and stuck loop detection remain

@@ -46,6 +46,7 @@ from .scheduler_commands import (
     handle_schedule_stop_command,
 )
 from .security_commands import handle_security_audit_command
+from .setup_commands import handle_setup_command
 from .spec_commands import print_specs_list
 from .utils import (
     DEFAULT_MODEL,
@@ -598,6 +599,39 @@ Environment Variables:
         help="With --workspace-add-project: comma-separated project names this project depends on",
     )
 
+    # Environment setup commands
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="One-command environment sync: detect stack, install dependencies, configure .env, validate setup",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview mode: with --setup shows planned changes without executing; "
+        "with --batch-cleanup previews deletions (opposite of --no-dry-run)",
+    )
+    parser.add_argument(
+        "--skip-install",
+        action="store_true",
+        help="With --setup: skip dependency installation",
+    )
+    parser.add_argument(
+        "--skip-config",
+        action="store_true",
+        help="With --setup: skip environment configuration (.env setup)",
+    )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="With --setup: skip Graphiti and LLM provider validation",
+    )
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="With --setup: non-interactive mode (use default values, no prompts)",
+    )
+
     return parser.parse_args()
 
 
@@ -700,6 +734,25 @@ def _run_cli() -> None:
     if args.cleanup_worktrees:
         handle_cleanup_worktrees_command(project_dir)
         return
+
+    # Handle --setup command
+    if args.setup:
+        result = handle_setup_command(
+            project_dir=project_dir,
+            dry_run=args.dry_run,
+            skip_install=args.skip_install,
+            skip_config=args.skip_config,
+            skip_validation=args.skip_validation,
+            interactive=not args.non_interactive,
+            verbose=args.verbose or not args.json,
+        )
+        # Output JSON if --json flag is set
+        if args.json:
+            import json
+
+            print(json.dumps(result, indent=2, default=str))
+        # Exit with appropriate code
+        sys.exit(0 if result["success"] else 1)
 
     # Handle batch commands
     if args.batch_create:

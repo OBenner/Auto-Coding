@@ -14,18 +14,34 @@
       "port": null,
       "dev_command": "npm run dev",
       "test_command": "npm test"
+    },
+    "web-backend": {
+      "path": "./apps/web-backend",
+      "tech_stack": ["python", "fastapi", "uvicorn"],
+      "port": 8000,
+      "dev_command": "uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
+      "test_command": "pytest tests/ -v"
+    },
+    "web-frontend": {
+      "path": "./apps/web-frontend",
+      "tech_stack": ["react", "typescript", "vite"],
+      "port": 3000,
+      "dev_command": "npm run dev",
+      "test_command": "npm test"
     }
   },
   "infrastructure": {
-    "docker": false,
-    "database": "graphiti_ladybugdb",
-    "memory_system": "graphiti"
+    "docker": true,
+    "database": "postgresql",
+    "cache": "redis",
+    "memory_system": "graphiti_ladybugdb"
   },
   "conventions": {
     "linter": "ruff",
     "formatter": "black",
     "testing": "pytest",
     "backend_patterns": "agent-based, async/await, claude-sdk",
-    "frontend_patterns": "react-components, electron-ipc"
+    "frontend_patterns": "react-components, electron-ipc",
+    "docker_patterns": "multi-stage builds, health checks, non-root users"
   }
 }

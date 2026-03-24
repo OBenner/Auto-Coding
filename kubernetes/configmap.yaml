@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auto-claude-config
+  namespace: auto-claude
+  labels:
+    app: auto-claude
+    component: config
+data:
+  # Server configuration
+  debug: "false"
+  log-level: "INFO"
+
+  # CORS configuration
+  cors-origins: "http://localhost:3000,https://autoclaude.example.com"
+
+  # Authentication
+  access-token-expire-minutes: "60"
+
+  # PostgreSQL configuration
+  postgres-db: "autoclaude"
+
+  # OAuth configuration
+  oauth-redirect-uri: "https://api.autoclaude.example.com/api/git/callback"
+
+  # Claude configuration
+  claude-model: "claude-sonnet-4-5-20250929"
+
+  # Graphiti memory configuration
+  graphiti-enabled: "true"
+  graphiti-llm-provider: "openai"
+
+  # Linear integration
+  linear-team-id: ""
+
+  # CI configuration
+  auto-claude-ci: "false"
+  auto-claude-json-output: "false"
