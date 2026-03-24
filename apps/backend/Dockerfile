@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
+# Copy application code into builder (filtered by .dockerignore)
+COPY . /app/src
+
 # Stage 2: Runtime stage with minimal footprint
 FROM python:3.12-slim
 
@@ -27,14 +30,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code (sensitive files excluded via .dockerignore)
-COPY . .
-
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser
 
 # Copy Python dependencies from builder stage to appuser's directory
 COPY --from=builder /root/.local /home/appuser/.local
+
+# Copy only the application code from the builder stage
+COPY --from=builder /app/src /app
 
 # Create directories for Auto Code data and set ownership
 RUN mkdir -p /app/.auto-claude /app/.worktrees && \

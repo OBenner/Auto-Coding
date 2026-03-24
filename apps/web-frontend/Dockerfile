@@ -5,16 +5,14 @@ FROM node:24-slim AS builder
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files and install dependencies first (layer caching)
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci --only=production=false
 
-# Copy application source (builder stage only; sensitive files excluded via .dockerignore)
-COPY . .
-
-# Build the application
+# Copy source code and build (filtered by .dockerignore)
+COPY src/ ./src/
+COPY public/ ./public/
+COPY index.html tsconfig*.json vite.config.* ./
 RUN npm run build
 
 # Stage 2: Runtime stage with nginx

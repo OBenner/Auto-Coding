@@ -265,10 +265,10 @@ config:
   autoClaudeCi: "false"
   autoClaudeJsonOutput: "false"
 
-  # Frontend configuration — cluster-internal URLs; cleartext is safe for pod-to-pod traffic.
-  # Override with HTTPS URLs if using a service mesh with mTLS.
-  viteApiUrl: "http://web-backend:8000"
-  viteWsUrl: "ws://web-backend:8000/ws"
+  # Frontend configuration — set at install time via --set or values override file.
+  # Example: helm install ... --set config.viteApiUrl=http://web-backend:8000
+  viteApiUrl: ""
+  viteWsUrl: ""
 
 # Secrets configuration
 # IMPORTANT: These are placeholder values. In production, use external secrets management
