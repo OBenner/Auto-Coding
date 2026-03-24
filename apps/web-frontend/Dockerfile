@@ -11,7 +11,7 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production=false
 
-# Copy application source
+# Copy application source (builder stage only; sensitive files excluded via .dockerignore)
 COPY . .
 
 # Build the application

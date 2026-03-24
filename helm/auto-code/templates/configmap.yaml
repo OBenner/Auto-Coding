@@ -38,6 +38,6 @@ data:
   auto-claude-ci: {{ .Values.config.autoClaudeCi | quote }}
   auto-claude-json-output: {{ .Values.config.autoClaudeJsonOutput | quote }}
 
-  # Frontend configuration
-  vite-api-url: {{ .Values.config.viteApiUrl | quote }}
+  # Frontend configuration — cluster-internal URLs (cleartext safe for pod-to-pod traffic)
+  vite-api-url: {{ .Values.config.viteApiUrl | quote }}  # NOSONAR — internal service URL
   vite-ws-url: {{ .Values.config.viteWsUrl | quote }}

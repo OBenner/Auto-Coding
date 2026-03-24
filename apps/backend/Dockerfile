@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
+# Copy application code (sensitive files excluded via .dockerignore)
 COPY . .
 
 # Create non-root user for security
