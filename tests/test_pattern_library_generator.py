@@ -108,7 +108,7 @@ class TestFindSourceFiles:
     def test_find_python_files(self, temp_project_dir):
         """Test finding Python files."""
         generator = PatternLibraryGenerator(temp_project_dir)
-        python_files = generator._find_source_files(temp_project_dir, "python")
+        python_files = generator._find_source_files(generator.project_dir, "python")
 
         # Should find main.py and utils.py, but not files in excluded dirs
         assert len(python_files) == 2
@@ -127,7 +127,7 @@ class TestFindSourceFiles:
     def test_exclude_node_modules(self, temp_project_dir):
         """Test that node_modules is excluded."""
         generator = PatternLibraryGenerator(temp_project_dir)
-        python_files = generator._find_source_files(temp_project_dir, "python")
+        python_files = generator._find_source_files(generator.project_dir, "python")
 
         # Should not include files from node_modules
         for file_path in python_files:
@@ -136,7 +136,7 @@ class TestFindSourceFiles:
     def test_exclude_git_directory(self, temp_project_dir):
         """Test that .git directory is excluded."""
         generator = PatternLibraryGenerator(temp_project_dir)
-        python_files = generator._find_source_files(temp_project_dir, "python")
+        python_files = generator._find_source_files(generator.project_dir, "python")
 
         # Should not include files from .git
         for file_path in python_files:
@@ -145,7 +145,7 @@ class TestFindSourceFiles:
     def test_exclude_auto_claude_directory(self, temp_project_dir):
         """Test that .auto-claude directory is excluded."""
         generator = PatternLibraryGenerator(temp_project_dir)
-        python_files = generator._find_source_files(temp_project_dir, "python")
+        python_files = generator._find_source_files(generator.project_dir, "python")
 
         # Should not include files from .auto-claude
         for file_path in python_files:
@@ -173,7 +173,7 @@ class TestExtractAllPatterns:
     def test_extract_patterns_from_files(self, temp_project_dir):
         """Test extracting patterns from source files."""
         generator = PatternLibraryGenerator(temp_project_dir)
-        python_files = generator._find_source_files(temp_project_dir, "python")
+        python_files = generator._find_source_files(generator.project_dir, "python")
 
         # Mock the extractor to return sample patterns
         mock_patterns = [
@@ -202,7 +202,7 @@ class TestExtractAllPatterns:
     def test_extract_patterns_without_line_numbers(self, temp_project_dir):
         """Test extracting patterns without line numbers."""
         generator = PatternLibraryGenerator(temp_project_dir)
-        python_files = generator._find_source_files(temp_project_dir, "python")
+        python_files = generator._find_source_files(generator.project_dir, "python")
 
         mock_patterns = [
             {
@@ -226,7 +226,7 @@ class TestExtractAllPatterns:
     def test_extract_specific_pattern_types(self, temp_project_dir):
         """Test extracting specific pattern types."""
         generator = PatternLibraryGenerator(temp_project_dir)
-        python_files = generator._find_source_files(temp_project_dir, "python")
+        python_files = generator._find_source_files(generator.project_dir, "python")
 
         with patch.object(generator.extractor, "extract_patterns", return_value=[]):
             generator._extract_all_patterns(
@@ -239,7 +239,7 @@ class TestExtractAllPatterns:
     def test_handle_extraction_errors(self, temp_project_dir):
         """Test handling errors during pattern extraction."""
         generator = PatternLibraryGenerator(temp_project_dir)
-        python_files = generator._find_source_files(temp_project_dir, "python")
+        python_files = generator._find_source_files(generator.project_dir, "python")
 
         # Mock extractor to raise an error
         with patch.object(
