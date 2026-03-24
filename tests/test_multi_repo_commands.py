@@ -10,6 +10,7 @@ Tests the cli/multi_repo_commands.py module including:
 """
 
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -19,6 +20,71 @@ import pytest
 # Keep a local fallback for running this file directly
 if not any("apps/backend" in p or "apps\\backend" in p for p in sys.path):
     sys.path.insert(0, "apps/backend")
+
+from cli.multi_repo_commands import (
+    handle_workspace_add_project_command,
+    handle_workspace_create_command,
+    handle_workspace_list_command,
+)
+
+# =============================================================================
+# SHARED HELPERS
+# =============================================================================
+
+
+@contextmanager
+def _patch_workspace_cli(*, include_banner: bool = True):
+    """Patch WorkspaceManager, print_status, print, and optionally print_banner.
+
+    Yields:
+        mock_wm_class: The mocked WorkspaceManager class
+    """
+    patches = [
+        patch("cli.multi_repo_commands.WorkspaceManager"),
+        patch("cli.multi_repo_commands.print_status"),
+        patch("builtins.print"),
+    ]
+    if include_banner:
+        patches.append(patch("cli.multi_repo_commands.print_banner"))
+
+    with patches[0] as mock_wm_class:
+        with patches[1]:
+            with patches[2]:
+                if include_banner:
+                    with patches[3]:
+                        yield mock_wm_class
+                else:
+                    yield mock_wm_class
+
+
+def _make_mock_manager(
+    workspace_dir: Path,
+    description: str | None = None,
+    project_count: int = 0,
+) -> MagicMock:
+    """Create a mock WorkspaceManager with standard attributes."""
+    mock_manager = MagicMock()
+    mock_manager.workspace_dir = workspace_dir
+    mock_manager.config.description = description
+    mock_manager.config.project_count = project_count
+    return mock_manager
+
+
+def _make_mock_project(
+    name: str,
+    path: str,
+    relationship: str = "independent",
+    dependencies: list[str] | None = None,
+    description: str | None = None,
+) -> MagicMock:
+    """Create a mock project with standard attributes."""
+    mock_project = MagicMock()
+    mock_project.name = name
+    mock_project.path = path
+    mock_project.relationship.value = relationship
+    mock_project.dependencies = dependencies or []
+    mock_project.description = description
+    return mock_project
 
 
 # =============================================================================
@@ -31,21 +97,11 @@ class TestHandleWorkspaceCreateCommandSuccess:
 
     def test_creates_workspace_with_name_only(self, tmp_path):
         """Creates workspace when name is provided and workspace doesn't exist."""
-        mock_manager = MagicMock()
-        mock_manager.workspace_dir = tmp_path / "test-ws"
-        mock_manager.config.description = None
-        mock_manager.config.project_count = 0
+        mock_manager = _make_mock_manager(tmp_path / "test-ws")
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("cli.multi_repo_commands.print_banner"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli() as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = False
             mock_wm_class.create_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_create_command
 
             result = handle_workspace_create_command(
                 name="test-ws",
@@ -61,20 +117,13 @@ class TestHandleWorkspaceCreateCommandSuccess:
 
     def test_creates_workspace_with_description(self, tmp_path):
         """Creates workspace with optional description."""
-        mock_manager = MagicMock()
-        mock_manager.workspace_dir = tmp_path / "my-ws"
-        mock_manager.config.description = "My workspace description"
+        mock_manager = _make_mock_manager(
+            tmp_path / "my-ws", description="My workspace description"
+        )
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("cli.multi_repo_commands.print_banner"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli() as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = False
             mock_wm_class.create_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_create_command
 
             result = handle_workspace_create_command(
                 name="my-ws",
@@ -91,20 +140,11 @@ class TestHandleWorkspaceCreateCommandSuccess:
 
     def test_uses_default_base_dir_when_not_provided(self):
         """Uses .auto-claude/workspaces as default base_dir."""
-        mock_manager = MagicMock()
-        mock_manager.workspace_dir = Path(".auto-claude/workspaces/ws")
-        mock_manager.config.description = None
+        mock_manager = _make_mock_manager(Path(".auto-claude/workspaces/ws"))
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("cli.multi_repo_commands.print_banner"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli() as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = False
             mock_wm_class.create_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_create_command
 
             result = handle_workspace_create_command(name="ws")
 
@@ -115,9 +155,7 @@ class TestHandleWorkspaceCreateCommandSuccess:
 
     def test_calls_print_banner(self, tmp_path):
         """Calls print_banner when creating a workspace."""
-        mock_manager = MagicMock()
-        mock_manager.workspace_dir = tmp_path / "ws"
-        mock_manager.config.description = None
+        mock_manager = _make_mock_manager(tmp_path / "ws")
 
         with (
             patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
@@ -127,8 +165,6 @@ class TestHandleWorkspaceCreateCommandSuccess:
         ):
             mock_wm_class.workspace_exists.return_value = False
             mock_wm_class.create_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_create_command
 
             handle_workspace_create_command(name="ws", base_dir=tmp_path)
 
@@ -140,15 +176,8 @@ class TestHandleWorkspaceCreateCommandAlreadyExists:
 
     def test_returns_false_when_workspace_exists(self, tmp_path):
         """Returns False when workspace already exists."""
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("cli.multi_repo_commands.print_banner"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli() as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = True
-
-            from cli.multi_repo_commands import handle_workspace_create_command
 
             result = handle_workspace_create_command(name="existing", base_dir=tmp_path)
 
@@ -156,15 +185,8 @@ class TestHandleWorkspaceCreateCommandAlreadyExists:
 
     def test_does_not_create_when_workspace_exists(self, tmp_path):
         """Does not call create_workspace when workspace already exists."""
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("cli.multi_repo_commands.print_banner"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli() as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = True
-
-            from cli.multi_repo_commands import handle_workspace_create_command
 
             handle_workspace_create_command(name="existing", base_dir=tmp_path)
 
@@ -176,16 +198,9 @@ class TestHandleWorkspaceCreateCommandErrors:
 
     def test_returns_false_on_value_error(self, tmp_path):
         """Returns False when ValueError is raised during creation."""
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("cli.multi_repo_commands.print_banner"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli() as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = False
             mock_wm_class.create_workspace.side_effect = ValueError("Invalid name")
-
-            from cli.multi_repo_commands import handle_workspace_create_command
 
             result = handle_workspace_create_command(name="bad name", base_dir=tmp_path)
 
@@ -193,16 +208,9 @@ class TestHandleWorkspaceCreateCommandErrors:
 
     def test_returns_false_on_os_error(self, tmp_path):
         """Returns False when OSError is raised during creation."""
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("cli.multi_repo_commands.print_banner"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli() as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = False
             mock_wm_class.create_workspace.side_effect = OSError("Permission denied")
-
-            from cli.multi_repo_commands import handle_workspace_create_command
 
             result = handle_workspace_create_command(name="ws", base_dir=tmp_path)
 
@@ -221,12 +229,7 @@ class TestHandleWorkspaceListCommandNoWorkspaces:
         """Returns True when base directory doesn't exist."""
         non_existent = tmp_path / "no-workspaces"
 
-        with (
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            from cli.multi_repo_commands import handle_workspace_list_command
-
+        with _patch_workspace_cli(include_banner=False):
             result = handle_workspace_list_command(base_dir=non_existent)
 
         assert result is True
@@ -238,24 +241,14 @@ class TestHandleWorkspaceListCommandNoWorkspaces:
         # Create directories without workspace.json
         (base_dir / "not-a-workspace").mkdir()
 
-        with (
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            from cli.multi_repo_commands import handle_workspace_list_command
-
+        with _patch_workspace_cli(include_banner=False):
             result = handle_workspace_list_command(base_dir=base_dir)
 
         assert result is True
 
     def test_uses_default_base_dir_when_not_provided(self):
         """Uses .auto-claude/workspaces as default base_dir."""
-        with (
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            from cli.multi_repo_commands import handle_workspace_list_command
-
+        with _patch_workspace_cli(include_banner=False):
             # Should not raise; returns True even if default dir doesn't exist
             result = handle_workspace_list_command()
 
@@ -290,8 +283,6 @@ class TestHandleWorkspaceListCommandWithWorkspaces:
         ):
             mock_wm_class.load_workspace.return_value = mock_manager
 
-            from cli.multi_repo_commands import handle_workspace_list_command
-
             result = handle_workspace_list_command(base_dir=base_dir)
 
         assert result is True
@@ -321,8 +312,6 @@ class TestHandleWorkspaceListCommandWithWorkspaces:
         ):
             mock_wm_class.load_workspace.return_value = mock_manager
 
-            from cli.multi_repo_commands import handle_workspace_list_command
-
             handle_workspace_list_command(base_dir=base_dir)
 
         assert mock_wm_class.load_workspace.call_count == 2
@@ -335,13 +324,8 @@ class TestHandleWorkspaceListCommandWithWorkspaces:
         ws_dir.mkdir()
         (ws_dir / "workspace.json").write_text("{}")
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
             mock_wm_class.load_workspace.side_effect = ValueError("Corrupt config")
-
-            from cli.multi_repo_commands import handle_workspace_list_command
 
             # Should not raise; broken workspaces are reported and skipped
             result = handle_workspace_list_command(base_dir=base_dir)
@@ -375,8 +359,6 @@ class TestHandleWorkspaceListCommandWithWorkspaces:
         ):
             mock_wm_class.load_workspace.return_value = mock_manager
 
-            from cli.multi_repo_commands import handle_workspace_list_command
-
             handle_workspace_list_command(base_dir=base_dir)
 
         # Only the valid workspace should be loaded
@@ -388,6 +370,20 @@ class TestHandleWorkspaceListCommandWithWorkspaces:
 # =============================================================================
 
 
+def _setup_add_project_mocks(
+    mock_wm_class: MagicMock,
+    mock_manager: MagicMock,
+    mock_project: MagicMock,
+    *,
+    workspace_exists: bool = True,
+) -> None:
+    """Wire up common mocks for add-project tests."""
+    mock_wm_class.workspace_exists.return_value = workspace_exists
+    mock_wm_class.load_workspace.return_value = mock_manager
+    mock_manager.get_project_state.return_value = None
+    mock_manager.add_project.return_value = mock_project
+
+
 class TestHandleWorkspaceAddProjectCommandSuccess:
     """Tests for successful project addition."""
 
@@ -396,27 +392,11 @@ class TestHandleWorkspaceAddProjectCommandSuccess:
         project_dir = tmp_path / "my-project"
         project_dir.mkdir()
 
-        mock_project = MagicMock()
-        mock_project.name = "my-project"
-        mock_project.path = str(project_dir)
-        mock_project.relationship.value = "independent"
-        mock_project.dependencies = []
-        mock_project.description = None
+        mock_project = _make_mock_project("my-project", str(project_dir))
+        mock_manager = _make_mock_manager(tmp_path / "ws", project_count=1)
 
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.return_value = mock_project
-        mock_manager.config.project_count = 1
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
+            _setup_add_project_mocks(mock_wm_class, mock_manager, mock_project)
 
             result = handle_workspace_add_project_command(
                 workspace_name="my-ws",
@@ -433,27 +413,11 @@ class TestHandleWorkspaceAddProjectCommandSuccess:
         project_dir = tmp_path / "cool-project"
         project_dir.mkdir()
 
-        mock_project = MagicMock()
-        mock_project.name = "cool-project"
-        mock_project.path = str(project_dir)
-        mock_project.relationship.value = "independent"
-        mock_project.dependencies = []
-        mock_project.description = None
+        mock_project = _make_mock_project("cool-project", str(project_dir))
+        mock_manager = _make_mock_manager(tmp_path / "ws", project_count=1)
 
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.return_value = mock_project
-        mock_manager.config.project_count = 1
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
+            _setup_add_project_mocks(mock_wm_class, mock_manager, mock_project)
 
             handle_workspace_add_project_command(
                 workspace_name="my-ws",
@@ -470,27 +434,11 @@ class TestHandleWorkspaceAddProjectCommandSuccess:
         project_dir = tmp_path / "my-project"
         project_dir.mkdir()
 
-        mock_project = MagicMock()
-        mock_project.name = "custom-name"
-        mock_project.path = str(project_dir)
-        mock_project.relationship.value = "independent"
-        mock_project.dependencies = []
-        mock_project.description = None
+        mock_project = _make_mock_project("custom-name", str(project_dir))
+        mock_manager = _make_mock_manager(tmp_path / "ws", project_count=1)
 
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.return_value = mock_project
-        mock_manager.config.project_count = 1
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
+            _setup_add_project_mocks(mock_wm_class, mock_manager, mock_project)
 
             handle_workspace_add_project_command(
                 workspace_name="my-ws",
@@ -507,27 +455,13 @@ class TestHandleWorkspaceAddProjectCommandSuccess:
         project_dir = tmp_path / "frontend"
         project_dir.mkdir()
 
-        mock_project = MagicMock()
-        mock_project.name = "frontend"
-        mock_project.path = str(project_dir)
-        mock_project.relationship.value = "depends_on"
-        mock_project.dependencies = ["backend", "shared"]
-        mock_project.description = None
+        mock_project = _make_mock_project(
+            "frontend", str(project_dir), "depends_on", ["backend", "shared"]
+        )
+        mock_manager = _make_mock_manager(tmp_path / "ws", project_count=3)
 
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.return_value = mock_project
-        mock_manager.config.project_count = 3
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
+            _setup_add_project_mocks(mock_wm_class, mock_manager, mock_project)
 
             result = handle_workspace_add_project_command(
                 workspace_name="my-ws",
@@ -546,27 +480,11 @@ class TestHandleWorkspaceAddProjectCommandSuccess:
         project_dir = tmp_path / "proj"
         project_dir.mkdir()
 
-        mock_project = MagicMock()
-        mock_project.name = "proj"
-        mock_project.path = str(project_dir)
-        mock_project.relationship.value = "independent"
-        mock_project.dependencies = []
-        mock_project.description = None
+        mock_project = _make_mock_project("proj", str(project_dir))
+        mock_manager = _make_mock_manager(tmp_path / "ws", project_count=1)
 
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.return_value = mock_project
-        mock_manager.config.project_count = 1
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
+            _setup_add_project_mocks(mock_wm_class, mock_manager, mock_project)
 
             handle_workspace_add_project_command(
                 workspace_name="ws",
@@ -582,14 +500,8 @@ class TestHandleWorkspaceAddProjectCommandValidation:
 
     def test_returns_false_when_workspace_not_found(self, tmp_path):
         """Returns False when workspace doesn't exist."""
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = False
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
 
             result = handle_workspace_add_project_command(
                 workspace_name="nonexistent",
@@ -603,14 +515,8 @@ class TestHandleWorkspaceAddProjectCommandValidation:
         """Returns False when project path doesn't exist on filesystem."""
         non_existent = tmp_path / "does-not-exist"
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = True
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
 
             result = handle_workspace_add_project_command(
                 workspace_name="ws",
@@ -625,14 +531,8 @@ class TestHandleWorkspaceAddProjectCommandValidation:
         file_path = tmp_path / "a-file.txt"
         file_path.write_text("I am a file")
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = True
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
 
             result = handle_workspace_add_project_command(
                 workspace_name="ws",
@@ -647,14 +547,8 @@ class TestHandleWorkspaceAddProjectCommandValidation:
         project_dir = tmp_path / "proj"
         project_dir.mkdir()
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = True
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
 
             result = handle_workspace_add_project_command(
                 workspace_name="ws",
@@ -670,19 +564,12 @@ class TestHandleWorkspaceAddProjectCommandValidation:
         project_dir = tmp_path / "proj"
         project_dir.mkdir()
 
-        mock_existing_state = MagicMock()  # Non-None means project exists
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = mock_existing_state
+        mock_manager = _make_mock_manager(tmp_path / "ws")
+        mock_manager.get_project_state.return_value = MagicMock()  # Non-None → exists
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = True
             mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
 
             result = handle_workspace_add_project_command(
                 workspace_name="ws",
@@ -698,78 +585,26 @@ class TestHandleWorkspaceAddProjectCommandValidation:
 class TestHandleWorkspaceAddProjectCommandErrors:
     """Tests for error handling when adding a project fails."""
 
-    def test_returns_false_on_value_error(self, tmp_path):
-        """Returns False when ValueError is raised during add_project."""
+    @pytest.mark.parametrize(
+        "error_cls,error_msg",
+        [
+            (ValueError, "Circular dependency"),
+            (FileNotFoundError, "Workspace file missing"),
+            (OSError, "Disk full"),
+        ],
+    )
+    def test_returns_false_on_exception(self, tmp_path, error_cls, error_msg):
+        """Returns False when an exception is raised during add_project."""
         project_dir = tmp_path / "proj"
         project_dir.mkdir()
 
-        mock_manager = MagicMock()
+        mock_manager = _make_mock_manager(tmp_path / "ws")
         mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.side_effect = ValueError("Circular dependency")
+        mock_manager.add_project.side_effect = error_cls(error_msg)
 
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
             mock_wm_class.workspace_exists.return_value = True
             mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
-
-            result = handle_workspace_add_project_command(
-                workspace_name="ws",
-                project_path=str(project_dir),
-                base_dir=tmp_path,
-            )
-
-        assert result is False
-
-    def test_returns_false_on_file_not_found_error(self, tmp_path):
-        """Returns False when FileNotFoundError is raised."""
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.side_effect = FileNotFoundError("Workspace file missing")
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
-
-            result = handle_workspace_add_project_command(
-                workspace_name="ws",
-                project_path=str(project_dir),
-                base_dir=tmp_path,
-            )
-
-        assert result is False
-
-    def test_returns_false_on_os_error(self, tmp_path):
-        """Returns False when OSError is raised."""
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.side_effect = OSError("Disk full")
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
 
             result = handle_workspace_add_project_command(
                 workspace_name="ws",
@@ -792,27 +627,11 @@ class TestHandleWorkspaceAddProjectCommandRelationships:
         project_dir = tmp_path / "proj"
         project_dir.mkdir()
 
-        mock_project = MagicMock()
-        mock_project.name = "proj"
-        mock_project.path = str(project_dir)
-        mock_project.relationship.value = relationship
-        mock_project.dependencies = []
-        mock_project.description = None
+        mock_project = _make_mock_project("proj", str(project_dir), relationship)
+        mock_manager = _make_mock_manager(tmp_path / "ws", project_count=1)
 
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.return_value = mock_project
-        mock_manager.config.project_count = 1
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
+            _setup_add_project_mocks(mock_wm_class, mock_manager, mock_project)
 
             result = handle_workspace_add_project_command(
                 workspace_name="ws",
@@ -828,27 +647,11 @@ class TestHandleWorkspaceAddProjectCommandRelationships:
         project_dir = tmp_path / "proj"
         project_dir.mkdir()
 
-        mock_project = MagicMock()
-        mock_project.name = "proj"
-        mock_project.path = str(project_dir)
-        mock_project.relationship.value = "independent"
-        mock_project.dependencies = []
-        mock_project.description = None
+        mock_project = _make_mock_project("proj", str(project_dir))
+        mock_manager = _make_mock_manager(tmp_path / "ws", project_count=1)
 
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.return_value = mock_project
-        mock_manager.config.project_count = 1
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
+            _setup_add_project_mocks(mock_wm_class, mock_manager, mock_project)
 
             handle_workspace_add_project_command(
                 workspace_name="ws",
@@ -871,27 +674,11 @@ class TestHandleWorkspaceAddProjectCommandDefaultDependencies:
         project_dir = tmp_path / "proj"
         project_dir.mkdir()
 
-        mock_project = MagicMock()
-        mock_project.name = "proj"
-        mock_project.path = str(project_dir)
-        mock_project.relationship.value = "independent"
-        mock_project.dependencies = []
-        mock_project.description = None
+        mock_project = _make_mock_project("proj", str(project_dir))
+        mock_manager = _make_mock_manager(tmp_path / "ws", project_count=1)
 
-        mock_manager = MagicMock()
-        mock_manager.get_project_state.return_value = None
-        mock_manager.add_project.return_value = mock_project
-        mock_manager.config.project_count = 1
-
-        with (
-            patch("cli.multi_repo_commands.WorkspaceManager") as mock_wm_class,
-            patch("cli.multi_repo_commands.print_status"),
-            patch("builtins.print"),
-        ):
-            mock_wm_class.workspace_exists.return_value = True
-            mock_wm_class.load_workspace.return_value = mock_manager
-
-            from cli.multi_repo_commands import handle_workspace_add_project_command
+        with _patch_workspace_cli(include_banner=False) as mock_wm_class:
+            _setup_add_project_mocks(mock_wm_class, mock_manager, mock_project)
 
             handle_workspace_add_project_command(
                 workspace_name="ws",

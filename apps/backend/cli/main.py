@@ -28,6 +28,11 @@ from .migration_commands import (
     handle_migration_command,
     handle_migration_status_command,
 )
+from .multi_repo_commands import (
+    handle_workspace_add_project_command,
+    handle_workspace_create_command,
+    handle_workspace_list_command,
+)
 from .predictive_scan_commands import (
     handle_predictive_scan_check_command,
     handle_predictive_scan_command,
@@ -54,11 +59,6 @@ from .utils import (
     get_project_dir,
     print_banner,
     setup_environment,
-)
-from .multi_repo_commands import (
-    handle_workspace_add_project_command,
-    handle_workspace_create_command,
-    handle_workspace_list_command,
 )
 from .workspace_commands import (
     handle_cleanup_worktrees_command,

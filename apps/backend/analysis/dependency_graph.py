@@ -33,11 +33,41 @@ Usage:
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+# =============================================================================
+# HELPERS
+# =============================================================================
+
+
+def _normalize_package_name(name: str) -> str:
+    """Normalize a package name for cross-repo comparison.
+
+    Strips leading ``@`` scopes, replaces ``/`` and ``-`` with ``_``,
+    and lowercases the result so that e.g. ``@scope/my-lib`` becomes
+    ``scope_my_lib``.
+    """
+    return name.lstrip("@").replace("/", "_").replace("-", "_").lower()
+
+
+def _read_package_json(repo_path: Path) -> dict[str, Any] | None:
+    """Read and parse a repo's ``package.json``, returning *None* on failure.
+
+    Returns:
+        Parsed JSON dict, or *None* if the file is missing or unparseable.
+    """
+    package_json = repo_path / "package.json"
+    if not package_json.exists():
+        return None
+    try:
+        return json.loads(package_json.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None  # Gracefully ignore missing or malformed package.json
 
 
 # =============================================================================
@@ -197,9 +227,7 @@ class MultiRepoDependencyGraph:
             return False
 
         del self.nodes[name]
-        self.edges = [
-            e for e in self.edges if e.source != name and e.target != name
-        ]
+        self.edges = [e for e in self.edges if e.source != name and e.target != name]
 
         # Clean up references in remaining nodes
         for node in self.nodes.values():
@@ -376,7 +404,7 @@ class MultiRepoDependencyGraph:
         Raises:
             ValueError: If a circular dependency is detected
         """
-        in_degree: dict[str, int] = {name: 0 for name in self.nodes}
+        in_degree: dict[str, int] = dict.fromkeys(self.nodes, 0)
 
         for node in self.nodes.values():
             for dep in node.dependencies:
@@ -601,7 +629,7 @@ class MultiRepoDependencyGraph:
                 if item.is_dir() and (item / "__init__.py").exists():
                     names.add(item.name)
         except OSError:
-            pass
+            pass  # Gracefully ignore I/O errors for optional package detection
 
         # pyproject.toml name field
         pyproject = repo_path / "pyproject.toml"
@@ -611,26 +639,20 @@ class MultiRepoDependencyGraph:
                 for line in content.splitlines():
                     stripped = line.strip()
                     if stripped.startswith("name") and "=" in stripped:
-                        value = stripped.split("=", 1)[1].strip().strip('"\'')
+                        value = stripped.split("=", 1)[1].strip().strip("\"'")
                         if value:
                             names.add(value)
                             names.add(value.replace("-", "_"))
             except OSError:
-                pass
+                pass  # Gracefully ignore parse errors for optional pyproject.toml
 
         # package.json name field (JS/TS repos)
-        package_json = repo_path / "package.json"
-        if package_json.exists():
-            try:
-                import json
-
-                data = json.loads(package_json.read_text(encoding="utf-8"))
-                pkg_name = data.get("name", "")
-                if pkg_name:
-                    names.add(pkg_name)
-                    names.add(pkg_name.lstrip("@").replace("/", "_").replace("-", "_"))
-            except (OSError, ValueError):
-                pass
+        data = _read_package_json(repo_path)
+        if data is not None:
+            pkg_name = data.get("name", "")
+            if pkg_name:
+                names.add(pkg_name)
+                names.add(_normalize_package_name(pkg_name))
 
         return names
 
@@ -661,26 +683,18 @@ class MultiRepoDependencyGraph:
                         if name:
                             deps.add(name.lower().replace("-", "_"))
             except OSError:
-                pass
+                pass  # Gracefully ignore I/O errors for optional requirements.txt
 
         # package.json dependencies / devDependencies
-        package_json = repo_path / "package.json"
-        if package_json.exists():
-            try:
-                import json
-
-                data = json.loads(package_json.read_text(encoding="utf-8"))
-                for section in ("dependencies", "devDependencies", "peerDependencies"):
-                    for pkg in data.get(section, {}):
-                        deps.add(pkg.lstrip("@").replace("/", "_").replace("-", "_"))
-            except (OSError, ValueError):
-                pass
+        data = _read_package_json(repo_path)
+        if data is not None:
+            for section in ("dependencies", "devDependencies", "peerDependencies"):
+                for pkg in data.get(section, {}):
+                    deps.add(_normalize_package_name(pkg))
 
         return deps
 
-    def _infer_cross_repo_edges(
-        self, repo_info: dict[str, dict[str, Any]]
-    ) -> None:
+    def _infer_cross_repo_edges(self, repo_info: dict[str, dict[str, Any]]) -> None:
         """
         Infer dependency edges between repos by matching external module names
         against package names provided by other repos.
@@ -695,8 +709,8 @@ class MultiRepoDependencyGraph:
                     continue
                 target_packages: set[str] = target_info.get("package_names", set())
                 # Normalize to lowercase for comparison
-                normalized_ext = {m.lower().replace("-", "_") for m in ext_modules}
-                normalized_pkg = {p.lower().replace("-", "_") for p in target_packages}
+                normalized_ext = {_normalize_package_name(m) for m in ext_modules}
+                normalized_pkg = {_normalize_package_name(p) for p in target_packages}
                 shared = normalized_ext & normalized_pkg
                 if shared:
                     # Check if edge already exists

@@ -24,6 +24,13 @@ from ui import highlight, print_status
 
 from .utils import print_banner
 
+_DEFAULT_WORKSPACE_DIR = Path(".auto-claude/workspaces")
+
+
+def _resolve_base_dir(base_dir: Path | None) -> Path:
+    """Return *base_dir* or the default workspace directory."""
+    return base_dir or _DEFAULT_WORKSPACE_DIR
+
 
 def handle_workspace_create_command(
     name: str,
@@ -43,7 +50,7 @@ def handle_workspace_create_command(
     """
     print_banner()
 
-    base_dir = base_dir or Path(".auto-claude/workspaces")
+    base_dir = _resolve_base_dir(base_dir)
 
     # Check if workspace already exists
     if WorkspaceManager.workspace_exists(name, base_dir):
@@ -65,11 +72,11 @@ def handle_workspace_create_command(
         print(f"  Location:    {manager.workspace_dir}")
         if description:
             print(f"  Description: {description}")
-        print(f"  Projects:    0 (use --workspace-add-project to add projects)")
+        print("  Projects:    0 (use --workspace-add-project to add projects)")
         print()
         print("Next steps:")
         print(f"  Add a project:  python run.py --workspace-add-project {name} <path>")
-        print(f"  List workspaces: python run.py --workspace-list")
+        print("  List workspaces: python run.py --workspace-list")
         return True
 
     except ValueError as e:
@@ -92,7 +99,7 @@ def handle_workspace_list_command(
     Returns:
         True if listing succeeded (even if no workspaces found), False on error
     """
-    base_dir = base_dir or Path(".auto-claude/workspaces")
+    base_dir = _resolve_base_dir(base_dir)
 
     if not base_dir.exists():
         print_status("No workspaces found", "info")
@@ -123,7 +130,9 @@ def handle_workspace_list_command(
             print(f"  {highlight(stats['name'])}")
             if manager.config.description:
                 print(f"    Description: {manager.config.description}")
-            print(f"    Projects:    {stats['total_projects']} total, {stats['enabled_projects']} enabled")
+            print(
+                f"    Projects:    {stats['total_projects']} total, {stats['enabled_projects']} enabled"
+            )
             if stats["project_names"]:
                 print(f"    Project names: {', '.join(stats['project_names'])}")
             print(f"    Location:    {workspace_path}")
@@ -163,7 +172,7 @@ def handle_workspace_add_project_command(
     Returns:
         True if project was added successfully, False otherwise
     """
-    base_dir = base_dir or Path(".auto-claude/workspaces")
+    base_dir = _resolve_base_dir(base_dir)
 
     # Validate workspace exists
     if not WorkspaceManager.workspace_exists(workspace_name, base_dir):
@@ -203,7 +212,10 @@ def handle_workspace_add_project_command(
         # Check if project name already exists
         existing = manager.get_project_state(project_name)
         if existing:
-            print_status(f"Project '{project_name}' already exists in workspace '{workspace_name}'", "error")
+            print_status(
+                f"Project '{project_name}' already exists in workspace '{workspace_name}'",
+                "error",
+            )
             return False
 
         project = manager.add_project(
@@ -217,7 +229,9 @@ def handle_workspace_add_project_command(
         # Save workspace after adding project
         manager.save()
 
-        print_status(f"Project '{project_name}' added to workspace '{workspace_name}'", "success")
+        print_status(
+            f"Project '{project_name}' added to workspace '{workspace_name}'", "success"
+        )
         print()
         print(f"  Project:      {project.name}")
         print(f"  Path:         {project.path}")

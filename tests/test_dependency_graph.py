@@ -29,7 +29,6 @@ from analysis.dependency_graph import (
     RepoNode,
 )
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
@@ -85,27 +84,35 @@ def diamond_graph(tmp_path: Path) -> MultiRepoDependencyGraph:
 class TestAddRepo:
     """Tests for MultiRepoDependencyGraph.add_repo."""
 
-    def test_add_single_repo_returns_node(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_single_repo_returns_node(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """add_repo should return the created RepoNode."""
         node = empty_graph.add_repo("my-repo", tmp_path / "my-repo")
 
         assert isinstance(node, RepoNode)
         assert node.name == "my-repo"
 
-    def test_added_repo_appears_in_nodes(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_added_repo_appears_in_nodes(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Registered repo should be accessible via .nodes."""
         empty_graph.add_repo("repo-a", tmp_path / "a")
 
         assert "repo-a" in empty_graph.nodes
 
-    def test_add_repo_stores_resolved_path(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_repo_stores_resolved_path(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """RepoNode.path should be the resolved absolute string path."""
         raw_path = tmp_path / "sub"
         node = empty_graph.add_repo("sub", raw_path)
 
         assert node.path == str(raw_path.resolve())
 
-    def test_add_repo_stores_metadata(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_repo_stores_metadata(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Metadata dict should be attached to the node."""
         meta = {"language": "python", "tags": ["api"]}
         node = empty_graph.add_repo("api", tmp_path / "api", metadata=meta)
@@ -113,20 +120,26 @@ class TestAddRepo:
         assert node.metadata["language"] == "python"
         assert node.metadata["tags"] == ["api"]
 
-    def test_add_repo_empty_metadata_by_default(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_repo_empty_metadata_by_default(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """When no metadata is provided the node should have an empty dict."""
         node = empty_graph.add_repo("no-meta", tmp_path / "no-meta")
 
         assert node.metadata == {}
 
-    def test_add_duplicate_repo_raises_value_error(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_duplicate_repo_raises_value_error(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Registering the same name twice must raise ValueError."""
         empty_graph.add_repo("dup", tmp_path / "dup1")
 
         with pytest.raises(ValueError, match="already registered"):
             empty_graph.add_repo("dup", tmp_path / "dup2")
 
-    def test_add_repo_resets_analyzed_flag(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_repo_resets_analyzed_flag(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Adding a new repo should mark the graph as not yet analyzed."""
         empty_graph.analyzed = True
         empty_graph.add_repo("new", tmp_path / "new")
@@ -142,17 +155,23 @@ class TestAddRepo:
 class TestRemoveRepo:
     """Tests for MultiRepoDependencyGraph.remove_repo."""
 
-    def test_remove_existing_repo_returns_true(self, simple_graph: MultiRepoDependencyGraph):
+    def test_remove_existing_repo_returns_true(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """remove_repo should return True when the repo is found and removed."""
         result = simple_graph.remove_repo("shared")
 
         assert result is True
 
-    def test_remove_nonexistent_repo_returns_false(self, empty_graph: MultiRepoDependencyGraph):
+    def test_remove_nonexistent_repo_returns_false(
+        self, empty_graph: MultiRepoDependencyGraph
+    ):
         """remove_repo should return False when name is not registered."""
         assert empty_graph.remove_repo("ghost") is False
 
-    def test_removed_repo_absent_from_nodes(self, simple_graph: MultiRepoDependencyGraph):
+    def test_removed_repo_absent_from_nodes(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """After removal the repo name should no longer be in .nodes."""
         simple_graph.remove_repo("shared")
 
@@ -166,7 +185,9 @@ class TestRemoveRepo:
             assert edge.source != "backend"
             assert edge.target != "backend"
 
-    def test_remove_repo_cleans_up_dependent_references(self, simple_graph: MultiRepoDependencyGraph):
+    def test_remove_repo_cleans_up_dependent_references(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Other nodes' .dependencies / .dependents sets must not reference removed name."""
         simple_graph.remove_repo("backend")
 
@@ -183,7 +204,9 @@ class TestRemoveRepo:
 class TestAddEdge:
     """Tests for MultiRepoDependencyGraph.add_edge."""
 
-    def test_add_edge_returns_dependency_edge(self, simple_graph: MultiRepoDependencyGraph):
+    def test_add_edge_returns_dependency_edge(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """add_edge should return a DependencyEdge instance."""
         # Re-use simple_graph but add a fresh edge
         edge = simple_graph.add_edge("frontend", "shared")
@@ -192,7 +215,9 @@ class TestAddEdge:
         assert edge.source == "frontend"
         assert edge.target == "shared"
 
-    def test_add_edge_default_type_is_imports(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_edge_default_type_is_imports(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Default edge_type should be EdgeType.IMPORTS."""
         empty_graph.add_repo("a", tmp_path / "a")
         empty_graph.add_repo("b", tmp_path / "b")
@@ -200,7 +225,9 @@ class TestAddEdge:
 
         assert edge.edge_type == EdgeType.IMPORTS
 
-    def test_add_edge_custom_type(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_edge_custom_type(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Edge type should be stored correctly."""
         empty_graph.add_repo("x", tmp_path / "x")
         empty_graph.add_repo("y", tmp_path / "y")
@@ -208,29 +235,39 @@ class TestAddEdge:
 
         assert edge.edge_type == EdgeType.DECLARES
 
-    def test_add_edge_updates_source_dependencies(self, simple_graph: MultiRepoDependencyGraph):
+    def test_add_edge_updates_source_dependencies(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Source node's .dependencies should include target name after add_edge."""
         assert "shared" in simple_graph.nodes["backend"].dependencies
 
-    def test_add_edge_updates_target_dependents(self, simple_graph: MultiRepoDependencyGraph):
+    def test_add_edge_updates_target_dependents(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Target node's .dependents should include source name after add_edge."""
         assert "backend" in simple_graph.nodes["shared"].dependents
 
-    def test_add_edge_unknown_source_raises_value_error(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_edge_unknown_source_raises_value_error(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Specifying an unregistered source should raise ValueError."""
         empty_graph.add_repo("target", tmp_path / "t")
 
         with pytest.raises(ValueError, match="Source repo"):
             empty_graph.add_edge("ghost-source", "target")
 
-    def test_add_edge_unknown_target_raises_value_error(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_edge_unknown_target_raises_value_error(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Specifying an unregistered target should raise ValueError."""
         empty_graph.add_repo("source", tmp_path / "s")
 
         with pytest.raises(ValueError, match="Target repo"):
             empty_graph.add_edge("source", "ghost-target")
 
-    def test_add_edge_stores_weight(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_edge_stores_weight(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Custom weight should be stored on the edge."""
         empty_graph.add_repo("p", tmp_path / "p")
         empty_graph.add_repo("q", tmp_path / "q")
@@ -238,7 +275,9 @@ class TestAddEdge:
 
         assert edge.weight == 42
 
-    def test_add_edge_stores_details(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_add_edge_stores_details(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Custom details should be stored on the edge."""
         empty_graph.add_repo("m", tmp_path / "m")
         empty_graph.add_repo("n", tmp_path / "n")
@@ -263,7 +302,9 @@ class TestGetRepo:
         assert node is not None
         assert node.name == "backend"
 
-    def test_get_nonexistent_repo_returns_none(self, simple_graph: MultiRepoDependencyGraph):
+    def test_get_nonexistent_repo_returns_none(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """get_repo should return None for an unknown name."""
         assert simple_graph.get_repo("nope") is None
 
@@ -271,18 +312,24 @@ class TestGetRepo:
 class TestGetDependencies:
     """Tests for MultiRepoDependencyGraph.get_dependencies."""
 
-    def test_get_dependencies_returns_correct_nodes(self, simple_graph: MultiRepoDependencyGraph):
+    def test_get_dependencies_returns_correct_nodes(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """backend depends on shared; get_dependencies should return [shared_node]."""
         deps = simple_graph.get_dependencies("backend")
 
         assert len(deps) == 1
         assert deps[0].name == "shared"
 
-    def test_get_dependencies_for_root_node_is_empty(self, simple_graph: MultiRepoDependencyGraph):
+    def test_get_dependencies_for_root_node_is_empty(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """shared has no dependencies; result should be empty list."""
         assert simple_graph.get_dependencies("shared") == []
 
-    def test_get_dependencies_unknown_repo_returns_empty(self, simple_graph: MultiRepoDependencyGraph):
+    def test_get_dependencies_unknown_repo_returns_empty(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Querying an unknown repo should return an empty list (no exception)."""
         assert simple_graph.get_dependencies("unknown") == []
 
@@ -290,18 +337,24 @@ class TestGetDependencies:
 class TestGetDependents:
     """Tests for MultiRepoDependencyGraph.get_dependents."""
 
-    def test_get_dependents_returns_correct_nodes(self, simple_graph: MultiRepoDependencyGraph):
+    def test_get_dependents_returns_correct_nodes(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """shared is depended on by backend; get_dependents should return [backend_node]."""
         dependents = simple_graph.get_dependents("shared")
 
         assert len(dependents) == 1
         assert dependents[0].name == "backend"
 
-    def test_get_dependents_for_leaf_node_is_empty(self, simple_graph: MultiRepoDependencyGraph):
+    def test_get_dependents_for_leaf_node_is_empty(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """frontend has no dependents; result should be empty list."""
         assert simple_graph.get_dependents("frontend") == []
 
-    def test_get_dependents_unknown_repo_returns_empty(self, simple_graph: MultiRepoDependencyGraph):
+    def test_get_dependents_unknown_repo_returns_empty(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Querying an unknown repo should return an empty list (no exception)."""
         assert simple_graph.get_dependents("unknown") == []
 
@@ -314,7 +367,9 @@ class TestGetDependents:
 class TestGetAffectedRepos:
     """Tests for MultiRepoDependencyGraph.get_affected_repos."""
 
-    def test_changing_shared_affects_backend_and_frontend(self, simple_graph: MultiRepoDependencyGraph):
+    def test_changing_shared_affects_backend_and_frontend(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """shared ← backend ← frontend, so changing shared affects both."""
         affected = simple_graph.get_affected_repos("shared")
 
@@ -328,12 +383,16 @@ class TestGetAffectedRepos:
 
         assert affected == []
 
-    def test_get_affected_repos_unknown_raises_key_error(self, simple_graph: MultiRepoDependencyGraph):
+    def test_get_affected_repos_unknown_raises_key_error(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Passing an unknown repo name should raise KeyError."""
         with pytest.raises(KeyError):
             simple_graph.get_affected_repos("does-not-exist")
 
-    def test_diamond_graph_all_upstream_affected(self, diamond_graph: MultiRepoDependencyGraph):
+    def test_diamond_graph_all_upstream_affected(
+        self, diamond_graph: MultiRepoDependencyGraph
+    ):
         """
         Diamond: d ← b ← a, d ← c ← a
         Changing d should affect b, c, and a (all of them).
@@ -342,7 +401,9 @@ class TestGetAffectedRepos:
 
         assert set(affected) == {"b", "c", "a"}
 
-    def test_no_duplicate_repos_in_affected(self, diamond_graph: MultiRepoDependencyGraph):
+    def test_no_duplicate_repos_in_affected(
+        self, diamond_graph: MultiRepoDependencyGraph
+    ):
         """Each repo should appear at most once in the affected list."""
         affected = diamond_graph.get_affected_repos("d")
 
@@ -357,7 +418,9 @@ class TestGetAffectedRepos:
 class TestGetBuildOrder:
     """Tests for MultiRepoDependencyGraph.get_build_order."""
 
-    def test_simple_graph_build_order_respects_deps(self, simple_graph: MultiRepoDependencyGraph):
+    def test_simple_graph_build_order_respects_deps(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """
         For shared → backend → frontend the build order must satisfy:
         shared before backend, backend before frontend.
@@ -367,14 +430,18 @@ class TestGetBuildOrder:
         assert order.index("shared") < order.index("backend")
         assert order.index("backend") < order.index("frontend")
 
-    def test_build_order_includes_all_repos(self, simple_graph: MultiRepoDependencyGraph):
+    def test_build_order_includes_all_repos(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Every registered repo should appear exactly once in the build order."""
         order = simple_graph.get_build_order()
 
         assert set(order) == set(simple_graph.nodes.keys())
         assert len(order) == len(simple_graph.nodes)
 
-    def test_diamond_graph_build_order_valid(self, diamond_graph: MultiRepoDependencyGraph):
+    def test_diamond_graph_build_order_valid(
+        self, diamond_graph: MultiRepoDependencyGraph
+    ):
         """
         Diamond: a→b→d, a→c→d
         d must appear before b and c; b and c before a.
@@ -386,7 +453,9 @@ class TestGetBuildOrder:
         assert order.index("b") < order.index("a")
         assert order.index("c") < order.index("a")
 
-    def test_no_deps_graph_build_order_is_all_nodes(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_no_deps_graph_build_order_is_all_nodes(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """When there are no edges, all nodes appear in the build order."""
         empty_graph.add_repo("x", tmp_path / "x")
         empty_graph.add_repo("y", tmp_path / "y")
@@ -394,7 +463,9 @@ class TestGetBuildOrder:
 
         assert set(order) == {"x", "y"}
 
-    def test_cyclic_graph_raises_value_error(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_cyclic_graph_raises_value_error(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """A circular dependency should raise ValueError."""
         empty_graph.add_repo("a", tmp_path / "a")
         empty_graph.add_repo("b", tmp_path / "b")
@@ -421,7 +492,9 @@ class TestHasCycle:
         """An empty graph cannot have a cycle."""
         assert empty_graph.has_cycle() is False
 
-    def test_cyclic_graph_has_cycle(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_cyclic_graph_has_cycle(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """A → B → A should be detected as cyclic."""
         empty_graph.add_repo("a", tmp_path / "a")
         empty_graph.add_repo("b", tmp_path / "b")
@@ -430,7 +503,9 @@ class TestHasCycle:
 
         assert empty_graph.has_cycle() is True
 
-    def test_self_loop_is_cycle(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_self_loop_is_cycle(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """A node pointing to itself creates a cycle."""
         empty_graph.add_repo("self", tmp_path / "self")
         # Manually create self-loop by manipulating the node's sets to avoid
@@ -439,7 +514,9 @@ class TestHasCycle:
 
         assert empty_graph.has_cycle() is True
 
-    def test_three_node_cycle(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_three_node_cycle(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """A → B → C → A is a three-node cycle."""
         for name in ("a", "b", "c"):
             empty_graph.add_repo(name, tmp_path / name)
@@ -462,7 +539,9 @@ class TestHasCycle:
 class TestGetEdgesForRepo:
     """Tests for MultiRepoDependencyGraph.get_edges_for_repo."""
 
-    def test_returns_source_and_target_edges(self, simple_graph: MultiRepoDependencyGraph):
+    def test_returns_source_and_target_edges(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """backend appears as both source (→shared) and target (←frontend)."""
         edges = simple_graph.get_edges_for_repo("backend")
         sources = {e.source for e in edges}
@@ -473,13 +552,17 @@ class TestGetEdgesForRepo:
         assert any(e.source == "backend" for e in edges)
         assert any(e.target == "backend" for e in edges)
 
-    def test_returns_empty_for_isolated_repo(self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path):
+    def test_returns_empty_for_isolated_repo(
+        self, empty_graph: MultiRepoDependencyGraph, tmp_path: Path
+    ):
         """Repo with no edges should return empty list."""
         empty_graph.add_repo("solo", tmp_path / "solo")
 
         assert empty_graph.get_edges_for_repo("solo") == []
 
-    def test_returns_empty_for_unknown_repo(self, simple_graph: MultiRepoDependencyGraph):
+    def test_returns_empty_for_unknown_repo(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Unknown repo name should return empty list without raising."""
         assert simple_graph.get_edges_for_repo("mystery") == []
 
@@ -544,7 +627,9 @@ class TestCalculateImpactScore:
 class TestToDict:
     """Tests for MultiRepoDependencyGraph.to_dict."""
 
-    def test_to_dict_contains_required_keys(self, simple_graph: MultiRepoDependencyGraph):
+    def test_to_dict_contains_required_keys(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Serialized dict should have nodes, edges, analyzed, repo_count, edge_count."""
         data = simple_graph.to_dict()
 
@@ -601,28 +686,42 @@ class TestFromDict:
 
         assert set(restored.nodes.keys()) == set(simple_graph.nodes.keys())
 
-    def test_round_trip_preserves_edge_count(self, simple_graph: MultiRepoDependencyGraph):
+    def test_round_trip_preserves_edge_count(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Serializing and deserializing should restore all edges."""
         data = simple_graph.to_dict()
         restored = MultiRepoDependencyGraph.from_dict(data)
 
         assert len(restored.edges) == len(simple_graph.edges)
 
-    def test_round_trip_preserves_dependencies(self, simple_graph: MultiRepoDependencyGraph):
+    def test_round_trip_preserves_dependencies(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Dependency sets should survive round-trip serialization."""
         data = simple_graph.to_dict()
         restored = MultiRepoDependencyGraph.from_dict(data)
 
-        assert restored.nodes["backend"].dependencies == simple_graph.nodes["backend"].dependencies
+        assert (
+            restored.nodes["backend"].dependencies
+            == simple_graph.nodes["backend"].dependencies
+        )
 
-    def test_round_trip_preserves_dependents(self, simple_graph: MultiRepoDependencyGraph):
+    def test_round_trip_preserves_dependents(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """Dependent sets should survive round-trip serialization."""
         data = simple_graph.to_dict()
         restored = MultiRepoDependencyGraph.from_dict(data)
 
-        assert restored.nodes["shared"].dependents == simple_graph.nodes["shared"].dependents
+        assert (
+            restored.nodes["shared"].dependents
+            == simple_graph.nodes["shared"].dependents
+        )
 
-    def test_round_trip_preserves_analyzed_flag(self, simple_graph: MultiRepoDependencyGraph):
+    def test_round_trip_preserves_analyzed_flag(
+        self, simple_graph: MultiRepoDependencyGraph
+    ):
         """analyzed flag should be preserved through serialization."""
         simple_graph.analyzed = True
         data = simple_graph.to_dict()
