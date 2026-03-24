@@ -542,8 +542,14 @@ class EnhancedCodeSearch:
                     if not data:
                         raise ValueError("No data to export to CSV")
 
-                    # Get headers from first result
-                    writer = csv.DictWriter(f, fieldnames=data[0].keys())
+                    # Collect all unique keys across all rows
+                    all_keys: set[str] = set()
+                    for row in data:
+                        all_keys.update(row.keys())
+                    fieldnames = sorted(all_keys)
+                    writer = csv.DictWriter(
+                        f, fieldnames=fieldnames, extrasaction="ignore"
+                    )
                     writer.writeheader()
 
                     # Write data rows
@@ -598,9 +604,9 @@ class EnhancedCodeSearch:
                     "type": result_type,
                     "category": "file",
                     "index": idx,
-                    "file_path": str(getattr(file_result, "file_path", "")),
-                    "score": getattr(file_result, "score", 0.0),
-                    "matches": getattr(file_result, "matches", []),
+                    "file_path": str(getattr(file_result, "path", "")),
+                    "score": getattr(file_result, "relevance_score", 0.0),
+                    "matches": getattr(file_result, "matching_lines", []),
                 }
             )
 
@@ -625,12 +631,12 @@ class EnhancedCodeSearch:
             flattened.append(
                 {
                     "type": result_type,
-                    "result_category": "pattern",
+                    "category": "pattern",
                     "index": idx,
                     "content": pattern_result.get("content", ""),
                     "score": pattern_result.get("score", 0.0),
                     "pattern_type": pattern_result.get("type", ""),
-                    "category": pattern_result.get("category", ""),
+                    "pattern_category": pattern_result.get("category", ""),
                 }
             )
 

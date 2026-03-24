@@ -68,7 +68,7 @@ async def search_code(
     # Initialize Graphiti memory
     memory = None
     try:
-        memory = get_graphiti_memory(project_dir, project_dir)
+        memory = get_graphiti_memory(project_dir / ".auto-claude", project_dir)
     except Exception as e:
         print(warning(f"{icon(Icons.WARNING)} Graphiti memory not available: {e}"))
         print(muted("Proceeding with file-based search only...\n"))
@@ -367,7 +367,7 @@ def show_search_status(project_dir: Path) -> None:
 
     # Check Graphiti memory
     try:
-        memory = get_graphiti_memory(project_dir, project_dir)
+        memory = get_graphiti_memory(project_dir / ".auto-claude", project_dir)
         graphiti_available = memory is not None and memory.is_initialized
     except Exception:
         graphiti_available = False
@@ -428,7 +428,7 @@ def show_search_status(project_dir: Path) -> None:
     print()
 
 
-def manage_saved_searches(
+async def manage_saved_searches(
     project_dir: Path,
     action: str,
     name: str | None = None,
@@ -533,16 +533,11 @@ def manage_saved_searches(
         print(muted(f"Type: {search.search_type}"))
         print()
 
-        # Import asyncio here to run the async search
-        import asyncio
-
         # Run the search with saved parameters
-        asyncio.run(
-            search_code(
-                project_dir=project_dir,
-                query=search.query,
-                search_type=search.search_type,
-            )
+        await search_code(
+            project_dir=project_dir,
+            query=search.query,
+            search_type=search.search_type,
         )
 
     elif action == "delete":
@@ -635,7 +630,7 @@ async def handle_search_command(
     if status:
         show_search_status(project_dir)
     elif saved_action:
-        manage_saved_searches(
+        await manage_saved_searches(
             project_dir=project_dir,
             action=saved_action,
             name=saved_name,

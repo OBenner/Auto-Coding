@@ -71,6 +71,7 @@ export interface ElectronAPI extends
 
 export const createElectronAPI = (): ElectronAPI => {
   const securityAPI = createSecurityAPI();
+  const searchAPI = createSearchAPI();
   return {
     ...createProjectAPI(),
     ...createTerminalAPI(),
@@ -89,7 +90,7 @@ export const createElectronAPI = (): ElectronAPI => {
     ...createContextViewerAPI(),
     ...createFeedbackAPI(),
     ...createSecurityAPI(),
-    ...createSearchAPI(),
+    ...searchAPI,
     ...securityAPI,
     security: securityAPI,
     github: createGitHubAPI(),
@@ -98,7 +99,7 @@ export const createElectronAPI = (): ElectronAPI => {
     sessionReplay: createSessionReplayAPI(),
     agentInspector: createAgentInspectorAPI(),
     scheduler: createSchedulerAPI(),
-    search: createSearchAPI()
+    search: searchAPI
   };
 };
 

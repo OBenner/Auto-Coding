@@ -13,8 +13,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -24,7 +23,6 @@ if str(sys_path) not in sys.path:
     sys.path.insert(0, str(sys_path))
 
 from context.saved_searches import SavedSearch, SavedSearches
-
 
 # =============================================================================
 # TEST FIXTURES
@@ -200,6 +198,7 @@ class TestSavedSearchesInit:
         finally:
             # Restore original cwd
             import os
+
             os.chdir(original_cwd)
 
     def test_init_loads_existing_searches(self, tmp_storage_path):
@@ -336,10 +335,7 @@ class TestSaveSearch:
 
     def test_save_search_invalid_type_raises_error(self, saved_searches):
         """Test that invalid search_type raises ValueError."""
-        with pytest.raises(
-            ValueError,
-            match="Invalid search_type: invalid"
-        ):
+        with pytest.raises(ValueError, match="Invalid search_type: invalid"):
             saved_searches.save_search(
                 name="test",
                 query="query",
@@ -414,6 +410,7 @@ class TestGetSearch:
 
         # Wait a tiny bit and get again
         import time
+
         time.sleep(0.01)
 
         updated_search = saved_searches.get_search("test")
@@ -477,21 +474,9 @@ class TestListSearches:
 
     def test_list_searches_filtered_by_tags(self, saved_searches):
         """Test listing searches filtered by tags."""
-        saved_searches.save_search(
-            name="auth1",
-            query="q1",
-            tags=["auth", "security"]
-        )
-        saved_searches.save_search(
-            name="auth2",
-            query="q2",
-            tags=["auth", "api"]
-        )
-        saved_searches.save_search(
-            name="ui",
-            query="q3",
-            tags=["ui", "frontend"]
-        )
+        saved_searches.save_search(name="auth1", query="q1", tags=["auth", "security"])
+        saved_searches.save_search(name="auth2", query="q2", tags=["auth", "api"])
+        saved_searches.save_search(name="ui", query="q3", tags=["ui", "frontend"])
 
         # Single tag filter
         auth_searches = saved_searches.list_searches(tags=["auth"])
@@ -507,6 +492,7 @@ class TestListSearches:
         # Create searches in order
         saved_searches.save_search(name="old", query="q1")
         import time
+
         time.sleep(0.01)
 
         saved_searches.save_search(name="middle", query="q2")
@@ -588,10 +574,7 @@ class TestUpdateSearch:
         """Test updating search query."""
         saved_searches.save_search(name="test", query="original")
 
-        updated = saved_searches.update_search(
-            name="test",
-            query="updated"
-        )
+        updated = saved_searches.update_search(name="test", query="updated")
 
         assert updated is not None
         assert updated.query == "updated"
@@ -622,10 +605,7 @@ class TestUpdateSearch:
 
     def test_update_nonexistent_search(self, saved_searches):
         """Test updating a non-existent search returns None."""
-        result = saved_searches.update_search(
-            name="nonexistent",
-            query="query"
-        )
+        result = saved_searches.update_search(name="nonexistent", query="query")
 
         assert result is None
 
@@ -634,10 +614,7 @@ class TestUpdateSearch:
         saved_searches.save_search(name="test", query="query")
 
         with pytest.raises(ValueError, match="Invalid search_type"):
-            saved_searches.update_search(
-                name="test",
-                search_type="invalid"
-            )
+            saved_searches.update_search(name="test", search_type="invalid")
 
     def test_update_search_preserves_created_at(self, saved_searches):
         """Test that update preserves created_at timestamp."""
@@ -697,6 +674,7 @@ class TestExportSearches:
                 assert expected_path.exists()
         finally:
             import os
+
             os.chdir(original_cwd)
 
     def test_export_filtered_by_type(self, saved_searches, tmp_path):
@@ -705,10 +683,7 @@ class TestExportSearches:
         saved_searches.save_search(name="k1", query="q2", search_type="keyword")
 
         export_path = tmp_path / "export.json"
-        saved_searches.export_searches(
-            output_path=export_path,
-            search_type="semantic"
-        )
+        saved_searches.export_searches(output_path=export_path, search_type="semantic")
 
         data = json.loads(export_path.read_text(encoding="utf-8"))
         assert data["count"] == 1
@@ -721,10 +696,7 @@ class TestExportSearches:
         saved_searches.save_search(name="ui", query="q3", tags=["ui"])
 
         export_path = tmp_path / "export.json"
-        saved_searches.export_searches(
-            output_path=export_path,
-            tags=["auth", "api"]
-        )
+        saved_searches.export_searches(output_path=export_path, tags=["auth", "api"])
 
         data = json.loads(export_path.read_text(encoding="utf-8"))
         assert data["count"] == 1
@@ -748,9 +720,7 @@ class TestExportSearches:
 class TestImportSearches:
     """Test import_searches method."""
 
-    def _create_import_file(
-        self, path: Path, searches: list[dict]
-    ) -> None:
+    def _create_import_file(self, path: Path, searches: list[dict]) -> None:
         """Helper to create an import file."""
         data = {
             "exported_at": datetime.now(UTC).isoformat(),
@@ -785,7 +755,7 @@ class TestImportSearches:
                     "description": None,
                     "tags": [],
                 },
-            ]
+            ],
         )
 
         count = saved_searches.import_searches(import_path)
@@ -816,14 +786,12 @@ class TestImportSearches:
                     "description": None,
                     "tags": [],
                 }
-            ]
+            ],
         )
 
         # Should raise ValueError on conflict
         with pytest.raises(ValueError, match="already exists"):
-            saved_searches.import_searches(
-                import_path, merge_strategy="error"
-            )
+            saved_searches.import_searches(import_path, merge_strategy="error")
 
     def test_import_with_merge_strategy_skip(self, saved_searches, tmp_path):
         """Test import with skip strategy on name conflict."""
@@ -853,12 +821,10 @@ class TestImportSearches:
                     "description": None,
                     "tags": [],
                 },
-            ]
+            ],
         )
 
-        count = saved_searches.import_searches(
-            import_path, merge_strategy="skip"
-        )
+        count = saved_searches.import_searches(import_path, merge_strategy="skip")
 
         # Should skip conflicting search, import new one
         assert count == 1
@@ -883,12 +849,10 @@ class TestImportSearches:
                     "description": None,
                     "tags": [],
                 }
-            ]
+            ],
         )
 
-        count = saved_searches.import_searches(
-            import_path, merge_strategy="overwrite"
-        )
+        count = saved_searches.import_searches(import_path, merge_strategy="overwrite")
 
         # Should overwrite
         assert count == 1
@@ -935,7 +899,7 @@ class TestImportSearches:
                     "description": None,
                     "tags": [],
                 }
-            ]
+            ],
         )
 
         saved_searches.import_searches(import_path)
@@ -984,7 +948,7 @@ class TestSavedSearchesIntegration:
     def test_full_crud_workflow(self, saved_searches):
         """Test a full CRUD workflow."""
         # Create
-        search = saved_searches.save_search(
+        saved_searches.save_search(
             name="full_test",
             query="test query",
             search_type="semantic",
@@ -998,10 +962,7 @@ class TestSavedSearchesIntegration:
         assert retrieved.query == "test query"
 
         # Update
-        updated = saved_searches.update_search(
-            name="full_test",
-            query="updated query"
-        )
+        updated = saved_searches.update_search(name="full_test", query="updated query")
         assert updated.query == "updated query"
 
         # List
@@ -1034,7 +995,6 @@ class TestSavedSearchesIntegration:
         saved_searches.export_searches(output_path=export_path)
 
         # Import into new instance
-        import_path = tmp_path / "import.json"
         new_storage = tmp_path / "new_storage.json"
         new_searches = SavedSearches(storage_path=new_storage)
 
@@ -1081,8 +1041,7 @@ class TestSavedSearchesIntegration:
 
         # Combined filter
         semantic_auth = saved_searches.list_searches(
-            search_type="semantic",
-            tags=["auth"]
+            search_type="semantic", tags=["auth"]
         )
         assert len(semantic_auth) == 1
         assert semantic_auth[0].name == "semantic_auth"
@@ -1090,6 +1049,7 @@ class TestSavedSearchesIntegration:
         # Update last_used to test sorting
         saved_searches.get_search("semantic_auth")
         import time
+
         time.sleep(0.01)
         saved_searches.get_search("keyword_auth")
 

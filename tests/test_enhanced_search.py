@@ -10,8 +10,7 @@ Tests the enhanced code search that combines:
 
 import sys
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -22,7 +21,6 @@ if str(sys_path) not in sys.path:
 
 from context.enhanced_search import EnhancedCodeSearch
 from context.models import FileMatch
-
 
 # =============================================================================
 # TEST FIXTURES
@@ -173,7 +171,9 @@ class TestEnhancedCodeSearchInit:
 
             assert searcher.project_dir == project_dir.resolve()
             assert searcher.graphiti_memory == mock_graphiti_memory
-            assert searcher._code_relationships == mock_graphiti_memory.code_relationships
+            assert (
+                searcher._code_relationships == mock_graphiti_memory.code_relationships
+            )
             assert searcher._graphiti_search == mock_graphiti_memory._search
 
     def test_init_without_graphiti(self, project_dir):
@@ -197,9 +197,7 @@ class TestEnhancedCodeSearchInit:
                 use_semantic_search=False,
             )
 
-            searcher = EnhancedCodeSearch(
-                project_dir, use_semantic_search=False
-            )
+            searcher = EnhancedCodeSearch(project_dir, use_semantic_search=False)
 
             assert searcher._code_searcher.use_semantic_search is False
 
@@ -237,9 +235,7 @@ class TestSearchService:
         """Test search_service with no results."""
         enhanced_search._code_searcher.search_service.return_value = []
 
-        result = enhanced_search.search_service(
-            project_dir, "backend", ["nonexistent"]
-        )
+        result = enhanced_search.search_service(project_dir, "backend", ["nonexistent"])
 
         assert result == []
 
@@ -280,7 +276,9 @@ class TestSearchWithSemantics:
         self, enhanced_search, project_dir
     ):
         """Test search_with_semantics with no results."""
-        enhanced_search._code_searcher.search_with_semantics = AsyncMock(return_value=[])
+        enhanced_search._code_searcher.search_with_semantics = AsyncMock(
+            return_value=[]
+        )
 
         result = await enhanced_search.search_with_semantics(
             project_path := project_dir,
@@ -726,7 +724,9 @@ class TestSearchUnified:
         enhanced_search._code_searcher.search_with_semantics = AsyncMock(
             return_value=file_matches
         )
-        enhanced_search._code_relationships.search_by_purpose = AsyncMock(return_value=[])
+        enhanced_search._code_relationships.search_by_purpose = AsyncMock(
+            return_value=[]
+        )
         enhanced_search._graphiti_search.get_patterns_and_gotchas = AsyncMock(
             return_value=([], [])
         )
@@ -785,7 +785,9 @@ class TestGetStatus:
         assert status["graphiti_search_available"] is False
         assert status["semantic_search_enabled"] is True
 
-    def test_get_status_semantic_search_disabled(self, project_dir, mock_graphiti_memory):
+    def test_get_status_semantic_search_disabled(
+        self, project_dir, mock_graphiti_memory
+    ):
         """Test get_status with semantic search disabled."""
         with patch("context.enhanced_search.CodeSearcher") as mock_searcher_class:
             mock_searcher_class.return_value = MagicMock(

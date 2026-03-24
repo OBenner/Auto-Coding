@@ -105,7 +105,7 @@ class CodeSearcher:
                                 found += 1
 
                 if score > 0:
-                    rel_path = str(file_path.relative_to(self.project_dir))
+                    rel_path = str(file_path.resolve().relative_to(self.project_dir))
                     matches.append(
                         FileMatch(
                             path=rel_path,
@@ -388,6 +388,6 @@ class CodeSearcher:
         for item in directory.rglob("*"):
             if item.is_file() and item.suffix in CODE_EXTENSIONS:
                 # Check if in skip directory
-                parts = item.relative_to(directory).parts
+                parts = item.resolve().relative_to(directory.resolve()).parts
                 if not any(part in SKIP_DIRS for part in parts):
                     yield item

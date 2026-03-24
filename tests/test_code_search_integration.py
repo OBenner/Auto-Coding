@@ -21,7 +21,6 @@ from context.enhanced_search import EnhancedCodeSearch
 from context.models import FileMatch
 from context.saved_searches import SavedSearch, SavedSearches
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
@@ -197,7 +196,9 @@ class TestEnhancedCodeSearchFileSearch:
 
         service_path = temp_project_dir / "apps" / "backend" / "services"
         results = searcher.search_service(
-            service_path=service_path, service_name="services", keywords=["authenticate"]
+            service_path=service_path,
+            service_name="services",
+            keywords=["authenticate"],
         )
 
         assert isinstance(results, list)
@@ -439,9 +440,7 @@ class TestEnhancedCodeSearchStatusAndExport:
         )
 
         with pytest.raises(ValueError, match="Unsupported format"):
-            searcher.export_search_results(
-                results=[{"test": "data"}], format="xml"
-            )
+            searcher.export_search_results(results=[{"test": "data"}], format="xml")
 
     def test_export_search_results_empty_data(self, temp_project_dir):
         """Test export fails with empty data."""
@@ -518,7 +517,10 @@ class TestSavedSearchesInit:
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("pathlib.Path.cwd", return_value=Path(tmpdir)):
                 searches = SavedSearches()
-                assert searches.storage_path == Path(tmpdir) / ".auto-claude" / "saved_searches.json"
+                assert (
+                    searches.storage_path
+                    == Path(tmpdir) / ".auto-claude" / "saved_searches.json"
+                )
 
     def test_init_custom_path(self, temp_searches_file):
         """Test initialization with custom path."""
@@ -679,9 +681,9 @@ class TestSavedSearchesCRUD:
         """Test searches are sorted by last_used."""
         searches = SavedSearches(storage_path=temp_searches_file)
 
-        s1 = searches.save_search(name="s1", query="test1", search_type="semantic")
-        s2 = searches.save_search(name="s2", query="test2", search_type="semantic")
-        s3 = searches.save_search(name="s3", query="test3", search_type="semantic")
+        searches.save_search(name="s1", query="test1", search_type="semantic")
+        searches.save_search(name="s2", query="test2", search_type="semantic")
+        searches.save_search(name="s3", query="test3", search_type="semantic")
 
         # Access s2 to update last_used
         searches.get_search("s2")
@@ -778,9 +780,7 @@ class TestSavedSearchesImportExport:
 
         try:
             # Export only semantic searches
-            result_path = searches.export_searches(
-                output_path=export_path, search_type="semantic"
-            )
+            searches.export_searches(output_path=export_path, search_type="semantic")
 
             data = json.loads(export_path.read_text(encoding="utf-8"))
             assert data["count"] == 1
@@ -950,7 +950,9 @@ class TestSavedSearchesImportExport:
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             import_path = Path(f.name)
-            import_path.write_text('{"exported_at": "2024-01-01", "count": 0, "searches": []}')
+            import_path.write_text(
+                '{"exported_at": "2024-01-01", "count": 0, "searches": []}'
+            )
 
         try:
             with pytest.raises(ValueError, match="Invalid merge_strategy"):
@@ -976,7 +978,7 @@ class TestSearchIntegration:
         )
 
         # Perform search
-        results = await searcher.search_by_purpose("authentication")
+        await searcher.search_by_purpose("authentication")
 
         # Save search
         with tempfile.TemporaryDirectory() as tmpdir:

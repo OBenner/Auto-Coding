@@ -23,7 +23,7 @@ class SavedSearch:
 
     name: str
     query: str
-    search_type: str  # 'semantic', 'keyword', 'hybrid'
+    search_type: str  # 'unified', 'purpose', 'patterns', 'callers', 'callees', 'semantic', 'keyword', 'hybrid'
     filters: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     last_used: str | None = None
@@ -37,7 +37,18 @@ class SavedSearch:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SavedSearch:
         """Create SavedSearch from dictionary."""
-        return cls(**data)
+        known_fields = {
+            "name",
+            "query",
+            "search_type",
+            "filters",
+            "created_at",
+            "last_used",
+            "description",
+            "tags",
+        }
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        return cls(**filtered_data)
 
 
 class SavedSearches:
@@ -89,10 +100,20 @@ class SavedSearches:
         if not name or not name.strip():
             raise ValueError("Search name cannot be empty")
 
-        if search_type not in ("semantic", "keyword", "hybrid"):
+        valid_types = (
+            "unified",
+            "purpose",
+            "patterns",
+            "callers",
+            "callees",
+            "semantic",
+            "keyword",
+            "hybrid",
+        )
+        if search_type not in valid_types:
             raise ValueError(
                 f"Invalid search_type: {search_type}. "
-                "Must be 'semantic', 'keyword', or 'hybrid'"
+                f"Must be one of: {', '.join(repr(t) for t in valid_types)}"
             )
 
         # Create or update search
@@ -227,10 +248,20 @@ class SavedSearches:
         existing = self._searches[name]
 
         # Validate search_type if provided
-        if search_type and search_type not in ("semantic", "keyword", "hybrid"):
+        valid_types = (
+            "unified",
+            "purpose",
+            "patterns",
+            "callers",
+            "callees",
+            "semantic",
+            "keyword",
+            "hybrid",
+        )
+        if search_type and search_type not in valid_types:
             raise ValueError(
                 f"Invalid search_type: {search_type}. "
-                "Must be 'semantic', 'keyword', or 'hybrid'"
+                f"Must be one of: {', '.join(repr(t) for t in valid_types)}"
             )
 
         # Update fields
