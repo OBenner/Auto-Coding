@@ -9,14 +9,12 @@ Produces Python modules compatible with the manual pattern library format.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from integrations.graphiti.pattern_categorizer import (
-    PATTERN_CATEGORIES,
     categorize_pattern_sync,
 )
 from integrations.graphiti.pattern_extractor import PatternExtractor
@@ -256,7 +254,7 @@ class PatternLibraryGenerator:
                 code = pattern["code_snippet"]
 
                 # Escape code for Python string literal
-                code_escaped = code.replace("\\", "\\\\").replace('"""', r'\"\"\"')
+                code_escaped = code.replace("\\", "\\\\").replace('"""', r"\"\"\"")
 
                 # Add pattern entry
                 module_code += f'    "{key}": """'

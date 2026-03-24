@@ -5,10 +5,10 @@ Language Patterns Module
 Idiomatic code patterns for different programming languages.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any
 
 
-def load_language_patterns(language: str) -> Optional[Dict[str, Any]]:
+def load_language_patterns(language: str) -> dict[str, Any] | None:
     """
     Load language-specific code patterns.
 
@@ -23,15 +23,19 @@ def load_language_patterns(language: str) -> Optional[Dict[str, Any]]:
     try:
         if language == "go":
             from .go_patterns import GO_PATTERNS
+
             return GO_PATTERNS
         elif language == "php":
             from .php_patterns import PHP_PATTERNS
+
             return PHP_PATTERNS
         elif language == "ruby":
             from .ruby_patterns import RUBY_PATTERNS
+
             return RUBY_PATTERNS
         elif language == "rust":
             from .rust_patterns import RUST_PATTERNS
+
             return RUST_PATTERNS
         else:
             return None

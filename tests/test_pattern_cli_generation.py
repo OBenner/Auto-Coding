@@ -154,7 +154,9 @@ class TestGenerateSingleLanguage:
         # Module should have docstring or comment header
         assert '"""' in content or "# " in content
 
-    def test_generate_creates_parent_directories(self, temp_project_dir, temp_output_dir):
+    def test_generate_creates_parent_directories(
+        self, temp_project_dir, temp_output_dir
+    ):
         """Generate creates parent directories if they don't exist."""
         nested_output = temp_output_dir / "nested" / "deep" / "python_patterns.py"
 
@@ -453,7 +455,7 @@ class TestErrorHandling:
         )
 
         # Should show warning in output
-        captured = capsys.readouterr()
+        _captured = capsys.readouterr()  # noqa: F841
         # May contain warning about unsupported language
         # (implementation-dependent)
 
@@ -518,7 +520,9 @@ class TestPatternLibraryGenerator:
 class TestSemanticMeaning:
     """Tests for semantic meaning and intent of CLI commands."""
 
-    def test_generate_creates_standalone_library(self, temp_project_dir, temp_output_dir):
+    def test_generate_creates_standalone_library(
+        self, temp_project_dir, temp_output_dir
+    ):
         """Generate creates a standalone, importable Python module."""
         output_path = temp_output_dir / "standalone_patterns.py"
 

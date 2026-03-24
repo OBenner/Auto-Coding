@@ -584,7 +584,9 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
             )
             return 1
         # For generate, use parent directory of spec_dir as project_dir
-        project_dir = spec_dir.parent.parent.parent  # .auto-claude/specs/XXX -> project root
+        project_dir = (
+            spec_dir.parent.parent.parent
+        )  # .auto-claude/specs/XXX -> project root
         source_dir = Path(args.source) if args.source else None
         max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
         generate_patterns(
@@ -599,7 +601,9 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
             )
             return 1
         # For generate-all, use parent directory of spec_dir as project_dir
-        project_dir = spec_dir.parent.parent.parent  # .auto-claude/specs/XXX -> project root
+        project_dir = (
+            spec_dir.parent.parent.parent
+        )  # .auto-claude/specs/XXX -> project root
         source_dir = Path(args.source) if args.source else None
         max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
         languages = args.languages.split(",") if args.languages else None
@@ -656,7 +660,15 @@ Examples:
 
     parser.add_argument(
         "action",
-        choices=["list", "show", "approve", "override", "delete", "generate", "generate-all"],
+        choices=[
+            "list",
+            "show",
+            "approve",
+            "override",
+            "delete",
+            "generate",
+            "generate-all",
+        ],
         help="Action to perform",
     )
 

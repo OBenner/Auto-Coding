@@ -32,7 +32,9 @@ def _load_library_patterns(project_dir: Path) -> dict[str, str]:
     """
     library_patterns = {}
 
-    def _extract_patterns(lang: str, category: str, patterns_dict: dict, prefix: str = ""):
+    def _extract_patterns(
+        lang: str, category: str, patterns_dict: dict, prefix: str = ""
+    ):
         """Recursively extract patterns from nested dictionaries."""
         for pattern_name, pattern_value in patterns_dict.items():
             if isinstance(pattern_value, dict):
@@ -41,7 +43,9 @@ def _load_library_patterns(project_dir: Path) -> dict[str, str]:
                 _extract_patterns(lang, category, pattern_value, new_prefix)
             elif isinstance(pattern_value, str):
                 # Actual pattern code
-                full_pattern_name = f"{prefix}_{pattern_name}" if prefix else pattern_name
+                full_pattern_name = (
+                    f"{prefix}_{pattern_name}" if prefix else pattern_name
+                )
                 pattern_key = f"library_{lang}_{category}_{full_pattern_name}"
                 pattern_text = (
                     f"Language: {lang}\n"
@@ -73,7 +77,9 @@ def _load_library_patterns(project_dir: Path) -> dict[str, str]:
                     if isinstance(category_patterns, dict):
                         _extract_patterns(language, category_name, category_patterns)
 
-                pattern_count = len([k for k in library_patterns.keys() if f"library_{language}_" in k])
+                pattern_count = len(
+                    [k for k in library_patterns.keys() if f"library_{language}_" in k]
+                )
                 if pattern_count > 0:
                     logger.info(
                         f"Loaded {pattern_count} patterns from {language} library"

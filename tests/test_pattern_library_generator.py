@@ -11,7 +11,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from integrations.graphiti.pattern_library_generator import (
     LANGUAGE_EXTENSIONS,
     PatternLibraryGenerator,
@@ -280,8 +279,16 @@ class TestCategorizePatterns:
         with patch(
             "integrations.graphiti.pattern_library_generator.categorize_pattern_sync",
             side_effect=[
-                {"category": "error-handling", "confidence": 0.9, "reasoning": "Error handling pattern"},
-                {"category": "api-design", "confidence": 0.95, "reasoning": "API endpoint pattern"},
+                {
+                    "category": "error-handling",
+                    "confidence": 0.9,
+                    "reasoning": "Error handling pattern",
+                },
+                {
+                    "category": "api-design",
+                    "confidence": 0.95,
+                    "reasoning": "API endpoint pattern",
+                },
             ],
         ):
             categorized = generator._categorize_patterns(patterns)
@@ -305,7 +312,11 @@ class TestCategorizePatterns:
 
         with patch(
             "integrations.graphiti.pattern_library_generator.categorize_pattern_sync",
-            return_value={"category": "uncategorized", "confidence": 0.0, "reasoning": "Could not categorize"},
+            return_value={
+                "category": "uncategorized",
+                "confidence": 0.0,
+                "reasoning": "Could not categorize",
+            },
         ):
             categorized = generator._categorize_patterns(patterns)
 
@@ -357,10 +368,18 @@ class TestGenerateModuleCode:
 
         categorized_patterns = {
             "error-handling": [
-                {"type": "error", "pattern": "try-except", "code_snippet": "try:\n    pass\nexcept:\n    pass"}
+                {
+                    "type": "error",
+                    "pattern": "try-except",
+                    "code_snippet": "try:\n    pass\nexcept:\n    pass",
+                }
             ],
             "api-design": [
-                {"type": "api", "pattern": "endpoint", "code_snippet": "@app.route('/test')\ndef test():\n    pass"}
+                {
+                    "type": "api",
+                    "pattern": "endpoint",
+                    "code_snippet": "@app.route('/test')\ndef test():\n    pass",
+                }
             ],
         }
 
@@ -389,7 +408,7 @@ class TestGenerateModuleCode:
         module_code = generator._generate_module_code("python", categorized_patterns)
 
         # Should escape triple quotes
-        assert r'\"\"\"' in module_code or "'''" in module_code
+        assert r"\"\"\"" in module_code or "'''" in module_code
 
     def test_generate_empty_module(self, temp_project_dir):
         """Test generating module with no patterns."""
@@ -478,7 +497,9 @@ class TestWriteEmptyLibrary:
         assert "Javascript Language Patterns Module" in content
         assert "No patterns were extracted" in content or "No patterns found" in content
 
-    def test_write_empty_library_creates_parent_dirs(self, temp_project_dir, temp_output_dir):
+    def test_write_empty_library_creates_parent_dirs(
+        self, temp_project_dir, temp_output_dir
+    ):
         """Test that writing creates parent directories."""
         generator = PatternLibraryGenerator(temp_project_dir)
         output_path = temp_output_dir / "subdir" / "nested" / "empty.py"
@@ -512,7 +533,11 @@ class TestGenerateLibraryFile:
         ):
             with patch(
                 "integrations.graphiti.pattern_library_generator.categorize_pattern_sync",
-                return_value={"category": "error-handling", "confidence": 0.9, "reasoning": "Error pattern"},
+                return_value={
+                    "category": "error-handling",
+                    "confidence": 0.9,
+                    "reasoning": "Error pattern",
+                },
             ):
                 generator.generate_library_file(
                     output_path=output_path, language="python", options={}
@@ -590,7 +615,11 @@ class TestGenerateLibraryFile:
         ):
             with patch(
                 "integrations.graphiti.pattern_library_generator.categorize_pattern_sync",
-                return_value={"category": "error-handling", "confidence": 0.9, "reasoning": "Error pattern"},
+                return_value={
+                    "category": "error-handling",
+                    "confidence": 0.9,
+                    "reasoning": "Error pattern",
+                },
             ):
                 # Generate with max_patterns_per_category limit
                 generator.generate_library_file(
@@ -628,7 +657,11 @@ class TestGenerateLibraryFile:
         ):
             with patch(
                 "integrations.graphiti.pattern_library_generator.categorize_pattern_sync",
-                return_value={"category": "testing", "confidence": 0.8, "reasoning": "Test pattern"},
+                return_value={
+                    "category": "testing",
+                    "confidence": 0.8,
+                    "reasoning": "Test pattern",
+                },
             ):
                 generator.generate_library_file(
                     output_path=output_path,
