@@ -1,217 +1,78 @@
 /**
- * ExportDialog - Dialog for exporting agent thought process data
+ * ExportDialog - Agent Inspector session export.
  *
- * Allows users to export agent sessions in JSON or Markdown format.
- * Exports include thoughts, tool calls, performance metrics, and patterns.
- *
- * Features:
- * - Format selection (JSON or Markdown)
- * - Export session log with all details
- * - Automatic file download after export
- * - Error handling with user feedback
- *
- * @example
- * ```tsx
- * <ExportDialog
- *   open={isExportOpen}
- *   onOpenChange={setIsExportOpen}
- *   projectPath="/path/to/project"
- *   specId="spec-123"
- *   sessionId="session-456"
- * />
- * ```
+ * Thin wrapper around BaseExportDialog with agent-inspector-specific
+ * IPC call and i18n namespace.
  */
-import { useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Download, FileText, Code } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Label } from '../ui/label';
+  BaseExportDialog,
+  type BaseExportDialogLabels,
+} from '../ui/base-export-dialog';
 
-/**
- * Export format options
- */
-type ExportFormat = 'json' | 'markdown';
-
-/**
- * Props for the ExportDialog component
- */
 interface ExportDialogProps {
-  /** Whether the dialog is open */
   open: boolean;
-  /** Callback when the dialog open state changes */
   onOpenChange: (open: boolean) => void;
-  /** Path to the project directory */
   projectPath: string;
-  /** Spec ID containing the session */
   specId: string;
-  /** Session ID to export */
   sessionId: string;
 }
-
-/**
- * Format options for export
- */
-const FORMAT_OPTIONS = [
-  { value: 'json' as const, labelKey: 'export.formatJson', icon: Code, description: 'export.formatJsonDesc' },
-  { value: 'markdown' as const, labelKey: 'export.formatMarkdown', icon: FileText, description: 'export.formatMarkdownDesc' }
-] as const;
 
 export function ExportDialog({
   open,
   onOpenChange,
   projectPath,
   specId,
-  sessionId
+  sessionId,
 }: Readonly<ExportDialogProps>) {
-  const { t } = useTranslation(['agent-inspector', 'dialogs']);
+  const { t } = useTranslation(['agent-inspector']);
 
-  // Form state
-  const [format, setFormat] = useState<ExportFormat>('json');
-  const [isExporting, setIsExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const labels: BaseExportDialogLabels = {
+    title: t('agent-inspector:export.title'),
+    description: t('agent-inspector:export.description'),
+    formatLabel: t('agent-inspector:export.format'),
+    jsonLabel: t('agent-inspector:export.formatJson'),
+    markdownLabel: t('agent-inspector:export.formatMarkdown'),
+    jsonInfo: t('agent-inspector:export.formatJsonInfo'),
+    markdownInfo: t('agent-inspector:export.formatMarkdownInfo'),
+    cancelLabel: t('agent-inspector:export.cancel'),
+    exportLabel: t('agent-inspector:export.export'),
+    exportingLabel: t('agent-inspector:export.exporting'),
+    errorFallback: t('agent-inspector:errors.exportFailed'),
+  };
 
-  const handleExport = async () => {
-    setIsExporting(true);
-    setError(null);
-
-    try {
-      // Call agent inspector export API
-      const result = await (globalThis as unknown as Window).electronAPI.agentInspector.exportSession(
+  const handleExport = useCallback(
+    async (format: 'json' | 'markdown'): Promise<string> => {
+      const result = await (
+        globalThis as unknown as Window
+      ).electronAPI.agentInspector.exportSession(
         projectPath,
         specId,
         sessionId,
-        format
+        format,
       );
 
       if (!result.success) {
-        throw new Error(result.error || t('agent-inspector:errors.exportFailed'));
+        throw new Error(
+          result.error || t('agent-inspector:errors.exportFailed'),
+        );
       }
 
-      // Create a blob and trigger download
-      const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
-      const blob = new Blob([content], {
-        type: format === 'json' ? 'application/json' : 'text/markdown'
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-
-      // Generate filename
-      const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
-      const extension = format === 'json' ? 'json' : 'md';
-      const filename = `agent-session-${sessionId}-${timestamp}.${extension}`;
-
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-
-      // Close dialog on success
-      onOpenChange(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('agent-inspector:errors.exportFailed'));
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleClose = () => {
-    if (!isExporting) {
-      onOpenChange(false);
-    }
-  };
+      return typeof result.data === 'string'
+        ? result.data
+        : JSON.stringify(result.data, null, 2);
+    },
+    [projectPath, specId, sessionId, t],
+  );
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="text-foreground">
-            {t('agent-inspector:export.title')}
-          </DialogTitle>
-          <DialogDescription>
-            {t('agent-inspector:export.description')}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-5 py-4">
-          {/* Format Selection */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-foreground">
-              {t('agent-inspector:export.format')}
-            </Label>
-            <div className="grid grid-cols-2 gap-3">
-              {FORMAT_OPTIONS.map(({ value, labelKey, icon: Icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setFormat(value)}
-                  disabled={isExporting}
-                  className={`
-                    flex items-center gap-3 p-4 rounded-lg border-2 transition-all
-                    ${format === value
-                      ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                      : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                    }
-                    ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                  `}
-                >
-                  <Icon className={`h-5 w-5 ${format === value ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={`font-medium ${format === value ? 'text-foreground' : 'text-muted-foreground'}`}>
-                    {t(`agent-inspector:${labelKey}`)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Info Box */}
-          <div className="rounded-lg bg-muted/50 border border-border p-3 text-sm text-muted-foreground">
-            <p className="flex items-start gap-2">
-              <Download className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>
-                {format === 'json'
-                  ? t('agent-inspector:export.formatJsonInfo')
-                  : t('agent-inspector:export.formatMarkdownInfo')}
-              </span>
-            </p>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive" role="alert">
-              <span>{error}</span>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={isExporting}>
-            {t('agent-inspector:export.cancel')}
-          </Button>
-          <Button onClick={handleExport} disabled={isExporting}>
-            {isExporting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('agent-inspector:export.exporting')}
-              </>
-            ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                {t('agent-inspector:export.export')}
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <BaseExportDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      labels={labels}
+      onExport={handleExport}
+      filenamePrefix={`agent-session-${sessionId}`}
+    />
   );
 }

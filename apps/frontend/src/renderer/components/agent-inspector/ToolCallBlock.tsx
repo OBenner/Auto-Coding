@@ -84,6 +84,17 @@ function toolCallBlockPropsAreEqual(
   );
 }
 
+/** Shared CodeMirror basicSetup config for read-only JSON viewers */
+const CODE_MIRROR_SETUP = {
+  lineNumbers: true,
+  highlightActiveLineGutter: false,
+  highlightSpecialChars: true,
+  foldGutter: true,
+  syntaxHighlighting: true,
+  bracketMatching: true,
+  highlightActiveLine: false,
+} as const;
+
 /**
  * ToolCallBlock component with expandable input/output sections
  * Shows tool calls with syntax-highlighted JSON for debugging
@@ -208,15 +219,7 @@ export const ToolCallBlock = memo(function ToolCallBlock({
                 extensions={[json()]}
                 theme={isDarkMode ? 'dark' : 'light'}
                 editable={false}
-                basicSetup={{
-                  lineNumbers: true,
-                  highlightActiveLineGutter: false,
-                  highlightSpecialChars: true,
-                  foldGutter: true,
-                  syntaxHighlighting: true,
-                  bracketMatching: true,
-                  highlightActiveLine: false,
-                }}
+                basicSetup={CODE_MIRROR_SETUP}
                 className="text-xs"
                 style={{
                   fontSize: '12px',

@@ -231,70 +231,28 @@ export function PerformanceMetrics({
                 {t('agent-inspector:metrics.tokenDistribution', 'Token Distribution')}
               </h4>
               <div className="space-y-2">
-                {/* Input Tokens Bar */}
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-muted-foreground">
-                      {t('agent-inspector:metrics.input', 'Input')}
-                    </span>
-                    <span className="font-medium">
-                      {formatNumber(metrics.inputTokens)} (
-                      {formatPercentage(metrics.inputTokens, totalTokens)})
-                    </span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 transition-all"
-                      style={{
-                        width: formatPercentage(metrics.inputTokens, totalTokens),
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Output Tokens Bar */}
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-muted-foreground">
-                      {t('agent-inspector:metrics.output', 'Output')}
-                    </span>
-                    <span className="font-medium">
-                      {formatNumber(metrics.outputTokens)} (
-                      {formatPercentage(metrics.outputTokens, totalTokens)})
-                    </span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500 transition-all"
-                      style={{
-                        width: formatPercentage(metrics.outputTokens, totalTokens),
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Thinking Tokens Bar */}
-                {metrics.thinkingTokens !== undefined && metrics.thinkingTokens > 0 && (
-                  <div>
+                {[
+                  { label: t('agent-inspector:metrics.input', 'Input'), value: metrics.inputTokens, color: 'bg-blue-500' },
+                  { label: t('agent-inspector:metrics.output', 'Output'), value: metrics.outputTokens, color: 'bg-green-500' },
+                  ...(metrics.thinkingTokens !== undefined && metrics.thinkingTokens > 0
+                    ? [{ label: t('agent-inspector:metrics.thinking', 'Thinking'), value: metrics.thinkingTokens, color: 'bg-purple-500' }]
+                    : []),
+                ].map(({ label, value, color }) => (
+                  <div key={label}>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">
-                        {t('agent-inspector:metrics.thinking', 'Thinking')}
-                      </span>
+                      <span className="text-muted-foreground">{label}</span>
                       <span className="font-medium">
-                        {formatNumber(metrics.thinkingTokens)} (
-                        {formatPercentage(metrics.thinkingTokens, totalTokens)})
+                        {formatNumber(value)} ({formatPercentage(value, totalTokens)})
                       </span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-purple-500 transition-all"
-                        style={{
-                          width: formatPercentage(metrics.thinkingTokens, totalTokens),
-                        }}
+                        className={`h-full ${color} transition-all`}
+                        style={{ width: formatPercentage(value, totalTokens) }}
                       />
                     </div>
                   </div>
-                )}
+                ))}
               </div>
             </div>
 

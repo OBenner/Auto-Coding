@@ -334,52 +334,35 @@ function detectNoProgress(
 }
 
 /**
- * Get icon component for pattern severity
+ * Consolidated severity configuration — icon, card colors, and badge colors
+ * keyed by PatternSeverity. Eliminates three near-identical switch blocks.
  */
-function getSeverityIcon(severity: PatternSeverity): React.ComponentType<{ className?: string }> {
-  switch (severity) {
-    case PatternSeverity.CRITICAL:
-      return XCircle;
-    case PatternSeverity.ERROR:
-      return AlertTriangle;
-    case PatternSeverity.WARNING:
-      return AlertCircle;
-    default:
-      return AlertCircle;
+const SEVERITY_CONFIG: Record<
+  PatternSeverity,
+  {
+    icon: React.ComponentType<{ className?: string }>;
+    colors: string;
+    badgeColor: string;
   }
-}
+> = {
+  [PatternSeverity.CRITICAL]: {
+    icon: XCircle,
+    colors: 'border-red-500/50 bg-red-500/10',
+    badgeColor: 'bg-red-500/20 text-red-400 border-red-500/30',
+  },
+  [PatternSeverity.ERROR]: {
+    icon: AlertTriangle,
+    colors: 'border-orange-500/50 bg-orange-500/10',
+    badgeColor: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  },
+  [PatternSeverity.WARNING]: {
+    icon: AlertCircle,
+    colors: 'border-yellow-500/50 bg-yellow-500/10',
+    badgeColor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  },
+};
 
-/**
- * Get color classes for pattern severity
- */
-function getSeverityColors(severity: PatternSeverity): string {
-  switch (severity) {
-    case PatternSeverity.CRITICAL:
-      return 'border-red-500/50 bg-red-500/10';
-    case PatternSeverity.ERROR:
-      return 'border-orange-500/50 bg-orange-500/10';
-    case PatternSeverity.WARNING:
-      return 'border-yellow-500/50 bg-yellow-500/10';
-    default:
-      return 'border-gray-500/50 bg-gray-500/10';
-  }
-}
-
-/**
- * Get badge color for pattern severity
- */
-function getSeverityBadgeColor(severity: PatternSeverity): string {
-  switch (severity) {
-    case PatternSeverity.CRITICAL:
-      return 'bg-red-500/20 text-red-400 border-red-500/30';
-    case PatternSeverity.ERROR:
-      return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
-    case PatternSeverity.WARNING:
-      return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-    default:
-      return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-  }
-}
+const DEFAULT_SEVERITY = SEVERITY_CONFIG[PatternSeverity.WARNING];
 
 /**
  * Get icon for pattern type
@@ -457,12 +440,10 @@ export const PatternDetector = memo(function PatternDetector({
       {/* Individual Pattern Cards */}
       {detectedPatterns.map((pattern, index) => {
         const Icon = getPatternIcon(pattern.type);
-        const SeverityIcon = getSeverityIcon(pattern.severity);
-        const severityColors = getSeverityColors(pattern.severity);
-        const badgeColor = getSeverityBadgeColor(pattern.severity);
+        const config = SEVERITY_CONFIG[pattern.severity] || DEFAULT_SEVERITY;
 
         return (
-          <Card key={`${pattern.type}-${index}`} className={cn(severityColors, 'border')}>
+          <Card key={`${pattern.type}-${index}`} className={cn(config.colors, 'border')}>
             <CardHeader>
               <div className="flex items-start gap-3">
                 <div className="shrink-0 mt-0.5">
@@ -471,8 +452,8 @@ export const PatternDetector = memo(function PatternDetector({
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <CardTitle className="text-base">{pattern.description}</CardTitle>
-                    <Badge variant="outline" className={cn('gap-1 text-xs', badgeColor)}>
-                      <SeverityIcon className="h-3 w-3" />
+                    <Badge variant="outline" className={cn('gap-1 text-xs', config.badgeColor)}>
+                      <config.icon className="h-3 w-3" />
                       {pattern.severity.toUpperCase()}
                     </Badge>
                   </div>
