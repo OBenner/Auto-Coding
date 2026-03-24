@@ -1,60 +1,81 @@
 """
-Unit tests for agents/tools_pkg/models.py
+Unit tests for agents/tools_pkg/models.py — SearXNG integration
 """
+
 import os
-import pytest
+from unittest.mock import patch
 
 
-def test_is_searxng_enabled_true():
-    """Test that is_searxng_enabled returns True when SEARXNG_ENABLED=true"""
-    # Save original value
-    original = os.environ.get("SEARXNG_ENABLED")
-    try:
-        os.environ["SEARXNG_ENABLED"] = "true"
-        from agents.tools_pkg.models import is_searxng_enabled
-        assert is_searxng_enabled() is True
-    finally:
-        # Restore original value
-        if original is None:
+class TestIsSearxngEnabled:
+    """Tests for is_searxng_enabled() with proper env isolation."""
+
+    def test_enabled_when_true(self):
+        """Returns True when SEARXNG_ENABLED=true."""
+        with patch.dict(os.environ, {"SEARXNG_ENABLED": "true"}):
+            from agents.tools_pkg.models import is_searxng_enabled
+
+            assert is_searxng_enabled() is True
+
+    def test_disabled_when_false(self):
+        """Returns False when SEARXNG_ENABLED=false."""
+        with patch.dict(os.environ, {"SEARXNG_ENABLED": "false"}):
+            from agents.tools_pkg.models import is_searxng_enabled
+
+            assert is_searxng_enabled() is False
+
+    def test_disabled_when_unset(self):
+        """Returns False when SEARXNG_ENABLED is not set."""
+        with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("SEARXNG_ENABLED", None)
-        else:
-            os.environ["SEARXNG_ENABLED"] = original
+            from agents.tools_pkg.models import is_searxng_enabled
+
+            assert is_searxng_enabled() is False
+
+    def test_case_insensitive(self):
+        """Handles case-insensitive values."""
+        with patch.dict(os.environ, {"SEARXNG_ENABLED": "True"}):
+            from agents.tools_pkg.models import is_searxng_enabled
+
+            assert is_searxng_enabled() is True
 
 
-def test_is_searxng_enabled_false():
-    """Test that is_searxng_enabled returns False when unset or false"""
-    from agents.tools_pkg.models import is_searxng_enabled
+class TestSearxngConstants:
+    """Tests for SearXNG-related constants."""
 
-    # Test unset
-    original = os.environ.get("SEARXNG_ENABLED")
-    try:
-        os.environ.pop("SEARXNG_ENABLED", None)
-        assert is_searxng_enabled() is False
+    def test_searxng_tools_constant(self):
+        """SEARXNG_TOOLS contains expected tool names."""
+        from agents.tools_pkg.models import SEARXNG_TOOLS
 
-        # Test explicit false
-        os.environ["SEARXNG_ENABLED"] = "false"
-        assert is_searxng_enabled() is False
-    finally:
-        if original is not None:
-            os.environ["SEARXNG_ENABLED"] = original
+        assert SEARXNG_TOOLS == [
+            "mcp__searxng__web_search",
+            "mcp__searxng__read_url",
+        ]
 
+    def test_map_mcp_server_name_searxng(self):
+        """_map_mcp_server_name maps searxng correctly (case-insensitive)."""
+        from agents.tools_pkg.models import _map_mcp_server_name
 
-def test_searxng_tools_constant():
-    """Test that SEARXNG_TOOLS contains expected tool names"""
-    from agents.tools_pkg.models import SEARXNG_TOOLS
-
-    expected_tools = [
-        "mcp__searxng__web_search",
-        "mcp__searxng__read_url",
-    ]
-
-    assert SEARXNG_TOOLS == expected_tools
+        assert _map_mcp_server_name("searxng") == "searxng"
+        assert _map_mcp_server_name("SEARXNG") == "searxng"
+        assert _map_mcp_server_name("SearXNG") == "searxng"
 
 
-def test_map_mcp_server_searxng():
-    """Test that _map_mcp_server_name maps searxng correctly"""
-    from agents.tools_pkg.models import _map_mcp_server_name
+class TestSearxngServerActivation:
+    """Integration tests verifying SearXNG is wired into server selection."""
 
-    assert _map_mcp_server_name("searxng") == "searxng"
-    assert _map_mcp_server_name("SEARXNG") == "searxng"  # Case-insensitive
-    assert _map_mcp_server_name("SearXNG") == "searxng"  # Case-insensitive
+    def test_searxng_added_to_servers_when_enabled(self):
+        """get_required_mcp_servers includes 'searxng' when SEARXNG_ENABLED=true."""
+        with patch.dict(os.environ, {"SEARXNG_ENABLED": "true"}):
+            from agents.tools_pkg.models import get_required_mcp_servers
+
+            servers = get_required_mcp_servers("coder")
+            assert "searxng" in servers
+
+    def test_searxng_absent_when_disabled(self):
+        """get_required_mcp_servers excludes 'searxng' when SEARXNG_ENABLED is not set."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SEARXNG_ENABLED", None)
+            from agents.tools_pkg.models import get_required_mcp_servers
+
+            servers = get_required_mcp_servers("coder")
+            assert "searxng" not in servers

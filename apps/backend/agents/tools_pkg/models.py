@@ -618,6 +618,10 @@ def get_required_mcp_servers(
     if "graphiti" in servers and not os.environ.get("GRAPHITI_MCP_URL"):
         servers = [s for s in servers if s != "graphiti"]
 
+    # Add SearXNG when enabled (free web search alternative)
+    if is_searxng_enabled() and "searxng" not in servers:
+        servers.append("searxng")
+
     # Handle actor-critic-thinking for agents that have it enabled
     # This is a special marker in agent configs that adds the server when enabled
     # Unlike "linear" which is in mcp_servers_optional list, this is a boolean flag

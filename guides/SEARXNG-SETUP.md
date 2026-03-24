@@ -199,7 +199,7 @@ python run.py --task "Search for information about Python async patterns"
 
 ### Agent Workflow
 
-When SearXNG is enabled, agents use these tools instead of Anthropic's WebSearch:
+When SearXNG is enabled, agents gain additional search tools alongside Anthropic's WebSearch:
 
 **1. Web Search via SearXNG**
 ```
