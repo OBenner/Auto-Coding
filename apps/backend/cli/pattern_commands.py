@@ -14,6 +14,7 @@ from pathlib import Path
 
 from cli.utils import print_banner
 from integrations.graphiti.pattern_categorizer import get_pattern_categories
+from integrations.graphiti.pattern_library_generator import PatternLibraryGenerator
 from integrations.graphiti.pattern_suggester import get_patterns_by_category
 from memory.graphiti_helpers import (
     get_graphiti_memory,
@@ -361,6 +362,232 @@ def delete_pattern(spec_dir: Path, pattern_index: int) -> None:
     print()
 
 
+def generate_patterns(
+    project_dir: Path,
+    language: str,
+    output_path: Path,
+    source_dir: Path | None = None,
+    max_patterns: int = 50,
+) -> None:
+    """
+    Generate a pattern library module for the specified language.
+
+    Args:
+        project_dir: Project root directory to analyze
+        language: Programming language to generate patterns for
+        output_path: Path where the generated module will be written
+        source_dir: Specific directory to analyze (default: project_dir)
+        max_patterns: Maximum patterns per category (default: 50)
+    """
+    print_banner()
+    print(f"\n{icon(Icons.GEAR)} Generating Pattern Library\n")
+
+    print_key_value("Language", language)
+    print_key_value("Project", str(project_dir))
+    print_key_value("Output", str(output_path))
+    if source_dir:
+        print_key_value("Source", str(source_dir))
+    print()
+
+    try:
+        # Create generator
+        generator = PatternLibraryGenerator(project_dir)
+
+        # Prepare options
+        options = {
+            "max_patterns_per_category": max_patterns,
+            "include_line_numbers": False,
+        }
+        if source_dir:
+            options["source_dir"] = source_dir
+
+        # Generate library file
+        print(info("Analyzing codebase and extracting patterns..."))
+        generator.generate_library_file(output_path, language, options)
+
+        print()
+        print(success(f"{icon(Icons.SUCCESS)} Pattern library generated successfully"))
+        print(muted(f"Saved to: {output_path}"))
+        print()
+
+    except ValueError as e:
+        print(warning(f"{icon(Icons.WARNING)} {e}"))
+        print()
+    except Exception as e:
+        print(warning(f"{icon(Icons.WARNING)} Failed to generate patterns: {e}"))
+        print()
+
+
+def _generate_for_language(
+    generator: PatternLibraryGenerator,
+    output_path: Path,
+    language: str,
+    options: dict,
+) -> tuple[bool, str | None]:
+    """
+    Generate a pattern library for a single language.
+
+    Args:
+        generator: Reusable PatternLibraryGenerator instance
+        output_path: Path where the generated module will be written
+        language: Programming language to generate for
+        options: Generation options dict
+
+    Returns:
+        Tuple of (success, error_message). error_message is None on success.
+    """
+    try:
+        generator.generate_library_file(output_path, language, options)
+        return True, None
+    except ValueError as e:
+        return False, f"Skipped: {e}"
+    except Exception as e:
+        return False, f"Failed: {e}"
+
+
+def generate_all_patterns(
+    project_dir: Path,
+    output_dir: Path,
+    languages: list[str] | None = None,
+    source_dir: Path | None = None,
+    max_patterns: int = 50,
+) -> None:
+    """
+    Generate pattern library modules for multiple languages.
+
+    Args:
+        project_dir: Project root directory to analyze
+        output_dir: Directory where generated modules will be written
+        languages: List of languages to generate (default: all supported)
+        source_dir: Specific directory to analyze (default: project_dir)
+        max_patterns: Maximum patterns per category (default: 50)
+    """
+    from integrations.graphiti.pattern_library_generator import LANGUAGE_EXTENSIONS
+
+    print_banner()
+    print(f"\n{icon(Icons.GEAR)} Batch Pattern Library Generation\n")
+
+    print_key_value("Project", str(project_dir))
+    print_key_value("Output Dir", str(output_dir))
+    if source_dir:
+        print_key_value("Source", str(source_dir))
+    print()
+
+    # Determine languages to generate
+    if languages:
+        # Validate provided languages
+        supported = set(LANGUAGE_EXTENSIONS.keys())
+        invalid = [lang for lang in languages if lang not in supported]
+        if invalid:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} Unsupported languages: {', '.join(invalid)}"
+                )
+            )
+            print(muted(f"Supported: {', '.join(sorted(supported))}"))
+            print()
+            return
+        target_languages = languages
+    else:
+        # Generate for all supported languages
+        target_languages = sorted(LANGUAGE_EXTENSIONS.keys())
+
+    print_header(f"Generating libraries for {len(target_languages)} languages")
+    print()
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create a single generator instance — it has no per-run state
+    generator = PatternLibraryGenerator(project_dir)
+
+    # Generate library for each language
+    success_count = 0
+    failed_languages = []
+
+    for i, language in enumerate(target_languages, 1):
+        print(f"[{i}/{len(target_languages)}] {language}...")
+
+        output_path = output_dir / f"{language}_patterns.py"
+
+        # Prepare per-language options
+        options: dict = {
+            "max_patterns_per_category": max_patterns,
+            "include_line_numbers": False,
+        }
+        if source_dir:
+            options["source_dir"] = source_dir
+
+        ok, err = _generate_for_language(generator, output_path, language, options)
+        if ok:
+            print(muted(f"  ✓ Saved to: {output_path}"))
+            success_count += 1
+        else:
+            print(muted(f"  ✗ {err}"))
+            failed_languages.append((language, err or "Unknown error"))
+
+        print()
+
+    # Print summary
+    print(divider())
+    print_header("Summary")
+    print()
+    print_key_value("Total Languages", str(len(target_languages)))
+    print_key_value("Successfully Generated", str(success_count))
+    print_key_value("Failed/Skipped", str(len(failed_languages)))
+    print()
+
+    if failed_languages:
+        print_header("Failed Languages")
+        print()
+        for lang, error in failed_languages:
+            print(f"  • {lang}: {error}")
+        print()
+
+    if success_count > 0:
+        print(success(f"{icon(Icons.SUCCESS)} Batch generation completed"))
+        print(muted(f"Libraries saved to: {output_dir}"))
+        print()
+    else:
+        print(warning(f"{icon(Icons.WARNING)} No libraries generated"))
+        print()
+
+
+def _resolve_project_dir(spec_dir: Path, explicit_project_dir: Path | None) -> Path:
+    """
+    Resolve the project root directory.
+
+    Uses an explicit path if provided, otherwise derives it from the spec_dir
+    by climbing three parents (.auto-claude/specs/XXX → project root) and
+    validates the result by checking for expected marker files.
+
+    Args:
+        spec_dir: Spec directory path
+        explicit_project_dir: Explicit project directory from --project-dir flag
+
+    Returns:
+        Validated project root path
+
+    Raises:
+        ValueError: If the resolved path does not look like a project root
+    """
+    if explicit_project_dir:
+        project_dir = explicit_project_dir.resolve()
+    else:
+        # Heuristic: .auto-claude/specs/XXX → project root
+        project_dir = spec_dir.parent.parent.parent
+
+    # Validate — check for at least one expected marker
+    markers = [".git", "package.json", "pyproject.toml", "setup.py", ".auto-claude"]
+    if not any((project_dir / m).exists() for m in markers):
+        raise ValueError(
+            f"Resolved project directory '{project_dir}' does not contain any of "
+            f"{markers}. Pass --project-dir explicitly."
+        )
+
+    return project_dir
+
+
 def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
     """
     Handle the pattern management command.
@@ -404,6 +631,47 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
             )
             return 1
         delete_pattern(spec_dir, args.index)
+    elif action == "generate":
+        if not args.language or not args.output:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} --language and --output required for 'generate' action"
+                )
+            )
+            return 1
+        try:
+            project_dir = _resolve_project_dir(
+                spec_dir, Path(args.project_dir) if args.project_dir else None
+            )
+        except ValueError as e:
+            print(warning(f"{icon(Icons.WARNING)} {e}"))
+            return 1
+        source_dir = Path(args.source) if args.source else None
+        max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
+        generate_patterns(
+            project_dir, args.language, Path(args.output), source_dir, max_patterns
+        )
+    elif action == "generate-all":
+        if not args.output_dir:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} --output-dir required for 'generate-all' action"
+                )
+            )
+            return 1
+        try:
+            project_dir = _resolve_project_dir(
+                spec_dir, Path(args.project_dir) if args.project_dir else None
+            )
+        except ValueError as e:
+            print(warning(f"{icon(Icons.WARNING)} {e}"))
+            return 1
+        source_dir = Path(args.source) if args.source else None
+        max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
+        languages = args.languages.split(",") if args.languages else None
+        generate_all_patterns(
+            project_dir, Path(args.output_dir), languages, source_dir, max_patterns
+        )
     else:
         print(warning(f"{icon(Icons.WARNING)} Unknown action: {action}"))
         return 1
@@ -437,12 +705,32 @@ Examples:
 
   # Delete a pattern
   python pattern_commands.py delete --spec-dir .auto-claude/specs/001-feature --index 7
+
+  # Generate pattern library for Python
+  python pattern_commands.py generate --spec-dir .auto-claude/specs/001-feature --language python --output patterns/python_patterns.py
+
+  # Generate patterns from specific directory
+  python pattern_commands.py generate --spec-dir .auto-claude/specs/001-feature --language javascript --output patterns/js_patterns.py --source apps/frontend
+
+  # Generate pattern libraries for all supported languages
+  python pattern_commands.py generate-all --spec-dir .auto-claude/specs/001-feature --output-dir patterns/
+
+  # Generate libraries for specific languages only
+  python pattern_commands.py generate-all --spec-dir .auto-claude/specs/001-feature --output-dir patterns/ --languages python,javascript,typescript
         """,
     )
 
     parser.add_argument(
         "action",
-        choices=["list", "show", "approve", "override", "delete"],
+        choices=[
+            "list",
+            "show",
+            "approve",
+            "override",
+            "delete",
+            "generate",
+            "generate-all",
+        ],
         help="Action to perform",
     )
 
@@ -471,6 +759,49 @@ Examples:
         help="New pattern text (for 'override' action)",
     )
 
+    parser.add_argument(
+        "--language",
+        type=str,
+        help="Programming language to generate patterns for (for 'generate' action)",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Output path for generated pattern library (for 'generate' action)",
+    )
+
+    parser.add_argument(
+        "--source",
+        type=str,
+        help="Source directory to analyze (for 'generate' action, default: project root)",
+    )
+
+    parser.add_argument(
+        "--max-patterns",
+        type=int,
+        default=50,
+        help="Maximum patterns per category (for 'generate' action, default: 50)",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="Output directory for generated pattern libraries (for 'generate-all' action)",
+    )
+
+    parser.add_argument(
+        "--languages",
+        type=str,
+        help="Comma-separated list of languages to generate (for 'generate-all' action, default: all supported)",
+    )
+
+    parser.add_argument(
+        "--project-dir",
+        type=str,
+        help="Explicit project root directory (default: derived from spec-dir by climbing 3 parents)",
+    )
+
     args = parser.parse_args()
 
     # Validate spec_dir exists
@@ -482,6 +813,468 @@ Examples:
 
     # Handle the command
     handle_patterns_command(args.spec_dir, args)
+
+
+def handle_pattern_analyze_command(
+    project_dir: Path,
+    spec_id: str | None = None,
+    output_json: bool = False,
+) -> None:
+    """
+    Handle the failure pattern analyze command.
+
+    Args:
+        project_dir: Project root directory
+        spec_id: Optional spec ID to analyze (if None, analyze all specs)
+        output_json: Whether to output results as JSON
+    """
+    print_banner()
+    print(f"\n{icon(Icons.ANALYSIS)} Failure Pattern Analysis")
+    print(f"Project: {project_dir}\n")
+
+    # Try to import pattern analysis components
+    try:
+        from analysis.failure_pattern_extractor import FailurePatternExtractor
+    except ImportError:
+        print(
+            warning(
+                f"{icon(Icons.WARNING)} Failure pattern analysis not available. "
+                "Please ensure analysis modules are installed."
+            )
+        )
+        return
+
+    # Find specs directory
+    from cli.utils import find_specs_dir
+
+    specs_dir = find_specs_dir(project_dir)
+
+    if spec_id:
+        # Analyze specific spec
+        spec_dir = specs_dir / spec_id
+        if not spec_dir.exists():
+            print(
+                warning(f"{icon(Icons.WARNING)} Spec directory not found: {spec_dir}")
+            )
+            return
+
+        spec_dirs = [spec_dir]
+    else:
+        # Analyze all specs
+        spec_dirs = [d for d in specs_dir.iterdir() if d.is_dir()]
+
+    all_patterns = []
+    for spec_dir in spec_dirs:
+        print(info(f"{icon(Icons.INFO)} Analyzing spec: {spec_dir.name}"))
+
+        try:
+            extractor = FailurePatternExtractor(spec_dir)
+
+            # Load attempt history
+            if not extractor.attempt_history_file.exists():
+                print(
+                    muted(f"  {icon(Icons.MINUS)} No attempt history found, skipping")
+                )
+                continue
+
+            attempt_history = extractor.load_attempt_history()
+            if not attempt_history.get("attempts"):
+                print(muted(f"  {icon(Icons.MINUS)} No attempts recorded, skipping"))
+                continue
+
+            # Extract patterns
+            analysis = extractor.extract_all_patterns()
+
+            if output_json:
+                all_patterns.append(
+                    {
+                        "spec": spec_dir.name,
+                        "analysis": analysis,
+                    }
+                )
+            else:
+                # Display patterns in human-readable format
+                _display_failure_pattern_analysis(spec_dir.name, analysis)
+
+        except Exception as e:
+            print(warning(f"  {icon(Icons.WARNING)} Failed to analyze: {e}"))
+            continue
+
+    if output_json:
+        import json
+
+        print(json.dumps(all_patterns, indent=2))
+    else:
+        print(success(f"\n{icon(Icons.SUCCESS)} Pattern analysis complete"))
+
+
+def _display_failure_pattern_analysis(spec_name: str, analysis: dict) -> None:
+    """Display failure pattern analysis in human-readable format."""
+    total_attempts = analysis.get("total_attempts", 0)
+    failed_attempts = analysis.get("failed_attempts", 0)
+    patterns = analysis.get("patterns", [])
+
+    print(
+        f"  {icon(Icons.CHART)} Attempts: {total_attempts} ({failed_attempts} failed)"
+    )
+
+    if not patterns:
+        print(muted(f"  {icon(Icons.MINUS)} No failure patterns detected"))
+        return
+
+    print(f"  {icon(Icons.PATTERN)} Patterns detected: {len(patterns)}\n")
+
+    for pattern in patterns:
+        pattern_type = pattern.get("pattern_type", "unknown")
+        description = pattern.get("description", "")
+        frequency = pattern.get("frequency", 0)
+        confidence = pattern.get("confidence", 0.0)
+
+        print(f"    [{pattern_type.upper()}] ({frequency}x, {confidence:.0%})")
+        print(f"    {description}")
+
+        recommendations = pattern.get("recovery_recommendations", [])
+        if recommendations:
+            print("    Recommendations:")
+            for rec in recommendations[:3]:  # Show top 3
+                print(f"      • {rec}")
+        print()
+
+
+def handle_pattern_query_command(
+    project_dir: Path,
+    spec_dir: Path,
+    query: str,
+    pattern_type: str | None = None,
+    min_confidence: float = 0.0,
+    num_results: int = 10,
+    output_json: bool = False,
+) -> None:
+    """
+    Handle the failure pattern query command.
+
+    Args:
+        project_dir: Project root directory
+        spec_dir: Spec directory for context
+        query: Search query for patterns
+        pattern_type: Optional pattern type filter
+        min_confidence: Minimum confidence score
+        num_results: Maximum number of results
+        output_json: Whether to output results as JSON
+    """
+    print_banner()
+    print(f"\n{icon(Icons.SEARCH)} Querying Failure Patterns")
+    print(f"Query: {query}\n")
+
+    # Try to import pattern store components
+    try:
+        from integrations.graphiti.failure_pattern_store import FailurePatternStore
+        from integrations.graphiti.memory import get_graphiti_memory
+    except ImportError:
+        print(
+            warning(
+                f"{icon(Icons.WARNING)} Pattern store not available. "
+                "Please ensure Graphiti integration is installed."
+            )
+        )
+        return
+
+    import asyncio
+
+    async def _query_patterns():
+        """Async query function."""
+        try:
+            # Get Graphiti memory
+            memory = get_graphiti_memory(spec_dir, project_dir)
+
+            # Create pattern store
+            spec_id = spec_dir.name
+            group_id = f"spec_{spec_id}"
+            pattern_store = FailurePatternStore(
+                client=memory.client,
+                group_id=group_id,
+                spec_context_id=spec_id,
+                group_id_mode="spec",
+                project_dir=project_dir,
+            )
+
+            # Query patterns
+            patterns = await pattern_store.query_failure_patterns(
+                query=query,
+                pattern_type=pattern_type,
+                min_confidence=min_confidence,
+                num_results=num_results,
+                include_project_patterns=True,
+            )
+
+            return patterns
+
+        except Exception as e:
+            print(warning(f"{icon(Icons.WARNING)} Failed to query patterns: {e}"))
+            return None
+
+    # Run async query
+    patterns = asyncio.run(_query_patterns())
+
+    if patterns is None:
+        return
+
+    if not patterns:
+        print(muted(f"{icon(Icons.MINUS)} No matching patterns found"))
+        return
+
+    if output_json:
+        import json
+
+        print(json.dumps(patterns, indent=2))
+    else:
+        _display_failure_pattern_query_results(patterns, query)
+
+    print(success(f"\n{icon(Icons.SUCCESS)} Found {len(patterns)} pattern(s)"))
+
+
+def _display_failure_pattern_query_results(patterns: list[dict], query: str) -> None:
+    """Display failure pattern query results in human-readable format."""
+    print(f"Results for: {query}\n")
+
+    for i, pattern in enumerate(patterns, 1):
+        pattern_type = pattern.get("pattern_type", "unknown")
+        description = pattern.get("description", "")
+        frequency = pattern.get("frequency", 0)
+        confidence = pattern.get("confidence", 0.0)
+        relevance = pattern.get("relevance_score", 0.0)
+
+        print(f"{i}. [{pattern_type.upper()}]")
+        print(f"   {description}")
+        print(
+            f"   Frequency: {frequency}x | Confidence: {confidence:.0%} | Relevance: {relevance:.0%}"
+        )
+
+        affected_subtasks = pattern.get("affected_subtasks", [])
+        if affected_subtasks:
+            print(f"   Affected: {', '.join(affected_subtasks[:3])}")
+
+        recommendations = pattern.get("recovery_recommendations", [])
+        if recommendations:
+            print("   Recovery strategies:")
+            for rec in recommendations[:2]:
+                print(f"     • {rec}")
+        print()
+
+
+def handle_pattern_stats_command(
+    project_dir: Path,
+    spec_dir: Path,
+    output_json: bool = False,
+) -> None:
+    """
+    Handle the failure pattern statistics command.
+
+    Args:
+        project_dir: Project root directory
+        spec_dir: Spec directory for context
+        output_json: Whether to output results as JSON
+    """
+    print_banner()
+    print(f"\n{icon(Icons.CHART)} Failure Pattern Statistics")
+    print(f"Spec: {spec_dir.name}\n")
+
+    # Try to import pattern store components
+    try:
+        from integrations.graphiti.failure_pattern_store import FailurePatternStore
+        from integrations.graphiti.memory import get_graphiti_memory
+    except ImportError:
+        print(
+            warning(
+                f"{icon(Icons.WARNING)} Pattern store not available. "
+                "Please ensure Graphiti integration is installed."
+            )
+        )
+        return
+
+    import asyncio
+
+    async def _get_stats():
+        """Async stats function."""
+        try:
+            # Get Graphiti memory
+            memory = get_graphiti_memory(spec_dir, project_dir)
+
+            # Create pattern store
+            spec_id = spec_dir.name
+            group_id = f"spec_{spec_id}"
+            pattern_store = FailurePatternStore(
+                client=memory.client,
+                group_id=group_id,
+                spec_context_id=spec_id,
+                group_id_mode="spec",
+                project_dir=project_dir,
+            )
+
+            # Get statistics
+            stats = await pattern_store.get_pattern_statistics()
+
+            return stats
+
+        except Exception as e:
+            print(warning(f"{icon(Icons.WARNING)} Failed to get statistics: {e}"))
+            return None
+
+    # Run async query
+    stats = asyncio.run(_get_stats())
+
+    if stats is None:
+        return
+
+    if output_json:
+        import json
+
+        print(json.dumps(stats, indent=2))
+    else:
+        _display_failure_pattern_statistics(stats)
+
+    print(success(f"\n{icon(Icons.SUCCESS)} Statistics complete"))
+
+
+def _display_failure_pattern_statistics(stats: dict) -> None:
+    """Display failure pattern statistics in human-readable format."""
+    total_patterns = stats.get("total_patterns", 0)
+    patterns_by_type = stats.get("patterns_by_type", {})
+    most_common = stats.get("most_common_patterns", [])
+    high_frequency_count = stats.get("high_frequency_patterns", 0)
+    avg_confidence = stats.get("average_confidence", 0.0)
+
+    print(f"Total Patterns: {total_patterns}")
+    print(f"High-Frequency Patterns: {high_frequency_count}")
+    print(f"Average Confidence: {avg_confidence:.1%}\n")
+
+    if patterns_by_type:
+        print("Patterns by Type:")
+        for pattern_type, count in sorted(
+            patterns_by_type.items(), key=lambda x: x[1], reverse=True
+        ):
+            print(f"  {pattern_type}: {count}")
+        print()
+
+    if most_common:
+        print("Most Common Patterns:")
+        for i, pattern in enumerate(most_common, 1):
+            pattern_type = pattern.get("pattern_type", "unknown")
+            description = pattern.get("description", "")
+            frequency = pattern.get("frequency", 0)
+
+            # Truncate description for display
+            desc_short = (
+                description[:60] + "..." if len(description) > 60 else description
+            )
+
+            print(f"  {i}. [{pattern_type}] ({frequency}x)")
+            print(f"     {desc_short}")
+
+
+def register_pattern_commands(subparsers: argparse._SubParsersAction) -> None:
+    """
+    Register failure pattern CLI commands.
+
+    Args:
+        subparsers: ArgumentParser subparsers object to add commands to
+    """
+    # Pattern analyze command
+    analyze_parser = subparsers.add_parser(
+        "failure-pattern-analyze",
+        help="Analyze failure patterns from attempt history",
+        description="Extract and analyze failure patterns from recovery attempt history",
+    )
+    analyze_parser.add_argument(
+        "--spec",
+        type=str,
+        default=None,
+        help="Spec ID to analyze (default: all specs)",
+    )
+    analyze_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results as JSON",
+    )
+    analyze_parser.set_defaults(
+        func=lambda args: handle_pattern_analyze_command(
+            project_dir=args.project_dir,
+            spec_id=args.spec,
+            output_json=args.json,
+        )
+    )
+
+    # Pattern query command
+    query_parser = subparsers.add_parser(
+        "failure-pattern-query",
+        help="Query stored failure patterns",
+        description="Search and retrieve failure patterns from Graphiti memory",
+    )
+    query_parser.add_argument(
+        "query",
+        type=str,
+        help="Search query for patterns",
+    )
+    query_parser.add_argument(
+        "--pattern-type",
+        type=str,
+        default=None,
+        choices=[
+            "recurring_error",
+            "escalating_complexity",
+            "model_limitation",
+            "circular_fix",
+            "context_exhaustion",
+        ],
+        help="Filter by pattern type",
+    )
+    query_parser.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.0,
+        help="Minimum confidence score (default: 0.0)",
+    )
+    query_parser.add_argument(
+        "--num-results",
+        type=int,
+        default=10,
+        help="Maximum number of results (default: 10)",
+    )
+    query_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results as JSON",
+    )
+    query_parser.set_defaults(
+        func=lambda args: handle_pattern_query_command(
+            project_dir=args.project_dir,
+            spec_dir=args.spec_dir,
+            query=args.query,
+            pattern_type=args.pattern_type,
+            min_confidence=args.min_confidence,
+            num_results=args.num_results,
+            output_json=args.json,
+        )
+    )
+
+    # Pattern statistics command
+    stats_parser = subparsers.add_parser(
+        "failure-pattern-stats",
+        help="Show failure pattern statistics",
+        description="Display statistics about stored failure patterns",
+    )
+    stats_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results as JSON",
+    )
+    stats_parser.set_defaults(
+        func=lambda args: handle_pattern_stats_command(
+            project_dir=args.project_dir,
+            spec_dir=args.spec_dir,
+            output_json=args.json,
+        )
+    )
 
 
 if __name__ == "__main__":

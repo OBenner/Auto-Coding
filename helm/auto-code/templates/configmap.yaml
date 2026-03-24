@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auto-claude-config
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.labels" . | nindent 4 }}
+    app: auto-claude
+    component: config
+data:
+  # Server configuration
+  debug: {{ .Values.config.debug | quote }}
+  log-level: {{ .Values.config.logLevel | quote }}
+
+  # CORS configuration
+  cors-origins: {{ .Values.config.corsOrigins | quote }}
+
+  # Authentication
+  access-token-expire-minutes: {{ .Values.config.accessTokenExpireMinutes | quote }}
+
+  # PostgreSQL configuration
+  postgres-db: {{ .Values.config.postgresDb | quote }}
+
+  # OAuth configuration
+  oauth-redirect-uri: {{ .Values.config.oauthRedirectUri | quote }}
+
+  # Claude configuration
+  claude-model: {{ .Values.config.claudeModel | quote }}
+
+  # Graphiti memory configuration
+  graphiti-enabled: {{ .Values.config.graphitiEnabled | quote }}
+  graphiti-llm-provider: {{ .Values.config.graphitiLlmProvider | quote }}
+
+  # Linear integration
+  linear-team-id: {{ .Values.config.linearTeamId | quote }}
+
+  # CI configuration
+  auto-claude-ci: {{ .Values.config.autoClaudeCi | quote }}
+  auto-claude-json-output: {{ .Values.config.autoClaudeJsonOutput | quote }}
+
+  # Frontend configuration — set via --set config.viteApiUrl=... at install time
+  {{- if .Values.config.viteApiUrl }}
+  vite-api-url: {{ .Values.config.viteApiUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.viteWsUrl }}
+  vite-ws-url: {{ .Values.config.viteWsUrl | quote }}
+  {{- end }}

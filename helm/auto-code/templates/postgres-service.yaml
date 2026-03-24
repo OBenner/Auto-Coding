@@ -1,0 +1,19 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.postgres.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    {{- include "auto-code.postgres.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+{{- end }}

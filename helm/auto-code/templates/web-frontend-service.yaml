@@ -1,0 +1,22 @@
+{{- if .Values.webFrontend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.webFrontend.labels" . | nindent 4 }}
+  {{- with .Values.webFrontend.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.webFrontend.service.type }}
+  selector:
+    {{- include "auto-code.webFrontend.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: http
+    port: {{ .Values.webFrontend.service.port }}
+    targetPort: http
+    protocol: TCP
+{{- end }}

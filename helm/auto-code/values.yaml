@@ -1,0 +1,316 @@
+# Default values for auto-code Helm chart
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  namespace: auto-claude
+  environment: production
+
+# Image settings
+images:
+  backend:
+    repository: auto-code-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  webBackend:
+    repository: auto-code-web-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  webFrontend:
+    repository: auto-code-web-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: postgres
+    tag: 16-alpine
+    pullPolicy: IfNotPresent
+  redis:
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+
+# Backend deployment configuration
+backend:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  persistence:
+    data:
+      enabled: true
+      size: 5Gi
+      storageClass: standard
+    worktrees:
+      enabled: true
+      size: 20Gi
+      storageClass: standard
+
+# Web backend deployment configuration
+webBackend:
+  enabled: true
+  replicas: 2
+  service:
+    type: LoadBalancer
+    port: 8000
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    sessionAffinity: ClientIP
+    sessionAffinityConfig:
+      clientIP:
+        timeoutSeconds: 10800  # 3 hours for WebSocket connections
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 40
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Web frontend deployment configuration
+webFrontend:
+  enabled: true
+  replicas: 2
+  service:
+    type: LoadBalancer
+    port: 3000
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# PostgreSQL configuration
+postgres:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: standard
+  backup:
+    enabled: true
+    size: 10Gi
+    storageClass: standard
+  livenessProbe:
+    exec:
+      command:
+        - pg_isready
+        - -U
+        - postgres
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    exec:
+      command:
+        - pg_isready
+        - -U
+        - postgres
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Redis configuration
+redis:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: standard
+  livenessProbe:
+    exec:
+      command:
+        - redis-cli
+        - ping
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    exec:
+      command:
+        - redis-cli
+        - ping
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/websocket-services: web-backend
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # kubernetes.io/tls-acme: "true"
+  tls:
+    enabled: false
+    # secretName: auto-claude-tls
+    # hosts:
+    #   - autoclaude.example.com
+    #   - api.autoclaude.example.com
+  hosts:
+    frontend:
+      host: autoclaude.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+    backend:
+      host: api.autoclaude.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+# ConfigMap settings
+config:
+  # Server configuration
+  debug: "false"
+  logLevel: "INFO"
+
+  # CORS configuration
+  corsOrigins: "http://localhost:3000,https://autoclaude.example.com"
+
+  # Authentication
+  accessTokenExpireMinutes: "60"
+
+  # PostgreSQL configuration
+  postgresDb: "autoclaude"
+
+  # OAuth configuration
+  oauthRedirectUri: "https://api.autoclaude.example.com/api/git/callback"
+
+  # Claude configuration
+  claudeModel: "claude-sonnet-4-5-20250929"
+
+  # Graphiti memory configuration
+  graphitiEnabled: "true"
+  graphitiLlmProvider: "openai"
+
+  # Linear integration
+  linearTeamId: ""
+
+  # CI configuration
+  autoClaudeCi: "false"
+  autoClaudeJsonOutput: "false"
+
+  # Frontend configuration — set at install time via --set or values override file.
+  # Example: helm install ... --set config.viteApiUrl=http://web-backend:8000
+  viteApiUrl: ""
+  viteWsUrl: ""
+
+# Secrets configuration
+# IMPORTANT: These are placeholder values. In production, use external secrets management
+# or create secrets manually with proper base64 encoding
+secrets:
+  # PostgreSQL credentials (will be base64 encoded by Helm)
+  postgresUser: "postgres"
+  postgresPassword: "postgres"
+  databaseUrl: "postgresql://postgres:postgres@postgres:5432/autoclaude"
+
+  # Redis password (optional)
+  redisPassword: ""
+
+  # Secret key for JWT tokens
+  # Generate with: openssl rand -base64 32
+  # REQUIRED: Set via --set secrets.secretKey=<value> or in a values override file
+  secretKey: ""
+
+  # Claude API keys
+  # At least one is required
+  anthropicApiKey: ""
+  claudeCodeOauthToken: ""
+
+  # OpenAI API key for Graphiti memory
+  # Required if graphiti-llm-provider is "openai"
+  openaiApiKey: ""
+
+  # GitHub OAuth credentials (optional)
+  githubClientId: ""
+  githubClientSecret: ""
+  githubToken: ""
+
+  # GitLab OAuth credentials (optional)
+  gitlabClientId: ""
+  gitlabClientSecret: ""
+
+  # Linear API key (optional)
+  linearApiKey: ""
+
+# Rolling update strategy
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
