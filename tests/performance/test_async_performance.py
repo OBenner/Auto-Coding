@@ -88,32 +88,22 @@ class TestUvloopIntegration:
                 pytest.fail(f"Client module import failed when uvloop unavailable: {e}")
 
     def test_client_module_windows_compatibility(self):
-        """Test that client.py works on Windows without uvloop."""
-        # Just verify the module can be imported
-        # The actual Windows compatibility is handled in the module itself
-        # with the platform check: if sys.platform != "win32"
-        try:
-            # Check that the client module has the uvloop initialization code
-            from pathlib import Path
+        """Test that client.py has platform-aware uvloop initialization."""
+        client_file = (
+            Path(__file__).parent.parent.parent
+            / "apps"
+            / "backend"
+            / "core"
+            / "client.py"
+        )
 
-            client_file = (
-                Path(__file__).parent.parent.parent
-                / "apps"
-                / "backend"
-                / "core"
-                / "client.py"
-            )
+        if not client_file.exists():
+            pytest.skip("client.py not found at expected path")
 
-            if client_file.exists():
-                content = client_file.read_text()
-                # Verify the platform check exists (uses is_windows() from platform module)
-                assert "is_windows()" in content or 'sys.platform != "win32"' in content
-                assert "uvloop" in content
-        except Exception:
-            # If we can't check the file, that's ok - test passes anyway
-            pass
-
-        assert True
+        content = client_file.read_text(encoding="utf-8")
+        # Verify the platform check exists (uses is_windows() from platform module)
+        assert "is_windows()" in content or 'sys.platform != "win32"' in content
+        assert "uvloop" in content
 
 
 class TestAsyncPerformance:

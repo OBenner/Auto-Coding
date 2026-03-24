@@ -232,12 +232,7 @@ class TestImplementationPlanPerformance:
 
     @pytest.mark.benchmark
     def test_plan_loading_performance(self, tmp_path):
-        """Test implementation plan loading performance."""
-        try:
-            from implementation_plan import ImplementationPlan
-        except ImportError:
-            pytest.skip("ImplementationPlan not available")
-
+        """Baseline benchmark for raw JSON I/O of plan-sized data structures."""
         # Create a complex implementation plan for testing
         plan_data = {
             "feature": "Test Feature",

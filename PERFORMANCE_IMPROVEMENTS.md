@@ -16,7 +16,7 @@ This document summarizes all performance improvements, optimizations, and findin
 |------|--------|--------|---------|
 | **Backend Async** | ✅ Implemented | 2-4x faster async I/O | uvloop enabled (Linux/macOS) |
 | **Bundle Analysis** | ✅ Implemented | Optimization visibility | stats.html visualization available |
-| **Performance Tests** | ✅ Implemented | Regression detection | 79 benchmark tests created |
+| **Performance Tests** | ✅ Implemented | Regression detection | 77 benchmark tests created |
 | **Zustand Audit** | ✅ Documented | Identified improvements | 60+ selectors need optimization |
 | **Database Queries** | ✅ Audited | No issues found | N+1 query patterns absent |
 | **Connection Pool** | ✅ Optimized | Configurable settings | Environment-based configuration |
@@ -98,7 +98,7 @@ export default defineConfig({
       // MUST be last in renderer plugins array
       visualizer({
         filename: './out/renderer/stats.html',
-        open: true,
+        open: !process.env.CI,
         gzipSize: true,
         brotliSize: true
       })
@@ -127,7 +127,7 @@ npm run build
 ### Implementation: Profiling Tools
 
 **Tools Added:**
-- `py-spy>=0.3.14` - Low-overhead sampling profiler for Python
+- `py-spy>=0.4.1` - Low-overhead sampling profiler for Python
 - `memory-profiler>=0.61.0` - Memory usage profiling
 
 **Files Modified:**
@@ -282,7 +282,7 @@ CREATE INDEX idx_repositories_user_provider ON repositories(user_id, provider);
 - `tests/performance/test_frontend_performance.py` - 24 tests
 - `tests/performance/test_memory_performance.py` - 20 tests
 
-**Total Tests:** 79 (69 passing, 8 skipped - platform-specific or optional dependencies)
+**Total Tests:** 77 (69 passing, 8 skipped - platform-specific or optional dependencies)
 
 #### Test Coverage:
 
@@ -333,12 +333,12 @@ python -m pytest tests/performance/ -v
 | Phase 2 | Zustand selector audit | ✅ Complete | ZUSTAND_SELECTOR_AUDIT.md created |
 | Phase 3 | Install profiling tools | ✅ Complete | py-spy, memory-profiler added |
 | Phase 3 | Profile backend | ✅ Complete | PERFORMANCE_PROFILE.md created |
-| Phase 4 | Add uvloop to requirements | ✅ Complete | uvloop>=0.19.0 added |
+| Phase 4 | Add uvloop to requirements | ✅ Complete | uvloop>=0.22.1 added |
 | Phase 4 | Add uvloop.install() | ✅ Complete | Windows-compatible implementation |
 | Phase 4 | Verify Windows compatibility | ✅ Complete | All tests passed |
 | Phase 5 | Audit N+1 queries | ✅ Complete | N1_QUERY_AUDIT.md (no issues found) |
 | Phase 5 | Optimize connection pool | ✅ Complete | Environment-based configuration |
-| Phase 6 | Create benchmark tests | ✅ Complete | 79 performance tests created |
+| Phase 6 | Create benchmark tests | ✅ Complete | 77 performance tests created |
 
 ### Partially Completed ⚠️
 
@@ -359,7 +359,7 @@ python -m pytest tests/performance/ -v
 |--------|--------|-------|-------------|
 | **Async I/O (Linux/macOS)** | Default asyncio | uvloop-enabled | 2-4x faster |
 | **Bundle visibility** | No analysis | stats.html available | 100% |
-| **Performance tests** | 0 tests | 79 tests | New capability |
+| **Performance tests** | 0 tests | 77 tests | New capability |
 | **Connection pool config** | Hard-coded | Environment-based | More flexible |
 
 ### Documented Findings (Future Optimization Opportunities)
@@ -379,9 +379,9 @@ python -m pytest tests/performance/ -v
 
 **Backend (requirements.txt):**
 ```
-py-spy>=0.3.14           # Sampling profiler
+py-spy>=0.4.1           # Sampling profiler
 memory-profiler>=0.61.0  # Memory profiling
-uvloop>=0.19.0; sys_platform != "win32"  # Async optimization
+uvloop>=0.22.1; sys_platform != "win32"  # Async optimization
 ```
 
 ### New Configuration

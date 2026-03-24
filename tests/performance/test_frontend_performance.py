@@ -14,12 +14,8 @@ and patterns that can be checked from the backend/CI perspective.
 """
 
 import json
-import os
 import sys
-import zipfile
 from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -121,9 +117,9 @@ class TestVirtualizationPatterns:
                     virtualizer_found = True
                     break
 
-            # Note: This is a soft check - virtualization may not be implemented yet
-            # The test mainly verifies we can check the pattern
-            assert True
+            assert virtualizer_found, (
+                "useVirtualizer/useVirtual pattern not found in renderer source"
+            )
 
 
 class TestZustandOptimizationPatterns:
@@ -424,10 +420,10 @@ class TestPerformanceRegressions:
 @pytest.fixture
 def bundle_size_baseline():
     """Baseline bundle sizes for regression detection."""
-    # These would be established from initial measurements
+    # Baselines established from current measurements
     return {
         "main": 5.0,  # MB
-        "renderer": 2.0,  # MB
+        "renderer": 8.0,  # MB (includes all JS chunks in renderer output)
     }
 
 
@@ -443,16 +439,25 @@ class TestBundleSizeRegression:
         if main_bundle.exists():
             current_size_mb = main_bundle.stat().st_size / (1024 * 1024)
             baseline_mb = bundle_size_baseline["main"]
-
-            # Allow 20% increase before flagging regression
             threshold = baseline_mb * 1.2
 
-            # Test verifies we can detect regression
-            assert True
+            assert current_size_mb <= threshold, (
+                f"Main bundle regression: {current_size_mb:.1f}MB > {threshold:.1f}MB"
+            )
 
     def test_renderer_size_not_increased_significantly(self, bundle_size_baseline):
         """Test that renderer bundle size hasn't increased significantly."""
         frontend_dir = Path(__file__).parent.parent.parent / "apps" / "frontend"
+        renderer_dir = frontend_dir / "out" / "renderer"
 
-        # Test verifies regression detection capability
-        assert True
+        if renderer_dir.exists():
+            js_files = list(renderer_dir.glob("**/*.js"))
+            if js_files:
+                total_size = sum(f.stat().st_size for f in js_files)
+                current_size_mb = total_size / (1024 * 1024)
+                baseline_mb = bundle_size_baseline["renderer"]
+                threshold = baseline_mb * 1.2
+
+                assert current_size_mb <= threshold, (
+                    f"Renderer bundle regression: {current_size_mb:.1f}MB > {threshold:.1f}MB"
+                )
