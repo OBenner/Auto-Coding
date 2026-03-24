@@ -22,6 +22,7 @@ from analysis.coverage_analyzer import (
     CoverageAnalyzer,
     CoverageResult,
     parse_coverage_json,
+    validate_coverage_threshold,
 )
 from core.client import create_client
 from phase_config import get_phase_model, get_phase_thinking_budget
@@ -40,10 +41,57 @@ from ui import (
     print_status,
 )
 
+# Import shared generator helpers
+from ._generator_base import log_generator_result, run_generator_session
+from ._validation import validate_python_tests
+
+# Import fixture generator
+from .fixture_generator import generate_fixtures
+
 # Import framework-specific generators
 from .vitest_generator import generate_vitest_tests, validate_vitest_tests
 
 logger = logging.getLogger(__name__)
+
+# Template for the integration test generator agent starting message.
+# Formatted with analysis_json at runtime.
+_INTEGRATION_TEST_STARTING_MESSAGE = """You are the Integration Test Generator Agent. Your task is to generate comprehensive integration tests for API endpoints and multi-component interactions.
+
+## Code Analysis Results
+
+{analysis_json}
+
+## Your Task
+
+1. Read the spec.md to understand what API endpoints and services were implemented
+2. Review the implementation_plan.json to see what integrations were built
+3. Study existing integration test patterns in tests/integration/test_*.py (if they exist)
+4. Identify API endpoints, routes, and service integrations that need testing
+5. Generate integration test files that validate:
+   - API endpoint functionality (request/response validation)
+   - Database interactions (CRUD operations)
+   - Service layer integration
+   - Authentication and authorization
+   - Error handling and edge cases
+6. Follow the project's testing conventions
+7. Use appropriate mocking for external dependencies
+
+## Integration Test Pattern (pytest)
+
+Your tests should:
+- Use pytest as the test framework
+- Test multiple components working together (not isolated units)
+- Validate API endpoints with different inputs
+- Test database operations (create, read, update, delete)
+- Verify service layer logic
+- Handle authentication/authorization scenarios
+- Test error conditions and edge cases
+- Use fixtures for test data setup and teardown
+
+Generate test files in the tests/integration/ directory following the naming convention test_integration_*.py.
+
+Begin by loading context (Phase 0 in your prompt).
+"""
 
 
 def detect_test_framework(analysis_results: dict[str, Any]) -> str:
@@ -89,19 +137,42 @@ def analyze_coverage_gaps(
     project_dir: Path,
     source_dir: str | None = None,
     config: CoverageConfig | None = None,
+    enforce_threshold: bool = True,
 ) -> tuple[CoverageResult | None, dict[str, Any]]:
     """
-    Run coverage analysis and identify gaps in test coverage.
+    Run coverage analysis and identify gaps in test coverage with threshold enforcement.
+
+    This function performs comprehensive coverage analysis and enforces minimum coverage
+    thresholds. It provides detailed gap reporting including:
+    - Files below the coverage threshold
+    - Critical gaps (significantly below threshold)
+    - Missing line numbers per file
+    - Coverage statistics and enforcement status
+    - Prioritized list of files needing tests
 
     Args:
         project_dir: Root directory of the project
         source_dir: Directory to measure coverage for (e.g., "apps/backend")
         config: Coverage configuration with thresholds (optional)
+        enforce_threshold: Whether to enforce the minimum coverage threshold (default: True)
 
     Returns:
         Tuple of (coverage_result, gaps_summary)
         - coverage_result: CoverageResult with analysis data or None if failed
-        - gaps_summary: Dictionary with gap statistics and files needing attention
+        - gaps_summary: Dictionary with detailed gap statistics and enforcement status:
+            * total_coverage: Overall coverage percentage
+            * meets_threshold: Whether coverage meets the minimum threshold
+            * threshold_message: Validation message from validate_coverage_threshold
+            * files_with_gaps: List of files below threshold (sorted by priority)
+            * critical_gaps: List of files with coverage < 50% of threshold
+            * high_priority_gaps: List of files with coverage 50-80% of threshold
+            * medium_priority_gaps: List of files with coverage 80-100% of threshold
+            * missing_lines_by_file: Dict mapping file paths to missing line numbers
+            * coverage_by_file: Dict mapping file paths to coverage percentages
+            * total_lines_missing: Total number of missing lines across all files
+            * total_files_analyzed: Total number of files in coverage report
+            * threshold_percent: The minimum coverage threshold used
+            * error: Error message if coverage analysis failed
     """
     analyzer = CoverageAnalyzer(project_dir)
 
@@ -111,7 +182,12 @@ def analyze_coverage_gaps(
     installed, message = analyzer.check_pytest_cov_installed()
     if not installed:
         logger.warning(f"pytest-cov not available: {message}")
-        return None, {"error": message, "coverage_gaps": []}
+        error_summary = {
+            "error": message,
+            "meets_threshold": False,
+            "threshold_percent": config.minimum_coverage if config else 80.0,
+        }
+        return None, error_summary
 
     # Determine source directory if not specified
     if source_dir is None:
@@ -122,118 +198,296 @@ def analyze_coverage_gaps(
             # Use current directory
             source_dir = "."
 
-    # Run coverage with JSON output
+    # Get minimum coverage threshold
+    min_coverage = config.minimum_coverage if config else 80.0
+
+    # Run coverage with JSON output (optionally enforce threshold)
     coverage_output = project_dir / ".coverage.test_generator.json"
     result = analyzer.run_coverage(
         source_dir=source_dir,
         output_format="json",
         output_file=coverage_output,
+        min_coverage=min_coverage if enforce_threshold else None,
     )
 
     if not result.success:
         logger.warning(f"Coverage analysis failed: {result.error_message}")
-        return None, {"error": result.error_message, "coverage_gaps": []}
+        error_summary = {
+            "error": result.error_message,
+            "meets_threshold": False,
+            "threshold_percent": min_coverage,
+        }
+        return None, error_summary
 
     # Parse the JSON coverage report
     try:
         coverage_result = parse_coverage_json(coverage_output)
     except Exception as e:
         logger.error(f"Failed to parse coverage JSON: {e}")
-        return None, {"error": str(e), "coverage_gaps": []}
+        error_summary = {
+            "error": str(e),
+            "meets_threshold": False,
+            "threshold_percent": min_coverage,
+        }
+        return None, error_summary
 
-    # Identify coverage gaps
+    # Validate coverage meets threshold using the coverage_analyzer function
+    passes_threshold, threshold_message = validate_coverage_threshold(
+        coverage_result, min_coverage
+    )
+
+    # Identify coverage gaps with detailed categorization
     gaps_summary = {
         "total_coverage": coverage_result.total_coverage,
+        "meets_threshold": passes_threshold,
+        "threshold_message": threshold_message,
+        "threshold_percent": min_coverage,
         "files_with_gaps": [],
-        "critical_gaps": [],
+        "critical_gaps": [],  # < 50% of threshold
+        "high_priority_gaps": [],  # 50-80% of threshold
+        "medium_priority_gaps": [],  # 80-100% of threshold
         "missing_lines_by_file": {},
+        "coverage_by_file": {},
+        "total_lines_missing": 0,
+        "total_files_analyzed": len(coverage_result.files),
     }
 
-    # Get minimum coverage threshold
-    min_coverage = config.minimum_coverage if config else 80.0
-
-    # Analyze each file for gaps
+    # Analyze each file for gaps with priority categorization
     for file_path, file_coverage in coverage_result.files.items():
+        coverage_percent = file_coverage.coverage_percent
+        gaps_summary["coverage_by_file"][file_path] = coverage_percent
+
         # Check if file is below threshold
-        if file_coverage.coverage_percent < min_coverage:
+        if coverage_percent < min_coverage:
+            # Calculate coverage deficit
+            deficit = min_coverage - coverage_percent
+            deficit_ratio = deficit / min_coverage
+
+            # Add to appropriate priority category
+            if deficit_ratio > 0.5:  # More than 50% below threshold
+                gaps_summary["critical_gaps"].append(file_path)
+            elif deficit_ratio > 0.2:  # 20-50% below threshold
+                gaps_summary["high_priority_gaps"].append(file_path)
+            else:  # Less than 20% below threshold
+                gaps_summary["medium_priority_gaps"].append(file_path)
+
             gaps_summary["files_with_gaps"].append(file_path)
             gaps_summary["missing_lines_by_file"][file_path] = (
                 file_coverage.lines_missing
             )
+            gaps_summary["total_lines_missing"] += len(file_coverage.lines_missing)
 
-            # Mark as critical gap if significantly below threshold
-            if file_coverage.coverage_percent < min_coverage * 0.5:
-                gaps_summary["critical_gaps"].append(file_path)
+    # Sort files within each priority category by coverage (lowest first)
+    for category in ["critical_gaps", "high_priority_gaps", "medium_priority_gaps"]:
+        gaps_summary[category].sort(key=lambda fp: gaps_summary["coverage_by_file"][fp])
 
-    # Log results
+    # Also sort the main files_with_gaps by priority (critical first, then coverage)
+    priority_order = {}
+    for idx, fp in enumerate(gaps_summary["critical_gaps"]):
+        priority_order[fp] = idx
+    for idx, fp in enumerate(gaps_summary["high_priority_gaps"]):
+        priority_order[fp] = len(gaps_summary["critical_gaps"]) + idx
+    for idx, fp in enumerate(gaps_summary["medium_priority_gaps"]):
+        priority_order[fp] = (
+            len(gaps_summary["critical_gaps"])
+            + len(gaps_summary["high_priority_gaps"])
+            + idx
+        )
+
+    gaps_summary["files_with_gaps"].sort(
+        key=lambda fp: (
+            priority_order.get(fp, 999),
+            -gaps_summary["coverage_by_file"][fp],
+        )
+    )
+
+    # Log results with detailed statistics
     files_with_gaps_count = len(gaps_summary["files_with_gaps"])
+    total_files = gaps_summary["total_files_analyzed"]
+
     if files_with_gaps_count > 0:
+        # Coverage below threshold
+        status_level = "error" if not passes_threshold else "warning"
         print_status(
-            f"Found {files_with_gaps_count} file(s) with coverage gaps",
-            "warning",
+            f"Coverage threshold enforcement: {threshold_message}",
+            status_level,
         )
         print_key_value("Total coverage", f"{coverage_result.total_coverage:.1f}%")
-        print_key_value("Files with gaps", str(files_with_gaps_count))
+        print_key_value("Required threshold", f"{min_coverage:.1f}%")
+        print_key_value("Files with gaps", f"{files_with_gaps_count}/{total_files}")
+        print_key_value("Total missing lines", str(gaps_summary["total_lines_missing"]))
+
         if gaps_summary["critical_gaps"]:
-            print_key_value("Critical gaps", str(len(gaps_summary["critical_gaps"])))
+            print_key_value(
+                "Critical gaps (<50% of threshold)",
+                str(len(gaps_summary["critical_gaps"])),
+            )
+        if gaps_summary["high_priority_gaps"]:
+            print_key_value(
+                "High priority gaps (50-80% of threshold)",
+                str(len(gaps_summary["high_priority_gaps"])),
+            )
+        if gaps_summary["medium_priority_gaps"]:
+            print_key_value(
+                "Medium priority gaps (80-100% of threshold)",
+                str(len(gaps_summary["medium_priority_gaps"])),
+            )
     else:
+        # Coverage meets or exceeds threshold
         print_status(
-            f"Coverage meets threshold: {coverage_result.total_coverage:.1f}%",
+            f"✓ Coverage meets threshold: {coverage_result.total_coverage:.1f}% "
+            f"(required: {min_coverage:.1f}%)",
             "success",
         )
+        print_key_value("Files analyzed", str(total_files))
+        print_key_value("Files meeting threshold", f"{total_files}/{total_files}")
 
     return coverage_result, gaps_summary
 
 
 def format_coverage_gaps_prompt(gaps_summary: dict[str, Any]) -> str:
     """
-    Format coverage gaps as a prompt for the AI agent.
+    Format coverage gaps as a detailed prompt for the AI agent.
+
+    This function creates a comprehensive, prioritized report of coverage gaps
+    to guide test generation. It categorizes gaps by priority and provides
+    specific line numbers needing coverage.
 
     Args:
-        gaps_summary: Summary from analyze_coverage_gaps
+        gaps_summary: Summary from analyze_coverage_gaps with detailed metrics
 
     Returns:
-        Formatted string describing coverage gaps
+        Formatted string describing coverage gaps with prioritization
     """
     if "error" in gaps_summary:
-        return f"Coverage analysis failed: {gaps_summary['error']}"
+        return f"## Coverage Analysis Failed\n\n{gaps_summary['error']}"
 
-    if not gaps_summary.get("files_with_gaps"):
-        return "Coverage meets all thresholds. No gaps detected."
+    # Get threshold information
+    threshold = gaps_summary.get("threshold_percent", 80.0)
+    total_coverage = gaps_summary["total_coverage"]
 
     lines = []
-    lines.append("## Coverage Gaps Detected")
-    lines.append("")
-    lines.append(f"**Total Coverage:** {gaps_summary['total_coverage']:.1f}%")
-    lines.append(f"**Files with Gaps:** {len(gaps_summary['files_with_gaps'])}")
+    lines.append("## Coverage Gap Analysis")
     lines.append("")
 
-    if gaps_summary.get("critical_gaps"):
-        lines.append("### Critical Gaps (Significantly Below Threshold)")
-        for file_path in gaps_summary["critical_gaps"][:5]:
-            lines.append(f"- {file_path}")
+    # Coverage status header
+    if gaps_summary.get("meets_threshold", False):
+        lines.append("✓ **Status:** Coverage meets threshold")
+        lines.append(
+            f"**Total Coverage:** {total_coverage:.1f}% (required: {threshold:.1f}%)"
+        )
+    else:
+        lines.append("⚠ **Status:** Coverage below threshold")
+        lines.append(
+            f"**Total Coverage:** {total_coverage:.1f}% (required: {threshold:.1f}%)"
+        )
+        lines.append(f"**Deficit:** {threshold - total_coverage:.1f}%")
+
+    # Statistics
+    lines.append("")
+    lines.append("### Statistics")
+    lines.append(f"- **Files Analyzed:** {gaps_summary.get('total_files_analyzed', 0)}")
+    lines.append(
+        f"- **Files with Gaps:** {len(gaps_summary.get('files_with_gaps', []))}"
+    )
+    lines.append(
+        f"- **Total Missing Lines:** {gaps_summary.get('total_lines_missing', 0)}"
+    )
+
+    # Priority breakdown
+    if gaps_summary.get("files_with_gaps"):
+        lines.append("")
+        lines.append("### Gap Prioritization")
+
+        if gaps_summary.get("critical_gaps"):
+            critical_count = len(gaps_summary["critical_gaps"])
+            lines.append(
+                f"- **🔴 Critical:** {critical_count} file(s) with coverage < {threshold * 0.5:.1f}%"
+            )
+
+        if gaps_summary.get("high_priority_gaps"):
+            high_count = len(gaps_summary["high_priority_gaps"])
+            lines.append(
+                f"- **🟠 High Priority:** {high_count} file(s) with coverage {threshold * 0.5:.1f}%-{threshold * 0.8:.1f}%"
+            )
+
+        if gaps_summary.get("medium_priority_gaps"):
+            medium_count = len(gaps_summary["medium_priority_gaps"])
+            lines.append(
+                f"- **🟡 Medium Priority:** {medium_count} file(s) with coverage {threshold * 0.8:.1f}%-{threshold:.1f}%"
+            )
+
+    # Detailed file listing by priority
+    if gaps_summary.get("files_with_gaps"):
+        lines.append("")
+        lines.append("### Files Requiring Additional Tests")
+        lines.append("")
+        lines.append("*Files are listed by priority (critical → high → medium)*")
         lines.append("")
 
-    lines.append("### Files Requiring Additional Tests")
-    for file_path in gaps_summary["files_with_gaps"][:10]:
-        missing_lines = gaps_summary["missing_lines_by_file"].get(file_path, [])
-        if missing_lines:
-            line_ranges = _format_line_ranges(missing_lines[:20])
-            lines.append(f"- **{file_path}**")
-            lines.append(f"  - Missing lines: {line_ranges}")
-        else:
-            lines.append(f"- **{file_path}**")
+        # Show files with their coverage and missing lines
+        max_files_to_show = 15
+        shown_count = 0
 
-    if len(gaps_summary["files_with_gaps"]) > 10:
-        lines.append(
-            f"- ... and {len(gaps_summary['files_with_gaps']) - 10} more files"
-        )
+        for file_path in gaps_summary["files_with_gaps"]:
+            if shown_count >= max_files_to_show:
+                break
 
+            coverage = gaps_summary["coverage_by_file"].get(file_path, 0.0)
+            missing_lines = gaps_summary["missing_lines_by_file"].get(file_path, [])
+
+            # Determine priority indicator
+            if file_path in gaps_summary.get("critical_gaps", []):
+                priority = "🔴"
+            elif file_path in gaps_summary.get("high_priority_gaps", []):
+                priority = "🟠"
+            else:
+                priority = "🟡"
+
+            lines.append(f"{priority} **{file_path}**")
+            lines.append(
+                f"   - Coverage: {coverage:.1f}% (threshold: {threshold:.1f}%)"
+            )
+
+            if missing_lines:
+                # Show line ranges (limit to first 30 lines to keep prompt manageable)
+                line_ranges = _format_line_ranges(missing_lines[:30])
+                lines.append(f"   - Missing lines: {line_ranges}")
+
+                if len(missing_lines) > 30:
+                    lines.append(f"   - ... and {len(missing_lines) - 30} more lines")
+
+            shown_count += 1
+
+        # Show count of remaining files
+        remaining_files = len(gaps_summary["files_with_gaps"]) - shown_count
+        if remaining_files > 0:
+            lines.append("")
+            lines.append(f"... and {remaining_files} more file(s) with coverage gaps")
+
+    # Action items
+    lines.append("")
+    lines.append("### Action Items")
     lines.append("")
     lines.append(
-        "**Action Required:** Generate additional tests to cover the missing lines above."
+        "1. **Prioritize Critical Gaps:** Start with files marked 🔴 (lowest coverage)"
     )
-    lines.append("Focus on the specific line numbers that are not covered.")
+    lines.append(
+        "2. **Target Missing Lines:** Write tests specifically for the missing line numbers"
+    )
+    lines.append(
+        "3. **Focus on High Impact:** Address high-priority gaps (🟠) before medium (🟡)"
+    )
+    lines.append(
+        "4. **Verify Coverage:** Run tests and re-check coverage after each batch"
+    )
+    lines.append("")
+    lines.append(
+        "**Note:** Coverage is measured at the line level. Ensure tests execute all"
+    )
+    lines.append(
+        "the missing lines listed above, including edge cases and error paths."
+    )
 
     return "\n".join(lines)
 
@@ -634,6 +888,235 @@ def _check_fixture_usage(node: ast.FunctionDef) -> bool:
     return False
 
 
+def detect_edge_cases_from_analysis(
+    analysis_results: dict[str, Any], project_dir: Path
+) -> list[dict[str, Any]]:
+    """
+    Detect edge cases from code analysis results for test generation.
+
+    This function extracts or detects edge case patterns from source code to guide
+    the AI agent in generating comprehensive tests. It prioritizes edge_cases already
+    present in analysis_results (from CodeAnalyzer or TypeScriptAnalyzer), and falls
+    back to AST-based detection for Python source files.
+
+    Detected edge cases include:
+    - Error handling (try/except blocks)
+    - Boundary conditions (None checks, numeric boundaries, empty checks)
+    - Type validation (isinstance checks)
+    - Error raising (raise statements)
+    - Assertions
+
+    Args:
+        analysis_results: Code analysis results from CodeAnalyzer or TypeScriptAnalyzer
+        project_dir: Root project directory for reading source files
+
+    Returns:
+        List of edge case dictionaries with keys:
+        - type: Category of edge case (error_handling, boundary_condition, type_validation, etc.)
+        - pattern: Specific pattern detected (try/except, none_check, isinstance_check, etc.)
+        - lineno: Line number where pattern was found
+        - description: Human-readable description of the edge case
+        - file: Source file where edge case was found (if available)
+    """
+    # First, check if edge_cases are already in the analysis results
+    if "edge_cases" in analysis_results and analysis_results["edge_cases"]:
+        return analysis_results["edge_cases"]
+
+    edge_cases = []
+
+    # If we have analyzed_files in the results, detect edge cases from Python sources
+    analyzed_files = list(analysis_results.get("analyzed_files", []))
+    if not analyzed_files:
+        # Try to extract file paths from functions/classes
+        seen_files: set[str] = set()
+        for func in analysis_results.get("functions", []):
+            if "file" in func:
+                file_path = func["file"]
+                if file_path not in seen_files:
+                    seen_files.add(file_path)
+                    analyzed_files.append(file_path)
+        for cls in analysis_results.get("classes", []):
+            if "file" in cls:
+                file_path = cls["file"]
+                if file_path not in seen_files:
+                    seen_files.add(file_path)
+                    analyzed_files.append(file_path)
+
+    # Detect edge cases from Python source files
+    for file_path in analyzed_files:
+        # Only process Python files
+        if not str(file_path).endswith(".py"):
+            continue
+
+        full_path = project_dir / file_path
+        if not full_path.exists():
+            logger.debug(f"Source file not found: {full_path}")
+            continue
+
+        try:
+            source = full_path.read_text(encoding="utf-8")
+            tree = ast.parse(source)
+
+            # Detect edge cases in this file
+            file_edge_cases = _detect_edge_cases_from_ast(tree, str(file_path))
+            edge_cases.extend(file_edge_cases)
+
+        except SyntaxError as e:
+            logger.warning(f"Syntax error in {file_path}: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to detect edge cases in {file_path}: {e}")
+
+    return edge_cases
+
+
+def _detect_edge_cases_from_ast(tree: ast.AST, file_path: str) -> list[dict[str, Any]]:
+    """
+    Detect edge case patterns from Python AST.
+
+    This is a simplified version of CodeAnalyzer._detect_edge_cases() that
+    focuses on patterns most relevant for test generation.
+
+    Args:
+        tree: AST tree of the source code
+        file_path: Path to the source file
+
+    Returns:
+        List of edge case dictionaries
+    """
+    edge_cases: list[dict[str, Any]] = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Try):
+            edge_cases.extend(_detect_try_except_patterns(node, file_path))
+        elif isinstance(node, ast.Compare):
+            edge_cases.extend(_detect_comparison_patterns(node, file_path))
+        elif isinstance(node, ast.Call):
+            edge_cases.extend(_detect_isinstance_patterns(node, file_path))
+        elif isinstance(node, ast.Raise):
+            edge_cases.extend(_detect_raise_patterns(node, file_path))
+        elif isinstance(node, ast.Assert):
+            edge_cases.extend(_detect_assert_patterns(node, file_path))
+
+    return edge_cases
+
+
+def _detect_try_except_patterns(node: ast.Try, file_path: str) -> list[dict[str, Any]]:
+    """Detect error handling patterns from try/except blocks."""
+    results = []
+    for handler in node.handlers:
+        exc_type = "Exception"
+        if handler.type:
+            if isinstance(handler.type, ast.Name):
+                exc_type = handler.type.id
+            elif isinstance(handler.type, ast.Attribute):
+                exc_type = ast.unparse(handler.type)
+        results.append(
+            {
+                "type": "error_handling",
+                "pattern": f"try/except {exc_type}",
+                "lineno": node.lineno,
+                "description": f"Handles {exc_type} exceptions",
+                "file": file_path,
+            }
+        )
+    return results
+
+
+def _detect_comparison_patterns(
+    node: ast.Compare, file_path: str
+) -> list[dict[str, Any]]:
+    """Detect boundary conditions from comparison nodes."""
+    code = ast.unparse(node)
+
+    if "None" in code:
+        return [
+            {
+                "type": "boundary_condition",
+                "pattern": "none_check",
+                "lineno": node.lineno,
+                "description": f"None check: {code}",
+                "file": file_path,
+            }
+        ]
+
+    if any(op in code for op in ["< 0", "> 0", "== 0", "<= 0", ">= 0"]):
+        return [
+            {
+                "type": "boundary_condition",
+                "pattern": "numeric_boundary",
+                "lineno": node.lineno,
+                "description": f"Numeric boundary: {code}",
+                "file": file_path,
+            }
+        ]
+
+    if "len(" in code and any(op in code for op in ["== 0", "> 0", "< 1"]):
+        return [
+            {
+                "type": "boundary_condition",
+                "pattern": "empty_check",
+                "lineno": node.lineno,
+                "description": f"Empty check: {code}",
+                "file": file_path,
+            }
+        ]
+
+    return []
+
+
+def _detect_isinstance_patterns(node: ast.Call, file_path: str) -> list[dict[str, Any]]:
+    """Detect isinstance type validation calls."""
+    if not (isinstance(node.func, ast.Name) and node.func.id == "isinstance"):
+        return []
+    if len(node.args) < 2:
+        return []
+
+    type_check = ast.unparse(node.args[1])
+    return [
+        {
+            "type": "type_validation",
+            "pattern": "isinstance_check",
+            "lineno": node.lineno,
+            "description": f"Type check: isinstance(..., {type_check})",
+            "file": file_path,
+        }
+    ]
+
+
+def _detect_raise_patterns(node: ast.Raise, file_path: str) -> list[dict[str, Any]]:
+    """Detect explicit error raising patterns."""
+    exc_type = "Exception"
+    if node.exc:
+        if isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name):
+            exc_type = node.exc.func.id
+        elif isinstance(node.exc, ast.Name):
+            exc_type = node.exc.id
+
+    return [
+        {
+            "type": "error_raising",
+            "pattern": f"raise {exc_type}",
+            "lineno": node.lineno,
+            "description": f"Raises {exc_type}",
+            "file": file_path,
+        }
+    ]
+
+
+def _detect_assert_patterns(node: ast.Assert, file_path: str) -> list[dict[str, Any]]:
+    """Detect assertion patterns."""
+    test_code = ast.unparse(node.test)
+    return [
+        {
+            "type": "assertion",
+            "pattern": "assert",
+            "lineno": node.lineno,
+            "description": f"Assertion: {test_code}",
+            "file": file_path,
+        }
+    ]
+
+
 def _check_edge_case_coverage(node: ast.FunctionDef, source: str) -> dict[str, Any]:
     """
     Check if test covers edge cases.
@@ -794,6 +1277,138 @@ def _calculate_quality_score(metrics: Any, issue_count: int) -> float:
     return max(0.0, min(100.0, score))
 
 
+async def generate_integration_tests(
+    project_dir: Path,
+    spec_dir: Path,
+    analysis_results: dict[str, Any],
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
+    verbose: bool = False,
+) -> dict[str, Any]:
+    """
+    Run Integration Test Generator Agent session to generate integration tests for API endpoints.
+
+    Integration tests validate that multiple components work together correctly,
+    such as API endpoints interacting with databases, services, and external dependencies.
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        analysis_results: Code analysis results (should include API endpoints, routes, etc.)
+        model: Claude model to use (defaults to phase config)
+        max_thinking_tokens: Extended thinking token budget (optional)
+        verbose: Whether to show detailed output
+
+    Returns:
+        Dictionary with:
+        - generated_files: List of generated test file paths (relative to project_dir)
+        - success: Whether generation succeeded
+        - error: Error message if failed
+        - framework: Test framework used ("integration-pytest")
+    """
+    starting_message = _INTEGRATION_TEST_STARTING_MESSAGE.format(
+        analysis_json=json.dumps(analysis_results, indent=2)
+    )
+
+    # Run the shared generator session boilerplate
+    endpoints_count = len(analysis_results.get("endpoints", []))
+    routes_count = len(analysis_results.get("routes", []))
+    services_count = len(analysis_results.get("services", []))
+
+    session_result = await run_generator_session(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        analysis_results=analysis_results,
+        session_title="INTEGRATION TEST GENERATOR SESSION",
+        session_description="Generating integration tests for API endpoints and services...",
+        prompt_name="test_generator",  # Reuse test_generator prompt
+        agent_type="test_generator",
+        session_name="integration-test-generator-session",
+        starting_message=starting_message,
+        log_phase=LogPhase.VALIDATION,
+        log_summary=(
+            f"Analyzing {endpoints_count} endpoints, "
+            f"{routes_count} routes, "
+            f"{services_count} services for integration tests"
+        ),
+        model=model,
+        max_thinking_tokens=max_thinking_tokens,
+        verbose=verbose,
+    )
+
+    framework = "integration-pytest"
+
+    if not session_result["success"]:
+        return {
+            "generated_files": [],
+            "success": False,
+            "error": session_result["error"],
+            "framework": framework,
+        }
+
+    # Scan tests/integration/ directory for newly created test files
+    print()
+    print_status("Scanning for generated integration test files...", "progress")
+
+    test_files: list[Path] = []
+    tests_integration_dir = project_dir / "tests" / "integration"
+    if tests_integration_dir.exists():
+        for test_file in tests_integration_dir.glob("test_integration_*.py"):
+            test_files.append(test_file.relative_to(project_dir))
+    else:
+        # Try to find integration tests in the main tests/ directory
+        tests_dir = project_dir / "tests"
+        if tests_dir.exists():
+            for test_file in tests_dir.glob("test_integration_*.py"):
+                test_files.append(test_file.relative_to(project_dir))
+            if test_files:
+                print_status(
+                    f"Found {len(test_files)} integration tests in tests/", "success"
+                )
+        else:
+            return {
+                "generated_files": [],
+                "success": False,
+                "error": "tests/ directory not found",
+                "framework": framework,
+            }
+
+    if not test_files:
+        logger.warning("No integration test files were generated")
+        print_status("No integration test files found", "warning")
+        return {
+            "generated_files": [],
+            "success": False,
+            "error": "No test files generated",
+            "framework": framework,
+        }
+
+    print_key_value("Generated files", str(len(test_files)))
+    for test_file in test_files:
+        print(f"  {muted('•')} {test_file}")
+    print()
+
+    # Validate generated tests
+    validation_success = await validate_python_tests(
+        test_files, project_dir, label="Integration"
+    )
+
+    # Log results
+    log_generator_result(
+        spec_dir=spec_dir,
+        test_files=test_files,
+        validation_success=validation_success,
+        framework="Integration",
+    )
+
+    return {
+        "generated_files": [str(f) for f in test_files],
+        "success": validation_success,
+        "error": None if validation_success else "Test validation failed",
+        "framework": framework,
+    }
+
+
 async def run_test_generator_session(
     project_dir: Path,
     spec_dir: Path,
@@ -801,6 +1416,7 @@ async def run_test_generator_session(
     model: str | None = None,
     max_thinking_tokens: int | None = None,
     verbose: bool = False,
+    generate_fixtures_first: bool = True,
 ) -> dict[str, Any]:
     """
     Run Test Generator Agent session to generate tests for analyzed code.
@@ -815,6 +1431,7 @@ async def run_test_generator_session(
         model: Claude model to use (defaults to phase config)
         max_thinking_tokens: Extended thinking token budget (optional)
         verbose: Whether to show detailed output
+        generate_fixtures_first: Whether to generate fixtures before tests (default: True)
 
     Returns:
         Dictionary with:
@@ -890,6 +1507,45 @@ async def run_test_generator_session(
         print_key_value("Min coverage", f"{coverage_config.minimum_coverage:.0f}%")
     except Exception as e:
         logger.warning(f"Failed to load coverage config: {e}")
+
+    # Generate fixtures first if requested
+    fixture_files = []
+    if generate_fixtures_first:
+        print()
+        print_status("Generating test fixtures...", "progress")
+        try:
+            fixture_result = await generate_fixtures(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                analysis_results=analysis_results,
+                model=model,
+                max_thinking_tokens=max_thinking_tokens,
+                verbose=verbose,
+            )
+
+            if fixture_result["success"] and fixture_result.get("generated_files"):
+                fixture_files = fixture_result["generated_files"]
+                print_key_value("Fixture files", str(len(fixture_files)))
+                for fixture_file in fixture_files:
+                    print(f"  {muted('•')} {fixture_file}")
+            elif not fixture_result["success"]:
+                logger.warning(
+                    f"Fixture generation failed: {fixture_result.get('error')}"
+                )
+                print_status(
+                    f"Fixture generation failed: {fixture_result.get('error')}",
+                    "warning",
+                )
+            else:
+                logger.info("No fixtures were generated")
+                print_status("No fixtures were generated", "info")
+
+        except Exception as e:
+            error_msg = f"Fixture generation failed with exception: {e}"
+            logger.warning(error_msg)
+            print_status(error_msg, "warning")
+
+    print()
 
     # Load the test generator prompt
     try:
@@ -1148,6 +1804,7 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
 
     return {
         "generated_files": [str(f) for f in test_files],
+        "fixture_files": fixture_files,
         "success": validation_success,
         "error": None if validation_success else "Test validation failed",
         "framework": "pytest",

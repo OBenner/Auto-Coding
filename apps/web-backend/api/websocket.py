@@ -12,6 +12,7 @@ import logging
 import os
 from datetime import datetime
 
+from core import sanitize_log as _sanitize_log
 from core.security import verify_websocket_token
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
@@ -22,11 +23,6 @@ from api.models.agent_event import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 router = APIRouter()
@@ -456,8 +452,9 @@ async def terminal_websocket(websocket: WebSocket):
     # Get or create terminal session
     session = terminal_manager.get_session(session_id)
     if not session:
-        # Create new session with user's home directory or default project directory
-        working_dir = user_claims.get("working_dir", os.getcwd())
+        # Use the current working directory as the project root; ignore any
+        # working_dir claim from the JWT to prevent path traversal via crafted tokens.
+        working_dir = os.getcwd()
         session = terminal_manager.create_session(
             session_id=session_id,
             working_dir=working_dir,
@@ -533,7 +530,12 @@ async def terminal_websocket(websocket: WebSocket):
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
             except Exception as e:
                 logger.error(f"Error processing terminal message: {e}")
-                await websocket.send_json({"type": "error", "message": str(e)})
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": "Internal error processing terminal message",
+                    }
+                )
 
     except WebSocketDisconnect:
         logger.info(
