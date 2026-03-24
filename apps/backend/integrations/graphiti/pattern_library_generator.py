@@ -9,8 +9,10 @@ Produces Python modules compatible with the manual pattern library format.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -180,41 +182,66 @@ class PatternLibraryGenerator:
 
         return all_patterns
 
-    def _categorize_patterns(
-        self, patterns: list[dict[str, Any]]
-    ) -> dict[str, list[dict[str, Any]]]:
-        """Categorize patterns using AI classification."""
-        categorized = defaultdict(list)
+    # Extended fallback mapping from pattern type → category
+    _TYPE_TO_CATEGORY: dict[str, str] = {
+        "error": "error-handling",
+        "api": "api-design",
+        "state": "state-management",
+        "import": "architecture",
+        "class": "architecture",
+        "function": "architecture",
+        "security": "security",
+        "performance": "performance",
+        "test": "testing",
+        "config": "configuration",
+        "logging": "observability",
+        "database": "database",
+        "ui": "ui-ux",
+        "deployment": "deployment",
+    }
 
-        # Run categorization for all patterns
-        for pattern in patterns:
-            # Build pattern description for categorization
+    def _categorize_patterns(
+        self,
+        patterns: list[dict[str, Any]],
+        max_workers: int = 4,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Categorize patterns using AI classification with concurrent execution.
+
+        Args:
+            patterns: List of pattern dicts to categorize
+            max_workers: Max threads for parallel categorization (default: 4)
+        """
+        categorized: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+        def _classify(pattern: dict[str, Any]) -> tuple[dict[str, Any], str]:
             pattern_desc = (
                 f"Type: {pattern['type']}\n"
                 f"Pattern: {pattern['pattern']}\n"
                 f"Code: {pattern['code_snippet']}"
             )
-
-            # Categorize (synchronously - runs async internally)
             result = categorize_pattern_sync(pattern_desc, self.project_dir)
             category = result["category"]
 
-            # Use pattern type as fallback category
-            if category == "uncategorized" and pattern["type"]:
-                # Map pattern types to categories
-                type_to_category = {
-                    "error": "error-handling",
-                    "api": "api-design",
-                    "state": "state-management",
-                    "import": "architecture",
-                    "class": "architecture",
-                    "function": "architecture",
-                    "security": "security",
-                    "performance": "performance",
-                }
-                category = type_to_category.get(pattern["type"], "uncategorized")
+            if category == "uncategorized" and pattern.get("type"):
+                category = self._TYPE_TO_CATEGORY.get(pattern["type"], "uncategorized")
+            return pattern, category
 
-            categorized[category].append(pattern)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_classify, p): p for p in patterns}
+            for future in as_completed(futures):
+                try:
+                    pattern, category = future.result()
+                    categorized[category].append(pattern)
+                except Exception as e:
+                    # Fallback: use the pattern's type mapping on classification error
+                    p = futures[future]
+                    fallback = self._TYPE_TO_CATEGORY.get(
+                        p.get("type", ""), "uncategorized"
+                    )
+                    logger.debug(
+                        f"Classification failed for pattern, using fallback '{fallback}': {e}"
+                    )
+                    categorized[fallback].append(p)
 
         return dict(categorized)
 
@@ -250,16 +277,12 @@ class PatternLibraryGenerator:
                 # Generate unique key
                 key = self._generate_pattern_key(pattern, i)
 
-                # Get code snippet
+                # Use json.dumps for safe, correct string escaping
                 code = pattern["code_snippet"]
-
-                # Escape code for Python string literal
-                code_escaped = code.replace("\\", "\\\\").replace('"""', r"\"\"\"")
+                code_literal = json.dumps(code)
 
                 # Add pattern entry
-                module_code += f'    "{key}": """'
-                module_code += code_escaped
-                module_code += '""",\n'
+                module_code += f"    {json.dumps(key)}: {code_literal},\n"
 
             module_code += "}\n\n\n"
 

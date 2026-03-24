@@ -418,6 +418,33 @@ def generate_patterns(
         print()
 
 
+def _generate_for_language(
+    generator: PatternLibraryGenerator,
+    output_path: Path,
+    language: str,
+    options: dict,
+) -> tuple[bool, str | None]:
+    """
+    Generate a pattern library for a single language.
+
+    Args:
+        generator: Reusable PatternLibraryGenerator instance
+        output_path: Path where the generated module will be written
+        language: Programming language to generate for
+        options: Generation options dict
+
+    Returns:
+        Tuple of (success, error_message). error_message is None on success.
+    """
+    try:
+        generator.generate_library_file(output_path, language, options)
+        return True, None
+    except ValueError as e:
+        return False, f"Skipped: {e}"
+    except Exception as e:
+        return False, f"Failed: {e}"
+
+
 def generate_all_patterns(
     project_dir: Path,
     output_dir: Path,
@@ -471,6 +498,9 @@ def generate_all_patterns(
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Create a single generator instance — it has no per-run state
+    generator = PatternLibraryGenerator(project_dir)
+
     # Generate library for each language
     success_count = 0
     failed_languages = []
@@ -478,32 +508,23 @@ def generate_all_patterns(
     for i, language in enumerate(target_languages, 1):
         print(f"[{i}/{len(target_languages)}] {language}...")
 
-        # Determine output filename
         output_path = output_dir / f"{language}_patterns.py"
 
-        try:
-            # Create generator
-            generator = PatternLibraryGenerator(project_dir)
+        # Prepare per-language options
+        options: dict = {
+            "max_patterns_per_category": max_patterns,
+            "include_line_numbers": False,
+        }
+        if source_dir:
+            options["source_dir"] = source_dir
 
-            # Prepare options
-            options = {
-                "max_patterns_per_category": max_patterns,
-                "include_line_numbers": False,
-            }
-            if source_dir:
-                options["source_dir"] = source_dir
-
-            # Generate library file
-            generator.generate_library_file(output_path, language, options)
+        ok, err = _generate_for_language(generator, output_path, language, options)
+        if ok:
             print(muted(f"  ✓ Saved to: {output_path}"))
             success_count += 1
-
-        except ValueError as e:
-            print(muted(f"  ⚠ Skipped: {e}"))
-            failed_languages.append((language, str(e)))
-        except Exception as e:
-            print(muted(f"  ✗ Failed: {e}"))
-            failed_languages.append((language, str(e)))
+        else:
+            print(muted(f"  ✗ {err}"))
+            failed_languages.append((language, err or "Unknown error"))
 
         print()
 
@@ -530,6 +551,41 @@ def generate_all_patterns(
     else:
         print(warning(f"{icon(Icons.WARNING)} No libraries generated"))
         print()
+
+
+def _resolve_project_dir(spec_dir: Path, explicit_project_dir: Path | None) -> Path:
+    """
+    Resolve the project root directory.
+
+    Uses an explicit path if provided, otherwise derives it from the spec_dir
+    by climbing three parents (.auto-claude/specs/XXX → project root) and
+    validates the result by checking for expected marker files.
+
+    Args:
+        spec_dir: Spec directory path
+        explicit_project_dir: Explicit project directory from --project-dir flag
+
+    Returns:
+        Validated project root path
+
+    Raises:
+        ValueError: If the resolved path does not look like a project root
+    """
+    if explicit_project_dir:
+        project_dir = explicit_project_dir.resolve()
+    else:
+        # Heuristic: .auto-claude/specs/XXX → project root
+        project_dir = spec_dir.parent.parent.parent
+
+    # Validate — check for at least one expected marker
+    markers = [".git", "package.json", "pyproject.toml", "setup.py", ".auto-claude"]
+    if not any((project_dir / m).exists() for m in markers):
+        raise ValueError(
+            f"Resolved project directory '{project_dir}' does not contain any of "
+            f"{markers}. Pass --project-dir explicitly."
+        )
+
+    return project_dir
 
 
 def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
@@ -583,10 +639,13 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
                 )
             )
             return 1
-        # For generate, use parent directory of spec_dir as project_dir
-        project_dir = (
-            spec_dir.parent.parent.parent
-        )  # .auto-claude/specs/XXX -> project root
+        try:
+            project_dir = _resolve_project_dir(
+                spec_dir, Path(args.project_dir) if args.project_dir else None
+            )
+        except ValueError as e:
+            print(warning(f"{icon(Icons.WARNING)} {e}"))
+            return 1
         source_dir = Path(args.source) if args.source else None
         max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
         generate_patterns(
@@ -600,10 +659,13 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
                 )
             )
             return 1
-        # For generate-all, use parent directory of spec_dir as project_dir
-        project_dir = (
-            spec_dir.parent.parent.parent
-        )  # .auto-claude/specs/XXX -> project root
+        try:
+            project_dir = _resolve_project_dir(
+                spec_dir, Path(args.project_dir) if args.project_dir else None
+            )
+        except ValueError as e:
+            print(warning(f"{icon(Icons.WARNING)} {e}"))
+            return 1
         source_dir = Path(args.source) if args.source else None
         max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
         languages = args.languages.split(",") if args.languages else None
@@ -732,6 +794,12 @@ Examples:
         "--languages",
         type=str,
         help="Comma-separated list of languages to generate (for 'generate-all' action, default: all supported)",
+    )
+
+    parser.add_argument(
+        "--project-dir",
+        type=str,
+        help="Explicit project root directory (default: derived from spec-dir by climbing 3 parents)",
     )
 
     args = parser.parse_args()

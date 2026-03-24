@@ -171,31 +171,33 @@ class TestExtractAllPatterns:
     """Test pattern extraction from multiple files."""
 
     def test_extract_patterns_from_files(self, temp_project_dir):
-        """Test extracting patterns from source files."""
+        """Test extracting patterns from multiple source files with per-file results."""
         generator = PatternLibraryGenerator(temp_project_dir)
         python_files = generator._find_source_files(generator.project_dir, "python")
 
-        # Mock the extractor to return sample patterns
-        mock_patterns = [
-            {
-                "type": "error",
-                "pattern": "try-except with logging",
-                "code_snippet": "try:\n    ...\nexcept ValueError as e:\n    logger.error(f'Error: {e}')",
-                "line_number": 5,
-            }
-        ]
+        # Return different patterns for each file via side_effect
+        def _mock_extract(file_path, pattern_types=None):
+            return [
+                {
+                    "type": "error",
+                    "pattern": f"pattern-from-{file_path.name}",
+                    "code_snippet": f"# code from {file_path.name}",
+                    "line_number": 5,
+                }
+            ]
 
         with patch.object(
-            generator.extractor, "extract_patterns", return_value=mock_patterns
+            generator.extractor, "extract_patterns", side_effect=_mock_extract
         ):
             patterns = generator._extract_all_patterns(
                 python_files, pattern_types=None, include_line_numbers=True
             )
 
-            # Should extract patterns from both files
-            assert len(patterns) > 0
-            # Should add file metadata
-            assert all("file" in p for p in patterns)
+            # Should get one pattern per file
+            assert len(patterns) == len(python_files)
+            # Each pattern should have correct file metadata
+            pattern_files = {p["file"] for p in patterns}
+            assert len(pattern_files) == len(python_files)
             # Should include line numbers when requested
             assert all("line_number" in p for p in patterns)
 
@@ -407,8 +409,9 @@ class TestGenerateModuleCode:
 
         module_code = generator._generate_module_code("python", categorized_patterns)
 
-        # Should escape triple quotes
-        assert r"\"\"\"" in module_code or "'''" in module_code
+        # json.dumps serialization should safely escape the triple quotes
+        # The output uses JSON string literals, so triple double-quotes are escaped
+        assert '"""' not in module_code or r"\"\"\"" in module_code
 
     def test_generate_empty_module(self, temp_project_dir):
         """Test generating module with no patterns."""

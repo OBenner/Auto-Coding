@@ -17,6 +17,41 @@ from .models import FileMatch
 logger = logging.getLogger(__name__)
 
 
+def _extract_library_patterns(
+    lang: str,
+    category: str,
+    patterns_dict: dict,
+    library_patterns: dict[str, str],
+    prefix: str = "",
+) -> None:
+    """
+    Recursively extract patterns from nested dictionaries into library_patterns.
+
+    Args:
+        lang: Language name
+        category: Pattern category
+        patterns_dict: Nested dict of pattern name → code or sub-dict
+        library_patterns: Output dict to populate (mutated in place)
+        prefix: Accumulated prefix for nested keys
+    """
+    for pattern_name, pattern_value in patterns_dict.items():
+        if isinstance(pattern_value, dict):
+            new_prefix = f"{prefix}_{pattern_name}" if prefix else pattern_name
+            _extract_library_patterns(
+                lang, category, pattern_value, library_patterns, new_prefix
+            )
+        elif isinstance(pattern_value, str):
+            full_pattern_name = f"{prefix}_{pattern_name}" if prefix else pattern_name
+            pattern_key = f"library_{lang}_{category}_{full_pattern_name}"
+            pattern_text = (
+                f"Language: {lang}\n"
+                f"Category: {category}\n"
+                f"Pattern: {full_pattern_name}\n\n"
+                f"{pattern_value}"
+            )
+            library_patterns[pattern_key] = pattern_text
+
+
 def _load_library_patterns(project_dir: Path) -> dict[str, str]:
     """
     Load patterns from auto-generated language-specific libraries.
@@ -31,29 +66,6 @@ def _load_library_patterns(project_dir: Path) -> dict[str, str]:
         Dictionary mapping pattern keys to code snippets from libraries
     """
     library_patterns = {}
-
-    def _extract_patterns(
-        lang: str, category: str, patterns_dict: dict, prefix: str = ""
-    ):
-        """Recursively extract patterns from nested dictionaries."""
-        for pattern_name, pattern_value in patterns_dict.items():
-            if isinstance(pattern_value, dict):
-                # Nested category (e.g., frameworks.gin)
-                new_prefix = f"{prefix}_{pattern_name}" if prefix else pattern_name
-                _extract_patterns(lang, category, pattern_value, new_prefix)
-            elif isinstance(pattern_value, str):
-                # Actual pattern code
-                full_pattern_name = (
-                    f"{prefix}_{pattern_name}" if prefix else pattern_name
-                )
-                pattern_key = f"library_{lang}_{category}_{full_pattern_name}"
-                pattern_text = (
-                    f"Language: {lang}\n"
-                    f"Category: {category}\n"
-                    f"Pattern: {full_pattern_name}\n\n"
-                    f"{pattern_value}"
-                )
-                library_patterns[pattern_key] = pattern_text
 
     try:
         from patterns import load_language_patterns
@@ -75,7 +87,9 @@ def _load_library_patterns(project_dir: Path) -> dict[str, str]:
                 # Pattern libraries contain categorized dictionaries
                 for category_name, category_patterns in lang_patterns.items():
                     if isinstance(category_patterns, dict):
-                        _extract_patterns(language, category_name, category_patterns)
+                        _extract_library_patterns(
+                            language, category_name, category_patterns, library_patterns
+                        )
 
                 pattern_count = len(
                     [k for k in library_patterns.keys() if f"library_{language}_" in k]
@@ -210,9 +224,11 @@ async def discover_with_memory(
     # Optionally add file-based patterns
     if include_file_patterns and reference_files and keywords:
         discoverer = PatternDiscoverer(project_dir)
+        # Library patterns already loaded above — skip duplicate load
         file_patterns = discoverer.discover_patterns(
             reference_files=reference_files,
             keywords=keywords,
+            include_library_patterns=False,
         )
         # Merge file patterns (file patterns won't override Graphiti patterns due to different keys)
         patterns.update(file_patterns)

@@ -21,8 +21,9 @@ import pytest
 
 # sys.path is set by conftest.py (apps/backend is already on the path)
 # Keep a local fallback for running this file directly
-if not any("apps/backend" in p or "apps\\backend" in p for p in sys.path):
-    sys.path.insert(0, "apps/backend")
+_backend_path = str(Path(__file__).resolve().parent.parent / "apps" / "backend")
+if not any(Path(p).resolve() == Path(_backend_path).resolve() for p in sys.path):
+    sys.path.insert(0, _backend_path)
 
 from cli.pattern_commands import (
     generate_all_patterns,
@@ -513,8 +514,11 @@ class TestPatternLibraryGenerator:
 
         generator.generate_library_file(output_path, "python", options)
 
-        # Should complete without error
-        assert True
+        # Verify the file was actually created and is non-empty
+        assert output_path.exists(), "Generated library file should exist"
+        assert output_path.stat().st_size > 0, (
+            "Generated library file should be non-empty"
+        )
 
 
 class TestSemanticMeaning:
