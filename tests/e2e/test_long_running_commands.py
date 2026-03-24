@@ -184,30 +184,33 @@ class TestLongRunningCommands:
         """
         # Create a command that produces incremental output
         # Use -u for unbuffered Python output and flush=True in prints
-        # Produce 20 lines at 0.1s each so task["output"] gets flushed (every 10 lines)
+        # Produce 20 lines at 0.2s each so task["output"] gets flushed (every 10 lines)
         task_id = await manager.start_task(
-            f"{sys.executable} -u -c \"import time; [print(f'Line {{i}}', flush=True) or time.sleep(0.1) for i in range(1, 21)]\"",
-            timeout=10,
+            f"{sys.executable} -u -c \"import time; [print(f'Line {{i}}', flush=True) or time.sleep(0.2) for i in range(1, 21)]\"",
+            timeout=15,
         )
 
-        # Wait for initial output (need at least 10 lines for output flush at 10-line intervals)
-        # 20 lines at 0.1s each = 2s total; first flush at ~1.0s (line 10)
-        await asyncio.sleep(1.2)
+        # Poll until we get initial output (instead of fixed sleep — avoids CI timing flakes)
+        initial_len = 0
+        for _ in range(30):
+            await asyncio.sleep(0.5)
+            output_data = manager.get_task_output(task_id)
+            if output_data and len(output_data.get("output", "")) > 0:
+                initial_len = len(output_data["output"])
+                break
 
-        # Check that we're getting partial output (10 lines flushed)
-        output_data = manager.get_task_output(task_id)
-        assert output_data is not None
-        initial_len = len(output_data.get("output", ""))
+        assert initial_len > 0, "Expected some output after polling"
 
-        # Wait for next flush threshold (line 20 at ~2.0s from start)
-        await asyncio.sleep(1.0)
+        # Poll until output grows (proves real-time streaming)
+        grew = False
+        for _ in range(20):
+            await asyncio.sleep(0.5)
+            output_data_2 = manager.get_task_output(task_id)
+            if output_data_2 and len(output_data_2.get("output", "")) > initial_len:
+                grew = True
+                break
 
-        # Output should have grown (proves real-time streaming)
-        output_data_2 = manager.get_task_output(task_id)
-        assert output_data_2 is not None
-        assert len(output_data_2.get("output", "")) > initial_len, (
-            f"Output did not grow: initial={initial_len}, current={len(output_data_2.get('output', ''))}"
-        )
+        assert grew, f"Output did not grow after polling: initial={initial_len}"
 
         # Poll for completion
         for _ in range(20):

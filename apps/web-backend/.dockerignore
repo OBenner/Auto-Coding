@@ -1,0 +1,77 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Virtual environment
+.venv/
+.venv*/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Tests (development only)
+tests/
+*.test.py
+test_*.py
+pytest.ini
+.pytest_cache/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic
+alembic.ini
+
+# Documentation
+*.md
+!README.md
+
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Logs
+logs/
+*.log

@@ -1,0 +1,15 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: {{ include "auto-code.namespace" . }}
+  labels:
+    {{- include "auto-code.backend.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service - no load balancing needed
+  selector:
+    {{- include "auto-code.backend.selectorLabels" . | nindent 4 }}
+  # No ports defined - backend is CLI-based and doesn't expose network services
+{{- end }}

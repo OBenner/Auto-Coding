@@ -1,0 +1,19 @@
+apiVersion: v2
+name: auto-code
+description: A Helm chart for Auto-Claude - Multi-agent autonomous coding framework
+type: application
+version: 1.0.0
+appVersion: "3.0.0"
+keywords:
+  - auto-claude
+  - ai
+  - coding
+  - autonomous
+  - agents
+home: https://github.com/OBenner/Auto-Coding
+sources:
+  - https://github.com/OBenner/Auto-Coding
+maintainers:
+  - name: Auto-Claude Team
+    email: noreply@example.com
+icon: https://raw.githubusercontent.com/OBenner/Auto-Coding/main/apps/frontend/assets/icon.png
