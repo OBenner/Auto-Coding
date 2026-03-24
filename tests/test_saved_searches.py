@@ -858,6 +858,53 @@ class TestImportSearches:
         assert searches_reloaded.count == 1
         assert searches_reloaded.get_search("imported") is not None
 
+    def test_import_atomic_rollback_on_conflict(self, saved_searches, tmp_path):
+        """Import with merge_strategy='error' must leave state unchanged
+        when the second row conflicts with an existing search."""
+        # Pre-populate an existing search
+        saved_searches.save_search(name="existing", query="old query")
+        assert saved_searches.count == 1
+
+        import_path = tmp_path / "import.json"
+        self._create_import_file(
+            import_path,
+            [
+                # First entry is new -- would succeed on its own
+                _make_search_data(name="new_search", query="new query"),
+                # Second entry conflicts with 'existing'
+                _make_search_data(name="existing", query="conflict"),
+            ],
+        )
+
+        with pytest.raises(ValueError, match="already exists"):
+            saved_searches.import_searches(import_path, merge_strategy="error")
+
+        # State must be completely unchanged (atomic rollback)
+        assert saved_searches.count == 1
+        assert saved_searches.get_search("new_search") is None
+        assert saved_searches.get_search("existing").query == "old query"
+
+    def test_import_malformed_entry_raises_error(self, saved_searches, tmp_path):
+        """Import file with a malformed entry (missing required keys)
+        should raise ValueError, and nothing should be persisted."""
+        import_path = tmp_path / "import.json"
+
+        # Create import data with a malformed entry missing 'query'
+        malformed_data = {
+            "exported_at": datetime.now(UTC).isoformat(),
+            "count": 1,
+            "searches": [
+                {"name": "bad_entry", "search_type": "semantic"},
+            ],
+        }
+        import_path.write_text(json.dumps(malformed_data, indent=2), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Missing required field"):
+            saved_searches.import_searches(import_path)
+
+        # Nothing should have been imported
+        assert saved_searches.count == 0
+
 
 # =============================================================================
 # PROPERTIES TESTS

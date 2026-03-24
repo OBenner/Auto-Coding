@@ -73,6 +73,16 @@ async def search_code(
         print(warning(f"{icon(Icons.WARNING)} Graphiti memory not available: {e}"))
         print(muted("Proceeding with file-based search only...\n"))
 
+    # Verify memory is actually initialized; clear it if not
+    if memory is not None and not memory.is_initialized:
+        print(
+            warning(
+                f"{icon(Icons.WARNING)} Graphiti memory exists but is not initialized"
+            )
+        )
+        print(muted("Proceeding with file-based search only...\n"))
+        memory = None
+
     # Create enhanced searcher
     searcher = EnhancedCodeSearch(project_dir, graphiti_memory=memory)
 
@@ -95,6 +105,15 @@ async def search_code(
         _display_unified_results(results)
 
     elif search_type == "purpose":
+        if memory is None:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} Purpose search requires Graphiti memory"
+                )
+            )
+            print(muted("Enable Graphiti to use purpose-based search.\n"))
+            return
+
         print(info(f"Searching by purpose: {query}\n"))
 
         if entity_type:
@@ -107,6 +126,15 @@ async def search_code(
         _display_purpose_results(results)
 
     elif search_type == "patterns":
+        if memory is None:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} Pattern search requires Graphiti memory"
+                )
+            )
+            print(muted("Enable Graphiti to use pattern-based search.\n"))
+            return
+
         print(info(f"Finding similar patterns: {query}\n"))
 
         results = await searcher.find_similar_patterns(query=query, num_results=limit)
@@ -114,6 +142,13 @@ async def search_code(
         _display_pattern_results(results)
 
     elif search_type == "callers":
+        if memory is None:
+            print(
+                warning(f"{icon(Icons.WARNING)} Caller search requires Graphiti memory")
+            )
+            print(muted("Enable Graphiti to use caller search.\n"))
+            return
+
         print(info(f"Finding callers of: {query}\n"))
 
         results = await searcher.find_callers(function_name=query, limit=limit)
@@ -121,6 +156,13 @@ async def search_code(
         _display_caller_results(results, query)
 
     elif search_type == "callees":
+        if memory is None:
+            print(
+                warning(f"{icon(Icons.WARNING)} Callee search requires Graphiti memory")
+            )
+            print(muted("Enable Graphiti to use callee search.\n"))
+            return
+
         print(info(f"Finding callees of: {query}\n"))
 
         results = await searcher.find_callees(function_name=query, limit=limit)

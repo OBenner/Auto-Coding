@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bookmark,
   Loader2,
@@ -62,18 +63,18 @@ function withTimeout<T>(promise: Promise<T>, ms = 5_000): Promise<T> {
   ]);
 }
 
-function formatDate(isoString: string | null): string {
-  if (!isoString) return 'Never';
+function formatDate(isoString: string | null, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (!isoString) return t('code-search:savedSearches.dates.never');
   const date = new Date(isoString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+  if (diffDays === 0) return t('code-search:savedSearches.dates.today');
+  if (diffDays === 1) return t('code-search:savedSearches.dates.yesterday');
+  if (diffDays < 7) return t('code-search:savedSearches.dates.daysAgo', { count: diffDays });
+  if (diffDays < 30) return t('code-search:savedSearches.dates.weeksAgo', { count: Math.floor(diffDays / 7) });
+  if (diffDays < 365) return t('code-search:savedSearches.dates.monthsAgo', { count: Math.floor(diffDays / 30) });
   return date.toLocaleDateString();
 }
 
@@ -117,6 +118,7 @@ function SearchFormDialog({
   onSubmit,
   submitLabel,
 }: SearchFormDialogProps) {
+  const { t } = useTranslation(['code-search']);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
@@ -126,49 +128,49 @@ function SearchFormDialog({
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}name`}>Name *</Label>
+            <Label htmlFor={`${idPrefix}name`}>{t('code-search:savedSearches.form.name')} *</Label>
             <Input
               id={`${idPrefix}name`}
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="My search query"
+              placeholder={t('code-search:savedSearches.form.namePlaceholder')}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}query`}>Query *</Label>
+            <Label htmlFor={`${idPrefix}query`}>{t('code-search:savedSearches.form.query')} *</Label>
             <Input
               id={`${idPrefix}query`}
               value={formData.query}
               onChange={(e) => setFormData(prev => ({ ...prev, query: e.target.value }))}
-              placeholder="function authentication"
+              placeholder={t('code-search:savedSearches.form.queryPlaceholder')}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}search_type`}>Search Type</Label>
+            <Label htmlFor={`${idPrefix}search_type`}>{t('code-search:savedSearches.form.searchType')}</Label>
             <select
               id={`${idPrefix}search_type`}
               value={formData.search_type}
               onChange={(e) => setFormData(prev => ({ ...prev, search_type: e.target.value }))}
               className="w-full px-3 py-2 rounded-md border border-input bg-background"
             >
-              <option value="unified">Unified</option>
-              <option value="purpose">Purpose</option>
-              <option value="patterns">Patterns</option>
-              <option value="callers">Callers</option>
-              <option value="callees">Callees</option>
+              <option value="unified">{t('code-search:savedSearches.searchTypes.unified')}</option>
+              <option value="purpose">{t('code-search:savedSearches.searchTypes.purpose')}</option>
+              <option value="patterns">{t('code-search:savedSearches.searchTypes.patterns')}</option>
+              <option value="callers">{t('code-search:savedSearches.searchTypes.callers')}</option>
+              <option value="callees">{t('code-search:savedSearches.searchTypes.callees')}</option>
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}description`}>Description</Label>
+            <Label htmlFor={`${idPrefix}description`}>{t('code-search:savedSearches.form.description')}</Label>
             <Input
               id={`${idPrefix}description`}
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Find authentication-related functions"
+              placeholder={t('code-search:savedSearches.form.descriptionPlaceholder')}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}tags`}>Tags</Label>
+            <Label htmlFor={`${idPrefix}tags`}>{t('code-search:savedSearches.form.tags')}</Label>
             <div className="flex gap-2">
               <Input
                 id={`${idPrefix}tags`}
@@ -180,10 +182,10 @@ function SearchFormDialog({
                     onAddTag();
                   }
                 }}
-                placeholder="Add a tag"
+                placeholder={t('code-search:savedSearches.form.tagsPlaceholder')}
               />
               <Button type="button" variant="outline" onClick={onAddTag}>
-                Add
+                {t('code-search:savedSearches.form.addTag')}
               </Button>
             </div>
             {formData.tags.length > 0 && (
@@ -205,7 +207,7 @@ function SearchFormDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('code-search:savedSearches.dialog.cancel')}
           </Button>
           <Button onClick={onSubmit} disabled={!formData.name || !formData.query}>
             {submitLabel}
@@ -217,6 +219,7 @@ function SearchFormDialog({
 }
 
 export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
+  const { t } = useTranslation(['code-search']);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -265,8 +268,8 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
         setSavedSearches(result.data);
         if (showRefreshToast) {
           toast({
-            title: 'Saved Searches Refreshed',
-            description: 'Your saved searches have been updated.',
+            title: t('code-search:savedSearches.toast.refreshed.title'),
+            description: t('code-search:savedSearches.toast.refreshed.description'),
           });
         }
       } else {
@@ -345,17 +348,17 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
 
       if (result.success) {
         toast({
-          title: 'Search Deleted',
-          description: `"${selectedSearch.name}" has been removed from your saved searches.`,
+          title: t('code-search:savedSearches.toast.deleted.title'),
+          description: t('code-search:savedSearches.toast.deleted.description', { name: selectedSearch.name }),
         });
         await loadSavedSearches();
       } else {
         throw new Error(result.error || 'Failed to delete saved search');
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to delete saved search';
+      const msg = error instanceof Error ? error.message : t('code-search:savedSearches.toast.deleteFailed.description');
       toast({
-        title: 'Delete Failed',
+        title: t('code-search:savedSearches.toast.deleteFailed.title'),
         description: msg,
         variant: 'destructive',
       });
@@ -368,8 +371,8 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
   const handleSaveSearch = useCallback(async (isEdit = false) => {
     if (!window.electronAPI?.search.searchSavedSave && !window.electronAPI?.search.searchSavedUpdate) {
       toast({
-        title: 'Error',
-        description: 'Saved search functionality is not available',
+        title: t('code-search:savedSearches.toast.error.title'),
+        description: t('code-search:savedSearches.toast.error.description'),
         variant: 'destructive',
       });
       return;
@@ -383,11 +386,15 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
 
       let result: { success: boolean; search?: SavedSearch; error?: string };
       if (isEdit && selectedSearch) {
+        // Strip `name` — the update handler identifies the search by the
+        // second positional arg (`selectedSearch.name`), not a `name` field
+        // inside the updates payload.
+        const { name: _name, ...updates } = searchToSave;
         result = await withTimeout(
           window.electronAPI.search.searchSavedUpdate?.(
             projectId,
             selectedSearch.name,
-            searchToSave
+            updates
           )
         );
       } else {
@@ -398,8 +405,12 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
 
       if (result.success) {
         toast({
-          title: isEdit ? 'Search Updated' : 'Search Saved',
-          description: `"${formData.name}" has been ${isEdit ? 'updated' : 'saved'}.`,
+          title: isEdit
+            ? t('code-search:savedSearches.toast.updated.title')
+            : t('code-search:savedSearches.toast.created.title'),
+          description: isEdit
+            ? t('code-search:savedSearches.toast.updated.description', { name: formData.name })
+            : t('code-search:savedSearches.toast.created.description', { name: formData.name }),
         });
         setShowCreateDialog(false);
         setShowEditDialog(false);
@@ -408,9 +419,9 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
         throw new Error(result.error || 'Failed to save search');
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to save search';
+      const msg = error instanceof Error ? error.message : t('code-search:savedSearches.toast.saveFailed.description');
       toast({
-        title: 'Save Failed',
+        title: t('code-search:savedSearches.toast.saveFailed.title'),
         description: msg,
         variant: 'destructive',
       });
@@ -427,16 +438,16 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
 
       if (result.success && result.data) {
         toast({
-          title: 'Export Successful',
-          description: `Exported ${result.data.count} saved search(es) to ${result.data.path}`,
+          title: t('code-search:savedSearches.toast.exportSuccess.title'),
+          description: t('code-search:savedSearches.toast.exportSuccess.description', { count: result.data.count, path: result.data.path }),
         });
       } else {
         throw new Error(result.error || 'Failed to export saved searches');
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to export saved searches';
+      const msg = error instanceof Error ? error.message : t('code-search:savedSearches.toast.exportFailed.description');
       toast({
-        title: 'Export Failed',
+        title: t('code-search:savedSearches.toast.exportFailed.title'),
         description: msg,
         variant: 'destructive',
       });
@@ -480,9 +491,9 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
           <div className="flex items-center gap-3">
             <Bookmark className="h-6 w-6 text-accent" />
             <div>
-              <h1 className="text-2xl font-semibold text-foreground">Saved Searches</h1>
+              <h1 className="text-2xl font-semibold text-foreground">{t('code-search:savedSearches.title')}</h1>
               <p className="text-sm text-muted-foreground">
-                Manage and reuse your code search queries
+                {t('code-search:savedSearches.description')}
               </p>
             </div>
             {isLoading && (
@@ -498,7 +509,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
               disabled={savedSearches.length === 0}
             >
               <Download className="h-4 w-4 mr-1" />
-              Export
+              {t('code-search:savedSearches.actions.export')}
             </Button>
             <Button
               variant="outline"
@@ -507,7 +518,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
               disabled={isRefreshing}
             >
               <Loader2 className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
+              {t('code-search:savedSearches.actions.refresh')}
             </Button>
             <Button
               variant="default"
@@ -515,7 +526,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
               onClick={handleCreate}
             >
               <Plus className="h-4 w-4 mr-1" />
-              New Search
+              {t('code-search:savedSearches.actions.newSearch')}
             </Button>
           </div>
         </div>
@@ -529,12 +540,12 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
             <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-destructive">Failed to load saved searches</p>
+                <p className="text-sm font-medium text-destructive">{t('code-search:savedSearches.error.title')}</p>
                 <p className="text-xs text-muted-foreground mt-1 break-all">{loadError}</p>
               </div>
               <Button variant="outline" size="sm" onClick={handleRefresh} className="shrink-0">
                 <Loader2 className="h-3 w-3 mr-1" />
-                Retry
+                {t('code-search:savedSearches.actions.retry')}
               </Button>
             </div>
           )}
@@ -583,11 +594,11 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
                         <div className="flex items-center gap-4 text-xs text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            <span>Created: {formatDate(search.created_at)}</span>
+                            <span>{t('code-search:savedSearches.dates.created')}: {formatDate(search.created_at, t)}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            <span>Last used: {formatDate(search.last_used)}</span>
+                            <span>{t('code-search:savedSearches.dates.lastUsed')}: {formatDate(search.last_used, t)}</span>
                           </div>
                         </div>
                       </div>
@@ -597,7 +608,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRunSearch(search)}
-                          title="Run search"
+                          title={t('code-search:savedSearches.actions.runSearch')}
                         >
                           <Play className="h-4 w-4" />
                         </Button>
@@ -605,7 +616,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(search)}
-                          title="Edit search"
+                          title={t('code-search:savedSearches.actions.editSearch')}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -613,7 +624,7 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(search)}
-                          title="Delete search"
+                          title={t('code-search:savedSearches.actions.deleteSearch')}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -627,13 +638,13 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
             /* Empty State */
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Bookmark className="h-16 w-16 text-muted-foreground/50 mb-4" />
-              <p className="text-lg font-medium text-foreground">No saved searches yet</p>
+              <p className="text-lg font-medium text-foreground">{t('code-search:savedSearches.empty.title')}</p>
               <p className="text-sm text-muted-foreground mb-4">
-                Save your frequently used search queries to quickly access them later
+                {t('code-search:savedSearches.empty.description')}
               </p>
               <Button onClick={handleCreate}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Your First Saved Search
+                {t('code-search:savedSearches.empty.action')}
               </Button>
             </div>
           )}
@@ -644,8 +655,8 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
       <SearchFormDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        title="Create Saved Search"
-        description="Save a search query to quickly access it later"
+        title={t('code-search:savedSearches.dialog.createTitle')}
+        description={t('code-search:savedSearches.dialog.createDescription')}
         idPrefix=""
         formData={formData}
         setFormData={setFormData}
@@ -654,15 +665,15 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
         onAddTag={handleAddTag}
         onRemoveTag={handleRemoveTag}
         onSubmit={() => handleSaveSearch(false)}
-        submitLabel="Save Search"
+        submitLabel={t('code-search:savedSearches.dialog.save')}
       />
 
       {/* Edit Dialog */}
       <SearchFormDialog
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
-        title="Edit Saved Search"
-        description="Update your saved search query"
+        title={t('code-search:savedSearches.dialog.editTitle')}
+        description={t('code-search:savedSearches.dialog.editDescription')}
         idPrefix="edit-"
         formData={formData}
         setFormData={setFormData}
@@ -671,24 +682,24 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
         onAddTag={handleAddTag}
         onRemoveTag={handleRemoveTag}
         onSubmit={() => handleSaveSearch(true)}
-        submitLabel="Update Search"
+        submitLabel={t('code-search:savedSearches.dialog.update')}
       />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Saved Search</DialogTitle>
+            <DialogTitle>{t('code-search:savedSearches.dialog.deleteTitle')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{selectedSearch?.name}"? This action cannot be undone.
+              {t('code-search:savedSearches.dialog.deleteDescription', { name: selectedSearch?.name })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-              Cancel
+              {t('code-search:savedSearches.dialog.cancel')}
             </Button>
             <Button variant="destructive" onClick={handleConfirmDelete}>
-              Delete
+              {t('code-search:savedSearches.dialog.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

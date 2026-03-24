@@ -36,7 +36,45 @@ class SavedSearch:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SavedSearch:
-        """Create SavedSearch from dictionary."""
+        """Create SavedSearch from dictionary.
+
+        Args:
+            data: Dictionary containing saved search fields.
+
+        Returns:
+            A new SavedSearch instance.
+
+        Raises:
+            ValueError: If *data* is not a dict, is missing required fields,
+                        or contains an invalid ``search_type``.
+        """
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Expected dict for SavedSearch data, got {type(data).__name__}"
+            )
+
+        # Validate required fields
+        required_fields = ("name", "query", "search_type")
+        missing = [f for f in required_fields if f not in data]
+        if missing:
+            raise ValueError(f"Missing required field(s): {', '.join(missing)}")
+
+        valid_types = (
+            "unified",
+            "purpose",
+            "patterns",
+            "callers",
+            "callees",
+            "semantic",
+            "keyword",
+            "hybrid",
+        )
+        if data["search_type"] not in valid_types:
+            raise ValueError(
+                f"Invalid search_type: {data['search_type']}. "
+                f"Must be one of: {', '.join(repr(t) for t in valid_types)}"
+            )
+
         known_fields = {
             "name",
             "query",
@@ -358,30 +396,17 @@ class SavedSearches:
             if "searches" not in data:
                 raise ValueError("Invalid import file: missing 'searches' key")
 
-            valid_types = (
-                "unified",
-                "purpose",
-                "patterns",
-                "callers",
-                "callees",
-                "semantic",
-                "keyword",
-                "hybrid",
-            )
+            # Stage all entries first so that a conflict with merge_strategy="error"
+            # doesn't leave partial state.  We validate *every* entry, then apply
+            # atomically.
+            staged: dict[str, SavedSearch] = {}
 
-            imported_count = 0
             for search_data in data["searches"]:
                 search = SavedSearch.from_dict(search_data)
                 name = search.name
 
-                if search.search_type not in valid_types:
-                    logger.warning(
-                        f"Skipping search '{search.name}' with invalid type: {search.search_type}"
-                    )
-                    continue
-
                 # Handle name conflicts
-                if name in self._searches:
+                if name in self._searches or name in staged:
                     if merge_strategy == "error":
                         raise ValueError(
                             f"Search '{name}' already exists. "
@@ -391,8 +416,11 @@ class SavedSearches:
                         continue
                     # 'overwrite': proceed with import
 
-                self._searches[name] = search
-                imported_count += 1
+                staged[name] = search
+
+            # Apply staged entries atomically
+            self._searches.update(staged)
+            imported_count = len(staged)
 
             self._save_searches()
             logger.info(f"Imported {imported_count} searches from {input_path}")

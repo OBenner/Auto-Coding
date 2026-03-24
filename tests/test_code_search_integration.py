@@ -13,9 +13,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Add backend to path
+# Add backend to path (idempotent)
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "apps" / "backend"))
+_backend_path = str(REPO_ROOT / "apps" / "backend")
+if _backend_path not in sys.path:
+    sys.path.insert(0, _backend_path)
 
 from context.enhanced_search import EnhancedCodeSearch
 from context.models import FileMatch
@@ -372,6 +374,47 @@ class TestEnhancedCodeSearchStatusAndExport:
         finally:
             output_path.unlink(missing_ok=True)
 
+    def test_export_json_with_filematch_objects(self, searcher_no_graphiti):
+        """Test JSON export correctly serializes FileMatch objects
+        without mutating the original results dict."""
+        fm = FileMatch(
+            path=Path("apps/backend/auth.py"),
+            relevance_score=0.85,
+            matching_lines=[(10, "def login")],
+        )
+        results = {
+            "files": [fm],
+            "purpose": [
+                {
+                    "entity_name": "login",
+                    "entity_type": "function",
+                    "score": 0.9,
+                }
+            ],
+            "patterns": [],
+            "total": 2,
+        }
+
+        output_path = _create_temp_json_path()
+
+        try:
+            searcher_no_graphiti.export_search_results(
+                results=results, output_path=output_path, format="json"
+            )
+
+            # Original dict must still contain the FileMatch object
+            assert isinstance(results["files"][0], FileMatch)
+
+            # Exported JSON should have a plain dict for the file entry
+            with open(output_path, encoding="utf-8") as f:
+                exported_data = json.load(f)
+
+            assert exported_data["files"][0]["path"] == "apps/backend/auth.py"
+            assert exported_data["files"][0]["relevance_score"] == 0.85
+            assert exported_data["purpose"][0]["entity_name"] == "login"
+        finally:
+            output_path.unlink(missing_ok=True)
+
     def test_export_search_results_csv(self, searcher_no_graphiti):
         """Test exporting search results to CSV."""
         results = [
@@ -403,6 +446,32 @@ class TestEnhancedCodeSearchStatusAndExport:
             assert "entity_name,entity_type,purpose" in content
             assert "test_func" in content
             assert "another_func" in content
+        finally:
+            output_path.unlink(missing_ok=True)
+
+    def test_export_csv_key_union(self, searcher_no_graphiti):
+        """Test CSV export uses the union of all row keys when rows
+        have differing key sets."""
+        results = [
+            {"entity_name": "func_a", "purpose": "does A"},
+            {"entity_name": "func_b", "module": "mod_b"},
+        ]
+
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+            output_path = Path(f.name)
+
+        try:
+            searcher_no_graphiti.export_search_results(
+                results=results, output_path=output_path, format="csv"
+            )
+
+            content = output_path.read_text(encoding="utf-8")
+            # Header must include all unique keys
+            assert "entity_name" in content
+            assert "purpose" in content
+            assert "module" in content
+            assert "func_a" in content
+            assert "func_b" in content
         finally:
             output_path.unlink(missing_ok=True)
 
@@ -964,6 +1033,31 @@ class TestSearchIntegration:
         assert results_path.exists()
         exported_data = json.loads(results_path.read_text(encoding="utf-8"))
         assert exported_data == results
+
+        # -- Also exercise the saved-searches import path --
+        with tempfile.TemporaryDirectory() as tmpdir:
+            searches_file = Path(tmpdir) / "searches.json"
+            saved_searches = SavedSearches(storage_path=searches_file)
+
+            # Save a search, export it, then import into a fresh instance
+            saved_searches.save_search(
+                name="auth_search",
+                query="authentication",
+                search_type="semantic",
+            )
+
+            export_path = Path(tmpdir) / "exported_searches.json"
+            saved_searches.export_searches(output_path=export_path)
+
+            # Import into a new instance
+            new_file = Path(tmpdir) / "new_searches.json"
+            new_searches = SavedSearches(storage_path=new_file)
+            count = new_searches.import_searches(export_path)
+
+            assert count == 1
+            imported = new_searches.get_search("auth_search")
+            assert imported is not None
+            assert imported.query == "authentication"
 
 
 if __name__ == "__main__":

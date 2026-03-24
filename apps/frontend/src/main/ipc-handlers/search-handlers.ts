@@ -101,17 +101,32 @@ function errorMessage(error: unknown, fallback: string): string {
 function runPythonCli(projectPath: string, args: string[], errorPrefix: string): Promise<string> {
   const { spawn } = require('child_process');
 
-  const pythonCmd = path.join(projectPath, 'apps', 'backend', '.venv', 'bin', 'python');
+  // Platform-aware venv path: Scripts/python.exe on Windows, bin/python on Unix
+  const venvSubdir = process.platform === 'win32'
+    ? path.join('Scripts', 'python.exe')
+    : path.join('bin', 'python');
+  const pythonCmd = path.join(projectPath, 'apps', 'backend', '.venv', venvSubdir);
   const searchScript = path.join(projectPath, 'apps', 'backend', 'cli', 'search_commands.py');
+
+  const TIMEOUT_MS = 30_000;
 
   return new Promise<string>((resolve, reject) => {
     let stdout = '';
     let stderr = '';
+    let settled = false;
 
     const proc = spawn(pythonCmd, [searchScript, ...args], {
       cwd: projectPath,
       env: process.env,
     });
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        proc.kill();
+        reject(new Error(`${errorPrefix} timed out after ${TIMEOUT_MS / 1000}s`));
+      }
+    }, TIMEOUT_MS);
 
     proc.stdout?.on('data', (data: Buffer) => {
       stdout += data.toString();
@@ -122,6 +137,9 @@ function runPythonCli(projectPath: string, args: string[], errorPrefix: string):
     });
 
     proc.on('close', (code: number) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       if (code === 0) {
         resolve(stdout);
       } else {
@@ -130,6 +148,9 @@ function runPythonCli(projectPath: string, args: string[], errorPrefix: string):
     });
 
     proc.on('error', (err: Error) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       reject(err);
     });
   });
@@ -391,7 +412,13 @@ export function registerSearchHandlers(
 
         const exportPath = outputPath || path.join(project.path, 'saved_searches_export.json');
 
-        await fsPromises.writeFile(exportPath, JSON.stringify({
+        // Validate that the export path is inside the project directory
+        const resolvedExportPath = path.resolve(exportPath);
+        if (!resolvedExportPath.startsWith(path.resolve(project.path))) {
+          return { success: false, error: 'Export path must be inside the project directory' };
+        }
+
+        await fsPromises.writeFile(resolvedExportPath, JSON.stringify({
           exported_at: new Date().toISOString(),
           count: data.searches.length,
           searches: data.searches,
@@ -400,7 +427,7 @@ export function registerSearchHandlers(
         return {
           success: true,
           data: {
-            path: exportPath,
+            path: resolvedExportPath,
             count: data.searches.length,
           },
         };
@@ -420,8 +447,14 @@ export function registerSearchHandlers(
       return withProject(projectId, 'Failed to import saved searches', async (project) => {
         const filePath = savedSearchesPath(project.path);
 
+        // Validate that the import path is inside the project directory
+        const resolvedImportPath = path.resolve(inputPath);
+        if (!resolvedImportPath.startsWith(path.resolve(project.path))) {
+          return { success: false, error: 'Import path must be inside the project directory' };
+        }
+
         // Load import file
-        const importContent = await fsPromises.readFile(inputPath, 'utf-8');
+        const importContent = await fsPromises.readFile(resolvedImportPath, 'utf-8');
         const importData = JSON.parse(importContent);
 
         if (!importData.searches) {
