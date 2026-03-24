@@ -25,6 +25,32 @@ if str(sys_path) not in sys.path:
 from context.saved_searches import SavedSearch, SavedSearches
 
 # =============================================================================
+# HELPER FACTORIES
+# =============================================================================
+
+
+def _make_search_data(
+    name: str = "test-search",
+    query: str = "test query",
+    search_type: str = "semantic",
+    **overrides,
+) -> dict:
+    """Create a SavedSearch data dict with defaults."""
+    data = {
+        "name": name,
+        "query": query,
+        "search_type": search_type,
+        "filters": {},
+        "created_at": datetime.now(UTC).isoformat(),
+        "last_used": None,
+        "description": None,
+        "tags": [],
+    }
+    data.update(overrides)
+    return data
+
+
+# =============================================================================
 # TEST FIXTURES
 # =============================================================================
 
@@ -207,18 +233,7 @@ class TestSavedSearchesInit:
         existing_data = {
             "saved_at": datetime.now(UTC).isoformat(),
             "count": 1,
-            "searches": [
-                {
-                    "name": "existing_search",
-                    "query": "test query",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                }
-            ],
+            "searches": [_make_search_data(name="existing_search")],
         }
         tmp_storage_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_storage_path.write_text(json.dumps(existing_data), encoding="utf-8")
@@ -735,26 +750,10 @@ class TestImportSearches:
         self._create_import_file(
             import_path,
             [
-                {
-                    "name": "imported1",
-                    "query": "query1",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                },
-                {
-                    "name": "imported2",
-                    "query": "query2",
-                    "search_type": "keyword",
-                    "filters": {},
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                },
+                _make_search_data(name="imported1", query="query1"),
+                _make_search_data(
+                    name="imported2", query="query2", search_type="keyword"
+                ),
             ],
         )
 
@@ -775,18 +774,7 @@ class TestImportSearches:
         import_path = tmp_path / "import.json"
         self._create_import_file(
             import_path,
-            [
-                {
-                    "name": "existing",
-                    "query": "new",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                }
-            ],
+            [_make_search_data(name="existing", query="new")],
         )
 
         # Should raise ValueError on conflict
@@ -801,26 +789,8 @@ class TestImportSearches:
         self._create_import_file(
             import_path,
             [
-                {
-                    "name": "existing",
-                    "query": "new",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                },
-                {
-                    "name": "new_search",
-                    "query": "query",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                },
+                _make_search_data(name="existing", query="new"),
+                _make_search_data(name="new_search", query="query"),
             ],
         )
 
@@ -838,18 +808,7 @@ class TestImportSearches:
         import_path = tmp_path / "import.json"
         self._create_import_file(
             import_path,
-            [
-                {
-                    "name": "existing",
-                    "query": "new",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                }
-            ],
+            [_make_search_data(name="existing", query="new")],
         )
 
         count = saved_searches.import_searches(import_path, merge_strategy="overwrite")
@@ -888,18 +847,7 @@ class TestImportSearches:
         import_path = tmp_path / "import.json"
         self._create_import_file(
             import_path,
-            [
-                {
-                    "name": "imported",
-                    "query": "query",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                }
-            ],
+            [_make_search_data(name="imported", query="query")],
         )
 
         saved_searches.import_searches(import_path)
