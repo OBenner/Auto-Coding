@@ -55,6 +55,20 @@
     "successRate": "Taux de réussite (%)"
   },
 
+  "specSummary": {
+    "title": "Apercu des spécifications",
+    "specCount": "{{count}} spécification",
+    "specCount_other": "{{count}} spécifications",
+    "loading": "Chargement des données de spécification...",
+    "noData": "Aucune spécification suivie",
+    "noDataHint": "Les statistiques de spécification apparaîtront ici après la création de votre première spécification",
+    "totalSpecs": "Total des spécifications",
+    "completed": "Terminées",
+    "inProgress": "En cours",
+    "avgQAIterations": "Itérations QA moyennes",
+    "workflowBreakdown": "Répartition par type de workflow"
+  },
+
   "qa": {
     "totalReviews": "Revues totales",
     "approved": "Approuvé",
