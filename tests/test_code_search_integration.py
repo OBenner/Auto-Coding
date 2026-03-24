@@ -379,6 +379,8 @@ class TestEnhancedCodeSearchStatusAndExport:
         without mutating the original results dict."""
         fm = FileMatch(
             path=Path("apps/backend/auth.py"),
+            service="search",
+            reason="keyword match",
             relevance_score=0.85,
             matching_lines=[(10, "def login")],
         )
