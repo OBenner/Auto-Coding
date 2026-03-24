@@ -21,6 +21,10 @@ This allows:
 3. Branches persist until explicitly merged
 4. Clear 1:1:1 mapping: spec → worktree → branch
 5. Per-project worktrees in multi-codebase workspaces
+
+Architecture Decision:
+    See ADR-003 (docs/architecture/adr/ADR-003-worktree-isolation.md) for rationale
+    on using Git worktree isolation for autonomous build sessions.
 """
 
 import asyncio
