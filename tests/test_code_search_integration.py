@@ -411,7 +411,7 @@ class TestEnhancedCodeSearchStatusAndExport:
             with open(output_path, encoding="utf-8") as f:
                 exported_data = json.load(f)
 
-            assert exported_data["files"][0]["path"] == "apps/backend/auth.py"
+            assert exported_data["files"][0]["path"] == str(Path("apps/backend/auth.py"))
             assert exported_data["files"][0]["relevance_score"] == 0.85
             assert exported_data["purpose"][0]["entity_name"] == "login"
         finally:
