@@ -163,17 +163,20 @@ def _display_unified_results(results: dict) -> None:
         print()
 
         for idx, match in enumerate(files[:10], 1):
-            file_path = getattr(match, "file_path", "Unknown")
-            score = getattr(match, "score", 0.0)
-            matches = getattr(match, "matches", [])
+            file_path = getattr(match, "path", "Unknown")
+            score = getattr(match, "relevance_score", 0.0)
+            matching_lines = getattr(match, "matching_lines", [])
 
             print(f"  {idx}. {file_path}")
             print(f"     Score: {score:.2f}")
 
-            if matches:
-                match_summary = ", ".join(matches[:3])
-                if len(matches) > 3:
-                    match_summary += f" (+{len(matches) - 3} more)"
+            if matching_lines:
+                formatted = [
+                    f"line {lineno}: {text}" for lineno, text in matching_lines[:3]
+                ]
+                match_summary = ", ".join(formatted)
+                if len(matching_lines) > 3:
+                    match_summary += f" (+{len(matching_lines) - 3} more)"
                 print(f"     Matches: {match_summary}")
 
             print()
@@ -408,7 +411,9 @@ def show_search_status(project_dir: Path) -> None:
     print_header("Saved Searches")
     print()
 
-    saved_searches = SavedSearches()
+    saved_searches = SavedSearches(
+        storage_path=project_dir / ".auto-claude" / "saved_searches.json"
+    )
     print_key_value("Total", str(saved_searches.count))
 
     if saved_searches.count > 0:
@@ -466,7 +471,9 @@ async def manage_saved_searches(
     print_banner()
     print(f"\n{icon(Icons.SEARCH)} Saved Searches\n")
 
-    saved_searches = SavedSearches()
+    saved_searches = SavedSearches(
+        storage_path=project_dir / ".auto-claude" / "saved_searches.json"
+    )
 
     if action == "list":
         print_header("All Saved Searches")
@@ -533,11 +540,19 @@ async def manage_saved_searches(
         print(muted(f"Type: {search.search_type}"))
         print()
 
+        # Translate saved search types to runtime types
+        type_mapping = {
+            "semantic": "unified",
+            "keyword": "unified",
+            "hybrid": "unified",
+        }
+        runtime_type = type_mapping.get(search.search_type, search.search_type)
+
         # Run the search with saved parameters
         await search_code(
             project_dir=project_dir,
             query=search.query,
-            search_type=search.search_type,
+            search_type=runtime_type,
         )
 
     elif action == "delete":

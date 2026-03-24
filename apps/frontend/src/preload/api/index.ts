@@ -89,7 +89,6 @@ export const createElectronAPI = (): ElectronAPI => {
     ...createPluginAPI(),
     ...createContextViewerAPI(),
     ...createFeedbackAPI(),
-    ...createSecurityAPI(),
     ...searchAPI,
     ...securityAPI,
     security: securityAPI,

@@ -516,6 +516,19 @@ class EnhancedCodeSearch:
 
         try:
             if format == "json":
+                # Convert FileMatch objects to plain dicts for JSON serialization
+                if isinstance(results, dict) and "files" in results:
+                    results["files"] = [
+                        {
+                            "path": str(fm.path),
+                            "relevance_score": fm.relevance_score,
+                            "matching_lines": fm.matching_lines,
+                        }
+                        if hasattr(fm, "path")
+                        else fm
+                        for fm in results["files"]
+                    ]
+
                 # Export as JSON
                 with open(output_file, "w", encoding="utf-8") as f:
                     json.dump(results, f, indent=2, default=str)

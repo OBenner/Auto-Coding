@@ -11,9 +11,11 @@ The Code Search feature provides semantic and structural code search powered by 
 | `patterns` | Discover design patterns and architectural patterns |
 | `callers` | Find functions/methods that call a given target |
 | `callees` | Find functions/methods called by a given source |
-| `semantic` | Graphiti-powered semantic similarity search |
-| `keyword` | Traditional text-based keyword search |
-| `hybrid` | Combined semantic + keyword search |
+| `semantic` | Saved-search metadata only (maps to `unified` at runtime) |
+| `keyword` | Saved-search metadata only (maps to `unified` at runtime) |
+| `hybrid` | Saved-search metadata only (maps to `unified` at runtime) |
+
+> **Note:** `semantic`, `keyword`, and `hybrid` are not valid `--search-type` CLI values. They exist only as saved-search metadata and are automatically translated to `unified` when a saved search is loaded.
 
 ## CLI Usage
 
@@ -40,21 +42,21 @@ Searches can be saved, reloaded, and shared via export/import.
 ```bash
 # Save a search
 python cli/main.py --project-dir /path/to/project \
-  --saved-searches save --search-name "auth-search" \
-  --search "authentication" --search-type unified
+  --saved-searches save --saved-name "auth-search" \
+  --saved-query "authentication" --saved-type unified
 
 # List saved searches
 python cli/main.py --project-dir /path/to/project --saved-searches list
 
 # Load and re-run a saved search
 python cli/main.py --project-dir /path/to/project \
-  --saved-searches load --search-name "auth-search"
+  --saved-searches load --saved-name "auth-search"
 
 # Export/Import
 python cli/main.py --project-dir /path/to/project \
-  --saved-searches export --search-export-file searches.json
+  --saved-searches export --search-export searches.json
 python cli/main.py --project-dir /path/to/project \
-  --saved-searches import --search-import-file searches.json
+  --saved-searches import --search-import searches.json
 ```
 
 ## Architecture

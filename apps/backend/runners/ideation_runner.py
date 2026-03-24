@@ -64,9 +64,6 @@ def main():
 
     import argparse
 
-    # Validate platform-specific dependencies before running
-    validate_platform_dependencies()
-
     parser = argparse.ArgumentParser(
         description="AI-powered ideation generation",
         formatter_class=argparse.RawDescriptionHelpFormatter,

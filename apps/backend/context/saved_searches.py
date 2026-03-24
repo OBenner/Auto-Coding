@@ -358,10 +358,27 @@ class SavedSearches:
             if "searches" not in data:
                 raise ValueError("Invalid import file: missing 'searches' key")
 
+            valid_types = (
+                "unified",
+                "purpose",
+                "patterns",
+                "callers",
+                "callees",
+                "semantic",
+                "keyword",
+                "hybrid",
+            )
+
             imported_count = 0
             for search_data in data["searches"]:
                 search = SavedSearch.from_dict(search_data)
                 name = search.name
+
+                if search.search_type not in valid_types:
+                    logger.warning(
+                        f"Skipping search '{search.name}' with invalid type: {search.search_type}"
+                    )
+                    continue
 
                 # Handle name conflicts
                 if name in self._searches:
