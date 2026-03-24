@@ -1025,7 +1025,9 @@ async def run_autonomous_agent(
                     num_results=3,  # Get top 3 most relevant failure patterns
                 )
                 if failure_patterns:
-                    print_status("Failure pattern context loaded for recovery", "success")
+                    print_status(
+                        "Failure pattern context loaded for recovery", "success"
+                    )
 
             # Generate focused, minimal prompt for this subtask
             prompt = generate_subtask_prompt(
