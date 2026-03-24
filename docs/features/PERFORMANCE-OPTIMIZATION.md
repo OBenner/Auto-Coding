@@ -113,4 +113,4 @@ pytest tests/performance/ -m benchmark -v
 | `test_async_performance.py` | Async task creation, concurrency, event loop overhead, uvloop integration |
 | `test_backend_performance.py` | Backend operation benchmarks |
 | `test_frontend_performance.py` | Bundle size constraints, Zustand optimization patterns, build artifacts |
-| `test_memory_performance.py` | Memory monitor performance, pressure detection, leak detection |
+| `test_memory_performance.py` | Memory monitor performance, pressure detection, cleanup verification, data structure efficiency |

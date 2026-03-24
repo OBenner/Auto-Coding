@@ -23,7 +23,7 @@ import type { GitHubIssue } from "../../shared/types";
 import type { GitHubIssuesProps } from "./github-issues/types";
 
 export function GitHubIssues({ onOpenSettings, onNavigateToTask }: GitHubIssuesProps) {
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore(useShallow((state) => state.projects));
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const tasks = useTaskStore(useShallow((state) => state.tasks));

@@ -78,6 +78,7 @@ class TestUvloopIntegration:
             # The import should not fail even if uvloop is not available
             try:
                 import importlib
+
                 import core.client as client_module
 
                 importlib.reload(client_module)
@@ -94,7 +95,14 @@ class TestUvloopIntegration:
         try:
             # Check that the client module has the uvloop initialization code
             from pathlib import Path
-            client_file = Path(__file__).parent.parent.parent / "apps" / "backend" / "core" / "client.py"
+
+            client_file = (
+                Path(__file__).parent.parent.parent
+                / "apps"
+                / "backend"
+                / "core"
+                / "client.py"
+            )
 
             if client_file.exists():
                 content = client_file.read_text()
@@ -114,6 +122,7 @@ class TestAsyncPerformance:
     @pytest.mark.benchmark
     def test_async_task_creation_performance(self):
         """Benchmark async task creation and execution time."""
+
         async def trivial_task(x: int) -> int:
             return x * 2
 
@@ -134,6 +143,7 @@ class TestAsyncPerformance:
     @pytest.mark.benchmark
     def test_concurrent_coroutine_performance(self):
         """Benchmark concurrent coroutine execution."""
+
         async def io_bound_task(duration: float) -> float:
             """Simulate an I/O bound async operation."""
             await asyncio.sleep(duration)
@@ -152,11 +162,14 @@ class TestAsyncPerformance:
         assert count == 100
         # With proper async, these should run concurrently, not sequentially
         # 100 * 0.001s = 0.1s sequential, but should be much faster concurrent
-        assert elapsed < 0.5, f"100 concurrent tasks took {elapsed:.3f}s (expected < 0.5s)"
+        assert elapsed < 0.5, (
+            f"100 concurrent tasks took {elapsed:.3f}s (expected < 0.5s)"
+        )
 
     @pytest.mark.benchmark
     def test_asyncio_gather_performance(self):
         """Benchmark asyncio.gather() with many tasks."""
+
         async def simple_task(n: int) -> int:
             return n
 
@@ -177,6 +190,7 @@ class TestAsyncPerformance:
     @pytest.mark.benchmark
     def test_event_loop_overhead(self):
         """Measure event loop overhead for minimal coroutines."""
+
         async def noop():
             pass
 
@@ -200,6 +214,7 @@ class TestAsyncMemoryEfficiency:
     @pytest.mark.benchmark
     def test_many_small_tasks_memory(self):
         """Test that creating many small tasks doesn't leak memory."""
+
         async def small_task():
             await asyncio.sleep(0)
             return 1
@@ -219,6 +234,7 @@ class TestAsyncMemoryEfficiency:
     @pytest.mark.benchmark
     def test_async_generator_memory(self):
         """Test async generators don't hold references unnecessarily."""
+
         async def async_generator(n: int):
             """Yield values asynchronously."""
             for i in range(n):
@@ -241,6 +257,7 @@ class TestAsyncRegressionDetection:
 
     def test_await_loop_performance_baseline(self):
         """Establish baseline for await loop performance."""
+
         async def count_awaits(n: int):
             total = 0
             for i in range(n):
@@ -261,6 +278,7 @@ class TestAsyncRegressionDetection:
     @pytest.mark.benchmark
     def test_queue_operations_performance(self):
         """Benchmark asyncio.Queue operations."""
+
         async def producer(queue: asyncio.Queue, n: int):
             for i in range(n):
                 await queue.put(i)
@@ -296,6 +314,7 @@ class TestAsyncRegressionDetection:
 
     def test_lock_contention_performance(self):
         """Test async lock performance under contention."""
+
         async def worker(lock: asyncio.Lock, worker_id: int):
             async with lock:
                 # Simulate some work
@@ -337,6 +356,7 @@ class TestWithConfigurableThresholds:
 
     def test_task_creation_with_threshold(self, performance_thresholds):
         """Test task creation against configurable threshold."""
+
         async def trivial_task(x: int) -> int:
             return x * 2
 
@@ -350,4 +370,6 @@ class TestWithConfigurableThresholds:
         elapsed = asyncio.run(run_tasks())
 
         threshold = performance_thresholds["task_creation_max_seconds"]
-        assert elapsed < threshold, f"Tasks exceeded threshold: {elapsed:.3f}s > {threshold}s"
+        assert elapsed < threshold, (
+            f"Tasks exceeded threshold: {elapsed:.3f}s > {threshold}s"
+        )

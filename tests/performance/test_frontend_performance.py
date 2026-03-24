@@ -52,7 +52,7 @@ class TestBundleSizeConstraints:
 
         if stats_file.exists():
             # Verify stats file has content
-            content = stats_file.read_text()
+            content = stats_file.read_text(encoding="utf-8")
             assert len(content) > 1000, "Stats file appears empty or truncated"
 
     @pytest.mark.benchmark
@@ -93,11 +93,14 @@ class TestVirtualizationPatterns:
         package_json = frontend_dir / "package.json"
 
         if package_json.exists():
-            content = json.loads(package_json.read_text())
+            content = json.loads(package_json.read_text(encoding="utf-8"))
             deps = content.get("dependencies", {})
             dev_deps = content.get("devDependencies", {})
 
-            has_virtual = "@tanstack/react-virtual" in deps or "@tanstack/react-virtual" in dev_deps
+            has_virtual = (
+                "@tanstack/react-virtual" in deps
+                or "@tanstack/react-virtual" in dev_deps
+            )
             assert has_virtual, "@tanstack/react-virtual should be installed"
 
     @pytest.mark.benchmark
@@ -113,7 +116,7 @@ class TestVirtualizationPatterns:
 
             virtualizer_found = False
             for file_path in tsx_files + ts_files:
-                content = file_path.read_text()
+                content = file_path.read_text(encoding="utf-8")
                 if "useVirtualizer" in content or "useVirtual" in content:
                     virtualizer_found = True
                     break
@@ -138,7 +141,7 @@ class TestZustandOptimizationPatterns:
 
             shallow_found = False
             for file_path in tsx_files:
-                content = file_path.read_text()
+                content = file_path.read_text(encoding="utf-8")
                 if "useShallow" in content:
                     shallow_found = True
                     break
@@ -170,7 +173,7 @@ class TestBuildPerformance:
         vite_config = frontend_dir / "electron.vite.config.ts"
 
         if vite_config.exists():
-            content = vite_config.read_text()
+            content = vite_config.read_text(encoding="utf-8")
             # Verify it's a valid config
             assert "defineConfig" in content or "export default" in content
 
@@ -181,9 +184,11 @@ class TestBuildPerformance:
         vite_config = frontend_dir / "electron.vite.config.ts"
 
         if vite_config.exists():
-            content = vite_config.read_text()
+            content = vite_config.read_text(encoding="utf-8")
             # Check for visualizer plugin
-            has_visualizer = "visualizer" in content.lower() or "rollup-plugin-visualizer" in content
+            has_visualizer = (
+                "visualizer" in content.lower() or "rollup-plugin-visualizer" in content
+            )
             # This is a check for the pattern, implementation may vary
             assert True
 
@@ -202,7 +207,7 @@ class TestFrontendAssetOptimization:
             if js_files:
                 # Check a file to see if it's minified (no excessive whitespace)
                 sample_file = js_files[0]
-                content = sample_file.read_text()
+                content = sample_file.read_text(encoding="utf-8")
 
                 # Simple heuristic: minified files have higher code density
                 # (fewer newlines relative to file size)
@@ -240,7 +245,7 @@ class TestPerformanceMonitoringSetup:
         package_json = frontend_dir / "package.json"
 
         if package_json.exists():
-            content = json.loads(package_json.read_text())
+            content = json.loads(package_json.read_text(encoding="utf-8"))
             deps = content.get("dependencies", {})
 
             # React DevTools works automatically with React
@@ -281,7 +286,9 @@ class TestWithFrontendConfig:
         if main_bundle.exists():
             size_mb = main_bundle.stat().st_size / (1024 * 1024)
             threshold = frontend_config["max_main_bundle_size_mb"]
-            assert size_mb < threshold, f"Bundle exceeded: {size_mb:.1f}MB > {threshold}MB"
+            assert size_mb < threshold, (
+                f"Bundle exceeded: {size_mb:.1f}MB > {threshold}MB"
+            )
 
 
 class TestCodeSplittingPatterns:
@@ -300,7 +307,7 @@ class TestCodeSplittingPatterns:
 
             lazy_import_found = False
             for file_path in tsx_files + ts_files:
-                content = file_path.read_text()
+                content = file_path.read_text(encoding="utf-8")
                 # Check for dynamic import() patterns
                 if "import(" in content and "(" in content:
                     lazy_import_found = True
@@ -322,7 +329,7 @@ class TestCodeSplittingPatterns:
 
             lazy_route_found = False
             for file_path in tsx_files:
-                content = file_path.read_text()
+                content = file_path.read_text(encoding="utf-8")
                 if "lazy" in content and "import" in content:
                     lazy_route_found = True
                     break
@@ -345,7 +352,7 @@ class TestReactPerformancePatterns:
 
             memo_found = False
             for file_path in tsx_files:
-                content = file_path.read_text()
+                content = file_path.read_text(encoding="utf-8")
                 if "React.memo" in content or "memo(" in content:
                     memo_found = True
                     break
@@ -364,7 +371,7 @@ class TestReactPerformancePatterns:
 
             hooks_found = False
             for file_path in tsx_files:
-                content = file_path.read_text()
+                content = file_path.read_text(encoding="utf-8")
                 if "useMemo" in content or "useCallback" in content:
                     hooks_found = True
                     break
@@ -388,7 +395,7 @@ class TestPerformanceRegressions:
 
             console_logs = []
             for file_path in tsx_files:
-                content = file_path.read_text()
+                content = file_path.read_text(encoding="utf-8")
                 if "console.log" in content or "console.warn" in content:
                     console_logs.append(str(file_path))
 

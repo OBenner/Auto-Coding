@@ -49,7 +49,9 @@ class TestMemoryMonitorPerformance:
 
         # Mock process to avoid psutil dependency in tests
         mock_process = MagicMock()
-        mock_process.memory_info.return_value = MagicMock(rss=1024 * 1024 * 500)  # 500MB
+        mock_process.memory_info.return_value = MagicMock(
+            rss=1024 * 1024 * 500
+        )  # 500MB
         monitor._process = mock_process
 
         start = time.perf_counter()
@@ -83,7 +85,9 @@ class TestMemoryMonitorPerformance:
         monitor = MemoryMonitor(max_memory_mb=1000.0, warning_threshold=0.8)
 
         mock_process = MagicMock()
-        mock_process.memory_info.return_value = MagicMock(rss=1024 * 1024 * 850)  # 850MB
+        mock_process.memory_info.return_value = MagicMock(
+            rss=1024 * 1024 * 850
+        )  # 850MB
         monitor._process = mock_process
 
         start = time.perf_counter()
@@ -125,7 +129,9 @@ class TestMemoryPressureLevels:
         monitor = MemoryMonitor(max_memory_mb=1000.0)
 
         mock_process = MagicMock()
-        mock_process.memory_info.return_value = MagicMock(rss=1024 * 1024 * 1100)  # 110%
+        mock_process.memory_info.return_value = MagicMock(
+            rss=1024 * 1024 * 1100
+        )  # 110%
         monitor._process = mock_process
 
         assert monitor.check_pressure() == MemoryPressure.CRITICAL
@@ -143,7 +149,9 @@ class TestMemoryPressureLevels:
 
         start = time.perf_counter()
         for usage_mb in usage_levels:
-            mock_process.memory_info.return_value = MagicMock(rss=usage_mb * 1024 * 1024)
+            mock_process.memory_info.return_value = MagicMock(
+                rss=usage_mb * 1024 * 1024
+            )
             _ = monitor.check_pressure()
         elapsed = time.perf_counter() - start
 
@@ -191,27 +199,22 @@ class TestSessionBoundsPerformance:
         assert elapsed < 0.5, f"4000 reason generations took {elapsed:.3f}s"
 
 
-class TestMemoryLeakDetection:
-    """Tests to help detect memory leaks."""
+class TestMemoryCleanup:
+    """Tests to verify memory cleanup completes without error."""
 
     @pytest.mark.benchmark
-    def test_list_growth_and_cleanup(self):
-        """Test that large lists are cleaned up properly."""
-        # Create large lists repeatedly
+    def test_list_cleanup_completes(self):
+        """Test that large list allocation and cleanup completes without OOM."""
         for _ in range(100):
             large_list = [i for i in range(10000)]
-            # List should be garbage collected
             del large_list
 
-        # Force garbage collection
         gc.collect()
-
-        # If this test doesn't crash or OOM, memory cleanup is working
         assert True
 
     @pytest.mark.benchmark
-    def test_dict_growth_and_cleanup(self):
-        """Test that large dicts are cleaned up properly."""
+    def test_dict_cleanup_completes(self):
+        """Test that large dict allocation and cleanup completes without OOM."""
         for _ in range(100):
             large_dict = {f"key_{i}": f"value_{i}" * 100 for i in range(1000)}
             del large_dict
@@ -226,31 +229,26 @@ class TestMemoryLeakDetection:
         for i in range(1000):
             large_string += f"chunk_{i}" * 100
 
-        # At this point we have a large string
         size_before = len(large_string)
 
-        # Clear it
         large_string = ""
         gc.collect()
 
-        # Verify it was cleared
         assert len(large_string) == 0
 
     @pytest.mark.benchmark
     def test_object_reference_cleanup(self):
         """Test that object references are cleaned up."""
+
         class TestObject:
             def __init__(self, data):
                 self.data = data
 
-        # Create many objects
         objects = [TestObject(f"data_{i}" * 100) for i in range(10000)]
 
-        # Clear references
         objects.clear()
         gc.collect()
 
-        # Verify cleanup
         assert len(objects) == 0
 
 
@@ -286,13 +284,7 @@ class TestLargeDataStructureHandling:
     @pytest.mark.benchmark
     def test_nested_structure_access_performance(self):
         """Test access to nested data structures."""
-        nested = {
-            "level1": {
-                "level2": {
-                    "level3": {"data": [i for i in range(1000)]}
-                }
-            }
-        }
+        nested = {"level1": {"level2": {"level3": {"data": [i for i in range(1000)]}}}}
 
         start = time.perf_counter()
         for _ in range(1000):
@@ -348,30 +340,24 @@ class TestMemoryEfficientPatterns:
 
     @pytest.mark.benchmark
     def test_generator_vs_list_memory_efficiency(self):
-        """Test that generators use less memory than lists."""
-        # List approach
-        start = time.perf_counter()
+        """Test that generator objects use less memory than materialized lists."""
         list_result = [i * 2 for i in range(100000)]
-        list_time = time.perf_counter() - start
         list_memory = sys.getsizeof(list_result)
 
-        # Generator approach - consume to list for comparison
-        start = time.perf_counter()
-        gen_result_list = list(i * 2 for i in range(100000))
-        gen_time = time.perf_counter() - start
-        gen_memory = sys.getsizeof(gen_result_list)
+        gen_obj = (i * 2 for i in range(100000))
+        gen_memory = sys.getsizeof(gen_obj)
 
-        # Both produce same result
-        assert sum(list_result) == sum(gen_result_list)
+        # Generator object should be much smaller than a materialized list
+        assert gen_memory < list_memory, (
+            f"Generator ({gen_memory}B) should use less memory than list ({list_memory}B)"
+        )
 
-        # Both approaches complete successfully
-        # The generator expression, when converted to list, has similar size
-        # but the key benefit is lazy evaluation when not materialized
-        assert True
+        # Consume generator to verify correctness
+        assert sum(list_result) == sum(gen_obj)
 
     @pytest.mark.benchmark
     def test_string_concatenation_efficiency(self):
-        """Test efficient string concatenation patterns."""
+        """Test that join is faster than repeated concatenation."""
         # Inefficient: repeated concatenation
         start = time.perf_counter()
         result1 = ""
@@ -386,13 +372,15 @@ class TestMemoryEfficientPatterns:
         join_time = time.perf_counter() - start
 
         assert result1 == result2
-        # Join should be faster or similar
-        # This mainly verifies both work without OOM
+        # Both must complete; join is typically faster at scale
+        # Use a generous multiplier to avoid flaky tests on slow CI
+        assert join_time < concat_time * 5, (
+            f"join ({join_time:.4f}s) unexpectedly slower than concat ({concat_time:.4f}s)"
+        )
 
     @pytest.mark.benchmark
     def test_set_vs_list_lookup_performance(self):
-        """Test set vs list lookup performance."""
-        # Create test data
+        """Test that set lookup (O(1)) is faster than list lookup (O(n))."""
         items = list(range(10000))
         test_set = set(items)
         test_list = items
@@ -409,9 +397,10 @@ class TestMemoryEfficientPatterns:
             _ = i in test_set
         set_time = time.perf_counter() - start
 
-        # Set lookup should be significantly faster
-        # But we just verify both complete
-        assert True
+        # Set lookup should be significantly faster for large collections
+        assert set_time < list_time, (
+            f"Set lookup ({set_time:.4f}s) should be faster than list lookup ({list_time:.4f}s)"
+        )
 
 
 @pytest.fixture

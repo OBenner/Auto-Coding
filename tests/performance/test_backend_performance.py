@@ -39,7 +39,10 @@ class TestFileIOPerformance:
                     "id": f"spec-{i}",
                     "name": f"Test Spec {i}",
                     "phases": [
-                        {"id": f"phase-{j}", "tasks": [{"id": f"task-{k}"} for k in range(10)]}
+                        {
+                            "id": f"phase-{j}",
+                            "tasks": [{"id": f"task-{k}"} for k in range(10)],
+                        }
                         for j in range(5)
                     ],
                 }
@@ -168,10 +171,9 @@ class TestSecurityValidationPerformance:
         try:
             from security.tool_input_validator import SecurityValidator
         except ImportError:
-            pytest.skip("SecurityValidator not available")
+            pytest.skip("SecurityValidator not available - TODO: implement benchmark")
 
-        # Test that the validator can be imported and used
-        # The actual implementation depends on the security module structure
+        # TODO: Implement actual benchmark logic once SecurityValidator API is stable
         assert True
 
     @pytest.mark.benchmark
@@ -180,10 +182,9 @@ class TestSecurityValidationPerformance:
         try:
             from context.project_analyzer import ProjectStack
         except ImportError:
-            # Module may be in different location
-            pytest.skip("ProjectStack not available")
+            pytest.skip("ProjectStack not available - TODO: implement benchmark")
 
-        # Test placeholder - actual implementation depends on module structure
+        # TODO: Implement actual benchmark logic once ProjectStack API is stable
         assert True
 
     @pytest.mark.benchmark
@@ -192,9 +193,9 @@ class TestSecurityValidationPerformance:
         try:
             from security.tool_input_validator import SecurityValidator
         except ImportError:
-            pytest.skip("SecurityValidator not available")
+            pytest.skip("SecurityValidator not available - TODO: implement benchmark")
 
-        # Test placeholder - actual implementation depends on module structure
+        # TODO: Implement actual benchmark logic once SecurityValidator API is stable
         assert True
 
 
@@ -398,5 +399,9 @@ class TestWithPerformanceConfig:
         max_write = performance_config["max_json_write_time"]
         max_read = performance_config["max_json_read_time"]
 
-        assert write_elapsed < max_write, f"Write exceeded: {write_elapsed:.3f}s > {max_write}s"
-        assert read_elapsed < max_read, f"Read exceeded: {read_elapsed:.3f}s > {max_read}s"
+        assert write_elapsed < max_write, (
+            f"Write exceeded: {write_elapsed:.3f}s > {max_write}s"
+        )
+        assert read_elapsed < max_read, (
+            f"Read exceeded: {read_elapsed:.3f}s > {max_read}s"
+        )

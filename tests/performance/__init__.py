@@ -13,7 +13,7 @@ Test modules:
 Run performance tests with:
     pytest tests/performance/
     pytest tests/performance/ -v -m "not slow"
-    pytest tests/performance/ --benchmark-only
+    pytest tests/performance/ -m benchmark
 
 Performance tests are designed to detect regressions, not just verify functionality.
 They establish baseline metrics and fail when significant degradations occur.

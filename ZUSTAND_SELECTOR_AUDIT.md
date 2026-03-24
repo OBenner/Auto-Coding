@@ -9,6 +9,7 @@ This document audits all Zustand stores in the frontend for selectors that retur
 In Zustand v4+, when a selector returns an object or array, the component will re-render on **every state change** even if the selected values haven't actually changed. This is because Zustand uses reference equality to determine if a re-render is needed.
 
 **Example anti-pattern:**
+
 ```typescript
 // ❌ CAUSES UNNECESSARY RE-RENDERS
 const { items, status } = useStore((state) => ({
@@ -18,6 +19,7 @@ const { items, status } = useStore((state) => ({
 ```
 
 **Solution:**
+
 ```typescript
 // ✅ USE useShallow() FOR OBJECT/ARRAY SELECTORS
 import { useShallow } from 'zustand/react/shallow';
@@ -275,7 +277,9 @@ const { items, status } = useStore(
 
 ### 15. `task-store.ts`
 
-**Optimization Needed: YES** (PARTIALLY READ - FILE TOO LARGE)
+**Optimization Needed: YES**
+
+**Note:** File size prevented complete audit. Only initial state declarations and primary selectors were reviewed. Additional selectors may exist throughout the file that also require optimization.
 
 | Selector | Returns | Location | Priority |
 |----------|---------|----------|----------|
@@ -418,7 +422,9 @@ const { items, status } = useStore((state) => ({
   items: state.items,
   status: state.status
 }));
+```
 
+```typescript
 // ✅ AFTER (prevents unnecessary re-renders)
 import { useShallow } from 'zustand/react/shallow';
 
@@ -433,7 +439,7 @@ const { items, status } = useStore(
 ## Next Steps
 
 1. **Phase 1 (CRITICAL):** Optimize `task-store.ts` and `terminal-store.ts` - highest update frequency
-2. **Phase 2 (HIGH):** Optimize remaining HIGH priority stores
+2. **Phase 2 (HIGH):** Optimize remaining HIGH-priority stores
 3. **Phase 3 (MEDIUM/LOW):** Complete remaining optimizations
 
 **Estimated Impact:**

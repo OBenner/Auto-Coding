@@ -33,21 +33,21 @@ This document summarizes all performance improvements, optimizations, and findin
 - Slower concurrent operations on Linux/macOS
 
 **After:**
-- uvloop installed and configured (`uvloop>=0.19.0`)
-- Platform-aware installation (Linux/macOS only)
+- uvloop installed and configured (`uvloop>=0.22.1`)
+- Platform-aware installation (Linux/macOS only, uses `is_windows()` from platform module)
 - 2-4x performance improvement for async I/O operations
 
 **Files Modified:**
-- `apps/backend/requirements.txt` - Added `uvloop>=0.19.0; sys_platform != "win32"`
-- `apps/backend/core/client.py` - Added uvloop initialization with Windows compatibility
+- `apps/backend/requirements.txt` - Added `uvloop>=0.22.1; sys_platform != "win32"`
+- `apps/backend/core/client.py` - Added uvloop initialization with platform abstraction
 
 **Code Implementation:**
 ```python
 # apps/backend/core/client.py
-import sys
+from core.platform import is_windows
 
 # uvloop is Linux/macOS only - skip on Windows
-if sys.platform != "win32":
+if not is_windows():
     try:
         import uvloop
         uvloop.install()
