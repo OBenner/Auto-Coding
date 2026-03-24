@@ -21,6 +21,10 @@ New code should prefer importing from the graphiti package:
 
 For detailed documentation on the memory system architecture and usage,
 see graphiti/graphiti.py.
+
+Architecture Decision:
+    See ADR-002 (docs/architecture/adr/ADR-002-graphiti-memory.md) for rationale
+    on adopting Graphiti as the persistent memory system.
 """
 
 from pathlib import Path

@@ -560,6 +560,14 @@ const browserMockAPI: ElectronAPI = {
     exportAll: async () => ({ success: true, data: '' }),
   },
 
+  // Agent Inspector API (thought process transparency)
+  agentInspector: {
+    getThoughts: async () => ({ success: true, data: [] }),
+    getToolCalls: async () => ({ success: true, data: [] }),
+    getInspectorData: async () => ({ success: true, data: { thoughts: [], toolCalls: [] } }),
+    exportSession: async () => ({ success: true, data: '' }),
+  },
+
   // Scheduler API (build scheduling and queue management)
   scheduler: {
     scheduleBuild: async () => ({ success: true, data: { buildId: 'mock-build-1' } }),

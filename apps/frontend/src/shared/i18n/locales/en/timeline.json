@@ -1,0 +1,75 @@
+{
+  "title": "Build Timeline",
+  "description": "Interactive timeline visualization of agent phases and subtasks",
+  "loading": "Loading timeline...",
+  "error": "Failed to load timeline",
+  "noData": "No timeline data available",
+  "zoomIn": "Zoom in",
+  "zoomOut": "Zoom out",
+  "reset": "Reset zoom",
+  "dragHint": "Drag to pan",
+  "phaseAriaLabel": "{{name}} phase",
+  "subtaskAriaLabel": "{{description}} - {{status}}",
+  "controls": {
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "reset": "Reset zoom",
+    "panUp": "Pan up",
+    "panDown": "Pan down",
+    "panLeft": "Pan left",
+    "panRight": "Pan right",
+    "zoomControls": "Zoom controls",
+    "panControls": "Pan controls",
+    "export": "Export",
+    "exporting": "Exporting..."
+  },
+  "phases": {
+    "planning": "Planning",
+    "coding": "Coding",
+    "qa_review": "Reviewing",
+    "qa_fixing": "Fixing",
+    "unknown": "Unknown"
+  },
+  "status": {
+    "pending": "Pending",
+    "in_progress": "In Progress",
+    "completed": "Completed",
+    "failed": "Failed"
+  },
+  "time": {
+    "estimated": "Est.",
+    "actual": "Actual",
+    "remaining": "Remaining"
+  },
+  "subtask": {
+    "expand": "Expand subtask details",
+    "collapse": "Collapse subtask details",
+    "files": "Files",
+    "noFiles": "No files associated",
+    "dependencies": "Dependencies"
+  },
+  "detail": {
+    "description": "Description",
+    "filesToCreate": "Files to Create",
+    "filesToModify": "Files to Modify",
+    "verification": "Verification",
+    "notes": "Notes"
+  },
+  "errors": {
+    "loadPlan": "Failed to load implementation plan",
+    "loadData": "Failed to load timeline data"
+  },
+  "export": {
+    "button": "Export as image",
+    "buttonLabel": "Export as PNG",
+    "downloading": "Exporting...",
+    "copying": "Copying to clipboard...",
+    "success": "Timeline exported successfully",
+    "copySuccess": "Timeline copied to clipboard",
+    "error": "Failed to export timeline",
+    "copyError": "Failed to copy to clipboard",
+    "defaultFilename": "timeline",
+    "clipboardFilename": "clipboard",
+    "copyToClipboard": "Copy to clipboard"
+  }
+}
