@@ -1,0 +1,197 @@
+{
+  "feature": "Multi-Codebase Orchestration CLI",
+  "workflow_type": "feature",
+  "workflow_rationale": "New CLI commands layered on top of existing workspace_config/workspace_manager infrastructure",
+  "phases": [
+    {
+      "id": "phase-1-multi-repo-commands",
+      "name": "Multi-Repo CLI Commands",
+      "type": "implementation",
+      "description": "Create CLI module exposing workspace create/list/add-project and dependency graph commands",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create multi_repo_commands.py with workspace create, list, add-project handlers",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/cli/multi_repo_commands.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/cli/workspace_commands.py",
+            "apps/backend/core/workspace_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.cli.multi_repo_commands import handle_workspace_create_command; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Create dependency_graph.py analysis module for multi-repo graph visualization",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/analysis/dependency_graph.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/core/workspace_config.py",
+            "apps/backend/context/dependency_analyzer.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.analysis.dependency_graph import MultiRepoDependencyGraph; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-cli-integration",
+      "name": "CLI Integration",
+      "type": "implementation",
+      "description": "Add --workspace-create, --workspace-list, --workspace-add-project, --dep-graph args to main.py",
+      "depends_on": [
+        "phase-1-multi-repo-commands"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Add multi-repo CLI arguments and dispatch to main.py",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/cli/main.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/cli/main.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python apps/backend/run.py --help 2>&1 | grep -c workspace",
+            "expected": "2"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-tests",
+      "name": "Tests",
+      "type": "implementation",
+      "description": "Unit tests for multi_repo_commands and dependency_graph modules",
+      "depends_on": [
+        "phase-2-cli-integration"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create tests/test_multi_repo_commands.py for CLI command handlers",
+          "service": "backend",
+          "files_to_create": [
+            "tests/test_multi_repo_commands.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/cli/workspace_commands.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "apps/backend/.venv/bin/pytest tests/test_multi_repo_commands.py -v 2>&1 | tail -5",
+            "expected": "passed"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Create tests/test_dependency_graph.py for dependency graph analysis",
+          "service": "backend",
+          "files_to_create": [
+            "tests/test_dependency_graph.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/analysis/dependency_scanner.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "apps/backend/.venv/bin/pytest tests/test_dependency_graph.py -v 2>&1 | tail -5",
+            "expected": "passed"
+          },
+          "status": "completed"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 3,
+    "total_subtasks": 5,
+    "services_involved": [
+      "backend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1
+    },
+    "startup_command": "source apps/backend/.venv/bin/activate && python apps/backend/run.py --help"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "phase-3-tests",
+    "test_types_required": [
+      "unit"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "CLI exposes --workspace-create, --workspace-list, --workspace-add-project flags",
+      "Dependency graph analysis shows topological build order",
+      "All new tests pass"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests",
+        "command": "apps/backend/.venv/bin/pytest tests/test_multi_repo_commands.py tests/test_dependency_graph.py -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Medium risk: new backend CLI module, no existing code modified except main.py imports"
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "apps/backend/.venv/bin/pytest tests/test_multi_repo_commands.py tests/test_dependency_graph.py -v"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": false
+    },
+    "e2e_tests": {
+      "required": false
+    },
+    "browser_verification": {
+      "required": false
+    },
+    "database_verification": {
+      "required": false
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-03-20T12:37:19.724Z"
+}
