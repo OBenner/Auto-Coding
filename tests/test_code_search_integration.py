@@ -138,6 +138,20 @@ def mock_graphiti_memory():
 
 
 @pytest.fixture
+def searcher_no_graphiti(temp_project_dir):
+    """Create an EnhancedCodeSearch instance without Graphiti."""
+    return EnhancedCodeSearch(project_dir=temp_project_dir, graphiti_memory=None)
+
+
+@pytest.fixture
+def searcher_with_graphiti(temp_project_dir, mock_graphiti_memory):
+    """Create an EnhancedCodeSearch instance with mock Graphiti."""
+    return EnhancedCodeSearch(
+        project_dir=temp_project_dir, graphiti_memory=mock_graphiti_memory
+    )
+
+
+@pytest.fixture
 def temp_searches_file():
     """Create a temporary saved searches file."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -231,13 +245,9 @@ class TestEnhancedCodeSearchGraphitiMethods:
     """Tests for Graphiti-dependent search methods."""
 
     @pytest.mark.asyncio
-    async def test_search_by_purpose(self, temp_project_dir, mock_graphiti_memory):
+    async def test_search_by_purpose(self, searcher_with_graphiti):
         """Test searching code by purpose using Graphiti."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=mock_graphiti_memory
-        )
-
-        results = await searcher.search_by_purpose("user authentication")
+        results = await searcher_with_graphiti.search_by_purpose("user authentication")
 
         assert len(results) == 1
         assert results[0]["entity_name"] == "authenticate_user"
@@ -245,24 +255,18 @@ class TestEnhancedCodeSearchGraphitiMethods:
         assert results[0]["score"] == pytest.approx(0.95)
 
     @pytest.mark.asyncio
-    async def test_search_by_purpose_without_graphiti(self, temp_project_dir):
+    async def test_search_by_purpose_without_graphiti(self, searcher_no_graphiti):
         """Test search_by_purpose returns empty without Graphiti."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=None
-        )
-
-        results = await searcher.search_by_purpose("user authentication")
+        results = await searcher_no_graphiti.search_by_purpose("user authentication")
 
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_find_similar_patterns(self, temp_project_dir, mock_graphiti_memory):
+    async def test_find_similar_patterns(self, searcher_with_graphiti):
         """Test finding similar code patterns."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=mock_graphiti_memory
+        results = await searcher_with_graphiti.find_similar_patterns(
+            "security patterns"
         )
-
-        results = await searcher.find_similar_patterns("security patterns")
 
         assert len(results) == 2  # 1 pattern + 1 gotcha
         # Results should be sorted by score
@@ -275,50 +279,36 @@ class TestEnhancedCodeSearchGraphitiMethods:
         assert "type" in pattern
 
     @pytest.mark.asyncio
-    async def test_find_similar_patterns_without_graphiti(self, temp_project_dir):
+    async def test_find_similar_patterns_without_graphiti(self, searcher_no_graphiti):
         """Test find_similar_patterns returns empty without Graphiti."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=None
-        )
-
-        results = await searcher.find_similar_patterns("security patterns")
+        results = await searcher_no_graphiti.find_similar_patterns("security patterns")
 
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_find_callers(self, temp_project_dir, mock_graphiti_memory):
+    async def test_find_callers(self, searcher_with_graphiti):
         """Test finding function callers."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=mock_graphiti_memory
-        )
-
-        callers = await searcher.find_callers("authenticate_user")
+        callers = await searcher_with_graphiti.find_callers("authenticate_user")
 
         assert len(callers) == 1
         assert callers[0]["caller"] == "process_request"
         assert callers[0]["file_path"] == "apps/backend/api.py"
 
     @pytest.mark.asyncio
-    async def test_find_callees(self, temp_project_dir, mock_graphiti_memory):
+    async def test_find_callees(self, searcher_with_graphiti):
         """Test finding function callees."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=mock_graphiti_memory
-        )
-
-        callees = await searcher.find_callees("authenticate_user")
+        callees = await searcher_with_graphiti.find_callees("authenticate_user")
 
         assert len(callees) == 1
         assert callees[0]["callee"] == "validate_token"
         assert callees[0]["file_path"] == "apps/backend/services/auth.py"
 
     @pytest.mark.asyncio
-    async def test_search_unified(self, temp_project_dir, mock_graphiti_memory):
+    async def test_search_unified(self, searcher_with_graphiti):
         """Test unified search across all methods."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=mock_graphiti_memory
+        results = await searcher_with_graphiti.search_unified(
+            "authentication", limit=10
         )
-
-        results = await searcher.search_unified("authentication", limit=10)
 
         assert "files" in results
         assert "purpose" in results
@@ -335,13 +325,9 @@ class TestEnhancedCodeSearchGraphitiMethods:
 class TestEnhancedCodeSearchStatusAndExport:
     """Tests for status and export functionality."""
 
-    def test_get_status_with_graphiti(self, temp_project_dir, mock_graphiti_memory):
+    def test_get_status_with_graphiti(self, searcher_with_graphiti):
         """Test getting status with Graphiti enabled."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=mock_graphiti_memory
-        )
-
-        status = searcher.get_status()
+        status = searcher_with_graphiti.get_status()
 
         assert "project_dir" in status
         assert "graphiti_enabled" in status
@@ -350,25 +336,17 @@ class TestEnhancedCodeSearchStatusAndExport:
         assert status["code_relationships_available"] is True
         assert status["graphiti_search_available"] is True
 
-    def test_get_status_without_graphiti(self, temp_project_dir):
+    def test_get_status_without_graphiti(self, searcher_no_graphiti):
         """Test getting status without Graphiti."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=None
-        )
-
-        status = searcher.get_status()
+        status = searcher_no_graphiti.get_status()
 
         assert status["graphiti_enabled"] is False
         assert status["graphiti_initialized"] is False
         assert status["code_relationships_available"] is False
         assert status["graphiti_search_available"] is False
 
-    def test_export_search_results_json(self, temp_project_dir):
+    def test_export_search_results_json(self, searcher_no_graphiti):
         """Test exporting search results to JSON."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=None
-        )
-
         results = [
             {
                 "entity_name": "test_func",
@@ -377,11 +355,10 @@ class TestEnhancedCodeSearchStatusAndExport:
             }
         ]
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            output_path = Path(f.name)
+        output_path = _create_temp_json_path()
 
         try:
-            exported_path = searcher.export_search_results(
+            exported_path = searcher_no_graphiti.export_search_results(
                 results=results, output_path=output_path, format="json"
             )
 
@@ -395,12 +372,8 @@ class TestEnhancedCodeSearchStatusAndExport:
         finally:
             output_path.unlink(missing_ok=True)
 
-    def test_export_search_results_csv(self, temp_project_dir):
+    def test_export_search_results_csv(self, searcher_no_graphiti):
         """Test exporting search results to CSV."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=None
-        )
-
         results = [
             {
                 "entity_name": "test_func",
@@ -418,7 +391,7 @@ class TestEnhancedCodeSearchStatusAndExport:
             output_path = Path(f.name)
 
         try:
-            exported_path = searcher.export_search_results(
+            exported_path = searcher_no_graphiti.export_search_results(
                 results=results, output_path=output_path, format="csv"
             )
 
@@ -433,23 +406,17 @@ class TestEnhancedCodeSearchStatusAndExport:
         finally:
             output_path.unlink(missing_ok=True)
 
-    def test_export_search_results_unsupported_format(self, temp_project_dir):
+    def test_export_search_results_unsupported_format(self, searcher_no_graphiti):
         """Test export fails with unsupported format."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=None
-        )
-
         with pytest.raises(ValueError, match="Unsupported format"):
-            searcher.export_search_results(results=[{"test": "data"}], format="xml")
+            searcher_no_graphiti.export_search_results(
+                results=[{"test": "data"}], format="xml"
+            )
 
-    def test_export_search_results_empty_data(self, temp_project_dir):
+    def test_export_search_results_empty_data(self, searcher_no_graphiti):
         """Test export fails with empty data."""
-        searcher = EnhancedCodeSearch(
-            project_dir=temp_project_dir, graphiti_memory=None
-        )
-
         with pytest.raises(ValueError, match="Cannot export empty"):
-            searcher.export_search_results(results=[])
+            searcher_no_graphiti.export_search_results(results=[])
 
 
 # =============================================================================
@@ -737,6 +704,56 @@ class TestSavedSearchesCRUD:
         assert updated is None
 
 
+def _make_search_entry(
+    name: str,
+    query: str,
+    search_type: str = "semantic",
+) -> dict:
+    """Build a single saved-search dict suitable for import data."""
+    return {
+        "name": name,
+        "query": query,
+        "search_type": search_type,
+        "filters": {},
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "last_used": None,
+        "description": None,
+        "tags": [],
+    }
+
+
+def _make_import_data(searches: list[dict]) -> dict:
+    """Build an import-file payload wrapping a list of search entries."""
+    return {
+        "exported_at": "2024-01-01T00:00:00+00:00",
+        "count": len(searches),
+        "searches": searches,
+    }
+
+
+def _write_import_file(data: dict) -> Path:
+    """Write *data* as JSON to a temporary file and return its path.
+
+    The caller is responsible for deleting the file when done (use
+    ``path.unlink(missing_ok=True)`` in a ``finally`` block).
+    """
+    with tempfile.NamedTemporaryFile(
+        suffix=".json", mode="w", delete=False, encoding="utf-8"
+    ) as f:
+        import_path = Path(f.name)
+        json.dump(data, f)
+    return import_path
+
+
+def _create_temp_json_path() -> Path:
+    """Create a temporary .json file path (empty) for export tests.
+
+    The caller is responsible for deleting the file when done.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        return Path(f.name)
+
+
 class TestSavedSearchesImportExport:
     """Tests for import/export functionality."""
 
@@ -747,8 +764,7 @@ class TestSavedSearchesImportExport:
         searches.save_search(name="s1", query="test1", search_type="semantic")
         searches.save_search(name="s2", query="test2", search_type="keyword")
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            export_path = Path(f.name)
+        export_path = _create_temp_json_path()
 
         try:
             result_path = searches.export_searches(output_path=export_path)
@@ -775,8 +791,7 @@ class TestSavedSearchesImportExport:
             name="k1", query="test2", search_type="keyword", tags=["database"]
         )
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            export_path = Path(f.name)
+        export_path = _create_temp_json_path()
 
         try:
             # Export only semantic searches
@@ -790,39 +805,14 @@ class TestSavedSearchesImportExport:
 
     def test_import_searches(self, temp_searches_file):
         """Test importing searches from JSON."""
-        # Create import file
-        import_data = {
-            "exported_at": "2024-01-01T00:00:00+00:00",
-            "count": 2,
-            "searches": [
-                {
-                    "name": "imported1",
-                    "query": "test1",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": "2024-01-01T00:00:00+00:00",
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                },
-                {
-                    "name": "imported2",
-                    "query": "test2",
-                    "search_type": "keyword",
-                    "filters": {},
-                    "created_at": "2024-01-01T00:00:00+00:00",
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                },
-            ],
-        }
+        import_data = _make_import_data(
+            [
+                _make_search_entry("imported1", "test1", "semantic"),
+                _make_search_entry("imported2", "test2", "keyword"),
+            ]
+        )
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", mode="w", delete=False, encoding="utf-8"
-        ) as f:
-            import_path = Path(f.name)
-            json.dump(import_data, f)
+        import_path = _write_import_file(import_data)
 
         try:
             searches = SavedSearches(storage_path=temp_searches_file)
@@ -843,28 +833,12 @@ class TestSavedSearchesImportExport:
         searches = SavedSearches(storage_path=temp_searches_file)
         searches.save_search(name="existing", query="old", search_type="semantic")
 
-        import_data = {
-            "exported_at": "2024-01-01T00:00:00+00:00",
-            "count": 1,
-            "searches": [
-                {
-                    "name": "existing",  # Conflict
-                    "query": "new",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": "2024-01-01T00:00:00+00:00",
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                }
-            ],
-        }
-
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", mode="w", delete=False, encoding="utf-8"
-        ) as f:
-            import_path = Path(f.name)
-            json.dump(import_data, f)
+        import_data = _make_import_data(
+            [
+                _make_search_entry("existing", "new"),
+            ]
+        )
+        import_path = _write_import_file(import_data)
 
         try:
             with pytest.raises(ValueError, match="already exists"):
@@ -877,28 +851,12 @@ class TestSavedSearchesImportExport:
         searches = SavedSearches(storage_path=temp_searches_file)
         searches.save_search(name="existing", query="old", search_type="semantic")
 
-        import_data = {
-            "exported_at": "2024-01-01T00:00:00+00:00",
-            "count": 1,
-            "searches": [
-                {
-                    "name": "existing",  # Conflict
-                    "query": "new",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": "2024-01-01T00:00:00+00:00",
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                }
-            ],
-        }
-
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", mode="w", delete=False, encoding="utf-8"
-        ) as f:
-            import_path = Path(f.name)
-            json.dump(import_data, f)
+        import_data = _make_import_data(
+            [
+                _make_search_entry("existing", "new"),
+            ]
+        )
+        import_path = _write_import_file(import_data)
 
         try:
             count = searches.import_searches(import_path, merge_strategy="skip")
@@ -913,28 +871,12 @@ class TestSavedSearchesImportExport:
         searches = SavedSearches(storage_path=temp_searches_file)
         searches.save_search(name="existing", query="old", search_type="semantic")
 
-        import_data = {
-            "exported_at": "2024-01-01T00:00:00+00:00",
-            "count": 1,
-            "searches": [
-                {
-                    "name": "existing",  # Conflict
-                    "query": "new",
-                    "search_type": "semantic",
-                    "filters": {},
-                    "created_at": "2024-01-01T00:00:00+00:00",
-                    "last_used": None,
-                    "description": None,
-                    "tags": [],
-                }
-            ],
-        }
-
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", mode="w", delete=False, encoding="utf-8"
-        ) as f:
-            import_path = Path(f.name)
-            json.dump(import_data, f)
+        import_data = _make_import_data(
+            [
+                _make_search_entry("existing", "new"),
+            ]
+        )
+        import_path = _write_import_file(import_data)
 
         try:
             count = searches.import_searches(import_path, merge_strategy="overwrite")
@@ -948,11 +890,7 @@ class TestSavedSearchesImportExport:
         """Test import with invalid merge strategy raises error."""
         searches = SavedSearches(storage_path=temp_searches_file)
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            import_path = Path(f.name)
-            import_path.write_text(
-                '{"exported_at": "2024-01-01", "count": 0, "searches": []}'
-            )
+        import_path = _write_import_file(_make_import_data([]))
 
         try:
             with pytest.raises(ValueError, match="Invalid merge_strategy"):

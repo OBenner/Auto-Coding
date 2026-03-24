@@ -78,6 +78,109 @@ export interface SavedSearch {
 }
 
 /**
+ * Helper: Look up a project by ID, returning an error result if not found.
+ */
+function getProjectOrFail(projectId: string): { success: false; error: string } | { success: true; project: { path: string } } {
+  const project = projectStore.getProject(projectId);
+  if (!project) {
+    return { success: false, error: 'Project not found' };
+  }
+  return { success: true, project };
+}
+
+/**
+ * Helper: Extract a human-readable message from an unknown error value.
+ */
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+/**
+ * Helper: Run a Python CLI script inside a project and return its stdout.
+ */
+function runPythonCli(projectPath: string, args: string[], errorPrefix: string): Promise<string> {
+  const { spawn } = require('child_process');
+
+  const pythonCmd = path.join(projectPath, 'apps', 'backend', '.venv', 'bin', 'python');
+  const searchScript = path.join(projectPath, 'apps', 'backend', 'cli', 'search_commands.py');
+
+  return new Promise<string>((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+
+    const proc = spawn(pythonCmd, [searchScript, ...args], {
+      cwd: projectPath,
+      env: process.env,
+    });
+
+    proc.stdout?.on('data', (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr?.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', (code: number) => {
+      if (code === 0) {
+        resolve(stdout);
+      } else {
+        reject(new Error(`${errorPrefix} failed with code ${code}: ${stderr}`));
+      }
+    });
+
+    proc.on('error', (err: Error) => {
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Helper: Get the path to the saved searches JSON file for a project.
+ */
+function savedSearchesPath(projectPath: string): string {
+  return path.join(projectPath, '.auto-claude', 'saved_searches.json');
+}
+
+/**
+ * Helper: Load the saved searches data from disk, returning a default if the file doesn't exist.
+ */
+async function loadSavedSearchesData(filePath: string): Promise<{ searches: SavedSearch[] }> {
+  if (!(await fileExists(filePath))) {
+    return { searches: [] };
+  }
+  const content = await fsPromises.readFile(filePath, 'utf-8');
+  return JSON.parse(content);
+}
+
+/**
+ * Helper: Write saved searches data to disk, creating parent directories if needed.
+ */
+async function writeSavedSearchesData(filePath: string, data: { searches: SavedSearch[] }): Promise<void> {
+  await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+  await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+/**
+ * Helper: Wrap an IPC handler body with project lookup and error handling.
+ */
+async function withProject<T>(
+  projectId: string,
+  fallbackError: string,
+  handler: (project: { path: string }) => Promise<IPCResult<T>>,
+): Promise<IPCResult<T>> {
+  const lookup = getProjectOrFail(projectId);
+  if (!lookup.success) {
+    return lookup;
+  }
+  try {
+    return await handler(lookup.project);
+  } catch (error) {
+    return { success: false, error: errorMessage(error, fallbackError) };
+  }
+}
+
+/**
  * Register search handlers
  */
 export function registerSearchHandlers(
@@ -96,21 +199,8 @@ export function registerSearchHandlers(
         entity_type?: string;
       } = {}
     ): Promise<IPCResult<UnifiedSearchResult | PurposeSearchResult[] | PatternSearchResult[] | CallerCalleeResult[]>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        // Import Python subprocess handling
-        const { spawn } = require('child_process');
-
-        // Build CLI command
-        const pythonCmd = path.join(project.path, 'apps', 'backend', '.venv', 'bin', 'python');
-        const searchScript = path.join(project.path, 'apps', 'backend', 'cli', 'search_commands.py');
-
+      return withProject(projectId, 'Search failed', async (project) => {
         const args = [
-          searchScript,
           '--project-dir', project.path,
           '--search', query,
           '--search-type', searchType,
@@ -124,50 +214,11 @@ export function registerSearchHandlers(
           args.push('--search-entity-type', options.entity_type);
         }
 
-        // Execute search command
-        const result = await new Promise<string>((resolve, reject) => {
-          let stdout = '';
-          let stderr = '';
-
-          const proc = spawn(pythonCmd, args, {
-            cwd: project.path,
-            env: process.env,
-          });
-
-          proc.stdout?.on('data', (data: Buffer) => {
-            stdout += data.toString();
-          });
-
-          proc.stderr?.on('data', (data: Buffer) => {
-            stderr += data.toString();
-          });
-
-          proc.on('close', (code: number) => {
-            if (code === 0) {
-              resolve(stdout);
-            } else {
-              reject(new Error(`Search failed with code ${code}: ${stderr}`));
-            }
-          });
-
-          proc.on('error', (err: Error) => {
-            reject(err);
-          });
-        });
-
-        // Parse result (assuming JSON output)
+        const result = await runPythonCli(project.path, args, 'Search');
         const searchResults = JSON.parse(result);
 
-        return {
-          success: true,
-          data: searchResults,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Search failed',
-        };
-      }
+        return { success: true, data: searchResults };
+      });
     }
   );
 
@@ -175,63 +226,15 @@ export function registerSearchHandlers(
   ipcMain.handle(
     IPC_CHANNELS.SEARCH_GET_STATUS,
     async (_, projectId: string): Promise<IPCResult<SearchStatus>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const { spawn } = require('child_process');
-
-        const pythonCmd = path.join(project.path, 'apps', 'backend', '.venv', 'bin', 'python');
-        const searchScript = path.join(project.path, 'apps', 'backend', 'cli', 'search_commands.py');
-
-        const result = await new Promise<string>((resolve, reject) => {
-          let stdout = '';
-          let stderr = '';
-
-          const proc = spawn(pythonCmd, [
-            searchScript,
-            '--project-dir', project.path,
-            '--search-status',
-          ], {
-            cwd: project.path,
-            env: process.env,
-          });
-
-          proc.stdout?.on('data', (data: Buffer) => {
-            stdout += data.toString();
-          });
-
-          proc.stderr?.on('data', (data: Buffer) => {
-            stderr += data.toString();
-          });
-
-          proc.on('close', (code: number) => {
-            if (code === 0) {
-              resolve(stdout);
-            } else {
-              reject(new Error(`Status check failed with code ${code}: ${stderr}`));
-            }
-          });
-
-          proc.on('error', (err: Error) => {
-            reject(err);
-          });
-        });
-
+      return withProject(projectId, 'Failed to get search status', async (project) => {
+        const result = await runPythonCli(
+          project.path,
+          ['--project-dir', project.path, '--search-status'],
+          'Status check',
+        );
         const status = JSON.parse(result);
-
-        return {
-          success: true,
-          data: status,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get search status',
-        };
-      }
+        return { success: true, data: status };
+      });
     }
   );
 
@@ -239,31 +242,11 @@ export function registerSearchHandlers(
   ipcMain.handle(
     IPC_CHANNELS.SEARCH_SAVED_LIST,
     async (_, projectId: string): Promise<IPCResult<SavedSearch[]>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const savedSearchesPath = path.join(project.path, '.auto-claude', 'saved_searches.json');
-
-        if (!(await fileExists(savedSearchesPath))) {
-          return { success: true, data: [] };
-        }
-
-        const content = await fsPromises.readFile(savedSearchesPath, 'utf-8');
-        const data = JSON.parse(content);
-
-        return {
-          success: true,
-          data: data.searches || [],
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to list saved searches',
-        };
-      }
+      return withProject(projectId, 'Failed to list saved searches', async (project) => {
+        const filePath = savedSearchesPath(project.path);
+        const data = await loadSavedSearchesData(filePath);
+        return { success: true, data: data.searches };
+      });
     }
   );
 
@@ -271,37 +254,22 @@ export function registerSearchHandlers(
   ipcMain.handle(
     IPC_CHANNELS.SEARCH_SAVED_GET,
     async (_, projectId: string, name: string): Promise<IPCResult<SavedSearch>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
+      return withProject(projectId, 'Failed to get saved search', async (project) => {
+        const filePath = savedSearchesPath(project.path);
 
-      try {
-        const savedSearchesPath = path.join(project.path, '.auto-claude', 'saved_searches.json');
-
-        if (!(await fileExists(savedSearchesPath))) {
+        if (!(await fileExists(filePath))) {
           return { success: false, error: 'Saved search not found' };
         }
 
-        const content = await fsPromises.readFile(savedSearchesPath, 'utf-8');
-        const data = JSON.parse(content);
-
-        const search = (data.searches || []).find((s: SavedSearch) => s.name === name);
+        const data = await loadSavedSearchesData(filePath);
+        const search = data.searches.find((s) => s.name === name);
 
         if (!search) {
           return { success: false, error: 'Saved search not found' };
         }
 
-        return {
-          success: true,
-          data: search,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to get saved search',
-        };
-      }
+        return { success: true, data: search };
+      });
     }
   );
 
@@ -313,21 +281,9 @@ export function registerSearchHandlers(
       projectId: string,
       search: Omit<SavedSearch, 'created_at' | 'last_used'>
     ): Promise<IPCResult<SavedSearch>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const savedSearchesPath = path.join(project.path, '.auto-claude', 'saved_searches.json');
-
-        // Load existing searches
-        let data: { searches: SavedSearch[] } = { searches: [] };
-
-        if (await fileExists(savedSearchesPath)) {
-          const content = await fsPromises.readFile(savedSearchesPath, 'utf-8');
-          data = JSON.parse(content);
-        }
+      return withProject(projectId, 'Failed to save search', async (project) => {
+        const filePath = savedSearchesPath(project.path);
+        const data = await loadSavedSearchesData(filePath);
 
         // Check if search already exists
         const existingIndex = data.searches.findIndex((s) => s.name === search.name);
@@ -345,20 +301,10 @@ export function registerSearchHandlers(
           data.searches.push(newSearch);
         }
 
-        // Save searches
-        await fsPromises.mkdir(path.dirname(savedSearchesPath), { recursive: true });
-        await fsPromises.writeFile(savedSearchesPath, JSON.stringify(data, null, 2), 'utf-8');
+        await writeSavedSearchesData(filePath, data);
 
-        return {
-          success: true,
-          data: newSearch,
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to save search',
-        };
-      }
+        return { success: true, data: newSearch };
+      });
     }
   );
 
@@ -371,22 +317,15 @@ export function registerSearchHandlers(
       name: string,
       updates: Partial<Omit<SavedSearch, 'name' | 'created_at'>>
     ): Promise<IPCResult<SavedSearch>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
+      return withProject(projectId, 'Failed to update saved search', async (project) => {
+        const filePath = savedSearchesPath(project.path);
 
-      try {
-        const savedSearchesPath = path.join(project.path, '.auto-claude', 'saved_searches.json');
-
-        if (!(await fileExists(savedSearchesPath))) {
+        if (!(await fileExists(filePath))) {
           return { success: false, error: 'Saved search not found' };
         }
 
-        const content = await fsPromises.readFile(savedSearchesPath, 'utf-8');
-        const data = JSON.parse(content);
-
-        const index = data.searches.findIndex((s: SavedSearch) => s.name === name);
+        const data = await loadSavedSearchesData(filePath);
+        const index = data.searches.findIndex((s) => s.name === name);
 
         if (index < 0) {
           return { success: false, error: 'Saved search not found' };
@@ -399,18 +338,10 @@ export function registerSearchHandlers(
           last_used: new Date().toISOString(),
         };
 
-        await fsPromises.writeFile(savedSearchesPath, JSON.stringify(data, null, 2), 'utf-8');
+        await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
 
-        return {
-          success: true,
-          data: data.searches[index],
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to update saved search',
-        };
-      }
+        return { success: true, data: data.searches[index] };
+      });
     }
   );
 
@@ -418,22 +349,15 @@ export function registerSearchHandlers(
   ipcMain.handle(
     IPC_CHANNELS.SEARCH_SAVED_DELETE,
     async (_, projectId: string, name: string): Promise<IPCResult<void>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
+      return withProject(projectId, 'Failed to delete saved search', async (project) => {
+        const filePath = savedSearchesPath(project.path);
 
-      try {
-        const savedSearchesPath = path.join(project.path, '.auto-claude', 'saved_searches.json');
-
-        if (!(await fileExists(savedSearchesPath))) {
+        if (!(await fileExists(filePath))) {
           return { success: false, error: 'Saved search not found' };
         }
 
-        const content = await fsPromises.readFile(savedSearchesPath, 'utf-8');
-        const data = JSON.parse(content);
-
-        const index = data.searches.findIndex((s: SavedSearch) => s.name === name);
+        const data = await loadSavedSearchesData(filePath);
+        const index = data.searches.findIndex((s) => s.name === name);
 
         if (index < 0) {
           return { success: false, error: 'Saved search not found' };
@@ -441,15 +365,10 @@ export function registerSearchHandlers(
 
         data.searches.splice(index, 1);
 
-        await fsPromises.writeFile(savedSearchesPath, JSON.stringify(data, null, 2), 'utf-8');
+        await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
 
         return { success: true };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to delete saved search',
-        };
-      }
+      });
     }
   );
 
@@ -461,20 +380,14 @@ export function registerSearchHandlers(
       projectId: string,
       outputPath?: string
     ): Promise<IPCResult<{ path: string; count: number }>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
+      return withProject(projectId, 'Failed to export saved searches', async (project) => {
+        const filePath = savedSearchesPath(project.path);
 
-      try {
-        const savedSearchesPath = path.join(project.path, '.auto-claude', 'saved_searches.json');
-
-        if (!(await fileExists(savedSearchesPath))) {
+        if (!(await fileExists(filePath))) {
           return { success: false, error: 'No saved searches to export' };
         }
 
-        const content = await fsPromises.readFile(savedSearchesPath, 'utf-8');
-        const data = JSON.parse(content);
+        const data = await loadSavedSearchesData(filePath);
 
         const exportPath = outputPath || path.join(project.path, 'saved_searches_export.json');
 
@@ -491,12 +404,7 @@ export function registerSearchHandlers(
             count: data.searches.length,
           },
         };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to export saved searches',
-        };
-      }
+      });
     }
   );
 
@@ -509,13 +417,8 @@ export function registerSearchHandlers(
       inputPath: string,
       mergeStrategy: 'error' | 'skip' | 'overwrite' = 'error'
     ): Promise<IPCResult<{ count: number }>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const savedSearchesPath = path.join(project.path, '.auto-claude', 'saved_searches.json');
+      return withProject(projectId, 'Failed to import saved searches', async (project) => {
+        const filePath = savedSearchesPath(project.path);
 
         // Load import file
         const importContent = await fsPromises.readFile(inputPath, 'utf-8');
@@ -526,12 +429,7 @@ export function registerSearchHandlers(
         }
 
         // Load existing searches
-        let data: { searches: SavedSearch[] } = { searches: [] };
-
-        if (await fileExists(savedSearchesPath)) {
-          const content = await fsPromises.readFile(savedSearchesPath, 'utf-8');
-          data = JSON.parse(content);
-        }
+        const data = await loadSavedSearchesData(filePath);
 
         let importedCount = 0;
 
@@ -556,20 +454,10 @@ export function registerSearchHandlers(
           importedCount++;
         }
 
-        // Save searches
-        await fsPromises.mkdir(path.dirname(savedSearchesPath), { recursive: true });
-        await fsPromises.writeFile(savedSearchesPath, JSON.stringify(data, null, 2), 'utf-8');
+        await writeSavedSearchesData(filePath, data);
 
-        return {
-          success: true,
-          data: { count: importedCount },
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to import saved searches',
-        };
-      }
+        return { success: true, data: { count: importedCount } };
+      });
     }
   );
 }

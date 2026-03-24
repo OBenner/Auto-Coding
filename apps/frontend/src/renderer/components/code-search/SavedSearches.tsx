@@ -77,6 +77,145 @@ function formatDate(isoString: string | null): string {
   return date.toLocaleDateString();
 }
 
+interface SearchFormData {
+  name: string;
+  query: string;
+  search_type: string;
+  description: string;
+  tags: string[];
+  filters: Record<string, unknown>;
+}
+
+interface SearchFormDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  idPrefix: string;
+  formData: SearchFormData;
+  setFormData: React.Dispatch<React.SetStateAction<SearchFormData>>;
+  tagInput: string;
+  setTagInput: (value: string) => void;
+  onAddTag: () => void;
+  onRemoveTag: (tag: string) => void;
+  onSubmit: () => void;
+  submitLabel: string;
+}
+
+function SearchFormDialog({
+  open,
+  onOpenChange,
+  title,
+  description: desc,
+  idPrefix,
+  formData,
+  setFormData,
+  tagInput,
+  setTagInput,
+  onAddTag,
+  onRemoveTag,
+  onSubmit,
+  submitLabel,
+}: SearchFormDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{desc}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}name`}>Name *</Label>
+            <Input
+              id={`${idPrefix}name`}
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="My search query"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}query`}>Query *</Label>
+            <Input
+              id={`${idPrefix}query`}
+              value={formData.query}
+              onChange={(e) => setFormData(prev => ({ ...prev, query: e.target.value }))}
+              placeholder="function authentication"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}search_type`}>Search Type</Label>
+            <select
+              id={`${idPrefix}search_type`}
+              value={formData.search_type}
+              onChange={(e) => setFormData(prev => ({ ...prev, search_type: e.target.value }))}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background"
+            >
+              <option value="unified">Unified</option>
+              <option value="purpose">Purpose</option>
+              <option value="patterns">Patterns</option>
+              <option value="callers">Callers</option>
+              <option value="callees">Callees</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}description`}>Description</Label>
+            <Input
+              id={`${idPrefix}description`}
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Find authentication-related functions"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${idPrefix}tags`}>Tags</Label>
+            <div className="flex gap-2">
+              <Input
+                id={`${idPrefix}tags`}
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onAddTag();
+                  }
+                }}
+                placeholder="Add a tag"
+              />
+              <Button type="button" variant="outline" onClick={onAddTag}>
+                Add
+              </Button>
+            </div>
+            {formData.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {formData.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="text-xs">
+                    {tag}
+                    <button
+                      onClick={() => onRemoveTag(tag)}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={onSubmit} disabled={!formData.name || !formData.query}>
+            {submitLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -91,13 +230,13 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
   const [selectedSearch, setSelectedSearch] = useState<SavedSearch | null>(null);
 
   // Form states
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<SearchFormData>({
     name: '',
     query: '',
     search_type: 'unified',
     description: '',
-    tags: [] as string[],
-    filters: {} as Record<string, unknown>,
+    tags: [],
+    filters: {},
   });
   const [tagInput, setTagInput] = useState('');
 
@@ -502,202 +641,38 @@ export function SavedSearches({ projectId, onRunSearch }: SavedSearchesProps) {
       </ScrollArea>
 
       {/* Create Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Create Saved Search</DialogTitle>
-            <DialogDescription>
-              Save a search query to quickly access it later
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="My search query"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="query">Query *</Label>
-              <Input
-                id="query"
-                value={formData.query}
-                onChange={(e) => setFormData(prev => ({ ...prev, query: e.target.value }))}
-                placeholder="function authentication"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="search_type">Search Type</Label>
-              <select
-                id="search_type"
-                value={formData.search_type}
-                onChange={(e) => setFormData(prev => ({ ...prev, search_type: e.target.value }))}
-                className="w-full px-3 py-2 rounded-md border border-input bg-background"
-              >
-                <option value="unified">Unified</option>
-                <option value="purpose">Purpose</option>
-                <option value="patterns">Patterns</option>
-                <option value="callers">Callers</option>
-                <option value="callees">Callees</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Find authentication-related functions"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tags">Tags</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="tags"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                  placeholder="Add a tag"
-                />
-                <Button type="button" variant="outline" onClick={handleAddTag}>
-                  Add
-                </Button>
-              </div>
-              {formData.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {formData.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      {tag}
-                      <button
-                        onClick={() => handleRemoveTag(tag)}
-                        className="ml-1 hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => handleSaveSearch(false)} disabled={!formData.name || !formData.query}>
-              Save Search
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SearchFormDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        title="Create Saved Search"
+        description="Save a search query to quickly access it later"
+        idPrefix=""
+        formData={formData}
+        setFormData={setFormData}
+        tagInput={tagInput}
+        setTagInput={setTagInput}
+        onAddTag={handleAddTag}
+        onRemoveTag={handleRemoveTag}
+        onSubmit={() => handleSaveSearch(false)}
+        submitLabel="Save Search"
+      />
 
       {/* Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Saved Search</DialogTitle>
-            <DialogDescription>
-              Update your saved search query
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Name *</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="My search query"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-query">Query *</Label>
-              <Input
-                id="edit-query"
-                value={formData.query}
-                onChange={(e) => setFormData(prev => ({ ...prev, query: e.target.value }))}
-                placeholder="function authentication"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-search_type">Search Type</Label>
-              <select
-                id="edit-search_type"
-                value={formData.search_type}
-                onChange={(e) => setFormData(prev => ({ ...prev, search_type: e.target.value }))}
-                className="w-full px-3 py-2 rounded-md border border-input bg-background"
-              >
-                <option value="unified">Unified</option>
-                <option value="purpose">Purpose</option>
-                <option value="patterns">Patterns</option>
-                <option value="callers">Callers</option>
-                <option value="callees">Callees</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Input
-                id="edit-description"
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Find authentication-related functions"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-tags">Tags</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="edit-tags"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                  placeholder="Add a tag"
-                />
-                <Button type="button" variant="outline" onClick={handleAddTag}>
-                  Add
-                </Button>
-              </div>
-              {formData.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {formData.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      {tag}
-                      <button
-                        onClick={() => handleRemoveTag(tag)}
-                        className="ml-1 hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => handleSaveSearch(true)} disabled={!formData.name || !formData.query}>
-              Update Search
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SearchFormDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        title="Edit Saved Search"
+        description="Update your saved search query"
+        idPrefix="edit-"
+        formData={formData}
+        setFormData={setFormData}
+        tagInput={tagInput}
+        setTagInput={setTagInput}
+        onAddTag={handleAddTag}
+        onRemoveTag={handleRemoveTag}
+        onSubmit={() => handleSaveSearch(true)}
+        submitLabel="Update Search"
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
