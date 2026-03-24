@@ -37,7 +37,7 @@ The inspector automatically analyzes agent behavior for suspicious patterns:
 | **Repeated Failures** | Multiple consecutive tool failures | Agent may be unable to recover from errors |
 | **Rapid Execution** | Tools executed faster than expected | May indicate no-op or trivial tool calls |
 | **Same Error** | Identical errors appearing repeatedly | Underlying issue not being addressed |
-| **No Progress** | High tool call count with low completion | Agent may be spinning without making progress |
+| **No Progress** | No activity for 5+ minutes (live sessions only) | Agent may be stuck or waiting; archived sessions are excluded |
 
 Each detected pattern shows:
 - Severity level (warning, error, info)
@@ -131,6 +131,12 @@ Each log entry contains:
 1. Click the **Export** button in the inspector toolbar
 2. Choose JSON (for data analysis) or Markdown (for sharing)
 3. Select the session and download
+
+## Error Handling
+
+- **Initial load failure** — Full-screen error state with retry button
+- **Refresh failure with stale data** — Banner at the top indicates the refresh failed while keeping stale data visible, with a retry option
+- **View-specific empty states** — Each view (Timeline, Thoughts, Tool Calls) shows contextual messaging when no entries exist
 
 ## Internationalization
 

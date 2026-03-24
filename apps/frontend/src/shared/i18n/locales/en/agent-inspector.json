@@ -111,8 +111,13 @@
       "suggestion": "Agent appears to be stuck or waiting. Consider checking the task status."
     }
   },
+  "noToolCallsYet": "No Tool Calls Yet",
+  "noToolCallsDescription": "Tool calls will appear here as the agent executes actions.",
+  "noEntriesYet": "No Entries Yet",
+  "noEntriesDescription": "Timeline entries will appear here as the agent works.",
   "errors": {
     "loadFailed": "Failed to load agent thoughts",
-    "exportFailed": "Failed to export session log"
+    "exportFailed": "Failed to export session log",
+    "refreshFailed": "Refresh failed: {{error}}"
   }
 }

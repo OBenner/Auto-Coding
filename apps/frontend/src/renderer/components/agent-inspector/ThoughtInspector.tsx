@@ -66,15 +66,18 @@ export function ThoughtInspector({
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Refresh error shown as a banner when stale data is displayed
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+
   // Load thoughts and tool calls from backend
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) setLoading(true);
       setError(null);
+      setRefreshError(null);
 
       // Use electronAPI if available (Electron), otherwise use mock data (browser)
       if (!window.electronAPI?.agentInspector || !specId) {
-        // In browser mode or without specId, use empty arrays
         setThoughts([]);
         setToolCalls([]);
         setLoading(false);
@@ -82,7 +85,6 @@ export function ThoughtInspector({
         return;
       }
 
-      // Get combined inspector data from backend
       const result = await window.electronAPI.agentInspector.getInspectorData(
         projectPath,
         specId,
@@ -96,12 +98,18 @@ export function ThoughtInspector({
       setThoughts(result.data.thoughts);
       setToolCalls(result.data.toolCalls);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      // If we already have data, show as refresh error banner instead of replacing the view
+      if (isRefresh && (thoughts.length > 0 || toolCalls.length > 0)) {
+        setRefreshError(msg);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [projectPath, specId, sessionId]);
+  }, [projectPath, specId, sessionId, thoughts.length, toolCalls.length]);
 
   // Initial load
   useEffect(() => {
@@ -111,7 +119,7 @@ export function ThoughtInspector({
   // Refresh handler
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    loadData();
+    loadData(true);
   }, [loadData]);
 
   // Combine thoughts and tool calls into timeline
@@ -255,11 +263,29 @@ export function ThoughtInspector({
         </div>
       </div>
 
+      {/* Refresh Error Banner */}
+      {refreshError && (
+        <div className="flex-none px-6 py-2 bg-destructive/10 border-b border-destructive/30">
+          <div className="flex items-center gap-2 text-sm text-destructive">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{t('agent-inspector:errors.refreshFailed', 'Refresh failed: {{error}}', { error: refreshError })}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              className="ml-auto h-6 px-2 text-xs"
+            >
+              {t('common:actions.retry')}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <ScrollArea className="flex-1">
         <div className="p-6">
           {filteredEntries.length === 0 ? (
-            // Empty state
+            // Empty state - message matches the current view
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center space-y-4 py-8">
@@ -270,10 +296,18 @@ export function ThoughtInspector({
                   </div>
                   <div>
                     <h3 className="font-semibold text-lg">
-                      {t('agent-inspector:noThoughtsYet')}
+                      {currentView === 'tools'
+                        ? t('agent-inspector:noToolCallsYet', 'No Tool Calls Yet')
+                        : currentView === 'thoughts'
+                          ? t('agent-inspector:noThoughtsYet', 'No Thoughts Yet')
+                          : t('agent-inspector:noEntriesYet', 'No Entries Yet')}
                     </h3>
                     <p className="text-sm text-muted-foreground mt-2">
-                      {t('agent-inspector:noThoughtsDescription')}
+                      {currentView === 'tools'
+                        ? t('agent-inspector:noToolCallsDescription', 'Tool calls will appear here as the agent executes actions.')
+                        : currentView === 'thoughts'
+                          ? t('agent-inspector:noThoughtsDescription', 'Thinking blocks will appear here as the agent reasons.')
+                          : t('agent-inspector:noEntriesDescription', 'Timeline entries will appear here as the agent works.')}
                     </p>
                   </div>
                 </div>

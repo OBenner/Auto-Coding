@@ -111,8 +111,13 @@
       "suggestion": "L'agent semble bloqué ou en attente. Envisagez de vérifier l'état de la tâche."
     }
   },
+  "noToolCallsYet": "Aucun appel d'outil pour le moment",
+  "noToolCallsDescription": "Les appels d'outils apparaîtront ici lorsque l'agent exécutera des actions.",
+  "noEntriesYet": "Aucune entrée pour le moment",
+  "noEntriesDescription": "Les entrées de la chronologie apparaîtront ici pendant que l'agent travaille.",
   "errors": {
     "loadFailed": "Échec du chargement des pensées de l'agent",
-    "exportFailed": "Échec de l'exportation du journal de session"
+    "exportFailed": "Échec de l'exportation du journal de session",
+    "refreshFailed": "Échec de l'actualisation : {{error}}"
   }
 }

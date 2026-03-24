@@ -1034,39 +1034,40 @@ export function registerSessionReplayHandlers(): void {
   // ============================================
 
   /**
+   * Load task logs for a given project/spec, returning an error IPCResult on failure.
+   * Shared helper to eliminate duplication across inspector handlers.
+   */
+  async function loadSpecLogs(
+    projectPath: string,
+    specId: string,
+    context: string
+  ): Promise<{ logs: TaskLogs | null; errorResult?: IPCResult<never> }> {
+    try {
+      const specDir = path.join(projectPath, AUTO_BUILD_PATHS.SPECS_DIR, specId);
+      const logs = await loadTaskLogs(specDir);
+      return { logs };
+    } catch (error) {
+      debugError(`[Agent Inspector] ${context}:`, error);
+      return {
+        logs: null,
+        errorResult: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
    * Get agent thinking blocks from task logs
    */
   ipcMain.handle(
     IPC_CHANNELS.AGENT_INSPECTOR_GET_THOUGHTS,
-    async (
-      _,
-      projectPath: string,
-      specId: string,
-      sessionId?: string
-    ): Promise<IPCResult<AgentThinkingBlock[]>> => {
-      try {
-        const specDir = path.join(
-          projectPath,
-          AUTO_BUILD_PATHS.SPECS_DIR,
-          specId
-        );
-
-        const logs = await loadTaskLogs(specDir);
-
-        if (!logs?.phases) {
-          return { success: true, data: [] };
-        }
-
-        const thoughts = extractThoughts(logs, sessionId);
-
-        return { success: true, data: thoughts };
-      } catch (error) {
-        debugError('[Agent Inspector] Failed to get thoughts:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
-      }
+    async (_, projectPath: string, specId: string, sessionId?: string): Promise<IPCResult<AgentThinkingBlock[]>> => {
+      const { logs, errorResult } = await loadSpecLogs(projectPath, specId, 'Failed to get thoughts');
+      if (errorResult) return errorResult;
+      if (!logs?.phases) return { success: true, data: [] };
+      return { success: true, data: extractThoughts(logs, sessionId) };
     }
   );
 
@@ -1075,35 +1076,11 @@ export function registerSessionReplayHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.AGENT_INSPECTOR_GET_TOOL_CALLS,
-    async (
-      _,
-      projectPath: string,
-      specId: string,
-      sessionId?: string
-    ): Promise<IPCResult<AgentInspectorToolCall[]>> => {
-      try {
-        const specDir = path.join(
-          projectPath,
-          AUTO_BUILD_PATHS.SPECS_DIR,
-          specId
-        );
-
-        const logs = await loadTaskLogs(specDir);
-
-        if (!logs?.phases) {
-          return { success: true, data: [] };
-        }
-
-        const toolCalls = extractToolCalls(logs, sessionId);
-
-        return { success: true, data: toolCalls };
-      } catch (error) {
-        debugError('[Agent Inspector] Failed to get tool calls:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
-      }
+    async (_, projectPath: string, specId: string, sessionId?: string): Promise<IPCResult<AgentInspectorToolCall[]>> => {
+      const { logs, errorResult } = await loadSpecLogs(projectPath, specId, 'Failed to get tool calls');
+      if (errorResult) return errorResult;
+      if (!logs?.phases) return { success: true, data: [] };
+      return { success: true, data: extractToolCalls(logs, sessionId) };
     }
   );
 
@@ -1112,48 +1089,17 @@ export function registerSessionReplayHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.AGENT_INSPECTOR_GET_INSPECTOR_DATA,
-    async (
-      _,
-      projectPath: string,
-      specId: string,
-      sessionId?: string
-    ): Promise<IPCResult<{ thoughts: AgentThinkingBlock[]; toolCalls: AgentInspectorToolCall[] }>> => {
-      try {
-        const specDir = path.join(
-          projectPath,
-          AUTO_BUILD_PATHS.SPECS_DIR,
-          specId
-        );
-
-        const logs = await loadTaskLogs(specDir);
-
-        if (!logs?.phases) {
-          return {
-            success: true,
-            data: {
-              thoughts: [],
-              toolCalls: [],
-            },
-          };
-        }
-
-        const thoughts = extractThoughts(logs, sessionId);
-        const toolCalls = extractToolCalls(logs, sessionId);
-
-        return {
-          success: true,
-          data: {
-            thoughts,
-            toolCalls,
-          },
-        };
-      } catch (error) {
-        debugError('[Agent Inspector] Failed to get inspector data:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
-      }
+    async (_, projectPath: string, specId: string, sessionId?: string): Promise<IPCResult<{ thoughts: AgentThinkingBlock[]; toolCalls: AgentInspectorToolCall[] }>> => {
+      const { logs, errorResult } = await loadSpecLogs(projectPath, specId, 'Failed to get inspector data');
+      if (errorResult) return errorResult;
+      if (!logs?.phases) return { success: true, data: { thoughts: [], toolCalls: [] } };
+      return {
+        success: true,
+        data: {
+          thoughts: extractThoughts(logs, sessionId),
+          toolCalls: extractToolCalls(logs, sessionId),
+        },
+      };
     }
   );
 
@@ -1162,40 +1108,15 @@ export function registerSessionReplayHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.AGENT_INSPECTOR_EXPORT_SESSION,
-    async (
-      _,
-      projectPath: string,
-      specId: string,
-      sessionId: string,
-      format: 'json' | 'markdown'
-    ): Promise<IPCResult<string>> => {
-      try {
-        const specDir = path.join(
-          projectPath,
-          AUTO_BUILD_PATHS.SPECS_DIR,
-          specId
-        );
+    async (_, projectPath: string, specId: string, sessionId: string, format: 'json' | 'markdown'): Promise<IPCResult<string>> => {
+      const { logs, errorResult } = await loadSpecLogs(projectPath, specId, 'Failed to export session');
+      if (errorResult) return errorResult;
+      if (!logs) return { success: false, error: 'No logs found to export' };
 
-        const logs = await loadTaskLogs(specDir);
-
-        if (!logs) {
-          return { success: false, error: 'No logs found to export' };
-        }
-
-        const numericSessionId = Number.parseInt(sessionId, 10);
-
-        if (format === 'json') {
-          return exportSessionAsJson(logs, numericSessionId);
-        }
-
-        return exportSessionAsMarkdown(logs, numericSessionId);
-      } catch (error) {
-        debugError('[Agent Inspector] Failed to export session:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
-      }
+      const numericSessionId = Number.parseInt(sessionId, 10);
+      return format === 'json'
+        ? exportSessionAsJson(logs, numericSessionId)
+        : exportSessionAsMarkdown(logs, numericSessionId);
     }
   );
 }

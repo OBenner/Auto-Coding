@@ -165,31 +165,38 @@ function detectInfiniteLoop(toolCalls: AgentToolCall[], t: TFunc): DetectedPatte
 
 /**
  * Detect repeated failures pattern
+ * Tracks the maximum consecutive failure run, not just the trailing streak.
  */
 function detectRepeatedFailures(toolCalls: AgentToolCall[], t: TFunc): DetectedPattern | null {
   if (toolCalls.length < DETECTION_THRESHOLDS.REPEATED_FAILURES_THRESHOLD) return null;
 
   let consecutiveFailures = 0;
-  const affectedItems: string[] = [];
+  let currentAffectedItems: string[] = [];
+  let maxConsecutiveFailures = 0;
+  let maxAffectedItems: string[] = [];
 
   for (const call of toolCalls) {
     if (call.success === false || call.error) {
       consecutiveFailures++;
-      affectedItems.push(call.id);
+      currentAffectedItems.push(call.id);
+      if (consecutiveFailures > maxConsecutiveFailures) {
+        maxConsecutiveFailures = consecutiveFailures;
+        maxAffectedItems = [...currentAffectedItems];
+      }
     } else if (call.success === true) {
       consecutiveFailures = 0;
-      affectedItems.length = 0;
+      currentAffectedItems = [];
     }
   }
 
-  if (consecutiveFailures >= DETECTION_THRESHOLDS.REPEATED_FAILURES_THRESHOLD) {
+  if (maxConsecutiveFailures >= DETECTION_THRESHOLDS.REPEATED_FAILURES_THRESHOLD) {
     return {
       type: PatternType.REPEATED_FAILURES,
       severity: PatternSeverity.ERROR,
-      description: t('patterns.repeatedFailure.description', { count: consecutiveFailures }),
+      description: t('patterns.repeatedFailure.description', { count: maxConsecutiveFailures }),
       suggestion: t('patterns.repeatedFailure.suggestion'),
-      occurrences: consecutiveFailures,
-      affectedItems: affectedItems.slice(-consecutiveFailures),
+      occurrences: maxConsecutiveFailures,
+      affectedItems: maxAffectedItems,
     };
   }
 
@@ -198,17 +205,22 @@ function detectRepeatedFailures(toolCalls: AgentToolCall[], t: TFunc): DetectedP
 
 /**
  * Detect rapid tool calls pattern (potential runaway agent)
+ * Normalizes sort order to handle both newest-first and oldest-first input.
  */
 function detectRapidToolCalls(toolCalls: AgentToolCall[], t: TFunc): DetectedPattern | null {
   if (toolCalls.length < 10) return null;
 
-  // Calculate calls per second in recent window (last 10 calls)
-  const recentCalls = toolCalls.slice(-10);
+  // Sort the last 10 calls by timestamp ascending to ensure correct time span calculation
+  const recentCalls = toolCalls
+    .slice(-10)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const timestamps = recentCalls.map((call) => new Date(call.timestamp).getTime());
 
   if (timestamps.length < 2) return null;
 
   const timeSpanMs = timestamps[timestamps.length - 1] - timestamps[0];
+  if (timeSpanMs <= 0) return null;
+
   const callsPerSecond = (recentCalls.length / timeSpanMs) * 1000;
 
   if (callsPerSecond >= DETECTION_THRESHOLDS.RAPID_CALLS_PER_SECOND) {
@@ -274,7 +286,11 @@ function detectSameErrorRepeated(toolCalls: AgentToolCall[], t: TFunc): Detected
 }
 
 /**
- * Detect no progress pattern (agent stuck)
+ * Detect no progress pattern (agent stuck).
+ * Only fires for live sessions — if the first and last timestamps span more than
+ * NO_PROGRESS_WINDOW_MS and there was recent activity within the last hour,
+ * the session is likely still active and stalled.  Archived or completed sessions
+ * (last activity > 1 hour ago) are excluded.
  */
 function detectNoProgress(
   toolCalls: AgentToolCall[],
@@ -288,8 +304,18 @@ function detectNoProgress(
   if (allItems.length < 2) return null;
 
   const now = Date.now();
+  const firstItemTime = new Date(allItems[0].timestamp).getTime();
   const lastItemTime = new Date(allItems[allItems.length - 1].timestamp).getTime();
   const timeSinceLastActivity = now - lastItemTime;
+
+  // Skip archived/completed sessions — if last activity was over an hour ago,
+  // the session is almost certainly finished, not stalled
+  const ONE_HOUR_MS = 3600000;
+  if (timeSinceLastActivity > ONE_HOUR_MS) return null;
+
+  // Only flag sessions that have been running long enough to have meaningful stalls
+  const sessionDuration = lastItemTime - firstItemTime;
+  if (sessionDuration < DETECTION_THRESHOLDS.NO_PROGRESS_WINDOW_MS) return null;
 
   // Check if agent has been inactive for too long
   if (timeSinceLastActivity >= DETECTION_THRESHOLDS.NO_PROGRESS_WINDOW_MS) {
