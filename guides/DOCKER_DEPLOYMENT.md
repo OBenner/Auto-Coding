@@ -194,24 +194,26 @@ docker volume ls | grep autoclaude
 
 **Inspect volume:**
 ```bash
-docker volume inspect autoclaude_postgres_data
+# Volume names are prefixed with the Compose project name (directory name, lowercased).
+# For a project in a directory named "Auto-Claude", the prefix is "auto-claude".
+docker volume inspect auto-claude_postgres_data
 ```
 
 **Backup volumes:**
 ```bash
 # Backup postgres data
-docker run --rm -v autoclaude_postgres_data:/data -v $(pwd):/backup \
+docker run --rm -v auto-claude_postgres_data:/data -v $(pwd):/backup \
   alpine tar czf /backup/postgres-backup.tar.gz -C /data .
 
 # Backup backend data
-docker run --rm -v autoclaude_backend_data:/data -v $(pwd):/backup \
+docker run --rm -v auto-claude_backend_data:/data -v $(pwd):/backup \
   alpine tar czf /backup/backend-backup.tar.gz -C /data .
 ```
 
 **Restore volumes:**
 ```bash
 # Restore postgres data
-docker run --rm -v autoclaude_postgres_data:/data -v $(pwd):/backup \
+docker run --rm -v auto-claude_postgres_data:/data -v $(pwd):/backup \
   alpine sh -c "cd /data && tar xzf /backup/postgres-backup.tar.gz"
 ```
 

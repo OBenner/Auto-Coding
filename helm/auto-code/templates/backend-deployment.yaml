@@ -16,6 +16,7 @@ spec:
       labels:
         {{- include "auto-code.backend.labels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: backend
         image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"

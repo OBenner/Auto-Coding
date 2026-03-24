@@ -84,6 +84,4 @@ logs/security/
 !README.md
 
 # Docker files
-Dockerfile
-.dockerignore
 docker-compose*.yml

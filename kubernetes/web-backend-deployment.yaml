@@ -25,10 +25,12 @@ spec:
         component: web-backend
         tier: api
     spec:
+      securityContext:
+        runAsNonRoot: true
       containers:
       - name: web-backend
         image: auto-code-web-backend:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - name: http
           containerPort: 8000

@@ -18,15 +18,15 @@ spec:
   {{- end }}
   {{- if .Values.ingress.tls.enabled }}
   tls:
-  - hosts:
+  - {{- if .Values.ingress.tls.secretName }}
+    secretName: {{ .Values.ingress.tls.secretName }}
+    {{- end }}
+    hosts:
     {{- if .Values.ingress.hosts.frontend.host }}
     - {{ .Values.ingress.hosts.frontend.host }}
     {{- end }}
     {{- if .Values.ingress.hosts.backend.host }}
     - {{ .Values.ingress.hosts.backend.host }}
-    {{- end }}
-    {{- if .Values.ingress.tls.secretName }}
-    secretName: {{ .Values.ingress.tls.secretName }}
     {{- end }}
   {{- end }}
   rules:

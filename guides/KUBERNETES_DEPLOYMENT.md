@@ -76,6 +76,7 @@ kubectl create secret generic auto-claude-secrets \
   --from-literal=claude-oauth-token=your-oauth-token-here \
   --from-literal=openai-api-key=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
   --from-literal=secret-key=your-secret-key-here \
+  --from-literal=database-url=postgresql://postgres:YOUR_PASSWORD@postgres-service:5432/autoclaude \
   --namespace auto-claude
 
 # Optional: GitHub integration
@@ -93,7 +94,6 @@ kubectl create configmap auto-claude-config \
   --from-literal=GRAPHITI_ENABLED=true \
   --from-literal=GRAPHITI_LLM_PROVIDER=openai \
   --from-literal=CLAUDE_MODEL=claude-sonnet-4-5-20250929 \
-  --from-literal=DATABASE_URL=postgresql://postgres:postgres@postgres-service:5432/autoclaude \
   --from-literal=REDIS_HOST=redis-service \
   --from-literal=REDIS_PORT=6379 \
   --from-literal=HOST=0.0.0.0 \
@@ -311,8 +311,8 @@ data:
   # Claude model
   CLAUDE_MODEL: "claude-sonnet-4-5-20250929"
 
-  # Database connection
-  DATABASE_URL: "postgresql://postgres:postgres@postgres-service:5432/autoclaude"
+  # NOTE: DATABASE_URL contains credentials and is stored in auto-claude-secrets Secret,
+  # not in this ConfigMap. Reference it via secretKeyRef in your Deployment spec.
 
   # Redis connection
   REDIS_HOST: "redis-service"
@@ -433,8 +433,25 @@ kubectl get pvc -n auto-claude
 
 #### Volume Snapshots (Backup)
 
+> **Note:** The `$(date +%Y%m%d)` shell expansion below is not processed by `kubectl apply`.
+> Generate the YAML with the date substituted using the `kubectl` command shown after the template.
+
 ```yaml
-# snapshot.yaml
+# snapshot.yaml (template — see command below to apply)
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: postgres-snapshot-YYYYMMDD
+  namespace: auto-claude
+spec:
+  volumeSnapshotClassName: csi-snapclass
+  source:
+    persistentVolumeClaimName: postgres-pvc
+```
+
+```bash
+# Create snapshot with today's date in the name
+kubectl apply -f - <<EOF
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshot
 metadata:
@@ -444,11 +461,7 @@ spec:
   volumeSnapshotClassName: csi-snapclass
   source:
     persistentVolumeClaimName: postgres-pvc
-```
-
-```bash
-# Create snapshot
-kubectl apply -f snapshot.yaml
+EOF
 
 # List snapshots
 kubectl get volumesnapshot -n auto-claude
@@ -995,8 +1008,8 @@ kubectl get svc -n auto-claude postgres-service
 kubectl exec -it <backend-pod> -n auto-claude -- \
   psql -h postgres-service -U postgres -d autoclaude
 
-# Check DATABASE_URL in ConfigMap
-kubectl get configmap auto-claude-config -n auto-claude -o yaml | grep DATABASE_URL
+# Check DATABASE_URL in Secret (stored as base64)
+kubectl get secret auto-claude-secrets -n auto-claude -o jsonpath='{.data.database-url}' | base64 -d
 
 # Check postgres logs
 kubectl logs -n auto-claude -l app=postgres --tail=50
@@ -1227,10 +1240,12 @@ spec:
           port: 443
 ```
 
-### 3. Pod Security Standards
+### 3. Pod Security Standards (Kubernetes 1.25+)
+
+Pod Security Policies (PSP) were removed in Kubernetes 1.25. Use **Pod Security Admission (PSA)** namespace labels instead to enforce security standards:
 
 ```yaml
-# pod-security-policy.yaml (Kubernetes 1.25+)
+# pod-security-admission.yaml
 apiVersion: v1
 kind: Namespace
 metadata:

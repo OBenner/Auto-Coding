@@ -3,7 +3,7 @@ name: auto-code
 description: A Helm chart for Auto-Claude - Multi-agent autonomous coding framework
 type: application
 version: 1.0.0
-appVersion: "2.8.0"
+appVersion: "3.0.0"
 keywords:
   - auto-claude
   - ai

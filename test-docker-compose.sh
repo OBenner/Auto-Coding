@@ -21,10 +21,17 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-if ! command -v docker-compose &> /dev/null; then
-    echo -e "${RED}ERROR: docker-compose is not installed or not in PATH${NC}"
+# Detect docker compose command: prefer "docker compose" (v2 plugin), fall back to "docker-compose"
+DOCKER_COMPOSE=""
+if docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo -e "${RED}ERROR: Neither 'docker compose' (v2 plugin) nor 'docker-compose' found${NC}"
     exit 1
 fi
+echo -e "${GREEN}Using: ${DOCKER_COMPOSE}${NC}"
 
 # Check if .env file exists
 if [ ! -f .env ]; then
@@ -38,20 +45,20 @@ if [ ! -f .env ]; then
     fi
 fi
 
-# Validate docker-compose configuration
-echo "Step 1: Validating docker-compose configuration..."
-if docker-compose config > /dev/null 2>&1; then
+# Validate $DOCKER_COMPOSE configuration
+echo "Step 1: Validating $DOCKER_COMPOSE configuration..."
+if $DOCKER_COMPOSE config > /dev/null 2>&1; then
     echo -e "${GREEN}✓ docker-compose.yml is valid${NC}"
 else
     echo -e "${RED}✗ docker-compose.yml has errors${NC}"
-    docker-compose config
+    $DOCKER_COMPOSE config
     exit 1
 fi
 echo ""
 
 # Start services
 echo "Step 2: Starting Docker Compose services..."
-docker-compose up -d
+$DOCKER_COMPOSE up -d
 echo ""
 
 # Wait for services to initialize
@@ -61,21 +68,22 @@ echo ""
 
 # Check service status
 echo "Step 4: Checking service health status..."
-docker-compose ps
+$DOCKER_COMPOSE ps
 echo ""
 
 # Verify each service individually
 echo "Step 5: Verifying individual services..."
 
 # Check postgres
-if docker-compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
+if $DOCKER_COMPOSE exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
     echo -e "${GREEN}✓ PostgreSQL is healthy${NC}"
 else
     echo -e "${RED}✗ PostgreSQL is not healthy${NC}"
 fi
 
-# Check redis
-if docker-compose exec -T redis redis-cli ping | grep -q PONG; then
+# Check redis (supports optional REDIS_PASSWORD)
+REDIS_PASS="${REDIS_PASSWORD:-redis}"
+if $DOCKER_COMPOSE exec -T redis redis-cli -a "$REDIS_PASS" ping 2>/dev/null | grep -q PONG; then
     echo -e "${GREEN}✓ Redis is healthy${NC}"
 else
     echo -e "${RED}✗ Redis is not healthy${NC}"
@@ -98,18 +106,18 @@ fi
 echo ""
 
 # Check for unhealthy services
-UNHEALTHY=$(docker-compose ps | grep -c "unhealthy" || true)
+UNHEALTHY=$($DOCKER_COMPOSE ps | grep -c "unhealthy" || true)
 if [ "$UNHEALTHY" -gt 0 ]; then
     echo -e "${RED}WARNING: $UNHEALTHY service(s) are unhealthy${NC}"
     echo ""
     echo "Logs from unhealthy services:"
-    docker-compose logs --tail=50
+    $DOCKER_COMPOSE logs --tail=50
     exit 1
 fi
 
 # Check all services are running
-RUNNING=$(docker-compose ps | grep -c "Up" || true)
-EXPECTED=5  # postgres, redis, backend, web-backend, web-frontend
+RUNNING=$($DOCKER_COMPOSE ps | grep -c "Up" || true)
+EXPECTED=$($DOCKER_COMPOSE config --services 2>/dev/null | wc -l)
 
 if [ "$RUNNING" -ge "$EXPECTED" ]; then
     echo -e "${GREEN}✓ All services are running and healthy${NC}"
@@ -129,6 +137,6 @@ echo "  - Web Frontend: http://localhost:3000"
 echo "  - PostgreSQL: localhost:5432"
 echo "  - Redis: localhost:6379"
 echo ""
-echo "To view logs: docker-compose logs -f"
-echo "To stop services: docker-compose down"
+echo "To view logs: $DOCKER_COMPOSE logs -f"
+echo "To stop services: $DOCKER_COMPOSE down"
 echo ""

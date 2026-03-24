@@ -25,10 +25,12 @@ spec:
         component: web-frontend
         tier: frontend
     spec:
+      securityContext:
+        runAsNonRoot: true
       containers:
       - name: web-frontend
         image: auto-code-web-frontend:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - name: http
           containerPort: 3000

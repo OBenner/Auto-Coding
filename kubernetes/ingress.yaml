@@ -16,7 +16,7 @@ metadata:
     # CORS configuration
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://auto-claude.example.com"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     # Rate limiting
     nginx.ingress.kubernetes.io/limit-rps: "100"

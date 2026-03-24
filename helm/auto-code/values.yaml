@@ -283,8 +283,8 @@ secrets:
 
   # Secret key for JWT tokens
   # Generate with: openssl rand -base64 32
-  # REQUIRED: Replace with your own secure key in production
-  secretKey: "change-me-in-production"
+  # REQUIRED: Set via --set secrets.secretKey=<value> or in a values override file
+  secretKey: ""
 
   # Claude API keys
   # At least one is required

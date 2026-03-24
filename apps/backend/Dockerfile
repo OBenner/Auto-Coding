@@ -22,7 +22,8 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Install runtime system dependencies
-RUN apt-get update && apt-get install -y \
+# git is required at runtime for worktree operations (cli/worktree.py)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 

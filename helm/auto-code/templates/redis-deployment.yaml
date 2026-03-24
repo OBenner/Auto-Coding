@@ -21,9 +21,9 @@ spec:
         image: "{{ .Values.images.redis.repository }}:{{ .Values.images.redis.tag }}"
         imagePullPolicy: {{ .Values.images.redis.pullPolicy }}
         command:
-        - redis-server
-        - --appendonly
-        - "yes"
+        - sh
+        - -c
+        - redis-server --appendonly yes --requirepass $(REDIS_PASSWORD)
         ports:
         - name: redis
           containerPort: 6379

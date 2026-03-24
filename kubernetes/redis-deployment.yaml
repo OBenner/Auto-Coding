@@ -24,9 +24,9 @@ spec:
       - name: redis
         image: redis:7-alpine
         command:
-        - redis-server
-        - --appendonly
-        - "yes"
+        - sh
+        - -c
+        - redis-server --appendonly yes --requirepass $(REDIS_PASSWORD)
         ports:
         - name: redis
           containerPort: 6379
@@ -44,8 +44,9 @@ spec:
         livenessProbe:
           exec:
             command:
-            - redis-cli
-            - ping
+            - sh
+            - -c
+            - redis-cli -a $REDIS_PASSWORD ping
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -53,8 +54,9 @@ spec:
         readinessProbe:
           exec:
             command:
-            - redis-cli
-            - ping
+            - sh
+            - -c
+            - redis-cli -a $REDIS_PASSWORD ping
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 5
