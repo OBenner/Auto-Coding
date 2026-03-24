@@ -15,13 +15,9 @@ import os
 import platform
 from pathlib import Path
 
+from core import sanitize_log as _sanitize_log
+
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
-
 
 # Platform detection
 IS_WINDOWS = platform.system() == "Windows"

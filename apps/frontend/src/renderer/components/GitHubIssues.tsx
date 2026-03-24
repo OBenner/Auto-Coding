@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useProjectStore } from "../stores/project-store";
 import { useTaskStore } from "../stores/task-store";
+import { useShallow } from 'zustand/react/shallow';
 import {
   useGitHubIssues,
   useGitHubInvestigation,
@@ -22,10 +23,10 @@ import type { GitHubIssue } from "../../shared/types";
 import type { GitHubIssuesProps } from "./github-issues/types";
 
 export function GitHubIssues({ onOpenSettings, onNavigateToTask }: GitHubIssuesProps) {
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore(useShallow((state) => state.projects));
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
-  const tasks = useTaskStore((state) => state.tasks);
+  const tasks = useTaskStore(useShallow((state) => state.tasks));
 
   const {
     syncStatus,

@@ -13,10 +13,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.sentry import capture_exception
-
-if TYPE_CHECKING:
-    from agents.session_context import SessionContext
-
 from debug import (
     debug,
     debug_detailed,
@@ -27,16 +23,16 @@ from debug import (
     is_debug_enabled,
 )
 from integrations.graphiti.config import get_graphiti_status, is_graphiti_enabled
-
-# Import from parent memory package
-# Now safe since this module is named memory_manager (not memory)
-from memory import save_session_insights as save_file_based_memory
 from memory.graphiti_helpers import get_graphiti_memory
 from memory.patterns import (
     save_detected_patterns_from_errors,
     save_detected_patterns_from_naming,
     save_detected_patterns_from_organization,
 )
+from memory.sessions import save_session_insights as save_file_based_memory
+
+if TYPE_CHECKING:
+    from agents.session_context import SessionContext
 
 logger = logging.getLogger(__name__)
 

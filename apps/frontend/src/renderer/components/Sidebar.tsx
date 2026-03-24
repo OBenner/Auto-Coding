@@ -58,6 +58,7 @@ import {
   initializeProject
 } from '../stores/project-store';
 import { useSettingsStore, saveSettings } from '../stores/settings-store';
+import { useShallow } from 'zustand/react/shallow';
 import { AddProjectModal } from './AddProjectModal';
 import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
@@ -126,9 +127,9 @@ export function Sidebar({
   onViewChange
 }: SidebarProps) {
   const { t } = useTranslation(['navigation', 'dialogs', 'common']);
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore(useShallow((state) => state.projects));
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
-  const settings = useSettingsStore((state) => state.settings);
+  const settings = useSettingsStore(useShallow((state) => state.settings));
   const hasPendingAuthFailure = useAuthFailureStore((state) => state.hasPendingAuthFailure);
 
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
