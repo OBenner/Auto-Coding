@@ -66,7 +66,8 @@ async def validate_python_tests(
                 text=True,
                 timeout=30,
             )
-            if result.returncode != 0:
+            # Allow conftest.py with no collected tests (fixtures only)
+            if result.returncode != 0 and file_path.name != "conftest.py":
                 print_status(f"pytest collection failed for {test_file}", "error")
                 logger.debug(f"pytest output: {result.stdout}\n{result.stderr}")
                 return False

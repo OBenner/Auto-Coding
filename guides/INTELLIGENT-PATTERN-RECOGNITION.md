@@ -238,6 +238,103 @@ python test_pattern_workflow.py
 2. **Cold Start**: First few builds won't have patterns to suggest (system needs data)
 3. **Context Window**: Very large codebases may exceed context limits for pattern extraction
 
+## Automatic Pattern Library Generation
+
+This PR extends pattern recognition with automatic generation of language-specific pattern libraries from codebase analysis via AST extraction and AI categorization.
+
+### What It Does
+
+The Pattern Library Generator:
+1. **Scans project source files** for the specified language(s)
+2. **Extracts patterns** using AST analysis (function signatures, class structures, module patterns, error handling, etc.)
+3. **Categorizes** each pattern using AI classification
+4. **Generates importable Python modules** in the same format as the manual pattern libraries
+
+### CLI Commands
+
+#### Generate patterns for a single language
+
+```bash
+cd apps/backend
+python cli/main.py pattern generate --language python --output patterns/python_patterns.py
+```
+
+#### Generate patterns for all detected languages
+
+```bash
+cd apps/backend
+python cli/main.py pattern generate-all --output-dir patterns/
+```
+
+#### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `--language` | Target language (python, javascript, typescript, go, rust, java, csharp, cpp, ruby, php) |
+| `--output` | Output file path for generated module |
+| `--output-dir` | Output directory for batch generation |
+| `--source` | Optional source directory to scan (defaults to project root) |
+| `--max-patterns` | Maximum patterns to extract per language (default: 50) |
+| `--languages` | Comma-separated list for `generate-all` (defaults to all detected) |
+
+### Supported Languages
+
+| Language | Extensions |
+|----------|-----------|
+| Python | `.py` |
+| JavaScript | `.js`, `.jsx` |
+| TypeScript | `.ts`, `.tsx` |
+| Go | `.go` |
+| Rust | `.rs` |
+| Java | `.java` |
+| C# | `.cs` |
+| C++ | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.h` |
+| Ruby | `.rb` |
+| PHP | `.php` |
+
+### Architecture
+
+```text
+cli/pattern_commands.py          # CLI interface (generate, generate-all actions)
+integrations/graphiti/
+├── pattern_library_generator.py # Core generator: scan → extract → categorize → emit
+├── pattern_extractor.py         # AST-based pattern extraction
+└── pattern_categorizer.py       # AI-based pattern classification
+context/pattern_discovery.py     # Runtime pattern discovery from generated libraries
+patterns/__init__.py             # Dynamic pattern loader
+```
+
+### Generated Module Format
+
+The generator produces importable Python modules compatible with the existing manual pattern libraries:
+
+```python
+"""
+Auto-generated Python Pattern Library
+=====================================
+Extracted from codebase analysis.
+"""
+
+PYTHON_PATTERNS = {
+    "error_handling": {
+        "try_except_logging": "try:\\n    result = operation()\\nexcept Exception as e:\\n    logger.error(f'Operation failed: {e}')\\n    raise",
+    },
+    "architecture": {
+        "factory_pattern": "class ServiceFactory:\\n    @staticmethod\\n    def create(type: str) -> Service: ...",
+    },
+}
+```
+
+### Testing
+
+```bash
+# Run pattern library generator tests
+python -m pytest tests/test_pattern_library_generator.py -v
+
+# Run CLI integration tests
+python -m pytest tests/test_pattern_cli_generation.py -v
+```
+
 ## Future Enhancements
 
 Potential improvements for future versions:

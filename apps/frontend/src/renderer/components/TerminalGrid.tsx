@@ -35,6 +35,7 @@ import { cn } from '../lib/utils';
 import { useTerminalStore } from '../stores/terminal-store';
 import { useTaskStore } from '../stores/task-store';
 import { useFileExplorerStore } from '../stores/file-explorer-store';
+import { useShallow } from 'zustand/react/shallow';
 import { TERMINAL_DOM_UPDATE_DELAY_MS } from '../../shared/constants';
 import type { SessionDateInfo } from '../../shared/types';
 
@@ -45,7 +46,7 @@ interface TerminalGridProps {
 }
 
 export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: TerminalGridProps) {
-  const allTerminals = useTerminalStore((state) => state.terminals);
+  const allTerminals = useTerminalStore(useShallow((state) => state.terminals));
   // Filter terminals to show only those belonging to the current project
   // Also include legacy terminals without projectPath (created before this change)
   // Exclude exited terminals as they are no longer functional
@@ -65,7 +66,7 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
   const reorderTerminals = useTerminalStore((state) => state.reorderTerminals);
 
   // Get tasks from task store for task selection dropdown in terminals
-  const tasks = useTaskStore((state) => state.tasks);
+  const tasks = useTaskStore(useShallow((state) => state.tasks));
 
   // File explorer state
   const fileExplorerOpen = useFileExplorerStore((state) => state.isOpen);

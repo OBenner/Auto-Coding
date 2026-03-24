@@ -30,6 +30,7 @@ import { TaskFileExplorerDrawer } from './TaskFileExplorerDrawer';
 import { FileAutocomplete } from './FileAutocomplete';
 import { createTask, saveDraft, loadDraft, clearDraft, isDraftEmpty } from '../stores/task-store';
 import { useProjectStore } from '../stores/project-store';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../lib/utils';
 import type { TaskCategory, TaskPriority, TaskComplexity, TaskImpact, TaskMetadata, ImageAttachment, TaskDraft, ModelType, ThinkingLevel, ReferencedFile, AIProvider } from '../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
@@ -80,7 +81,7 @@ export function TaskCreationWizard({
   const [useWorktree, setUseWorktree] = useState(true);
 
   // Get project path from project store
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore(useShallow((state) => state.projects));
   const projectPath = useMemo(() => {
     const project = projects.find((p) => p.id === projectId);
     return project?.path ?? null;

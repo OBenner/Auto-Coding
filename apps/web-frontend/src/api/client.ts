@@ -12,6 +12,8 @@ import type {
 	AgentStatusResponse,
 	ApiConfig,
 	ApiError,
+	FileContent,
+	FileListResponse,
 	SpecDetail,
 	SpecListResponse,
 	TaskDetail,
@@ -254,6 +256,56 @@ export class ApiClient {
 	 */
 	async getAuthStatus(): Promise<{ status: string }> {
 		return this.fetch<{ status: string }>("/api/auth/status");
+	}
+
+	// ============================================
+	// FILE SYSTEM ENDPOINTS
+	// ============================================
+
+	/**
+	 * List files in a directory
+	 */
+	async listFiles(path: string = "/"): Promise<FileListResponse> {
+		const encodedPath = encodeURIComponent(path);
+		return this.fetch<FileListResponse>(`/api/files?path=${encodedPath}`);
+	}
+
+	/**
+	 * Read file contents
+	 */
+	async readFile(path: string): Promise<FileContent> {
+		const encodedPath = encodeURIComponent(path);
+		return this.fetch<FileContent>(`/api/files/content?path=${encodedPath}`);
+	}
+
+	/**
+	 * Write file contents
+	 */
+	async writeFile(path: string, content: string): Promise<{ success: boolean; path: string }> {
+		return this.fetch<{ success: boolean; path: string }>("/api/files/content", {
+			method: "PUT",
+			body: JSON.stringify({ path, content }),
+		});
+	}
+
+	/**
+	 * Create a directory
+	 */
+	async createDirectory(path: string): Promise<{ success: boolean; path: string }> {
+		return this.fetch<{ success: boolean; path: string }>("/api/files/directory", {
+			method: "POST",
+			body: JSON.stringify({ path }),
+		});
+	}
+
+	/**
+	 * Delete a file or directory
+	 */
+	async deleteFile(path: string): Promise<{ success: boolean; path: string }> {
+		const encodedPath = encodeURIComponent(path);
+		return this.fetch<{ success: boolean; path: string }>(`/api/files?path=${encodedPath}`, {
+			method: "DELETE",
+		});
 	}
 
 	// ============================================
