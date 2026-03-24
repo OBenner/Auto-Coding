@@ -21,6 +21,7 @@ spec:
         component: postgres
         tier: database
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: postgres
         image: postgres:16-alpine

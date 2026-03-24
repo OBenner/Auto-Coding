@@ -17,6 +17,7 @@ spec:
       labels:
         {{- include "auto-code.postgres.labels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: postgres
         image: "{{ .Values.images.postgres.repository }}:{{ .Values.images.postgres.tag }}"

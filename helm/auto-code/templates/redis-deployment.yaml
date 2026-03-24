@@ -16,6 +16,7 @@ spec:
       labels:
         {{- include "auto-code.redis.labels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: redis
         image: "{{ .Values.images.redis.repository }}:{{ .Values.images.redis.tag }}"

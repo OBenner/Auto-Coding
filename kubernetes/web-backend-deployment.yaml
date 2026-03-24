@@ -25,6 +25,7 @@ spec:
         component: web-backend
         tier: api
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
       containers:

@@ -25,6 +25,7 @@ spec:
         component: web-frontend
         tier: frontend
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
       containers:

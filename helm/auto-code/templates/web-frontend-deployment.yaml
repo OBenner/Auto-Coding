@@ -18,6 +18,7 @@ spec:
       labels:
         {{- include "auto-code.webFrontend.labels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: web-frontend
         image: "{{ .Values.images.webFrontend.repository }}:{{ .Values.images.webFrontend.tag }}"

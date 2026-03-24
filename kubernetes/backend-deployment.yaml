@@ -20,6 +20,7 @@ spec:
         component: backend
         tier: application
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: backend
         image: auto-code-backend:latest

@@ -20,6 +20,7 @@ spec:
         component: redis
         tier: cache
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: redis
         image: redis:7-alpine
