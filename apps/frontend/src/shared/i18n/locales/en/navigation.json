@@ -26,6 +26,7 @@
     "agentTools": "MCP Overview",
     "mergeAnalytics": "Merge Analytics",
     "sessions": "Session Replay",
+    "agentInspector": "Agent Inspector",
     "feedback": "Feedback",
     "modelUsage": "Model Usage"
   },

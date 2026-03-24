@@ -1,84 +1,67 @@
 {
   "files_to_modify": {
     "backend": [
-      "apps/backend/services/recovery.py",
-      "apps/backend/qa/recovery_metrics.py",
-      "apps/backend/agents/coder.py",
+      "apps/backend/core/error_classifier.py",
+      "apps/backend/core/error_utils.py",
       "apps/backend/agents/session.py",
-      "apps/backend/prompts/coder_recovery.md",
-      "apps/backend/cli/main.py"
-    ],
-    "frontend": []
+      "apps/backend/core/client.py"
+    ]
   },
   "files_to_create": {
     "backend": [
-      "apps/backend/analysis/failure_pattern_extractor.py",
-      "apps/backend/integrations/graphiti/failure_pattern_store.py",
-      "apps/backend/cli/pattern_commands.py",
-      "tests/analysis/test_failure_pattern_extractor.py",
-      "tests/integrations/graphiti/test_failure_pattern_store.py"
+      "apps/backend/core/error_codes.py",
+      "apps/backend/core/typed_errors.py",
+      "apps/backend/core/error_detection.py",
+      "tests/test_sdk_error_wrapping.py"
     ],
-    "frontend": []
-  },
+    "docs": [
+      "docs/error-handling.md"
+    ]
   },
   "files_to_reference": [
-    "apps/backend/analysis/failure_analyzer.py",
-    "apps/backend/analysis/failure_storage.py",
-    "apps/backend/services/recovery.py",
-    "apps/backend/integrations/graphiti/pattern_store.py",
-    "apps/backend/qa/recovery_metrics.py",
-    "apps/backend/cli/pattern_commands.py",
-    "apps/backend/agents/memory_manager.py",
-    "tests/integrations/graphiti/test_graphiti_memory.py"
+    "apps/backend/core/error_classifier.py",
+    "apps/backend/core/error_utils.py",
+    "apps/backend/core/providers/exceptions.py",
+    "apps/backend/agents/session.py",
+    "tests/test_error_classifier.py"
   ],
   "patterns": {
-    "failure_analysis": "FailureAnalyzer in analysis/failure_analyzer.py uses heuristics and optional Claude SDK for root cause analysis. Returns structured failure data.",
-    "pattern_storage": "PatternStore in integrations/graphiti/pattern_store.py manages pattern storage and retrieval with confidence tracking using Graphiti memory.",
-    "recovery_system": "RecoveryManager in services/recovery.py provides automatic rollback, circular fix detection, and attempt history tracking.",
-    "cli_commands": "CLI commands in cli/ use argparse subcommands pattern. Pattern commands in cli/pattern_commands.py use get_graphiti_memory() helper.",
-    "graphiti_integration": "Graphiti memory accessed via memory.graphiti_helpers.get_graphiti_memory(). Uses run_async() for async operations.",
-    "qa_metrics": "RecoveryMetrics in qa/recovery_metrics.py tracks recovery success rates and metrics for QA loop."
+    "error_classification": "ErrorClassifier class uses regex patterns to match error strings. Has SDKErrorCategory enum with categories like AUTH_INVALID, RATE_LIMITED, etc.",
+    "error_utils": "Helper functions like is_rate_limit_error(), is_auth_error() use string matching with .lower() and 'in' checks",
+    "exception_pattern": "Custom exceptions inherit from Exception, use descriptive class names, may have custom attributes",
+    "enum_pattern": "SDKErrorCategory uses class-based enum with string values. Use auto() for automatic value assignment.",
+    "test_pattern": "Tests use pytest, organize into classes by function, use fixtures for setup"
   },
   "existing_implementations": {
-    "failure_analysis": {
-      "description": "Found FailureAnalyzer in apps/backend/analysis/failure_analyzer.py",
+    "error_classifier": {
+      "description": "Found ErrorClassifier in core/error_classifier.py with string-based pattern matching",
       "relevant_files": [
-        "apps/backend/analysis/failure_analyzer.py",
-        "apps/backend/analysis/failure_storage.py"
+        "apps/backend/core/error_classifier.py"
       ],
-      "details": "FailureAnalyzer extracts root causes from build failures using heuristics and optional Claude SDK. Returns structured failure data with type, root_cause, suggested_fix."
+      "details": "Has SDKErrorCategory enum (AUTH_INVALID, AUTH_EXPIRED, RATE_LIMITED, etc.). Uses regex patterns stored in module-level lists (_AUTH_PATTERNS, _RATE_LIMIT_PATTERNS). classify_exception() and classify_response() methods do string matching."
     },
-    "pattern_storage": {
-      "description": "Found PatternStore in apps/backend/integrations/graphiti/pattern_store.py",
+    "error_utils": {
+      "description": "Found error utility functions in core/error_utils.py",
       "relevant_files": [
-        "apps/backend/integrations/graphiti/pattern_store.py",
-        "apps/backend/integrations/graphiti/pattern_extractor.py",
-        "apps/backend/integrations/graphiti/pattern_learner.py"
+        "apps/backend/core/error_utils.py"
       ],
-      "details": "PatternStore manages pattern storage and retrieval with confidence tracking. Uses Graphiti memory for cross-session learning."
+      "details": "Functions like is_tool_concurrency_error(), is_rate_limit_error(), is_authentication_error() all use string checking: error_str = str(error).lower(); return 'pattern' in error_str. Fragile and error-prone."
     },
-    "recovery_system": {
-      "description": "Found RecoveryManager in apps/backend/services/recovery.py",
+    "custom_exceptions": {
+      "description": "Found many custom exception classes throughout codebase",
       "relevant_files": [
-        "apps/backend/services/recovery.py",
-        "apps/backend/qa/recovery_metrics.py"
+        "apps/backend/core/providers/exceptions.py",
+        "apps/backend/core/worktree.py",
+        "apps/backend/agents/process_isolator.py"
       ],
-      "details": "RecoveryManager provides automatic rollback, circular fix detection, and attempt history tracking. Has FailureType enum and retry strategies."
+      "details": "ProviderError, ProviderNotInstalled, ProviderConfigError, WorktreeError, AgentProcessError, etc. All inherit from Exception but don't have error_code field."
     },
-    "cli_pattern_commands": {
-      "description": "Found pattern commands in apps/backend/cli/pattern_commands.py",
+    "error_usage": {
+      "description": "ErrorClassifier used in agents/session.py for error classification",
       "relevant_files": [
-        "apps/backend/cli/pattern_commands.py"
+        "apps/backend/agents/session.py"
       ],
-      "details": "CLI commands for listing learned patterns. Uses get_graphiti_memory() helper and pattern categorization."
-    },
-    "graphiti_helpers": {
-      "description": "Found Graphiti memory helpers in apps/backend/memory/graphiti_helpers.py",
-      "relevant_files": [
-        "apps/backend/memory/graphiti_helpers.py",
-        "apps/backend/memory/patterns.py"
-      ],
-      "details": "get_graphiti_memory() factory function. run_async() wrapper for async operations. File-based pattern storage as fallback."
+      "details": "Imports ErrorClassifier, likely used for detecting and handling SDK errors during agent sessions"
     }
   }
 }

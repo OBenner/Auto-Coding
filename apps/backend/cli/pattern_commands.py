@@ -14,6 +14,7 @@ from pathlib import Path
 
 from cli.utils import print_banner
 from integrations.graphiti.pattern_categorizer import get_pattern_categories
+from integrations.graphiti.pattern_library_generator import PatternLibraryGenerator
 from integrations.graphiti.pattern_suggester import get_patterns_by_category
 from memory.graphiti_helpers import (
     get_graphiti_memory,
@@ -361,6 +362,232 @@ def delete_pattern(spec_dir: Path, pattern_index: int) -> None:
     print()
 
 
+def generate_patterns(
+    project_dir: Path,
+    language: str,
+    output_path: Path,
+    source_dir: Path | None = None,
+    max_patterns: int = 50,
+) -> None:
+    """
+    Generate a pattern library module for the specified language.
+
+    Args:
+        project_dir: Project root directory to analyze
+        language: Programming language to generate patterns for
+        output_path: Path where the generated module will be written
+        source_dir: Specific directory to analyze (default: project_dir)
+        max_patterns: Maximum patterns per category (default: 50)
+    """
+    print_banner()
+    print(f"\n{icon(Icons.GEAR)} Generating Pattern Library\n")
+
+    print_key_value("Language", language)
+    print_key_value("Project", str(project_dir))
+    print_key_value("Output", str(output_path))
+    if source_dir:
+        print_key_value("Source", str(source_dir))
+    print()
+
+    try:
+        # Create generator
+        generator = PatternLibraryGenerator(project_dir)
+
+        # Prepare options
+        options = {
+            "max_patterns_per_category": max_patterns,
+            "include_line_numbers": False,
+        }
+        if source_dir:
+            options["source_dir"] = source_dir
+
+        # Generate library file
+        print(info("Analyzing codebase and extracting patterns..."))
+        generator.generate_library_file(output_path, language, options)
+
+        print()
+        print(success(f"{icon(Icons.SUCCESS)} Pattern library generated successfully"))
+        print(muted(f"Saved to: {output_path}"))
+        print()
+
+    except ValueError as e:
+        print(warning(f"{icon(Icons.WARNING)} {e}"))
+        print()
+    except Exception as e:
+        print(warning(f"{icon(Icons.WARNING)} Failed to generate patterns: {e}"))
+        print()
+
+
+def _generate_for_language(
+    generator: PatternLibraryGenerator,
+    output_path: Path,
+    language: str,
+    options: dict,
+) -> tuple[bool, str | None]:
+    """
+    Generate a pattern library for a single language.
+
+    Args:
+        generator: Reusable PatternLibraryGenerator instance
+        output_path: Path where the generated module will be written
+        language: Programming language to generate for
+        options: Generation options dict
+
+    Returns:
+        Tuple of (success, error_message). error_message is None on success.
+    """
+    try:
+        generator.generate_library_file(output_path, language, options)
+        return True, None
+    except ValueError as e:
+        return False, f"Skipped: {e}"
+    except Exception as e:
+        return False, f"Failed: {e}"
+
+
+def generate_all_patterns(
+    project_dir: Path,
+    output_dir: Path,
+    languages: list[str] | None = None,
+    source_dir: Path | None = None,
+    max_patterns: int = 50,
+) -> None:
+    """
+    Generate pattern library modules for multiple languages.
+
+    Args:
+        project_dir: Project root directory to analyze
+        output_dir: Directory where generated modules will be written
+        languages: List of languages to generate (default: all supported)
+        source_dir: Specific directory to analyze (default: project_dir)
+        max_patterns: Maximum patterns per category (default: 50)
+    """
+    from integrations.graphiti.pattern_library_generator import LANGUAGE_EXTENSIONS
+
+    print_banner()
+    print(f"\n{icon(Icons.GEAR)} Batch Pattern Library Generation\n")
+
+    print_key_value("Project", str(project_dir))
+    print_key_value("Output Dir", str(output_dir))
+    if source_dir:
+        print_key_value("Source", str(source_dir))
+    print()
+
+    # Determine languages to generate
+    if languages:
+        # Validate provided languages
+        supported = set(LANGUAGE_EXTENSIONS.keys())
+        invalid = [lang for lang in languages if lang not in supported]
+        if invalid:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} Unsupported languages: {', '.join(invalid)}"
+                )
+            )
+            print(muted(f"Supported: {', '.join(sorted(supported))}"))
+            print()
+            return
+        target_languages = languages
+    else:
+        # Generate for all supported languages
+        target_languages = sorted(LANGUAGE_EXTENSIONS.keys())
+
+    print_header(f"Generating libraries for {len(target_languages)} languages")
+    print()
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create a single generator instance — it has no per-run state
+    generator = PatternLibraryGenerator(project_dir)
+
+    # Generate library for each language
+    success_count = 0
+    failed_languages = []
+
+    for i, language in enumerate(target_languages, 1):
+        print(f"[{i}/{len(target_languages)}] {language}...")
+
+        output_path = output_dir / f"{language}_patterns.py"
+
+        # Prepare per-language options
+        options: dict = {
+            "max_patterns_per_category": max_patterns,
+            "include_line_numbers": False,
+        }
+        if source_dir:
+            options["source_dir"] = source_dir
+
+        ok, err = _generate_for_language(generator, output_path, language, options)
+        if ok:
+            print(muted(f"  ✓ Saved to: {output_path}"))
+            success_count += 1
+        else:
+            print(muted(f"  ✗ {err}"))
+            failed_languages.append((language, err or "Unknown error"))
+
+        print()
+
+    # Print summary
+    print(divider())
+    print_header("Summary")
+    print()
+    print_key_value("Total Languages", str(len(target_languages)))
+    print_key_value("Successfully Generated", str(success_count))
+    print_key_value("Failed/Skipped", str(len(failed_languages)))
+    print()
+
+    if failed_languages:
+        print_header("Failed Languages")
+        print()
+        for lang, error in failed_languages:
+            print(f"  • {lang}: {error}")
+        print()
+
+    if success_count > 0:
+        print(success(f"{icon(Icons.SUCCESS)} Batch generation completed"))
+        print(muted(f"Libraries saved to: {output_dir}"))
+        print()
+    else:
+        print(warning(f"{icon(Icons.WARNING)} No libraries generated"))
+        print()
+
+
+def _resolve_project_dir(spec_dir: Path, explicit_project_dir: Path | None) -> Path:
+    """
+    Resolve the project root directory.
+
+    Uses an explicit path if provided, otherwise derives it from the spec_dir
+    by climbing three parents (.auto-claude/specs/XXX → project root) and
+    validates the result by checking for expected marker files.
+
+    Args:
+        spec_dir: Spec directory path
+        explicit_project_dir: Explicit project directory from --project-dir flag
+
+    Returns:
+        Validated project root path
+
+    Raises:
+        ValueError: If the resolved path does not look like a project root
+    """
+    if explicit_project_dir:
+        project_dir = explicit_project_dir.resolve()
+    else:
+        # Heuristic: .auto-claude/specs/XXX → project root
+        project_dir = spec_dir.parent.parent.parent
+
+    # Validate — check for at least one expected marker
+    markers = [".git", "package.json", "pyproject.toml", "setup.py", ".auto-claude"]
+    if not any((project_dir / m).exists() for m in markers):
+        raise ValueError(
+            f"Resolved project directory '{project_dir}' does not contain any of "
+            f"{markers}. Pass --project-dir explicitly."
+        )
+
+    return project_dir
+
+
 def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
     """
     Handle the pattern management command.
@@ -404,6 +631,47 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
             )
             return 1
         delete_pattern(spec_dir, args.index)
+    elif action == "generate":
+        if not args.language or not args.output:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} --language and --output required for 'generate' action"
+                )
+            )
+            return 1
+        try:
+            project_dir = _resolve_project_dir(
+                spec_dir, Path(args.project_dir) if args.project_dir else None
+            )
+        except ValueError as e:
+            print(warning(f"{icon(Icons.WARNING)} {e}"))
+            return 1
+        source_dir = Path(args.source) if args.source else None
+        max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
+        generate_patterns(
+            project_dir, args.language, Path(args.output), source_dir, max_patterns
+        )
+    elif action == "generate-all":
+        if not args.output_dir:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} --output-dir required for 'generate-all' action"
+                )
+            )
+            return 1
+        try:
+            project_dir = _resolve_project_dir(
+                spec_dir, Path(args.project_dir) if args.project_dir else None
+            )
+        except ValueError as e:
+            print(warning(f"{icon(Icons.WARNING)} {e}"))
+            return 1
+        source_dir = Path(args.source) if args.source else None
+        max_patterns = args.max_patterns if hasattr(args, "max_patterns") else 50
+        languages = args.languages.split(",") if args.languages else None
+        generate_all_patterns(
+            project_dir, Path(args.output_dir), languages, source_dir, max_patterns
+        )
     else:
         print(warning(f"{icon(Icons.WARNING)} Unknown action: {action}"))
         return 1
@@ -437,12 +705,32 @@ Examples:
 
   # Delete a pattern
   python pattern_commands.py delete --spec-dir .auto-claude/specs/001-feature --index 7
+
+  # Generate pattern library for Python
+  python pattern_commands.py generate --spec-dir .auto-claude/specs/001-feature --language python --output patterns/python_patterns.py
+
+  # Generate patterns from specific directory
+  python pattern_commands.py generate --spec-dir .auto-claude/specs/001-feature --language javascript --output patterns/js_patterns.py --source apps/frontend
+
+  # Generate pattern libraries for all supported languages
+  python pattern_commands.py generate-all --spec-dir .auto-claude/specs/001-feature --output-dir patterns/
+
+  # Generate libraries for specific languages only
+  python pattern_commands.py generate-all --spec-dir .auto-claude/specs/001-feature --output-dir patterns/ --languages python,javascript,typescript
         """,
     )
 
     parser.add_argument(
         "action",
-        choices=["list", "show", "approve", "override", "delete"],
+        choices=[
+            "list",
+            "show",
+            "approve",
+            "override",
+            "delete",
+            "generate",
+            "generate-all",
+        ],
         help="Action to perform",
     )
 
@@ -469,6 +757,49 @@ Examples:
         "--text",
         type=str,
         help="New pattern text (for 'override' action)",
+    )
+
+    parser.add_argument(
+        "--language",
+        type=str,
+        help="Programming language to generate patterns for (for 'generate' action)",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Output path for generated pattern library (for 'generate' action)",
+    )
+
+    parser.add_argument(
+        "--source",
+        type=str,
+        help="Source directory to analyze (for 'generate' action, default: project root)",
+    )
+
+    parser.add_argument(
+        "--max-patterns",
+        type=int,
+        default=50,
+        help="Maximum patterns per category (for 'generate' action, default: 50)",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="Output directory for generated pattern libraries (for 'generate-all' action)",
+    )
+
+    parser.add_argument(
+        "--languages",
+        type=str,
+        help="Comma-separated list of languages to generate (for 'generate-all' action, default: all supported)",
+    )
+
+    parser.add_argument(
+        "--project-dir",
+        type=str,
+        help="Explicit project root directory (default: derived from spec-dir by climbing 3 parents)",
     )
 
     args = parser.parse_args()
