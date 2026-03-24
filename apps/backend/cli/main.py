@@ -28,6 +28,11 @@ from .migration_commands import (
     handle_migration_command,
     handle_migration_status_command,
 )
+from .pattern_commands import (
+    handle_pattern_analyze_command,
+    handle_pattern_query_command,
+    handle_pattern_stats_command,
+)
 from .predictive_scan_commands import (
     handle_predictive_scan_check_command,
     handle_predictive_scan_command,
@@ -544,6 +549,50 @@ Environment Variables:
         help="Output format for security audit report (default: both)",
     )
 
+    # Failure pattern analysis commands
+    parser.add_argument(
+        "--failure-pattern-analyze",
+        action="store_true",
+        help="Analyze failure patterns from attempt history",
+    )
+    parser.add_argument(
+        "--failure-pattern-query",
+        type=str,
+        default=None,
+        metavar="QUERY",
+        help="Query stored failure patterns from Graphiti memory",
+    )
+    parser.add_argument(
+        "--failure-pattern-stats",
+        action="store_true",
+        help="Show failure pattern statistics",
+    )
+    parser.add_argument(
+        "--pattern-type",
+        type=str,
+        default=None,
+        choices=[
+            "recurring_error",
+            "escalating_complexity",
+            "model_limitation",
+            "circular_fix",
+            "context_exhaustion",
+        ],
+        help="Filter failure patterns by type (with --failure-pattern-query)",
+    )
+    parser.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.0,
+        help="Minimum confidence score for pattern queries (default: 0.0)",
+    )
+    parser.add_argument(
+        "--pattern-num-results",
+        type=int,
+        default=10,
+        help="Maximum number of pattern results (default: 10)",
+    )
+
     # Environment setup commands
     parser.add_argument(
         "--setup",
@@ -818,6 +867,71 @@ def _run_cli() -> None:
             spec_dir=spec_dir,
             output_format=args.security_output_format,
             verbose=args.verbose,
+        )
+        return
+
+    # Handle failure pattern analyze command
+    if args.failure_pattern_analyze:
+        handle_pattern_analyze_command(
+            project_dir=project_dir,
+            spec_id=args.spec,
+            output_json=args.json,
+        )
+        return
+
+    # Handle failure pattern query command
+    if args.failure_pattern_query is not None:
+        # Requires --spec for context
+        if not args.spec:
+            print_banner()
+            print("\nError: --spec is required for --failure-pattern-query")
+            print("\nUsage:")
+            print(
+                "  python auto-claude/run.py --spec 001 --failure-pattern-query 'error type'"
+            )
+            sys.exit(1)
+
+        spec_dir = find_spec(project_dir, args.spec)
+        if not spec_dir:
+            print_banner()
+            print(f"\nError: Spec '{args.spec}' not found")
+            print("\nAvailable specs:")
+            print_specs_list(project_dir)
+            sys.exit(1)
+
+        handle_pattern_query_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            query=args.failure_pattern_query,
+            pattern_type=args.pattern_type,
+            min_confidence=args.min_confidence,
+            num_results=args.pattern_num_results,
+            output_json=args.json,
+        )
+        return
+
+    # Handle failure pattern statistics command
+    if args.failure_pattern_stats:
+        # Requires --spec for context
+        if not args.spec:
+            print_banner()
+            print("\nError: --spec is required for --failure-pattern-stats")
+            print("\nUsage:")
+            print("  python auto-claude/run.py --spec 001 --failure-pattern-stats")
+            sys.exit(1)
+
+        spec_dir = find_spec(project_dir, args.spec)
+        if not spec_dir:
+            print_banner()
+            print(f"\nError: Spec '{args.spec}' not found")
+            print("\nAvailable specs:")
+            print_specs_list(project_dir)
+            sys.exit(1)
+
+        handle_pattern_stats_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            output_json=args.json,
         )
         return
 

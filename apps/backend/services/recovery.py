@@ -13,6 +13,7 @@ Key Features:
 - Escalation to human when stuck
 """
 
+import asyncio
 import json
 import logging
 import subprocess
@@ -22,6 +23,10 @@ from enum import Enum
 from pathlib import Path
 
 from core.file_utils import write_json_atomic
+from integrations.graphiti.config import is_graphiti_enabled
+from integrations.graphiti.failure_pattern_store import FailurePatternStore
+from integrations.graphiti.memory import get_graphiti_memory
+from integrations.graphiti.queries_pkg.schema import GroupIdMode
 from services.dead_letter_queue import DeadLetterQueue
 from services.notification_manager import NotificationManager
 
@@ -188,6 +193,131 @@ class RecoveryManager:
         # Initialize notification manager for user notifications
         self.notification_manager = NotificationManager(spec_dir)
 
+        # Initialize recovery metrics for tracking success rates
+        # Lazy import to avoid circular dependency with qa module
+        from qa.recovery_metrics import RecoveryMetrics
+
+        self.metrics = RecoveryMetrics(spec_dir)
+
+        # Lazy initialization of pattern store (only if Graphiti enabled)
+        self._pattern_store: FailurePatternStore | None = None
+
+    def _get_pattern_store(self) -> FailurePatternStore | None:
+        """
+        Get or create the FailurePatternStore instance.
+
+        Returns None if Graphiti is not enabled or not configured.
+
+        Returns:
+            FailurePatternStore instance or None
+        """
+        if not is_graphiti_enabled():
+            return None
+
+        if self._pattern_store is None:
+            try:
+                # Get Graphiti memory instance
+                memory = get_graphiti_memory(
+                    spec_dir=self.spec_dir,
+                    project_dir=self.project_dir,
+                    group_id_mode=GroupIdMode.PROJECT,  # Use project-wide patterns
+                )
+
+                # Extract spec ID from spec_dir path
+                spec_id = self.spec_dir.name if self.spec_dir.name else "unknown_spec"
+
+                # Create pattern store
+                self._pattern_store = FailurePatternStore(
+                    client=memory,
+                    group_id=memory.group_id,
+                    spec_context_id=spec_id,
+                    group_id_mode=GroupIdMode.PROJECT,
+                    project_dir=self.project_dir,
+                )
+
+                logger.debug(
+                    "Initialized FailurePatternStore for pattern-based recovery"
+                )
+
+            except Exception as e:
+                logger.warning(f"Failed to initialize FailurePatternStore: {e}")
+                return None
+
+        return self._pattern_store
+
+    def _lookup_recovery_patterns(
+        self, failure_type: FailureType, subtask_id: str, error: str | None = None
+    ) -> list[dict]:
+        """
+        Look up historical recovery patterns for similar failures.
+
+        Queries the FailurePatternStore for patterns that match the current
+        failure type and context. Returns pattern-based recovery recommendations.
+
+        Args:
+            failure_type: Type of failure that occurred
+            subtask_id: ID of the subtask that failed
+            error: Optional error message for similarity search
+
+        Returns:
+            List of pattern dictionaries with recovery recommendations:
+            [
+                {
+                    "pattern_type": "recurring_error",
+                    "description": "Pattern description",
+                    "frequency": 5,
+                    "confidence": 0.85,
+                    "recovery_recommendations": ["Try different approach"],
+                    "relevance_score": 0.92
+                },
+                ...
+            ]
+        """
+        pattern_store = self._get_pattern_store()
+
+        if not pattern_store:
+            return []
+
+        try:
+            # Build query for pattern search
+            query_parts = [
+                f"failure type: {failure_type.value}",
+                f"subtask: {subtask_id}",
+            ]
+
+            if error:
+                query_parts.append(f"error: {error[:200]}")  # Limit error length
+
+            query = " ".join(query_parts)
+
+            # Run async query in sync context
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                patterns = loop.run_until_complete(
+                    pattern_store.query_failure_patterns(
+                        query=query,
+                        pattern_type=failure_type.value,
+                        min_confidence=0.5,
+                        min_frequency=1,
+                        num_results=5,
+                        include_project_patterns=True,
+                    )
+                )
+            finally:
+                loop.close()
+
+            logger.debug(
+                f"Found {len(patterns)} recovery patterns for {failure_type.value} in {subtask_id}"
+            )
+
+            return patterns
+
+        except Exception as e:
+            logger.warning(f"Failed to lookup recovery patterns: {e}")
+            return []
+
     def _init_attempt_history(self) -> None:
         """Initialize the attempt history file."""
         initial_data = {
@@ -247,8 +377,100 @@ class RecoveryManager:
         # Cap at maximum delay to prevent excessively long waits
         return min(delay, BACKOFF_MAX_DELAY)
 
+    def _select_adaptive_strategy(
+        self,
+        failure_type: FailureType,
+        attempt_count: int,
+        subtask_id: str,
+        default_strategies: list[tuple[str, str, bool, str]],
+    ) -> tuple[str, str, bool]:
+        """
+        Select the best strategy based on historical success rates.
+
+        Uses adaptive selection to choose strategies with proven track records:
+        - Analyzes historical success rates for each candidate strategy
+        - Prefers strategies with >70% success rate and 5+ uses
+        - Falls back to default strategies if no proven winner exists
+        - Balances success rate with usage count (confidence)
+
+        Args:
+            failure_type: Type of failure that occurred
+            attempt_count: Number of previous attempts
+            subtask_id: ID of the subtask that failed
+            default_strategies: List of (name, description, use_fallback, guidance) tuples
+
+        Returns:
+            Tuple of (strategy_name, strategy_description, use_model_fallback)
+        """
+        strategy_stats = self.metrics.get_strategy_statistics()
+
+        # Score each candidate strategy based on historical performance
+        scored_strategies = []
+        for name, desc, use_fallback, _ in default_strategies:
+            stats = strategy_stats.get(name, {})
+            success_rate = stats.get("success_rate_percent", 0.0)
+            total_uses = stats.get("total_uses", 0)
+
+            # Calculate strategy score
+            # High success rate + high usage = high confidence
+            if total_uses >= 5 and success_rate >= 70.0:
+                # Strong candidate: proven track record
+                score = success_rate + (total_uses * 0.5)
+                scored_strategies.append(
+                    (name, desc, use_fallback, score, success_rate, total_uses)
+                )
+                logger.debug(
+                    f"Strategy '{name}': strong candidate (success: {success_rate:.1f}%, "
+                    f"uses: {total_uses}, score: {score:.1f})"
+                )
+            elif total_uses >= 3 and success_rate >= 50.0:
+                # Moderate candidate: some evidence of effectiveness
+                score = success_rate + (total_uses * 0.3)
+                scored_strategies.append(
+                    (name, desc, use_fallback, score, success_rate, total_uses)
+                )
+                logger.debug(
+                    f"Strategy '{name}': moderate candidate (success: {success_rate:.1f}%, "
+                    f"uses: {total_uses}, score: {score:.1f})"
+                )
+            else:
+                # Weak or no data: use as fallback only
+                logger.debug(
+                    f"Strategy '{name}': insufficient data (success: {success_rate:.1f}%, "
+                    f"uses: {total_uses})"
+                )
+
+        # Select best strategy if we have strong evidence
+        if scored_strategies:
+            # Sort by score (descending)
+            scored_strategies.sort(key=lambda x: x[3], reverse=True)
+            best_name, best_desc, best_fallback, best_score, best_rate, best_uses = (
+                scored_strategies[0]
+            )
+
+            logger.info(
+                f"Adaptive strategy selection: chose '{best_name}' "
+                f"(success rate: {best_rate:.1f}%, uses: {best_uses}, score: {best_score:.1f}) "
+                f"for {failure_type.value} in {subtask_id}"
+            )
+
+            return best_name, best_desc, best_fallback
+
+        # No strong candidates: use default strategy
+        default_name, default_desc, default_fallback, _ = default_strategies[0]
+        logger.debug(
+            f"No proven strategy found, using default '{default_name}' "
+            f"for {failure_type.value} in {subtask_id}"
+        )
+
+        return default_name, default_desc, default_fallback
+
     def select_retry_strategy(
-        self, failure_type: FailureType, attempt_count: int, subtask_id: str
+        self,
+        failure_type: FailureType,
+        attempt_count: int,
+        subtask_id: str,
+        error: str | None = None,
     ) -> RetryStrategy | None:
         """
         Select an appropriate retry strategy based on failure type and history.
@@ -258,6 +480,17 @@ class RecoveryManager:
         - Attempt 1: Model fallback (try different model)
         - Attempt 2+: Alternative approach with guidance
 
+        Enhanced with pattern-based recovery:
+        - Queries historical failure patterns for similar cases
+        - Uses pattern recovery recommendations when available
+        - Incorporates pattern confidence and frequency into strategy selection
+
+        Enhanced with adaptive strategy selection:
+        - Analyzes historical success rates for each candidate strategy
+        - Prefers strategies with proven track records (>70% success, 5+ uses)
+        - Falls back to default strategies when no strong evidence exists
+        - Tracks strategy performance for continuous learning
+
         For BROKEN_BUILD failures, no retry strategy is returned since
         these require rollback instead.
 
@@ -265,6 +498,7 @@ class RecoveryManager:
             failure_type: Type of failure that occurred
             attempt_count: Number of previous attempts (0-indexed)
             subtask_id: ID of the subtask that failed
+            error: Optional error message for pattern matching
 
         Returns:
             RetryStrategy if retry should be attempted, None if should escalate/skip
@@ -281,6 +515,25 @@ class RecoveryManager:
         if failure_type == FailureType.CONTEXT_EXHAUSTED:
             return None
 
+        # Look up historical patterns for this failure
+        patterns = self._lookup_recovery_patterns(failure_type, subtask_id, error)
+
+        # Extract pattern-based recommendations if available
+        pattern_guidance = ""
+        if patterns:
+            # Use the highest confidence pattern's recommendations
+            best_pattern = max(patterns, key=lambda p: p.get("confidence", 0.0))
+            pattern_recommendations = best_pattern.get("recovery_recommendations", [])
+            if pattern_recommendations:
+                pattern_guidance = "\n".join(
+                    f"• {rec}" for rec in pattern_recommendations[:3]
+                )
+                pattern_confidence = best_pattern.get("confidence", 0.0)
+                logger.info(
+                    f"Using pattern-based recovery guidance (confidence: {pattern_confidence:.2f}) "
+                    f"for {failure_type.value} in {subtask_id}"
+                )
+
         # For VERIFICATION_FAILED and UNKNOWN, select progressive strategies
         if failure_type == FailureType.VERIFICATION_FAILED:
             max_attempts = 3
@@ -290,35 +543,92 @@ class RecoveryManager:
 
             if attempt_count == 0:
                 # First attempt: direct retry
+                guidance = "Review the verification error and fix the issue"
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
                 return RetryStrategy(
                     name="direct_retry",
                     description="Retry with same approach",
                     use_model_fallback=False,
-                    guidance="Review the verification error and fix the issue",
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
             elif attempt_count == 1:
-                # Second attempt: try with model fallback
+                # Second attempt: use adaptive strategy selection
+                candidate_strategies = [
+                    (
+                        "model_fallback",
+                        "Retry with fallback model (opus→sonnet→haiku)",
+                        True,
+                        "",
+                    ),
+                    (
+                        "direct_retry",
+                        "Retry with same approach and corrections",
+                        False,
+                        "",
+                    ),
+                    ("context_analysis", "Retry with deeper error analysis", False, ""),
+                ]
+
+                strategy_name, strategy_desc, use_fallback = (
+                    self._select_adaptive_strategy(
+                        failure_type, attempt_count, subtask_id, candidate_strategies
+                    )
+                )
+
+                guidance = "Use a different model which may handle this task better"
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
                 return RetryStrategy(
-                    name="model_fallback",
-                    description="Retry with fallback model (opus→sonnet→haiku)",
-                    use_model_fallback=True,
-                    guidance="Use a different model which may handle this task better",
+                    name=strategy_name,
+                    description=strategy_desc,
+                    use_model_fallback=use_fallback,
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
             else:
                 # Third attempt: alternative approach with specific guidance
-                return RetryStrategy(
-                    name="alternative_approach",
-                    description="Try a simpler or different approach",
-                    use_model_fallback=True,
-                    guidance=(
-                        "IMPORTANT: Try a DIFFERENT approach:\n"
-                        "- Use a simpler implementation\n"
-                        "- Try a different library or pattern\n"
-                        "- Break down into smaller steps\n"
-                        "- Review previous attempt errors carefully"
+                # Use adaptive strategy selection
+                candidate_strategies = [
+                    (
+                        "alternative_approach",
+                        "Try a simpler or different approach",
+                        True,
+                        "",
                     ),
+                    (
+                        "incremental_fix",
+                        "Fix issues incrementally with testing",
+                        False,
+                        "",
+                    ),
+                    ("model_fallback", "Retry with fallback model", True, ""),
+                ]
+
+                strategy_name, strategy_desc, use_fallback = (
+                    self._select_adaptive_strategy(
+                        failure_type, attempt_count, subtask_id, candidate_strategies
+                    )
+                )
+
+                guidance = (
+                    "IMPORTANT: Try a DIFFERENT approach:\n"
+                    "- Use a simpler implementation\n"
+                    "- Try a different library or pattern\n"
+                    "- Break down into smaller steps\n"
+                    "- Review previous attempt errors carefully"
+                )
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
+                return RetryStrategy(
+                    name=strategy_name,
+                    description=strategy_desc,
+                    use_model_fallback=use_fallback,
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
 
@@ -330,26 +640,56 @@ class RecoveryManager:
 
             if attempt_count == 0:
                 # First attempt: direct retry
+                guidance = "Review the error message and fix the issue"
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
                 return RetryStrategy(
                     name="direct_retry",
                     description="Retry with same approach",
                     use_model_fallback=False,
-                    guidance="Review the error message and fix the issue",
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
             else:
-                # Second attempt: try with model fallback and alternative approach
-                return RetryStrategy(
-                    name="model_fallback_alternative",
-                    description="Retry with fallback model and alternative approach",
-                    use_model_fallback=True,
-                    guidance=(
-                        "Unknown error - try a different approach:\n"
-                        "- Simplify the implementation\n"
-                        "- Add error handling\n"
-                        "- Check for edge cases\n"
-                        "- Verify dependencies are available"
+                # Second attempt: use adaptive strategy selection
+                candidate_strategies = [
+                    (
+                        "model_fallback_alternative",
+                        "Retry with fallback model and alternative approach",
+                        True,
+                        "",
                     ),
+                    (
+                        "direct_retry_enhanced",
+                        "Retry with enhanced error handling",
+                        False,
+                        "",
+                    ),
+                    ("simplify_approach", "Simplify the implementation", False, ""),
+                ]
+
+                strategy_name, strategy_desc, use_fallback = (
+                    self._select_adaptive_strategy(
+                        failure_type, attempt_count, subtask_id, candidate_strategies
+                    )
+                )
+
+                guidance = (
+                    "Unknown error - try a different approach:\n"
+                    "- Simplify the implementation\n"
+                    "- Add error handling\n"
+                    "- Check for edge cases\n"
+                    "- Verify dependencies are available"
+                )
+                if pattern_guidance:
+                    guidance = f"{guidance}\n\nHistorical recovery patterns suggest:\n{pattern_guidance}"
+
+                return RetryStrategy(
+                    name=strategy_name,
+                    description=strategy_desc,
+                    use_model_fallback=use_fallback,
+                    guidance=guidance,
                     max_attempts=max_attempts,
                 )
 
@@ -680,7 +1020,7 @@ class RecoveryManager:
         return similar_count >= 2
 
     def determine_recovery_action(
-        self, failure_type: FailureType, subtask_id: str
+        self, failure_type: FailureType, subtask_id: str, error: str | None = None
     ) -> RecoveryAction:
         """
         Decide what to do based on failure type and history.
@@ -688,6 +1028,11 @@ class RecoveryManager:
         Uses select_retry_strategy() to choose appropriate retry strategies
         including model fallback, alternative approaches, and simpler implementations.
         Applies exponential backoff to prevent API rate limiting.
+
+        Enhanced with pattern-based recovery from FailurePatternStore:
+        - Queries historical patterns for similar failures
+        - Incorporates pattern-based recommendations into retry strategies
+        - Uses pattern confidence and frequency to guide recovery approach
 
         Integrates with NotificationManager to determine when to notify users:
         - Silent retries below retry_threshold (default: 3 attempts)
@@ -702,6 +1047,7 @@ class RecoveryManager:
         Args:
             failure_type: Type of failure that occurred
             subtask_id: ID of the subtask that failed
+            error: Optional error message for pattern matching
 
         Returns:
             RecoveryAction describing what to do (includes wait_seconds, strategy,
@@ -782,7 +1128,9 @@ class RecoveryManager:
             )
 
         # For other failure types, use strategy selection
-        strategy = self.select_retry_strategy(failure_type, attempt_count, subtask_id)
+        strategy = self.select_retry_strategy(
+            failure_type, attempt_count, subtask_id, error
+        )
 
         if strategy:
             # Retry with selected strategy
@@ -1159,6 +1507,8 @@ class RecoveryManager:
         Should be called after determine_recovery_action() to track
         whether the user was notified or if this was a silent retry.
 
+        Also records the recovery attempt in metrics for success rate tracking.
+
         Args:
             subtask_id: ID of the subtask that failed
             failure_type: Type of failure that occurred
@@ -1168,6 +1518,14 @@ class RecoveryManager:
             True if recorded successfully
         """
         attempt_count = self.get_attempt_count(subtask_id)
+
+        # Record recovery attempt in metrics for success rate tracking
+        if recovery_action.strategy:
+            strategy_name = recovery_action.strategy.name
+            logger.debug(
+                f"Recording recovery attempt with strategy '{strategy_name}' "
+                f"for {subtask_id} (attempt {attempt_count + 1})"
+            )
 
         if recovery_action.should_notify:
             # Record that a notification was sent
@@ -1186,6 +1544,71 @@ class RecoveryManager:
                 attempt_count=attempt_count,
                 failure_type=failure_type.value,
             )
+
+    def record_recovery_outcome(
+        self,
+        subtask_id: str,
+        success: bool,
+        iterations: int,
+        duration_seconds: float | None = None,
+        strategy: str | None = None,
+        issues_fixed: int = 0,
+    ) -> bool:
+        """
+        Record the outcome of a recovery attempt in metrics.
+
+        Should be called after a recovery attempt completes to track
+        success rates for different recovery strategies.
+
+        Args:
+            subtask_id: ID of the subtask that was being recovered
+            success: Whether the recovery attempt succeeded
+            iterations: Number of iterations used in the recovery attempt
+            duration_seconds: Optional duration of the recovery attempt
+            strategy: Strategy used for recovery (optional)
+            issues_fixed: Number of issues fixed (default: 0)
+
+        Returns:
+            True if recorded successfully
+        """
+        outcome = "success" if success else "failed"
+
+        logger.info(
+            f"Recording recovery outcome: {outcome} for {subtask_id} "
+            f"(strategy: {strategy or 'unknown'}, iterations: {iterations})"
+        )
+
+        return self.metrics.record_attempt(
+            outcome=outcome,
+            iterations=iterations,
+            duration_seconds=duration_seconds,
+            issues_fixed=issues_fixed,
+            strategy=strategy,
+        )
+
+    def get_recovery_metrics_summary(self) -> dict:
+        """
+        Get comprehensive recovery metrics summary.
+
+        Returns:
+            Dict with recovery metrics including success rates,
+            strategy statistics, and recent history
+        """
+        return self.metrics.get_summary()
+
+    def get_strategy_success_rates(self) -> dict:
+        """
+        Get success rates for all recovery strategies.
+
+        Returns:
+            Dict mapping strategy names to their success rates:
+            {
+                "direct_retry": {"success_rate_percent": 70.0, "total_uses": 10},
+                "model_fallback": {"success_rate_percent": 85.0, "total_uses": 5},
+                ...
+            }
+        """
+        return self.metrics.get_strategy_statistics()
 
     def get_notification_statistics(self) -> dict:
         """

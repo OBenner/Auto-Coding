@@ -65,6 +65,7 @@ from ui import (
 from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
 from .memory_manager import (
     debug_memory_system_status,
+    get_failure_patterns,
     get_graphiti_context,
     get_pattern_suggestions,
 )
@@ -1014,6 +1015,20 @@ async def run_autonomous_agent(
                 query=subtask_description,
             )
 
+            # Retrieve failure patterns for retries (learn from past failures)
+            failure_patterns = None
+            if attempt_count > 0:
+                failure_patterns = await get_failure_patterns(
+                    spec_dir=spec_dir,
+                    project_dir=project_dir,
+                    query=subtask_description,
+                    num_results=3,  # Get top 3 most relevant failure patterns
+                )
+                if failure_patterns:
+                    print_status(
+                        "Failure pattern context loaded for recovery", "success"
+                    )
+
             # Generate focused, minimal prompt for this subtask
             prompt = generate_subtask_prompt(
                 spec_dir=spec_dir,
@@ -1030,6 +1045,10 @@ async def run_autonomous_agent(
                 prompt += f"\n\n## RECOVERY STRATEGY\n\n{recovery_guidance}\n"
                 # Clear the guidance after using it
                 recovery_guidance = None
+
+            # Add failure patterns for retries (learn from past similar failures)
+            if failure_patterns:
+                prompt += f"\n\n{failure_patterns}\n"
 
             # Load and append relevant file context
             context = load_subtask_context(spec_dir, project_dir, next_subtask)
