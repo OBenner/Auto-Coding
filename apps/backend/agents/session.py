@@ -99,6 +99,7 @@ class ConversationRound:
         assistant_response: The complete text response from the agent
         tool_calls: List of tools called during this round
         code_references: List of file paths referenced in this round
+        thinking_blocks: List of thinking/reasoning blocks from extended thinking
         phase: Execution phase (planning, coding, validation)
         input_tokens: Number of input tokens used
         output_tokens: Number of output tokens used
@@ -119,6 +120,7 @@ class ConversationRound:
         self.assistant_response = ""
         self.tool_calls: list[dict[str, Any]] = []
         self.code_references: set[str] = set()
+        self.thinking_blocks: list[str] = []
         self.phase = phase
         self.input_tokens = 0
         self.output_tokens = 0
@@ -140,6 +142,11 @@ class ConversationRound:
             # (which also have a "pattern" key alongside "path")
             self.code_references.add(tool_input["path"])
 
+    def add_thinking_block(self, thinking: str) -> None:
+        """Record a thinking block from extended thinking."""
+        if thinking and thinking.strip():
+            self.thinking_blocks.append(thinking)
+
     def set_usage(self, input_tokens: int, output_tokens: int) -> None:
         """Set token usage for this round."""
         self.input_tokens = input_tokens
@@ -155,6 +162,7 @@ class ConversationRound:
             "assistant_response": self.assistant_response,
             "tool_calls": self.tool_calls,
             "code_references": list(self.code_references),
+            "thinking_blocks": self.thinking_blocks,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "model": self.model,
@@ -173,6 +181,7 @@ class ConversationRound:
         round_obj.assistant_response = data["assistant_response"]
         round_obj.tool_calls = data.get("tool_calls", [])
         round_obj.code_references = set(data.get("code_references", []))
+        round_obj.thinking_blocks = data.get("thinking_blocks", [])
         round_obj.input_tokens = data.get("input_tokens", 0)
         round_obj.output_tokens = data.get("output_tokens", 0)
         return round_obj

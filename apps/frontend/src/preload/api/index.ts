@@ -22,6 +22,8 @@ import type { PatternAPI } from './modules/pattern-api';
 import { createPatternAPI } from './modules/pattern-api';
 import type { SessionReplayAPI } from './modules/session-replay-api';
 import { createSessionReplayAPI } from './modules/session-replay-api';
+import type { AgentInspectorAPI } from './modules/agent-inspector-api';
+import { createAgentInspectorAPI } from './modules/agent-inspector-api';
 import { ContextViewerAPI, createContextViewerAPI } from './modules/context-viewer-api';
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
 import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
@@ -57,6 +59,8 @@ export interface ElectronAPI extends
   pattern: PatternAPI;
   /** Session replay API for learning and review */
   sessionReplay: SessionReplayAPI;
+  /** Agent inspector API for thought process transparency */
+  agentInspector: AgentInspectorAPI;
   /** Scheduler API for build scheduling and queue management */
   scheduler: SchedulerAPI;
 }
@@ -86,6 +90,7 @@ export const createElectronAPI = (): ElectronAPI => {
     queue: createQueueAPI(),  // Queue routing for rate limit recovery
     pattern: createPatternAPI(),
     sessionReplay: createSessionReplayAPI(),
+    agentInspector: createAgentInspectorAPI(),
     scheduler: createSchedulerAPI()
   };
 };
@@ -111,6 +116,7 @@ export {
   createPluginAPI,
   createPatternAPI,
   createSessionReplayAPI,
+  createAgentInspectorAPI,
   createContextViewerAPI,
   createSchedulerAPI,
   createFeedbackAPI,
@@ -140,6 +146,7 @@ export type {
   PluginAPI,
   PatternAPI,
   SessionReplayAPI,
+  AgentInspectorAPI,
   ContextViewerAPI,
   SchedulerAPI,
   FeedbackAPI,
