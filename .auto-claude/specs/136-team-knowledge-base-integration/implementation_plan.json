@@ -444,8 +444,9 @@
     }
   },
   "qa_signoff": null,
-  "status": "ai_review",
+  "status": "human_review",
   "planStatus": "review",
-  "updated_at": "2026-02-06T19:12:02.973Z",
-  "last_updated": "2026-02-06T20:00:00.000000+00:00"
+  "updated_at": "2026-03-05T08:10:22.042Z",
+  "last_updated": "2026-02-06T20:00:00.000000+00:00",
+  "recoveryNote": "Task recovered from stuck state at 2026-03-05T08:10:22.042Z"
 }

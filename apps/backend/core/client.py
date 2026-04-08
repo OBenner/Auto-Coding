@@ -171,6 +171,7 @@ from agents.tools_pkg import (
     GRAPHITI_MCP_TOOLS,
     LINEAR_TOOLS,
     PUPPETEER_TOOLS,
+    SEARXNG_TOOLS,
     create_auto_claude_mcp_server,
     get_allowed_tools,
     get_required_mcp_servers,
@@ -442,6 +443,11 @@ def is_graphiti_mcp_enabled() -> bool:
 def get_graphiti_mcp_url() -> str:
     """Get the Graphiti MCP server URL."""
     return os.environ.get("GRAPHITI_MCP_URL", "http://localhost:8000/mcp/")
+
+
+def get_searxng_url() -> str:
+    """Get the SearXNG instance URL for web search."""
+    return os.environ.get("SEARXNG_URL", "http://localhost:8888")
 
 
 def is_electron_mcp_enabled() -> bool:
@@ -951,6 +957,9 @@ def create_client(
     # Check if Graphiti MCP is enabled (already filtered by get_required_mcp_servers)
     graphiti_mcp_enabled = "graphiti" in required_servers
 
+    # Check if SearXNG MCP is enabled (already filtered by get_required_mcp_servers)
+    searxng_mcp_enabled = "searxng" in required_servers
+
     # Determine browser tools for permissions (already in allowed_tools_list)
     browser_tools_permissions = []
     if "electron" in required_servers:
@@ -1053,6 +1062,11 @@ def create_client(
                     if graphiti_mcp_enabled
                     else []
                 ),
+                *(
+                    [f"{tool}(*)" for tool in SEARXNG_TOOLS]
+                    if searxng_mcp_enabled
+                    else []
+                ),
                 *[f"{tool}(*)" for tool in browser_tools_permissions],
             ],
         },
@@ -1100,6 +1114,8 @@ def create_client(
         mcp_servers_list.append("linear (project management)")
     if graphiti_mcp_enabled:
         mcp_servers_list.append("graphiti-memory (knowledge graph)")
+    if searxng_mcp_enabled:
+        mcp_servers_list.append("searxng (free web search)")
     if "actor-critic-thinking" in required_servers:
         mcp_servers_list.append("actor-critic-thinking (dual-perspective analysis)")
     if "auto-claude" in required_servers and auto_claude_tools_enabled:
@@ -1174,6 +1190,16 @@ def create_client(
         mcp_servers["graphiti-memory"] = {
             "type": "http",
             "url": get_graphiti_mcp_url(),
+        }
+
+    # SearXNG MCP server for free web search
+    if searxng_mcp_enabled:
+        mcp_servers["searxng"] = {
+            "command": "npx",
+            "args": ["-y", "mcp-searxng"],
+            "env": {
+                "SEARXNG_URL": get_searxng_url(),
+            },
         }
 
     # Actor-Critic Thinking MCP server for dual-perspective analysis

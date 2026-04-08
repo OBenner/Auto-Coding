@@ -88,6 +88,14 @@ GRAPHITI_MCP_TOOLS = [
     "mcp__graphiti-memory__get_entity_edge",  # Get specific entity/relationship
 ]
 
+# SearXNG MCP tools for free web search (when SEARXNG_ENABLED is set)
+# SearXNG is a self-hosted metasearch engine - free alternative to Anthropic's WebSearch
+# See guides/SEARXNG-SETUP.md for Docker setup instructions
+SEARXNG_TOOLS = [
+    "mcp__searxng__web_search",  # Search web via SearXNG metasearch
+    "mcp__searxng__read_url",  # Fetch and parse URL content
+]
+
 # =============================================================================
 # Browser Automation MCP Tools (QA agents only)
 # =============================================================================
@@ -139,6 +147,25 @@ def is_electron_mcp_enabled() -> bool:
     - Embedded mode: MCP server runs inside Electron process
     """
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
+
+
+def is_searxng_enabled() -> bool:
+    """
+    Check if SearXNG MCP server integration is enabled.
+
+    Requires SEARXNG_ENABLED to be set to 'true'.
+    When enabled, agents can use SearXNG tools for free web search.
+
+    SearXNG is a self-hosted metasearch engine that aggregates results from
+    multiple search engines (DuckDuckGo, Brave, Google, Bing, etc.).
+    This provides a free alternative to Anthropic's WebSearch ($0.01/query).
+
+    Prerequisites:
+    - Docker installed and running
+    - SearXNG container running on SEARXNG_URL (default: http://localhost:8888)
+    - JSON format enabled in SearXNG settings.yml
+    """
+    return os.environ.get("SEARXNG_ENABLED", "").lower() == "true"
 
 
 # =============================================================================
@@ -495,14 +522,15 @@ def _map_mcp_server_name(
     if not name:
         return None
     mappings = {
+        "actor-critic-thinking": "actor-critic-thinking",
+        "auto-claude": "auto-claude",
         "context7": "context7",
+        "electron": "electron",
         "graphiti-memory": "graphiti",
         "graphiti": "graphiti",
         "linear": "linear",
-        "electron": "electron",
         "puppeteer": "puppeteer",
-        "auto-claude": "auto-claude",
-        "actor-critic-thinking": "actor-critic-thinking",
+        "searxng": "searxng",
     }
     # Check if it's a known mapping
     mapped = mappings.get(name.lower().strip())
@@ -589,6 +617,10 @@ def get_required_mcp_servers(
     # Filter graphiti if not enabled
     if "graphiti" in servers and not os.environ.get("GRAPHITI_MCP_URL"):
         servers = [s for s in servers if s != "graphiti"]
+
+    # Add SearXNG when enabled (free web search alternative)
+    if is_searxng_enabled() and "searxng" not in servers:
+        servers.append("searxng")
 
     # Handle actor-critic-thinking for agents that have it enabled
     # This is a special marker in agent configs that adds the server when enabled

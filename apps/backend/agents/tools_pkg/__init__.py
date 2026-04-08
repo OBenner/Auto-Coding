@@ -41,6 +41,7 @@ from .models import (
     GRAPHITI_MCP_TOOLS,
     LINEAR_TOOLS,
     PUPPETEER_TOOLS,
+    SEARXNG_TOOLS,
     # Auto-Code tool names
     TOOL_GET_BUILD_PROGRESS,
     TOOL_GET_SESSION_CONTEXT,
@@ -79,6 +80,7 @@ __all__ = [
     "GRAPHITI_MCP_TOOLS",
     "ELECTRON_TOOLS",
     "PUPPETEER_TOOLS",
+    "SEARXNG_TOOLS",
     # Auto-Code tool name constants
     "TOOL_UPDATE_SUBTASK_STATUS",
     "TOOL_GET_BUILD_PROGRESS",
