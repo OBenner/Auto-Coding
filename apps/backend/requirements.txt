@@ -28,7 +28,7 @@ google-generativeai>=0.8.0
 
 # LiteLLM - Unified interface for 100+ LLM providers
 # Provides consistent API for OpenAI, Anthropic, Azure, Google, Ollama, etc.
-litellm==1.82.6
+litellm==1.83.4
 
 # OpenAI SDK - Required for OpenRouter integration
 # OpenRouter uses OpenAI-compatible API
