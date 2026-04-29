@@ -1248,9 +1248,7 @@ async def run_autonomous_agent(
                 return
 
             status = result.status
-            response = result.response_text
             usage_metadata = result.usage_metadata
-            _decision_tracker = result.decision_tracker
 
             if (
                 runtime_mode == "patch_proposal"

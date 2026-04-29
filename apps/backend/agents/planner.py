@@ -242,7 +242,6 @@ async def run_followup_planner(
             requirements=RuntimeRequirements.planner(),
         )
         status = result.status
-        response = result.response_text
         usage_metadata = result.usage_metadata
 
         # Call after_session hook for enabled agent plugins
