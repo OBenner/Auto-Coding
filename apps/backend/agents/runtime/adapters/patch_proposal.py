@@ -1,7 +1,6 @@
 """Patch proposal runtime adapter."""
 
 import json
-import re
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -405,10 +404,7 @@ def save_patch_result_artifact(
 
 
 def _extract_json_object(text: str) -> str:
-    stripped = text.strip()
-    fence_match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, re.DOTALL)
-    if fence_match:
-        stripped = fence_match.group(1).strip()
+    stripped = _strip_markdown_fence(text)
 
     start = stripped.find("{")
     if start < 0:
@@ -437,6 +433,20 @@ def _extract_json_object(text: str) -> str:
                 return stripped[start : index + 1]
 
     raise PatchProposalError("Patch proposal did not contain a complete JSON object")
+
+
+def _strip_markdown_fence(text: str) -> str:
+    stripped = text.strip()
+    lines = stripped.splitlines()
+    if len(lines) < 2:
+        return stripped
+
+    opening = lines[0].strip().lower()
+    closing = lines[-1].strip()
+    if opening in {"```", "```json"} and closing == "```":
+        return "\n".join(lines[1:-1]).strip()
+
+    return stripped
 
 
 def _clean_diff_path(path: str) -> str:

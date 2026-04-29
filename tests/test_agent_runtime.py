@@ -295,6 +295,16 @@ def test_parse_patch_proposal_handles_braces_inside_strings():
     assert proposal == {"summary": "contains { braces }", "files": []}
 
 
+def test_parse_patch_proposal_strips_markdown_fence_without_regex():
+    proposal = parse_patch_proposal(
+        """```json
+{"summary": "fenced", "files": []}
+```"""
+    )
+
+    assert proposal == {"summary": "fenced", "files": []}
+
+
 def test_patch_mode_marks_subtask_completed(tmp_path: Path):
     from agents.coder import _mark_patch_subtask_completed
 
