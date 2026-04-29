@@ -39,6 +39,10 @@ from .predictive_scan_commands import (
     handle_predictive_scan_command,
     handle_predictive_scan_status_command,
 )
+from .provider_smoke_commands import (
+    DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS,
+    handle_provider_smoke_command,
+)
 from .qa_commands import (
     handle_qa_command,
     handle_qa_status_command,
@@ -182,6 +186,29 @@ Environment Variables:
         "--runtime-modes",
         action="store_true",
         help="Show provider/runtime compatibility and exit",
+    )
+
+    parser.add_argument(
+        "--provider-smoke",
+        action="store_true",
+        help="Run an opt-in text-only smoke check for the configured provider",
+    )
+
+    parser.add_argument(
+        "--provider-smoke-prompt",
+        type=str,
+        default=None,
+        help="With --provider-smoke: custom prompt for the smoke request",
+    )
+
+    parser.add_argument(
+        "--provider-smoke-timeout",
+        type=float,
+        default=DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS,
+        help=(
+            "With --provider-smoke: timeout in seconds "
+            f"(default: {DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS:g})"
+        ),
     )
 
     parser.add_argument(
@@ -734,6 +761,19 @@ def _run_cli() -> None:
     # Handle --runtime-modes command before requiring a spec.
     if args.runtime_modes:
         handle_runtime_modes_command(output_json=args.json)
+        return
+
+    # Handle --provider-smoke command before requiring a spec.
+    if args.provider_smoke:
+        result = handle_provider_smoke_command(
+            project_dir=project_dir,
+            model=model,
+            prompt=args.provider_smoke_prompt,
+            timeout_seconds=args.provider_smoke_timeout,
+            output_json=args.json,
+        )
+        if not result.success:
+            sys.exit(1)
         return
 
     # Handle --list command

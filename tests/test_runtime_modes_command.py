@@ -25,6 +25,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "claude" in output
     assert "openai" in output
     assert "patch_proposal" in output
+    assert "--provider-smoke" in output
     assert payload["providers"][0]["provider"] == "claude"
 
 
@@ -40,3 +41,4 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert provider_rows["openai"]["full_autonomous"] == "no"
     assert provider_rows["openai"]["analysis_only"] == "yes"
     assert "runtime_modes" in payload
+    assert "provider_smoke" in payload["recommendations"]

@@ -39,6 +39,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
                 "Use a non-Claude completion provider with "
                 "--runtime-mode patch_proposal for coder subtasks."
             ),
+            "provider_smoke": "Use --provider-smoke before running a spec.",
         },
     }
 
@@ -81,6 +82,7 @@ def format_runtime_modes_text() -> str:
             "  Full autonomous: python run.py --spec 001 --provider claude",
             "  Analysis:        python run.py --spec 001 --provider openai --analyze",
             "  Patch proposal:  python run.py --spec 001 --provider openai --runtime-mode patch_proposal",
+            "  Provider smoke:  python run.py --provider openai --provider-smoke",
         ]
     )
 

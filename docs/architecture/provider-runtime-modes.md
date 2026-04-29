@@ -100,6 +100,17 @@ python run.py --spec 001 --provider openai --analyze --analysis-prompt "Review i
 
 The analysis output is saved under `artifacts/analysis_only_analysis_*.md`.
 
+To verify a configured provider before using it in a spec, run an opt-in smoke
+check:
+
+```bash
+python run.py --provider openai --provider-smoke
+python run.py --provider openai --model gpt-4o --provider-smoke --json
+```
+
+The smoke check sends a short text-only request through the provider abstraction
+and reports whether the configured key/model can return a response.
+
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
 phases will fail fast with a capability error instead of attempting an unsafe
@@ -170,4 +181,6 @@ translation and security parity, if the limited modes prove useful.
 - `apps/backend/cli/runtime_commands.py` - runtime compatibility CLI.
 - `apps/backend/agents/planner.py` - runtime selection for follow-up planning.
 - `apps/backend/core/providers/` - provider adapters and provider factory.
+- `apps/backend/cli/provider_smoke_commands.py` - opt-in live provider smoke
+  checks.
 - `tests/test_agent_runtime.py` - runtime capability and patch proposal tests.
