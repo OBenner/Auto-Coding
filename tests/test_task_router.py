@@ -192,6 +192,48 @@ routing:
         load_model_routing_config(config_path)
 
 
+def test_provider_model_mismatch_fails_validation(tmp_path):
+    """Direct providers should only route to models from their pricing provider."""
+    config_path = tmp_path / "model_routing.yaml"
+    config_path.write_text(
+        """
+routing:
+  low:
+    provider: google
+    model: gpt-4o
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="provider/model mismatch"):
+        load_model_routing_config(config_path)
+
+
+def test_invalid_routing_section_shape_fails_validation(tmp_path):
+    """Malformed routing sections should fail with ValueError."""
+    config_path = tmp_path / "model_routing.yaml"
+    config_path.write_text("routing: []", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="'routing' section must be a mapping"):
+        load_model_routing_config(config_path)
+
+
+def test_invalid_threshold_values_fail_validation(tmp_path):
+    """Complexity thresholds should be numeric when provided."""
+    config_path = tmp_path / "model_routing.yaml"
+    config_path.write_text(
+        """
+complexity_thresholds:
+  high: hard
+  medium: 0.4
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Complexity thresholds must be numeric"):
+        load_model_routing_config(config_path)
+
+
 def test_invalid_yaml_syntax_raises_value_error(tmp_path):
     """Malformed YAML should honor the public ValueError contract."""
     config_path = tmp_path / "model_routing.yaml"
@@ -368,3 +410,40 @@ def test_create_agent_session_applies_route_when_subtask_provided(tmp_path):
     assert routed_config.provider == "openai"
     assert routed_config.openai_model == "gpt-4o-mini"
     assert session.config.model == "gpt-4o-mini"
+
+
+def test_create_agent_session_explicit_model_bypasses_routing(tmp_path):
+    """Explicit model overrides should bypass task routing even with a subtask."""
+    from core.providers import factory
+
+    class DummyProvider:
+        name = "openai"
+
+        def create_session(self, session_config):
+            return SimpleNamespace(client=object(), config=session_config)
+
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch.object(
+            factory.ProviderConfig,
+            "from_env",
+            return_value=ProviderConfig(provider="openai", openai_model="gpt-4o"),
+        ),
+        patch.object(
+            factory, "create_engine_provider", return_value=DummyProvider()
+        ) as create_provider,
+        patch("core.providers.task_router.TaskComplexityRouter") as router_cls,
+    ):
+        session = factory.create_agent_session(
+            agent_type="coder",
+            project_dir=tmp_path,
+            spec_dir=tmp_path / ".auto-claude" / "specs" / "001",
+            model="gpt-4o-mini",
+            subtask={"description": "Fix typo"},
+        )
+
+    provider_config = create_provider.call_args.args[0]
+    assert provider_config.provider == "openai"
+    assert provider_config.openai_model == "gpt-4o"
+    assert session.config.model == "gpt-4o-mini"
+    router_cls.assert_not_called()

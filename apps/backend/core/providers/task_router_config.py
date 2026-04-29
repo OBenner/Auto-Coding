@@ -20,6 +20,11 @@ from core.providers.cost_calculator import MODEL_PRICING
 
 logger = logging.getLogger(__name__)
 
+PROVIDER_PRICING_ALIASES = {
+    "claude": "anthropic",
+}
+AGGREGATOR_PROVIDERS = {"litellm", "openrouter"}
+
 
 DEFAULT_MODEL_ROUTING_CONFIG: dict[str, Any] = {
     "complexity_thresholds": {
@@ -105,8 +110,16 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
     """Apply MODEL_ROUTER_{LEVEL}_PROVIDER/MODEL env overrides."""
     updated = copy.deepcopy(config)
     routing = updated.setdefault("routing", {})
+    if not isinstance(routing, dict):
+        return updated
+
     for level in ("high", "medium", "low"):
-        route = routing.setdefault(level, {})
+        if level not in routing:
+            routing[level] = {}
+        route = routing[level]
+        if not isinstance(route, dict):
+            continue
+
         env_prefix = f"MODEL_ROUTER_{level.upper()}"
         provider = os.getenv(f"{env_prefix}_PROVIDER")
         model = os.getenv(f"{env_prefix}_MODEL")
@@ -129,15 +142,26 @@ def _validate_config(config: dict[str, Any]) -> None:
     """
     valid_providers = {provider.value for provider in AIEngineProvider}
     routing = config.get("routing", {})
+    if not isinstance(routing, dict):
+        raise ValueError("Model routing config 'routing' section must be a mapping")
 
     for level in ("high", "medium", "low"):
         if level not in routing:
             raise ValueError(
                 f"Missing model routing entry for complexity level: {level}"
             )
+        if not isinstance(routing[level], dict):
+            raise ValueError(
+                f"Model routing entry for complexity level {level} must be a mapping"
+            )
 
         provider = str(routing[level].get("provider", "")).lower()
         model = str(routing[level].get("model", ""))
+        if not provider or not model:
+            raise ValueError(
+                f"Model routing entry for complexity level {level} must include "
+                "provider and model"
+            )
 
         if provider not in valid_providers:
             raise ValueError(
@@ -149,10 +173,33 @@ def _validate_config(config: dict[str, Any]) -> None:
                 f"Invalid model router model for {level}: {model}. "
                 "Model must exist in MODEL_PRICING."
             )
+        pricing_provider = str(MODEL_PRICING[model].get("provider", "")).lower()
+        normalized_provider = PROVIDER_PRICING_ALIASES.get(provider, provider)
+        if (
+            provider not in AGGREGATOR_PROVIDERS
+            and pricing_provider not in {"", "unknown"}
+            and normalized_provider != pricing_provider
+        ):
+            raise ValueError(
+                f"Model router provider/model mismatch for {level}: {provider}/{model}"
+            )
 
     thresholds = config.get("complexity_thresholds", {})
-    if float(thresholds.get("high", 0.7)) <= float(thresholds.get("medium", 0.4)):
+    if not isinstance(thresholds, dict):
+        raise ValueError(
+            "Model routing config 'complexity_thresholds' section must be a mapping"
+        )
+    try:
+        high_threshold = float(thresholds.get("high", 0.7))
+        medium_threshold = float(thresholds.get("medium", 0.4))
+        low_threshold = float(thresholds["low"]) if "low" in thresholds else None
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Complexity thresholds must be numeric") from exc
+
+    if high_threshold <= medium_threshold:
         raise ValueError("High complexity threshold must be greater than medium.")
+    if low_threshold is not None and medium_threshold <= low_threshold:
+        raise ValueError("Medium complexity threshold must be greater than low.")
 
 
 def load_model_routing_config(config_path: Path | None = None) -> dict[str, Any]:
