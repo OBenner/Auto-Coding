@@ -15,10 +15,9 @@ SENSITIVE_PATH_PARTS = {
     ".git",
     ".claude",
     ".mcp.json",
-    ".env",
-    ".env.local",
-    ".env.production",
+    "secrets",
 }
+SENSITIVE_FILENAME_PREFIXES = (".env",)
 
 PATCH_PROMPT_TEMPLATE = """\
 You are running in Auto Code patch proposal mode.
@@ -168,7 +167,9 @@ class PatchProposalRuntimeSession:
         ]
         if artifacts:
             response_lines.extend(["", "Artifacts:"])
-            response_lines.extend(f"- {name}: {path}" for name, path in artifacts.items())
+            response_lines.extend(
+                f"- {name}: {path}" for name, path in artifacts.items()
+            )
         if tests:
             response_lines.extend(["", "Suggested verification commands:"])
             response_lines.extend(f"- {test}" for test in tests)
@@ -289,6 +290,8 @@ def validate_workspace_relative_path(path: str) -> None:
         raise PatchProposalError(f"Patch path contains unsafe segments: {path}")
     if any(part in SENSITIVE_PATH_PARTS for part in candidate.parts):
         raise PatchProposalError(f"Patch path targets sensitive file: {path}")
+    if candidate.name.startswith(SENSITIVE_FILENAME_PREFIXES):
+        raise PatchProposalError(f"Patch path targets sensitive file: {path}")
 
 
 def apply_git_patch(patch: str, project_dir: Path) -> None:
@@ -347,11 +350,11 @@ def save_patch_artifacts(
         "proposal": proposal,
         "raw_response": raw_response,
     }
-    proposal_path.write_text(
-        json.dumps(proposal_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    diff_path.write_text(patch if patch.endswith("\n") else f"{patch}\n", encoding="utf-8")
+    proposal_json = json.dumps(proposal_payload, indent=2, ensure_ascii=False)
+    diff_text = patch if patch.endswith("\n") else f"{patch}\n"
+
+    proposal_path.write_text(proposal_json, encoding="utf-8")
+    diff_path.write_text(diff_text, encoding="utf-8")
 
     return {
         "patch_proposal": str(proposal_path),
@@ -408,10 +411,32 @@ def _extract_json_object(text: str) -> str:
         stripped = fence_match.group(1).strip()
 
     start = stripped.find("{")
-    end = stripped.rfind("}")
-    if start < 0 or end < start:
+    if start < 0:
         raise PatchProposalError("Patch proposal did not contain a JSON object")
-    return stripped[start : end + 1]
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for index, char in enumerate(stripped[start:], start=start):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return stripped[start : index + 1]
+
+    raise PatchProposalError("Patch proposal did not contain a complete JSON object")
 
 
 def _clean_diff_path(path: str) -> str:

@@ -702,13 +702,13 @@ def _run_cli() -> None:
 
     # Get provider from CLI arg (default: from env or claude)
     provider = args.provider
+    if provider:
+        os.environ["AI_ENGINE_PROVIDER"] = provider
 
     if args.runtime_mode:
         from agents.runtime import normalize_runtime_mode
 
-        os.environ["AUTO_CODE_RUNTIME_MODE"] = normalize_runtime_mode(
-            args.runtime_mode
-        )
+        os.environ["AUTO_CODE_RUNTIME_MODE"] = normalize_runtime_mode(args.runtime_mode)
 
     # Handle --list command
     if args.list:

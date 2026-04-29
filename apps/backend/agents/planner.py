@@ -174,8 +174,11 @@ async def run_followup_planner(
     )
 
     provider_name = getattr(session, "provider_name", None)
-    if not isinstance(provider_name, str):
-        provider_name = "claude"
+    if not isinstance(provider_name, str) or not provider_name.strip():
+        raise ValueError(
+            "Planner session missing provider_name; provider-backed sessions must "
+            "declare their runtime provider"
+        )
     runtime_session = create_runtime_session(
         provider_name=provider_name,
         agent_session=session,

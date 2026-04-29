@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-
 from agents.runtime import (
     RuntimeCapabilityError,
     RuntimeRequirements,
@@ -16,6 +15,7 @@ from agents.runtime import (
 )
 from agents.runtime.adapters.patch_proposal import (
     PatchProposalError,
+    parse_patch_proposal,
     validate_workspace_relative_path,
 )
 from core.providers.config import ProviderConfig
@@ -52,7 +52,7 @@ async def test_claude_runtime_wraps_existing_session_runner(tmp_path: Path):
         assert message == "do work"
         assert spec_dir == tmp_path
         assert verbose is True
-        assert subtask_id is None
+        assert subtask_id == "1.1"
         return "complete", "done", {"input_tokens": 1, "output_tokens": 2}, "tracker"
 
     runtime_session = create_runtime_session(
@@ -282,8 +282,17 @@ async def test_patch_proposal_runtime_rejects_unsafe_paths(tmp_path: Path):
 
 
 def test_patch_path_validator_rejects_sensitive_paths():
-    with pytest.raises(PatchProposalError):
-        validate_workspace_relative_path(".env")
+    for path in (".env", ".env.development", "secrets/api-key.txt"):
+        with pytest.raises(PatchProposalError):
+            validate_workspace_relative_path(path)
+
+
+def test_parse_patch_proposal_handles_braces_inside_strings():
+    proposal = parse_patch_proposal(
+        'prefix {"summary": "contains { braces }", "files": []} trailing {"ignored": true}'
+    )
+
+    assert proposal == {"summary": "contains { braces }", "files": []}
 
 
 def test_patch_mode_marks_subtask_completed(tmp_path: Path):

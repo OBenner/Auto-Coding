@@ -495,8 +495,12 @@ def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
         from datetime import UTC, datetime
 
         subtask["completed_at"] = datetime.now(UTC).isoformat()
-    except Exception:
-        pass
+    except (OSError, OverflowError, ValueError):
+        logger.debug(
+            "Unable to timestamp patch proposal completion for subtask %s",
+            subtask_id,
+            exc_info=True,
+        )
 
     for phase in plan.get("phases", []):
         subtasks = phase.get("subtasks", [])
@@ -1262,9 +1266,16 @@ async def run_autonomous_agent(
                     if is_build_complete(spec_dir):
                         status = "complete"
                 else:
-                    logger.warning(
-                        "Patch proposal applied but subtask status could not be updated"
+                    message = (
+                        "Patch proposal applied but subtask status could not be "
+                        f"updated for {subtask_id}"
                     )
+                    logger.error(message)
+                    print_status(message, "error")
+                    if task_logger:
+                        task_logger.log_error(message, current_log_phase)
+                    status = "error"
+                    status_manager.update(state=BuildState.ERROR)
 
         # Call after_session hook for enabled agent plugins
         if PLUGINS_AVAILABLE:

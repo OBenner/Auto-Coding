@@ -1,11 +1,14 @@
 """Completion-only runtime adapter."""
 
+import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 from ..capabilities import RuntimeCapabilities
 from ..result import AgentRunResult
+
+logger = logging.getLogger(__name__)
 
 
 class CompletionRuntimeSession:
@@ -28,18 +31,28 @@ class CompletionRuntimeSession:
         return None
 
     async def _stream_text(self, message: str) -> AsyncIterator[str]:
-        if hasattr(self.agent_session, "complete"):
-            async for chunk in self.agent_session.complete(message, stream=True):
-                yield str(chunk)
-            return
+        try:
+            if hasattr(self.agent_session, "complete"):
+                async for chunk in self.agent_session.complete(message, stream=True):
+                    yield str(chunk)
+                return
 
-        if hasattr(self.agent_session, "query") and hasattr(
-            self.agent_session, "receive_response"
-        ):
-            await self.agent_session.query(message)
-            async for chunk in self.agent_session.receive_response():
-                yield str(chunk)
-            return
+            if hasattr(self.agent_session, "query") and hasattr(
+                self.agent_session, "receive_response"
+            ):
+                await self.agent_session.query(message)
+                async for chunk in self.agent_session.receive_response():
+                    yield str(chunk)
+                return
+        except Exception as e:
+            logger.error(
+                "Provider %s completion stream failed",
+                self.provider_name,
+                exc_info=True,
+            )
+            raise RuntimeError(
+                f"Provider {self.provider_name} completion failed: {e}"
+            ) from e
 
         raise AttributeError(
             f"Provider {self.provider_name} session does not expose a completion API"

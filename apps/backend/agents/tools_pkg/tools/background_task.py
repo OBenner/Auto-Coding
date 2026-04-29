@@ -470,8 +470,10 @@ class BackgroundTaskManager:
         # Store task reference to prevent premature garbage collection
         bg_task = asyncio.create_task(self._run_command(task_id))
         bg_task.add_done_callback(
-            lambda t: self._async_tasks.pop(task_id, None)
-            or (t.exception() if not t.cancelled() and t.exception() else None)
+            lambda t: (
+                self._async_tasks.pop(task_id, None)
+                or (t.exception() if not t.cancelled() and t.exception() else None)
+            )
         )
         self._async_tasks[task_id] = bg_task
 

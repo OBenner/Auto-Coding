@@ -1,5 +1,6 @@
 """Claude Agent SDK runtime adapter."""
 
+import inspect
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -27,7 +28,12 @@ class ClaudeAgentRuntimeSession:
     @property
     def context_client(self) -> Any:
         """Client object used by existing plugin hooks."""
-        return getattr(self.agent_session, "client", None)
+        client = getattr(self.agent_session, "client", None)
+        if client is None:
+            raise AttributeError(
+                "Claude runtime requires an agent session with a 'client' attribute"
+            )
+        return client
 
     async def run(
         self,
@@ -38,11 +44,10 @@ class ClaudeAgentRuntimeSession:
         phase: Any,
         subtask_id: str | None = None,
     ) -> AgentRunResult:
-        del subtask_id
-
         client = self.context_client
-        if client is None:
-            raise AttributeError("Claude runtime session missing 'client' attribute")
+        runner_kwargs = {"phase": phase}
+        if "subtask_id" in inspect.signature(self._session_runner).parameters:
+            runner_kwargs["subtask_id"] = subtask_id
 
         async with client:
             (
@@ -51,7 +56,11 @@ class ClaudeAgentRuntimeSession:
                 usage_metadata,
                 decision_tracker,
             ) = await self._session_runner(
-                client, message, spec_dir, verbose, phase=phase
+                client,
+                message,
+                spec_dir,
+                verbose,
+                **runner_kwargs,
             )
 
         return AgentRunResult(

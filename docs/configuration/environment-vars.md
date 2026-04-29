@@ -55,15 +55,16 @@ python run.py --spec 001 --provider openai
 
 **Example**:
 ```bash
-export AUTO_CODE_RUNTIME_MODE=patch_proposal
+export AUTO_CODE_RUNTIME_MODE=full_autonomous
 ```
 
-**Per-Agent Override**:
+**Per-Agent Override for Limited Providers**:
 ```bash
 export AGENT_RUNTIME_MODE_CODER=patch_proposal
 ```
 
-Prefer per-agent overrides when mixing Claude with limited providers:
+Prefer per-agent overrides when mixing Claude with limited providers so planner
+and QA phases keep the full autonomous runtime:
 
 ```bash
 AI_ENGINE_PROVIDER=claude
