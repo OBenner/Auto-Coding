@@ -8,7 +8,7 @@ tomli>=2.0.0; python_version < "3.11"
 # Linux Secret Service support for credential storage
 # Provides access to the Freedesktop.org Secret Service API via DBus
 # Used on Linux to store OAuth tokens in gnome-keyring/kwallet
-secretstorage>=3.3.3; sys_platform == "linux"
+secretstorage>=3.5.0; sys_platform == "linux"
 
 # Memory Integration - LadybugDB (embedded graph database)
 # Requires Python 3.12+ (no Docker required)
@@ -28,11 +28,11 @@ google-generativeai>=0.8.0
 
 # LiteLLM - Unified interface for 100+ LLM providers
 # Provides consistent API for OpenAI, Anthropic, Azure, Google, Ollama, etc.
-litellm==1.82.6
+litellm==1.83.7
 
 # OpenAI SDK - Required for OpenRouter integration
 # OpenRouter uses OpenAI-compatible API
-openai>=1.0.0
+openai>=2.32.0
 
 # zAI SDK - GLM model provider (智谱AI / zhipu AI)
 zai-sdk>=0.2.2
@@ -45,7 +45,7 @@ psutil>=5.9.0
 
 # FastAPI - Web framework for building APIs with webhooks
 # Provides automatic OpenAPI documentation, async support, type validation
-fastapi>=0.104.0
+fastapi>=0.136.1
 
 # Uvicorn - ASGI server for running FastAPI applications
 # Required to serve FastAPI apps in production
