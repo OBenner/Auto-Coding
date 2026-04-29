@@ -215,9 +215,12 @@ def handle_build_command(
         if model:
             model_env_map = {
                 "claude": "CLAUDE_MODEL",
+                "openai": "OPENAI_MODEL",
+                "google": "GOOGLE_MODEL",
                 "litellm": "LITELLM_MODEL",
                 "openrouter": "OPENROUTER_MODEL",
                 "zhipuai": "ZHIPUAI_MODEL",
+                "ollama": "OLLAMA_MODEL",
             }
             env_key = model_env_map.get(provider)
             if env_key:

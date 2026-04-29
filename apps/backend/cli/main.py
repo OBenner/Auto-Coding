@@ -149,8 +149,31 @@ Environment Variables:
         "--provider",
         type=str,
         default=None,
-        choices=["claude", "litellm", "openrouter", "zhipuai"],
+        choices=[
+            "claude",
+            "openai",
+            "google",
+            "litellm",
+            "openrouter",
+            "zhipuai",
+            "ollama",
+        ],
         help="AI provider to use (default: from env or claude)",
+    )
+
+    parser.add_argument(
+        "--runtime-mode",
+        type=str,
+        default=None,
+        choices=[
+            "full-autonomous",
+            "full_autonomous",
+            "patch-proposal",
+            "patch_proposal",
+            "analysis-only",
+            "analysis_only",
+        ],
+        help="Agent runtime mode (default: full_autonomous)",
     )
 
     parser.add_argument(
@@ -679,6 +702,13 @@ def _run_cli() -> None:
 
     # Get provider from CLI arg (default: from env or claude)
     provider = args.provider
+
+    if args.runtime_mode:
+        from agents.runtime import normalize_runtime_mode
+
+        os.environ["AUTO_CODE_RUNTIME_MODE"] = normalize_runtime_mode(
+            args.runtime_mode
+        )
 
     # Handle --list command
     if args.list:

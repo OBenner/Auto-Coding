@@ -69,6 +69,13 @@ from .memory_manager import (
     get_graphiti_context,
     get_pattern_suggestions,
 )
+from .runtime import (
+    RuntimeCapabilityError,
+    RuntimeRequirements,
+    create_runtime_session,
+    get_runtime_mode,
+    run_runtime_session,
+)
 from .session import (
     post_session_processing,
     run_agent_session,
@@ -468,6 +475,36 @@ def validate_subtask_files(
         }
 
     return {"success": True, "missing_files": [], "invalid_paths": []}
+
+
+def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
+    """Mark a subtask completed after Auto Code applies a patch proposal."""
+    plan_file = spec_dir / "implementation_plan.json"
+    plan = load_implementation_plan(spec_dir)
+    if not plan:
+        return False
+
+    subtask = find_subtask_in_plan(plan, subtask_id)
+    if not subtask:
+        return False
+
+    subtask["status"] = "completed"
+    subtask["completed_by"] = "patch_proposal"
+
+    try:
+        from datetime import UTC, datetime
+
+        subtask["completed_at"] = datetime.now(UTC).isoformat()
+    except Exception:
+        pass
+
+    for phase in plan.get("phases", []):
+        subtasks = phase.get("subtasks", [])
+        if subtasks and all(item.get("status") == "completed" for item in subtasks):
+            phase["status"] = "completed"
+
+    write_json_atomic(plan_file, plan, indent=2, ensure_ascii=False)
+    return True
 
 
 def _display_context_window_usage(
@@ -1169,23 +1206,65 @@ async def run_autonomous_agent(
             else:
                 session = provider.create_session(session_config)
 
-            if not hasattr(session, "client"):
-                raise AttributeError(
-                    f"Provider {provider.name} session missing 'client' attribute"
-                )
-
-            client = session.client
+            runtime_mode = get_runtime_mode(agent_type_for_session)
+            runtime_session = create_runtime_session(
+                provider_name=provider.name,
+                agent_session=session,
+                claude_session_runner=run_agent_session,
+                runtime_mode=runtime_mode,
+                project_dir=project_dir,
+            )
+            client = runtime_session.context_client
 
             # Run in current process (legacy mode)
-            async with client:
-                (
-                    status,
-                    response,
-                    usage_metadata,
-                    _decision_tracker,
-                ) = await run_agent_session(
-                    client, prompt, spec_dir, verbose, phase=current_log_phase
+            if current_log_phase == LogPhase.PLANNING:
+                requirements = RuntimeRequirements.planner()
+            elif runtime_mode == "patch_proposal":
+                requirements = RuntimeRequirements.patch_proposal()
+            elif runtime_mode == "analysis_only":
+                requirements = RuntimeRequirements.text_only()
+            else:
+                requirements = RuntimeRequirements.full_coder()
+            try:
+                result = await run_runtime_session(
+                    runtime_session,
+                    prompt,
+                    spec_dir,
+                    verbose,
+                    phase=current_log_phase,
+                    requirements=requirements,
+                    subtask_id=subtask_id,
                 )
+            except RuntimeCapabilityError as e:
+                logger.error(str(e))
+                print_status(str(e), "error")
+                if task_logger:
+                    task_logger.log_error(str(e), current_log_phase)
+                status_manager.update(state=BuildState.ERROR)
+                return
+
+            status = result.status
+            response = result.response_text
+            usage_metadata = result.usage_metadata
+            _decision_tracker = result.decision_tracker
+
+            if (
+                runtime_mode == "patch_proposal"
+                and current_log_phase == LogPhase.CODING
+                and subtask_id
+                and status != "error"
+            ):
+                if _mark_patch_subtask_completed(spec_dir, subtask_id):
+                    print_status(
+                        f"Marked subtask {subtask_id} completed from patch proposal",
+                        "success",
+                    )
+                    if is_build_complete(spec_dir):
+                        status = "complete"
+                else:
+                    logger.warning(
+                        "Patch proposal applied but subtask status could not be updated"
+                    )
 
         # Call after_session hook for enabled agent plugins
         if PLUGINS_AVAILABLE:

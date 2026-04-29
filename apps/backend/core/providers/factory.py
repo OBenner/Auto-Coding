@@ -314,10 +314,11 @@ def create_agent_session(
             provider/model based on task complexity.
 
     Returns:
-        AgentSession with a .client property containing the SDK client
+        AgentSession for the configured provider. Claude sessions expose a
+        `.client` property for the SDK client; completion providers may expose
+        provider-specific streaming APIs instead.
 
     Raises:
-        AttributeError: If the session object lacks a ``client`` attribute
         ProviderError: If provider creation or session creation fails
     """
     from core.providers.base import SessionConfig
@@ -360,11 +361,6 @@ def create_agent_session(
                 name=f"{agent_type}-session",
                 model=model,
             )
-        )
-
-    if not hasattr(session, "client"):
-        raise AttributeError(
-            f"Provider {provider.name} session missing 'client' attribute"
         )
 
     return session

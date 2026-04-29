@@ -32,6 +32,13 @@ from ui import (
     print_status,
 )
 
+from .runtime import (
+    RuntimeCapabilityError,
+    RuntimeRequirements,
+    create_runtime_session,
+    get_runtime_mode,
+    run_runtime_session,
+)
 from .session import run_agent_session, save_token_stats
 
 # Import plugin system for agent lifecycle hooks
@@ -65,7 +72,7 @@ def create_planner_session(
         max_thinking_tokens: Token budget for extended thinking
 
     Returns:
-        AgentSession with a .client property containing the SDK client
+        AgentSession for the configured provider
 
     Raises:
         ProviderError: If provider creation or session creation fails
@@ -166,8 +173,17 @@ async def run_followup_planner(
         max_thinking_tokens=planning_thinking_budget,
     )
 
-    # Get the underlying SDK client from the session
-    client = session.client
+    provider_name = getattr(session, "provider_name", None)
+    if not isinstance(provider_name, str):
+        provider_name = "claude"
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=session,
+        claude_session_runner=run_agent_session,
+        runtime_mode=get_runtime_mode("planner"),
+        project_dir=project_dir,
+    )
+    client = runtime_session.context_client
 
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
@@ -214,15 +230,17 @@ async def run_followup_planner(
 
     try:
         # Run single planning session
-        async with client:
-            (
-                status,
-                response,
-                usage_metadata,
-                _,
-            ) = await run_agent_session(
-                client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
-            )
+        result = await run_runtime_session(
+            runtime_session,
+            prompt,
+            spec_dir,
+            verbose,
+            phase=LogPhase.PLANNING,
+            requirements=RuntimeRequirements.planner(),
+        )
+        status = result.status
+        response = result.response_text
+        usage_metadata = result.usage_metadata
 
         # Call after_session hook for enabled agent plugins
         if PLUGINS_AVAILABLE:
@@ -341,6 +359,14 @@ async def run_followup_planner(
             )
             status_manager.update(state=BuildState.ERROR)
             return False
+
+    except RuntimeCapabilityError as e:
+        print()
+        print_status(str(e), "error")
+        if task_logger:
+            task_logger.log_error(str(e), LogPhase.PLANNING)
+        status_manager.update(state=BuildState.ERROR)
+        return False
 
     except Exception as e:
         print()
