@@ -1,0 +1,55 @@
+# Routing table: complexity level -> provider/model
+# Env var overrides: MODEL_ROUTER_{LEVEL}_PROVIDER, MODEL_ROUTER_{LEVEL}_MODEL
+
+complexity_thresholds:
+  high: 0.7
+  medium: 0.4
+  # below 0.4 = low
+
+scoring_weights:
+  base_score: 0.3
+  high_risk_issue: 0.1
+  high_risk_max: 0.3
+  medium_risk_issue: 0.05
+  medium_risk_max: 0.15
+  files_threshold_medium: 5
+  files_score_medium: 0.15
+  files_threshold_high: 10
+  files_score_high: 0.25
+  architecture_keywords:
+    - "architect"
+    - "design"
+    - "refactor"
+    - "migrate"
+    - "migrate"
+    - "rewrite"
+    - "restructure"
+    - "overhaul"
+  architecture_keyword_score: 0.2
+  trivial_keywords:
+    - "fix typo"
+    - "update comment"
+    - "format"
+    - "whitespace"
+    - "rename variable"
+  trivial_keyword_score: -0.2
+  security_work_type_bonus: 0.1
+
+routing:
+  high:
+    provider: claude
+    model: claude-sonnet-4-5-20250929
+    max_tokens: 16384
+  medium:
+    provider: openai
+    model: gpt-4o
+    max_tokens: 8192
+  low:
+    provider: openai
+    model: gpt-4o-mini
+    max_tokens: 4096
+
+# Default estimated tokens for cost calculation
+estimated_tokens:
+  input: 5000
+  output: 2000

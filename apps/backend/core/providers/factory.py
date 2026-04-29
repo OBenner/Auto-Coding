@@ -14,6 +14,7 @@ Usage:
 """
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,39 @@ if TYPE_CHECKING:
     from core.providers.base import AgentSession, AIEngineProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_route_to_config(config: "ProviderConfig", route: object) -> "ProviderConfig":
+    """
+    Apply a task routing decision to a provider config.
+
+    Args:
+        config: Existing provider configuration loaded from environment.
+        route: TaskRoute-like object with provider and model attributes.
+
+    Returns:
+        ProviderConfig with routed provider/model values applied.
+    """
+    provider = str(route.provider)
+    model = str(route.model)
+    routed_config = replace(config, provider=provider)
+
+    if provider == "claude":
+        routed_config.claude_model = model
+    elif provider == "openai":
+        routed_config.openai_model = model
+    elif provider == "google":
+        routed_config.google_model = model
+    elif provider == "litellm":
+        routed_config.litellm_model = model
+    elif provider == "openrouter":
+        routed_config.openrouter_model = model
+    elif provider == "zhipuai":
+        routed_config.zhipuai_model = model
+    elif provider == "ollama":
+        routed_config.ollama_model = model
+
+    return routed_config
 
 
 def _create_claude_provider(config: "ProviderConfig") -> "AIEngineProvider":
@@ -261,6 +295,7 @@ def create_agent_session(
     spec_dir: "Path",
     model: str | None = None,
     max_thinking_tokens: int | None = None,
+    subtask: dict | None = None,
 ) -> "AgentSession":
     """
     Shared factory for creating agent sessions across all agent types.
@@ -274,6 +309,9 @@ def create_agent_session(
         spec_dir: Directory containing the spec
         model: Model to use (overrides provider config)
         max_thinking_tokens: Token budget for extended thinking
+        subtask: Optional subtask metadata for runtime model routing. If
+            provided and model is not explicitly set, the router selects a
+            provider/model based on task complexity.
 
     Returns:
         AgentSession with a .client property containing the SDK client
@@ -285,6 +323,24 @@ def create_agent_session(
     from core.providers.base import SessionConfig
 
     config = ProviderConfig.from_env(agent_type=agent_type)
+
+    if subtask is not None and not model:
+        from core.providers.task_router import TaskComplexityRouter
+
+        router = TaskComplexityRouter()
+        route = router.route(subtask, agent_type)
+        logger.info(
+            "Task routed: complexity=%s (%.2f) -> %s/%s | cost=%.4f | %s",
+            route.complexity,
+            route.complexity_score,
+            route.provider,
+            route.model,
+            route.estimated_cost,
+            route.reasoning,
+        )
+        model = route.model
+        config = _apply_route_to_config(config, route)
+
     provider = create_engine_provider(config)
 
     if provider.name == "claude":
