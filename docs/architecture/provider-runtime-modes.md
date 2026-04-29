@@ -84,6 +84,15 @@ Provider selection can also be supplied on the command line:
 python run.py --spec 001 --provider openai --runtime-mode analysis_only
 ```
 
+For a non-mutating analysis pass that does not enter the coding loop, use:
+
+```bash
+python run.py --spec 001 --provider openai --analyze
+python run.py --spec 001 --provider openai --analyze --analysis-prompt "Review implementation risks"
+```
+
+The analysis output is saved under `artifacts/analysis_only_analysis_*.md`.
+
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
 phases will fail fast with a capability error instead of attempting an unsafe
@@ -138,18 +147,17 @@ Examples:
 ## Current Boundaries
 
 This runtime engine is an integration boundary, not a generic replacement for
-the Claude Agent SDK. The remaining work is:
-
-- a dedicated user-facing analysis command or phase that uses analysis-only
-  runtimes without entering the coding loop;
-- a generic edit/tool runtime with MCP translation and security parity, if the
-  limited modes prove useful.
+the Claude Agent SDK. The remaining work is a generic edit/tool runtime with MCP
+translation and security parity, if the limited modes prove useful.
 
 ## Related Code
 
 - `apps/backend/agents/runtime/` - runtime capabilities, requirements, session
   engine, and adapters.
+- `apps/backend/agents/runtime/artifacts.py` - shared analysis-only artifact
+  persistence.
 - `apps/backend/agents/coder.py` - runtime selection for planning/coding phases.
+- `apps/backend/cli/analysis_commands.py` - non-mutating provider analysis CLI.
 - `apps/backend/agents/planner.py` - runtime selection for follow-up planning.
 - `apps/backend/core/providers/` - provider adapters and provider factory.
 - `tests/test_agent_runtime.py` - runtime capability and patch proposal tests.

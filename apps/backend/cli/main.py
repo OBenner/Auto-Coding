@@ -16,6 +16,7 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 
+from .analysis_commands import handle_analysis_command
 from .analytics_commands import handle_analytics_command
 from .batch_commands import (
     handle_batch_cleanup_command,
@@ -174,6 +175,19 @@ Environment Variables:
             "analysis_only",
         ],
         help="Agent runtime mode (default: full_autonomous)",
+    )
+
+    parser.add_argument(
+        "--analyze",
+        action="store_true",
+        help="Run a non-mutating analysis-only pass for a spec",
+    )
+
+    parser.add_argument(
+        "--analysis-prompt",
+        type=str,
+        default=None,
+        help="With --analyze: custom analysis question or focus",
     )
 
     parser.add_argument(
@@ -1052,6 +1066,17 @@ def _run_cli() -> None:
 
     if args.review_status:
         handle_review_status_command(spec_dir)
+        return
+
+    if args.analyze:
+        handle_analysis_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            model=model,
+            user_prompt=args.analysis_prompt,
+            verbose=args.verbose,
+            output_json=args.json,
+        )
         return
 
     if args.qa:
