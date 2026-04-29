@@ -167,8 +167,8 @@ def load_model_routing_config(config_path: Path | None = None) -> dict[str, Any]
         Validated routing configuration dictionary.
 
     Raises:
-        ValueError: If YAML content is invalid or references unknown
-            providers/models.
+        ValueError: If YAML cannot be read, YAML content is invalid, or the
+            config references unknown providers/models.
     """
     path = config_path or get_default_config_path()
     config = copy.deepcopy(DEFAULT_MODEL_ROUTING_CONFIG)
@@ -177,6 +177,8 @@ def load_model_routing_config(config_path: Path | None = None) -> dict[str, Any]
         try:
             with path.open(encoding="utf-8") as config_file:
                 loaded = yaml.safe_load(config_file) or {}
+        except OSError as exc:
+            raise ValueError(f"Unable to read model routing config: {path}") from exc
         except yaml.YAMLError as exc:
             raise ValueError(f"Invalid YAML in model routing config: {path}") from exc
         if not isinstance(loaded, dict):

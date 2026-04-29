@@ -52,7 +52,7 @@ class TaskComplexityRouter:
         self.config = load_model_routing_config(config_path)
         self.risk_analyzer = RiskAnalyzer()
 
-    def route(self, subtask: dict, agent_type: str | None = None) -> TaskRoute:
+    def route(self, subtask: dict | None, agent_type: str | None = None) -> TaskRoute:
         """
         Analyze a subtask and return the selected provider/model route.
 
@@ -63,7 +63,17 @@ class TaskComplexityRouter:
         Returns:
             TaskRoute containing the selected model and routing rationale.
         """
-        safe_subtask = subtask or {}
+        if subtask is None:
+            safe_subtask = {}
+        elif isinstance(subtask, dict):
+            safe_subtask = subtask
+        else:
+            logger.warning(
+                "Ignoring malformed subtask payload for routing: expected dict, got %s",
+                type(subtask).__name__,
+            )
+            safe_subtask = {}
+
         work_types = detect_work_type(safe_subtask)
         risk_issues = self.risk_analyzer.analyze_subtask_risks(safe_subtask)
         complexity_score = self._calculate_complexity_score(

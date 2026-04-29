@@ -201,6 +201,23 @@ def test_invalid_yaml_syntax_raises_value_error(tmp_path):
         load_model_routing_config(config_path)
 
 
+def test_config_read_errors_raise_value_error(tmp_path, monkeypatch):
+    """Unreadable routing config files should honor the public ValueError contract."""
+    config_path = tmp_path / "model_routing.yaml"
+    config_path.write_text("routing: {}", encoding="utf-8")
+    original_open = Path.open
+
+    def fail_config_open(self, *args, **kwargs):
+        if self == config_path:
+            raise OSError("permission denied")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", fail_config_open)
+
+    with pytest.raises(ValueError, match="Unable to read model routing config"):
+        load_model_routing_config(config_path)
+
+
 def test_route_handles_empty_subtask_and_unknown_work_type():
     """Empty subtasks and unknown work types should not crash scoring."""
     router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
@@ -217,6 +234,20 @@ def test_route_handles_empty_subtask_and_unknown_work_type():
     assert route.complexity == "low"
     assert route.work_types == []
     assert score == pytest.approx(0.3)
+
+
+def test_route_ignores_malformed_subtask_payload(caplog):
+    """Malformed subtask payloads should fall back to an empty routing payload."""
+    router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
+    router.risk_analyzer = MagicMock()
+    router.risk_analyzer.analyze_subtask_risks.return_value = []
+
+    route = router.route(["not", "a", "dict"])
+
+    assert route.complexity == "low"
+    assert route.work_types == []
+    assert "Ignoring malformed subtask payload" in caplog.text
+    router.risk_analyzer.analyze_subtask_risks.assert_called_once_with({})
 
 
 def test_keyword_matching_is_boundary_aware():
