@@ -270,11 +270,6 @@ class BackgroundTaskManager:
         timeout = task["timeout"]
 
         try:
-            # Update task state to running
-            task["status"] = self.STATE_RUNNING
-            task["started_at"] = datetime.now(UTC).isoformat()
-            self._save_task_state(task_id)
-
             # SECURITY: Parse command safely to prevent shell injection (CWE-78)
             # Using shlex.split() + create_subprocess_exec() instead of create_subprocess_shell()
             # This prevents command injection attacks like: echo "test" && rm -rf /
@@ -306,6 +301,8 @@ class BackgroundTaskManager:
 
             # Store process reference
             self.processes[task_id] = process
+            task["status"] = self.STATE_RUNNING
+            task["started_at"] = datetime.now(UTC).isoformat()
             task["pid"] = process.pid
             self._save_task_state(task_id)
 
