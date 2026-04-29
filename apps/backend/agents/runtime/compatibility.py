@@ -20,6 +20,7 @@ class ProviderRuntimeCompatibility:
 
     provider: str
     full_autonomous: str
+    generic_edit: str
     analysis_only: str
     patch_proposal: str
     notes: str
@@ -41,6 +42,11 @@ RUNTIME_MODE_INFO: tuple[RuntimeModeInfo, ...] = (
         capabilities="Text completion or streaming",
     ),
     RuntimeModeInfo(
+        mode="generic_edit",
+        purpose="Provider-neutral local file, patch, and shell action loop",
+        capabilities="Text completion, structured JSON actions, local tools",
+    ),
+    RuntimeModeInfo(
         mode="patch_proposal",
         purpose="Validated local application of model-proposed diffs",
         capabilities="Text completion, structured output, local patch validation",
@@ -52,6 +58,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
     ProviderRuntimeCompatibility(
         provider="claude",
         full_autonomous="yes",
+        generic_edit="not needed",
         analysis_only="yes",
         patch_proposal="not needed",
         notes="Uses Claude Agent SDK path for the full Auto Code runtime.",
@@ -59,44 +66,50 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
     ProviderRuntimeCompatibility(
         provider="openai",
         full_autonomous="no",
+        generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Direct SDK sessions are text-only from Auto Code's perspective.",
+        notes="Direct SDK sessions can use Auto Code's local JSON action loop.",
     ),
     ProviderRuntimeCompatibility(
         provider="google",
         full_autonomous="no",
+        generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Gemini sessions can stream text; tool/MCP parity is not implemented.",
+        notes="Gemini can use local JSON actions; MCP parity is not implemented.",
     ),
     ProviderRuntimeCompatibility(
         provider="litellm",
         full_autonomous="no",
+        generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Gateway provider; Auto Code treats routed models as text-only.",
+        notes="Gateway provider; generic_edit depends on routed model quality.",
     ),
     ProviderRuntimeCompatibility(
         provider="openrouter",
         full_autonomous="no",
+        generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="OpenAI-compatible gateway without native Auto Code tools.",
+        notes="OpenAI-compatible gateway with Auto Code local actions.",
     ),
     ProviderRuntimeCompatibility(
         provider="zhipuai",
         full_autonomous="no",
+        generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Text completion support only.",
+        notes="Text completion plus Auto Code local JSON actions.",
     ),
     ProviderRuntimeCompatibility(
         provider="ollama",
         full_autonomous="no",
+        generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Local OpenAI-compatible models for private text-only work.",
+        notes="Local models can attempt generic_edit without remote code sharing.",
     ),
 )
 

@@ -14,6 +14,8 @@ hooks, and session lifecycle behavior.
 Other providers can still be useful, but they run through limited runtime modes:
 
 - `analysis_only` for phases that only need text reasoning.
+- `generic_edit` for an experimental provider-neutral JSON action loop that can
+  read files, write files, apply patches, and run validated single commands.
 - `patch_proposal` for providers that return a structured unified diff proposal
   that Auto Code validates and applies locally.
 
@@ -25,6 +27,7 @@ capabilities required by the current phase.
 | Runtime mode | Purpose | Required capabilities | Typical providers |
 |--------------|---------|-----------------------|-------------------|
 | `full_autonomous` | Full planner/coder/QA workflow with tools and filesystem access | Tools, MCP, shell, filesystem edits, workspace access, structured output | Claude Agent SDK |
+| `generic_edit` | Experimental local action loop for coder subtasks | Text completion, structured JSON actions, local file/patch/shell tools | OpenAI, Google, LiteLLM, OpenRouter, ZhipuAI, Ollama |
 | `patch_proposal` | Model proposes a patch; Auto Code validates and applies it locally | Text completion, structured output, local patch application | OpenAI, Google, LiteLLM, OpenRouter, ZhipuAI, Ollama |
 | `analysis_only` | Text-only analysis without edits or tools | Text completion or streaming | OpenAI, Google, LiteLLM, OpenRouter, ZhipuAI, Ollama |
 
@@ -37,15 +40,15 @@ python run.py --runtime-modes
 python run.py --runtime-modes --json
 ```
 
-| Provider | Full autonomous coding | Analysis-only | Patch proposal | Notes |
-|----------|------------------------|---------------|----------------|-------|
-| `claude` | Yes | Yes | Not needed | Uses the Claude Agent SDK path and keeps existing behavior. |
-| `openai` | No | Limited | Limited | Direct OpenAI SDK sessions do not provide Auto Code's tool/MCP/security runtime. |
-| `google` | No | Limited | Limited | Gemini sessions can stream text; tool/MCP parity is not implemented. |
-| `litellm` | No | Limited | Limited | Gateway provider; capabilities depend on the routed model, but Auto Code treats it as text-only. |
-| `openrouter` | No | Limited | Limited | OpenAI-compatible gateway; no native Auto Code tool runtime. |
-| `zhipuai` | No | Limited | Limited | Text completion support only. |
-| `ollama` | No | Limited | Limited | Local OpenAI-compatible models; useful for private text-only work. |
+| Provider | Full autonomous coding | Generic edit | Analysis-only | Patch proposal | Notes |
+|----------|------------------------|--------------|---------------|----------------|-------|
+| `claude` | Yes | Not needed | Yes | Not needed | Uses the Claude Agent SDK path and keeps existing behavior. |
+| `openai` | No | Experimental | Limited | Limited | Direct OpenAI SDK sessions can use Auto Code's local JSON action loop. |
+| `google` | No | Experimental | Limited | Limited | Gemini can use local JSON actions; MCP parity is not implemented. |
+| `litellm` | No | Experimental | Limited | Limited | Gateway provider; generic edit depends on routed model quality. |
+| `openrouter` | No | Experimental | Limited | Limited | OpenAI-compatible gateway with Auto Code local actions. |
+| `zhipuai` | No | Experimental | Limited | Limited | Text completion plus Auto Code local JSON actions. |
+| `ollama` | No | Experimental | Limited | Limited | Local models can attempt generic edit without remote code sharing. |
 
 `Limited` means the provider is allowed only when the selected runtime mode does
 not require missing capabilities. It does not imply the provider has been
@@ -77,6 +80,20 @@ AGENT_RUNTIME_MODE_CODER=patch_proposal
 OPENAI_API_KEY=sk-...
 ```
 
+### Per-Agent Generic Edit Mode
+
+Use the same per-agent routing shape for the experimental local action loop:
+
+```bash
+AI_ENGINE_PROVIDER=claude
+
+AGENT_PROVIDER_CODER=openai
+AGENT_MODEL_CODER=gpt-4o
+AGENT_RUNTIME_MODE_CODER=generic_edit
+
+OPENAI_API_KEY=sk-...
+```
+
 ### Command-Line Runtime Override
 
 The CLI can override the runtime mode for a run:
@@ -89,6 +106,12 @@ Provider selection can also be supplied on the command line:
 
 ```bash
 python run.py --spec 001 --provider openai --runtime-mode analysis_only
+```
+
+For the experimental generic local action loop, use:
+
+```bash
+AGENT_PROVIDER_CODER=openai AGENT_RUNTIME_MODE_CODER=generic_edit python run.py --spec 001
 ```
 
 For a non-mutating analysis pass that does not enter the coding loop, use:
@@ -115,6 +138,42 @@ Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
 phases will fail fast with a capability error instead of attempting an unsafe
 fallback.
+
+## Generic Edit Contract
+
+`generic_edit` mode asks the model to return one JSON object per iteration. Auto
+Code executes the requested local actions, sends observations back to the model,
+and repeats until the model returns `finish` or the runtime reaches its
+iteration limit.
+
+Supported actions:
+
+```json
+{
+  "thought": "short planning note",
+  "actions": [
+    { "tool": "read_file", "path": "relative/path.py", "max_chars": 12000 },
+    { "tool": "write_file", "path": "relative/path.py", "content": "..." },
+    { "tool": "apply_patch", "patch": "unified diff" },
+    { "tool": "run_command", "command": "pytest tests/test_file.py -q", "timeout": 60 },
+    { "tool": "finish", "summary": "what changed", "tests": ["commands run"], "risks": [] }
+  ]
+}
+```
+
+Auto Code validates and executes these actions locally:
+
+- file paths use the same workspace-relative sensitive-path checks as
+  `patch_proposal`;
+- patches use `git apply --check --whitespace=nowarn` before applying;
+- commands pass the existing security allowlist/validator layer;
+- commands run without a shell and do not support pipes, redirection, or command
+  chaining;
+- traces and summaries are saved as `generic_edit_trace.json`,
+  `generic_edit_result.json`, and `generic_edit_summary.md`.
+
+This mode is intentionally not full autonomous parity. It does not expose MCP,
+subagents, provider-native tools, or Claude SDK session lifecycle behavior.
 
 ## Patch Proposal Contract
 
@@ -165,12 +224,16 @@ Examples:
   of pretending implementation succeeded.
 - A non-Claude provider in `patch_proposal` mode can modify files only through
   a validated unified diff.
+- A non-Claude provider in `generic_edit` mode can modify files through Auto
+  Code's local JSON action loop, but still lacks MCP and subagents.
 
 ## Current Boundaries
 
 This runtime engine is an integration boundary, not a generic replacement for
-the Claude Agent SDK. The remaining work is a generic edit/tool runtime with MCP
-translation and security parity, if the limited modes prove useful.
+the Claude Agent SDK. The generic edit runtime is the first local tool-loop
+slice; remaining work includes MCP translation, richer command/session
+streaming, provider-native function calling where available, and security parity
+with the Claude SDK path.
 
 ## Related Code
 

@@ -6,7 +6,6 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
-
 from agents.runtime import (
     RuntimeRequirements,
     create_runtime_session,
@@ -383,3 +382,58 @@ async def test_openai_provider_supports_patch_proposal_mode(
     )
     assert result_artifact["status"] == "applied"
     assert result_artifact["subtask_id"] == "1.1"
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_supports_generic_edit_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    target = tmp_path / "generic.txt"
+    target.write_text("old\n", encoding="utf-8")
+    response = {
+        "thought": "edit directly",
+        "actions": [
+            {
+                "tool": "write_file",
+                "path": "generic.txt",
+                "content": "new\n",
+            },
+            {
+                "tool": "finish",
+                "summary": "OpenAI provider generic edit smoke",
+                "tests": [],
+                "risks": [],
+            },
+        ],
+    }
+    _install_fake_openai(monkeypatch, [json.dumps(response)])
+    provider = OpenAIProvider(
+        ProviderConfig(provider="openai", openai_api_key="test-key")
+    )
+    session = provider.create_session(SessionConfig(name="openai-generic-edit"))
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "update generic.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.2",
+    )
+
+    assert result.status == "continue"
+    assert "OpenAI provider generic edit smoke" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["subtask_id"] == "1.2"

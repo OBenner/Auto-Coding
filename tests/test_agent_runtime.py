@@ -167,6 +167,19 @@ class FakePatchProposalSession:
         yield json.dumps(self.proposal)
 
 
+class FakeGenericEditSession:
+    provider_name = "openai"
+
+    def __init__(self, responses: list[dict]):
+        self.responses = [json.dumps(response) for response in responses]
+        self.messages: list[str] = []
+
+    async def complete(self, message: str, stream: bool = True):
+        assert stream is True
+        self.messages.append(message)
+        yield self.responses.pop(0)
+
+
 def _init_git_repo(path: Path) -> None:
     subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
     subprocess.run(
@@ -358,12 +371,176 @@ def test_patch_mode_marks_subtask_completed(tmp_path: Path):
     assert updated["phases"][0]["status"] == "completed"
 
 
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
+    target = tmp_path / "hello.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "inspect target",
+                "actions": [{"tool": "read_file", "path": "hello.txt"}],
+            },
+            {
+                "thought": "replace content",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "hello.txt",
+                        "content": "new\n",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Updated greeting through generic edit",
+                        "tests": ["not run"],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "change hello.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    assert result.status == "continue"
+    assert "Updated greeting through generic edit" in result.response_text
+    assert "generic_edit_summary" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert len(session.messages) == 3
+    assert "generic_edit mode" in session.messages[0]
+    assert "observations" in session.messages[1]
+
+    artifact_dir = tmp_path / "artifacts"
+    assert (artifact_dir / "generic_edit_trace.json").exists()
+    assert (artifact_dir / "generic_edit_result.json").exists()
+    assert (artifact_dir / "generic_edit_summary.md").exists()
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["subtask_id"] == "1.1"
+    assert result_artifact["iteration_count"] == 3
+    assert result_artifact["tests"] == ["not run"]
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_runs_validated_single_command(tmp_path: Path):
+    _init_git_repo(tmp_path)
+    session = FakeGenericEditSession(
+        [
+            {
+                "actions": [
+                    {
+                        "tool": "run_command",
+                        "command": "git status --short",
+                        "timeout": 10,
+                    }
+                ],
+            },
+            {
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Validated command completed",
+                        "tests": ["git status --short"],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "check repository",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    command_result = trace["trace"][0]["actions"][0]["result"]
+    assert command_result["ok"] is True
+    assert command_result["data"]["exit_code"] == 0
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_unsafe_write_path(tmp_path: Path):
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    session = FakeGenericEditSession(
+        [
+            {
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "../evil.txt",
+                        "content": "bad\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "should not finish while action failed",
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=session,
+        project_dir=tmp_path,
+        max_iterations=1,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "unsafe write",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "error"
+    assert "max iterations" in result.response_text
+    assert not (tmp_path.parent / "evil.txt").exists()
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    first_result = trace["trace"][0]["actions"][0]["result"]
+    assert first_result["ok"] is False
+    assert "unsafe segments" in first_result["message"]
+
+
 def test_runtime_mode_env_resolution(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("AUTO_CODE_RUNTIME_MODE", "patch-proposal")
     assert get_runtime_mode("coder") == "patch_proposal"
     monkeypatch.setenv("AGENT_RUNTIME_MODE_CODER", "analysis-only")
     assert get_runtime_mode("coder") == "analysis_only"
     assert normalize_runtime_mode("full-autonomous") == "full_autonomous"
+    assert normalize_runtime_mode("generic-edit") == "generic_edit"
 
 
 @pytest.mark.asyncio

@@ -63,6 +63,20 @@ class RuntimeCapabilities:
             apply_patch=True,
         )
 
+    @classmethod
+    def generic_edit(cls) -> "RuntimeCapabilities":
+        """Capabilities for Auto Code's provider-neutral local tool loop."""
+        return cls(
+            text_completion=True,
+            streaming_text=True,
+            structured_output=True,
+            function_tools=True,
+            filesystem_read=True,
+            filesystem_edit=True,
+            shell=True,
+            apply_patch=True,
+        )
+
     def available(self) -> list[str]:
         """Return capability names set to true."""
         return [
@@ -131,6 +145,21 @@ class RuntimeRequirements:
                 "text_completion",
                 "structured_output",
                 "filesystem_edit",
+                "apply_patch",
+            ),
+        )
+
+    @classmethod
+    def generic_edit(cls) -> "RuntimeRequirements":
+        return cls(
+            mode="generic_edit",
+            required=(
+                "text_completion",
+                "structured_output",
+                "function_tools",
+                "filesystem_read",
+                "filesystem_edit",
+                "shell",
                 "apply_patch",
             ),
         )

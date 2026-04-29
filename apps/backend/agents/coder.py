@@ -478,8 +478,12 @@ def validate_subtask_files(
     return {"success": True, "missing_files": [], "invalid_paths": []}
 
 
-def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
-    """Mark a subtask completed after Auto Code applies a patch proposal."""
+def _mark_runtime_subtask_completed(
+    spec_dir: Path,
+    subtask_id: str,
+    completed_by: str,
+) -> bool:
+    """Mark a subtask completed after a limited local runtime applies changes."""
     plan_file = spec_dir / "implementation_plan.json"
     plan = load_implementation_plan(spec_dir)
     if not plan:
@@ -490,7 +494,7 @@ def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
         return False
 
     subtask["status"] = "completed"
-    subtask["completed_by"] = "patch_proposal"
+    subtask["completed_by"] = completed_by
 
     try:
         from datetime import UTC, datetime
@@ -498,7 +502,7 @@ def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
         subtask["completed_at"] = datetime.now(UTC).isoformat()
     except (OSError, OverflowError, ValueError):
         logger.debug(
-            "Unable to timestamp patch proposal completion for subtask %s",
+            "Unable to timestamp runtime completion for subtask %s",
             subtask_id,
             exc_info=True,
         )
@@ -510,6 +514,15 @@ def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
 
     write_json_atomic(plan_file, plan, indent=2, ensure_ascii=False)
     return True
+
+
+def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
+    """Mark a subtask completed after Auto Code applies a patch proposal."""
+    return _mark_runtime_subtask_completed(
+        spec_dir,
+        subtask_id,
+        completed_by="patch_proposal",
+    )
 
 
 def _display_context_window_usage(
@@ -1225,6 +1238,8 @@ async def run_autonomous_agent(
             # Run in current process (legacy mode)
             if current_log_phase == LogPhase.PLANNING:
                 requirements = RuntimeRequirements.planner()
+            elif runtime_mode == "generic_edit":
+                requirements = RuntimeRequirements.generic_edit()
             elif runtime_mode == "patch_proposal":
                 requirements = RuntimeRequirements.patch_proposal()
             elif runtime_mode == "analysis_only":
@@ -1272,21 +1287,25 @@ async def run_autonomous_agent(
                 status_manager.update(state=BuildState.ERROR)
 
             if (
-                runtime_mode == "patch_proposal"
+                runtime_mode in {"patch_proposal", "generic_edit"}
                 and current_log_phase == LogPhase.CODING
                 and subtask_id
                 and status != "error"
             ):
-                if _mark_patch_subtask_completed(spec_dir, subtask_id):
+                if _mark_runtime_subtask_completed(
+                    spec_dir,
+                    subtask_id,
+                    completed_by=runtime_mode,
+                ):
                     print_status(
-                        f"Marked subtask {subtask_id} completed from patch proposal",
+                        f"Marked subtask {subtask_id} completed from {runtime_mode}",
                         "success",
                     )
                     if is_build_complete(spec_dir):
                         status = "complete"
                 else:
                     message = (
-                        "Patch proposal applied but subtask status could not be "
+                        f"{runtime_mode} completed but subtask status could not be "
                         f"updated for {subtask_id}"
                     )
                     logger.error(message)

@@ -3,10 +3,16 @@
 import os
 from typing import Literal
 
-RuntimeMode = Literal["full_autonomous", "patch_proposal", "analysis_only"]
+RuntimeMode = Literal[
+    "full_autonomous",
+    "generic_edit",
+    "patch_proposal",
+    "analysis_only",
+]
 
 VALID_RUNTIME_MODES: tuple[RuntimeMode, ...] = (
     "full_autonomous",
+    "generic_edit",
     "patch_proposal",
     "analysis_only",
 )

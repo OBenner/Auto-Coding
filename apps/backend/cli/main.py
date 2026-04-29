@@ -174,6 +174,8 @@ Environment Variables:
         choices=[
             "full-autonomous",
             "full_autonomous",
+            "generic-edit",
+            "generic_edit",
             "patch-proposal",
             "patch_proposal",
             "analysis-only",

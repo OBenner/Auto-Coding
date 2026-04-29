@@ -34,6 +34,10 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         "providers": provider_runtime_compatibility_as_dicts(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
+            "generic_edit": (
+                "Use --runtime-mode generic_edit for experimental local "
+                "file/patch/shell actions with completion providers."
+            ),
             "analysis_only": "Use --analyze with any configured provider.",
             "patch_proposal": (
                 "Use a non-Claude completion provider with "
@@ -53,6 +57,7 @@ def format_runtime_modes_text() -> str:
         [
             row.provider,
             row.full_autonomous,
+            row.generic_edit,
             row.analysis_only,
             row.patch_proposal,
             row.notes,
@@ -72,6 +77,7 @@ def format_runtime_modes_text() -> str:
                 [
                     "Provider",
                     "Full autonomous",
+                    "Generic edit",
                     "Analysis-only",
                     "Patch proposal",
                     "Notes",
@@ -80,6 +86,7 @@ def format_runtime_modes_text() -> str:
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",
+            "  Generic edit:    AGENT_PROVIDER_CODER=openai AGENT_RUNTIME_MODE_CODER=generic_edit python run.py --spec 001",
             "  Analysis:        python run.py --spec 001 --provider openai --analyze",
             "  Patch proposal:  python run.py --spec 001 --provider openai --runtime-mode patch_proposal",
             "  Provider smoke:  python run.py --provider openai --provider-smoke",

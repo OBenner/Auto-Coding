@@ -6,6 +6,7 @@ from typing import Any
 
 from .claude import ClaudeAgentRuntimeSession
 from .completion import CompletionRuntimeSession
+from .generic_edit import GenericEditRuntimeSession
 from .patch_proposal import PatchProposalRuntimeSession
 
 
@@ -34,6 +35,15 @@ def create_runtime_session(
         if project_dir is None:
             raise ValueError("project_dir is required for patch proposal runtime")
         return PatchProposalRuntimeSession(
+            provider_name=provider_name,
+            agent_session=agent_session,
+            project_dir=project_dir,
+        )
+
+    if runtime_mode == "generic_edit":
+        if project_dir is None:
+            raise ValueError("project_dir is required for generic edit runtime")
+        return GenericEditRuntimeSession(
             provider_name=provider_name,
             agent_session=agent_session,
             project_dir=project_dir,
