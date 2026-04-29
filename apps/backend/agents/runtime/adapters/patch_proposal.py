@@ -127,6 +127,9 @@ class PatchProposalRuntimeSession:
                             "Patch proposal did not include changes: " + risk_text
                         ),
                         artifacts=artifacts,
+                        files=describe_proposal_files(proposal),
+                        tests=normalize_string_list(proposal.get("tests")),
+                        risks=normalize_string_list(proposal.get("risks")),
                     )
                 )
                 return AgentRunResult(
@@ -147,6 +150,13 @@ class PatchProposalRuntimeSession:
                     status="error",
                     message=str(e),
                     artifacts=artifacts,
+                    files=describe_proposal_files(proposal),
+                    tests=normalize_string_list(proposal.get("tests"))
+                    if proposal
+                    else None,
+                    risks=normalize_string_list(proposal.get("risks"))
+                    if proposal
+                    else None,
                     raw_response=proposal_text,
                     patch=patch,
                 )
@@ -157,24 +167,9 @@ class PatchProposalRuntimeSession:
             )
 
         summary = str(proposal.get("summary") or "Patch proposal applied")
-        tests = proposal.get("tests") or []
-        risks = proposal.get("risks") or []
-        response_lines = [
-            summary,
-            "",
-            f"Applied patch proposal with {len(proposal.get('files') or [])} file entry/entries.",
-        ]
-        if artifacts:
-            response_lines.extend(["", "Artifacts:"])
-            response_lines.extend(
-                f"- {name}: {path}" for name, path in artifacts.items()
-            )
-        if tests:
-            response_lines.extend(["", "Suggested verification commands:"])
-            response_lines.extend(f"- {test}" for test in tests)
-        if risks:
-            response_lines.extend(["", "Risks:"])
-            response_lines.extend(f"- {risk}" for risk in risks)
+        files = describe_proposal_files(proposal)
+        tests = normalize_string_list(proposal.get("tests"))
+        risks = normalize_string_list(proposal.get("risks"))
 
         artifacts.update(
             save_patch_result_artifact(
@@ -184,10 +179,32 @@ class PatchProposalRuntimeSession:
                 status="applied",
                 message=summary,
                 artifacts=artifacts,
+                files=files,
                 tests=tests,
                 risks=risks,
                 patch=patch,
             )
+        )
+        artifacts.update(
+            save_patch_summary_artifact(
+                spec_dir=spec_dir,
+                provider_name=self.provider_name,
+                subtask_id=subtask_id,
+                status="applied",
+                summary=summary,
+                files=files,
+                tests=tests,
+                risks=risks,
+                artifacts=artifacts,
+            )
+        )
+
+        response_lines = build_patch_response(
+            summary=summary,
+            files=files,
+            tests=tests,
+            risks=risks,
+            artifacts=artifacts,
         )
 
         return AgentRunResult(
@@ -246,6 +263,67 @@ def collect_patch_text(proposal: dict[str, Any]) -> str:
             patches.append(file_entry["patch"])
 
     return "\n".join(patch.strip("\n") for patch in patches if patch.strip())
+
+
+def normalize_string_list(value: Any) -> list[str]:
+    """Normalize model-provided scalar/list values into display strings."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value if item is not None]
+    return [str(value)]
+
+
+def describe_proposal_files(proposal: dict[str, Any] | None) -> list[dict[str, str]]:
+    """Return stable file metadata for artifacts and user output."""
+    if not proposal:
+        return []
+
+    files: list[dict[str, str]] = []
+    for file_entry in proposal.get("files") or []:
+        if not isinstance(file_entry, dict):
+            continue
+        path = file_entry.get("path")
+        if path is None:
+            continue
+        files.append(
+            {
+                "path": str(path),
+                "operation": str(file_entry.get("operation") or "modify"),
+            }
+        )
+    return files
+
+
+def build_patch_response(
+    *,
+    summary: str,
+    files: list[dict[str, str]],
+    tests: list[str],
+    risks: list[str],
+    artifacts: dict[str, str],
+) -> list[str]:
+    """Build concise user-facing patch proposal output."""
+    response_lines = [
+        summary,
+        "",
+        f"Applied patch proposal with {len(files)} file entry/entries.",
+    ]
+    if files:
+        response_lines.extend(["", "Files:"])
+        response_lines.extend(
+            f"- {file['operation']}: {file['path']}" for file in files
+        )
+    if artifacts:
+        response_lines.extend(["", "Artifacts:"])
+        response_lines.extend(f"- {name}: {path}" for name, path in artifacts.items())
+    if tests:
+        response_lines.extend(["", "Suggested verification commands:"])
+        response_lines.extend(f"- {test}" for test in tests)
+    if risks:
+        response_lines.extend(["", "Risks:"])
+        response_lines.extend(f"- {risk}" for risk in risks)
+    return response_lines
 
 
 def validate_patch_paths(patch: str, project_dir: Path) -> None:
@@ -369,6 +447,7 @@ def save_patch_result_artifact(
     status: str,
     message: str,
     artifacts: dict[str, str] | None = None,
+    files: list[dict[str, str]] | None = None,
     tests: list[Any] | None = None,
     risks: list[Any] | None = None,
     raw_response: str | None = None,
@@ -387,10 +466,15 @@ def save_patch_result_artifact(
         "message": message,
         "artifacts": artifacts or {},
     }
+    if files is not None:
+        payload["files"] = files
+        payload["file_count"] = len(files)
     if tests is not None:
         payload["tests"] = tests
+        payload["test_count"] = len(tests)
     if risks is not None:
         payload["risks"] = risks
+        payload["risk_count"] = len(risks)
     if raw_response is not None:
         payload["raw_response"] = raw_response
     if patch is not None:
@@ -401,6 +485,53 @@ def save_patch_result_artifact(
         encoding="utf-8",
     )
     return {"patch_result": str(result_path)}
+
+
+def save_patch_summary_artifact(
+    *,
+    spec_dir: Path,
+    provider_name: str,
+    subtask_id: str | None,
+    status: str,
+    summary: str,
+    files: list[dict[str, str]],
+    tests: list[str],
+    risks: list[str],
+    artifacts: dict[str, str],
+) -> dict[str, str]:
+    """Persist a human-readable patch proposal summary."""
+    artifact_dir = spec_dir / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = artifact_dir / "patch_summary.md"
+
+    lines = [
+        "# Patch Proposal Summary",
+        "",
+        f"Status: {status}",
+        f"Provider: {provider_name}",
+    ]
+    if subtask_id:
+        lines.append(f"Subtask: {subtask_id}")
+    lines.extend(["", "## Summary", "", summary])
+
+    if files:
+        lines.extend(["", "## Files", ""])
+        lines.extend(f"- `{file['operation']}` `{file['path']}`" for file in files)
+
+    if tests:
+        lines.extend(["", "## Suggested Verification Commands", ""])
+        lines.extend(f"- `{test}`" for test in tests)
+
+    if risks:
+        lines.extend(["", "## Risks", ""])
+        lines.extend(f"- {risk}" for risk in risks)
+
+    if artifacts:
+        lines.extend(["", "## Artifacts", ""])
+        lines.extend(f"- `{name}`: `{path}`" for name, path in artifacts.items())
+
+    summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"patch_summary": str(summary_path)}
 
 
 def _extract_json_object(text: str) -> str:

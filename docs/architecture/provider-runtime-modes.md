@@ -141,7 +141,11 @@ Auto Code validates and applies the proposal locally:
 - rejects sensitive paths such as `.git`, `.env`, `.env.local`,
   `.env.production`, `.mcp.json`, and `.claude`;
 - runs `git apply --check --whitespace=nowarn` before applying;
-- saves patch artifacts in the spec artifacts directory;
+- saves patch artifacts in the spec artifacts directory:
+  - `patch_proposal.json` for the raw provider proposal;
+  - `patch.diff` for the unified diff;
+  - `patch_result.json` for structured status, file, test, and risk metadata;
+  - `patch_summary.md` for a human-readable review summary;
 - does not automatically run model-suggested test commands.
 
 ## Fail-Fast Behavior

@@ -224,17 +224,29 @@ async def test_patch_proposal_runtime_applies_valid_unified_diff(tmp_path: Path)
 
     assert result.status == "continue"
     assert "Update greeting fixture" in result.response_text
+    assert "Files:" in result.response_text
+    assert "modify: hello.txt" in result.response_text
+    assert "patch_summary" in result.response_text
     assert target.read_text(encoding="utf-8") == "new\n"
 
     artifact_dir = tmp_path / "artifacts"
     assert (artifact_dir / "patch_proposal.json").exists()
     assert (artifact_dir / "patch.diff").exists()
     assert (artifact_dir / "patch_result.json").exists()
+    assert (artifact_dir / "patch_summary.md").exists()
     result_artifact = json.loads(
         (artifact_dir / "patch_result.json").read_text(encoding="utf-8")
     )
     assert result_artifact["status"] == "applied"
     assert result_artifact["subtask_id"] is None
+    assert result_artifact["files"] == [{"path": "hello.txt", "operation": "modify"}]
+    assert result_artifact["file_count"] == 1
+    assert result_artifact["tests"] == ["pytest tests/test_hello.py"]
+    assert result_artifact["test_count"] == 1
+    summary = (artifact_dir / "patch_summary.md").read_text(encoding="utf-8")
+    assert "Patch Proposal Summary" in summary
+    assert "`modify` `hello.txt`" in summary
+    assert "`pytest tests/test_hello.py`" in summary
 
 
 @pytest.mark.asyncio
@@ -279,6 +291,8 @@ async def test_patch_proposal_runtime_rejects_unsafe_paths(tmp_path: Path):
         (tmp_path / "artifacts" / "patch_result.json").read_text(encoding="utf-8")
     )
     assert result_artifact["status"] == "error"
+    assert result_artifact["files"] == []
+    assert result_artifact["file_count"] == 0
 
 
 def test_patch_path_validator_rejects_sensitive_paths():
