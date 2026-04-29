@@ -9,10 +9,11 @@ import asyncio
 import json
 import logging
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 from context.constants import SKIP_DIRS
-from core.file_utils import write_json_atomic
+from core.file_utils import atomic_write, write_json_atomic
 from core.model_fallback import MODEL_FALLBACK_CHAIN
 from core.providers.config import ProviderConfig
 from core.providers.factory import create_engine_provider
@@ -509,6 +510,66 @@ def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
 
     write_json_atomic(plan_file, plan, indent=2, ensure_ascii=False)
     return True
+
+
+def _safe_artifact_token(value: str | None, fallback: str) -> str:
+    """Return a filesystem-safe token for runtime artifact names."""
+    raw_value = (value or fallback).strip() or fallback
+    safe_chars = [
+        char if char.isalnum() or char in {"-", "_", "."} else "-" for char in raw_value
+    ]
+    token = "".join(safe_chars).strip(".-_")
+    return (token or fallback)[:80]
+
+
+def _save_analysis_only_artifact(
+    *,
+    spec_dir: Path,
+    response_text: str,
+    provider_name: str,
+    phase: str,
+    session_num: int,
+    subtask_id: str | None = None,
+) -> Path:
+    """Persist text-only runtime output so limited providers leave useful work."""
+    artifact_dir = spec_dir / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    phase_token = _safe_artifact_token(phase, "phase")
+    target_token = _safe_artifact_token(subtask_id, f"session-{session_num}")
+    artifact_path = artifact_dir / f"analysis_only_{phase_token}_{target_token}.md"
+    metadata_path = artifact_dir / f"analysis_only_{phase_token}_{target_token}.json"
+    timestamp = datetime.now(UTC).isoformat()
+
+    with atomic_write(artifact_path, "w", encoding="utf-8") as artifact:
+        artifact.write("# Analysis-only Runtime Result\n\n")
+        artifact.write(f"Provider: {provider_name}\n")
+        artifact.write("Runtime mode: analysis_only\n")
+        artifact.write(f"Phase: {phase}\n")
+        artifact.write(f"Session: {session_num}\n")
+        if subtask_id:
+            artifact.write(f"Subtask: {subtask_id}\n")
+        artifact.write(f"Timestamp: {timestamp}\n\n")
+        artifact.write(response_text.rstrip())
+        artifact.write("\n")
+
+    write_json_atomic(
+        metadata_path,
+        {
+            "status": "analysis_only",
+            "provider": provider_name,
+            "runtime_mode": "analysis_only",
+            "phase": phase,
+            "session": session_num,
+            "subtask_id": subtask_id,
+            "timestamp": timestamp,
+            "analysis_artifact": str(artifact_path),
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+
+    return artifact_path
 
 
 def _display_context_window_usage(
@@ -1163,6 +1224,7 @@ async def run_autonomous_agent(
         use_process_isolation = (
             os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
         )
+        analysis_only_terminal_message: str | None = None
 
         if use_process_isolation:
             # Run in isolated subprocess for crash resistance
@@ -1250,6 +1312,25 @@ async def run_autonomous_agent(
             status = result.status
             usage_metadata = result.usage_metadata
 
+            if runtime_mode == "analysis_only" and current_log_phase == LogPhase.CODING:
+                artifact_path = _save_analysis_only_artifact(
+                    spec_dir=spec_dir,
+                    response_text=result.response_text,
+                    provider_name=provider.name,
+                    phase="coding",
+                    session_num=iteration,
+                    subtask_id=subtask_id,
+                )
+                analysis_only_terminal_message = (
+                    "Analysis-only runtime completed text analysis but cannot "
+                    "complete coding subtasks because it has no workspace edit "
+                    "or tool capabilities. Saved model output to "
+                    f"{artifact_path}. Use patch_proposal for validated diffs "
+                    "or Claude/full_autonomous for autonomous coding."
+                )
+                status = "error"
+                status_manager.update(state=BuildState.ERROR)
+
             if (
                 runtime_mode == "patch_proposal"
                 and current_log_phase == LogPhase.CODING
@@ -1312,6 +1393,38 @@ async def run_autonomous_agent(
                             )
             except Exception as e:
                 logger.warning(f"Failed to call after_session hooks: {e}")
+
+        if analysis_only_terminal_message:
+            logger.error(analysis_only_terminal_message)
+            print_status(analysis_only_terminal_message, "error")
+            if task_logger:
+                task_logger.log_error(
+                    analysis_only_terminal_message,
+                    current_log_phase,
+                )
+            if subtask_id:
+                reset_subtask_to_pending(spec_dir, subtask_id)
+                recovery_manager.record_attempt(
+                    subtask_id=subtask_id,
+                    session=iteration,
+                    success=False,
+                    approach="Analysis-only runtime produced a text artifact",
+                    error=analysis_only_terminal_message,
+                )
+                subtasks = count_subtasks_detailed(spec_dir)
+                status_manager.update_subtasks(
+                    completed=subtasks["completed"],
+                    total=subtasks["total"],
+                    in_progress=0,
+                )
+            if sync_spec_to_source(spec_dir, source_spec_dir):
+                print_status("Analysis artifact synced to main project", "success")
+            emit_phase(
+                ExecutionPhase.FAILED,
+                "Analysis-only runtime cannot complete coding subtasks",
+                subtask=subtask_id,
+            )
+            return
 
         # Save token statistics for coding phase
         if usage_metadata and current_log_phase == LogPhase.CODING:

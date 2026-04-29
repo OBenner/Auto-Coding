@@ -350,3 +350,102 @@ def test_runtime_mode_env_resolution(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("AGENT_RUNTIME_MODE_CODER", "analysis-only")
     assert get_runtime_mode("coder") == "analysis_only"
     assert normalize_runtime_mode("full-autonomous") == "full_autonomous"
+
+
+@pytest.mark.asyncio
+async def test_analysis_only_coding_saves_artifact_without_post_processing(
+    temp_git_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from agents.coder import run_autonomous_agent
+
+    spec_dir = temp_git_repo / ".auto-claude" / "specs" / "001-analysis"
+    spec_dir.mkdir(parents=True)
+    (spec_dir / "spec.md").write_text("# Analyze only\n", encoding="utf-8")
+    plan_file = spec_dir / "implementation_plan.json"
+    plan_file.write_text(
+        json.dumps(
+            {
+                "feature": "Analyze only",
+                "workflow_type": "feature",
+                "phases": [
+                    {
+                        "id": "1",
+                        "name": "Phase 1",
+                        "subtasks": [
+                            {
+                                "id": "1.1",
+                                "description": "Explain the likely edit path",
+                                "status": "pending",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeAnalysisSession:
+        provider_name = "openai"
+
+        async def complete(self, message: str, stream: bool = True):
+            assert "Explain the likely edit path" in message
+            assert stream is True
+            yield "Inspect src/app.py before proposing edits."
+
+    class FakeProvider:
+        name = "openai"
+
+        def create_session(self, _session_config):
+            return FakeAnalysisSession()
+
+    async def fake_get_graphiti_context(*_args, **_kwargs):
+        return None
+
+    async def fake_get_pattern_suggestions(*_args, **_kwargs):
+        return None
+
+    async def fail_post_session_processing(*_args, **_kwargs):
+        raise AssertionError("analysis_only coding must not run post processing")
+
+    monkeypatch.setenv("AI_ENGINE_PROVIDER", "openai")
+    monkeypatch.setenv("AGENT_RUNTIME_MODE_CODER", "analysis_only")
+    monkeypatch.setattr(
+        "agents.coder.create_engine_provider", lambda *_a: FakeProvider()
+    )
+    monkeypatch.setattr("agents.coder.is_linear_enabled", lambda: False)
+    monkeypatch.setattr("agents.coder.get_graphiti_context", fake_get_graphiti_context)
+    monkeypatch.setattr(
+        "agents.coder.get_pattern_suggestions",
+        fake_get_pattern_suggestions,
+    )
+    monkeypatch.setattr("agents.coder.load_subtask_context", lambda *_a, **_k: {})
+    monkeypatch.setattr(
+        "agents.coder.post_session_processing",
+        fail_post_session_processing,
+    )
+    monkeypatch.setattr("agents.coder.AUTO_CONTINUE_DELAY_SECONDS", 0)
+
+    await run_autonomous_agent(
+        project_dir=temp_git_repo,
+        spec_dir=spec_dir,
+        model="gpt-4o",
+        max_iterations=1,
+        verbose=False,
+    )
+
+    artifact_path = spec_dir / "artifacts" / "analysis_only_coding_1.1.md"
+    metadata_path = spec_dir / "artifacts" / "analysis_only_coding_1.1.json"
+    assert artifact_path.exists()
+    assert metadata_path.exists()
+    assert "Inspect src/app.py" in artifact_path.read_text(encoding="utf-8")
+
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["status"] == "analysis_only"
+    assert metadata["provider"] == "openai"
+    assert metadata["subtask_id"] == "1.1"
+
+    updated_plan = json.loads(plan_file.read_text(encoding="utf-8"))
+    subtask = updated_plan["phases"][0]["subtasks"][0]
+    assert subtask["status"] == "pending"

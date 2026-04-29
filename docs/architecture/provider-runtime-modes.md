@@ -129,7 +129,9 @@ Examples:
 - A non-Claude provider in `full_autonomous` mode fails before tool-dependent
   coding starts.
 - A non-Claude provider in `analysis_only` mode is allowed only for phases that
-  need text completion.
+  need text completion. During coding, Auto Code saves the text output to
+  `artifacts/analysis_only_*.md`, leaves the subtask pending, and stops instead
+  of pretending implementation succeeded.
 - A non-Claude provider in `patch_proposal` mode can modify files only through
   a validated unified diff.
 
@@ -138,10 +140,8 @@ Examples:
 This runtime engine is an integration boundary, not a generic replacement for
 the Claude Agent SDK. The remaining work is:
 
-- provider-specific smoke tests for OpenAI-compatible, LiteLLM/OpenRouter,
-  Gemini, ZhipuAI, and Ollama sessions;
-- user-facing docs that map provider choices to runtime modes;
-- CI coverage for runtime tests on Python 3.12;
+- a dedicated user-facing analysis command or phase that uses analysis-only
+  runtimes without entering the coding loop;
 - a generic edit/tool runtime with MCP translation and security parity, if the
   limited modes prove useful.
 
