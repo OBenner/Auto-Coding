@@ -1,0 +1,385 @@
+import copy
+import json
+import subprocess
+import sys
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+
+import pytest
+
+from agents.runtime import (
+    RuntimeRequirements,
+    create_runtime_session,
+    run_runtime_session,
+)
+from core.providers.adapters.google import GoogleProvider
+from core.providers.adapters.litellm import LiteLLMProvider
+from core.providers.adapters.ollama import OllamaProvider
+from core.providers.adapters.openai import OpenAIProvider
+from core.providers.adapters.openrouter import OpenRouterProvider
+from core.providers.adapters.zhipuai import ZhipuAIProvider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig
+
+
+def _chunk(text: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(delta=SimpleNamespace(content=text))]
+    )
+
+
+class _AsyncChunkStream:
+    def __init__(self, chunks: list[str]):
+        self._chunks = chunks
+
+    def __aiter__(self):
+        return self._iter()
+
+    async def _iter(self):
+        for chunk in self._chunks:
+            yield _chunk(chunk)
+
+
+def _install_fake_openai(
+    monkeypatch: pytest.MonkeyPatch,
+    chunks: list[str],
+) -> SimpleNamespace:
+    calls: list[dict] = []
+    instances: list[object] = []
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            calls.append(copy.deepcopy(kwargs))
+            return _AsyncChunkStream(chunks)
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.chat = SimpleNamespace(
+                completions=FakeCompletions(),
+            )
+            instances.append(self)
+
+    module = ModuleType("openai")
+    module.AsyncOpenAI = FakeAsyncOpenAI
+    monkeypatch.setitem(sys.modules, "openai", module)
+    return SimpleNamespace(calls=calls, instances=instances)
+
+
+def _install_fake_litellm(
+    monkeypatch: pytest.MonkeyPatch,
+    chunks: list[str],
+) -> SimpleNamespace:
+    calls: list[dict] = []
+
+    async def acompletion(**kwargs):
+        calls.append(copy.deepcopy(kwargs))
+        return _AsyncChunkStream(chunks)
+
+    module = ModuleType("litellm")
+    module.acompletion = acompletion
+    monkeypatch.setitem(sys.modules, "litellm", module)
+    return SimpleNamespace(calls=calls)
+
+
+def _install_fake_google(
+    monkeypatch: pytest.MonkeyPatch,
+    chunks: list[str],
+) -> SimpleNamespace:
+    configured: list[str] = []
+    model_calls: list[dict] = []
+    sent_messages: list[str] = []
+
+    class FakeGoogleResponse:
+        text = "".join(chunks)
+
+        def __iter__(self):
+            for chunk in chunks:
+                yield SimpleNamespace(text=chunk)
+
+    class FakeChat:
+        def send_message(self, message: str, stream: bool = True):
+            sent_messages.append(message)
+            assert stream is True
+            return FakeGoogleResponse()
+
+    class FakeGenerativeModel:
+        def __init__(self, model_name: str, system_instruction: str = ""):
+            model_calls.append(
+                {
+                    "model_name": model_name,
+                    "system_instruction": system_instruction,
+                }
+            )
+
+        def start_chat(self, history=None):
+            assert history == []
+            return FakeChat()
+
+    def configure(api_key: str):
+        configured.append(api_key)
+
+    google_pkg = ModuleType("google")
+    google_pkg.__path__ = []
+    genai = ModuleType("google.generativeai")
+    genai.configure = configure
+    genai.GenerativeModel = FakeGenerativeModel
+    google_pkg.generativeai = genai
+
+    monkeypatch.setitem(sys.modules, "google", google_pkg)
+    monkeypatch.setitem(sys.modules, "google.generativeai", genai)
+    return SimpleNamespace(
+        configured=configured,
+        model_calls=model_calls,
+        sent_messages=sent_messages,
+    )
+
+
+def _install_fake_zai(
+    monkeypatch: pytest.MonkeyPatch,
+    chunks: list[str],
+) -> SimpleNamespace:
+    calls: list[dict] = []
+    api_keys: list[str] = []
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            calls.append(copy.deepcopy(kwargs))
+            return _AsyncChunkStream(chunks)
+
+    class FakeZhipuAiClient:
+        def __init__(self, api_key: str):
+            api_keys.append(api_key)
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    module = ModuleType("zai")
+    module.ZhipuAiClient = FakeZhipuAiClient
+    monkeypatch.setitem(sys.modules, "zai", module)
+    return SimpleNamespace(calls=calls, api_keys=api_keys)
+
+
+async def _run_analysis_smoke(session, provider_name: str, tmp_path: Path):
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=session,
+    )
+
+    return await run_runtime_session(
+        runtime_session,
+        "say smoke",
+        tmp_path,
+        requirements=RuntimeRequirements.text_only(),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    (
+        "provider_cls",
+        "provider_name",
+        "config_kwargs",
+        "session_model",
+        "expected_response",
+    ),
+    [
+        (
+            OpenAIProvider,
+            "openai",
+            {"provider": "openai", "openai_api_key": "test-key"},
+            "gpt-4o",
+            "openai ok",
+        ),
+        (
+            OpenRouterProvider,
+            "openrouter",
+            {"provider": "openrouter", "openrouter_api_key": "test-key"},
+            "openai/gpt-4o",
+            "openrouter ok",
+        ),
+        (
+            OllamaProvider,
+            "ollama",
+            {"provider": "ollama", "ollama_model": "llama3.1"},
+            None,
+            "ollama ok",
+        ),
+    ],
+)
+async def test_openai_compatible_providers_support_analysis_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    provider_cls,
+    provider_name: str,
+    config_kwargs: dict,
+    session_model: str | None,
+    expected_response: str,
+):
+    prefix, suffix = expected_response.split(" ", 1)
+    fake_openai = _install_fake_openai(monkeypatch, [f"{prefix} ", suffix])
+    provider = provider_cls(ProviderConfig(**config_kwargs))
+    session = provider.create_session(
+        SessionConfig(
+            name=f"{provider_name}-analysis",
+            system_prompt="system",
+            model=session_model,
+        )
+    )
+
+    result = await _run_analysis_smoke(session, provider_name, tmp_path)
+
+    assert result.status == "complete"
+    assert result.response_text == expected_response
+    assert fake_openai.calls[0]["stream"] is True
+    assert fake_openai.calls[0]["messages"][-1] == {
+        "role": "user",
+        "content": "say smoke",
+    }
+
+
+@pytest.mark.asyncio
+async def test_litellm_provider_supports_analysis_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    fake_litellm = _install_fake_litellm(monkeypatch, ["litellm ", "ok"])
+    provider = LiteLLMProvider(
+        ProviderConfig(provider="litellm", litellm_model="openai/gpt-4o")
+    )
+    session = provider.create_session(
+        SessionConfig(name="litellm-analysis", system_prompt="system")
+    )
+
+    result = await _run_analysis_smoke(session, "litellm", tmp_path)
+
+    assert result.status == "complete"
+    assert result.response_text == "litellm ok"
+    assert fake_litellm.calls[0]["model"] == "openai/gpt-4o"
+    assert fake_litellm.calls[0]["stream"] is True
+
+
+@pytest.mark.asyncio
+async def test_google_provider_supports_analysis_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    fake_google = _install_fake_google(monkeypatch, ["google ", "ok"])
+    provider = GoogleProvider(
+        ProviderConfig(
+            provider="google",
+            google_api_key="test-key",
+            google_model="gemini-2.0-flash",
+        )
+    )
+    session = provider.create_session(
+        SessionConfig(name="google-analysis", system_prompt="system")
+    )
+
+    result = await _run_analysis_smoke(session, "google", tmp_path)
+
+    assert result.status == "complete"
+    assert result.response_text == "google ok"
+    assert fake_google.configured == ["test-key"]
+    assert fake_google.model_calls == [
+        {
+            "model_name": "gemini-2.0-flash",
+            "system_instruction": "system",
+        }
+    ]
+    assert fake_google.sent_messages == ["say smoke"]
+
+
+@pytest.mark.asyncio
+async def test_zhipuai_provider_supports_analysis_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    fake_zai = _install_fake_zai(monkeypatch, ["zhipuai ", "ok"])
+    provider = ZhipuAIProvider(
+        ProviderConfig(
+            provider="zhipuai",
+            zhipuai_api_key="test-key",
+            zhipuai_model="glm-4-flash",
+        )
+    )
+    session = provider.create_session(
+        SessionConfig(name="zhipuai-analysis", system_prompt="system")
+    )
+
+    result = await _run_analysis_smoke(session, "zhipuai", tmp_path)
+
+    assert result.status == "complete"
+    assert result.response_text == "zhipuai ok"
+    assert fake_zai.api_keys == ["test-key"]
+    assert fake_zai.calls[0]["model"] == "glm-4-flash"
+
+
+def _init_git_repo(path: Path) -> None:
+    subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=path,
+        capture_output=True,
+        check=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_supports_patch_proposal_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    _init_git_repo(tmp_path)
+    target = tmp_path / "smoke.txt"
+    target.write_text("old\n", encoding="utf-8")
+    proposal = {
+        "summary": "OpenAI provider patch smoke",
+        "files": [
+            {
+                "path": "smoke.txt",
+                "operation": "modify",
+                "patch": """diff --git a/smoke.txt b/smoke.txt
+--- a/smoke.txt
++++ b/smoke.txt
+@@ -1 +1 @@
+-old
++new
+""",
+            }
+        ],
+        "tests": ["pytest tests/test_agent_runtime_provider_smoke.py"],
+        "risks": [],
+    }
+    _install_fake_openai(monkeypatch, [json.dumps(proposal)])
+    provider = OpenAIProvider(
+        ProviderConfig(provider="openai", openai_api_key="test-key")
+    )
+    session = provider.create_session(SessionConfig(name="openai-patch"))
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="patch_proposal",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "update smoke.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.patch_proposal(),
+        subtask_id="1.1",
+    )
+
+    assert result.status == "continue"
+    assert "OpenAI provider patch smoke" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "patch_result.json").read_text(encoding="utf-8")
+    )
+    assert result_artifact["status"] == "applied"
+    assert result_artifact["subtask_id"] == "1.1"
