@@ -12,6 +12,7 @@ from .capabilities import (
     RuntimeCapabilityError,
     RuntimeRequirements,
 )
+from .local_actions import LocalActionExecutor, ToolActionResult
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
 from .result import AgentRunResult
 from .session_engine import run_runtime_session
@@ -22,6 +23,8 @@ __all__ = [
     "RuntimeCapabilityError",
     "RuntimeRequirements",
     "RuntimeMode",
+    "LocalActionExecutor",
+    "ToolActionResult",
     "create_runtime_session",
     "get_runtime_mode",
     "normalize_runtime_mode",

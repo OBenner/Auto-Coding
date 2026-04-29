@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from agents.runtime import (
+    LocalActionExecutor,
     RuntimeCapabilityError,
     RuntimeRequirements,
     create_runtime_session,
@@ -438,6 +439,22 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert result_artifact["subtask_id"] == "1.1"
     assert result_artifact["iteration_count"] == 3
     assert result_artifact["tests"] == ["not run"]
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_rejects_command_chaining(tmp_path: Path):
+    executor = LocalActionExecutor(tmp_path)
+
+    result = await executor.execute(
+        {
+            "tool": "run_command",
+            "command": "git status --short && git status --short",
+        }
+    )
+
+    assert result.ok is False
+    assert result.tool == "run_command"
+    assert "one command at a time" in result.message
 
 
 @pytest.mark.asyncio

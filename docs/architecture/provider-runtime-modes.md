@@ -239,6 +239,8 @@ with the Claude SDK path.
 
 - `apps/backend/agents/runtime/` - runtime capabilities, requirements, session
   engine, and adapters.
+- `apps/backend/agents/runtime/local_actions.py` - reusable local action
+  executor used by generic edit and future provider-native tool adapters.
 - `apps/backend/agents/runtime/artifacts.py` - shared analysis-only artifact
   persistence.
 - `apps/backend/agents/runtime/compatibility.py` - user-facing provider/runtime
