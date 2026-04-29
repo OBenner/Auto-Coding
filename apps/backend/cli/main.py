@@ -44,6 +44,7 @@ from .qa_commands import (
     handle_qa_status_command,
     handle_review_status_command,
 )
+from .runtime_commands import handle_runtime_modes_command
 from .scheduler_commands import (
     handle_schedule_cancel_command,
     handle_schedule_command,
@@ -175,6 +176,12 @@ Environment Variables:
             "analysis_only",
         ],
         help="Agent runtime mode (default: full_autonomous)",
+    )
+
+    parser.add_argument(
+        "--runtime-modes",
+        action="store_true",
+        help="Show provider/runtime compatibility and exit",
     )
 
     parser.add_argument(
@@ -723,6 +730,11 @@ def _run_cli() -> None:
         from agents.runtime import normalize_runtime_mode
 
         os.environ["AUTO_CODE_RUNTIME_MODE"] = normalize_runtime_mode(args.runtime_mode)
+
+    # Handle --runtime-modes command before requiring a spec.
+    if args.runtime_modes:
+        handle_runtime_modes_command(output_json=args.json)
+        return
 
     # Handle --list command
     if args.list:

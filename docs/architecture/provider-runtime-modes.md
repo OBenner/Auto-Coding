@@ -30,6 +30,13 @@ capabilities required by the current phase.
 
 ## Provider Compatibility Matrix
 
+The same compatibility table is available from the CLI:
+
+```bash
+python run.py --runtime-modes
+python run.py --runtime-modes --json
+```
+
 | Provider | Full autonomous coding | Analysis-only | Patch proposal | Notes |
 |----------|------------------------|---------------|----------------|-------|
 | `claude` | Yes | Yes | Not needed | Uses the Claude Agent SDK path and keeps existing behavior. |
@@ -156,8 +163,11 @@ translation and security parity, if the limited modes prove useful.
   engine, and adapters.
 - `apps/backend/agents/runtime/artifacts.py` - shared analysis-only artifact
   persistence.
+- `apps/backend/agents/runtime/compatibility.py` - user-facing provider/runtime
+  compatibility metadata.
 - `apps/backend/agents/coder.py` - runtime selection for planning/coding phases.
 - `apps/backend/cli/analysis_commands.py` - non-mutating provider analysis CLI.
+- `apps/backend/cli/runtime_commands.py` - runtime compatibility CLI.
 - `apps/backend/agents/planner.py` - runtime selection for follow-up planning.
 - `apps/backend/core/providers/` - provider adapters and provider factory.
 - `tests/test_agent_runtime.py` - runtime capability and patch proposal tests.
