@@ -8,6 +8,7 @@ select an appropriate provider/model from configurable routing rules.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -154,14 +155,22 @@ class TaskComplexityRouter:
 
         description = str(subtask.get("description", "")).lower()
         architecture_keywords = weights.get("architecture_keywords", [])
-        if any(str(keyword).lower() in description for keyword in architecture_keywords):
+        if any(
+            self._matches_keyword(description, str(keyword))
+            for keyword in architecture_keywords
+        ):
             score += float(weights.get("architecture_keyword_score", 0.2))
 
         trivial_keywords = weights.get("trivial_keywords", [])
-        if any(str(keyword).lower() in description for keyword in trivial_keywords):
+        if any(
+            self._matches_keyword(description, str(keyword))
+            for keyword in trivial_keywords
+        ):
             score += float(weights.get("trivial_keyword_score", -0.2))
 
-        if any(work_type in work_types for work_type in ("authentication", "file_upload")):
+        if any(
+            work_type in work_types for work_type in ("authentication", "file_upload")
+        ):
             score += float(weights.get("security_work_type_bonus", 0.1))
 
         return max(0.0, min(1.0, score))
@@ -205,4 +214,9 @@ class TaskComplexityRouter:
         """Count files referenced by a subtask."""
         files_to_modify = subtask.get("files_to_modify", []) or []
         files_to_create = subtask.get("files_to_create", []) or []
-        return len(files_to_modify) + len(files_to_create)
+        return len({str(path) for path in [*files_to_modify, *files_to_create]})
+
+    def _matches_keyword(self, description: str, keyword: str) -> bool:
+        """Return True when keyword appears as a full word or phrase."""
+        pattern = r"\b" + re.escape(keyword.lower()) + r"\b"
+        return re.search(pattern, description) is not None

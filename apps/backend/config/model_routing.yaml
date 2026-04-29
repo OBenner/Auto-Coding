@@ -21,7 +21,6 @@ scoring_weights:
     - "design"
     - "refactor"
     - "migrate"
-    - "migrate"
     - "rewrite"
     - "restructure"
     - "overhaul"

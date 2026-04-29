@@ -41,7 +41,6 @@ DEFAULT_MODEL_ROUTING_CONFIG: dict[str, Any] = {
             "design",
             "refactor",
             "migrate",
-            "migrate",
             "rewrite",
             "restructure",
             "overhaul",
@@ -133,7 +132,9 @@ def _validate_config(config: dict[str, Any]) -> None:
 
     for level in ("high", "medium", "low"):
         if level not in routing:
-            raise ValueError(f"Missing model routing entry for complexity level: {level}")
+            raise ValueError(
+                f"Missing model routing entry for complexity level: {level}"
+            )
 
         provider = str(routing[level].get("provider", "")).lower()
         model = str(routing[level].get("model", ""))
@@ -173,8 +174,11 @@ def load_model_routing_config(config_path: Path | None = None) -> dict[str, Any]
     config = copy.deepcopy(DEFAULT_MODEL_ROUTING_CONFIG)
 
     if path.exists():
-        with path.open(encoding="utf-8") as config_file:
-            loaded = yaml.safe_load(config_file) or {}
+        try:
+            with path.open(encoding="utf-8") as config_file:
+                loaded = yaml.safe_load(config_file) or {}
+        except yaml.YAMLError as exc:
+            raise ValueError(f"Invalid YAML in model routing config: {path}") from exc
         if not isinstance(loaded, dict):
             raise ValueError(f"Model routing config must be a mapping: {path}")
         config = _deep_merge(config, loaded)

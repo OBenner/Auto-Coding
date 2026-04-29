@@ -19,6 +19,14 @@ def _issue(likelihood: str) -> SimpleNamespace:
     return SimpleNamespace(likelihood=likelihood)
 
 
+@pytest.fixture(autouse=True)
+def isolate_model_router_env(monkeypatch):
+    """Keep routing tests independent from local/CI env overrides."""
+    for key in tuple(os.environ):
+        if key.startswith("MODEL_ROUTER_"):
+            monkeypatch.delenv(key, raising=False)
+
+
 def test_calculate_complexity_score_for_trivial_task_is_low():
     """Trivial docs changes should be routed toward low complexity."""
     router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
@@ -50,7 +58,7 @@ def test_calculate_complexity_score_clamps_high_values():
         },
     )
 
-    assert score == 1.0
+    assert score == pytest.approx(1.0)
 
 
 def test_calculate_complexity_score_boundary_values():
@@ -119,7 +127,11 @@ def test_route_maps_score_to_configured_low_medium_high_models():
     assert high_route.provider == "claude"
     assert high_route.model == "claude-sonnet-4-5-20250929"
     assert high_route.risk_count == {"high": 3, "medium": 0, "low": 0}
-    assert high_route.estimated_cost > medium_route.estimated_cost > low_route.estimated_cost
+    assert (
+        high_route.estimated_cost
+        > medium_route.estimated_cost
+        > low_route.estimated_cost
+    )
 
 
 def test_yaml_loading_and_env_overrides(tmp_path, monkeypatch):
@@ -148,8 +160,8 @@ routing:
 
     config = load_model_routing_config(config_path)
 
-    assert config["complexity_thresholds"]["high"] == 0.8
-    assert config["complexity_thresholds"]["medium"] == 0.5
+    assert config["complexity_thresholds"]["high"] == pytest.approx(0.8)
+    assert config["complexity_thresholds"]["medium"] == pytest.approx(0.5)
     assert config["routing"]["low"]["provider"] == "openai"
     assert config["routing"]["low"]["model"] == "gpt-4o-mini"
 
@@ -180,6 +192,15 @@ routing:
         load_model_routing_config(config_path)
 
 
+def test_invalid_yaml_syntax_raises_value_error(tmp_path):
+    """Malformed YAML should honor the public ValueError contract."""
+    config_path = tmp_path / "model_routing.yaml"
+    config_path.write_text("routing: [broken", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid YAML in model routing config"):
+        load_model_routing_config(config_path)
+
+
 def test_route_handles_empty_subtask_and_unknown_work_type():
     """Empty subtasks and unknown work types should not crash scoring."""
     router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
@@ -198,7 +219,43 @@ def test_route_handles_empty_subtask_and_unknown_work_type():
     assert score == pytest.approx(0.3)
 
 
-def test_create_agent_session_without_subtask_keeps_existing_behavior(monkeypatch):
+def test_keyword_matching_is_boundary_aware():
+    """Keyword scoring should not trigger on larger containing words."""
+    router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
+
+    score = router._calculate_complexity_score(
+        work_types=[],
+        risk_issues=[],
+        subtask={"description": "Update microarchitecture reformatting notes"},
+    )
+    trivial_score = router._calculate_complexity_score(
+        work_types=[],
+        risk_issues=[],
+        subtask={"description": "Format docs"},
+    )
+
+    assert score == pytest.approx(0.3)
+    assert trivial_score == pytest.approx(0.1)
+
+
+def test_file_count_deduplicates_paths():
+    """Files listed in both create and modify buckets should count once."""
+    router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
+
+    assert (
+        router._file_count(
+            {
+                "files_to_modify": ["api/users.py", "tests/test_users.py"],
+                "files_to_create": ["api/users.py"],
+            }
+        )
+        == 2
+    )
+
+
+def test_create_agent_session_without_subtask_keeps_existing_behavior(
+    monkeypatch, tmp_path
+):
     """No-subtask calls should create a provider session without invoking routing."""
     from core.providers import factory
 
@@ -212,19 +269,21 @@ def test_create_agent_session_without_subtask_keeps_existing_behavior(monkeypatc
     monkeypatch.setenv("AI_ENGINE_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_MODEL", "gpt-4o")
 
-    with patch.object(
-        factory.ProviderConfig,
-        "from_env",
-        return_value=ProviderConfig(provider="openai", openai_model="gpt-4o"),
-    ) as from_env, patch.object(
-        factory, "create_engine_provider", return_value=DummyProvider()
-    ) as create_provider, patch(
-        "core.providers.task_router.TaskComplexityRouter"
-    ) as router_cls:
+    with (
+        patch.object(
+            factory.ProviderConfig,
+            "from_env",
+            return_value=ProviderConfig(provider="openai", openai_model="gpt-4o"),
+        ) as from_env,
+        patch.object(
+            factory, "create_engine_provider", return_value=DummyProvider()
+        ) as create_provider,
+        patch("core.providers.task_router.TaskComplexityRouter") as router_cls,
+    ):
         session = factory.create_agent_session(
             agent_type="coder",
-            project_dir=Path("/tmp/project"),
-            spec_dir=Path("/tmp/project/.auto-claude/specs/001"),
+            project_dir=tmp_path,
+            spec_dir=tmp_path / ".auto-claude" / "specs" / "001",
         )
 
     from_env.assert_called_once_with(agent_type="coder")
@@ -234,7 +293,7 @@ def test_create_agent_session_without_subtask_keeps_existing_behavior(monkeypatc
     assert session.config.model is None
 
 
-def test_create_agent_session_applies_route_when_subtask_provided():
+def test_create_agent_session_applies_route_when_subtask_provided(tmp_path):
     """A routed subtask should update provider config and session model."""
     from core.providers import factory
 
@@ -255,19 +314,22 @@ def test_create_agent_session_applies_route_when_subtask_provided():
     router = MagicMock()
     router.route.return_value = route
 
-    with patch.dict(os.environ, {}, clear=True), patch.object(
-        factory.ProviderConfig,
-        "from_env",
-        return_value=ProviderConfig(provider="claude"),
-    ), patch.object(
-        factory, "create_engine_provider", return_value=DummyProvider()
-    ) as create_provider, patch(
-        "core.providers.task_router.TaskComplexityRouter", return_value=router
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch.object(
+            factory.ProviderConfig,
+            "from_env",
+            return_value=ProviderConfig(provider="claude"),
+        ),
+        patch.object(
+            factory, "create_engine_provider", return_value=DummyProvider()
+        ) as create_provider,
+        patch("core.providers.task_router.TaskComplexityRouter", return_value=router),
     ):
         session = factory.create_agent_session(
             agent_type="coder",
-            project_dir=Path("/tmp/project"),
-            spec_dir=Path("/tmp/project/.auto-claude/specs/001"),
+            project_dir=tmp_path,
+            spec_dir=tmp_path / ".auto-claude" / "specs" / "001",
             subtask={"description": "Fix typo"},
         )
 
