@@ -44,6 +44,7 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 | **[Frontend Architecture](../modules/frontend-architecture.md)** | `docs/modules/` | frontend, electron, react, typescript, ui, desktop |
 | **[Web Backend Architecture](../modules/web-backend-architecture.md)** | `docs/modules/` | web, api, fastapi, backend, server |
 | **[Web Frontend Architecture](../modules/web-frontend-architecture.md)** | `docs/modules/` | web, react, typescript, vite, frontend |
+| **[Provider Runtime Modes](../architecture/provider-runtime-modes.md)** | `docs/architecture/` | provider, runtime, openai, claude, patch-proposal, analysis-only |
 | **[System Overview](../templates/architecture/system-overview.md)** | `docs/templates/architecture/` | template, system-design, high-level, overview |
 
 ---

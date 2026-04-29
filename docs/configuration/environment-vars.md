@@ -1,10 +1,12 @@
 # Environment Variable Configuration
 
-This document describes the environment variable schema for configuring AI engine providers in Auto Code, including the existing multi-provider support and the proposed OpenAI integration.
+This document describes the environment variable schema for configuring AI engine providers and runtime modes in Auto Code.
 
 ## Overview
 
-Auto Code supports multiple AI engine providers through a unified configuration interface. Providers are selected and configured through environment variables, enabling seamless switching between different AI backends without code changes.
+Auto Code supports multiple AI engine providers through a unified configuration interface. Providers are selected and configured through environment variables.
+
+Provider selection does not guarantee full autonomous coding capability. Claude remains the full autonomous runtime. Non-Claude providers are limited to runtime modes such as `analysis_only` and `patch_proposal` unless a future runtime supplies equivalent tools, MCP, shell, filesystem, and security behavior. See [Provider Runtime Modes](../architecture/provider-runtime-modes.md).
 
 ## Core Configuration Variables
 
@@ -14,9 +16,12 @@ Auto Code supports multiple AI engine providers through a unified configuration 
 
 **Valid Values**:
 - `claude` (default) - Claude Agent SDK with full agentic capabilities
-- `litellm` - LiteLLM unified API supporting 100+ LLMs
+- `openai` - OpenAI direct API
+- `google` - Google Gemini API
+- `litellm` - LiteLLM unified API supporting multiple providers
 - `openrouter` - OpenRouter cloud routing with 400+ models
-- `openai` (proposed) - OpenAI API with custom orchestration layer
+- `zhipuai` - Zhipu AI GLM models
+- `ollama` - Local Ollama models through an OpenAI-compatible API
 
 **Example**:
 ```bash
@@ -33,9 +38,42 @@ export AI_ENGINE_PROVIDER=claude
 # Override for single command
 AI_ENGINE_PROVIDER=openai python run.py --spec 001
 
-# Or use command-line flag (proposed)
+# Or use command-line flag
 python run.py --spec 001 --provider openai
 ```
+
+---
+
+### `AUTO_CODE_RUNTIME_MODE`
+
+**Description**: Selects the runtime behavior for provider sessions.
+
+**Valid Values**:
+- `full_autonomous` (default) - requires Claude Agent SDK-style tools, MCP, shell, filesystem edits, and workspace access
+- `patch_proposal` - lets a text provider propose a unified diff that Auto Code validates and applies
+- `analysis_only` - allows text-only provider responses without tools or edits
+
+**Example**:
+```bash
+export AUTO_CODE_RUNTIME_MODE=patch_proposal
+```
+
+**Per-Agent Override**:
+```bash
+export AGENT_RUNTIME_MODE_CODER=patch_proposal
+```
+
+Prefer per-agent overrides when mixing Claude with limited providers:
+
+```bash
+AI_ENGINE_PROVIDER=claude
+AGENT_PROVIDER_CODER=openai
+AGENT_MODEL_CODER=gpt-4o
+AGENT_RUNTIME_MODE_CODER=patch_proposal
+OPENAI_API_KEY=sk-...
+```
+
+If a phase requires capabilities the selected runtime does not provide, Auto Code fails fast with a capability error.
 
 ---
 
@@ -82,9 +120,9 @@ CLAUDE_MODEL=claude-sonnet-4-5-20250929
 
 ---
 
-### OpenAI API (`openai`) - Proposed
+### OpenAI API (`openai`)
 
-OpenAI integration with custom orchestration, security wrapper, and MCP client.
+OpenAI integration for text completion, analysis-only phases, and patch proposal mode. It does not currently provide full autonomous coding parity with the Claude Agent SDK.
 
 #### Required Variables
 
@@ -96,18 +134,8 @@ OpenAI integration with custom orchestration, security wrapper, and MCP client.
 
 | Variable | Description | Example | Default |
 |----------|-------------|---------|---------|
-| `OPENAI_MODEL` | Model identifier | `gpt-5.2` | `gpt-5.2` |
+| `OPENAI_MODEL` | Model identifier | `gpt-4o` | `gpt-4o` |
 | `OPENAI_BASE_URL` | Custom API base URL | `https://api.openai.com/v1` | `https://api.openai.com/v1` |
-| `OPENAI_CUSTOM_MCP_ENABLED` | Enable custom MCP client | `true`/`false` | `true` |
-| `OPENAI_SECURITY_WRAPPER_ENABLED` | Enable security wrapper | `true`/`false` | `true` |
-
-#### Supported Models (Proposed Mapping)
-
-| OpenAI Model | Claude Equivalent | Best For |
-|--------------|-------------------|----------|
-| `gpt-5.2` | Claude Sonnet 4.5 | Complex reasoning, code generation |
-| `gpt-5` | Claude Haiku | Cost optimization, quick tasks |
-| `gpt-5-turbo` | Claude Sonnet 4.5 | Fast complex reasoning |
 
 #### Configuration Example
 
@@ -115,26 +143,20 @@ OpenAI integration with custom orchestration, security wrapper, and MCP client.
 # .env file
 AI_ENGINE_PROVIDER=openai
 OPENAI_API_KEY=sk-proj-your-key-here
-OPENAI_MODEL=gpt-5.2
-OPENAI_CUSTOM_MCP_ENABLED=true
-OPENAI_SECURITY_WRAPPER_ENABLED=true
+OPENAI_MODEL=gpt-4o
 ```
 
 #### Features
 
-⚠️ Custom MCP client implementation required
-⚠️ Security wrapper applied externally
-✅ Function calling (via translation layer)
-✅ Streaming responses
-⚠️ No native extended thinking (requires workaround)
-⚠️ No native agent lifecycle (custom implementation)
+- Streaming/text completion
+- Analysis-only runtime mode
+- Patch proposal runtime mode
 
 #### Limitations
 
-- **No built-in MCP support**: Requires custom MCP client implementation
-- **No native security**: Requires security wrapper layer
-- **No agent orchestration**: Requires custom session management
-- **Tool schema incompatibility**: Requires translation layer for function calling
+- **No full Auto Code tool runtime**: MCP, shell, and filesystem edits are not exposed directly to the model.
+- **No native Auto Code security hooks**: Patch proposal mode applies validated diffs locally instead of giving the provider direct edit access.
+- **No Claude-style session lifecycle**: The runtime layer treats this as a completion provider.
 
 ---
 
