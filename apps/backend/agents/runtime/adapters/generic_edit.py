@@ -212,15 +212,12 @@ class GenericEditRuntimeSession:
 
 def build_generic_edit_prompt(message: str) -> str:
     """Build the generic_edit prompt from the shared local action manifest."""
-    return (
-        GENERIC_EDIT_PROMPT_TEMPLATE.replace(
-            "__AUTO_CODE_LOCAL_ACTIONS__",
-            render_local_action_prompt(),
-        )
-        .replace(
-            "__AUTO_CODE_TASK_PROMPT__",
-            message,
-        )
+    return GENERIC_EDIT_PROMPT_TEMPLATE.replace(
+        "__AUTO_CODE_LOCAL_ACTIONS__",
+        render_local_action_prompt(),
+    ).replace(
+        "__AUTO_CODE_TASK_PROMPT__",
+        message,
     )
 
 
