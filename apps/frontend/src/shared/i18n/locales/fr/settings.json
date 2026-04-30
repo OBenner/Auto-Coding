@@ -851,7 +851,11 @@
       "qaReviewerLabel": "Remplacement QA reviewer",
       "qaFixerLabel": "Remplacement QA fixer",
       "fallbackLabel": "Autoriser le fallback runtime",
-      "fallbackDescription": "Quand le mode autonome complet est choisi avec un fournisseur non-Claude, basculer vers édition générique, proposition de patch ou analyse seule au lieu d'échouer immédiatement."
+      "fallbackDescription": "Quand le mode autonome complet est choisi avec un fournisseur non-Claude, basculer vers édition générique, proposition de patch ou analyse seule au lieu d'échouer immédiatement.",
+      "validation": {
+        "fullAutonomousUnavailable": "Le runtime autonome complet est disponible uniquement via Claude Agent SDK. Choisissez un runtime limité ou activez le fallback.",
+        "fallbackWillApply": "Le mode autonome complet est sélectionné, mais ce fournisseur basculera vers un runtime limité compatible avant l'exécution."
+      }
     },
     "runtimeModes": {
       "useGlobal": "Utiliser le mode runtime par défaut",
@@ -876,6 +880,25 @@
       "claudeFirst": "Claude Agent SDK reste le runtime autonome complet. Les autres fournisseurs fonctionnent via des modes runtime limités.",
       "nonClaudeFullAutonomous": "Le mode autonome complet nécessite Claude Agent SDK. Choisissez édition générique, proposition de patch ou analyse seule pour ce fournisseur.",
       "fallbackActive": "Le fallback runtime est activé. Ce fournisseur ne lancera pas le mode autonome complet ; Auto Code basculera vers un runtime limité compatible."
+    },
+    "compatibilityMatrix": {
+      "title": "Compatibilité runtime",
+      "description": "Capacités actuelles pour {{provider}}",
+      "capabilities": {
+        "fullAutonomous": "Autonome complet",
+        "genericEdit": "Édition générique",
+        "patchProposal": "Proposition de patch",
+        "analysisOnly": "Analyse seule",
+        "nativeTools": "Outils natifs fournisseur",
+        "mcp": "Outils MCP",
+        "subagents": "Sous-agents",
+        "filesystemEdits": "Éditions de fichiers"
+      },
+      "status": {
+        "supported": "Supporté",
+        "limited": "Limité",
+        "unavailable": "Indisponible"
+      }
     },
     "models": {
       "title": "Sélection du modèle",
@@ -917,6 +940,33 @@
       "valid": "Les réglages fournisseur sont valides",
       "invalid": "Les réglages fournisseur nécessitent une attention",
       "availableProviders": "Fournisseurs configurés : {{providers}}"
+    },
+    "connectionTest": {
+      "action": "Tester le fournisseur",
+      "testing": "Test...",
+      "success": "La connexion fournisseur fonctionne",
+      "failure": "Le test fournisseur a échoué",
+      "provider": "Fournisseur",
+      "model": "Modèle",
+      "runtime": "Runtime",
+      "defaultModel": "Modèle par défaut",
+      "unavailable": "Le smoke check fournisseur est indisponible.",
+      "saveFailed": "Impossible d'enregistrer les réglages fournisseur avant le test."
+    },
+    "cost": {
+      "title": "Aperçu du coût",
+      "description": "Tarification de référence pour le modèle fournisseur sélectionné. Les exécutions réelles varient selon la tâche et la taille du contexte.",
+      "referenceEstimate": "Estimation de session de référence",
+      "referenceTokens": "Basé sur {{input}} tokens d'entrée et {{output}} tokens de sortie.",
+      "modelLabel": "Modèle configuré",
+      "pricingModelLabel": "Modèle de tarification",
+      "inputLabel": "Entrée",
+      "outputLabel": "Sortie",
+      "perMillion": "${{amount}} / 1M tokens",
+      "localTitle": "{{model}} s'exécute localement",
+      "localDescription": "Ollama n'a pas de coût de tokens d'API distante. Les coûts de calcul local et d'infrastructure s'appliquent toujours.",
+      "pricingUnavailableTitle": "Aucune donnée de prix pour {{model}}",
+      "pricingUnavailableDescription": "Auto Code peut quand même utiliser ce modèle, mais l'interface ne peut pas encore estimer son coût API."
     },
     "toast": {
       "providerChanged": "Fournisseur d'IA modifié",

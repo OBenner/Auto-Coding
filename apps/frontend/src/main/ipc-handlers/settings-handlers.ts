@@ -1,6 +1,7 @@
 import { ipcMain, dialog, app, shell } from 'electron';
 import { existsSync, writeFileSync, mkdirSync, statSync, readFileSync } from 'fs';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { is } from '@electron-toolkit/utils';
@@ -16,7 +17,8 @@ import type {
   SourceEnvCheckResult,
   ProviderSettings,
   AIEngineProvider,
-  AgentRuntimeMode
+  AgentRuntimeMode,
+  ProviderConnectionTestResult
 } from '../../shared/types';
 import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
@@ -28,6 +30,9 @@ import { getCurrentOS, isMacOS, isWindows } from '../platform';
 import { projectStore } from '../project-store';
 
 const settingsPath = getSettingsPath();
+const execFileAsync = promisify(execFile);
+const PROVIDER_SMOKE_TIMEOUT_SECONDS = 30;
+const PROVIDER_SMOKE_PROCESS_TIMEOUT_MS = 45_000;
 
 /**
  * Auto-detect the auto-claude source path relative to the app location.
@@ -300,6 +305,143 @@ function collectRuntimeCompatibilityErrors(
       ([label]) =>
         `Non-Claude providers cannot use ${label} full_autonomous runtime unless runtime fallback is enabled`
     );
+}
+
+type ProviderSmokeCliResult = {
+  success?: boolean;
+  provider?: string;
+  model?: string | null;
+  runtime_mode?: string;
+  message?: string;
+  response_excerpt?: string | null;
+  error_details?: string | null;
+};
+
+function textFromExecOutput(output: unknown): string {
+  if (Buffer.isBuffer(output)) {
+    return output.toString('utf-8');
+  }
+  return typeof output === 'string' ? output : '';
+}
+
+function extractProviderSmokeJson(output: string): ProviderSmokeCliResult | null {
+  const start = output.indexOf('{');
+  const end = output.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(output.slice(start, end + 1)) as unknown;
+    if (parsed && typeof parsed === 'object') {
+      return parsed as ProviderSmokeCliResult;
+    }
+  } catch (_error) {
+    return null;
+  }
+  return null;
+}
+
+function mapProviderSmokeResult(
+  result: ProviderSmokeCliResult
+): ProviderConnectionTestResult {
+  return {
+    success: result.success === true,
+    provider: result.provider ?? 'unknown',
+    model: result.model ?? null,
+    runtimeMode: result.runtime_mode ?? 'analysis_only',
+    message: result.message ?? 'Provider smoke check completed',
+    responseExcerpt: result.response_excerpt ?? null,
+    errorDetails: result.error_details ?? null,
+  };
+}
+
+function readProviderSmokeResult(
+  stdout: unknown,
+  stderr: unknown
+): ProviderConnectionTestResult | null {
+  const stdoutText = textFromExecOutput(stdout);
+  const stderrText = textFromExecOutput(stderr);
+  const parsed = extractProviderSmokeJson(stdoutText) ?? extractProviderSmokeJson(stderrText);
+  return parsed ? mapProviderSmokeResult(parsed) : null;
+}
+
+async function runProviderConnectionTest(
+  sourcePath: string,
+  envPath: string
+): Promise<IPCResult<ProviderConnectionTestResult>> {
+  const pythonPath = getToolPath('python');
+  if (!pythonPath) {
+    return {
+      success: false,
+      error: 'Python not found. Please install Python 3.12 or higher.'
+    };
+  }
+
+  const runPyPath = path.join(sourcePath, 'run.py');
+  if (!existsSync(runPyPath)) {
+    return {
+      success: false,
+      error: 'Backend run.py not found. Cannot run provider smoke check.'
+    };
+  }
+
+  const envVars = existsSync(envPath)
+    ? parseEnvFile(readEnvFileSafe(envPath))
+    : {};
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      pythonPath,
+      [
+        runPyPath,
+        '--provider-smoke',
+        '--json',
+        '--provider-smoke-timeout',
+        String(PROVIDER_SMOKE_TIMEOUT_SECONDS)
+      ],
+      {
+        cwd: sourcePath,
+        encoding: 'utf-8',
+        env: {
+          ...process.env,
+          ...envVars,
+          PYTHONIOENCODING: 'utf-8'
+        },
+        maxBuffer: 1024 * 1024,
+        timeout: PROVIDER_SMOKE_PROCESS_TIMEOUT_MS,
+      }
+    );
+
+    const result = readProviderSmokeResult(stdout, stderr);
+    if (result) {
+      return { success: true, data: result };
+    }
+
+    return {
+      success: false,
+      error: 'Provider smoke check did not return JSON output.'
+    };
+  } catch (error) {
+    const err = error as Error & {
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+      killed?: boolean;
+      signal?: string | null;
+    };
+    const result = readProviderSmokeResult(err.stdout, err.stderr);
+    if (result) {
+      return { success: true, data: result };
+    }
+
+    const details = textFromExecOutput(err.stderr) || err.message;
+    return {
+      success: false,
+      error: err.killed || err.signal === 'SIGTERM'
+        ? 'Provider smoke check timed out.'
+        : details
+    };
+  }
 }
 
 /**
@@ -1369,6 +1511,33 @@ export function registerSettingsHandlers(
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to validate provider config'
+        };
+      }
+    }
+  );
+
+  /**
+   * Run a real text-only provider smoke check through backend runtime code
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_CONFIG_TEST,
+    async (): Promise<IPCResult<ProviderConnectionTestResult>> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath || !envPath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        return await runProviderConnectionTest(sourcePath, envPath);
+      } catch (error) {
+        console.error('[PROVIDER_CONFIG_TEST] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to test provider config'
         };
       }
     }

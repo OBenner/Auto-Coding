@@ -4,6 +4,10 @@
 
 import { DEFAULT_APP_SETTINGS } from '../../../shared/constants';
 
+const noopUnsubscribe = () => {
+  // Browser mode has no Electron event stream to unsubscribe from.
+};
+
 export const settingsMock = {
   // Settings
   getSettings: async () => ({
@@ -64,6 +68,17 @@ export const settingsMock = {
       ]
     }
   }),
+  testProviderConfig: async () => ({
+    success: true,
+    data: {
+      success: true,
+      provider: 'claude' as const,
+      model: 'claude-sonnet-4-5-20250929',
+      runtimeMode: 'analysis_only',
+      message: 'Provider smoke check passed',
+      responseExcerpt: 'Browser mock provider is reachable.'
+    }
+  }),
 
   // App Info
   getAppVersion: async () => '0.1.0-browser',
@@ -76,8 +91,8 @@ export const settingsMock = {
   getDownloadedAppUpdate: async () => ({ success: true, data: null }),
 
   // App Update Event Listeners (no-op in browser mode)
-  onAppUpdateAvailable: () => () => {},
-  onAppUpdateDownloaded: () => () => {},
-  onAppUpdateProgress: () => () => {},
-  onAppUpdateStableDowngrade: () => () => {}
+  onAppUpdateAvailable: () => noopUnsubscribe,
+  onAppUpdateDownloaded: () => noopUnsubscribe,
+  onAppUpdateProgress: () => noopUnsubscribe,
+  onAppUpdateStableDowngrade: () => noopUnsubscribe
 };

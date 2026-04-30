@@ -1,29 +1,148 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  CircleSlash,
+  DollarSign,
+  Info,
+  ShieldCheck,
+  XCircle
+} from 'lucide-react';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '../ui/switch';
 import { SettingsSection } from './SettingsSection';
+import { MODEL_PRICING, estimateSessionCost } from '../../../shared/constants/model-costs';
 import type {
   AgentRuntimeMode,
   AIEngineProvider,
   AIProviderConfig,
-  ProviderConfigValidation
+  ProviderConfigValidation,
+  ProviderConnectionTestResult
 } from '../../../shared/types/settings';
 
 type ProviderSettingsSectionProps = Record<string, never>;
+type CapabilityStatus = 'supported' | 'limited' | 'unavailable';
+type ProviderCapabilityKey =
+  | 'fullAutonomous'
+  | 'genericEdit'
+  | 'patchProposal'
+  | 'analysisOnly'
+  | 'nativeTools'
+  | 'mcp'
+  | 'subagents'
+  | 'filesystemEdits';
 
 const USE_GLOBAL_RUNTIME_MODE = '__global__';
 const NON_CLAUDE_DEFAULT_RUNTIME_MODE: AgentRuntimeMode = 'generic_edit';
+const COST_ESTIMATE_INPUT_TOKENS = 80_000;
+const COST_ESTIMATE_OUTPUT_TOKENS = 20_000;
 const RUNTIME_OVERRIDE_KEYS = [
   'plannerRuntimeMode',
   'coderRuntimeMode',
   'qaReviewerRuntimeMode',
   'qaFixerRuntimeMode'
 ] as const;
+const PROVIDER_CAPABILITY_KEYS: ProviderCapabilityKey[] = [
+  'fullAutonomous',
+  'genericEdit',
+  'patchProposal',
+  'analysisOnly',
+  'nativeTools',
+  'mcp',
+  'subagents',
+  'filesystemEdits'
+];
+
+const DEFAULT_PROVIDER_MODEL: Record<AIEngineProvider, string> = {
+  claude: 'claude-sonnet-4-5-20250929',
+  openai: 'gpt-4o',
+  google: 'gemini-2.0-flash',
+  litellm: 'openai/gpt-4o',
+  openrouter: 'openai/gpt-4o',
+  zhipuai: 'glm-4-flash-250414',
+  ollama: 'llama3'
+};
+
+const PROVIDER_CAPABILITY_MATRIX: Record<
+  AIEngineProvider,
+  Record<ProviderCapabilityKey, CapabilityStatus>
+> = {
+  claude: {
+    fullAutonomous: 'supported',
+    genericEdit: 'supported',
+    patchProposal: 'supported',
+    analysisOnly: 'supported',
+    nativeTools: 'supported',
+    mcp: 'supported',
+    subagents: 'supported',
+    filesystemEdits: 'supported'
+  },
+  openai: {
+    fullAutonomous: 'unavailable',
+    genericEdit: 'supported',
+    patchProposal: 'supported',
+    analysisOnly: 'supported',
+    nativeTools: 'supported',
+    mcp: 'unavailable',
+    subagents: 'unavailable',
+    filesystemEdits: 'limited'
+  },
+  google: {
+    fullAutonomous: 'unavailable',
+    genericEdit: 'limited',
+    patchProposal: 'supported',
+    analysisOnly: 'supported',
+    nativeTools: 'unavailable',
+    mcp: 'unavailable',
+    subagents: 'unavailable',
+    filesystemEdits: 'limited'
+  },
+  litellm: {
+    fullAutonomous: 'unavailable',
+    genericEdit: 'limited',
+    patchProposal: 'supported',
+    analysisOnly: 'supported',
+    nativeTools: 'limited',
+    mcp: 'unavailable',
+    subagents: 'unavailable',
+    filesystemEdits: 'limited'
+  },
+  openrouter: {
+    fullAutonomous: 'unavailable',
+    genericEdit: 'limited',
+    patchProposal: 'supported',
+    analysisOnly: 'supported',
+    nativeTools: 'limited',
+    mcp: 'unavailable',
+    subagents: 'unavailable',
+    filesystemEdits: 'limited'
+  },
+  zhipuai: {
+    fullAutonomous: 'unavailable',
+    genericEdit: 'limited',
+    patchProposal: 'supported',
+    analysisOnly: 'supported',
+    nativeTools: 'unavailable',
+    mcp: 'unavailable',
+    subagents: 'unavailable',
+    filesystemEdits: 'limited'
+  },
+  ollama: {
+    fullAutonomous: 'unavailable',
+    genericEdit: 'limited',
+    patchProposal: 'supported',
+    analysisOnly: 'supported',
+    nativeTools: 'unavailable',
+    mcp: 'unavailable',
+    subagents: 'unavailable',
+    filesystemEdits: 'limited'
+  }
+};
 
 const PROVIDER_OPTIONS: Array<{
   value: AIEngineProvider;
@@ -65,6 +184,55 @@ function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderCon
     }
   }
   return normalized;
+}
+
+function getPrimaryProviderModel(config: AIProviderConfig): string {
+  switch (config.provider) {
+    case 'openai':
+      return config.openaiModel || DEFAULT_PROVIDER_MODEL.openai;
+    case 'google':
+      return config.googleModel || DEFAULT_PROVIDER_MODEL.google;
+    case 'litellm':
+      return config.litellmModel || DEFAULT_PROVIDER_MODEL.litellm;
+    case 'openrouter':
+      return config.openrouterModel || DEFAULT_PROVIDER_MODEL.openrouter;
+    case 'zhipuai':
+      return config.zhipuaiModel || DEFAULT_PROVIDER_MODEL.zhipuai;
+    case 'ollama':
+      return config.ollamaModel || DEFAULT_PROVIDER_MODEL.ollama;
+    default:
+      return config.claudeModel || DEFAULT_PROVIDER_MODEL.claude;
+  }
+}
+
+function normalizePricingModel(model: string): string | null {
+  const trimmed = model.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (MODEL_PRICING[trimmed] && trimmed !== 'default') {
+    return trimmed;
+  }
+
+  const segments = trimmed.split('/').reverse();
+  for (const segment of segments) {
+    if (MODEL_PRICING[segment] && segment !== 'default') {
+      return segment;
+    }
+  }
+
+  return null;
+}
+
+function getCapabilityStatusClass(status: CapabilityStatus): string {
+  switch (status) {
+    case 'supported':
+      return 'border-success/30 bg-success/10 text-success';
+    case 'limited':
+      return 'border-warning/30 bg-warning/10 text-warning';
+    default:
+      return 'border-border bg-muted text-muted-foreground';
+  }
 }
 
 function ProviderField({
@@ -114,8 +282,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [testingProvider, setTestingProvider] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [validationStatus, setValidationStatus] = useState<ProviderConfigValidation | null>(null);
+  const [connectionTestStatus, setConnectionTestStatus] = useState<ProviderConnectionTestResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,11 +330,57 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       ? 'settings:aiProvider.compatibility.fallbackActive'
       : 'settings:aiProvider.compatibility.nonClaudeFullAutonomous';
   }
+  const selectedCapabilities = PROVIDER_CAPABILITY_MATRIX[config.provider];
+  const fullAutonomousSelectionCount = [
+    activeRuntimeMode,
+    config.plannerRuntimeMode,
+    config.coderRuntimeMode,
+    config.qaReviewerRuntimeMode,
+    config.qaFixerRuntimeMode
+  ].filter((mode) => mode === 'full_autonomous').length;
+  const runtimeNoticeKey = config.provider !== 'claude' && fullAutonomousSelectionCount > 0
+    ? runtimeFallbackEnabled
+      ? 'settings:aiProvider.runtime.validation.fallbackWillApply'
+      : 'settings:aiProvider.runtime.validation.fullAutonomousUnavailable'
+    : null;
+  const primaryModel = getPrimaryProviderModel(config);
+  const costInfo = useMemo(() => {
+    if (config.provider === 'ollama') {
+      return {
+        model: primaryModel,
+        isLocal: true,
+        estimate: null,
+        pricingModel: null
+      };
+    }
+
+    const pricingModel = normalizePricingModel(primaryModel);
+    if (!pricingModel) {
+      return {
+        model: primaryModel,
+        isLocal: false,
+        estimate: null,
+        pricingModel: null
+      };
+    }
+
+    return {
+      model: primaryModel,
+      isLocal: false,
+      estimate: estimateSessionCost(
+        pricingModel,
+        COST_ESTIMATE_INPUT_TOKENS,
+        COST_ESTIMATE_OUTPUT_TOKENS
+      ),
+      pricingModel
+    };
+  }, [config.provider, primaryModel]);
 
   const updateConfig = (updates: Partial<AIProviderConfig>) => {
     setConfig((current) => normalizeProviderRuntimeConfig({ ...current, ...updates }));
     setSaveStatus('idle');
     setValidationStatus(null);
+    setConnectionTestStatus(null);
   };
 
   const handleProviderChange = (provider: AIEngineProvider) => {
@@ -202,6 +418,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     setValidating(true);
     setSaveStatus('idle');
     setValidationStatus(null);
+    setConnectionTestStatus(null);
     try {
       const nextConfig = normalizeProviderRuntimeConfig(config);
       setConfig(nextConfig);
@@ -219,6 +436,58 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       setSaveStatus('error');
     } finally {
       setValidating(false);
+    }
+  };
+
+  const handleTestProvider = async () => {
+    setTestingProvider(true);
+    setSaveStatus('idle');
+    setValidationStatus(null);
+    setConnectionTestStatus(null);
+    try {
+      const nextConfig = normalizeProviderRuntimeConfig(config);
+      setConfig(nextConfig);
+      const saveResult = await window.electronAPI?.updateProviderConfig?.(nextConfig);
+      if (!saveResult?.success) {
+        setSaveStatus('error');
+        setConnectionTestStatus({
+          success: false,
+          provider: nextConfig.provider,
+          runtimeMode: 'analysis_only',
+          message: saveResult?.error ?? t('settings:aiProvider.connectionTest.saveFailed'),
+          errorDetails: saveResult?.error ?? null
+        });
+        return;
+      }
+
+      const testResult = await window.electronAPI?.testProviderConfig?.();
+      if (testResult?.success && testResult.data) {
+        setConnectionTestStatus(testResult.data);
+        setSaveStatus('success');
+      } else {
+        setConnectionTestStatus({
+          success: false,
+          provider: nextConfig.provider,
+          runtimeMode: 'analysis_only',
+          message: testResult?.error ?? t('settings:aiProvider.connectionTest.unavailable'),
+          errorDetails: testResult?.error ?? null
+        });
+        setSaveStatus('error');
+      }
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : t('settings:aiProvider.connectionTest.unavailable');
+      setConnectionTestStatus({
+        success: false,
+        provider: config.provider,
+        runtimeMode: 'analysis_only',
+        message,
+        errorDetails: message
+      });
+      setSaveStatus('error');
+    } finally {
+      setTestingProvider(false);
     }
   };
 
@@ -255,6 +524,194 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           ))}
         </SelectContent>
       </Select>
+    );
+  };
+
+  const renderCapabilityStatus = (status: CapabilityStatus) => {
+    const Icon = status === 'supported'
+      ? CheckCircle2
+      : status === 'limited'
+        ? AlertTriangle
+        : XCircle;
+    return (
+      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${getCapabilityStatusClass(status)}`}>
+        <Icon className="h-3 w-3" />
+        {t(`settings:aiProvider.compatibilityMatrix.status.${status}`)}
+      </span>
+    );
+  };
+
+  const renderCapabilityMatrix = () => (
+    <div className="space-y-3 border-t border-border pt-4">
+      <div className="flex items-start gap-2">
+        <ShieldCheck className="mt-0.5 h-4 w-4 text-muted-foreground" />
+        <div>
+          <h3 className="text-sm font-medium text-foreground">
+            {t('settings:aiProvider.compatibilityMatrix.title')}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {t('settings:aiProvider.compatibilityMatrix.description', {
+              provider: t(selectedProvider.labelKey)
+            })}
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {PROVIDER_CAPABILITY_KEYS.map((capability) => (
+          <div
+            key={capability}
+            className="flex min-h-10 items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2"
+          >
+            <span className="text-xs font-medium text-foreground">
+              {t(`settings:aiProvider.compatibilityMatrix.capabilities.${capability}`)}
+            </span>
+            {renderCapabilityStatus(selectedCapabilities[capability])}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderCostPanel = () => (
+    <div className="space-y-3 border-t border-border pt-4">
+      <div className="flex items-start gap-2">
+        <DollarSign className="mt-0.5 h-4 w-4 text-muted-foreground" />
+        <div>
+          <h3 className="text-sm font-medium text-foreground">
+            {t('settings:aiProvider.cost.title')}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {t('settings:aiProvider.cost.description')}
+          </p>
+        </div>
+      </div>
+      <div className="max-w-xl rounded-md border border-border bg-background p-3">
+        {costInfo.isLocal ? (
+          <div className="flex items-start gap-2 text-sm">
+            <CircleSlash className="mt-0.5 h-4 w-4 text-success" />
+            <div>
+              <p className="font-medium text-foreground">
+                {t('settings:aiProvider.cost.localTitle', { model: costInfo.model })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t('settings:aiProvider.cost.localDescription')}
+              </p>
+            </div>
+          </div>
+        ) : costInfo.estimate ? (
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">
+                {t('settings:aiProvider.cost.referenceEstimate')}
+              </span>
+              <span className="font-semibold text-foreground">
+                {costInfo.estimate.formatted}
+              </span>
+            </div>
+            <dl className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <dt>{t('settings:aiProvider.cost.modelLabel')}</dt>
+                <dd className="font-medium text-foreground">{costInfo.model}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.cost.pricingModelLabel')}</dt>
+                <dd className="font-medium text-foreground">{costInfo.pricingModel}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.cost.inputLabel')}</dt>
+                <dd className="font-medium text-foreground">
+                  {t('settings:aiProvider.cost.perMillion', {
+                    amount: costInfo.estimate.pricing.inputPerMillion.toFixed(2)
+                  })}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.cost.outputLabel')}</dt>
+                <dd className="font-medium text-foreground">
+                  {t('settings:aiProvider.cost.perMillion', {
+                    amount: costInfo.estimate.pricing.outputPerMillion.toFixed(2)
+                  })}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              {t('settings:aiProvider.cost.referenceTokens', {
+                input: COST_ESTIMATE_INPUT_TOKENS.toLocaleString(),
+                output: COST_ESTIMATE_OUTPUT_TOKENS.toLocaleString()
+              })}
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 text-sm">
+            <Info className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="font-medium text-foreground">
+                {t('settings:aiProvider.cost.pricingUnavailableTitle', {
+                  model: costInfo.model
+                })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t('settings:aiProvider.cost.pricingUnavailableDescription')}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderConnectionTestStatus = () => {
+    if (!connectionTestStatus) {
+      return null;
+    }
+
+    const isSuccess = connectionTestStatus.success;
+    const Icon = isSuccess ? CheckCircle2 : AlertTriangle;
+    return (
+      <div className={`max-w-xl rounded-md border p-3 text-sm ${
+        isSuccess
+          ? 'border-success/30 bg-success/10'
+          : 'border-destructive/30 bg-destructive/10'
+      }`}
+      >
+        <div className={`flex items-start gap-2 ${isSuccess ? 'text-success' : 'text-destructive'}`}>
+          <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-medium">
+              {isSuccess
+                ? t('settings:aiProvider.connectionTest.success')
+                : t('settings:aiProvider.connectionTest.failure')}
+            </p>
+            <p className="text-xs text-foreground">{connectionTestStatus.message}</p>
+          </div>
+        </div>
+        <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+          <div>
+            <dt>{t('settings:aiProvider.connectionTest.provider')}</dt>
+            <dd className="font-medium text-foreground">{connectionTestStatus.provider}</dd>
+          </div>
+          <div>
+            <dt>{t('settings:aiProvider.connectionTest.model')}</dt>
+            <dd className="font-medium text-foreground">
+              {connectionTestStatus.model ?? t('settings:aiProvider.connectionTest.defaultModel')}
+            </dd>
+          </div>
+          <div>
+            <dt>{t('settings:aiProvider.connectionTest.runtime')}</dt>
+            <dd className="font-medium text-foreground">{connectionTestStatus.runtimeMode}</dd>
+          </div>
+        </dl>
+        {connectionTestStatus.responseExcerpt && (
+          <p className="mt-3 rounded-md bg-background/80 p-2 text-xs text-foreground">
+            {connectionTestStatus.responseExcerpt}
+          </p>
+        )}
+        {connectionTestStatus.errorDetails && (
+          <p className="mt-3 rounded-md bg-background/80 p-2 text-xs text-destructive">
+            {connectionTestStatus.errorDetails}
+          </p>
+        )}
+      </div>
     );
   };
 
@@ -481,6 +938,8 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           </div>
         </div>
 
+        {renderCapabilityMatrix()}
+
         <div className="space-y-4 border-t border-border pt-4">
           <div>
             <h3 className="text-sm font-medium text-foreground">
@@ -568,6 +1027,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
               )}
             </div>
           </div>
+
+          {runtimeNoticeKey && (
+            <div className="flex max-w-xl items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>{t(runtimeNoticeKey)}</p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-4 border-t border-border pt-4">
@@ -581,6 +1047,8 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           </div>
           {renderProviderConfiguration()}
         </div>
+
+        {renderCostPanel()}
 
         <div className="space-y-4 border-t border-border pt-4">
           <div>
@@ -617,18 +1085,29 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           />
         </div>
 
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex flex-wrap items-center gap-3 pt-2">
           <Button onClick={handleSave} disabled={saving || loading}>
             {saving ? t('common:buttons.saving') : t('common:buttons.save')}
           </Button>
           <Button
             variant="outline"
             onClick={handleValidate}
-            disabled={saving || validating || loading}
+            disabled={saving || validating || testingProvider || loading}
           >
             {validating
               ? t('settings:aiProvider.validation.validating')
               : t('settings:aiProvider.validation.action')}
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleTestProvider}
+            disabled={saving || validating || testingProvider || loading}
+          >
+            <Activity className="h-4 w-4" />
+            {testingProvider
+              ? t('settings:aiProvider.connectionTest.testing')
+              : t('settings:aiProvider.connectionTest.action')}
           </Button>
           {saveStatus === 'success' && (
             <span className="inline-flex items-center gap-1.5 text-sm text-success">
@@ -672,6 +1151,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
             )}
           </div>
         )}
+        {renderConnectionTestStatus()}
       </div>
     </SettingsSection>
   );

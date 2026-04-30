@@ -192,6 +192,7 @@ export const IPC_CHANNELS = {
   PROVIDER_CONFIG_GET: 'provider:config:get',
   PROVIDER_CONFIG_UPDATE: 'provider:config:update',
   PROVIDER_CONFIG_VALIDATE: 'provider:config:validate',
+  PROVIDER_CONFIG_TEST: 'provider:config:test',
 
   // API Profile management (custom Anthropic-compatible endpoints)
   PROFILES_GET: 'profiles:get',

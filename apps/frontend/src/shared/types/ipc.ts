@@ -16,8 +16,6 @@ import type {
   GraphitiMemoryStatus,
   ContextSearchResult,
   MemoryEpisode,
-  GraphNode,
-  GraphEdge,
   GraphDataResult,
   ProjectEnvConfig,
   InfrastructureStatus,
@@ -95,7 +93,14 @@ import type {
   AllProfilesUsage,
   TerminalProfileChangedEvent
 } from './agent';
-import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult, AIProviderConfig, ProviderConfigValidation } from './settings';
+import type {
+  AppSettings,
+  SourceEnvConfig,
+  SourceEnvCheckResult,
+  AIProviderConfig,
+  ProviderConfigValidation,
+  ProviderConnectionTestResult
+} from './settings';
 import type { AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent } from './app-update';
 import type {
   ChangelogTask,
@@ -395,6 +400,7 @@ export interface ElectronAPI {
   getProviderConfig: () => Promise<IPCResult<AIProviderConfig>>;
   updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
   validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
+  testProviderConfig: () => Promise<IPCResult<ProviderConnectionTestResult>>;
 
   // Sentry error reporting
   notifySentryStateChanged: (enabled: boolean) => void;

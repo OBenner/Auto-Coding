@@ -903,7 +903,11 @@
       "qaReviewerLabel": "QA Reviewer Override",
       "qaFixerLabel": "QA Fixer Override",
       "fallbackLabel": "Allow runtime fallback",
-      "fallbackDescription": "When full autonomous is selected with a non-Claude provider, degrade to generic edit, patch proposal, or analysis only instead of failing immediately."
+      "fallbackDescription": "When full autonomous is selected with a non-Claude provider, degrade to generic edit, patch proposal, or analysis only instead of failing immediately.",
+      "validation": {
+        "fullAutonomousUnavailable": "Full autonomous runtime is only available through Claude Agent SDK. Choose a limited runtime or enable fallback.",
+        "fallbackWillApply": "Full autonomous is selected, but this provider will fall back to a compatible limited runtime before execution."
+      }
     },
     "runtimeModes": {
       "useGlobal": "Use default runtime mode",
@@ -928,6 +932,25 @@
       "claudeFirst": "Claude Agent SDK remains the full autonomous runtime. Other providers work through limited runtime modes.",
       "nonClaudeFullAutonomous": "Full autonomous mode requires Claude Agent SDK. Choose generic edit, patch proposal, or analysis only for this provider.",
       "fallbackActive": "Runtime fallback is enabled. This provider will not run full autonomous; Auto Code will degrade to a compatible limited runtime."
+    },
+    "compatibilityMatrix": {
+      "title": "Runtime Compatibility",
+      "description": "Current capability set for {{provider}}",
+      "capabilities": {
+        "fullAutonomous": "Full autonomous",
+        "genericEdit": "Generic edit",
+        "patchProposal": "Patch proposal",
+        "analysisOnly": "Analysis only",
+        "nativeTools": "Provider-native tools",
+        "mcp": "MCP tools",
+        "subagents": "Subagents",
+        "filesystemEdits": "Filesystem edits"
+      },
+      "status": {
+        "supported": "Supported",
+        "limited": "Limited",
+        "unavailable": "Unavailable"
+      }
     },
     "models": {
       "title": "Model Selection",
@@ -969,6 +992,33 @@
       "valid": "Provider settings are valid",
       "invalid": "Provider settings need attention",
       "availableProviders": "Configured providers: {{providers}}"
+    },
+    "connectionTest": {
+      "action": "Test provider",
+      "testing": "Testing...",
+      "success": "Provider connection works",
+      "failure": "Provider test failed",
+      "provider": "Provider",
+      "model": "Model",
+      "runtime": "Runtime",
+      "defaultModel": "Default model",
+      "unavailable": "Provider smoke check is unavailable.",
+      "saveFailed": "Could not save provider settings before testing."
+    },
+    "cost": {
+      "title": "Cost Preview",
+      "description": "Reference pricing for the selected provider model. Actual agent runs vary by task and context size.",
+      "referenceEstimate": "Reference session estimate",
+      "referenceTokens": "Based on {{input}} input tokens and {{output}} output tokens.",
+      "modelLabel": "Configured model",
+      "pricingModelLabel": "Pricing model",
+      "inputLabel": "Input",
+      "outputLabel": "Output",
+      "perMillion": "${{amount}} / 1M tokens",
+      "localTitle": "{{model}} runs locally",
+      "localDescription": "Ollama has no remote API token cost. Local compute and infrastructure costs still apply.",
+      "pricingUnavailableTitle": "No pricing data for {{model}}",
+      "pricingUnavailableDescription": "Auto Code can still use this model, but the UI cannot estimate its API cost yet."
     },
     "toast": {
       "providerChanged": "AI Provider Changed",

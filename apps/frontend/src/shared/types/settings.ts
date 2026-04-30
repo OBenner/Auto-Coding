@@ -470,3 +470,13 @@ export interface ProviderConfigValidation {
   errors: string[];
   availableProviders: AIEngineProvider[];
 }
+
+export interface ProviderConnectionTestResult {
+  success: boolean;
+  provider: AIEngineProvider | string;
+  model?: string | null;
+  runtimeMode: AgentRuntimeMode | string;
+  message: string;
+  responseExcerpt?: string | null;
+  errorDetails?: string | null;
+}
