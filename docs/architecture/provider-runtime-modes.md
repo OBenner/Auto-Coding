@@ -168,6 +168,7 @@ Supported actions:
 {
   "thought": "short planning note",
   "actions": [
+    { "tool": "stat_path", "path": "src/app.py" },
     { "tool": "list_files", "path": "src", "recursive": false, "max_entries": 100 },
     { "tool": "search_text", "query": "function_name", "path": "src", "recursive": true, "max_matches": 25 },
     { "tool": "read_file", "path": "relative/path.py", "max_chars": 12000 },
@@ -197,6 +198,7 @@ Auto Code validates and executes these actions locally:
 
 - file paths use the same workspace-relative sensitive-path checks as
   `patch_proposal`;
+- path metadata inspection is bounded and never reads file contents;
 - file listings are bounded, skip sensitive/heavy directories, and return only
   path metadata;
 - text search is literal, bounded, skips sensitive/heavy directories, and

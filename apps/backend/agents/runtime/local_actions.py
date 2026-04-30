@@ -124,6 +124,20 @@ class CommandExecution:
 
 LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
     LocalActionToolSpec(
+        name="stat_path",
+        description="Inspect workspace path metadata without reading contents.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": "Workspace-relative path. Defaults to the project root.",
+            },
+        },
+        example={
+            "tool": "stat_path",
+            "path": "relative/path.py",
+        },
+    ),
+    LocalActionToolSpec(
         name="list_files",
         description="List workspace files and directories without reading contents.",
         parameters={
@@ -390,6 +404,8 @@ class LocalActionExecutor:
         """Execute one local action and return a structured result."""
         tool = action_tool(action)
         try:
+            if tool == "stat_path":
+                return self._stat_path(action)
             if tool == "list_files":
                 return self._list_files(action)
             if tool == "search_text":
@@ -424,6 +440,43 @@ class LocalActionExecutor:
                 ok=False,
                 message=f"Action failed unexpectedly: {e}",
             )
+
+    def _stat_path(self, action: dict[str, Any]) -> ToolActionResult:
+        path = optional_workspace_path(action, "path")
+        target = resolve_workspace_path(self.project_dir, path)
+        display_path = path or "."
+        if not target.exists():
+            return ToolActionResult(
+                tool="stat_path",
+                ok=True,
+                message=f"Path does not exist: {display_path}",
+                data={
+                    "path": display_path,
+                    "exists": False,
+                    "type": "missing",
+                },
+            )
+
+        path_type = (
+            "directory" if target.is_dir() else "file" if target.is_file() else "other"
+        )
+        data: dict[str, Any] = {
+            "path": display_path,
+            "exists": True,
+            "type": path_type,
+        }
+        if target.is_file():
+            try:
+                data["bytes"] = target.stat().st_size
+            except OSError:
+                data["bytes"] = None
+
+        return ToolActionResult(
+            tool="stat_path",
+            ok=True,
+            message=f"Inspected {display_path}",
+            data=data,
+        )
 
     def _list_files(self, action: dict[str, Any]) -> ToolActionResult:
         path = optional_workspace_path(action, "path")

@@ -528,6 +528,7 @@ def test_patch_mode_marks_subtask_completed(tmp_path: Path):
 
 def test_local_action_manifest_describes_generic_edit_contract():
     expected_tools = {
+        "stat_path",
         "list_files",
         "search_text",
         "read_file",
@@ -551,6 +552,10 @@ def test_local_action_manifest_describes_generic_edit_contract():
     } == expected_tools
 
     provider_schemas = local_action_tool_schemas()
+    stat_path_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "stat_path"
+    )
+    assert "path" in stat_path_schema["parameters"]["properties"]
     list_files_schema = next(
         schema for schema in provider_schemas if schema["name"] == "list_files"
     )
@@ -570,6 +575,54 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert run_command_schema["parameters"]["required"] == ["command"]
     assert "timeout" in run_command_schema["parameters"]["properties"]
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_stats_paths_safely(tmp_path: Path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print('hi')\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("SECRET=1\n", encoding="utf-8")
+    executor = LocalActionExecutor(tmp_path)
+
+    file_result = await executor.execute(
+        {
+            "tool": "stat_path",
+            "path": "src/app.py",
+        }
+    )
+
+    assert file_result.ok is True
+    assert file_result.data["exists"] is True
+    assert file_result.data["type"] == "file"
+    assert file_result.data["bytes"] > 0
+
+    dir_result = await executor.execute(
+        {
+            "tool": "stat_path",
+            "path": "src",
+        }
+    )
+    assert dir_result.ok is True
+    assert dir_result.data["type"] == "directory"
+    assert "bytes" not in dir_result.data
+
+    missing_result = await executor.execute(
+        {
+            "tool": "stat_path",
+            "path": "src/missing.py",
+        }
+    )
+    assert missing_result.ok is True
+    assert missing_result.data["exists"] is False
+    assert missing_result.data["type"] == "missing"
+
+    sensitive_result = await executor.execute(
+        {
+            "tool": "stat_path",
+            "path": ".env",
+        }
+    )
+    assert sensitive_result.ok is False
 
 
 @pytest.mark.asyncio
@@ -950,7 +1003,8 @@ async def test_generic_edit_runtime_prefers_native_tool_call_loop(tmp_path: Path
     assert session.messages[0] is not None
     assert "function calls" in session.messages[0]
     assert session.messages[1:] == [None, None]
-    assert [schema["name"] for schema in session.tool_schemas[0]][:3] == [
+    assert [schema["name"] for schema in session.tool_schemas[0]][:4] == [
+        "stat_path",
         "list_files",
         "search_text",
         "read_file",
