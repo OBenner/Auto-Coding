@@ -84,6 +84,11 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
 
   // API Key button handler - opens profile dialog
   const handleAPIKeyChoice = () => {
+    if (profiles.length > 0 && onAPIKeyPathComplete) {
+      onAPIKeyPathComplete();
+      return;
+    }
+
     setIsProfileDialogOpen(true);
   };
 
@@ -97,6 +102,15 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
     // If dialog closed and profile was created (was empty, now has profiles), skip to graphiti step
     if (!open && wasEmpty && hasProfilesNow && onAPIKeyPathComplete) {
       // Call the callback to skip oauth and go directly to graphiti
+      onAPIKeyPathComplete();
+    }
+  };
+
+  // Profile dialog save handler - ProfileEditDialog only calls this after a
+  // successful create/update, so it is more reliable than inferring creation
+  // from store state during dialog close.
+  const handleProfileSaved = () => {
+    if (onAPIKeyPathComplete) {
       onAPIKeyPathComplete();
     }
   };
@@ -164,6 +178,7 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
       <ProfileEditDialog
         open={isProfileDialogOpen}
         onOpenChange={handleProfileDialogClose}
+        onSaved={handleProfileSaved}
         // No profile prop = create mode
       />
     </>
