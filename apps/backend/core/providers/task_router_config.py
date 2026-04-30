@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 PROVIDER_PRICING_ALIASES = {
     "claude": "anthropic",
+    "codex": "openai",
 }
 AGGREGATOR_PROVIDERS = {"litellm", "openrouter"}
 

@@ -115,6 +115,7 @@
     "add": "Add",
     "gotIt": "Got it",
     "continue": "Continue",
+    "continueAnyway": "Continue Anyway",
     "saving": "Saving...",
     "load": "Load"
   },
@@ -636,6 +637,12 @@
     "step1": "Press Enter to start authentication",
     "step2": "Complete authentication in your browser",
     "step3": "Return here - auth will be detected automatically",
+    "codex": {
+      "instructionTitle": "Codex Authentication",
+      "step1": "Press Enter to run codex login",
+      "step2": "Complete OpenAI/Codex login in your browser",
+      "step3": "Return here and close this terminal after login"
+    },
     "authFailed": "Authentication failed",
     "connecting": "Connecting...",
     "authenticate": "Authenticate: {{profileName}}",

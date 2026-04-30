@@ -327,7 +327,7 @@ Current question: {message}"""
             provider_config.litellm_model = resolved_model
         elif provider == "ollama":
             provider_config.ollama_model = resolved_model
-        if not provider_config.is_valid():
+        if provider != "claude" and not provider_config.is_valid():
             errors = provider_config.get_validation_errors()
             raise RuntimeError("; ".join(errors))
 

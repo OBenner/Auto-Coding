@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+import textwrap
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -94,6 +95,55 @@ async def test_claude_runtime_wraps_existing_session_runner(tmp_path: Path):
     assert result.decision_tracker == "tracker"
     assert client.entered is True
     assert client.exited is True
+
+
+@pytest.mark.asyncio
+async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
+    fake_codex = tmp_path / "codex"
+    fake_codex.write_text(
+        textwrap.dedent(
+            """\
+            #!/usr/bin/env python3
+            import pathlib
+            import sys
+
+            args = sys.argv[1:]
+            assert args[0] == "exec"
+            assert "--cd" in args
+            assert "--sandbox" in args
+            assert "--color" in args
+            output_path = pathlib.Path(args[args.index("--output-last-message") + 1])
+            message = sys.stdin.read().strip()
+            output_path.write_text(f"final response: {message}", encoding="utf-8")
+            print("codex event log")
+            """
+        ),
+        encoding="utf-8",
+    )
+    fake_codex.chmod(0o755)
+
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    session = SimpleNamespace(
+        codex_command=str(fake_codex),
+        codex_home=codex_home,
+        model="codex-default",
+    )
+    runtime_session = create_runtime_session(
+        provider_name="codex",
+        agent_session=session,
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "do codex work",
+        tmp_path,
+        requirements=RuntimeRequirements.full_coder(),
+    )
+
+    assert result.status == "complete"
+    assert result.response_text == "final response: do codex work"
 
 
 class FakeCompletionSession:

@@ -60,6 +60,7 @@ const PROVIDER_CAPABILITY_KEYS: ProviderCapabilityKey[] = [
 
 const DEFAULT_PROVIDER_MODEL: Record<AIEngineProvider, string> = {
   claude: 'claude-sonnet-4-5-20250929',
+  codex: 'codex-default',
   openai: 'gpt-4o',
   google: 'gemini-2.0-flash',
   litellm: 'openai/gpt-4o',
@@ -80,6 +81,16 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     nativeTools: 'supported',
     mcp: 'supported',
     subagents: 'supported',
+    filesystemEdits: 'supported'
+  },
+  codex: {
+    fullAutonomous: 'supported',
+    genericEdit: 'supported',
+    patchProposal: 'supported',
+    analysisOnly: 'supported',
+    nativeTools: 'supported',
+    mcp: 'unavailable',
+    subagents: 'limited',
     filesystemEdits: 'supported'
   },
   openai: {
@@ -150,6 +161,7 @@ const PROVIDER_OPTIONS: Array<{
   descriptionKey: string;
 }> = [
   { value: 'claude', labelKey: 'settings:aiProvider.providers.claude.name', descriptionKey: 'settings:aiProvider.providers.claude.description' },
+  { value: 'codex', labelKey: 'settings:aiProvider.providers.codex.name', descriptionKey: 'settings:aiProvider.providers.codex.description' },
   { value: 'openai', labelKey: 'settings:aiProvider.providers.openai.name', descriptionKey: 'settings:aiProvider.providers.openai.description' },
   { value: 'google', labelKey: 'settings:aiProvider.providers.google.name', descriptionKey: 'settings:aiProvider.providers.google.description' },
   { value: 'litellm', labelKey: 'settings:aiProvider.providers.litellm.name', descriptionKey: 'settings:aiProvider.providers.litellm.description' },
@@ -170,7 +182,7 @@ const RUNTIME_MODE_OPTIONS: Array<{
 ];
 
 function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderConfig {
-  if (config.provider === 'claude') {
+  if (config.provider === 'claude' || config.provider === 'codex') {
     return config;
   }
 
@@ -188,6 +200,8 @@ function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderCon
 
 function getPrimaryProviderModel(config: AIProviderConfig): string {
   switch (config.provider) {
+    case 'codex':
+      return config.codexModel || DEFAULT_PROVIDER_MODEL.codex;
     case 'openai':
       return config.openaiModel || DEFAULT_PROVIDER_MODEL.openai;
     case 'google':
@@ -323,7 +337,8 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
 
   const activeRuntimeMode = config.runtimeMode ?? 'full_autonomous';
   const runtimeFallbackEnabled = config.runtimeFallbackEnabled ?? false;
-  const nonClaudeFullAutonomous = config.provider !== 'claude' && activeRuntimeMode === 'full_autonomous';
+  const fullAutonomousProvider = config.provider === 'claude' || config.provider === 'codex';
+  const nonClaudeFullAutonomous = !fullAutonomousProvider && activeRuntimeMode === 'full_autonomous';
   let compatibilityMessageKey = 'settings:aiProvider.compatibility.claudeFirst';
   if (nonClaudeFullAutonomous) {
     compatibilityMessageKey = runtimeFallbackEnabled
@@ -338,7 +353,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     config.qaReviewerRuntimeMode,
     config.qaFixerRuntimeMode
   ].filter((mode) => mode === 'full_autonomous').length;
-  const runtimeNoticeKey = config.provider !== 'claude' && fullAutonomousSelectionCount > 0
+  const runtimeNoticeKey = !fullAutonomousProvider && fullAutonomousSelectionCount > 0
     ? runtimeFallbackEnabled
       ? 'settings:aiProvider.runtime.validation.fallbackWillApply'
       : 'settings:aiProvider.runtime.validation.fullAutonomousUnavailable'
@@ -386,7 +401,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const handleProviderChange = (provider: AIEngineProvider) => {
     updateConfig({
       provider,
-      runtimeMode: provider === 'claude' ? 'full_autonomous' : config.runtimeMode
+      runtimeMode: provider === 'claude' || provider === 'codex' ? 'full_autonomous' : config.runtimeMode
     });
   };
 
@@ -498,7 +513,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     includeGlobal: boolean
   ) => {
     const runtimeModeOptions = RUNTIME_MODE_OPTIONS.filter(
-      (mode) => mode.value !== 'full_autonomous' || config.provider === 'claude'
+      (mode) => mode.value !== 'full_autonomous' || fullAutonomousProvider
     );
     return (
       <Select value={value || USE_GLOBAL_RUNTIME_MODE} onValueChange={onChange}>
@@ -714,6 +729,17 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
 
   const renderProviderConfiguration = () => {
     switch (config.provider) {
+      case 'codex':
+        return (
+          <ProviderField
+            id="codexModel"
+            label={t('settings:aiProvider.providerModels.codex.label')}
+            description={t('settings:aiProvider.providerModels.codex.description')}
+            placeholder={t('settings:aiProvider.providerModels.codex.placeholder')}
+            value={config.codexModel ?? ''}
+            onChange={(codexModel) => updateConfig({ codexModel })}
+          />
+        );
       case 'openai':
         return (
           <>

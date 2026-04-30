@@ -39,7 +39,7 @@
     },
     "accounts": {
       "title": "Accounts",
-      "description": "Claude accounts & API endpoints"
+      "description": "Claude, Codex & API endpoints"
     },
     "security": {
       "title": "Security",
@@ -578,9 +578,10 @@
   },
   "accounts": {
     "title": "Accounts",
-    "description": "Manage Claude accounts and API endpoints",
+    "description": "Manage Claude accounts, Codex accounts, and API endpoints",
     "tabs": {
       "claudeCode": "Claude Code",
+      "codex": "Codex CLI",
       "customEndpoints": "Custom Endpoints"
     },
     "claudeCode": {
@@ -599,6 +600,33 @@
       "emailPlaceholder": "Email (optional, for display)",
       "saveToken": "Save Token",
       "accountNamePlaceholder": "Account name (e.g., Work, Personal)"
+    },
+    "codex": {
+      "description": "Authenticate OpenAI/Codex accounts for the Codex CLI runtime.",
+      "accountLoginTitle": "Codex login is not an API key",
+      "accountLoginDescription": "Codex login stores account credentials under CODEX_HOME for the Codex CLI. It does not create or reveal an OPENAI_API_KEY; direct OpenAI API mode still needs a key.",
+      "noAccountsYet": "No Codex accounts configured yet",
+      "noEmail": "No email detected",
+      "default": "Default",
+      "active": "Active",
+      "authenticated": "Authenticated",
+      "needsAuth": "Needs Auth",
+      "authenticate": "Authenticate",
+      "authenticating": "Authenticating...",
+      "setActive": "Set Active",
+      "configDir": "CODEX_HOME: {{path}}",
+      "accountNamePlaceholder": "Codex account name (e.g., OpenAI Work)",
+      "tooltips": {
+        "reauthenticate": "Re-authenticate Codex profile",
+        "delete": "Delete Codex profile"
+      },
+      "toast": {
+        "loadProfilesFailed": "Failed to Load Codex Profiles",
+        "addProfileFailed": "Failed to Add Codex Profile",
+        "deleteProfileFailed": "Failed to Delete Codex Profile",
+        "setActiveProfileFailed": "Failed to Set Active Codex Profile",
+        "authFailed": "Codex Authentication Failed"
+      }
     },
     "customEndpoints": {
       "description": "Configure custom Anthropic-compatible API endpoints",
@@ -782,6 +810,10 @@
         "name": "Claude Agent SDK",
         "description": "Anthropic's Claude Agent SDK (default, recommended)"
       },
+      "codex": {
+        "name": "Codex CLI",
+        "description": "OpenAI/Codex account runtime using your active Codex profile"
+      },
       "openai": {
         "name": "OpenAI",
         "description": "Direct OpenAI SDK runtime for limited modes"
@@ -840,6 +872,11 @@
         "label": "Claude Model",
         "placeholder": "claude-sonnet-4-5-20250929",
         "description": "Optional Claude Agent SDK model override"
+      },
+      "codex": {
+        "label": "Codex Model",
+        "placeholder": "codex-default",
+        "description": "Optional model passed to codex exec; leave empty for the Codex default"
       },
       "openai": {
         "label": "OpenAI Model",

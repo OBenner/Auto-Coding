@@ -44,6 +44,8 @@ def _apply_route_to_config(config: "ProviderConfig", route: object) -> "Provider
 
     if provider == "claude":
         routed_config.claude_model = model
+    elif provider == "codex":
+        routed_config.codex_model = model
     elif provider == "openai":
         routed_config.openai_model = model
     elif provider == "google":
@@ -109,6 +111,31 @@ def _create_openai_provider(config: "ProviderConfig") -> "AIEngineProvider":
 
     logger.debug(f"Creating OpenAI provider with model: {config.openai_model}")
     return OpenAIProvider(config)
+
+
+def _create_codex_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create a Codex CLI account provider.
+
+    Args:
+        config: ProviderConfig with Codex CLI settings
+
+    Returns:
+        CodexCliProvider instance
+
+    Raises:
+        ProviderNotInstalled: If the adapter module is unavailable
+    """
+    try:
+        from core.providers.adapters.codex import CodexCliProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "Codex CLI adapter not installed. "
+            "Ensure core.providers.adapters.codex module exists."
+        ) from e
+
+    logger.debug(f"Creating Codex CLI provider with model: {config.codex_model}")
+    return CodexCliProvider(config)
 
 
 def _create_google_provider(config: "ProviderConfig") -> "AIEngineProvider":
@@ -270,6 +297,8 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
 
     if provider == "claude":
         return _create_claude_provider(config)
+    elif provider == "codex":
+        return _create_codex_provider(config)
     elif provider == "openai":
         return _create_openai_provider(config)
     elif provider == "google":
@@ -285,7 +314,8 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
     else:
         raise ProviderError(
             f"Unknown AI engine provider: {provider}. "
-            f"Supported providers: claude, openai, google, litellm, openrouter, zhipuai, ollama"
+            "Supported providers: claude, codex, openai, google, litellm, "
+            "openrouter, zhipuai, ollama"
         )
 
 
@@ -329,7 +359,7 @@ def create_agent_session(
         from core.providers.task_router import TaskComplexityRouter
 
         router = TaskComplexityRouter()
-        route = router.route(subtask, agent_type)
+        route = router.route(subtask, agent_type, provider_config=config)
         logger.info(
             "Task routed: complexity=%s (%.2f) -> %s/%s | cost=%.4f | %s",
             route.complexity,
@@ -373,4 +403,13 @@ def get_available_provider_names() -> list[str]:
     Returns:
         List of provider name strings
     """
-    return ["claude", "openai", "google", "litellm", "openrouter", "zhipuai", "ollama"]
+    return [
+        "claude",
+        "codex",
+        "openai",
+        "google",
+        "litellm",
+        "openrouter",
+        "zhipuai",
+        "ollama",
+    ]

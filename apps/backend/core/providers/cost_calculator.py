@@ -119,6 +119,13 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
         "output": 12.00,
         "provider": "openai",
     },
+    # Codex CLI account runtime. Uses the account/default model unless CODEX_MODEL
+    # is set, so pricing is not known here.
+    "codex-default": {
+        "input": 0.00,
+        "output": 0.00,
+        "provider": "unknown",
+    },
     # ==================== GOOGLE GEMINI ====================
     # Gemini 2.0 Flash - Latest fast model
     "gemini-2.0-flash": {

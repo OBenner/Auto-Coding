@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .claude import ClaudeAgentRuntimeSession
+from .codex_cli import CodexCliRuntimeSession
 from .completion import CompletionRuntimeSession
 from .generic_edit import GenericEditRuntimeSession
 from .patch_proposal import PatchProposalRuntimeSession
@@ -53,6 +54,14 @@ def create_runtime_session(
         return ClaudeAgentRuntimeSession(
             agent_session=agent_session,
             session_runner=claude_session_runner,
+        )
+
+    if provider_name == "codex":
+        if project_dir is None:
+            raise ValueError("project_dir is required for Codex CLI runtime")
+        return CodexCliRuntimeSession(
+            agent_session=agent_session,
+            project_dir=project_dir,
         )
 
     return CompletionRuntimeSession(

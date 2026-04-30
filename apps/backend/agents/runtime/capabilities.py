@@ -44,6 +44,21 @@ class RuntimeCapabilities:
         )
 
     @classmethod
+    def codex_cli(cls) -> "RuntimeCapabilities":
+        """Capabilities expected from Codex CLI exec sessions."""
+        return cls(
+            text_completion=True,
+            streaming_text=True,
+            structured_output=True,
+            native_tool_loop=True,
+            filesystem_read=True,
+            filesystem_edit=True,
+            shell=True,
+            apply_patch=True,
+            sandbox=True,
+        )
+
+    @classmethod
     def completion_only(cls) -> "RuntimeCapabilities":
         """Capabilities for direct model SDKs and model gateways."""
         return cls(

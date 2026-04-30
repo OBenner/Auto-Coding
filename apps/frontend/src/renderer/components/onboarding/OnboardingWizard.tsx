@@ -14,6 +14,7 @@ import { WizardProgress, WizardStep } from './WizardProgress';
 import { WelcomeStep } from './WelcomeStep';
 import { AuthChoiceStep } from './AuthChoiceStep';
 import { OAuthStep } from './OAuthStep';
+import { CodexOAuthStep } from './CodexOAuthStep';
 import { ClaudeCodeStep } from './ClaudeCodeStep';
 import { DevToolsStep } from './DevToolsStep';
 import { PrivacyStep } from './PrivacyStep';
@@ -66,6 +67,7 @@ export function OnboardingWizard({
   const [completedSteps, setCompletedSteps] = useState<Set<WizardStepId>>(new Set());
   // Track if oauth step was bypassed (API key path chosen)
   const [oauthBypassed, setOauthBypassed] = useState(false);
+  const [authRuntime, setAuthRuntime] = useState<'anthropic' | 'codex'>('anthropic');
 
   // Get current step ID
   const currentStepId = WIZARD_STEPS[currentStepIndex].id;
@@ -93,8 +95,8 @@ export function OnboardingWizard({
   }, [currentStepIndex, currentStepId]);
 
   const goToPreviousStep = useCallback(() => {
-    // If going back from memory and oauth was bypassed, go back to auth-choice (skip oauth)
-    if (currentStepId === 'memory' && oauthBypassed) {
+    // If going back from CLI and oauth was bypassed, go back to auth-choice (skip oauth)
+    if (currentStepId === 'claude-code' && oauthBypassed) {
       // Find index of auth-choice step
       const authChoiceIndex = WIZARD_STEPS.findIndex(step => step.id === 'auth-choice');
       setCurrentStepIndex(authChoiceIndex);
@@ -107,21 +109,31 @@ export function OnboardingWizard({
     }
   }, [currentStepIndex, currentStepId, oauthBypassed]);
 
-  // Handler for when API key path is chosen - skips oauth step
-  const handleSkipToMemory = useCallback(() => {
+  // Handler for when API key path is chosen - skips only the account OAuth step
+  const handleSkipOAuthStep = useCallback(() => {
     setOauthBypassed(true);
     setCompletedSteps(prev => new Set(prev).add('auth-choice'));
 
-    // Find index of memory step
-    const memoryIndex = WIZARD_STEPS.findIndex(step => step.id === 'memory');
-    setCurrentStepIndex(memoryIndex);
+    const cliIndex = WIZARD_STEPS.findIndex(step => step.id === 'claude-code');
+    setCurrentStepIndex(cliIndex);
   }, []);
+
+  const handleCodexOAuthPath = useCallback(() => {
+    setAuthRuntime('codex');
+    goToNextStep();
+  }, [goToNextStep]);
+
+  const handleAPIKeyPathComplete = useCallback(() => {
+    setAuthRuntime('anthropic');
+    handleSkipOAuthStep();
+  }, [handleSkipOAuthStep]);
 
   // Reset wizard state (for re-running) - defined before skipWizard/finishWizard that use it
   const resetWizard = useCallback(() => {
     setCurrentStepIndex(0);
     setCompletedSteps(new Set());
     setOauthBypassed(false);
+    setAuthRuntime('anthropic');
   }, []);
 
   const completeWizard = useCallback(async () => {
@@ -170,14 +182,24 @@ export function OnboardingWizard({
       case 'auth-choice':
         return (
           <AuthChoiceStep
-            onNext={goToNextStep}
+            onNext={() => {
+              setAuthRuntime('anthropic');
+              goToNextStep();
+            }}
             onBack={goToPreviousStep}
             onSkip={completeWizard}
-            onAPIKeyPathComplete={handleSkipToMemory}
+            onAPIKeyPathComplete={handleAPIKeyPathComplete}
+            onCodexOAuthPath={handleCodexOAuthPath}
           />
         );
       case 'oauth':
-        return (
+        return authRuntime === 'codex' ? (
+          <CodexOAuthStep
+            onNext={goToNextStep}
+            onBack={goToPreviousStep}
+            onSkip={completeWizard}
+          />
+        ) : (
           <OAuthStep
             onNext={goToNextStep}
             onBack={goToPreviousStep}
@@ -190,6 +212,7 @@ export function OnboardingWizard({
             onNext={goToNextStep}
             onBack={goToPreviousStep}
             onSkip={completeWizard}
+            runtime={authRuntime === 'codex' ? 'codex' : 'claude'}
           />
         );
       case 'devtools':

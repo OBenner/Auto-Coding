@@ -87,6 +87,8 @@ import type {
 import type {
   ClaudeProfileSettings,
   ClaudeProfile,
+  CodexProfileSettings,
+  CodexProfile,
   ClaudeAutoSwitchSettings,
   ClaudeAuthResult,
   ClaudeUsageSnapshot,
@@ -354,6 +356,17 @@ export interface ElectronAPI {
   authenticateClaudeProfile: (profileId: string) => Promise<IPCResult<{ terminalId: string; configDir: string }>>;
   /** Check if a profile has been authenticated (by checking .claude.json) */
   verifyClaudeProfileAuth: (profileId: string) => Promise<IPCResult<{ authenticated: boolean; email?: string }>>;
+
+  // Codex/OpenAI account profile management
+  getCodexProfiles: () => Promise<IPCResult<CodexProfileSettings>>;
+  createCodexProfile: (name: string) => Promise<IPCResult<CodexProfile>>;
+  saveCodexProfile: (profile: CodexProfile) => Promise<IPCResult<CodexProfile>>;
+  deleteCodexProfile: (profileId: string) => Promise<IPCResult>;
+  renameCodexProfile: (profileId: string, newName: string) => Promise<IPCResult>;
+  setActiveCodexProfile: (profileId: string) => Promise<IPCResult>;
+  authenticateCodexProfile: (profileId: string) => Promise<IPCResult<{ terminalId: string; configDir: string }>>;
+  verifyCodexProfileAuth: (profileId: string) => Promise<IPCResult<{ authenticated: boolean; email?: string }>>;
+
   /** Get auto-switch settings */
   getAutoSwitchSettings: () => Promise<IPCResult<ClaudeAutoSwitchSettings>>;
   /** Update auto-switch settings */
@@ -916,6 +929,7 @@ export interface ElectronAPI {
 
   // Claude Code CLI operations
   checkClaudeCodeVersion: () => Promise<IPCResult<import('./cli').ClaudeCodeVersionInfo>>;
+  checkCodexCodeVersion: () => Promise<IPCResult<import('./cli').ClaudeCodeVersionInfo>>;
   installClaudeCode: () => Promise<IPCResult<{ command: string }>>;
   getClaudeCodeVersions: () => Promise<IPCResult<import('./cli').ClaudeCodeVersionList>>;
   installClaudeCodeVersion: (version: string) => Promise<IPCResult<{ command: string; version: string }>>;

@@ -84,6 +84,11 @@ export interface ClaudeCodeAPI {
   checkClaudeCodeVersion: () => Promise<ClaudeCodeVersionResult>;
 
   /**
+   * Check Codex CLI version status.
+   */
+  checkCodexCodeVersion: () => Promise<ClaudeCodeVersionResult>;
+
+  /**
    * Install or update Claude Code CLI
    * Opens the user's terminal with the install command
    */
@@ -120,6 +125,9 @@ export interface ClaudeCodeAPI {
 export const createClaudeCodeAPI = (): ClaudeCodeAPI => ({
   checkClaudeCodeVersion: (): Promise<ClaudeCodeVersionResult> =>
     invokeIpc(IPC_CHANNELS.CLAUDE_CODE_CHECK_VERSION),
+
+  checkCodexCodeVersion: (): Promise<ClaudeCodeVersionResult> =>
+    invokeIpc(IPC_CHANNELS.CODEX_CODE_CHECK_VERSION),
 
   installClaudeCode: (): Promise<ClaudeCodeInstallResult> =>
     invokeIpc(IPC_CHANNELS.CLAUDE_CODE_INSTALL),

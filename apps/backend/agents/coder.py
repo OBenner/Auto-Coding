@@ -17,6 +17,7 @@ from core.model_fallback import MODEL_FALLBACK_CHAIN
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.factory import create_engine_provider
+from core.providers.task_router import TaskComplexityRouter
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -25,7 +26,12 @@ from linear_updater import (
     linear_task_stuck,
 )
 from notifications import notify_stuck_subtask
-from phase_config import get_phase_model, get_phase_thinking_budget, resolve_model_id
+from phase_config import (
+    get_phase_model,
+    get_phase_thinking_budget,
+    is_phase_model_locked,
+    resolve_model_id,
+)
 from phase_event import ExecutionPhase, emit_phase
 from progress import (
     count_subtasks,
@@ -77,6 +83,7 @@ from .runtime import (
     requirements_for_runtime_mode,
     resolve_runtime_mode_with_fallback,
     run_runtime_session,
+    runtime_fallback_enabled,
 )
 from .runtime.artifacts import (
     save_analysis_only_artifact,
@@ -942,6 +949,38 @@ async def run_autonomous_agent(
 
         # Use appropriate agent_type for correct tool permissions and thinking budget
         agent_type_for_session = "planner" if first_run else "coder"
+        provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
+        requested_runtime_mode = get_runtime_mode(agent_type_for_session)
+        route_allowed_providers = None
+        if (
+            requested_runtime_mode == "full_autonomous"
+            and not runtime_fallback_enabled()
+        ):
+            route_allowed_providers = {"claude", "codex"}
+
+        if (
+            next_subtask
+            and current_phase == "coding"
+            and not override_model
+            and model is None
+            and not is_phase_model_locked(spec_dir, current_phase)
+        ):
+            route = TaskComplexityRouter().route(
+                next_subtask,
+                agent_type=agent_type_for_session,
+                provider_config=provider_config,
+                allowed_providers=route_allowed_providers,
+            )
+            provider_config = provider_config.with_provider_model(
+                route.provider,
+                route.model,
+            )
+            phase_model = route.model
+            print_status(
+                f"Smart routing: {route.complexity} -> {route.provider}/{route.model}",
+                "info",
+            )
+            logger.info("Smart routing selected: %s", route)
 
         # Filled after provider/runtime resolution. Process isolation creates
         # its Claude client in the child process, so parent-side plugin hooks
@@ -1150,9 +1189,7 @@ async def run_autonomous_agent(
         )
         analysis_only_terminal_message: str | None = None
 
-        provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
         provider = create_engine_provider(provider_config)
-        requested_runtime_mode = get_runtime_mode(agent_type_for_session)
         runtime_phase = (
             "planning" if current_log_phase == LogPhase.PLANNING else "coding"
         )

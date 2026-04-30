@@ -28,11 +28,27 @@ import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preW
 import { parseEnvFile } from './utils';
 import { getCurrentOS, isMacOS, isWindows } from '../platform';
 import { projectStore } from '../project-store';
+import { getBestAvailableProfileEnv } from '../rate-limit-detector';
+import { getAPIProfileEnv } from '../services/profile';
+import { getCodexProfileManager } from '../codex-profile-manager';
 
 const settingsPath = getSettingsPath();
 const execFileAsync = promisify(execFile);
 const PROVIDER_SMOKE_TIMEOUT_SECONDS = 30;
 const PROVIDER_SMOKE_PROCESS_TIMEOUT_MS = 45_000;
+
+function hasClaudeProviderAuth(vars: Record<string, string>): boolean {
+  return Boolean(
+    vars['ANTHROPIC_API_KEY'] ||
+    vars['ANTHROPIC_AUTH_TOKEN'] ||
+    vars['CLAUDE_CODE_OAUTH_TOKEN'] ||
+    vars['CLAUDE_CONFIG_DIR']
+  );
+}
+
+function hasCodexProviderAuth(vars: Record<string, string>): boolean {
+  return Boolean(vars['CODEX_HOME']);
+}
 
 /**
  * Auto-detect the auto-claude source path relative to the app location.
@@ -112,6 +128,7 @@ function applyProviderSettingsToVars(
     vars['AI_ENGINE_PROVIDER'] = settings.provider;
   }
   const keyMap: Array<[keyof ProviderSettings, string]> = [
+    ['codexModel', 'CODEX_MODEL'],
     ['openaiApiKey', 'OPENAI_API_KEY'],
     ['googleApiKey', 'GOOGLE_API_KEY'],
     ['openrouterApiKey', 'OPENROUTER_API_KEY'],
@@ -171,6 +188,9 @@ ${varLine('ZHIPUAI_API_KEY')}
 
 # Provider Models and Endpoints
 ${varLine('CLAUDE_MODEL')}
+${varLine('CODEX_MODEL')}
+${varLine('CODEX_HOME')}
+${varLine('CODEX_CLI_PATH')}
 ${varLine('OPENAI_MODEL')}
 ${varLine('OPENAI_BASE_URL')}
 ${varLine('GOOGLE_MODEL')}
@@ -261,6 +281,7 @@ function generateProviderEnvContent(
 
   const providerVars = [
     'AI_ENGINE_PROVIDER', 'ANTHROPIC_API_KEY', 'CLAUDE_MODEL',
+    'CODEX_MODEL', 'CODEX_HOME', 'CODEX_CLI_PATH',
     'OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_BASE_URL',
     'GOOGLE_API_KEY', 'GOOGLE_MODEL',
     'LITELLM_MODEL', 'LITELLM_API_BASE', 'LITELLM_API_KEY',
@@ -287,7 +308,7 @@ function collectRuntimeCompatibilityErrors(
   vars: Record<string, string>
 ): string[] {
   const runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
-  if (provider === 'claude' || runtimeFallbackEnabled) {
+  if (provider === 'claude' || provider === 'codex' || runtimeFallbackEnabled) {
     return [];
   }
 
@@ -389,6 +410,9 @@ async function runProviderConnectionTest(
   const envVars = existsSync(envPath)
     ? parseEnvFile(readEnvFileSafe(envPath))
     : {};
+  const profileEnv = getBestAvailableProfileEnv().env;
+  const apiProfileEnv = await getAPIProfileEnv();
+  const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
 
   try {
     const { stdout, stderr } = await execFileAsync(
@@ -406,6 +430,9 @@ async function runProviderConnectionTest(
         env: {
           ...process.env,
           ...envVars,
+          ...profileEnv,
+          ...apiProfileEnv,
+          ...codexProfileEnv,
           PYTHONIOENCODING: 'utf-8'
         },
         maxBuffer: 1024 * 1024,
@@ -1328,6 +1355,7 @@ export function registerSettingsHandlers(
           config.provider = (vars['AI_ENGINE_PROVIDER'] || 'claude') as import('../../shared/types').AIEngineProvider;
           config.anthropicApiKey = vars['ANTHROPIC_API_KEY'];
           config.claudeModel = vars['CLAUDE_MODEL'];
+          config.codexModel = vars['CODEX_MODEL'];
           config.openaiApiKey = vars['OPENAI_API_KEY'];
           config.openaiModel = vars['OPENAI_MODEL'];
           config.openaiBaseUrl = vars['OPENAI_BASE_URL'];
@@ -1395,6 +1423,7 @@ export function registerSettingsHandlers(
         setEnvVar('AI_ENGINE_PROVIDER', config.provider);
         setEnvVar('ANTHROPIC_API_KEY', config.anthropicApiKey);
         setEnvVar('CLAUDE_MODEL', config.claudeModel);
+        setEnvVar('CODEX_MODEL', config.codexModel);
         setEnvVar('OPENAI_API_KEY', config.openaiApiKey);
         setEnvVar('OPENAI_MODEL', config.openaiModel);
         setEnvVar('OPENAI_BASE_URL', config.openaiBaseUrl);
@@ -1462,40 +1491,53 @@ export function registerSettingsHandlers(
         if (existsSync(envPath)) {
           const content = readFileSync(envPath, 'utf-8');
           const vars = parseEnvFile(content);
+          const profileEnv = getBestAvailableProfileEnv().env;
+          const apiProfileEnv = await getAPIProfileEnv();
+          const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
+          const effectiveVars = {
+            ...vars,
+            ...profileEnv,
+            ...apiProfileEnv,
+            ...codexProfileEnv,
+          };
 
           const provider = (vars['AI_ENGINE_PROVIDER'] || 'claude') as import('../../shared/types').AIEngineProvider;
 
-          if (vars['ANTHROPIC_API_KEY']) availableProviders.push('claude');
-          if (vars['OPENAI_API_KEY']) availableProviders.push('openai');
-          if (vars['GOOGLE_API_KEY']) availableProviders.push('google');
-          if (vars['LITELLM_MODEL']) availableProviders.push('litellm');
-          if (vars['OPENROUTER_API_KEY']) availableProviders.push('openrouter');
-          if (vars['ZHIPUAI_API_KEY']) availableProviders.push('zhipuai');
-          if (vars['OLLAMA_MODEL']) availableProviders.push('ollama');
+          if (hasClaudeProviderAuth(effectiveVars)) availableProviders.push('claude');
+          if (hasCodexProviderAuth(effectiveVars)) availableProviders.push('codex');
+          if (effectiveVars['OPENAI_API_KEY']) availableProviders.push('openai');
+          if (effectiveVars['GOOGLE_API_KEY']) availableProviders.push('google');
+          if (effectiveVars['LITELLM_MODEL']) availableProviders.push('litellm');
+          if (effectiveVars['OPENROUTER_API_KEY']) availableProviders.push('openrouter');
+          if (effectiveVars['ZHIPUAI_API_KEY']) availableProviders.push('zhipuai');
+          if (effectiveVars['OLLAMA_MODEL']) availableProviders.push('ollama');
 
           errors.push(...collectRuntimeCompatibilityErrors(provider, vars));
 
           switch (provider) {
             case 'claude':
-              if (!vars['ANTHROPIC_API_KEY']) errors.push('Claude provider requires ANTHROPIC_API_KEY environment variable');
+              if (!hasClaudeProviderAuth(effectiveVars)) errors.push('Claude provider requires Claude OAuth credentials, an active API profile, or ANTHROPIC_API_KEY');
+              break;
+            case 'codex':
+              if (!hasCodexProviderAuth(effectiveVars)) errors.push('Codex provider requires an active Codex profile or CODEX_HOME');
               break;
             case 'openai':
-              if (!vars['OPENAI_API_KEY']) errors.push('OpenAI provider requires OPENAI_API_KEY environment variable');
+              if (!effectiveVars['OPENAI_API_KEY']) errors.push('OpenAI provider requires OPENAI_API_KEY environment variable');
               break;
             case 'google':
-              if (!vars['GOOGLE_API_KEY']) errors.push('Google provider requires GOOGLE_API_KEY environment variable');
+              if (!effectiveVars['GOOGLE_API_KEY']) errors.push('Google provider requires GOOGLE_API_KEY environment variable');
               break;
             case 'litellm':
-              if (!vars['LITELLM_MODEL']) errors.push('LiteLLM provider requires LITELLM_MODEL environment variable');
+              if (!effectiveVars['LITELLM_MODEL']) errors.push('LiteLLM provider requires LITELLM_MODEL environment variable');
               break;
             case 'openrouter':
-              if (!vars['OPENROUTER_API_KEY']) errors.push('OpenRouter provider requires OPENROUTER_API_KEY environment variable');
+              if (!effectiveVars['OPENROUTER_API_KEY']) errors.push('OpenRouter provider requires OPENROUTER_API_KEY environment variable');
               break;
             case 'zhipuai':
-              if (!vars['ZHIPUAI_API_KEY']) errors.push('ZhipuAI provider requires ZHIPUAI_API_KEY environment variable');
+              if (!effectiveVars['ZHIPUAI_API_KEY']) errors.push('ZhipuAI provider requires ZHIPUAI_API_KEY environment variable');
               break;
             case 'ollama':
-              if (!vars['OLLAMA_MODEL']) errors.push('Ollama provider requires OLLAMA_MODEL environment variable');
+              if (!effectiveVars['OLLAMA_MODEL']) errors.push('Ollama provider requires OLLAMA_MODEL environment variable');
               break;
           }
         } else {

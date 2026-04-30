@@ -7,6 +7,7 @@ Follows the same patterns as integrations/graphiti/config.py for consistency.
 
 Supported Providers:
 - claude: Claude Agent SDK (default, recommended) - Full agentic capabilities
+- codex: Codex CLI account runtime - uses Codex login via CODEX_HOME
 - openai: OpenAI direct API - GPT-4, GPT-4o, o1, o3 models
 - google: Google Gemini API - Gemini 2.0, Gemini 1.5 models
 - litellm: LiteLLM unified API - 100+ LLMs via single interface
@@ -16,7 +17,7 @@ Supported Providers:
 
 Environment Variables:
     # Core
-    AI_ENGINE_PROVIDER: Provider selection (claude|openai|google|litellm|openrouter|zhipuai|ollama, default: claude)
+    AI_ENGINE_PROVIDER: Provider selection (claude|codex|openai|google|litellm|openrouter|zhipuai|ollama, default: claude)
 
     # Claude Agent SDK (default)
     ANTHROPIC_API_KEY: Required for Claude provider
@@ -25,6 +26,11 @@ Environment Variables:
     OPENAI_API_KEY: Required for OpenAI provider
     OPENAI_MODEL: Model identifier (default: gpt-4o)
     OPENAI_BASE_URL: Optional custom API base URL
+
+    # Codex CLI
+    CODEX_HOME: Config directory with Codex auth material
+    CODEX_MODEL: Optional model passed to codex exec
+    CODEX_CLI_PATH: Optional explicit codex executable path
 
     # Google Gemini
     GOOGLE_API_KEY: Required for Google provider
@@ -51,14 +57,17 @@ Environment Variables:
 """
 
 import os
-from dataclasses import dataclass
+import shutil
+from dataclasses import dataclass, replace
 from enum import Enum
+from pathlib import Path
 
 
 class AIEngineProvider(str, Enum):
     """Supported AI engine providers."""
 
     CLAUDE = "claude"
+    CODEX = "codex"
     OPENAI = "openai"
     GOOGLE = "google"
     LITELLM = "litellm"
@@ -73,7 +82,50 @@ DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4"
 DEFAULT_ZHIPUAI_MODEL = "glm-4-flash"
 DEFAULT_OPENAI_MODEL = "gpt-4o"
+DEFAULT_CODEX_MODEL = "codex-default"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+
+
+def _has_claude_oauth_credentials() -> bool:
+    """Return true when Claude OAuth credentials are available via env/config dir."""
+    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get(
+        "ANTHROPIC_AUTH_TOKEN"
+    ):
+        return True
+
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    if not config_dir:
+        return False
+
+    expanded_dir = Path(config_dir).expanduser()
+    return any(
+        (expanded_dir / filename).exists()
+        for filename in (".credentials.json", "credentials.json")
+    )
+
+
+def _codex_config_dir(config_dir: str | None = None) -> Path:
+    """Return the Codex config directory from env/defaults."""
+    value = config_dir or os.environ.get("CODEX_HOME") or "~/.codex"
+    return Path(value).expanduser()
+
+
+def _has_codex_auth_material(config_dir: str | None = None) -> bool:
+    """Return true when a Codex config dir contains login material."""
+    expanded_dir = _codex_config_dir(config_dir)
+    return any(
+        (expanded_dir / filename).exists()
+        for filename in ("auth.json", "credentials.json")
+    )
+
+
+def _codex_executable(explicit_path: str = "") -> str | None:
+    """Return a usable codex executable path if one is available."""
+    if explicit_path:
+        expanded = Path(explicit_path).expanduser()
+        if expanded.exists():
+            return str(expanded)
+    return shutil.which("codex")
 
 
 @dataclass
@@ -95,6 +147,11 @@ class ProviderConfig:
     openai_api_key: str = ""
     openai_model: str = DEFAULT_OPENAI_MODEL
     openai_base_url: str = ""
+
+    # Codex CLI settings
+    codex_home: str = ""
+    codex_model: str = DEFAULT_CODEX_MODEL
+    codex_cli_path: str = ""
 
     # Google Gemini settings
     google_api_key: str = ""
@@ -156,6 +213,11 @@ class ProviderConfig:
         openai_model = os.environ.get("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
         openai_base_url = os.environ.get("OPENAI_BASE_URL", "")
 
+        # Codex CLI settings
+        codex_home = os.environ.get("CODEX_HOME", "")
+        codex_model = os.environ.get("CODEX_MODEL", DEFAULT_CODEX_MODEL)
+        codex_cli_path = os.environ.get("CODEX_CLI_PATH", "")
+
         # Google Gemini settings
         google_api_key = os.environ.get("GOOGLE_API_KEY", "")
         google_model = os.environ.get("GOOGLE_MODEL", "gemini-2.0-flash")
@@ -185,6 +247,8 @@ class ProviderConfig:
         if agent_model:
             if provider == AIEngineProvider.CLAUDE.value:
                 claude_model = agent_model
+            elif provider == AIEngineProvider.CODEX.value:
+                codex_model = agent_model
             elif provider == AIEngineProvider.OPENAI.value:
                 openai_model = agent_model
             elif provider == AIEngineProvider.GOOGLE.value:
@@ -205,6 +269,9 @@ class ProviderConfig:
             openai_api_key=openai_api_key,
             openai_model=openai_model,
             openai_base_url=openai_base_url,
+            codex_home=codex_home,
+            codex_model=codex_model,
+            codex_cli_path=codex_cli_path,
             google_api_key=google_api_key,
             google_model=google_model,
             litellm_model=litellm_model,
@@ -226,31 +293,99 @@ class ProviderConfig:
 
         Returns True if the selected provider has its required credentials.
         """
-        if self.provider == AIEngineProvider.CLAUDE.value:
-            return bool(self.anthropic_api_key)
-        elif self.provider == AIEngineProvider.OPENAI.value:
+        return self.is_provider_available(self.provider)
+
+    def is_provider_available(self, provider: str) -> bool:
+        """Check whether a provider has the credentials/config needed to run."""
+        provider = provider.lower()
+
+        if provider == AIEngineProvider.CLAUDE.value:
+            return bool(self.anthropic_api_key) or _has_claude_oauth_credentials()
+        elif provider == AIEngineProvider.CODEX.value:
+            return bool(_codex_executable(self.codex_cli_path)) and (
+                _has_codex_auth_material(self.codex_home)
+            )
+        elif provider == AIEngineProvider.OPENAI.value:
             return bool(self.openai_api_key)
-        elif self.provider == AIEngineProvider.GOOGLE.value:
+        elif provider == AIEngineProvider.GOOGLE.value:
             return bool(self.google_api_key)
-        elif self.provider == AIEngineProvider.LITELLM.value:
+        elif provider == AIEngineProvider.LITELLM.value:
             # LiteLLM can work with various providers, model is required
             return bool(self.litellm_model)
-        elif self.provider == AIEngineProvider.OPENROUTER.value:
+        elif provider == AIEngineProvider.OPENROUTER.value:
             return bool(self.openrouter_api_key)
-        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+        elif provider == AIEngineProvider.ZHIPUAI.value:
             return bool(self.zhipuai_api_key)
-        elif self.provider == AIEngineProvider.OLLAMA.value:
+        elif provider == AIEngineProvider.OLLAMA.value:
             return bool(self.ollama_model)
         return False
+
+    def get_model_for(self, provider: str) -> str | None:
+        """Get the configured/default model for a specific provider."""
+        provider = provider.lower()
+        if provider == AIEngineProvider.CLAUDE.value:
+            return self.claude_model
+        elif provider == AIEngineProvider.CODEX.value:
+            return self.codex_model or DEFAULT_CODEX_MODEL
+        elif provider == AIEngineProvider.OPENAI.value:
+            return self.openai_model
+        elif provider == AIEngineProvider.GOOGLE.value:
+            return self.google_model
+        elif provider == AIEngineProvider.LITELLM.value:
+            return self.litellm_model or None
+        elif provider == AIEngineProvider.OPENROUTER.value:
+            return self.openrouter_model
+        elif provider == AIEngineProvider.ZHIPUAI.value:
+            return self.zhipuai_model
+        elif provider == AIEngineProvider.OLLAMA.value:
+            return self.ollama_model or None
+        return None
+
+    def with_provider_model(self, provider: str, model: str) -> "ProviderConfig":
+        """Return a copy configured to use the given provider/model pair."""
+        provider = provider.lower()
+        updated = replace(self, provider=provider)
+        if provider == AIEngineProvider.CLAUDE.value:
+            updated.claude_model = model
+        elif provider == AIEngineProvider.CODEX.value:
+            updated.codex_model = model
+        elif provider == AIEngineProvider.OPENAI.value:
+            updated.openai_model = model
+        elif provider == AIEngineProvider.GOOGLE.value:
+            updated.google_model = model
+        elif provider == AIEngineProvider.LITELLM.value:
+            updated.litellm_model = model
+        elif provider == AIEngineProvider.OPENROUTER.value:
+            updated.openrouter_model = model
+        elif provider == AIEngineProvider.ZHIPUAI.value:
+            updated.zhipuai_model = model
+        elif provider == AIEngineProvider.OLLAMA.value:
+            updated.ollama_model = model
+        return updated
+
+    def available_provider_names(self) -> list[str]:
+        """Return configured providers that can run with the current environment."""
+        return [
+            provider.value
+            for provider in AIEngineProvider
+            if self.is_provider_available(provider.value)
+        ]
 
     def get_validation_errors(self) -> list[str]:
         """Get list of validation errors for current configuration."""
         errors = []
 
         if self.provider == AIEngineProvider.CLAUDE.value:
-            if not self.anthropic_api_key:
+            if not self.is_provider_available(AIEngineProvider.CLAUDE.value):
                 errors.append(
-                    "Claude provider requires ANTHROPIC_API_KEY environment variable"
+                    "Claude provider requires Claude OAuth credentials or ANTHROPIC_API_KEY"
+                )
+        elif self.provider == AIEngineProvider.CODEX.value:
+            if not _codex_executable(self.codex_cli_path):
+                errors.append("Codex provider requires the codex CLI executable")
+            if not _has_codex_auth_material(self.codex_home):
+                errors.append(
+                    "Codex provider requires Codex login credentials in CODEX_HOME"
                 )
         elif self.provider == AIEngineProvider.OPENAI.value:
             if not self.openai_api_key:
@@ -291,6 +426,8 @@ class ProviderConfig:
         """Get a summary of configured provider."""
         if self.provider == AIEngineProvider.CLAUDE.value:
             return f"Claude Agent SDK ({self.claude_model})"
+        elif self.provider == AIEngineProvider.CODEX.value:
+            return f"Codex CLI ({self.codex_model or DEFAULT_CODEX_MODEL})"
         elif self.provider == AIEngineProvider.OPENAI.value:
             return f"OpenAI ({self.openai_model})"
         elif self.provider == AIEngineProvider.GOOGLE.value:
@@ -309,6 +446,8 @@ class ProviderConfig:
         """Get the configured model for the current provider."""
         if self.provider == AIEngineProvider.CLAUDE.value:
             return self.claude_model
+        elif self.provider == AIEngineProvider.CODEX.value:
+            return self.codex_model or DEFAULT_CODEX_MODEL
         elif self.provider == AIEngineProvider.OPENAI.value:
             return self.openai_model
         elif self.provider == AIEngineProvider.GOOGLE.value:
@@ -341,32 +480,7 @@ def get_available_providers() -> list[str]:
     Returns:
         List of provider names that have their required credentials configured
     """
-    config = ProviderConfig.from_env()
-    available = []
-
-    # Check each provider's credentials
-    if config.anthropic_api_key:
-        available.append(AIEngineProvider.CLAUDE.value)
-
-    if config.openai_api_key:
-        available.append(AIEngineProvider.OPENAI.value)
-
-    if config.google_api_key:
-        available.append(AIEngineProvider.GOOGLE.value)
-
-    if config.litellm_model:
-        available.append(AIEngineProvider.LITELLM.value)
-
-    if config.openrouter_api_key:
-        available.append(AIEngineProvider.OPENROUTER.value)
-
-    if config.zhipuai_api_key:
-        available.append(AIEngineProvider.ZHIPUAI.value)
-
-    if config.ollama_model:
-        available.append(AIEngineProvider.OLLAMA.value)
-
-    return available
+    return ProviderConfig.from_env().available_provider_names()
 
 
 def validate_provider_config() -> tuple[bool, list[str]]:

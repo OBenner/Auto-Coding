@@ -52,6 +52,7 @@ import { appLog, setupErrorLogging } from './app-logger';
 import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
 import { initializeClaudeProfileManager, getClaudeProfileManager } from './claude-profile-manager';
+import { initializeCodexProfileManager } from './codex-profile-manager';
 import { isMacOS, isWindows } from './platform';
 import { setupMCPLifecycle } from './mcp-manager';
 import type { AppSettings, AuthFailureInfo } from '../shared/types';
@@ -535,6 +536,10 @@ app.whenReady().then(() => {
     preWarmToolCache(['claude', 'git', 'gh', 'python']).catch((error) => {
       console.warn('[main] Failed to pre-warm CLI cache:', error);
     });
+  });
+
+  initializeCodexProfileManager().catch((error) => {
+    console.warn('[main] Failed to initialize Codex profile manager:', error);
   });
 
   // Initialize Claude profile manager, then start usage monitor

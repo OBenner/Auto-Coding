@@ -17,10 +17,18 @@ const debugLog = (...args: unknown[]) => {
 interface AuthTerminalProps {
   /** Terminal ID for this auth session */
   terminalId: string;
-  /** Claude config directory for this profile (CLAUDE_CONFIG_DIR) */
+  /** Config directory for this profile (CLAUDE_CONFIG_DIR or CODEX_HOME) */
   configDir: string;
   /** Profile name being authenticated */
   profileName: string;
+  /** Command to pre-fill for login. Defaults to Claude Code login. */
+  loginCommand?: string;
+  /** Environment variables to inject into the auth terminal. */
+  env?: Record<string, string>;
+  /** Which account login flow this terminal is guiding. */
+  authProvider?: 'claude' | 'codex';
+  /** Treat a clean terminal exit as successful authentication. */
+  successOnExitCode?: boolean;
   /** Callback when terminal is closed */
   onClose: () => void;
   /** Callback when authentication succeeds */
@@ -30,14 +38,18 @@ interface AuthTerminalProps {
 }
 
 /**
- * Embedded terminal component for Claude profile authentication.
- * Shows a minimal terminal where users can run /login to authenticate.
- * Automatically detects OAuth token capture via TERMINAL_OAUTH_TOKEN event.
+ * Embedded terminal component for CLI account authentication.
+ * Claude login can be detected from OAuth token events; Codex login is
+ * verified by checking the profile directory after the terminal closes.
  */
 export function AuthTerminal({
   terminalId,
   configDir,
   profileName,
+  loginCommand = 'claude /login',
+  env,
+  authProvider = 'claude',
+  successOnExitCode = false,
   onClose,
   onAuthSuccess,
   onAuthError,
@@ -125,7 +137,7 @@ export function AuthTerminal({
 
         console.warn('[AuthTerminal] Creating terminal:', terminalId, { cols, rows, configDir });
 
-        // Create terminal with CLAUDE_CONFIG_DIR set for this profile
+        // Create terminal with profile-specific auth env set.
         // The terminal ID pattern (claude-login-{profileId}-*) tells the
         // integration handler which profile to save captured tokens to
         const result = await window.electronAPI.createTerminal({
@@ -133,7 +145,7 @@ export function AuthTerminal({
           cols,
           rows,
           skipOAuthToken: true, // Don't inject existing token for auth terminals
-          env: {
+          env: env ?? {
             CLAUDE_CONFIG_DIR: configDir,
           },
         });
@@ -151,10 +163,18 @@ export function AuthTerminal({
         setStatus('ready');
 
         // Show instructions
-        const titleText = t('authTerminal.instructionTitle');
-        const step1Text = t('authTerminal.step1');
-        const step2Text = t('authTerminal.step2');
-        const step3Text = t('authTerminal.step3');
+        const titleText = authProvider === 'codex'
+          ? t('authTerminal.codex.instructionTitle')
+          : t('authTerminal.instructionTitle');
+        const step1Text = authProvider === 'codex'
+          ? t('authTerminal.codex.step1')
+          : t('authTerminal.step1');
+        const step2Text = authProvider === 'codex'
+          ? t('authTerminal.codex.step2')
+          : t('authTerminal.step2');
+        const step3Text = authProvider === 'codex'
+          ? t('authTerminal.codex.step3')
+          : t('authTerminal.step3');
 
         xterm.writeln('\x1b[1;36m╔════════════════════════════════════════════════════════════╗\x1b[0m');
         xterm.writeln(`\x1b[1;36m║\x1b[0m   \x1b[1m${titleText}\x1b[0m${' '.repeat(Math.max(0, 60 - titleText.length - 3))}\x1b[1;36m║\x1b[0m`);
@@ -167,7 +187,7 @@ export function AuthTerminal({
         xterm.writeln('\x1b[1;36m╚════════════════════════════════════════════════════════════╝\x1b[0m');
         xterm.writeln('');
 
-        // Pre-fill the terminal with 'claude /login' command
+        // Pre-fill the terminal with the requested login command.
         // Wait a moment for the shell prompt to be ready, then send the command
         // (without carriage return so user must press Enter)
         // Guard: only send once per component lifecycle
@@ -177,8 +197,8 @@ export function AuthTerminal({
             // Double-check guard in case of race conditions
             if (!loginSentRef.current) {
               loginSentRef.current = true;
-              debugLog('Sending /login pre-fill NOW', { terminalId });
-              window.electronAPI.sendTerminalInput(terminalId, 'claude /login');
+              debugLog('Sending login pre-fill NOW', { terminalId, loginCommand });
+              window.electronAPI.sendTerminalInput(terminalId, loginCommand);
             } else {
               debugLog('SKIPPED /login pre-fill (already sent)', { terminalId });
             }
@@ -199,7 +219,7 @@ export function AuthTerminal({
 
     createTerminal();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- configDir is stable for auth terminal lifecycle
-  }, [terminalId, onAuthError, configDir, t]);
+  }, [terminalId, onAuthError, configDir, t, authProvider, env, loginCommand]);
 
   // Setup terminal event listeners
   useEffect(() => {
@@ -277,7 +297,10 @@ export function AuthTerminal({
         });
         // If we were in onboarding status and terminal exits with code 0,
         // that means the user completed the onboarding successfully
-        if (statusRef.current === 'onboarding' && exitCode === 0) {
+        if (
+          exitCode === 0 &&
+          (statusRef.current === 'onboarding' || (successOnExitCode && statusRef.current === 'ready'))
+        ) {
           // Prevent race condition with onboarding-complete handler
           if (authCompletedRef.current) {
             debugLog('SKIPPED exit handler - auth already completed', { terminalId });
@@ -332,7 +355,7 @@ export function AuthTerminal({
       cleanupFnsRef.current.forEach(fn => fn());
       cleanupFnsRef.current = [];
     };
-  }, [terminalId, onAuthSuccess, onAuthError, onClose, t]);
+  }, [terminalId, onAuthSuccess, onAuthError, onClose, t, successOnExitCode]);
 
   // Handle resize
   useEffect(() => {

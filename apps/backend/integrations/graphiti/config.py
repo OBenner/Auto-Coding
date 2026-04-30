@@ -274,6 +274,26 @@ class GraphitiConfig:
         # Return True if enabled, embedder config is a bonus for semantic search
         return True
 
+    def has_llm_provider_credentials(self) -> bool:
+        """Return true when the configured Graphiti LLM provider can be created."""
+        if self.llm_provider == "openai":
+            return bool(self.openai_api_key)
+        elif self.llm_provider == "anthropic":
+            return bool(self.anthropic_api_key)
+        elif self.llm_provider == "azure_openai":
+            return bool(
+                self.azure_openai_api_key
+                and self.azure_openai_base_url
+                and self.azure_openai_llm_deployment
+            )
+        elif self.llm_provider == "ollama":
+            return bool(self.ollama_llm_model)
+        elif self.llm_provider == "google":
+            return bool(self.google_api_key)
+        elif self.llm_provider == "openrouter":
+            return bool(self.openrouter_api_key)
+        return False
+
     def _validate_embedder_provider(self) -> bool:
         """Validate embedder provider configuration."""
         if self.embedder_provider == "openai":

@@ -170,6 +170,58 @@ const browserMockAPI: ElectronAPI = {
     }
   }),
 
+  // Codex/OpenAI account profile management
+  getCodexProfiles: async () => ({
+    success: true,
+    data: {
+      profiles: [],
+      activeProfileId: null
+    }
+  }),
+
+  createCodexProfile: async (name: string) => ({
+    success: true,
+    data: {
+      id: `mock-codex-${Date.now()}`,
+      name,
+      configDir: '/tmp/mock-codex-home',
+      isDefault: false,
+      createdAt: new Date(),
+    }
+  }),
+
+  saveCodexProfile: async (profile) => ({
+    success: true,
+    data: profile
+  }),
+
+  deleteCodexProfile: async (_profileId: string) => ({
+    success: true
+  }),
+
+  renameCodexProfile: async (_profileId: string, _newName: string) => ({
+    success: true
+  }),
+
+  setActiveCodexProfile: async (_profileId: string) => ({
+    success: true
+  }),
+
+  authenticateCodexProfile: async (profileId: string) => ({
+    success: true,
+    data: {
+      terminalId: `mock-codex-login-${profileId}`,
+      configDir: '/tmp/mock-codex-home'
+    }
+  }),
+
+  verifyCodexProfileAuth: async () => ({
+    success: true,
+    data: {
+      authenticated: false
+    }
+  }),
+
   // GitHub API
   github: {
     getGitHubRepositories: async () => ({ success: true, data: [] }),
@@ -608,6 +660,22 @@ const browserMockAPI: ElectronAPI = {
         path: '/usr/local/bin/claude',
         source: 'system-path' as const,
         message: 'Claude Code CLI found'
+      }
+    }
+  }),
+  checkCodexCodeVersion: async () => ({
+    success: true,
+    data: {
+      installed: '0.128.0',
+      latest: 'unknown',
+      isOutdated: false,
+      path: '/Applications/Codex.app/Contents/Resources/codex',
+      detectionResult: {
+        found: true,
+        path: '/Applications/Codex.app/Contents/Resources/codex',
+        version: '0.128.0',
+        source: 'system-path',
+        message: 'Using Codex CLI'
       }
     }
   }),

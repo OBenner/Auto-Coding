@@ -67,6 +67,8 @@ def capabilities_for_runtime_mode(
 
     if runtime_mode == "full_autonomous" and provider_name == "claude":
         return RuntimeCapabilities.claude_agent_sdk()
+    if runtime_mode == "full_autonomous" and provider_name == "codex":
+        return RuntimeCapabilities.codex_cli()
     if runtime_mode == "generic_edit":
         return RuntimeCapabilities.generic_edit()
     if runtime_mode == "patch_proposal":

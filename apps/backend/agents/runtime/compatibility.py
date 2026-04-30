@@ -64,6 +64,14 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         notes="Uses Claude Agent SDK path for the full Auto Code runtime.",
     ),
     ProviderRuntimeCompatibility(
+        provider="codex",
+        full_autonomous="yes",
+        generic_edit="not needed",
+        analysis_only="yes",
+        patch_proposal="not needed",
+        notes="Uses Codex CLI account login through CODEX_HOME and codex exec.",
+    ),
+    ProviderRuntimeCompatibility(
         provider="openai",
         full_autonomous="no",
         generic_edit="experimental",

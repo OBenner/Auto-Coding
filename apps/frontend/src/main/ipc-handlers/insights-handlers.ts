@@ -120,6 +120,7 @@ export function registerInsightsHandlers(getMainWindow: () => BrowserWindow | nu
       };
 
       console.log("[Insights Handler] Using model config:", {
+        provider: configWithSettings.provider,
         model: configWithSettings.model,
         thinkingLevel: configWithSettings.thinkingLevel,
       });

@@ -162,6 +162,16 @@ export const IPC_CHANNELS = {
   CLAUDE_PROFILE_FETCH_USAGE: 'claude:fetchUsage',
   CLAUDE_PROFILE_GET_BEST_PROFILE: 'claude:getBestProfile',
 
+  // Codex/OpenAI account profile management
+  CODEX_PROFILES_GET: 'codex:profilesGet',
+  CODEX_PROFILE_CREATE: 'codex:profileCreate',
+  CODEX_PROFILE_SAVE: 'codex:profileSave',
+  CODEX_PROFILE_DELETE: 'codex:profileDelete',
+  CODEX_PROFILE_RENAME: 'codex:profileRename',
+  CODEX_PROFILE_SET_ACTIVE: 'codex:profileSetActive',
+  CODEX_PROFILE_AUTHENTICATE: 'codex:profileAuthenticate',
+  CODEX_PROFILE_VERIFY_AUTH: 'codex:profileVerifyAuth',
+
   // Account priority order (unified OAuth + API profile ordering)
   ACCOUNT_PRIORITY_GET: 'account:priorityGet',
   ACCOUNT_PRIORITY_SET: 'account:prioritySet',
@@ -664,6 +674,7 @@ export const IPC_CHANNELS = {
   CLAUDE_CODE_INSTALL_VERSION: 'claudeCode:installVersion',
   CLAUDE_CODE_GET_INSTALLATIONS: 'claudeCode:getInstallations',
   CLAUDE_CODE_SET_ACTIVE_PATH: 'claudeCode:setActivePath',
+  CODEX_CODE_CHECK_VERSION: 'codexCode:checkVersion',
 
   // MCP Server health checks
   MCP_CHECK_HEALTH: 'mcp:checkHealth',           // Quick connectivity check

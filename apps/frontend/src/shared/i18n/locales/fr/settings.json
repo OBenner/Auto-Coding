@@ -39,7 +39,7 @@
     },
     "accounts": {
       "title": "Comptes",
-      "description": "Comptes Claude & endpoints API"
+      "description": "Claude, Codex & endpoints API"
     },
     "security": {
       "title": "Sécurité",
@@ -578,9 +578,10 @@
   },
   "accounts": {
     "title": "Comptes",
-    "description": "Gérer les comptes Claude et les endpoints API",
+    "description": "Gérer les comptes Claude, les comptes Codex et les endpoints API",
     "tabs": {
       "claudeCode": "Claude Code",
+      "codex": "Codex CLI",
       "customEndpoints": "Endpoints personnalisés"
     },
     "claudeCode": {
@@ -599,6 +600,33 @@
       "emailPlaceholder": "Email (optionnel, pour l'affichage)",
       "saveToken": "Enregistrer le token",
       "accountNamePlaceholder": "Nom du compte (ex: Travail, Personnel)"
+    },
+    "codex": {
+      "description": "Authentifiez des comptes OpenAI/Codex pour le runtime Codex CLI.",
+      "accountLoginTitle": "La connexion Codex n'est pas une clé API",
+      "accountLoginDescription": "La connexion Codex stocke les identifiants du compte sous CODEX_HOME pour Codex CLI. Elle ne crée pas et n'affiche pas OPENAI_API_KEY ; le mode API OpenAI direct nécessite toujours une clé.",
+      "noAccountsYet": "Aucun compte Codex configuré",
+      "noEmail": "Aucun email détecté",
+      "default": "Par défaut",
+      "active": "Actif",
+      "authenticated": "Authentifié",
+      "needsAuth": "Auth requise",
+      "authenticate": "Authentifier",
+      "authenticating": "Authentification...",
+      "setActive": "Définir actif",
+      "configDir": "CODEX_HOME : {{path}}",
+      "accountNamePlaceholder": "Nom du compte Codex (ex: OpenAI Travail)",
+      "tooltips": {
+        "reauthenticate": "Réauthentifier le profil Codex",
+        "delete": "Supprimer le profil Codex"
+      },
+      "toast": {
+        "loadProfilesFailed": "Échec du chargement des profils Codex",
+        "addProfileFailed": "Échec de l'ajout du profil Codex",
+        "deleteProfileFailed": "Échec de la suppression du profil Codex",
+        "setActiveProfileFailed": "Échec de la définition du profil Codex actif",
+        "authFailed": "Échec de l'authentification Codex"
+      }
     },
     "customEndpoints": {
       "description": "Configurez des endpoints API compatibles Anthropic personnalisés",
@@ -730,6 +758,10 @@
         "name": "Claude Agent SDK",
         "description": "SDK Agent Claude d'Anthropic (par défaut, recommandé)"
       },
+      "codex": {
+        "name": "Codex CLI",
+        "description": "Runtime de compte OpenAI/Codex utilisant le profil Codex actif"
+      },
       "openai": {
         "name": "OpenAI",
         "description": "Runtime SDK OpenAI direct pour les modes limités"
@@ -788,6 +820,11 @@
         "label": "Modèle Claude",
         "placeholder": "claude-sonnet-4-5-20250929",
         "description": "Remplacement optionnel du modèle Claude Agent SDK"
+      },
+      "codex": {
+        "label": "Modèle Codex",
+        "placeholder": "codex-default",
+        "description": "Modèle optionnel transmis à codex exec ; laissez vide pour le défaut Codex"
       },
       "openai": {
         "label": "Modèle OpenAI",
