@@ -11,6 +11,7 @@ from ..local_actions import (
     ToolActionResult,
     action_tool,
     normalize_string_list,
+    render_local_action_prompt,
     safe_action_for_trace,
     safe_result_for_trace,
 )
@@ -24,11 +25,7 @@ You do not have native provider tools, MCP, or subagents. Auto Code exposes a
 small local action loop. Respond with exactly one JSON object and no prose.
 
 Available actions:
-- read_file: {"tool": "read_file", "path": "relative/path.py", "max_chars": 12000}
-- write_file: {"tool": "write_file", "path": "relative/path.py", "content": "complete file content"}
-- apply_patch: {"tool": "apply_patch", "patch": "unified diff"}
-- run_command: {"tool": "run_command", "command": "pytest tests/test_file.py -q", "timeout": 60}
-- finish: {"tool": "finish", "summary": "what changed", "tests": ["commands run"], "risks": []}
+__AUTO_CODE_LOCAL_ACTIONS__
 
 Rules:
 - Use only workspace-relative paths.
@@ -92,10 +89,7 @@ class GenericEditRuntimeSession:
     ) -> AgentRunResult:
         del verbose, phase
 
-        base_prompt = GENERIC_EDIT_PROMPT_TEMPLATE.replace(
-            "__AUTO_CODE_TASK_PROMPT__",
-            message,
-        )
+        base_prompt = build_generic_edit_prompt(message)
         prompt = base_prompt
         trace: list[dict[str, Any]] = []
 
@@ -214,6 +208,20 @@ class GenericEditRuntimeSession:
         async for chunk in self._completion_runtime._stream_text(message):
             chunks.append(chunk)
         return "".join(chunks)
+
+
+def build_generic_edit_prompt(message: str) -> str:
+    """Build the generic_edit prompt from the shared local action manifest."""
+    return (
+        GENERIC_EDIT_PROMPT_TEMPLATE.replace(
+            "__AUTO_CODE_LOCAL_ACTIONS__",
+            render_local_action_prompt(),
+        )
+        .replace(
+            "__AUTO_CODE_TASK_PROMPT__",
+            message,
+        )
+    )
 
 
 def parse_generic_edit_response(text: str) -> dict[str, Any]:

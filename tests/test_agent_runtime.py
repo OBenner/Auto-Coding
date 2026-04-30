@@ -11,7 +11,11 @@ from agents.runtime import (
     RuntimeRequirements,
     create_runtime_session,
     get_runtime_mode,
+    local_action_response_schema,
+    local_action_tool_schemas,
+    local_action_tool_specs,
     normalize_runtime_mode,
+    render_local_action_prompt,
     run_runtime_session,
 )
 from agents.runtime.adapters.patch_proposal import (
@@ -451,6 +455,35 @@ def test_patch_mode_marks_subtask_completed(tmp_path: Path):
     assert updated["phases"][0]["status"] == "completed"
 
 
+def test_local_action_manifest_describes_generic_edit_contract():
+    expected_tools = {
+        "read_file",
+        "write_file",
+        "apply_patch",
+        "run_command",
+        "finish",
+    }
+    specs = local_action_tool_specs()
+    assert {spec.name for spec in specs} == expected_tools
+
+    prompt = render_local_action_prompt()
+    for tool_name in expected_tools:
+        assert f"- {tool_name}:" in prompt
+
+    response_schema = local_action_response_schema()
+    action_schemas = response_schema["properties"]["actions"]["items"]["oneOf"]
+    assert {
+        schema["properties"]["tool"]["enum"][0] for schema in action_schemas
+    } == expected_tools
+
+    provider_schemas = local_action_tool_schemas()
+    run_command_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "run_command"
+    )
+    assert run_command_schema["parameters"]["required"] == ["command"]
+    assert "timeout" in run_command_schema["parameters"]["properties"]
+
+
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     target = tmp_path / "hello.txt"
@@ -506,6 +539,7 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert target.read_text(encoding="utf-8") == "new\n"
     assert len(session.messages) == 3
     assert "generic_edit mode" in session.messages[0]
+    assert render_local_action_prompt() in session.messages[0]
     assert "observations" in session.messages[1]
     assert "generic_edit mode" in session.messages[1]
     assert "change hello.txt" in session.messages[1]

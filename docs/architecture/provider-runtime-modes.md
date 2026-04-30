@@ -161,6 +161,12 @@ Supported actions:
 }
 ```
 
+The action contract is defined once in
+`apps/backend/agents/runtime/local_actions.py` as the local action manifest.
+The JSON-loop prompt is rendered from that manifest, and future provider-native
+function-calling adapters should use the same schemas instead of duplicating
+tool definitions.
+
 Auto Code validates and executes these actions locally:
 
 - file paths use the same workspace-relative sensitive-path checks as

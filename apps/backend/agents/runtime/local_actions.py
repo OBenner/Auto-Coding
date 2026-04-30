@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import shlex
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,6 +33,198 @@ TRACE_REDACTED_FIELDS = {"content", "output", "patch", "raw_response"}
 
 class LocalActionError(RuntimeError):
     """Raised when a local action request is malformed or unsafe."""
+
+
+@dataclass(frozen=True)
+class LocalActionToolSpec:
+    """Provider-neutral schema for one local action tool."""
+
+    name: str
+    description: str
+    parameters: dict[str, dict[str, Any]]
+    required: tuple[str, ...] = ()
+    example: dict[str, Any] = field(default_factory=dict)
+
+    def parameter_schema(self) -> dict[str, Any]:
+        """Return the JSON schema for provider-native function arguments."""
+        schema: dict[str, Any] = {
+            "type": "object",
+            "properties": deepcopy(self.parameters),
+            "additionalProperties": False,
+        }
+        if self.required:
+            schema["required"] = list(self.required)
+        return schema
+
+    def action_schema(self) -> dict[str, Any]:
+        """Return the JSON schema for the generic_edit action-loop shape."""
+        schema = self.parameter_schema()
+        schema["properties"] = {
+            "tool": {
+                "type": "string",
+                "enum": [self.name],
+                "description": "Local action tool name.",
+            },
+            **schema["properties"],
+        }
+        schema["required"] = ["tool", *self.required]
+        return schema
+
+    def provider_tool_schema(self) -> dict[str, Any]:
+        """Return a provider-neutral function/tool schema for future adapters."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": self.parameter_schema(),
+        }
+
+    def prompt_line(self) -> str:
+        """Render the compact action example used in JSON-loop prompts."""
+        return f"- {self.name}: {json.dumps(self.example, ensure_ascii=False)}"
+
+
+LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
+    LocalActionToolSpec(
+        name="read_file",
+        description="Read a UTF-8 text file from the workspace.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": "Workspace-relative file path.",
+            },
+            "max_chars": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_READ_FILE_CHARS,
+                "description": "Maximum number of characters to return.",
+            },
+        },
+        required=("path",),
+        example={
+            "tool": "read_file",
+            "path": "relative/path.py",
+            "max_chars": 12000,
+        },
+    ),
+    LocalActionToolSpec(
+        name="write_file",
+        description="Write complete UTF-8 text content to a workspace file.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": "Workspace-relative file path.",
+            },
+            "content": {
+                "type": "string",
+                "description": "Complete replacement file content.",
+            },
+        },
+        required=("path", "content"),
+        example={
+            "tool": "write_file",
+            "path": "relative/path.py",
+            "content": "complete file content",
+        },
+    ),
+    LocalActionToolSpec(
+        name="apply_patch",
+        description="Apply a unified diff inside the workspace.",
+        parameters={
+            "patch": {
+                "type": "string",
+                "description": "Unified diff to validate and apply.",
+            },
+        },
+        required=("patch",),
+        example={"tool": "apply_patch", "patch": "unified diff"},
+    ),
+    LocalActionToolSpec(
+        name="run_command",
+        description="Run one security-validated command without a shell.",
+        parameters={
+            "command": {
+                "type": "string",
+                "description": "Single command, without pipes or redirection.",
+            },
+            "timeout": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_COMMAND_TIMEOUT_SECONDS,
+                "description": "Command timeout in seconds.",
+            },
+        },
+        required=("command",),
+        example={
+            "tool": "run_command",
+            "command": "pytest tests/test_file.py -q",
+            "timeout": DEFAULT_COMMAND_TIMEOUT_SECONDS,
+        },
+    ),
+    LocalActionToolSpec(
+        name="finish",
+        description="Finish the local action loop with a summary.",
+        parameters={
+            "summary": {
+                "type": "string",
+                "description": "Short summary of the completed work.",
+            },
+            "tests": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Verification commands that were run or suggested.",
+            },
+            "risks": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Known residual risks or limitations.",
+            },
+        },
+        example={
+            "tool": "finish",
+            "summary": "what changed",
+            "tests": ["commands run"],
+            "risks": [],
+        },
+    ),
+)
+LOCAL_ACTION_TOOL_NAMES = frozenset(spec.name for spec in LOCAL_ACTION_TOOL_SPECS)
+
+
+def local_action_tool_specs() -> tuple[LocalActionToolSpec, ...]:
+    """Return the local action tool manifest."""
+    return LOCAL_ACTION_TOOL_SPECS
+
+
+def local_action_tool_schemas() -> list[dict[str, Any]]:
+    """Return provider-neutral schemas for native function-calling adapters."""
+    return [spec.provider_tool_schema() for spec in LOCAL_ACTION_TOOL_SPECS]
+
+
+def local_action_response_schema() -> dict[str, Any]:
+    """Return the JSON response schema for the generic_edit action loop."""
+    return {
+        "type": "object",
+        "properties": {
+            "thought": {
+                "type": "string",
+                "description": "Short planning note.",
+            },
+            "actions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "oneOf": [spec.action_schema() for spec in LOCAL_ACTION_TOOL_SPECS]
+                },
+            },
+        },
+        "required": ["actions"],
+        "additionalProperties": False,
+    }
+
+
+def render_local_action_prompt() -> str:
+    """Render local action examples for the generic_edit prompt."""
+    return "\n".join(spec.prompt_line() for spec in LOCAL_ACTION_TOOL_SPECS)
 
 
 @dataclass

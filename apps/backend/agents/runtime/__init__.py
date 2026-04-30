@@ -12,7 +12,15 @@ from .capabilities import (
     RuntimeCapabilityError,
     RuntimeRequirements,
 )
-from .local_actions import LocalActionExecutor, ToolActionResult
+from .local_actions import (
+    LocalActionExecutor,
+    LocalActionToolSpec,
+    ToolActionResult,
+    local_action_response_schema,
+    local_action_tool_schemas,
+    local_action_tool_specs,
+    render_local_action_prompt,
+)
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
 from .result import AgentRunResult
 from .session_engine import run_runtime_session
@@ -24,9 +32,14 @@ __all__ = [
     "RuntimeRequirements",
     "RuntimeMode",
     "LocalActionExecutor",
+    "LocalActionToolSpec",
     "ToolActionResult",
     "create_runtime_session",
     "get_runtime_mode",
+    "local_action_response_schema",
+    "local_action_tool_schemas",
+    "local_action_tool_specs",
     "normalize_runtime_mode",
+    "render_local_action_prompt",
     "run_runtime_session",
 ]
