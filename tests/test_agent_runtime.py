@@ -551,6 +551,25 @@ async def test_local_action_executor_rejects_command_chaining(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_local_action_executor_bounds_read_before_returning(tmp_path: Path):
+    target = tmp_path / "large.txt"
+    target.write_text("abcdef", encoding="utf-8")
+    executor = LocalActionExecutor(tmp_path)
+
+    result = await executor.execute(
+        {
+            "tool": "read_file",
+            "path": "large.txt",
+            "max_chars": 3,
+        }
+    )
+
+    assert result.ok is True
+    assert result.data["content"] == "abc"
+    assert result.data["truncated"] is True
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_runs_validated_single_command(tmp_path: Path):
     _init_git_repo(tmp_path)
     session = FakeGenericEditSession(
@@ -740,10 +759,10 @@ async def test_analysis_only_coding_saves_artifact_without_post_processing(
         verbose=False,
     )
 
-    artifact_path = (
-        spec_dir
-        / "artifacts"
-        / "analysis_only_coding_session-1_1.1_openai.md"
+    artifact_path = next(
+        (spec_dir / "artifacts").glob(
+            "analysis_only_coding_session-1_1.1_openai_*.md"
+        )
     )
     metadata_path = artifact_path.with_suffix(".json")
     assert artifact_path.exists()

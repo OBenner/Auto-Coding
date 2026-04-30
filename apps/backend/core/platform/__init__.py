@@ -489,7 +489,8 @@ def run_process(
     if not args:
         raise ValueError("args must include an executable")
 
-    command = build_windows_command(args[0], args[1:])
+    executable = find_executable(args[0]) or args[0]
+    command = build_windows_command(executable, args[1:])
     return subprocess.run(
         command,
         cwd=str(cwd) if cwd is not None else None,

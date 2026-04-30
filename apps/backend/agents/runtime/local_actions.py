@@ -103,7 +103,8 @@ class LocalActionExecutor:
 
         max_chars = int(action.get("max_chars") or MAX_READ_FILE_CHARS)
         max_chars = max(1, min(max_chars, MAX_READ_FILE_CHARS))
-        content = target.read_text(encoding="utf-8", errors="replace")
+        with target.open("r", encoding="utf-8", errors="replace") as handle:
+            content = handle.read(max_chars + 1)
         truncated = len(content) > max_chars
         if truncated:
             content = content[:max_chars]
@@ -134,7 +135,7 @@ class LocalActionExecutor:
 
     def _apply_patch(self, action: dict[str, Any]) -> ToolActionResult:
         patch = require_string(action, "patch")
-        validate_patch_paths(patch, self.project_dir)
+        validate_patch_paths(patch)
         apply_git_patch(patch, self.project_dir)
         return ToolActionResult(
             tool="apply_patch",

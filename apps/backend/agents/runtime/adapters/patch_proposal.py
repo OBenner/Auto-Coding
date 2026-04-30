@@ -152,7 +152,7 @@ class PatchProposalRuntimeSession:
                     ),
                 )
 
-            validate_patch_paths(patch, self.project_dir)
+            validate_patch_paths(patch)
             apply_git_patch(patch, self.project_dir)
         except PatchProposalError as e:
             artifacts.update(
@@ -339,9 +339,8 @@ def build_patch_response(
     return response_lines
 
 
-def validate_patch_paths(patch: str, project_dir: Path) -> None:
+def validate_patch_paths(patch: str) -> None:
     """Validate all paths referenced by a unified diff."""
-    del project_dir
     paths = extract_patch_paths(patch)
     if not paths:
         raise PatchProposalError("Patch does not contain any file paths")

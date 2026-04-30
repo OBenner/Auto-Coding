@@ -66,9 +66,11 @@ def build_analysis_prompt(
     sections = [
         "# Auto Code Analysis Request",
         "",
-        "You are running in analysis-only mode. Do not edit files, run tools, or "
-        "claim the implementation is complete. Produce useful engineering "
-        "guidance for the next coding step.",
+        (
+            "You are running in analysis-only mode. Do not edit files, run tools, or "
+            "claim the implementation is complete. Produce useful engineering "
+            "guidance for the next coding step."
+        ),
         "",
         f"Project directory: {project_dir}",
         f"Spec directory: {spec_dir}",

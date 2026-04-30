@@ -29,16 +29,19 @@ def save_analysis_only_artifact(
     artifact_dir = spec_dir / "artifacts"
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
+    timestamp = datetime.now(UTC).isoformat()
+    timestamp_token = safe_artifact_token(timestamp, "timestamp")
     phase_token = safe_artifact_token(phase, "phase")
     session_token = safe_artifact_token(f"session-{session_num}", "session")
     subtask_token = safe_artifact_token(subtask_id, "no-subtask")
     provider_token = safe_artifact_token(provider_name, "provider")
     basename = (
-        f"analysis_only_{phase_token}_{session_token}_{subtask_token}_{provider_token}"
+        "analysis_only_"
+        f"{phase_token}_{session_token}_{subtask_token}_{provider_token}_"
+        f"{timestamp_token}"
     )
     artifact_path = artifact_dir / f"{basename}.md"
     metadata_path = artifact_dir / f"{basename}.json"
-    timestamp = datetime.now(UTC).isoformat()
 
     with atomic_write(artifact_path, "w", encoding="utf-8") as artifact:
         artifact.write("# Analysis-only Runtime Result\n\n")

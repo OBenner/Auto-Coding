@@ -91,7 +91,21 @@ async def test_run_analysis_only_session_saves_artifact(
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert metadata["phase"] == "analysis"
     assert metadata["subtask_id"] is None
-    assert artifact_path.name == "analysis_only_analysis_session-1_no-subtask_openai.md"
+    assert artifact_path.name.startswith(
+        "analysis_only_analysis_session-1_no-subtask_openai_"
+    )
+    assert artifact_path.suffix == ".md"
+
+    second_result = await run_analysis_only_session(
+        project_dir=tmp_path,
+        spec_dir=spec_dir,
+        model="gpt-4o",
+        user_prompt="Focus on risk",
+        verbose=False,
+    )
+    second_artifact_path = Path(second_result["artifact"])
+    assert second_artifact_path.exists()
+    assert second_artifact_path != artifact_path
 
 
 @pytest.mark.asyncio

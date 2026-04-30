@@ -1366,7 +1366,16 @@ async def run_autonomous_agent(
                     current_log_phase,
                 )
             if subtask_id:
-                reset_subtask_to_pending(spec_dir, subtask_id)
+                if not reset_subtask_to_pending(spec_dir, subtask_id):
+                    logger.error(
+                        "Could not reset analysis-only subtask %s to pending in %s",
+                        subtask_id,
+                        spec_dir,
+                    )
+                    print_status(
+                        f"Could not reset subtask {subtask_id} to pending",
+                        "error",
+                    )
                 recovery_manager.record_attempt(
                     subtask_id=subtask_id,
                     session=iteration,
