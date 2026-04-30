@@ -383,9 +383,14 @@ export interface ProviderSettings {
   openaiApiKey?: string;
   googleApiKey?: string;
   openrouterApiKey?: string;
+  zhipuaiApiKey?: string;
   plannerModel?: string;
   coderModel?: string;
   qaModel?: string;
+  runtimeMode?: AgentRuntimeMode;
+  plannerRuntimeMode?: AgentRuntimeMode;
+  coderRuntimeMode?: AgentRuntimeMode;
+  qaReviewerRuntimeMode?: AgentRuntimeMode;
 }
 
 // ============================================
@@ -424,6 +429,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombi
 // ============================================
 
 export type AIEngineProvider = 'claude' | 'openai' | 'google' | 'litellm' | 'openrouter' | 'zhipuai' | 'ollama';
+export type AgentRuntimeMode = 'full_autonomous' | 'analysis_only' | 'patch_proposal' | 'generic_edit';
 
 export interface AIProviderConfig {
   provider: AIEngineProvider;
@@ -448,6 +454,12 @@ export interface AIProviderConfig {
   plannerModel?: string;
   coderModel?: string;
   qaModel?: string;
+  // Runtime mode overrides
+  runtimeMode?: AgentRuntimeMode;
+  plannerRuntimeMode?: AgentRuntimeMode;
+  coderRuntimeMode?: AgentRuntimeMode;
+  qaReviewerRuntimeMode?: AgentRuntimeMode;
+  qaFixerRuntimeMode?: AgentRuntimeMode;
 }
 
 export interface ProviderConfigValidation {

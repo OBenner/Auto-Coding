@@ -237,22 +237,24 @@ Examples:
 - A non-Claude provider in `patch_proposal` mode can modify files only through
   a validated unified diff.
 - A non-Claude provider in `generic_edit` mode can modify files through Auto
-  Code's local JSON action loop, but still lacks MCP and subagents.
+  Code's local action loop. OpenAI-compatible sessions use provider-native tool
+  calls when available; other sessions can use the JSON action loop. The mode
+  still lacks MCP and subagents.
 
 ## Current Boundaries
 
 This runtime engine is an integration boundary, not a generic replacement for
 the Claude Agent SDK. The generic edit runtime is the first local tool-loop
 slice; remaining work includes MCP translation, richer command/session
-streaming, provider-native function calling where available, and security parity
-with the Claude SDK path.
+streaming, broader provider-native function calling coverage, and security
+parity with the Claude SDK path.
 
 ## Related Code
 
 - `apps/backend/agents/runtime/` - runtime capabilities, requirements, session
   engine, and adapters.
 - `apps/backend/agents/runtime/local_actions.py` - reusable local action
-  executor used by generic edit and future provider-native tool adapters.
+  executor used by generic edit's JSON and provider-native tool-call loops.
 - `apps/backend/agents/runtime/artifacts.py` - shared analysis-only artifact
   persistence.
 - `apps/backend/agents/runtime/compatibility.py` - user-facing provider/runtime

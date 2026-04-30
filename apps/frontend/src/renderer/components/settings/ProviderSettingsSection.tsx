@@ -1,249 +1,359 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect } from 'react';
+import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { SettingsSection } from './SettingsSection';
-import type { AIEngineProvider } from '../../../shared/types/settings';
-
-type ProviderType = AIEngineProvider;
+import type {
+  AgentRuntimeMode,
+  AIEngineProvider,
+  AIProviderConfig
+} from '../../../shared/types/settings';
 
 type ProviderSettingsSectionProps = Record<string, never>;
 
-interface ProviderApiKeyFieldsProps {
-  selectedProvider: ProviderType;
-  openaiApiKey: string;
-  googleApiKey: string;
-  openrouterApiKey: string;
-  zhipuaiApiKey: string;
-  onOpenaiChange: (v: string) => void;
-  onGoogleChange: (v: string) => void;
-  onOpenrouterChange: (v: string) => void;
-  onZhipuaiChange: (v: string) => void;
-}
+const USE_GLOBAL_RUNTIME_MODE = '__global__';
 
-function ProviderApiKeyFields({
-  selectedProvider,
-  openaiApiKey, googleApiKey, openrouterApiKey, zhipuaiApiKey,
-  onOpenaiChange, onGoogleChange, onOpenrouterChange, onZhipuaiChange,
-}: ProviderApiKeyFieldsProps) {
-  const { t } = useTranslation(['settings']);
+const PROVIDER_OPTIONS: Array<{
+  value: AIEngineProvider;
+  labelKey: string;
+  descriptionKey: string;
+}> = [
+  { value: 'claude', labelKey: 'settings:aiProvider.providers.claude.name', descriptionKey: 'settings:aiProvider.providers.claude.description' },
+  { value: 'openai', labelKey: 'settings:aiProvider.providers.openai.name', descriptionKey: 'settings:aiProvider.providers.openai.description' },
+  { value: 'google', labelKey: 'settings:aiProvider.providers.google.name', descriptionKey: 'settings:aiProvider.providers.google.description' },
+  { value: 'litellm', labelKey: 'settings:aiProvider.providers.litellm.name', descriptionKey: 'settings:aiProvider.providers.litellm.description' },
+  { value: 'openrouter', labelKey: 'settings:aiProvider.providers.openrouter.name', descriptionKey: 'settings:aiProvider.providers.openrouter.description' },
+  { value: 'zhipuai', labelKey: 'settings:aiProvider.providers.zhipuai.name', descriptionKey: 'settings:aiProvider.providers.zhipuai.description' },
+  { value: 'ollama', labelKey: 'settings:aiProvider.providers.ollama.name', descriptionKey: 'settings:aiProvider.providers.ollama.description' },
+];
+
+const RUNTIME_MODE_OPTIONS: Array<{
+  value: AgentRuntimeMode;
+  labelKey: string;
+  descriptionKey: string;
+}> = [
+  { value: 'full_autonomous', labelKey: 'settings:aiProvider.runtimeModes.fullAutonomous.name', descriptionKey: 'settings:aiProvider.runtimeModes.fullAutonomous.description' },
+  { value: 'generic_edit', labelKey: 'settings:aiProvider.runtimeModes.genericEdit.name', descriptionKey: 'settings:aiProvider.runtimeModes.genericEdit.description' },
+  { value: 'patch_proposal', labelKey: 'settings:aiProvider.runtimeModes.patchProposal.name', descriptionKey: 'settings:aiProvider.runtimeModes.patchProposal.description' },
+  { value: 'analysis_only', labelKey: 'settings:aiProvider.runtimeModes.analysisOnly.name', descriptionKey: 'settings:aiProvider.runtimeModes.analysisOnly.description' },
+];
+
+function ProviderField({
+  id,
+  label,
+  description,
+  value,
+  onChange,
+  type = 'text',
+  placeholder
+}: {
+  id: string;
+  label: string;
+  description: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: 'text' | 'password';
+  placeholder?: string;
+}) {
   return (
-    <>
-      {selectedProvider === 'litellm' && (
-        <>
-          <div className="space-y-2">
-            <Label htmlFor="openaiApiKey" className="text-sm font-medium text-foreground">
-              {t('settings:aiProvider.apiKeys.openai.label')}
-            </Label>
-            <Input
-              id="openaiApiKey"
-              type="password"
-              placeholder={t('settings:aiProvider.apiKeys.openai.placeholder')}
-              value={openaiApiKey}
-              onChange={(e) => onOpenaiChange(e.target.value)}
-              className="max-w-md"
-            />
-            <p className="text-xs text-muted-foreground">
-              {t('settings:aiProvider.apiKeys.openai.description')}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="googleApiKey" className="text-sm font-medium text-foreground">
-              {t('settings:aiProvider.apiKeys.google.label')}
-            </Label>
-            <Input
-              id="googleApiKey"
-              type="password"
-              placeholder={t('settings:aiProvider.apiKeys.google.placeholder')}
-              value={googleApiKey}
-              onChange={(e) => onGoogleChange(e.target.value)}
-              className="max-w-md"
-            />
-            <p className="text-xs text-muted-foreground">
-              {t('settings:aiProvider.apiKeys.google.description')}
-            </p>
-          </div>
-        </>
-      )}
-      {selectedProvider === 'openrouter' && (
-        <div className="space-y-2">
-          <Label htmlFor="openrouterApiKey" className="text-sm font-medium text-foreground">
-            {t('settings:aiProvider.apiKeys.openrouter.label')}
-          </Label>
-          <Input
-            id="openrouterApiKey"
-            type="password"
-            placeholder={t('settings:aiProvider.apiKeys.openrouter.placeholder')}
-            value={openrouterApiKey}
-            onChange={(e) => onOpenrouterChange(e.target.value)}
-            className="max-w-md"
-          />
-          <p className="text-xs text-muted-foreground">
-            {t('settings:aiProvider.apiKeys.openrouter.description')}
-          </p>
-        </div>
-      )}
-      {selectedProvider === 'zhipuai' && (
-        <div className="space-y-2">
-          <Label htmlFor="zhipuaiApiKey" className="text-sm font-medium text-foreground">
-            {t('settings:aiProvider.apiKeys.zhipuai.label')}
-          </Label>
-          <Input
-            id="zhipuaiApiKey"
-            type="password"
-            placeholder={t('settings:aiProvider.apiKeys.zhipuai.placeholder')}
-            value={zhipuaiApiKey}
-            onChange={(e) => onZhipuaiChange(e.target.value)}
-            className="max-w-md"
-          />
-          <p className="text-xs text-muted-foreground">
-            {t('settings:aiProvider.apiKeys.zhipuai.description')}
-          </p>
-        </div>
-      )}
-    </>
-  );
-}
-
-interface PerAgentModelFieldsProps {
-  plannerModel: string;
-  coderModel: string;
-  qaModel: string;
-  onPlannerChange: (v: string) => void;
-  onCoderChange: (v: string) => void;
-  onQaChange: (v: string) => void;
-}
-
-function PerAgentModelFields({
-  plannerModel, coderModel, qaModel,
-  onPlannerChange, onCoderChange, onQaChange,
-}: PerAgentModelFieldsProps) {
-  const { t } = useTranslation(['settings']);
-  return (
-    <div className="space-y-4 pt-4 border-t border-border">
-      <div>
-        <h3 className="text-sm font-medium text-foreground mb-1">
-          {t('settings:aiProvider.models.title')}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {t('settings:aiProvider.models.description')}
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="plannerModel" className="text-sm font-medium text-foreground">
-          {t('settings:aiProvider.models.planner.label')}
-        </Label>
-        <Input
-          id="plannerModel"
-          type="text"
-          placeholder={t('settings:aiProvider.models.planner.placeholder')}
-          value={plannerModel}
-          onChange={(e) => onPlannerChange(e.target.value)}
-          className="max-w-md"
-        />
-        <p className="text-xs text-muted-foreground">
-          {t('settings:aiProvider.models.planner.description')}
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="coderModel" className="text-sm font-medium text-foreground">
-          {t('settings:aiProvider.models.coder.label')}
-        </Label>
-        <Input
-          id="coderModel"
-          type="text"
-          placeholder={t('settings:aiProvider.models.coder.placeholder')}
-          value={coderModel}
-          onChange={(e) => onCoderChange(e.target.value)}
-          className="max-w-md"
-        />
-        <p className="text-xs text-muted-foreground">
-          {t('settings:aiProvider.models.coder.description')}
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="qaModel" className="text-sm font-medium text-foreground">
-          {t('settings:aiProvider.models.qa.label')}
-        </Label>
-        <Input
-          id="qaModel"
-          type="text"
-          placeholder={t('settings:aiProvider.models.qa.placeholder')}
-          value={qaModel}
-          onChange={(e) => onQaChange(e.target.value)}
-          className="max-w-md"
-        />
-        <p className="text-xs text-muted-foreground">
-          {t('settings:aiProvider.models.qa.description')}
-        </p>
-      </div>
+    <div className="space-y-2">
+      <Label htmlFor={id} className="text-sm font-medium text-foreground">
+        {label}
+      </Label>
+      <Input
+        id={id}
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="max-w-xl"
+      />
+      <p className="text-xs text-muted-foreground">{description}</p>
     </div>
   );
 }
 
 /**
- * Provider settings component for configuring AI providers
+ * Provider settings component for configuring AI providers and runtime modes.
  */
 export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const { t } = useTranslation(['settings', 'common']);
-  const [selectedProvider, setSelectedProvider] = useState<ProviderType>('claude');
-  const [openaiApiKey, setOpenaiApiKey] = useState('');
-  const [googleApiKey, setGoogleApiKey] = useState('');
-  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
-  const [zhipuaiApiKey, setZhipuaiApiKey] = useState('');
-
-  // Model selection per agent type
-  const [plannerModel, setPlannerModel] = useState('');
-  const [coderModel, setCoderModel] = useState('');
-  const [qaModel, setQaModel] = useState('');
-
+  const [config, setConfig] = useState<AIProviderConfig>({
+    provider: 'claude',
+    runtimeMode: 'full_autonomous'
+  });
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  // Load existing config on mount
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const result = await window.electronAPI?.getProviderConfig?.();
-        if (result?.success && result.data) {
-          const data = result.data;
-          if (data.provider) setSelectedProvider(data.provider);
-          if (data.openaiApiKey) setOpenaiApiKey(data.openaiApiKey);
-          if (data.googleApiKey) setGoogleApiKey(data.googleApiKey);
-          if (data.openrouterApiKey) setOpenrouterApiKey(data.openrouterApiKey);
-          if (data.zhipuaiApiKey) setZhipuaiApiKey(data.zhipuaiApiKey);
-          if (data.plannerModel) setPlannerModel(data.plannerModel);
-          if (data.coderModel) setCoderModel(data.coderModel);
-          if (data.qaModel) setQaModel(data.qaModel);
+        if (!cancelled && result?.success && result.data) {
+          setConfig({
+            ...result.data,
+            provider: result.data.provider ?? 'claude',
+            runtimeMode: result.data.runtimeMode ?? 'full_autonomous'
+          });
         }
       } catch {
-        // Ignore errors loading config on mount
+        if (!cancelled) {
+          setSaveStatus('error');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const selectedProvider = useMemo(
+    () => PROVIDER_OPTIONS.find((provider) => provider.value === config.provider) ?? PROVIDER_OPTIONS[0],
+    [config.provider]
+  );
+
+  const activeRuntimeMode = config.runtimeMode ?? 'full_autonomous';
+  const nonClaudeFullAutonomous = config.provider !== 'claude' && activeRuntimeMode === 'full_autonomous';
+
+  const updateConfig = (updates: Partial<AIProviderConfig>) => {
+    setConfig((current) => ({ ...current, ...updates }));
+    setSaveStatus('idle');
+  };
+
+  const handleProviderChange = (provider: AIEngineProvider) => {
+    updateConfig({
+      provider,
+      runtimeMode: provider === 'claude' ? 'full_autonomous' : config.runtimeMode
+    });
+  };
+
+  const handleRuntimeOverrideChange = (
+    key: 'plannerRuntimeMode' | 'coderRuntimeMode' | 'qaReviewerRuntimeMode' | 'qaFixerRuntimeMode',
+    value: string
+  ) => {
+    updateConfig({
+      [key]: value === USE_GLOBAL_RUNTIME_MODE ? '' : value
+    } as Partial<AIProviderConfig>);
+  };
 
   const handleSave = async () => {
     setSaving(true);
     setSaveStatus('idle');
     try {
-      const config: Partial<import('../../../shared/types/settings').AIProviderConfig> = {
-        provider: selectedProvider,
-        openaiApiKey: openaiApiKey || undefined,
-        googleApiKey: googleApiKey || undefined,
-        openrouterApiKey: openrouterApiKey || undefined,
-        zhipuaiApiKey: zhipuaiApiKey || undefined,
-        plannerModel: plannerModel || undefined,
-        coderModel: coderModel || undefined,
-        qaModel: qaModel || undefined,
-      };
       const result = await window.electronAPI?.updateProviderConfig?.(config);
       setSaveStatus(result?.success ? 'success' : 'error');
     } catch {
       setSaveStatus('error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const renderRuntimeSelect = (
+    id: string,
+    value: AgentRuntimeMode | '' | undefined,
+    onChange: (value: string) => void,
+    includeGlobal: boolean
+  ) => (
+    <Select value={value || USE_GLOBAL_RUNTIME_MODE} onValueChange={onChange}>
+      <SelectTrigger id={id} className="w-full max-w-xl">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {includeGlobal && (
+          <SelectItem value={USE_GLOBAL_RUNTIME_MODE}>
+            {t('settings:aiProvider.runtimeModes.useGlobal')}
+          </SelectItem>
+        )}
+        {RUNTIME_MODE_OPTIONS.map((mode) => (
+          <SelectItem key={mode.value} value={mode.value}>
+            <div className="flex flex-col items-start">
+              <span className="font-medium">{t(mode.labelKey)}</span>
+              <span className="text-xs text-muted-foreground">{t(mode.descriptionKey)}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const renderProviderConfiguration = () => {
+    switch (config.provider) {
+      case 'openai':
+        return (
+          <>
+            <ProviderField
+              id="openaiApiKey"
+              label={t('settings:aiProvider.apiKeys.openai.label')}
+              description={t('settings:aiProvider.apiKeys.openai.description')}
+              placeholder={t('settings:aiProvider.apiKeys.openai.placeholder')}
+              type="password"
+              value={config.openaiApiKey ?? ''}
+              onChange={(openaiApiKey) => updateConfig({ openaiApiKey })}
+            />
+            <ProviderField
+              id="openaiModel"
+              label={t('settings:aiProvider.providerModels.openai.label')}
+              description={t('settings:aiProvider.providerModels.openai.description')}
+              placeholder={t('settings:aiProvider.providerModels.openai.placeholder')}
+              value={config.openaiModel ?? ''}
+              onChange={(openaiModel) => updateConfig({ openaiModel })}
+            />
+            <ProviderField
+              id="openaiBaseUrl"
+              label={t('settings:aiProvider.baseUrls.openai.label')}
+              description={t('settings:aiProvider.baseUrls.openai.description')}
+              placeholder={t('settings:aiProvider.baseUrls.openai.placeholder')}
+              value={config.openaiBaseUrl ?? ''}
+              onChange={(openaiBaseUrl) => updateConfig({ openaiBaseUrl })}
+            />
+          </>
+        );
+      case 'google':
+        return (
+          <>
+            <ProviderField
+              id="googleApiKey"
+              label={t('settings:aiProvider.apiKeys.google.label')}
+              description={t('settings:aiProvider.apiKeys.google.description')}
+              placeholder={t('settings:aiProvider.apiKeys.google.placeholder')}
+              type="password"
+              value={config.googleApiKey ?? ''}
+              onChange={(googleApiKey) => updateConfig({ googleApiKey })}
+            />
+            <ProviderField
+              id="googleModel"
+              label={t('settings:aiProvider.providerModels.google.label')}
+              description={t('settings:aiProvider.providerModels.google.description')}
+              placeholder={t('settings:aiProvider.providerModels.google.placeholder')}
+              value={config.googleModel ?? ''}
+              onChange={(googleModel) => updateConfig({ googleModel })}
+            />
+          </>
+        );
+      case 'litellm':
+        return (
+          <>
+            <ProviderField
+              id="litellmModel"
+              label={t('settings:aiProvider.providerModels.litellm.label')}
+              description={t('settings:aiProvider.providerModels.litellm.description')}
+              placeholder={t('settings:aiProvider.providerModels.litellm.placeholder')}
+              value={config.litellmModel ?? ''}
+              onChange={(litellmModel) => updateConfig({ litellmModel })}
+            />
+            <ProviderField
+              id="litellmApiBase"
+              label={t('settings:aiProvider.baseUrls.litellm.label')}
+              description={t('settings:aiProvider.baseUrls.litellm.description')}
+              placeholder={t('settings:aiProvider.baseUrls.litellm.placeholder')}
+              value={config.litellmApiBase ?? ''}
+              onChange={(litellmApiBase) => updateConfig({ litellmApiBase })}
+            />
+            <ProviderField
+              id="litellmApiKey"
+              label={t('settings:aiProvider.apiKeys.litellm.label')}
+              description={t('settings:aiProvider.apiKeys.litellm.description')}
+              placeholder={t('settings:aiProvider.apiKeys.litellm.placeholder')}
+              type="password"
+              value={config.litellmApiKey ?? ''}
+              onChange={(litellmApiKey) => updateConfig({ litellmApiKey })}
+            />
+          </>
+        );
+      case 'openrouter':
+        return (
+          <>
+            <ProviderField
+              id="openrouterApiKey"
+              label={t('settings:aiProvider.apiKeys.openrouter.label')}
+              description={t('settings:aiProvider.apiKeys.openrouter.description')}
+              placeholder={t('settings:aiProvider.apiKeys.openrouter.placeholder')}
+              type="password"
+              value={config.openrouterApiKey ?? ''}
+              onChange={(openrouterApiKey) => updateConfig({ openrouterApiKey })}
+            />
+            <ProviderField
+              id="openrouterModel"
+              label={t('settings:aiProvider.providerModels.openrouter.label')}
+              description={t('settings:aiProvider.providerModels.openrouter.description')}
+              placeholder={t('settings:aiProvider.providerModels.openrouter.placeholder')}
+              value={config.openrouterModel ?? ''}
+              onChange={(openrouterModel) => updateConfig({ openrouterModel })}
+            />
+            <ProviderField
+              id="openrouterBaseUrl"
+              label={t('settings:aiProvider.baseUrls.openrouter.label')}
+              description={t('settings:aiProvider.baseUrls.openrouter.description')}
+              placeholder={t('settings:aiProvider.baseUrls.openrouter.placeholder')}
+              value={config.openrouterBaseUrl ?? ''}
+              onChange={(openrouterBaseUrl) => updateConfig({ openrouterBaseUrl })}
+            />
+          </>
+        );
+      case 'zhipuai':
+        return (
+          <>
+            <ProviderField
+              id="zhipuaiApiKey"
+              label={t('settings:aiProvider.apiKeys.zhipuai.label')}
+              description={t('settings:aiProvider.apiKeys.zhipuai.description')}
+              placeholder={t('settings:aiProvider.apiKeys.zhipuai.placeholder')}
+              type="password"
+              value={config.zhipuaiApiKey ?? ''}
+              onChange={(zhipuaiApiKey) => updateConfig({ zhipuaiApiKey })}
+            />
+            <ProviderField
+              id="zhipuaiModel"
+              label={t('settings:aiProvider.providerModels.zhipuai.label')}
+              description={t('settings:aiProvider.providerModels.zhipuai.description')}
+              placeholder={t('settings:aiProvider.providerModels.zhipuai.placeholder')}
+              value={config.zhipuaiModel ?? ''}
+              onChange={(zhipuaiModel) => updateConfig({ zhipuaiModel })}
+            />
+          </>
+        );
+      case 'ollama':
+        return (
+          <>
+            <ProviderField
+              id="ollamaModel"
+              label={t('settings:aiProvider.providerModels.ollama.label')}
+              description={t('settings:aiProvider.providerModels.ollama.description')}
+              placeholder={t('settings:aiProvider.providerModels.ollama.placeholder')}
+              value={config.ollamaModel ?? ''}
+              onChange={(ollamaModel) => updateConfig({ ollamaModel })}
+            />
+            <ProviderField
+              id="ollamaBaseUrl"
+              label={t('settings:aiProvider.baseUrls.ollama.label')}
+              description={t('settings:aiProvider.baseUrls.ollama.description')}
+              placeholder={t('settings:aiProvider.baseUrls.ollama.placeholder')}
+              value={config.ollamaBaseUrl ?? ''}
+              onChange={(ollamaBaseUrl) => updateConfig({ ollamaBaseUrl })}
+            />
+          </>
+        );
+      default:
+        return (
+          <ProviderField
+            id="claudeModel"
+            label={t('settings:aiProvider.providerModels.claude.label')}
+            description={t('settings:aiProvider.providerModels.claude.description')}
+            placeholder={t('settings:aiProvider.providerModels.claude.placeholder')}
+            value={config.claudeModel ?? ''}
+            onChange={(claudeModel) => updateConfig({ claudeModel })}
+          />
+        );
     }
   };
 
@@ -257,49 +367,23 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           <Label htmlFor="aiProvider" className="text-sm font-medium text-foreground">
             {t('settings:aiProvider.label')}
           </Label>
-          <p className="text-sm text-muted-foreground">
-            {t('settings:aiProvider.hints.claudeDefault')}
-          </p>
           <Select
-            value={selectedProvider}
-            onValueChange={(value) => setSelectedProvider(value as ProviderType)}
+            value={config.provider}
+            onValueChange={(value) => handleProviderChange(value as AIEngineProvider)}
+            disabled={loading}
           >
-            <SelectTrigger id="aiProvider" className="w-full max-w-md">
+            <SelectTrigger id="aiProvider" className="w-full max-w-xl">
               <SelectValue placeholder={t('settings:aiProvider.selectProvider')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="claude">
-                <div className="flex flex-col items-start">
-                  <span className="font-medium">{t('settings:aiProvider.providers.claude.name')}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {t('settings:aiProvider.providers.claude.description')}
-                  </span>
-                </div>
-              </SelectItem>
-              <SelectItem value="litellm">
-                <div className="flex flex-col items-start">
-                  <span className="font-medium">{t('settings:aiProvider.providers.litellm.name')}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {t('settings:aiProvider.providers.litellm.description')}
-                  </span>
-                </div>
-              </SelectItem>
-              <SelectItem value="openrouter">
-                <div className="flex flex-col items-start">
-                  <span className="font-medium">{t('settings:aiProvider.providers.openrouter.name')}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {t('settings:aiProvider.providers.openrouter.description')}
-                  </span>
-                </div>
-              </SelectItem>
-              <SelectItem value="zhipuai">
-                <div className="flex flex-col items-start">
-                  <span className="font-medium">{t('settings:aiProvider.providers.zhipuai.name')}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {t('settings:aiProvider.providers.zhipuai.description')}
-                  </span>
-                </div>
-              </SelectItem>
+              {PROVIDER_OPTIONS.map((provider) => (
+                <SelectItem key={provider.value} value={provider.value}>
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">{t(provider.labelKey)}</span>
+                    <span className="text-xs text-muted-foreground">{t(provider.descriptionKey)}</span>
+                  </div>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
@@ -307,46 +391,158 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           </p>
         </div>
 
-        {/* API Key Configuration - conditionally shown based on provider */}
-        {selectedProvider !== 'claude' && (
-          <div className="space-y-4 pt-4 border-t border-border">
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-3">
-                {t('settings:aiProvider.apiKeys.title')}
+        <div className="rounded-md border border-border bg-muted/30 p-4">
+          <div className="flex items-start gap-3">
+            {nonClaudeFullAutonomous ? (
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            ) : (
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <div className="space-y-1">
+              <h3 className="text-sm font-medium text-foreground">
+                {t(selectedProvider.labelKey)}
               </h3>
+              <p className="text-xs text-muted-foreground">
+                {nonClaudeFullAutonomous
+                  ? t('settings:aiProvider.compatibility.nonClaudeFullAutonomous')
+                  : t('settings:aiProvider.compatibility.claudeFirst')}
+              </p>
             </div>
-            <ProviderApiKeyFields
-              selectedProvider={selectedProvider}
-              openaiApiKey={openaiApiKey}
-              googleApiKey={googleApiKey}
-              openrouterApiKey={openrouterApiKey}
-              zhipuaiApiKey={zhipuaiApiKey}
-              onOpenaiChange={setOpenaiApiKey}
-              onGoogleChange={setGoogleApiKey}
-              onOpenrouterChange={setOpenrouterApiKey}
-              onZhipuaiChange={setZhipuaiApiKey}
-            />
-            <PerAgentModelFields
-              plannerModel={plannerModel}
-              coderModel={coderModel}
-              qaModel={qaModel}
-              onPlannerChange={setPlannerModel}
-              onCoderChange={setCoderModel}
-              onQaChange={setQaModel}
-            />
           </div>
-        )}
+        </div>
 
-        {/* Save button - always visible */}
-        <div className="pt-2">
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? t('common:buttons.saving', 'Saving...') : t('common:actions.save')}
+        <div className="space-y-4 border-t border-border pt-4">
+          <div>
+            <h3 className="text-sm font-medium text-foreground">
+              {t('settings:aiProvider.runtime.title')}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {t('settings:aiProvider.runtime.description')}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="runtimeMode" className="text-sm font-medium text-foreground">
+              {t('settings:aiProvider.runtime.globalLabel')}
+            </Label>
+            {renderRuntimeSelect(
+              'runtimeMode',
+              activeRuntimeMode,
+              (runtimeMode) => updateConfig({ runtimeMode: runtimeMode as AgentRuntimeMode }),
+              false
+            )}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="plannerRuntimeMode" className="text-sm font-medium text-foreground">
+                {t('settings:aiProvider.runtime.plannerLabel')}
+              </Label>
+              {renderRuntimeSelect(
+                'plannerRuntimeMode',
+                config.plannerRuntimeMode,
+                (value) => handleRuntimeOverrideChange('plannerRuntimeMode', value),
+                true
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="coderRuntimeMode" className="text-sm font-medium text-foreground">
+                {t('settings:aiProvider.runtime.coderLabel')}
+              </Label>
+              {renderRuntimeSelect(
+                'coderRuntimeMode',
+                config.coderRuntimeMode,
+                (value) => handleRuntimeOverrideChange('coderRuntimeMode', value),
+                true
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qaReviewerRuntimeMode" className="text-sm font-medium text-foreground">
+                {t('settings:aiProvider.runtime.qaReviewerLabel')}
+              </Label>
+              {renderRuntimeSelect(
+                'qaReviewerRuntimeMode',
+                config.qaReviewerRuntimeMode,
+                (value) => handleRuntimeOverrideChange('qaReviewerRuntimeMode', value),
+                true
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qaFixerRuntimeMode" className="text-sm font-medium text-foreground">
+                {t('settings:aiProvider.runtime.qaFixerLabel')}
+              </Label>
+              {renderRuntimeSelect(
+                'qaFixerRuntimeMode',
+                config.qaFixerRuntimeMode,
+                (value) => handleRuntimeOverrideChange('qaFixerRuntimeMode', value),
+                true
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 border-t border-border pt-4">
+          <div>
+            <h3 className="text-sm font-medium text-foreground">
+              {t('settings:aiProvider.configuration.title')}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {t('settings:aiProvider.configuration.description')}
+            </p>
+          </div>
+          {renderProviderConfiguration()}
+        </div>
+
+        <div className="space-y-4 border-t border-border pt-4">
+          <div>
+            <h3 className="text-sm font-medium text-foreground">
+              {t('settings:aiProvider.models.title')}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {t('settings:aiProvider.models.description')}
+            </p>
+          </div>
+          <ProviderField
+            id="plannerModel"
+            label={t('settings:aiProvider.models.planner.label')}
+            description={t('settings:aiProvider.models.planner.description')}
+            placeholder={t('settings:aiProvider.models.planner.placeholder')}
+            value={config.plannerModel ?? ''}
+            onChange={(plannerModel) => updateConfig({ plannerModel })}
+          />
+          <ProviderField
+            id="coderModel"
+            label={t('settings:aiProvider.models.coder.label')}
+            description={t('settings:aiProvider.models.coder.description')}
+            placeholder={t('settings:aiProvider.models.coder.placeholder')}
+            value={config.coderModel ?? ''}
+            onChange={(coderModel) => updateConfig({ coderModel })}
+          />
+          <ProviderField
+            id="qaModel"
+            label={t('settings:aiProvider.models.qa.label')}
+            description={t('settings:aiProvider.models.qa.description')}
+            placeholder={t('settings:aiProvider.models.qa.placeholder')}
+            value={config.qaModel ?? ''}
+            onChange={(qaModel) => updateConfig({ qaModel })}
+          />
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <Button onClick={handleSave} disabled={saving || loading}>
+            {saving ? t('common:buttons.saving') : t('common:buttons.save')}
           </Button>
           {saveStatus === 'success' && (
-            <span className="ml-2 text-sm text-success">{t('common:status.saved', 'Saved')}</span>
+            <span className="inline-flex items-center gap-1.5 text-sm text-success">
+              <CheckCircle2 className="h-4 w-4" />
+              {t('common:labels.success')}
+            </span>
           )}
           {saveStatus === 'error' && (
-            <span className="ml-2 text-sm text-destructive">{t('common:status.error', 'Error saving')}</span>
+            <span className="inline-flex items-center gap-1.5 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              {t('common:labels.error')}
+            </span>
           )}
         </div>
       </div>

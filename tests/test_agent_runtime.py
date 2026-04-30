@@ -256,6 +256,44 @@ class FakeGenericEditSession:
         yield self.responses.pop(0)
 
 
+class FakeNativeToolCallSession:
+    provider_name = "openai"
+
+    def __init__(self, responses: list[list[dict]]):
+        self.responses = responses
+        self.messages: list[str | None] = []
+        self.tool_schemas: list[list[dict]] = []
+        self.tool_results: list[dict] = []
+
+    async def complete_with_tool_calls(self, message: str | None, tools: list[dict]):
+        await asyncio.sleep(0)
+        self.messages.append(message)
+        self.tool_schemas.append(tools)
+        tool_calls = [
+            SimpleNamespace(
+                id=f"call_{len(self.messages)}_{index}",
+                name=call["name"],
+                arguments=call.get("arguments", {}),
+            )
+            for index, call in enumerate(self.responses.pop(0), start=1)
+        ]
+        return SimpleNamespace(content="", tool_calls=tuple(tool_calls))
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: dict):
+        self.tool_results.append(
+            {"tool_call_id": tool_call_id, "name": name, "result": result}
+        )
+
+
+class FakeNativeToolFailureSession(FakeGenericEditSession):
+    async def complete_with_tool_calls(self, message: str | None, tools: list[dict]):
+        await asyncio.sleep(0)
+        raise RuntimeError("provider rejected tool calls")
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: dict):
+        raise AssertionError("tool results should not be added after fallback")
+
+
 def _init_git_repo(path: Path) -> None:
     run_process(["git", "init"], cwd=path, capture_output=True, check=True)
     run_process(
@@ -556,9 +594,7 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert result_artifact["iteration_count"] == 3
     assert result_artifact["tests"] == ["not run"]
 
-    trace_text = (artifact_dir / "generic_edit_trace.json").read_text(
-        encoding="utf-8"
-    )
+    trace_text = (artifact_dir / "generic_edit_trace.json").read_text(encoding="utf-8")
     assert trace_marker not in trace_text
     trace = json.loads(trace_text)
     read_result = trace["trace"][0]["actions"][0]["result"]
@@ -566,6 +602,126 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert read_result["data"]["content_bytes"] > 0
     assert "response_excerpt" in trace["trace"][0]
     assert "response" not in trace["trace"][0]
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_prefers_native_tool_call_loop(tmp_path: Path):
+    target = tmp_path / "native.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeNativeToolCallSession(
+        [
+            [{"name": "read_file", "arguments": {"path": "native.txt"}}],
+            [
+                {
+                    "name": "write_file",
+                    "arguments": {
+                        "path": "native.txt",
+                        "content": "new\n",
+                    },
+                }
+            ],
+            [
+                {
+                    "name": "finish",
+                    "arguments": {
+                        "summary": "Updated through native tool calls",
+                        "tests": ["not run"],
+                        "risks": [],
+                    },
+                }
+            ],
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "change native.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.3",
+    )
+
+    assert result.status == "continue"
+    assert "Updated through native tool calls" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert session.messages[0] is not None
+    assert "function calls" in session.messages[0]
+    assert session.messages[1:] == [None, None]
+    assert session.tool_schemas[0][0]["name"] == "read_file"
+    assert [result["name"] for result in session.tool_results] == [
+        "read_file",
+        "write_file",
+        "finish",
+    ]
+
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    assert trace["trace"][0]["loop"] == "native_tool_calls"
+    assert trace["trace"][0]["actions"][0]["request"]["tool"] == "read_file"
+    assert trace["trace"][0]["actions"][0]["result"]["data"]["content_redacted"]
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["subtask_id"] == "1.3"
+    assert result_artifact["iteration_count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_falls_back_when_native_tools_rejected(
+    tmp_path: Path,
+):
+    target = tmp_path / "fallback.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeNativeToolFailureSession(
+        [
+            {
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "fallback.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Fallback JSON loop completed",
+                        "tests": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "change fallback.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    assert "Fallback JSON loop completed" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert len(session.messages) == 1
+    assert "Respond with exactly one JSON object" in session.messages[0]
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    assert "loop" not in trace["trace"][0]
 
 
 @pytest.mark.asyncio
@@ -794,9 +950,7 @@ async def test_analysis_only_coding_saves_artifact_without_post_processing(
     )
 
     artifact_path = next(
-        (spec_dir / "artifacts").glob(
-            "analysis_only_coding_session-1_1.1_openai_*.md"
-        )
+        (spec_dir / "artifacts").glob("analysis_only_coding_session-1_1.1_openai_*.md")
     )
     metadata_path = artifact_path.with_suffix(".json")
     assert artifact_path.exists()

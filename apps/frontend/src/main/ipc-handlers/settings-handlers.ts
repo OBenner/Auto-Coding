@@ -109,18 +109,19 @@ function applyProviderSettingsToVars(
     ['openaiApiKey', 'OPENAI_API_KEY'],
     ['googleApiKey', 'GOOGLE_API_KEY'],
     ['openrouterApiKey', 'OPENROUTER_API_KEY'],
+    ['zhipuaiApiKey', 'ZHIPUAI_API_KEY'],
     ['plannerModel', 'AGENT_MODEL_PLANNER'],
     ['coderModel', 'AGENT_MODEL_CODER'],
     ['qaModel', 'AGENT_MODEL_QA_REVIEWER'],
+    ['runtimeMode', 'AUTO_CODE_RUNTIME_MODE'],
+    ['plannerRuntimeMode', 'AGENT_RUNTIME_MODE_PLANNER'],
+    ['coderRuntimeMode', 'AGENT_RUNTIME_MODE_CODER'],
+    ['qaReviewerRuntimeMode', 'AGENT_RUNTIME_MODE_QA_REVIEWER'],
   ];
   for (const [settingKey, envKey] of keyMap) {
     const value = settings[settingKey];
     if (value !== undefined) {
-      if (value) {
-        vars[envKey] = value as string;
-      } else {
-        delete vars[envKey];
-      }
+      vars[envKey] = value as string;
     }
   }
 }
@@ -149,14 +150,37 @@ function generateFreshEnvContent(vars: Record<string, string>): string {
 AI_ENGINE_PROVIDER=${vars['AI_ENGINE_PROVIDER'] || 'claude'}
 
 # Provider API Keys
+${varLine('ANTHROPIC_API_KEY')}
 ${varLine('OPENAI_API_KEY')}
 ${varLine('GOOGLE_API_KEY')}
+${varLine('LITELLM_API_KEY')}
 ${varLine('OPENROUTER_API_KEY')}
+${varLine('ZHIPUAI_API_KEY')}
+
+# Provider Models and Endpoints
+${varLine('CLAUDE_MODEL')}
+${varLine('OPENAI_MODEL')}
+${varLine('OPENAI_BASE_URL')}
+${varLine('GOOGLE_MODEL')}
+${varLine('LITELLM_MODEL')}
+${varLine('LITELLM_API_BASE')}
+${varLine('OPENROUTER_MODEL')}
+${varLine('OPENROUTER_BASE_URL')}
+${varLine('ZHIPUAI_MODEL')}
+${varLine('OLLAMA_MODEL')}
+${varLine('OLLAMA_BASE_URL')}
 
 # Per-Agent Model Configuration
 ${varLine('AGENT_MODEL_PLANNER')}
 ${varLine('AGENT_MODEL_CODER')}
 ${varLine('AGENT_MODEL_QA_REVIEWER')}
+
+# Runtime Mode Configuration
+${varLine('AUTO_CODE_RUNTIME_MODE')}
+${varLine('AGENT_RUNTIME_MODE_PLANNER')}
+${varLine('AGENT_RUNTIME_MODE_CODER')}
+${varLine('AGENT_RUNTIME_MODE_QA_REVIEWER')}
+${varLine('AGENT_RUNTIME_MODE_QA_FIXER')}
 `;
 }
 
@@ -223,8 +247,16 @@ function generateProviderEnvContent(
   );
 
   const providerVars = [
-    'AI_ENGINE_PROVIDER', 'OPENAI_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY',
-    'AGENT_MODEL_PLANNER', 'AGENT_MODEL_CODER', 'AGENT_MODEL_QA_REVIEWER',
+    'AI_ENGINE_PROVIDER', 'ANTHROPIC_API_KEY', 'CLAUDE_MODEL',
+    'OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_BASE_URL',
+    'GOOGLE_API_KEY', 'GOOGLE_MODEL',
+    'LITELLM_MODEL', 'LITELLM_API_BASE', 'LITELLM_API_KEY',
+    'OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'OPENROUTER_BASE_URL',
+    'ZHIPUAI_API_KEY', 'ZHIPUAI_MODEL', 'OLLAMA_MODEL', 'OLLAMA_BASE_URL',
+    'AGENT_MODEL_PLANNER', 'AGENT_MODEL_CODER',
+    'AGENT_MODEL_QA_REVIEWER', 'AUTO_CODE_RUNTIME_MODE',
+    'AGENT_RUNTIME_MODE_PLANNER', 'AGENT_RUNTIME_MODE_CODER',
+    'AGENT_RUNTIME_MODE_QA_REVIEWER', 'AGENT_RUNTIME_MODE_QA_FIXER',
   ];
   const newVars = providerVars.filter(v => !existingVarNames.has(v) && vars[v])
     .map(v => `${v}=${vars[v]}`);
@@ -502,9 +534,14 @@ export function registerSettingsHandlers(
           openaiApiKey: envVars['OPENAI_API_KEY'] || '',
           googleApiKey: envVars['GOOGLE_API_KEY'] || '',
           openrouterApiKey: envVars['OPENROUTER_API_KEY'] || '',
+          zhipuaiApiKey: envVars['ZHIPUAI_API_KEY'] || '',
           plannerModel: envVars['AGENT_MODEL_PLANNER'] || '',
           coderModel: envVars['AGENT_MODEL_CODER'] || '',
-          qaModel: envVars['AGENT_MODEL_QA_REVIEWER'] || ''
+          qaModel: envVars['AGENT_MODEL_QA_REVIEWER'] || '',
+          runtimeMode: envVars['AUTO_CODE_RUNTIME_MODE'] as ProviderSettings['runtimeMode'],
+          plannerRuntimeMode: envVars['AGENT_RUNTIME_MODE_PLANNER'] as ProviderSettings['plannerRuntimeMode'],
+          coderRuntimeMode: envVars['AGENT_RUNTIME_MODE_CODER'] as ProviderSettings['coderRuntimeMode'],
+          qaReviewerRuntimeMode: envVars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as ProviderSettings['qaReviewerRuntimeMode']
         };
 
         return { success: true, data: providerSettings };
@@ -1124,8 +1161,18 @@ export function registerSettingsHandlers(
           config.openrouterApiKey = vars['OPENROUTER_API_KEY'];
           config.openrouterModel = vars['OPENROUTER_MODEL'];
           config.openrouterBaseUrl = vars['OPENROUTER_BASE_URL'];
+          config.zhipuaiApiKey = vars['ZHIPUAI_API_KEY'];
+          config.zhipuaiModel = vars['ZHIPUAI_MODEL'];
           config.ollamaModel = vars['OLLAMA_MODEL'];
           config.ollamaBaseUrl = vars['OLLAMA_BASE_URL'];
+          config.plannerModel = vars['AGENT_MODEL_PLANNER'];
+          config.coderModel = vars['AGENT_MODEL_CODER'];
+          config.qaModel = vars['AGENT_MODEL_QA_REVIEWER'];
+          config.runtimeMode = vars['AUTO_CODE_RUNTIME_MODE'] as import('../../shared/types').AgentRuntimeMode;
+          config.plannerRuntimeMode = vars['AGENT_RUNTIME_MODE_PLANNER'] as import('../../shared/types').AgentRuntimeMode;
+          config.coderRuntimeMode = vars['AGENT_RUNTIME_MODE_CODER'] as import('../../shared/types').AgentRuntimeMode;
+          config.qaReviewerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as import('../../shared/types').AgentRuntimeMode;
+          config.qaFixerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_FIXER'] as import('../../shared/types').AgentRuntimeMode;
         }
 
         return {
@@ -1158,34 +1205,42 @@ export function registerSettingsHandlers(
           };
         }
 
-        let existingVars: Record<string, string> = {};
-        try {
-          const content = readFileSync(envPath, 'utf-8');
-          existingVars = parseEnvFile(content);
-        } catch {
-          // File doesn't exist yet, start with empty vars
-        }
+        const existingContent = readEnvFileSafe(envPath);
+        const existingVars = parseEnvFile(existingContent);
+        const setEnvVar = (key: string, value: string | undefined): void => {
+          if (value !== undefined) {
+            existingVars[key] = value;
+          }
+        };
 
-        if (config.provider !== undefined) existingVars['AI_ENGINE_PROVIDER'] = config.provider;
-        if (config.anthropicApiKey !== undefined) existingVars['ANTHROPIC_API_KEY'] = config.anthropicApiKey;
-        if (config.claudeModel !== undefined) existingVars['CLAUDE_MODEL'] = config.claudeModel;
-        if (config.openaiApiKey !== undefined) existingVars['OPENAI_API_KEY'] = config.openaiApiKey;
-        if (config.openaiModel !== undefined) existingVars['OPENAI_MODEL'] = config.openaiModel;
-        if (config.openaiBaseUrl !== undefined) existingVars['OPENAI_BASE_URL'] = config.openaiBaseUrl;
-        if (config.googleApiKey !== undefined) existingVars['GOOGLE_API_KEY'] = config.googleApiKey;
-        if (config.googleModel !== undefined) existingVars['GOOGLE_MODEL'] = config.googleModel;
-        if (config.litellmModel !== undefined) existingVars['LITELLM_MODEL'] = config.litellmModel;
-        if (config.litellmApiBase !== undefined) existingVars['LITELLM_API_BASE'] = config.litellmApiBase;
-        if (config.litellmApiKey !== undefined) existingVars['LITELLM_API_KEY'] = config.litellmApiKey;
-        if (config.openrouterApiKey !== undefined) existingVars['OPENROUTER_API_KEY'] = config.openrouterApiKey;
-        if (config.openrouterModel !== undefined) existingVars['OPENROUTER_MODEL'] = config.openrouterModel;
-        if (config.openrouterBaseUrl !== undefined) existingVars['OPENROUTER_BASE_URL'] = config.openrouterBaseUrl;
-        if (config.ollamaModel !== undefined) existingVars['OLLAMA_MODEL'] = config.ollamaModel;
-        if (config.ollamaBaseUrl !== undefined) existingVars['OLLAMA_BASE_URL'] = config.ollamaBaseUrl;
+        setEnvVar('AI_ENGINE_PROVIDER', config.provider);
+        setEnvVar('ANTHROPIC_API_KEY', config.anthropicApiKey);
+        setEnvVar('CLAUDE_MODEL', config.claudeModel);
+        setEnvVar('OPENAI_API_KEY', config.openaiApiKey);
+        setEnvVar('OPENAI_MODEL', config.openaiModel);
+        setEnvVar('OPENAI_BASE_URL', config.openaiBaseUrl);
+        setEnvVar('GOOGLE_API_KEY', config.googleApiKey);
+        setEnvVar('GOOGLE_MODEL', config.googleModel);
+        setEnvVar('LITELLM_MODEL', config.litellmModel);
+        setEnvVar('LITELLM_API_BASE', config.litellmApiBase);
+        setEnvVar('LITELLM_API_KEY', config.litellmApiKey);
+        setEnvVar('OPENROUTER_API_KEY', config.openrouterApiKey);
+        setEnvVar('OPENROUTER_MODEL', config.openrouterModel);
+        setEnvVar('OPENROUTER_BASE_URL', config.openrouterBaseUrl);
+        setEnvVar('ZHIPUAI_API_KEY', config.zhipuaiApiKey);
+        setEnvVar('ZHIPUAI_MODEL', config.zhipuaiModel);
+        setEnvVar('OLLAMA_MODEL', config.ollamaModel);
+        setEnvVar('OLLAMA_BASE_URL', config.ollamaBaseUrl);
+        setEnvVar('AGENT_MODEL_PLANNER', config.plannerModel);
+        setEnvVar('AGENT_MODEL_CODER', config.coderModel);
+        setEnvVar('AGENT_MODEL_QA_REVIEWER', config.qaModel);
+        setEnvVar('AUTO_CODE_RUNTIME_MODE', config.runtimeMode);
+        setEnvVar('AGENT_RUNTIME_MODE_PLANNER', config.plannerRuntimeMode);
+        setEnvVar('AGENT_RUNTIME_MODE_CODER', config.coderRuntimeMode);
+        setEnvVar('AGENT_RUNTIME_MODE_QA_REVIEWER', config.qaReviewerRuntimeMode);
+        setEnvVar('AGENT_RUNTIME_MODE_QA_FIXER', config.qaFixerRuntimeMode);
 
-        const newContent = Object.entries(existingVars)
-          .map(([key, value]) => `${key}=${value}`)
-          .join('\n');
+        const newContent = generateProviderEnvContent(existingVars, existingContent);
 
         writeFileSync(envPath, newContent, 'utf-8');
 
@@ -1230,7 +1285,13 @@ export function registerSettingsHandlers(
           if (vars['GOOGLE_API_KEY']) availableProviders.push('google');
           if (vars['LITELLM_MODEL']) availableProviders.push('litellm');
           if (vars['OPENROUTER_API_KEY']) availableProviders.push('openrouter');
+          if (vars['ZHIPUAI_API_KEY']) availableProviders.push('zhipuai');
           if (vars['OLLAMA_MODEL']) availableProviders.push('ollama');
+
+          const runtimeMode = vars['AUTO_CODE_RUNTIME_MODE'] || 'full_autonomous';
+          if (provider !== 'claude' && runtimeMode === 'full_autonomous') {
+            errors.push('Non-Claude providers require analysis_only, patch_proposal, or generic_edit runtime mode');
+          }
 
           switch (provider) {
             case 'claude':
@@ -1247,6 +1308,9 @@ export function registerSettingsHandlers(
               break;
             case 'openrouter':
               if (!vars['OPENROUTER_API_KEY']) errors.push('OpenRouter provider requires OPENROUTER_API_KEY environment variable');
+              break;
+            case 'zhipuai':
+              if (!vars['ZHIPUAI_API_KEY']) errors.push('ZhipuAI provider requires ZHIPUAI_API_KEY environment variable');
               break;
             case 'ollama':
               if (!vars['OLLAMA_MODEL']) errors.push('Ollama provider requires OLLAMA_MODEL environment variable');

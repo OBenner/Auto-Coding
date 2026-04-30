@@ -730,6 +730,14 @@
         "name": "Claude Agent SDK",
         "description": "SDK Agent Claude d'Anthropic (par défaut, recommandé)"
       },
+      "openai": {
+        "name": "OpenAI",
+        "description": "Runtime SDK OpenAI direct pour les modes limités"
+      },
+      "google": {
+        "name": "Google Gemini",
+        "description": "Runtime SDK Google Gemini pour les modes limités"
+      },
       "litellm": {
         "name": "LiteLLM",
         "description": "Interface unifiée supportant plus de 100 fournisseurs LLM"
@@ -741,6 +749,10 @@
       "zhipuai": {
         "name": "ZhipuAI (GLM)",
         "description": "Modèles GLM de Zhipu AI (glm-4, glm-4-flash)"
+      },
+      "ollama": {
+        "name": "Ollama",
+        "description": "Modèles locaux compatibles OpenAI sans coût d'API distant"
       }
     },
     "apiKeys": {
@@ -764,7 +776,103 @@
         "label": "Clé API ZhipuAI",
         "placeholder": "Entrez votre clé API ZhipuAI",
         "description": "Requise pour les modèles GLM (glm-4, glm-4-flash)"
+      },
+      "litellm": {
+        "label": "Clé API LiteLLM",
+        "placeholder": "Clé API du fournisseur, si nécessaire",
+        "description": "Clé API optionnelle de passerelle pour la route LiteLLM sélectionnée"
       }
+    },
+    "providerModels": {
+      "claude": {
+        "label": "Modèle Claude",
+        "placeholder": "claude-sonnet-4-5-20250929",
+        "description": "Remplacement optionnel du modèle Claude Agent SDK"
+      },
+      "openai": {
+        "label": "Modèle OpenAI",
+        "placeholder": "gpt-4o",
+        "description": "Modèle utilisé pour les sessions OpenAI directes"
+      },
+      "google": {
+        "label": "Modèle Gemini",
+        "placeholder": "gemini-2.0-flash",
+        "description": "Modèle utilisé pour les sessions Google Gemini"
+      },
+      "litellm": {
+        "label": "Modèle LiteLLM",
+        "placeholder": "openai/gpt-4o",
+        "description": "Route de modèle LiteLLM"
+      },
+      "openrouter": {
+        "label": "Modèle OpenRouter",
+        "placeholder": "anthropic/claude-sonnet-4",
+        "description": "Route de modèle OpenRouter"
+      },
+      "zhipuai": {
+        "label": "Modèle ZhipuAI",
+        "placeholder": "glm-4-flash-250414",
+        "description": "Modèle GLM utilisé pour les sessions ZhipuAI"
+      },
+      "ollama": {
+        "label": "Modèle Ollama",
+        "placeholder": "llama3.1",
+        "description": "Nom du modèle local installé dans Ollama"
+      }
+    },
+    "baseUrls": {
+      "openai": {
+        "label": "URL de base OpenAI",
+        "placeholder": "https://api.openai.com/v1",
+        "description": "Remplacement optionnel du point de terminaison compatible OpenAI"
+      },
+      "litellm": {
+        "label": "Base API LiteLLM",
+        "placeholder": "https://api.example.com/v1",
+        "description": "Point de terminaison optionnel de passerelle LiteLLM"
+      },
+      "openrouter": {
+        "label": "URL de base OpenRouter",
+        "placeholder": "https://openrouter.ai/api/v1",
+        "description": "Remplacement optionnel du point de terminaison compatible OpenRouter"
+      },
+      "ollama": {
+        "label": "URL de base Ollama",
+        "placeholder": "http://localhost:11434",
+        "description": "URL du serveur Ollama local"
+      }
+    },
+    "runtime": {
+      "title": "Mode runtime",
+      "description": "Détermine si un fournisseur peut modifier les fichiers, proposer des patchs ou seulement analyser du texte.",
+      "globalLabel": "Mode runtime par défaut",
+      "plannerLabel": "Remplacement Planificateur",
+      "coderLabel": "Remplacement Codeur",
+      "qaReviewerLabel": "Remplacement QA reviewer",
+      "qaFixerLabel": "Remplacement QA fixer"
+    },
+    "runtimeModes": {
+      "useGlobal": "Utiliser le mode runtime par défaut",
+      "fullAutonomous": {
+        "name": "Autonome complet",
+        "description": "Outils Claude Agent SDK, MCP, shell et éditions de fichiers"
+      },
+      "genericEdit": {
+        "name": "Édition générique",
+        "description": "Boucle d'outils locale neutre pour éditions de fichiers et commandes"
+      },
+      "patchProposal": {
+        "name": "Proposition de patch",
+        "description": "Le modèle propose des patchs validés qu'Auto Code applique localement"
+      },
+      "analysisOnly": {
+        "name": "Analyse seule",
+        "description": "Analyse textuelle sans modification de fichiers"
+      }
+    },
+    "compatibility": {
+      "claudeFirst": "Claude Agent SDK reste le runtime autonome complet. Les autres fournisseurs fonctionnent via des modes runtime limités.",
+      "nonClaudeFullAutonomous": "Le mode autonome complet nécessite Claude Agent SDK. Choisissez édition générique, proposition de patch ou analyse seule pour ce fournisseur."
     },
     "models": {
       "title": "Sélection du modèle",
@@ -787,6 +895,7 @@
     },
     "configuration": {
       "title": "Configuration du fournisseur",
+      "description": "Ces valeurs sont écrites dans le fichier .env backend utilisé par les nouvelles sessions d'agent.",
       "apiKey": "Clé API",
       "apiKeyPlaceholder": "Entrez votre clé API",
       "apiKeyDescription": "Requise pour les fournisseurs LiteLLM et OpenRouter",

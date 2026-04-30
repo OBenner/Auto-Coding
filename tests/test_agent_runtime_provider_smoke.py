@@ -488,23 +488,25 @@ async def test_openai_provider_supports_generic_edit_mode(
 ):
     target = tmp_path / "generic.txt"
     target.write_text("old\n", encoding="utf-8")
-    response = {
-        "thought": "edit directly",
-        "actions": [
-            {
-                "tool": "write_file",
-                "path": "generic.txt",
-                "content": "new\n",
-            },
-            {
-                "tool": "finish",
-                "summary": "OpenAI provider generic edit smoke",
-                "tests": [],
-                "risks": [],
-            },
+    fake_openai = _install_fake_openai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_write",
+                name="write_file",
+                arguments={"path": "generic.txt", "content": "new\n"},
+            ),
+            _openai_tool_call_response(
+                tool_call_id="call_finish",
+                name="finish",
+                arguments={
+                    "summary": "OpenAI provider generic edit smoke",
+                    "tests": [],
+                    "risks": [],
+                },
+            ),
         ],
-    }
-    _install_fake_openai(monkeypatch, [json.dumps(response)])
+    )
     provider = OpenAIProvider(
         ProviderConfig(provider="openai", openai_api_key="test-key")
     )
@@ -527,6 +529,11 @@ async def test_openai_provider_supports_generic_edit_mode(
     assert result.status == "continue"
     assert "OpenAI provider generic edit smoke" in result.response_text
     assert target.read_text(encoding="utf-8") == "new\n"
+    assert len(fake_openai.calls) == 2
+    assert fake_openai.calls[0]["stream"] is False
+    assert fake_openai.calls[0]["tools"][0]["function"]["name"] == "read_file"
+    assert fake_openai.calls[1]["messages"][-1]["role"] == "tool"
+    assert fake_openai.calls[1]["messages"][-1]["tool_call_id"] == "call_write"
     result_artifact = json.loads(
         (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
             encoding="utf-8"

@@ -50,6 +50,7 @@ python run.py --spec 001 --provider openai
 
 **Valid Values**:
 - `full_autonomous` (default) - requires Claude Agent SDK-style tools, MCP, shell, filesystem edits, and workspace access
+- `generic_edit` - uses Auto Code's local action loop for provider-neutral edits and validated commands
 - `patch_proposal` - lets a text provider propose a unified diff that Auto Code validates and applies
 - `analysis_only` - allows text-only provider responses without tools or edits
 
@@ -152,11 +153,12 @@ OPENAI_MODEL=gpt-4o
 - Streaming/text completion
 - Analysis-only runtime mode
 - Patch proposal runtime mode
+- Generic edit runtime mode with local action tools
 
 #### Limitations
 
-- **No full Auto Code tool runtime**: MCP, shell, and filesystem edits are not exposed directly to the model.
-- **No native Auto Code security hooks**: Patch proposal mode applies validated diffs locally instead of giving the provider direct edit access.
+- **No full Auto Code tool runtime**: MCP and subagents are not exposed to non-Claude providers.
+- **Local action boundary**: Generic edit mode exposes only workspace-relative file actions and security-validated single commands through Auto Code.
 - **No Claude-style session lifecycle**: The runtime layer treats this as a completion provider.
 
 ---

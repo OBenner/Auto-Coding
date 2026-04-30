@@ -274,9 +274,9 @@ has two layers:
 - The runtime mode decides whether that session can use tools, MCP, shell
   commands, filesystem edits, or only text/patch proposals.
 
-Claude remains required for full autonomous coding. Other providers are limited
-to `analysis_only` and `patch_proposal` modes until a generic edit/tool runtime
-exists. See [Provider Runtime Modes](../docs/architecture/provider-runtime-modes.md).
+Claude remains required for full autonomous coding. Other providers can run
+`analysis_only`, `patch_proposal`, or the experimental `generic_edit` local
+tool runtime. See [Provider Runtime Modes](../docs/architecture/provider-runtime-modes.md).
 
 Multi-provider support is useful for:
 - Cost optimization (mix and match providers)
@@ -310,6 +310,21 @@ OPENAI_API_KEY=sk-...
 In this mode, the provider returns a structured unified diff. Auto Code validates
 the diff locally before applying it and does not give the provider direct tool or
 filesystem access.
+
+**Generic edit mode for coder subtasks:**
+
+```bash
+AI_ENGINE_PROVIDER=claude
+AGENT_PROVIDER_CODER=openai
+AGENT_MODEL_CODER=gpt-4o
+AGENT_RUNTIME_MODE_CODER=generic_edit
+OPENAI_API_KEY=sk-...
+```
+
+In this mode, Auto Code exposes a small local action loop for workspace-relative
+file reads, validated patches, bounded file writes, and security-checked single
+commands. OpenAI-compatible sessions use provider-native tool calls when
+available and fall back to the JSON action loop otherwise.
 
 **OpenAI (for memory system):**
 ```bash

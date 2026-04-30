@@ -10,6 +10,7 @@ from ..local_actions import (
     LocalActionExecutor,
     ToolActionResult,
     action_tool,
+    local_action_tool_schemas,
     normalize_string_list,
     render_local_action_prompt,
     safe_action_for_trace,
@@ -41,6 +42,23 @@ Return schema:
     {"tool": "read_file", "path": "relative/path.py"}
   ]
 }
+
+Task:
+__AUTO_CODE_TASK_PROMPT__
+"""
+
+NATIVE_TOOL_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode.
+
+You do not have provider-native filesystem, shell, MCP, or subagents. Auto Code
+exposes a small set of local tools as function calls. Use those tools to inspect
+and edit the workspace. Keep iterating until the task is done, then call finish.
+
+Rules:
+- Use only workspace-relative paths.
+- Do not touch .git, .claude, .mcp.json, .env files, shell profiles, secrets, or credential files.
+- Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
+- run_command supports a single executable command, not shell pipes, redirection, or command chaining.
+- Call finish with a concise summary, verification commands, and risks when complete.
 
 Task:
 __AUTO_CODE_TASK_PROMPT__
@@ -89,6 +107,26 @@ class GenericEditRuntimeSession:
     ) -> AgentRunResult:
         del verbose, phase
 
+        if self._supports_native_tool_calls():
+            return await self._run_native_tool_loop(
+                message=message,
+                spec_dir=spec_dir,
+                subtask_id=subtask_id,
+            )
+
+        return await self._run_json_action_loop(
+            message=message,
+            spec_dir=spec_dir,
+            subtask_id=subtask_id,
+        )
+
+    async def _run_json_action_loop(
+        self,
+        *,
+        message: str,
+        spec_dir: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
         base_prompt = build_generic_edit_prompt(message)
         prompt = base_prompt
         trace: list[dict[str, Any]] = []
@@ -203,6 +241,166 @@ class GenericEditRuntimeSession:
             response_text=f"{message}\nArtifacts: {artifacts['generic_edit_trace']}",
         )
 
+    async def _run_native_tool_loop(
+        self,
+        *,
+        message: str,
+        spec_dir: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        prompt: str | None = build_native_tool_edit_prompt(message)
+        trace: list[dict[str, Any]] = []
+
+        for iteration in range(1, self.max_iterations + 1):
+            iteration_entry: dict[str, Any] = {
+                "iteration": iteration,
+                "loop": "native_tool_calls",
+                "response_excerpt": "",
+                "response_bytes": 0,
+                "actions": [],
+            }
+
+            try:
+                response = await self.agent_session.complete_with_tool_calls(
+                    prompt,
+                    local_action_tool_schemas(),
+                )
+            except Exception as e:
+                if iteration == 1 and callable(
+                    getattr(self.agent_session, "complete", None)
+                ):
+                    return await self._run_json_action_loop(
+                        message=message,
+                        spec_dir=spec_dir,
+                        subtask_id=subtask_id,
+                    )
+                iteration_entry["error"] = str(e)
+                trace.append(iteration_entry)
+                artifacts = save_generic_edit_artifacts(
+                    spec_dir=spec_dir,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    status="error",
+                    message=str(e),
+                    trace=trace,
+                    summary="Generic edit native tool-call loop failed.",
+                )
+                return AgentRunResult(
+                    status="error",
+                    response_text=(
+                        f"Generic edit native tool-call loop failed: {e}\n"
+                        f"Artifacts: {artifacts['generic_edit_trace']}"
+                    ),
+                )
+
+            response_content = str(getattr(response, "content", "") or "")
+            tool_calls = tuple(getattr(response, "tool_calls", ()) or ())
+            iteration_entry["response_excerpt"] = response_content[:1000]
+            iteration_entry["response_bytes"] = len(response_content.encode("utf-8"))
+
+            if not tool_calls:
+                result = ToolActionResult(
+                    tool="runtime",
+                    ok=False,
+                    message=(
+                        "No local tool calls returned; call at least one local "
+                        "tool or finish."
+                    ),
+                )
+                iteration_entry["actions"].append(safe_result_for_trace(result))
+                trace.append(iteration_entry)
+                prompt = (
+                    "No local tool calls were returned. Continue the task by "
+                    "calling one or more local tools, or call finish when complete."
+                )
+                continue
+
+            action_results: list[ToolActionResult] = []
+            finish_action: dict[str, Any] | None = None
+            finish_result: ToolActionResult | None = None
+            for tool_call in tool_calls:
+                action = {
+                    "tool": str(getattr(tool_call, "name", "") or ""),
+                    **dict(getattr(tool_call, "arguments", {}) or {}),
+                }
+                result = await self._executor.execute(action)
+                action_results.append(result)
+                iteration_entry["actions"].append(
+                    {
+                        "request": {
+                            "tool_call_id": str(getattr(tool_call, "id", "") or ""),
+                            **safe_action_for_trace(action),
+                        },
+                        "result": safe_result_for_trace(result),
+                    }
+                )
+                self.agent_session.add_tool_result(
+                    str(getattr(tool_call, "id", "") or ""),
+                    action_tool(action),
+                    result.to_dict(),
+                )
+
+                if action_tool(action) == "finish":
+                    finish_action = action
+                    finish_result = result
+
+            if (
+                finish_action is not None
+                and finish_result is not None
+                and all(action_result.ok for action_result in action_results)
+            ):
+                summary = str(finish_action.get("summary") or finish_result.message)
+                tests = normalize_string_list(finish_action.get("tests"))
+                risks = normalize_string_list(finish_action.get("risks"))
+                trace.append(iteration_entry)
+                artifacts = save_generic_edit_artifacts(
+                    spec_dir=spec_dir,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    status="complete",
+                    message=summary,
+                    trace=trace,
+                    summary=summary,
+                    tests=tests,
+                    risks=risks,
+                )
+                response_lines = build_generic_edit_response(
+                    summary=summary,
+                    artifacts=artifacts,
+                    tests=tests,
+                    risks=risks,
+                )
+                return AgentRunResult(
+                    status="continue",
+                    response_text="\n".join(response_lines),
+                )
+
+            trace.append(iteration_entry)
+            prompt = None
+
+        message = (
+            f"Generic edit native tool-call loop reached max iterations "
+            f"({self.max_iterations}) before finish."
+        )
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="error",
+            message=message,
+            trace=trace,
+            summary=message,
+        )
+        return AgentRunResult(
+            status="error",
+            response_text=f"{message}\nArtifacts: {artifacts['generic_edit_trace']}",
+        )
+
+    def _supports_native_tool_calls(self) -> bool:
+        return callable(
+            getattr(self.agent_session, "complete_with_tool_calls", None)
+        ) and callable(getattr(self.agent_session, "add_tool_result", None))
+
     async def _complete(self, message: str) -> str:
         chunks: list[str] = []
         async for chunk in self._completion_runtime._stream_text(message):
@@ -216,6 +414,14 @@ def build_generic_edit_prompt(message: str) -> str:
         "__AUTO_CODE_LOCAL_ACTIONS__",
         render_local_action_prompt(),
     ).replace(
+        "__AUTO_CODE_TASK_PROMPT__",
+        message,
+    )
+
+
+def build_native_tool_edit_prompt(message: str) -> str:
+    """Build the generic_edit prompt for provider-native tool-call sessions."""
+    return NATIVE_TOOL_PROMPT_TEMPLATE.replace(
         "__AUTO_CODE_TASK_PROMPT__",
         message,
     )
