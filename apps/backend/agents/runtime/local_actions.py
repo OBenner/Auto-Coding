@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_OUTPUT_CHARS = 12000
 MAX_READ_FILE_CHARS = 20000
+MAX_READ_MANY_FILES = 10
 MAX_LIST_FILE_ENTRIES = 200
 MAX_SEARCH_MATCHES = 100
 MAX_SEARCH_QUERY_CHARS = 512
@@ -215,6 +216,31 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
     ),
     LocalActionToolSpec(
+        name="read_many_files",
+        description="Read several UTF-8 text files from the workspace.",
+        parameters={
+            "paths": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": MAX_READ_MANY_FILES,
+                "description": "Workspace-relative file paths.",
+            },
+            "max_chars_per_file": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_READ_FILE_CHARS,
+                "description": "Maximum number of characters to return for each file.",
+            },
+        },
+        required=("paths",),
+        example={
+            "tool": "read_many_files",
+            "paths": ["relative/path.py", "relative/other.py"],
+            "max_chars_per_file": 8000,
+        },
+    ),
+    LocalActionToolSpec(
         name="write_file",
         description="Write complete UTF-8 text content to a workspace file.",
         parameters={
@@ -370,6 +396,8 @@ class LocalActionExecutor:
                 return self._search_text(action)
             if tool == "read_file":
                 return self._read_file(action)
+            if tool == "read_many_files":
+                return self._read_many_files(action)
             if tool == "write_file":
                 return self._write_file(action)
             if tool == "apply_patch":
@@ -581,25 +609,19 @@ class LocalActionExecutor:
 
     def _read_file(self, action: dict[str, Any]) -> ToolActionResult:
         path = require_string(action, "path")
-        target = resolve_workspace_path(self.project_dir, path)
-        if not target.exists() or not target.is_file():
-            return ToolActionResult(
-                tool="read_file",
-                ok=False,
-                message=f"File not found: {path}",
-            )
-
         max_chars = bounded_positive_int(
             action,
             "max_chars",
             default=MAX_READ_FILE_CHARS,
             maximum=MAX_READ_FILE_CHARS,
         )
-        with target.open("r", encoding="utf-8", errors="replace") as handle:
-            content = handle.read(max_chars + 1)
-        truncated = len(content) > max_chars
-        if truncated:
-            content = content[:max_chars]
+        file_result = self._read_text_file(path, max_chars=max_chars)
+        if not file_result["ok"]:
+            return ToolActionResult(
+                tool="read_file",
+                ok=False,
+                message=str(file_result["message"]),
+            )
 
         return ToolActionResult(
             tool="read_file",
@@ -607,10 +629,66 @@ class LocalActionExecutor:
             message=f"Read {path}",
             data={
                 "path": path,
-                "content": content,
-                "truncated": truncated,
+                "content": file_result["content"],
+                "truncated": file_result["truncated"],
             },
         )
+
+    def _read_many_files(self, action: dict[str, Any]) -> ToolActionResult:
+        paths = require_string_list(
+            action,
+            "paths",
+            maximum=MAX_READ_MANY_FILES,
+        )
+        max_chars = bounded_positive_int(
+            action,
+            "max_chars_per_file",
+            default=MAX_READ_FILE_CHARS,
+            maximum=MAX_READ_FILE_CHARS,
+        )
+        files = [
+            {
+                "path": path,
+                **self._read_text_file(path, max_chars=max_chars),
+            }
+            for path in paths
+        ]
+        read_count = sum(1 for file in files if file["ok"])
+
+        return ToolActionResult(
+            tool="read_many_files",
+            ok=read_count == len(files),
+            message=(
+                f"Read {read_count} of {len(files)} file"
+                f"{'' if len(files) == 1 else 's'}"
+            ),
+            data={
+                "files": files,
+                "file_count": len(files),
+                "read_count": read_count,
+            },
+        )
+
+    def _read_text_file(self, path: str, *, max_chars: int) -> dict[str, Any]:
+        target = resolve_workspace_path(self.project_dir, path)
+        if not target.exists() or not target.is_file():
+            return {
+                "ok": False,
+                "message": f"File not found: {path}",
+            }
+
+        with target.open("r", encoding="utf-8", errors="replace") as handle:
+            content = handle.read(max_chars + 1)
+        truncated = len(content) > max_chars
+        if truncated:
+            content = content[:max_chars]
+
+        return {
+            "ok": True,
+            "message": f"Read {path}",
+            "content": content,
+            "truncated": truncated,
+        }
 
     def _write_file(self, action: dict[str, Any]) -> ToolActionResult:
         path = require_string(action, "path")
@@ -855,6 +933,33 @@ def bounded_string(action: dict[str, Any], field_name: str, *, maximum: int) -> 
             f"Action field '{field_name}' must be at most {maximum} characters"
         )
     return value
+
+
+def require_string_list(
+    action: dict[str, Any],
+    field_name: str,
+    *,
+    maximum: int,
+) -> list[str]:
+    """Read a required bounded list of non-empty strings."""
+    value = action.get(field_name)
+    if not isinstance(value, list):
+        raise LocalActionError(f"Action field '{field_name}' must be a list")
+    if not value:
+        raise LocalActionError(f"Action field '{field_name}' must not be empty")
+    if len(value) > maximum:
+        raise LocalActionError(
+            f"Action field '{field_name}' must contain at most {maximum} items"
+        )
+    strings: list[str] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, str) or not item:
+            raise LocalActionError(
+                f"Action field '{field_name}' item #{index} must be a string"
+            )
+        validate_workspace_relative_path(item)
+        strings.append(item)
+    return strings
 
 
 def optional_workspace_path(action: dict[str, Any], field_name: str) -> str:

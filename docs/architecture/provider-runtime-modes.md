@@ -171,6 +171,7 @@ Supported actions:
     { "tool": "list_files", "path": "src", "recursive": false, "max_entries": 100 },
     { "tool": "search_text", "query": "function_name", "path": "src", "recursive": true, "max_matches": 25 },
     { "tool": "read_file", "path": "relative/path.py", "max_chars": 12000 },
+    { "tool": "read_many_files", "paths": ["relative/path.py", "relative/other.py"], "max_chars_per_file": 8000 },
     { "tool": "write_file", "path": "relative/path.py", "content": "..." },
     { "tool": "apply_patch", "patch": "unified diff" },
     { "tool": "run_command", "command": "pytest tests/test_file.py -q", "timeout": 60 },
@@ -200,6 +201,8 @@ Auto Code validates and executes these actions locally:
   path metadata;
 - text search is literal, bounded, skips sensitive/heavy directories, and
   returns compact path/line excerpts;
+- single-file and multi-file reads are bounded and use the same sensitive-path
+  checks;
 - patches use `git apply --check --whitespace=nowarn` before applying;
 - commands pass the existing security allowlist/validator layer;
 - commands run without a shell and do not support pipes, redirection, or command

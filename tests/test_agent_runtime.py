@@ -531,6 +531,7 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "list_files",
         "search_text",
         "read_file",
+        "read_many_files",
         "write_file",
         "apply_patch",
         "run_command",
@@ -559,6 +560,11 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert search_text_schema["parameters"]["required"] == ["query"]
     assert "max_matches" in search_text_schema["parameters"]["properties"]
+    read_many_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "read_many_files"
+    )
+    assert read_many_schema["parameters"]["required"] == ["paths"]
+    assert read_many_schema["parameters"]["properties"]["paths"]["maxItems"] == 10
     run_command_schema = next(
         schema for schema in provider_schemas if schema["name"] == "run_command"
     )
@@ -726,6 +732,32 @@ def test_search_text_trace_redacts_query_and_excerpts():
     excerpt = result["data"]["matches"][0]["excerpt_redacted"]
     assert excerpt is True
     assert "SECRET_NEEDLE" not in json.dumps(result)
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_reads_many_files_safely(tmp_path: Path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "one.py").write_text("one\n", encoding="utf-8")
+    (tmp_path / "src" / "two.py").write_text("two line\n", encoding="utf-8")
+    executor = LocalActionExecutor(tmp_path)
+
+    result = await executor.execute(
+        {
+            "tool": "read_many_files",
+            "paths": ["src/one.py", "src/two.py", "src/missing.py"],
+            "max_chars_per_file": 3,
+        }
+    )
+
+    assert result.ok is False
+    assert result.data["file_count"] == 3
+    assert result.data["read_count"] == 2
+    files_by_path = {file["path"]: file for file in result.data["files"]}
+    assert files_by_path["src/one.py"]["content"] == "one"
+    assert files_by_path["src/one.py"]["truncated"] is True
+    assert files_by_path["src/two.py"]["content"] == "two"
+    assert files_by_path["src/missing.py"]["ok"] is False
+    assert "content" not in files_by_path["src/missing.py"]
 
 
 @pytest.mark.asyncio
