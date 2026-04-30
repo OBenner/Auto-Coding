@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -49,6 +50,7 @@ async def test_claude_runtime_wraps_existing_session_runner(tmp_path: Path):
         phase,
         subtask_id=None,
     ):
+        await asyncio.sleep(0)
         assert received_client is client
         assert message == "do work"
         assert spec_dir == tmp_path
@@ -83,6 +85,7 @@ class FakeCompletionSession:
     provider_name = "openai"
 
     async def complete(self, message: str, stream: bool = True):
+        await asyncio.sleep(0)
         assert message == "analyze"
         assert stream is True
         yield "hello"
@@ -93,6 +96,7 @@ class FakeClaudeCompletionSession:
     provider_name = "claude"
 
     async def complete(self, message: str, stream: bool = True):
+        await asyncio.sleep(0)
         assert message == "analyze"
         assert stream is True
         yield "claude limited analysis"
@@ -106,9 +110,11 @@ class FakeClaudeQuerySession:
         self.query_message = None
 
     async def query(self, message: str):
+        await asyncio.sleep(0)
         self.query_message = message
 
     async def receive_response(self):
+        await asyncio.sleep(0)
         yield "query limited analysis"
 
 
@@ -448,8 +454,8 @@ def test_patch_mode_marks_subtask_completed(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     target = tmp_path / "hello.txt"
-    secret = "SECRET_TRACE_VALUE"
-    target.write_text(f"old\n{secret}\n", encoding="utf-8")
+    trace_marker = "TRACE_REDACTION_MARKER"
+    target.write_text(f"old\n{trace_marker}\n", encoding="utf-8")
     session = FakeGenericEditSession(
         [
             {
@@ -519,7 +525,7 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     trace_text = (artifact_dir / "generic_edit_trace.json").read_text(
         encoding="utf-8"
     )
-    assert secret not in trace_text
+    assert trace_marker not in trace_text
     trace = json.loads(trace_text)
     read_result = trace["trace"][0]["actions"][0]["result"]
     assert read_result["data"]["content_redacted"] is True
@@ -685,6 +691,7 @@ async def test_analysis_only_coding_saves_artifact_without_post_processing(
         provider_name = "openai"
 
         async def complete(self, message: str, stream: bool = True):
+            await asyncio.sleep(0)
             assert "Explain the likely edit path" in message
             assert stream is True
             yield "Inspect src/app.py before proposing edits."
@@ -696,12 +703,15 @@ async def test_analysis_only_coding_saves_artifact_without_post_processing(
             return FakeAnalysisSession()
 
     async def fake_get_graphiti_context(*_args, **_kwargs):
+        await asyncio.sleep(0)
         return None
 
     async def fake_get_pattern_suggestions(*_args, **_kwargs):
+        await asyncio.sleep(0)
         return None
 
     async def fail_post_session_processing(*_args, **_kwargs):
+        await asyncio.sleep(0)
         raise AssertionError("analysis_only coding must not run post processing")
 
     monkeypatch.setenv("AI_ENGINE_PROVIDER", "openai")

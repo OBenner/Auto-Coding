@@ -10,6 +10,7 @@ from core.platform import run_process
 from ..capabilities import RuntimeCapabilities
 from ..result import AgentRunResult
 from .completion import CompletionRuntimeSession
+from .json_helpers import extract_first_json_object
 
 SENSITIVE_PATH_PARTS = {
     ".git",
@@ -547,35 +548,13 @@ def save_patch_summary_artifact(
 
 
 def _extract_json_object(text: str) -> str:
-    stripped = _strip_markdown_fence(text)
-
-    start = stripped.find("{")
-    if start < 0:
-        raise PatchProposalError("Patch proposal did not contain a JSON object")
-
-    depth = 0
-    in_string = False
-    escaped = False
-    for index, char in enumerate(stripped[start:], start=start):
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-
-        if char == '"':
-            in_string = True
-        elif char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return stripped[start : index + 1]
-
-    raise PatchProposalError("Patch proposal did not contain a complete JSON object")
+    return extract_first_json_object(
+        text,
+        strip_fence=_strip_markdown_fence,
+        error_factory=PatchProposalError,
+        missing_message="Patch proposal did not contain a JSON object",
+        incomplete_message="Patch proposal did not contain a complete JSON object",
+    )
 
 
 def _strip_markdown_fence(text: str) -> str:

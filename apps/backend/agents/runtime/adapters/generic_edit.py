@@ -16,6 +16,7 @@ from ..local_actions import (
 )
 from ..result import AgentRunResult
 from .completion import CompletionRuntimeSession
+from .json_helpers import extract_first_json_object
 
 GENERIC_EDIT_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode.
 
@@ -371,35 +372,14 @@ def save_generic_edit_artifacts(
 
 def extract_json_object(text: str) -> str:
     """Extract the first complete JSON object from a text response."""
-    stripped = strip_markdown_fence(text)
-    start = stripped.find("{")
-    if start < 0:
-        raise GenericEditRuntimeError("Generic edit response did not contain JSON")
-
-    depth = 0
-    in_string = False
-    escaped = False
-    for index, char in enumerate(stripped[start:], start=start):
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-
-        if char == '"':
-            in_string = True
-        elif char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return stripped[start : index + 1]
-
-    raise GenericEditRuntimeError(
-        "Generic edit response did not contain a complete JSON object"
+    return extract_first_json_object(
+        text,
+        strip_fence=strip_markdown_fence,
+        error_factory=GenericEditRuntimeError,
+        missing_message="Generic edit response did not contain JSON",
+        incomplete_message=(
+            "Generic edit response did not contain a complete JSON object"
+        ),
     )
 
 

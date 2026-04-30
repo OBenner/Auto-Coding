@@ -31,24 +31,15 @@ class CompletionRuntimeSession:
         return None
 
     async def _stream_text(self, message: str) -> AsyncIterator[str]:
-        try:
-            if hasattr(self.agent_session, "complete"):
-                async for chunk in self.agent_session.complete(message, stream=True):
-                    yield str(chunk)
-                return
+        streamer = self._select_streamer()
+        if streamer is None:
+            raise AttributeError(
+                f"Provider {self.provider_name} session does not expose a completion API"
+            )
 
-            if hasattr(self.agent_session, "query") and hasattr(
-                self.agent_session, "receive_response"
-            ):
-                client = getattr(self.agent_session, "client", None)
-                if hasattr(client, "__aenter__") and hasattr(client, "__aexit__"):
-                    async with client:
-                        async for chunk in self._stream_query_response(message):
-                            yield chunk
-                else:
-                    async for chunk in self._stream_query_response(message):
-                        yield chunk
-                return
+        try:
+            async for chunk in streamer(message):
+                yield chunk
         except Exception as e:
             logger.error(
                 "Provider %s completion stream failed",
@@ -59,9 +50,36 @@ class CompletionRuntimeSession:
                 f"Provider {self.provider_name} completion failed: {e}"
             ) from e
 
-        raise AttributeError(
-            f"Provider {self.provider_name} session does not expose a completion API"
-        )
+    def _select_streamer(self):
+        """Return the streaming method supported by this provider session."""
+        if hasattr(self.agent_session, "complete"):
+            return self._stream_complete_response
+        if hasattr(self.agent_session, "query") and hasattr(
+            self.agent_session,
+            "receive_response",
+        ):
+            return self._stream_query_response_with_context
+        return None
+
+    async def _stream_complete_response(self, message: str) -> AsyncIterator[str]:
+        """Stream text from complete(stream=True) style sessions."""
+        async for chunk in self.agent_session.complete(message, stream=True):
+            yield str(chunk)
+
+    async def _stream_query_response_with_context(
+        self,
+        message: str,
+    ) -> AsyncIterator[str]:
+        """Stream text from query sessions, entering client context when present."""
+        client = getattr(self.agent_session, "client", None)
+        if not hasattr(client, "__aenter__") or not hasattr(client, "__aexit__"):
+            async for chunk in self._stream_query_response(message):
+                yield chunk
+            return
+
+        async with client:
+            async for chunk in self._stream_query_response(message):
+                yield chunk
 
     async def _stream_query_response(self, message: str) -> AsyncIterator[str]:
         """Stream text from query/receive_response style sessions."""

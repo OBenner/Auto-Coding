@@ -1,6 +1,6 @@
+import asyncio
 import copy
 import json
-import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -11,6 +11,7 @@ from agents.runtime import (
     create_runtime_session,
     run_runtime_session,
 )
+from core.platform import run_process
 from core.providers.adapters.google import GoogleProvider
 from core.providers.adapters.litellm import LiteLLMProvider
 from core.providers.adapters.ollama import OllamaProvider
@@ -48,6 +49,7 @@ def _install_fake_openai(
 
     class FakeCompletions:
         async def create(self, **kwargs):
+            await asyncio.sleep(0)
             calls.append(copy.deepcopy(kwargs))
             return _AsyncChunkStream(chunks)
 
@@ -72,6 +74,7 @@ def _install_fake_litellm(
     calls: list[dict] = []
 
     async def acompletion(**kwargs):
+        await asyncio.sleep(0)
         calls.append(copy.deepcopy(kwargs))
         return _AsyncChunkStream(chunks)
 
@@ -143,6 +146,7 @@ def _install_fake_zai(
 
     class FakeCompletions:
         async def create(self, **kwargs):
+            await asyncio.sleep(0)
             calls.append(copy.deepcopy(kwargs))
             return _AsyncChunkStream(chunks)
 
@@ -313,14 +317,14 @@ async def test_zhipuai_provider_supports_analysis_only(
 
 
 def _init_git_repo(path: Path) -> None:
-    subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
-    subprocess.run(
+    run_process(["git", "init"], cwd=path, capture_output=True, check=True)
+    run_process(
         ["git", "config", "user.email", "test@example.com"],
         cwd=path,
         capture_output=True,
         check=True,
     )
-    subprocess.run(
+    run_process(
         ["git", "config", "user.name", "Test User"],
         cwd=path,
         capture_output=True,

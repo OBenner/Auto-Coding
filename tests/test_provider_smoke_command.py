@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -137,6 +138,7 @@ def test_handle_provider_smoke_command_outputs_json(
     )
 
     async def fake_run_provider_smoke_check(**_kwargs):
+        await asyncio.sleep(0)
         return ProviderSmokeResult(
             success=True,
             provider="openai",
