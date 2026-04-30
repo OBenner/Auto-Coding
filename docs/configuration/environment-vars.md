@@ -265,33 +265,31 @@ OPENROUTER_MODEL=anthropic/claude-sonnet-4
 
 ## Model Selection Strategy
 
-### Per-Agent Model Configuration (Proposed)
+### Per-Agent Model Configuration
 
 Different agents may use different models based on task requirements:
 
 ```bash
 # Default models for each agent type
-PLANNER_MODEL=claude-sonnet-4-5-20250929
-CODER_MODEL=claude-sonnet-4-5-20250929
-QA_REVIEWER_MODEL=claude-sonnet-4-5-20250929
-QA_FIXER_MODEL=claude-sonnet-4-5-20250929
+AGENT_MODEL_PLANNER=claude-sonnet-4-5-20250929
+AGENT_MODEL_CODER=claude-sonnet-4-5-20250929
+AGENT_MODEL_QA_REVIEWER=claude-sonnet-4-5-20250929
 
 # Override for OpenAI provider
 AI_ENGINE_PROVIDER=openai
-PLANNER_MODEL=gpt-5.2
-CODER_MODEL=gpt-5.2
-QA_REVIEWER_MODEL=gpt-5.2
-QA_FIXER_MODEL=gpt-5
+AGENT_MODEL_PLANNER=gpt-4o
+AGENT_MODEL_CODER=gpt-4o
+AGENT_MODEL_QA_REVIEWER=gpt-4o
 ```
 
 ### Model Selection Logic
 
-1. **Check agent-specific model** (e.g., `PLANNER_MODEL`)
+1. **Check agent-specific model** (e.g., `AGENT_MODEL_PLANNER`)
 2. **Check provider default model** (e.g., `CLAUDE_MODEL`, `OPENAI_MODEL`)
 3. **Fall back to provider's default model**
 4. **Validate model is supported by provider**
 
-### Capability-Based Model Selection (Proposed)
+### Capability-Based Model Selection
 
 For providers without feature parity, models may be selected based on required capabilities:
 
@@ -302,7 +300,7 @@ if requires_extended_thinking:
         model = "claude-sonnet-4-5-20250929"
     elif provider == "openai":
         # Fallback: OpenAI doesn't support extended thinking
-        model = "gpt-5.2"  # Best available, with warning
+        model = "gpt-4o"  # Default OpenAI model, with warning
         logger.warning("Extended thinking not supported by OpenAI, using standard model")
 ```
 
@@ -478,9 +476,10 @@ AI_ENGINE_PROVIDER=claude
 ANTHROPIC_API_KEY=your-key-here
 CLAUDE_MODEL=claude-sonnet-4-5-20250929
 
-# OpenAI (proposed)
+# OpenAI
 OPENAI_API_KEY=your-key-here
-OPENAI_MODEL=gpt-5.2
+OPENAI_MODEL=gpt-4o
+OPENAI_BASE_URL=https://api.openai.com/v1
 
 # LiteLLM
 LITELLM_MODEL=gpt-4
@@ -597,7 +596,7 @@ python run.py --list-models --provider claude
 
 # Use correct model format
 # Claude: claude-sonnet-4-5-20250929
-# OpenAI: gpt-5.2
+# OpenAI: gpt-4o
 # LiteLLM: openai/gpt-4
 ```
 
@@ -689,7 +688,7 @@ OPENAI_API_KEY=sk-proj-prod-key
 ```bash
 # Use OpenAI for cost savings (assuming lower pricing)
 AI_ENGINE_PROVIDER=openai
-OPENAI_MODEL=gpt-5
+OPENAI_MODEL=gpt-4o
 OPENAI_API_KEY=sk-proj-...
 
 # Fallback to Claude for complex tasks
@@ -732,15 +731,13 @@ Complete list of all environment variables:
 | `ANTHROPIC_API_KEY` | string | (required) | Anthropic API key |
 | `CLAUDE_MODEL` | string | `claude-sonnet-4-5-20250929` | Default model |
 
-#### OpenAI Variables (Proposed)
+#### OpenAI Variables
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `OPENAI_API_KEY` | string | (required) | OpenAI API key |
-| `OPENAI_MODEL` | string | `gpt-5.2` | Default model |
+| `OPENAI_MODEL` | string | `gpt-4o` | Default model |
 | `OPENAI_BASE_URL` | string | `https://api.openai.com/v1` | API base URL |
-| `OPENAI_CUSTOM_MCP_ENABLED` | boolean | `true` | Enable custom MCP client |
-| `OPENAI_SECURITY_WRAPPER_ENABLED` | boolean | `true` | Enable security wrapper |
 
 #### LiteLLM Variables
 
@@ -775,5 +772,5 @@ Complete list of all environment variables:
 ---
 
 **Document Version:** 1.0
-**Last Updated:** 2025-02-16
-**Status:** Concept (for OpenAI integration)
+**Last Updated:** 2026-04-30
+**Status:** Active limited multi-provider support

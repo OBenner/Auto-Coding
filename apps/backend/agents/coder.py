@@ -14,6 +14,7 @@ from pathlib import Path
 from context.constants import SKIP_DIRS
 from core.file_utils import write_json_atomic
 from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.factory import create_engine_provider
 from linear_updater import (
@@ -939,9 +940,9 @@ async def run_autonomous_agent(
         # Use appropriate agent_type for correct tool permissions and thinking budget
         agent_type_for_session = "planner" if first_run else "coder"
 
-        # Defer provider/session creation until we know process isolation is not used.
-        # When process isolation is enabled the subprocess creates its own client,
-        # so building one here would be wasted work.
+        # Filled after provider/runtime resolution. Process isolation creates
+        # its Claude client in the child process, so parent-side plugin hooks
+        # may still see None in that mode.
         client = None
 
         # Generate appropriate prompt
@@ -1138,6 +1139,78 @@ async def run_autonomous_agent(
             task_logger.set_subtask(subtask_id)
             task_logger.set_session(iteration)
 
+        # Check if process isolation is enabled. Provider/runtime resolution
+        # happens before plugin hooks so hooks see the active runtime client in
+        # non-isolated mode.
+        use_process_isolation = (
+            os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
+        )
+        analysis_only_terminal_message: str | None = None
+
+        provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
+        provider = create_engine_provider(provider_config)
+        requested_runtime_mode = get_runtime_mode(agent_type_for_session)
+        runtime_phase = "planning" if current_log_phase == LogPhase.PLANNING else "coding"
+        runtime_decision = resolve_runtime_mode_with_fallback(
+            provider_name=provider.name,
+            requested_mode=requested_runtime_mode,
+            phase=runtime_phase,
+        )
+        runtime_mode = runtime_decision.selected_mode
+        if runtime_decision.fallback_applied:
+            logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
+            print_status(
+                f"Runtime fallback: {runtime_decision.requested_mode} -> "
+                f"{runtime_mode} ({provider.name})",
+                "warning",
+            )
+
+        if use_process_isolation and (
+            provider.name != "claude" or runtime_mode != "full_autonomous"
+        ):
+            logger.warning(
+                "Process isolation disabled for provider=%s runtime=%s",
+                provider.name,
+                runtime_mode,
+            )
+            print_status(
+                "Process isolation disabled because the selected provider/runtime "
+                "must use the in-process runtime engine",
+                "warning",
+            )
+            use_process_isolation = False
+
+        runtime_session = None
+        if not use_process_isolation:
+            session_config = SessionConfig(
+                name=f"{agent_type_for_session}-session-{iteration}",
+                model=phase_model,
+                extra={
+                    "agent_type": agent_type_for_session,
+                    "max_thinking_tokens": phase_thinking_budget,
+                },
+            )
+
+            if provider.name == "claude":
+                session = provider.create_session(
+                    session_config,
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    agent_type=agent_type_for_session,
+                    max_thinking_tokens=phase_thinking_budget,
+                )
+            else:
+                session = provider.create_session(session_config)
+
+            runtime_session = create_runtime_session(
+                provider_name=provider.name,
+                agent_session=session,
+                claude_session_runner=run_agent_session,
+                runtime_mode=runtime_mode,
+                project_dir=project_dir,
+            )
+            client = runtime_session.context_client
+
         # Call before_session hook for enabled agent plugins
         if PLUGINS_AVAILABLE:
             try:
@@ -1157,6 +1230,9 @@ async def run_autonomous_agent(
                         metadata={
                             "subtask_id": subtask_id,
                             "iteration": iteration,
+                            "provider": provider.name,
+                            "runtime_mode": runtime_mode,
+                            "process_isolation": use_process_isolation,
                             "attempt": recovery_manager.get_attempt_count(subtask_id)
                             + 1
                             if subtask_id
@@ -1178,15 +1254,8 @@ async def run_autonomous_agent(
             except Exception as e:
                 logger.warning(f"Failed to call before_session hooks: {e}")
 
-        # Check if process isolation is enabled
-        use_process_isolation = (
-            os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
-        )
-        analysis_only_terminal_message: str | None = None
-
         if use_process_isolation:
             # Run in isolated subprocess for crash resistance
-            agent_type = "planner" if first_run else "coder"
             if verbose or iteration == 1:
                 print_status(
                     "Process isolation: ENABLED (crash-resistant mode)", "info"
@@ -1194,69 +1263,18 @@ async def run_autonomous_agent(
             status, response, usage_metadata = await run_agent_session_isolated(
                 project_dir=project_dir,
                 spec_dir=spec_dir,
-                agent_type=agent_type,
+                agent_type=agent_type_for_session,
                 model=phase_model,
                 starting_message=prompt,
                 system_prompt=None,
                 max_thinking_tokens=phase_thinking_budget,
-                session_name=f"{agent_type}-session-{iteration}",
+                session_name=f"{agent_type_for_session}-session-{iteration}",
                 limits=None,  # Use default ResourceLimits
             )
         else:
-            # Create provider/session now (deferred to avoid wasted work when
-            # process isolation is enabled).
-            provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
-            provider = create_engine_provider(provider_config)
-
-            from core.providers.base import SessionConfig
-
-            session_config = SessionConfig(
-                name=f"{agent_type_for_session}-session-{iteration}",
-                model=phase_model,
-                extra={
-                    "agent_type": agent_type_for_session,
-                    "max_thinking_tokens": phase_thinking_budget,
-                },
-            )
-
-            if provider.name == "claude":
-                session = provider.create_session(
-                    session_config,
-                    project_dir=project_dir,
-                    spec_dir=spec_dir,
-                    agent_type=agent_type_for_session,
-                    max_thinking_tokens=phase_thinking_budget,
-                )
-            else:
-                session = provider.create_session(session_config)
-
-            requested_runtime_mode = get_runtime_mode(agent_type_for_session)
-            runtime_phase = (
-                "planning" if current_log_phase == LogPhase.PLANNING else "coding"
-            )
-            runtime_decision = resolve_runtime_mode_with_fallback(
-                provider_name=provider.name,
-                requested_mode=requested_runtime_mode,
-                phase=runtime_phase,
-            )
-            runtime_mode = runtime_decision.selected_mode
-            if runtime_decision.fallback_applied:
-                logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
-                print_status(
-                    f"Runtime fallback: {runtime_decision.requested_mode} -> "
-                    f"{runtime_mode} ({provider.name})",
-                    "warning",
-                )
-            runtime_session = create_runtime_session(
-                provider_name=provider.name,
-                agent_session=session,
-                claude_session_runner=run_agent_session,
-                runtime_mode=runtime_mode,
-                project_dir=project_dir,
-            )
-            client = runtime_session.context_client
-
             # Run in current process (legacy mode)
+            if runtime_session is None:
+                raise RuntimeError("Runtime session was not initialized")
             requirements = requirements_for_runtime_mode(
                 runtime_mode,
                 phase=runtime_phase,

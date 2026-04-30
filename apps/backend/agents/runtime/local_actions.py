@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from core.platform import is_windows, run_process
+from core.platform import is_windows
 from security import split_command_segments, validate_command
 
 from .adapters.patch_proposal import (
@@ -81,6 +81,16 @@ class LocalActionToolSpec:
     def prompt_line(self) -> str:
         """Render the compact action example used in JSON-loop prompts."""
         return f"- {self.name}: {json.dumps(self.example, ensure_ascii=False)}"
+
+
+@dataclass(frozen=True)
+class CommandExecution:
+    """Captured command result with bounded output."""
+
+    returncode: int
+    output: str
+    truncated: bool
+    timed_out: bool
 
 
 LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
@@ -295,8 +305,12 @@ class LocalActionExecutor:
                 message=f"File not found: {path}",
             )
 
-        max_chars = int(action.get("max_chars") or MAX_READ_FILE_CHARS)
-        max_chars = max(1, min(max_chars, MAX_READ_FILE_CHARS))
+        max_chars = bounded_positive_int(
+            action,
+            "max_chars",
+            default=MAX_READ_FILE_CHARS,
+            maximum=MAX_READ_FILE_CHARS,
+        )
         with target.open("r", encoding="utf-8", errors="replace") as handle:
             content = handle.read(max_chars + 1)
         truncated = len(content) > max_chars
@@ -340,8 +354,12 @@ class LocalActionExecutor:
 
     async def _run_command(self, action: dict[str, Any]) -> ToolActionResult:
         command = require_string(action, "command")
-        timeout = int(action.get("timeout") or DEFAULT_COMMAND_TIMEOUT_SECONDS)
-        timeout = max(1, min(timeout, MAX_COMMAND_TIMEOUT_SECONDS))
+        timeout = bounded_positive_int(
+            action,
+            "timeout",
+            default=DEFAULT_COMMAND_TIMEOUT_SECONDS,
+            maximum=MAX_COMMAND_TIMEOUT_SECONDS,
+        )
 
         if len(split_command_segments(command)) != 1:
             return ToolActionResult(
@@ -377,31 +395,104 @@ class LocalActionExecutor:
                 message=f"Command blocked by security validation: {reason}",
             )
 
-        completed = await asyncio.to_thread(
-            run_process,
-            args,
-            cwd=self.project_dir,
-            text=True,
-            capture_output=True,
-            timeout=timeout,
-        )
-        output = "\n".join(
-            part.strip()
-            for part in (completed.stdout, completed.stderr)
-            if part and part.strip()
-        )
-        if len(output) > MAX_TOOL_OUTPUT_CHARS:
+        completed = await self._run_subprocess_bounded(args, timeout)
+        output = completed.output
+        if completed.truncated:
             output = output[:MAX_TOOL_OUTPUT_CHARS] + "\n...[truncated]"
+
+        message = f"Command exited with code {completed.returncode}"
+        if completed.timed_out:
+            message = f"Command timed out after {timeout} seconds"
+        elif completed.truncated:
+            message = (
+                f"Command output exceeded {MAX_TOOL_OUTPUT_CHARS} characters "
+                "and was terminated"
+            )
 
         return ToolActionResult(
             tool="run_command",
-            ok=completed.returncode == 0,
-            message=f"Command exited with code {completed.returncode}",
+            ok=completed.returncode == 0 and not completed.truncated,
+            message=message,
             data={
                 "command": command,
                 "exit_code": completed.returncode,
                 "output": output,
+                "truncated": completed.truncated,
+                "timed_out": completed.timed_out,
             },
+        )
+
+    async def _run_subprocess_bounded(
+        self,
+        args: list[str],
+        timeout: int,
+    ) -> CommandExecution:
+        process = await asyncio.create_subprocess_exec(
+            *args,
+            cwd=str(self.project_dir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_parts: list[str] = []
+        stderr_parts: list[str] = []
+        remaining = MAX_TOOL_OUTPUT_CHARS
+        truncated = False
+
+        async def capture_stream(
+            stream: asyncio.StreamReader | None,
+            parts: list[str],
+        ) -> None:
+            nonlocal remaining, truncated
+            if stream is None:
+                return
+            while True:
+                chunk = await stream.read(4096)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                consumed_chars = 0
+                if remaining > 0:
+                    piece = text[:remaining]
+                    parts.append(piece)
+                    remaining -= len(piece)
+                    consumed_chars = len(piece)
+                if len(text) > consumed_chars or remaining <= 0:
+                    truncated = True
+                    if process.returncode is None:
+                        process.terminate()
+                    break
+
+        stdout_task = asyncio.create_task(capture_stream(process.stdout, stdout_parts))
+        stderr_task = asyncio.create_task(capture_stream(process.stderr, stderr_parts))
+        timed_out = False
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(stdout_task, stderr_task),
+                timeout=timeout,
+            )
+        except TimeoutError:
+            timed_out = True
+            if process.returncode is None:
+                process.kill()
+            await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+
+        if process.returncode is None:
+            try:
+                await asyncio.wait_for(process.wait(), timeout=1)
+            except TimeoutError:
+                process.kill()
+                await process.wait()
+
+        output = "\n".join(
+            part.strip()
+            for part in ("".join(stdout_parts), "".join(stderr_parts))
+            if part and part.strip()
+        )
+        return CommandExecution(
+            returncode=process.returncode if process.returncode is not None else -1,
+            output=output,
+            truncated=truncated,
+            timed_out=timed_out,
         )
 
 
@@ -465,6 +556,30 @@ def require_string(action: dict[str, Any], field_name: str) -> str:
     if not isinstance(value, str) or not value:
         raise LocalActionError(f"Action field '{field_name}' must be a string")
     return value
+
+
+def bounded_positive_int(
+    action: dict[str, Any],
+    field_name: str,
+    *,
+    default: int,
+    maximum: int,
+) -> int:
+    """Read an optional positive integer without treating 0 as a default."""
+    value = action.get(field_name)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        raise LocalActionError(f"Action field '{field_name}' must be a positive integer")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as e:
+        raise LocalActionError(
+            f"Action field '{field_name}' must be a positive integer"
+        ) from e
+    if parsed <= 0:
+        raise LocalActionError(f"Action field '{field_name}' must be greater than 0")
+    return min(parsed, maximum)
 
 
 def resolve_workspace_path(project_dir: Path, path: str) -> Path:

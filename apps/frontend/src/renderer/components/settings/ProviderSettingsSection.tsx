@@ -17,6 +17,13 @@ import type {
 type ProviderSettingsSectionProps = Record<string, never>;
 
 const USE_GLOBAL_RUNTIME_MODE = '__global__';
+const NON_CLAUDE_DEFAULT_RUNTIME_MODE: AgentRuntimeMode = 'generic_edit';
+const RUNTIME_OVERRIDE_KEYS = [
+  'plannerRuntimeMode',
+  'coderRuntimeMode',
+  'qaReviewerRuntimeMode',
+  'qaFixerRuntimeMode'
+] as const;
 
 const PROVIDER_OPTIONS: Array<{
   value: AIEngineProvider;
@@ -42,6 +49,23 @@ const RUNTIME_MODE_OPTIONS: Array<{
   { value: 'patch_proposal', labelKey: 'settings:aiProvider.runtimeModes.patchProposal.name', descriptionKey: 'settings:aiProvider.runtimeModes.patchProposal.description' },
   { value: 'analysis_only', labelKey: 'settings:aiProvider.runtimeModes.analysisOnly.name', descriptionKey: 'settings:aiProvider.runtimeModes.analysisOnly.description' },
 ];
+
+function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderConfig {
+  if (config.provider === 'claude' || config.runtimeFallbackEnabled) {
+    return config;
+  }
+
+  const normalized: AIProviderConfig = { ...config };
+  if (normalized.runtimeMode === 'full_autonomous') {
+    normalized.runtimeMode = NON_CLAUDE_DEFAULT_RUNTIME_MODE;
+  }
+  for (const key of RUNTIME_OVERRIDE_KEYS) {
+    if (normalized[key] === 'full_autonomous') {
+      normalized[key] = undefined;
+    }
+  }
+  return normalized;
+}
 
 function ProviderField({
   id,
@@ -99,11 +123,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       try {
         const result = await window.electronAPI?.getProviderConfig?.();
         if (!cancelled && result?.success && result.data) {
-          setConfig({
-            ...result.data,
-            provider: result.data.provider ?? 'claude',
-            runtimeMode: result.data.runtimeMode ?? 'full_autonomous'
-          });
+          setConfig(
+            normalizeProviderRuntimeConfig({
+              ...result.data,
+              provider: result.data.provider ?? 'claude',
+              runtimeMode: result.data.runtimeMode ?? 'full_autonomous'
+            })
+          );
         }
       } catch {
         if (!cancelled) {
@@ -136,7 +162,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   }
 
   const updateConfig = (updates: Partial<AIProviderConfig>) => {
-    setConfig((current) => ({ ...current, ...updates }));
+    setConfig((current) => normalizeProviderRuntimeConfig({ ...current, ...updates }));
     setSaveStatus('idle');
     setValidationStatus(null);
   };
@@ -153,7 +179,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     value: string
   ) => {
     updateConfig({
-      [key]: value === USE_GLOBAL_RUNTIME_MODE ? '' : value
+      [key]: value === USE_GLOBAL_RUNTIME_MODE ? undefined : value
     } as Partial<AIProviderConfig>);
   };
 
@@ -161,7 +187,9 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     setSaving(true);
     setSaveStatus('idle');
     try {
-      const result = await window.electronAPI?.updateProviderConfig?.(config);
+      const nextConfig = normalizeProviderRuntimeConfig(config);
+      setConfig(nextConfig);
+      const result = await window.electronAPI?.updateProviderConfig?.(nextConfig);
       setSaveStatus(result?.success ? 'success' : 'error');
     } catch {
       setSaveStatus('error');
@@ -175,7 +203,9 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     setSaveStatus('idle');
     setValidationStatus(null);
     try {
-      const saveResult = await window.electronAPI?.updateProviderConfig?.(config);
+      const nextConfig = normalizeProviderRuntimeConfig(config);
+      setConfig(nextConfig);
+      const saveResult = await window.electronAPI?.updateProviderConfig?.(nextConfig);
       if (!saveResult?.success) {
         setSaveStatus('error');
         return;
@@ -197,28 +227,36 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     value: AgentRuntimeMode | '' | undefined,
     onChange: (value: string) => void,
     includeGlobal: boolean
-  ) => (
-    <Select value={value || USE_GLOBAL_RUNTIME_MODE} onValueChange={onChange}>
-      <SelectTrigger id={id} className="w-full max-w-xl">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {includeGlobal && (
-          <SelectItem value={USE_GLOBAL_RUNTIME_MODE}>
-            {t('settings:aiProvider.runtimeModes.useGlobal')}
-          </SelectItem>
-        )}
-        {RUNTIME_MODE_OPTIONS.map((mode) => (
-          <SelectItem key={mode.value} value={mode.value}>
-            <div className="flex flex-col items-start">
-              <span className="font-medium">{t(mode.labelKey)}</span>
-              <span className="text-xs text-muted-foreground">{t(mode.descriptionKey)}</span>
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+  ) => {
+    const runtimeModeOptions = RUNTIME_MODE_OPTIONS.filter(
+      (mode) =>
+        mode.value !== 'full_autonomous' ||
+        config.provider === 'claude' ||
+        runtimeFallbackEnabled
+    );
+    return (
+      <Select value={value || USE_GLOBAL_RUNTIME_MODE} onValueChange={onChange}>
+        <SelectTrigger id={id} className="w-full max-w-xl">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {includeGlobal && (
+            <SelectItem value={USE_GLOBAL_RUNTIME_MODE}>
+              {t('settings:aiProvider.runtimeModes.useGlobal')}
+            </SelectItem>
+          )}
+          {runtimeModeOptions.map((mode) => (
+            <SelectItem key={mode.value} value={mode.value}>
+              <div className="flex flex-col items-start">
+                <span className="font-medium">{t(mode.labelKey)}</span>
+                <span className="text-xs text-muted-foreground">{t(mode.descriptionKey)}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  };
 
   const renderProviderConfiguration = () => {
     switch (config.provider) {

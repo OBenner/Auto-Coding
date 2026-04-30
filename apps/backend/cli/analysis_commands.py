@@ -72,8 +72,8 @@ def build_analysis_prompt(
             "guidance for the next coding step."
         ),
         "",
-        f"Project directory: {project_dir}",
-        f"Spec directory: {spec_dir}",
+        f"Project name: {project_dir.name}",
+        f"Spec name: {spec_dir.name}",
         "",
         "## User Request",
         request,

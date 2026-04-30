@@ -346,6 +346,7 @@ async def test_openai_compatible_session_exposes_native_tool_calls(
     assert session.messages[-2]["tool_calls"][0]["function"]["name"] == "read_file"
     assert session.messages[-1]["role"] == "tool"
     assert session.messages[-1]["tool_call_id"] == "call_1"
+    assert "name" not in session.messages[-1]
     assert "README.md" in session.messages[-1]["content"]
 
 
@@ -387,6 +388,7 @@ async def test_openrouter_session_exposes_native_tool_calls(
     )
     assert "HTTP-Referer" in fake_openai.instances[0].kwargs["default_headers"]
     assert session.messages[-1]["role"] == "tool"
+    assert "name" not in session.messages[-1]
 
 
 @pytest.mark.asyncio
@@ -424,6 +426,7 @@ async def test_litellm_session_exposes_native_tool_calls(
     assert fake_litellm.calls[0]["tool_choice"] == "auto"
     assert fake_litellm.calls[0]["tools"][0]["function"]["name"] == "read_file"
     assert session.messages[-1]["role"] == "tool"
+    assert "name" not in session.messages[-1]
 
 
 @pytest.mark.asyncio

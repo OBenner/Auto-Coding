@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -26,6 +27,7 @@ from agents.runtime.adapters.patch_proposal import (
     parse_patch_proposal,
     validate_workspace_relative_path,
 )
+from agents.runtime.local_actions import MAX_TOOL_OUTPUT_CHARS
 from core.platform import run_process
 from core.providers.config import ProviderConfig
 
@@ -771,6 +773,46 @@ async def test_local_action_executor_bounds_read_before_returning(tmp_path: Path
     assert result.ok is True
     assert result.data["content"] == "abc"
     assert result.data["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_rejects_zero_limits(tmp_path: Path):
+    target = tmp_path / "large.txt"
+    target.write_text("abcdef", encoding="utf-8")
+    executor = LocalActionExecutor(tmp_path)
+
+    read_result = await executor.execute(
+        {
+            "tool": "read_file",
+            "path": "large.txt",
+            "max_chars": 0,
+        }
+    )
+    command_result = await executor.execute(
+        {
+            "tool": "run_command",
+            "command": "git status --short",
+            "timeout": 0,
+        }
+    )
+
+    assert read_result.ok is False
+    assert "greater than 0" in read_result.message
+    assert command_result.ok is False
+    assert "greater than 0" in command_result.message
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_bounds_command_output(tmp_path: Path):
+    executor = LocalActionExecutor(tmp_path)
+
+    completed = await executor._run_subprocess_bounded(
+        [sys.executable, "-c", "print('x' * 20000)"],
+        timeout=10,
+    )
+
+    assert completed.truncated is True
+    assert len(completed.output) <= MAX_TOOL_OUTPUT_CHARS
 
 
 @pytest.mark.asyncio

@@ -192,7 +192,6 @@ class OpenRouterSession(AgentSession):
             {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
-                "name": name,
                 "content": content,
             }
         )

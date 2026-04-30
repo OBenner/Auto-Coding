@@ -102,7 +102,6 @@ class OpenAICompatibleSession(AgentSession):
             {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
-                "name": name,
                 "content": content,
             }
         )
@@ -294,12 +293,6 @@ def _get_attr_or_key(value: Any, key: str, default: Any = None) -> Any:
     if isinstance(value, dict):
         return value.get(key, default)
     return getattr(value, key, default)
-
-
-_format_openai_tool_schema = format_openai_tool_schema
-_parse_openai_tool_calls = parse_openai_tool_calls
-_assistant_message_from_response = assistant_message_from_tool_calls
-
 
 class OpenAICompatibleProvider(AIEngineProvider):
     """Base provider for OpenAI-compatible backends.

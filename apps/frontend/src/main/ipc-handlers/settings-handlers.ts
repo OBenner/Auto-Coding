@@ -15,7 +15,8 @@ import type {
   SourceEnvConfig,
   SourceEnvCheckResult,
   ProviderSettings,
-  AIEngineProvider
+  AIEngineProvider,
+  AgentRuntimeMode
 } from '../../shared/types';
 import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
@@ -274,6 +275,31 @@ function generateProviderEnvContent(
   }
 
   return updatedLines.join('\n');
+}
+
+function collectRuntimeCompatibilityErrors(
+  provider: AIEngineProvider,
+  vars: Record<string, string>
+): string[] {
+  const runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
+  if (provider === 'claude' || runtimeFallbackEnabled) {
+    return [];
+  }
+
+  const runtimeChecks: Array<[string, AgentRuntimeMode | undefined]> = [
+    ['default', (vars['AUTO_CODE_RUNTIME_MODE'] || 'full_autonomous') as AgentRuntimeMode],
+    ['planner', vars['AGENT_RUNTIME_MODE_PLANNER'] as AgentRuntimeMode | undefined],
+    ['coder', vars['AGENT_RUNTIME_MODE_CODER'] as AgentRuntimeMode | undefined],
+    ['QA reviewer', vars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as AgentRuntimeMode | undefined],
+    ['QA fixer', vars['AGENT_RUNTIME_MODE_QA_FIXER'] as AgentRuntimeMode | undefined],
+  ];
+
+  return runtimeChecks
+    .filter(([, mode]) => mode === 'full_autonomous')
+    .map(
+      ([label]) =>
+        `Non-Claude providers cannot use ${label} full_autonomous runtime unless runtime fallback is enabled`
+    );
 }
 
 /**
@@ -1305,15 +1331,7 @@ export function registerSettingsHandlers(
           if (vars['ZHIPUAI_API_KEY']) availableProviders.push('zhipuai');
           if (vars['OLLAMA_MODEL']) availableProviders.push('ollama');
 
-          const runtimeMode = vars['AUTO_CODE_RUNTIME_MODE'] || 'full_autonomous';
-          const runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
-          if (
-            provider !== 'claude' &&
-            runtimeMode === 'full_autonomous' &&
-            !runtimeFallbackEnabled
-          ) {
-            errors.push('Non-Claude providers require analysis_only, patch_proposal, or generic_edit runtime mode');
-          }
+          errors.push(...collectRuntimeCompatibilityErrors(provider, vars));
 
           switch (provider) {
             case 'claude':
