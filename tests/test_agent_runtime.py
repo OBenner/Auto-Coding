@@ -523,6 +523,7 @@ def test_patch_mode_marks_subtask_completed(tmp_path: Path):
 
 def test_local_action_manifest_describes_generic_edit_contract():
     expected_tools = {
+        "list_files",
         "read_file",
         "write_file",
         "apply_patch",
@@ -543,11 +544,77 @@ def test_local_action_manifest_describes_generic_edit_contract():
     } == expected_tools
 
     provider_schemas = local_action_tool_schemas()
+    list_files_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "list_files"
+    )
+    assert "max_entries" in list_files_schema["parameters"]["properties"]
     run_command_schema = next(
         schema for schema in provider_schemas if schema["name"] == "run_command"
     )
     assert run_command_schema["parameters"]["required"] == ["command"]
     assert "timeout" in run_command_schema["parameters"]["properties"]
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_lists_files_safely(tmp_path: Path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print('hi')\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("hello\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("SECRET=1\n", encoding="utf-8")
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(
+        "name: ci\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "pkg.js").write_text("", encoding="utf-8")
+    executor = LocalActionExecutor(tmp_path)
+
+    result = await executor.execute(
+        {
+            "tool": "list_files",
+            "recursive": True,
+            "max_entries": 20,
+        }
+    )
+
+    assert result.ok is True
+    paths = [entry["path"] for entry in result.data["entries"]]
+    assert "README.md" in paths
+    assert "src" in paths
+    assert "src/app.py" in paths
+    assert ".env" not in paths
+    assert ".github" not in paths
+    assert ".github/workflows/ci.yml" not in paths
+    assert "node_modules" not in paths
+    app_entry = next(
+        entry for entry in result.data["entries"] if entry["path"] == "src/app.py"
+    )
+    assert app_entry["type"] == "file"
+    assert app_entry["bytes"] > 0
+
+    hidden_result = await executor.execute(
+        {
+            "tool": "list_files",
+            "path": ".github",
+            "recursive": True,
+            "include_hidden": True,
+        }
+    )
+    hidden_paths = [entry["path"] for entry in hidden_result.data["entries"]]
+    assert hidden_result.ok is True
+    assert ".github/workflows/ci.yml" in hidden_paths
+
+    truncated_result = await executor.execute(
+        {
+            "tool": "list_files",
+            "recursive": True,
+            "max_entries": 1,
+        }
+    )
+    assert truncated_result.ok is True
+    assert truncated_result.data["entry_count"] == 1
+    assert truncated_result.data["truncated"] is True
 
 
 @pytest.mark.asyncio
@@ -740,7 +807,10 @@ async def test_generic_edit_runtime_prefers_native_tool_call_loop(tmp_path: Path
     assert session.messages[0] is not None
     assert "function calls" in session.messages[0]
     assert session.messages[1:] == [None, None]
-    assert session.tool_schemas[0][0]["name"] == "read_file"
+    assert [schema["name"] for schema in session.tool_schemas[0]][:2] == [
+        "list_files",
+        "read_file",
+    ]
     assert [result["name"] for result in session.tool_results] == [
         "read_file",
         "write_file",

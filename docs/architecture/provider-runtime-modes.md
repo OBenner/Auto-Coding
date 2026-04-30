@@ -168,6 +168,7 @@ Supported actions:
 {
   "thought": "short planning note",
   "actions": [
+    { "tool": "list_files", "path": "src", "recursive": false, "max_entries": 100 },
     { "tool": "read_file", "path": "relative/path.py", "max_chars": 12000 },
     { "tool": "write_file", "path": "relative/path.py", "content": "..." },
     { "tool": "apply_patch", "patch": "unified diff" },
@@ -194,6 +195,8 @@ Auto Code validates and executes these actions locally:
 
 - file paths use the same workspace-relative sensitive-path checks as
   `patch_proposal`;
+- file listings are bounded, skip sensitive/heavy directories, and return only
+  path metadata;
 - patches use `git apply --check --whitespace=nowarn` before applying;
 - commands pass the existing security allowlist/validator layer;
 - commands run without a shell and do not support pipes, redirection, or command

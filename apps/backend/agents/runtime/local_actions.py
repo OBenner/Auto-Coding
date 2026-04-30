@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import shlex
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -25,10 +26,26 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_OUTPUT_CHARS = 12000
 MAX_READ_FILE_CHARS = 20000
+MAX_LIST_FILE_ENTRIES = 200
 MAX_COMMAND_TIMEOUT_SECONDS = 120
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 60
 TRACE_STRING_PREVIEW_CHARS = 1000
 TRACE_REDACTED_FIELDS = {"content", "output", "patch", "raw_response"}
+DEFAULT_LIST_EXCLUDED_DIRS = {
+    ".git",
+    ".claude",
+    ".mcp",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+}
 
 
 class LocalActionError(RuntimeError):
@@ -94,6 +111,36 @@ class CommandExecution:
 
 
 LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
+    LocalActionToolSpec(
+        name="list_files",
+        description="List workspace files and directories without reading contents.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": "Workspace-relative directory path. Defaults to the project root.",
+            },
+            "recursive": {
+                "type": "boolean",
+                "description": "Whether to walk nested directories.",
+            },
+            "include_hidden": {
+                "type": "boolean",
+                "description": "Whether to include hidden files and directories.",
+            },
+            "max_entries": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_LIST_FILE_ENTRIES,
+                "description": "Maximum number of entries to return.",
+            },
+        },
+        example={
+            "tool": "list_files",
+            "path": "src",
+            "recursive": False,
+            "max_entries": 100,
+        },
+    ),
     LocalActionToolSpec(
         name="read_file",
         description="Read a UTF-8 text file from the workspace.",
@@ -266,6 +313,8 @@ class LocalActionExecutor:
         """Execute one local action and return a structured result."""
         tool = action_tool(action)
         try:
+            if tool == "list_files":
+                return self._list_files(action)
             if tool == "read_file":
                 return self._read_file(action)
             if tool == "write_file":
@@ -294,6 +343,85 @@ class LocalActionExecutor:
                 ok=False,
                 message=f"Action failed unexpectedly: {e}",
             )
+
+    def _list_files(self, action: dict[str, Any]) -> ToolActionResult:
+        path = optional_workspace_path(action, "path")
+        recursive = optional_bool(action, "recursive", default=False)
+        include_hidden = optional_bool(action, "include_hidden", default=False)
+        max_entries = bounded_positive_int(
+            action,
+            "max_entries",
+            default=MAX_LIST_FILE_ENTRIES,
+            maximum=MAX_LIST_FILE_ENTRIES,
+        )
+        target = resolve_workspace_path(self.project_dir, path)
+        if not target.exists() or not target.is_dir():
+            return ToolActionResult(
+                tool="list_files",
+                ok=False,
+                message=f"Directory not found: {path or '.'}",
+            )
+
+        entries: list[dict[str, Any]] = []
+        truncated = False
+
+        def add_entry(candidate: Path) -> bool:
+            nonlocal truncated
+            relative = candidate.relative_to(self.project_dir.resolve()).as_posix()
+            if not is_safe_list_entry(relative, include_hidden=include_hidden):
+                return True
+            if len(entries) >= max_entries:
+                truncated = True
+                return False
+            entry: dict[str, Any] = {
+                "path": relative,
+                "type": "directory" if candidate.is_dir() else "file",
+            }
+            if candidate.is_file():
+                try:
+                    entry["bytes"] = candidate.stat().st_size
+                except OSError:
+                    entry["bytes"] = None
+            entries.append(entry)
+            return True
+
+        if recursive:
+            for root, dir_names, file_names in os.walk(target):
+                root_path = Path(root)
+                dir_names[:] = sorted(
+                    name
+                    for name in dir_names
+                    if should_descend_directory(
+                        root_path / name,
+                        self.project_dir,
+                        include_hidden=include_hidden,
+                    )
+                )
+                for name in [*dir_names, *sorted(file_names)]:
+                    if not add_entry(root_path / name):
+                        dir_names[:] = []
+                        break
+                if truncated:
+                    break
+        else:
+            for child in sorted(target.iterdir(), key=lambda item: item.name):
+                if not add_entry(child):
+                    break
+
+        return ToolActionResult(
+            tool="list_files",
+            ok=True,
+            message=(
+                f"Listed {len(entries)} entr"
+                f"{'y' if len(entries) == 1 else 'ies'} under {path or '.'}"
+            ),
+            data={
+                "path": path or ".",
+                "entries": entries,
+                "entry_count": len(entries),
+                "truncated": truncated,
+            },
+        )
 
     def _read_file(self, action: dict[str, Any]) -> ToolActionResult:
         path = require_string(action, "path")
@@ -558,6 +686,29 @@ def require_string(action: dict[str, Any], field_name: str) -> str:
     return value
 
 
+def optional_workspace_path(action: dict[str, Any], field_name: str) -> str:
+    """Read an optional workspace path, treating root aliases as project root."""
+    value = action.get(field_name)
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise LocalActionError(f"Action field '{field_name}' must be a string")
+    if value in {"", ".", "./"}:
+        return ""
+    validate_workspace_relative_path(value)
+    return value
+
+
+def optional_bool(action: dict[str, Any], field_name: str, *, default: bool) -> bool:
+    """Read an optional boolean without silently accepting strings/numbers."""
+    value = action.get(field_name)
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise LocalActionError(f"Action field '{field_name}' must be a boolean")
+    return value
+
+
 def bounded_positive_int(
     action: dict[str, Any],
     field_name: str,
@@ -582,6 +733,33 @@ def bounded_positive_int(
     if parsed <= 0:
         raise LocalActionError(f"Action field '{field_name}' must be greater than 0")
     return min(parsed, maximum)
+
+
+def should_descend_directory(
+    directory: Path,
+    project_dir: Path,
+    *,
+    include_hidden: bool,
+) -> bool:
+    """Return whether recursive listing should walk into a directory."""
+    if directory.name in DEFAULT_LIST_EXCLUDED_DIRS:
+        return False
+    relative = directory.relative_to(project_dir.resolve()).as_posix()
+    return is_safe_list_entry(relative, include_hidden=include_hidden)
+
+
+def is_safe_list_entry(path: str, *, include_hidden: bool) -> bool:
+    """Return whether a path is safe and allowed in list_files output."""
+    parts = Path(path).parts
+    if any(part in DEFAULT_LIST_EXCLUDED_DIRS for part in parts):
+        return False
+    if not include_hidden and any(part.startswith(".") for part in parts):
+        return False
+    try:
+        validate_workspace_relative_path(path)
+    except PatchProposalError:
+        return False
+    return True
 
 
 def resolve_workspace_path(project_dir: Path, path: str) -> Path:

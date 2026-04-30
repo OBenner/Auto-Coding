@@ -113,6 +113,10 @@ def _openai_tool_call_response(
     return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
+def _submitted_tool_names(call: dict) -> list[str]:
+    return [tool["function"]["name"] for tool in call["tools"]]
+
+
 def _install_fake_litellm(
     monkeypatch: pytest.MonkeyPatch,
     chunks: list[str],
@@ -365,7 +369,10 @@ async def test_openai_compatible_session_exposes_native_tool_calls(
     assert fake_openai.calls[0]["stream"] is False
     assert fake_openai.calls[0]["tool_choice"] == "auto"
     assert fake_openai.calls[0]["tools"][0]["type"] == "function"
-    assert fake_openai.calls[0]["tools"][0]["function"]["name"] == "read_file"
+    assert _submitted_tool_names(fake_openai.calls[0])[:2] == [
+        "list_files",
+        "read_file",
+    ]
     assert session.messages[-2]["role"] == "assistant"
     assert session.messages[-2]["tool_calls"][0]["function"]["name"] == "read_file"
     assert session.messages[-1]["role"] == "tool"
@@ -448,7 +455,10 @@ async def test_litellm_session_exposes_native_tool_calls(
     assert response.tool_calls[0].name == "read_file"
     assert fake_litellm.calls[0]["stream"] is False
     assert fake_litellm.calls[0]["tool_choice"] == "auto"
-    assert fake_litellm.calls[0]["tools"][0]["function"]["name"] == "read_file"
+    assert _submitted_tool_names(fake_litellm.calls[0])[:2] == [
+        "list_files",
+        "read_file",
+    ]
     assert session.messages[-1]["role"] == "tool"
     assert "name" not in session.messages[-1]
 
@@ -492,7 +502,10 @@ async def test_zhipuai_session_exposes_native_tool_calls(
     assert fake_zai.api_keys == ["test-key"]
     assert fake_zai.calls[0]["stream"] is False
     assert fake_zai.calls[0]["tool_choice"] == "auto"
-    assert fake_zai.calls[0]["tools"][0]["function"]["name"] == "read_file"
+    assert _submitted_tool_names(fake_zai.calls[0])[:2] == [
+        "list_files",
+        "read_file",
+    ]
     assert session.messages[-2]["role"] == "assistant"
     assert session.messages[-2]["tool_calls"][0]["function"]["name"] == "read_file"
     assert session.messages[-1]["role"] == "tool"
@@ -699,7 +712,10 @@ async def test_openai_provider_supports_generic_edit_mode(
     assert target.read_text(encoding="utf-8") == "new\n"
     assert len(fake_openai.calls) == 2
     assert fake_openai.calls[0]["stream"] is False
-    assert fake_openai.calls[0]["tools"][0]["function"]["name"] == "read_file"
+    assert _submitted_tool_names(fake_openai.calls[0])[:2] == [
+        "list_files",
+        "read_file",
+    ]
     assert fake_openai.calls[1]["messages"][-1]["role"] == "tool"
     assert fake_openai.calls[1]["messages"][-1]["tool_call_id"] == "call_write"
     result_artifact = json.loads(
