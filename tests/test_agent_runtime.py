@@ -460,6 +460,28 @@ def test_parse_patch_proposal_strips_markdown_fence_without_regex():
     assert proposal == {"summary": "fenced", "files": []}
 
 
+def test_parse_patch_proposal_requires_file_paths():
+    with pytest.raises(PatchProposalError, match="field 'path'"):
+        parse_patch_proposal(
+            json.dumps(
+                {
+                    "summary": "missing path",
+                    "files": [{"patch": "diff --git a/a.txt b/a.txt\n"}],
+                }
+            )
+        )
+
+    with pytest.raises(PatchProposalError, match="field 'path'"):
+        parse_patch_proposal(
+            json.dumps(
+                {
+                    "summary": "empty path",
+                    "files": [{"path": "", "patch": "diff --git a/a.txt b/a.txt\n"}],
+                }
+            )
+        )
+
+
 def test_patch_mode_marks_subtask_completed(tmp_path: Path):
     from agents.coder import _mark_patch_subtask_completed
 
@@ -723,6 +745,101 @@ async def test_generic_edit_runtime_prefers_native_tool_call_loop(tmp_path: Path
     assert result_artifact["action_count"] == 3
     assert result_artifact["tool_counts"]["finish"] == 1
     assert result_artifact["action_timeline"][0]["tool_call_id"] == "call_1_1"
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_non_terminal_json_finish(tmp_path: Path):
+    target = tmp_path / "after-finish.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "done too early",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "after-finish.txt",
+                        "content": "new\n",
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "reject non-terminal finish",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "error"
+    assert "finish" in result.response_text
+    assert target.read_text(encoding="utf-8") == "old\n"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["stop_reason"] == "non_terminal_finish"
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_non_terminal_native_finish(
+    tmp_path: Path,
+):
+    target = tmp_path / "after-native-finish.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeNativeToolCallSession(
+        [
+            [
+                {
+                    "name": "finish",
+                    "arguments": {"summary": "done too early"},
+                },
+                {
+                    "name": "write_file",
+                    "arguments": {
+                        "path": "after-native-finish.txt",
+                        "content": "new\n",
+                    },
+                },
+            ]
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "reject native non-terminal finish",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "error"
+    assert "finish" in result.response_text
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert session.tool_results == []
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["stop_reason"] == "non_terminal_finish"
 
 
 @pytest.mark.asyncio

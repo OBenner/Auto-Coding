@@ -163,6 +163,28 @@ class GenericEditRuntimeSession:
                         f"Artifacts: {artifacts['generic_edit_trace']}"
                     ),
                 )
+            try:
+                validate_terminal_finish(actions)
+            except GenericEditRuntimeError as e:
+                iteration_entry["error"] = str(e)
+                trace.append(iteration_entry)
+                artifacts = save_generic_edit_artifacts(
+                    spec_dir=spec_dir,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    status="error",
+                    stop_reason="non_terminal_finish",
+                    message=str(e),
+                    trace=trace,
+                    summary="Generic edit runtime rejected a non-terminal finish.",
+                )
+                return AgentRunResult(
+                    status="error",
+                    response_text=(
+                        f"Generic edit runtime rejected provider actions: {e}\n"
+                        f"Artifacts: {artifacts['generic_edit_trace']}"
+                    ),
+                )
 
             if not actions:
                 result = ToolActionResult(
@@ -322,11 +344,40 @@ class GenericEditRuntimeSession:
             action_results: list[ToolActionResult] = []
             finish_action: dict[str, Any] | None = None
             finish_result: ToolActionResult | None = None
-            for tool_call in tool_calls:
-                action = {
-                    "tool": str(getattr(tool_call, "name", "") or ""),
-                    **dict(getattr(tool_call, "arguments", {}) or {}),
-                }
+            tool_actions = [
+                (
+                    tool_call,
+                    {
+                        "tool": str(getattr(tool_call, "name", "") or ""),
+                        **dict(getattr(tool_call, "arguments", {}) or {}),
+                    },
+                )
+                for tool_call in tool_calls
+            ]
+            try:
+                validate_terminal_finish([action for _, action in tool_actions])
+            except GenericEditRuntimeError as e:
+                iteration_entry["error"] = str(e)
+                trace.append(iteration_entry)
+                artifacts = save_generic_edit_artifacts(
+                    spec_dir=spec_dir,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    status="error",
+                    stop_reason="non_terminal_finish",
+                    message=str(e),
+                    trace=trace,
+                    summary="Generic edit runtime rejected a non-terminal finish.",
+                )
+                return AgentRunResult(
+                    status="error",
+                    response_text=(
+                        f"Generic edit runtime rejected provider tool calls: {e}\n"
+                        f"Artifacts: {artifacts['generic_edit_trace']}"
+                    ),
+                )
+
+            for tool_call, action in tool_actions:
                 result = await self._executor.execute(action)
                 action_results.append(result)
                 iteration_entry["actions"].append(
@@ -466,6 +517,17 @@ def normalize_actions(response: dict[str, Any]) -> list[dict[str, Any]]:
             )
         normalized.append(action)
     return normalized
+
+
+def validate_terminal_finish(actions: list[dict[str, Any]]) -> None:
+    """Reject action batches where finish is followed by another action."""
+    for index, action in enumerate(actions[:-1]):
+        if action_tool(action) != "finish":
+            continue
+        if any(action_tool(later_action) for later_action in actions[index + 1 :]):
+            raise GenericEditRuntimeError(
+                "Generic edit action 'finish' must be the final action"
+            )
 
 
 def build_observation_prompt(

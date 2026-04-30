@@ -253,8 +253,11 @@ def parse_patch_proposal(text: str) -> dict[str, Any]:
         if not isinstance(file_entry, dict):
             raise PatchProposalError(f"Patch proposal file #{index + 1} is invalid")
         path = file_entry.get("path")
-        if path is not None:
-            validate_workspace_relative_path(str(path))
+        if not isinstance(path, str) or not path.strip():
+            raise PatchProposalError(
+                f"Patch proposal file #{index + 1} field 'path' must be a non-empty string"
+            )
+        validate_workspace_relative_path(path)
         patch = file_entry.get("patch")
         if patch is not None and not isinstance(patch, str):
             raise PatchProposalError(

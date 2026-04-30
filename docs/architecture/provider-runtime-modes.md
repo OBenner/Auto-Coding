@@ -43,11 +43,11 @@ python run.py --runtime-modes --json
 | Provider | Full autonomous coding | Generic edit | Analysis-only | Patch proposal | Notes |
 |----------|------------------------|--------------|---------------|----------------|-------|
 | `claude` | Yes | Not needed | Yes | Not needed | Uses the Claude Agent SDK path and keeps existing behavior. |
-| `openai` | No | Experimental | Limited | Limited | Direct OpenAI SDK sessions can use Auto Code's local JSON action loop. |
+| `openai` | No | Experimental | Limited | Limited | Direct OpenAI SDK sessions use native tool calls when available, with JSON fallback. |
 | `google` | No | Experimental | Limited | Limited | Gemini can use local JSON actions; MCP parity is not implemented. |
-| `litellm` | No | Experimental | Limited | Limited | Gateway provider; generic edit depends on routed model quality. |
-| `openrouter` | No | Experimental | Limited | Limited | OpenAI-compatible gateway with Auto Code local actions. |
-| `zhipuai` | No | Experimental | Limited | Limited | Text completion plus Auto Code local JSON actions. |
+| `litellm` | No | Experimental | Limited | Limited | Gateway provider; native tools depend on routed model/gateway support. |
+| `openrouter` | No | Experimental | Limited | Limited | OpenAI-compatible gateway with native tools plus JSON fallback. |
+| `zhipuai` | No | Experimental | Limited | Limited | OpenAI-like tool calls where available, with local JSON fallback. |
 | `ollama` | No | Experimental | Limited | Limited | Local models can attempt generic edit without remote code sharing. |
 
 `Limited` means the provider is allowed only when the selected runtime mode does
@@ -185,9 +185,10 @@ tool definitions.
 
 OpenAI-compatible sessions expose a native tool-call bridge that can send these
 schemas as function tools and append tool results back to provider history.
-Direct OpenAI, Ollama, OpenRouter, and LiteLLM sessions use that bridge when the
-routed model/gateway supports tools; if the first native tool-call request is
-rejected, `generic_edit` falls back to the JSON action loop.
+Direct OpenAI, Ollama, OpenRouter, LiteLLM, and ZhipuAI sessions use that
+bridge when the routed model/gateway supports tools; if the first native
+tool-call request is rejected, `generic_edit` falls back to the JSON action
+loop.
 
 Auto Code validates and executes these actions locally:
 
