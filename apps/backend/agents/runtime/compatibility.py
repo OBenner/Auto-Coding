@@ -101,7 +101,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Text completion plus Auto Code local JSON actions.",
+        notes="OpenAI-like tool calls where available, with local JSON fallback.",
     ),
     ProviderRuntimeCompatibility(
         provider="ollama",

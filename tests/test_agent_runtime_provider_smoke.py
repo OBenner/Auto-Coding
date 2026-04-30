@@ -224,6 +224,30 @@ def _install_fake_zai(
     return SimpleNamespace(calls=calls, api_keys=api_keys)
 
 
+def _install_fake_zai_responses(
+    monkeypatch: pytest.MonkeyPatch,
+    responses: list[SimpleNamespace],
+) -> SimpleNamespace:
+    calls: list[dict] = []
+    api_keys: list[str] = []
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            await asyncio.sleep(0)
+            calls.append(copy.deepcopy(kwargs))
+            return responses.pop(0)
+
+    class FakeZhipuAiClient:
+        def __init__(self, api_key: str):
+            api_keys.append(api_key)
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    module = ModuleType("zai")
+    module.ZhipuAiClient = FakeZhipuAiClient
+    monkeypatch.setitem(sys.modules, "zai", module)
+    return SimpleNamespace(calls=calls, api_keys=api_keys)
+
+
 async def _run_analysis_smoke(session, provider_name: str, tmp_path: Path):
     runtime_session = create_runtime_session(
         provider_name=provider_name,
@@ -426,6 +450,53 @@ async def test_litellm_session_exposes_native_tool_calls(
     assert fake_litellm.calls[0]["tool_choice"] == "auto"
     assert fake_litellm.calls[0]["tools"][0]["function"]["name"] == "read_file"
     assert session.messages[-1]["role"] == "tool"
+    assert "name" not in session.messages[-1]
+
+
+@pytest.mark.asyncio
+async def test_zhipuai_session_exposes_native_tool_calls(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fake_zai = _install_fake_zai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_zhipu_1",
+                name="read_file",
+                arguments={"path": "README.md"},
+            )
+        ],
+    )
+    provider = ZhipuAIProvider(
+        ProviderConfig(
+            provider="zhipuai",
+            zhipuai_api_key="test-key",
+            zhipuai_model="glm-4-flash",
+        )
+    )
+    session = provider.create_session(SessionConfig(name="zhipuai-tools"))
+
+    response = await session.complete_with_tool_calls(
+        "Inspect the project",
+        local_action_tool_schemas(),
+    )
+    session.add_tool_result(
+        response.tool_calls[0].id,
+        response.tool_calls[0].name,
+        {"ok": True, "message": "Read README.md"},
+    )
+
+    assert response.tool_calls[0].id == "call_zhipu_1"
+    assert response.tool_calls[0].name == "read_file"
+    assert response.tool_calls[0].arguments == {"path": "README.md"}
+    assert fake_zai.api_keys == ["test-key"]
+    assert fake_zai.calls[0]["stream"] is False
+    assert fake_zai.calls[0]["tool_choice"] == "auto"
+    assert fake_zai.calls[0]["tools"][0]["function"]["name"] == "read_file"
+    assert session.messages[-2]["role"] == "assistant"
+    assert session.messages[-2]["tool_calls"][0]["function"]["name"] == "read_file"
+    assert session.messages[-1]["role"] == "tool"
+    assert session.messages[-1]["tool_call_id"] == "call_zhipu_1"
     assert "name" not in session.messages[-1]
 
 

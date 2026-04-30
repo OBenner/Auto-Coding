@@ -127,7 +127,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     genericEdit: 'limited',
     patchProposal: 'supported',
     analysisOnly: 'supported',
-    nativeTools: 'unavailable',
+    nativeTools: 'limited',
     mcp: 'unavailable',
     subagents: 'unavailable',
     filesystemEdits: 'limited'
