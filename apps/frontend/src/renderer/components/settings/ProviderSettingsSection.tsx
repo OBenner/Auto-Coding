@@ -170,7 +170,7 @@ const RUNTIME_MODE_OPTIONS: Array<{
 ];
 
 function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderConfig {
-  if (config.provider === 'claude' || config.runtimeFallbackEnabled) {
+  if (config.provider === 'claude') {
     return config;
   }
 
@@ -498,10 +498,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     includeGlobal: boolean
   ) => {
     const runtimeModeOptions = RUNTIME_MODE_OPTIONS.filter(
-      (mode) =>
-        mode.value !== 'full_autonomous' ||
-        config.provider === 'claude' ||
-        runtimeFallbackEnabled
+      (mode) => mode.value !== 'full_autonomous' || config.provider === 'claude'
     );
     return (
       <Select value={value || USE_GLOBAL_RUNTIME_MODE} onValueChange={onChange}>
