@@ -9,6 +9,7 @@ import pytest
 from agents.runtime import (
     RuntimeRequirements,
     create_runtime_session,
+    local_action_tool_schemas,
     run_runtime_session,
 )
 from core.platform import run_process
@@ -65,6 +66,51 @@ def _install_fake_openai(
     module.AsyncOpenAI = FakeAsyncOpenAI
     monkeypatch.setitem(sys.modules, "openai", module)
     return SimpleNamespace(calls=calls, instances=instances)
+
+
+def _install_fake_openai_responses(
+    monkeypatch: pytest.MonkeyPatch,
+    responses: list[SimpleNamespace],
+) -> SimpleNamespace:
+    calls: list[dict] = []
+    instances: list[object] = []
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            await asyncio.sleep(0)
+            calls.append(copy.deepcopy(kwargs))
+            return responses.pop(0)
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.chat = SimpleNamespace(
+                completions=FakeCompletions(),
+            )
+            instances.append(self)
+
+    module = ModuleType("openai")
+    module.AsyncOpenAI = FakeAsyncOpenAI
+    monkeypatch.setitem(sys.modules, "openai", module)
+    return SimpleNamespace(calls=calls, instances=instances)
+
+
+def _openai_tool_call_response(
+    *,
+    tool_call_id: str,
+    name: str,
+    arguments: dict,
+    content: str | None = None,
+) -> SimpleNamespace:
+    tool_call = SimpleNamespace(
+        id=tool_call_id,
+        function=SimpleNamespace(
+            name=name,
+            arguments=json.dumps(arguments),
+        ),
+    )
+    message = SimpleNamespace(content=content, tool_calls=[tool_call])
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
 def _install_fake_litellm(
@@ -237,6 +283,53 @@ async def test_openai_compatible_providers_support_analysis_only(
         "role": "user",
         "content": "say smoke",
     }
+
+
+@pytest.mark.asyncio
+async def test_openai_compatible_session_exposes_native_tool_calls(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fake_openai = _install_fake_openai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_1",
+                name="read_file",
+                arguments={"path": "README.md", "max_chars": 1000},
+            )
+        ],
+    )
+    provider = OpenAIProvider(
+        ProviderConfig(provider="openai", openai_api_key="test-key")
+    )
+    session = provider.create_session(SessionConfig(name="openai-tools"))
+
+    response = await session.complete_with_tool_calls(
+        "Inspect the project",
+        local_action_tool_schemas(),
+    )
+    session.add_tool_result(
+        response.tool_calls[0].id,
+        response.tool_calls[0].name,
+        {"ok": True, "message": "Read README.md"},
+    )
+
+    assert response.content == ""
+    assert response.tool_calls[0].id == "call_1"
+    assert response.tool_calls[0].name == "read_file"
+    assert response.tool_calls[0].arguments == {
+        "path": "README.md",
+        "max_chars": 1000,
+    }
+    assert fake_openai.calls[0]["stream"] is False
+    assert fake_openai.calls[0]["tool_choice"] == "auto"
+    assert fake_openai.calls[0]["tools"][0]["type"] == "function"
+    assert fake_openai.calls[0]["tools"][0]["function"]["name"] == "read_file"
+    assert session.messages[-2]["role"] == "assistant"
+    assert session.messages[-2]["tool_calls"][0]["function"]["name"] == "read_file"
+    assert session.messages[-1]["role"] == "tool"
+    assert session.messages[-1]["tool_call_id"] == "call_1"
+    assert "README.md" in session.messages[-1]["content"]
 
 
 @pytest.mark.asyncio

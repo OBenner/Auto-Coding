@@ -167,6 +167,12 @@ The JSON-loop prompt is rendered from that manifest, and future provider-native
 function-calling adapters should use the same schemas instead of duplicating
 tool definitions.
 
+OpenAI-compatible sessions expose a low-level native tool-call bridge that can
+send these schemas as function tools and append tool results back to provider
+history. The bridge is intentionally not the default `generic_edit` execution
+path yet; the JSON action loop remains the stable mode until provider/model
+tool-call behavior is calibrated.
+
 Auto Code validates and executes these actions locally:
 
 - file paths use the same workspace-relative sensitive-path checks as

@@ -9,12 +9,19 @@ This avoids code duplication across adapters that share the same
 streaming/completion logic.
 """
 
+import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
-from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
+from core.providers.base import (
+    AgentSession,
+    AIEngineProvider,
+    ProviderToolCall,
+    ProviderToolCallResponse,
+    SessionConfig,
+)
 from core.providers.exceptions import (
     ProviderConfigError,
     ProviderError,
@@ -48,7 +55,7 @@ class OpenAICompatibleSession(AgentSession):
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
-        self._messages: list[dict[str, str]] = []
+        self._messages: list[dict[str, Any]] = []
         self._client: Any = None
 
         if system_prompt:
@@ -59,7 +66,7 @@ class OpenAICompatibleSession(AgentSession):
         return self._model
 
     @property
-    def messages(self) -> list[dict[str, str]]:
+    def messages(self) -> list[dict[str, Any]]:
         return self._messages.copy()
 
     def _build_client_kwargs(self) -> dict[str, Any]:
@@ -88,13 +95,20 @@ class OpenAICompatibleSession(AgentSession):
     def add_assistant_message(self, content: str) -> None:
         self._messages.append({"role": "assistant", "content": content})
 
-    async def complete(self, message: str, stream: bool = True) -> AsyncIterator[str]:
-        if not self._is_active:
-            raise ProviderError("Session is closed")
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        """Append a provider-native tool result to the session history."""
+        content = result if isinstance(result, str) else json.dumps(result)
+        self._messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "name": name,
+                "content": content,
+            }
+        )
 
-        client = self._get_client()
-        self.add_user_message(message)
-
+    def _completion_kwargs(self, *, stream: bool) -> dict[str, Any]:
+        """Build common chat completion arguments."""
         completion_kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": self._messages,
@@ -105,6 +119,17 @@ class OpenAICompatibleSession(AgentSession):
             completion_kwargs["temperature"] = self._temperature
         if self._max_tokens is not None:
             completion_kwargs["max_tokens"] = self._max_tokens
+
+        return completion_kwargs
+
+    async def complete(self, message: str, stream: bool = True) -> AsyncIterator[str]:
+        if not self._is_active:
+            raise ProviderError("Session is closed")
+
+        client = self._get_client()
+        self.add_user_message(message)
+
+        completion_kwargs = self._completion_kwargs(stream=stream)
 
         try:
             if stream:
@@ -134,6 +159,52 @@ class OpenAICompatibleSession(AgentSession):
                 f"{self.provider_name.capitalize()} completion failed: {e}"
             ) from e
 
+    async def complete_with_tool_calls(
+        self,
+        message: str | None,
+        tools: list[dict[str, Any]],
+    ) -> ProviderToolCallResponse:
+        """Send a non-streaming request with provider-native function tools."""
+        if not self._is_active:
+            raise ProviderError("Session is closed")
+
+        client = self._get_client()
+        if message:
+            self.add_user_message(message)
+
+        completion_kwargs = self._completion_kwargs(stream=False)
+        completion_kwargs["tools"] = [
+            _format_openai_tool_schema(tool) for tool in tools
+        ]
+        completion_kwargs["tool_choice"] = "auto"
+
+        try:
+            response = await client.chat.completions.create(**completion_kwargs)
+            if not hasattr(response, "choices") or not response.choices:
+                return ProviderToolCallResponse(content="")
+
+            message_obj = response.choices[0].message
+            content = str(getattr(message_obj, "content", "") or "")
+            tool_calls = _parse_openai_tool_calls(message_obj)
+            if content or tool_calls:
+                self._messages.append(
+                    _assistant_message_from_response(
+                        content=content,
+                        tool_calls=tool_calls,
+                    )
+                )
+            return ProviderToolCallResponse(
+                content=content,
+                tool_calls=tuple(tool_calls),
+            )
+        except Exception as e:
+            logger.error(
+                f"{self.provider_name.capitalize()} tool-call completion error: {e}"
+            )
+            raise ProviderError(
+                f"{self.provider_name.capitalize()} tool-call completion failed: {e}"
+            ) from e
+
     def clear_history(self, keep_system: bool = True) -> None:
         if keep_system:
             system_msgs = [m for m in self._messages if m["role"] == "system"]
@@ -148,6 +219,77 @@ class OpenAICompatibleSession(AgentSession):
         logger.debug(
             f"{self.provider_name.capitalize()} session {self.session_id} closed"
         )
+
+
+def _format_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
+    """Convert a provider-neutral tool schema to OpenAI chat-completions shape."""
+    if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
+        return tool
+
+    return {
+        "type": "function",
+        "function": {
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool.get(
+                "parameters",
+                {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            ),
+        },
+    }
+
+
+def _parse_openai_tool_calls(message_obj: Any) -> list[ProviderToolCall]:
+    """Normalize OpenAI SDK tool-call objects into runtime-friendly records."""
+    normalized: list[ProviderToolCall] = []
+    for tool_call in getattr(message_obj, "tool_calls", None) or []:
+        function = getattr(tool_call, "function", None)
+        name = str(getattr(function, "name", "") or "")
+        raw_arguments = str(getattr(function, "arguments", "") or "{}")
+        try:
+            parsed_arguments = json.loads(raw_arguments)
+        except json.JSONDecodeError as e:
+            raise ProviderError(f"Invalid tool-call arguments for {name}: {e}") from e
+        if not isinstance(parsed_arguments, dict):
+            raise ProviderError(f"Tool-call arguments for {name} must be an object")
+
+        normalized.append(
+            ProviderToolCall(
+                id=str(getattr(tool_call, "id", "") or ""),
+                name=name,
+                arguments=parsed_arguments,
+            )
+        )
+    return normalized
+
+
+def _assistant_message_from_response(
+    *,
+    content: str,
+    tool_calls: list[ProviderToolCall],
+) -> dict[str, Any]:
+    """Build a chat-completions assistant message with optional tool calls."""
+    message: dict[str, Any] = {
+        "role": "assistant",
+        "content": content or None,
+    }
+    if tool_calls:
+        message["tool_calls"] = [
+            {
+                "id": tool_call.id,
+                "type": "function",
+                "function": {
+                    "name": tool_call.name,
+                    "arguments": json.dumps(tool_call.arguments),
+                },
+            }
+            for tool_call in tool_calls
+        ]
+    return message
 
 
 class OpenAICompatibleProvider(AIEngineProvider):
