@@ -589,12 +589,14 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
 
     artifact_dir = tmp_path / "artifacts"
     assert (artifact_dir / "generic_edit_trace.json").exists()
+    assert (artifact_dir / "generic_edit_timeline.json").exists()
     assert (artifact_dir / "generic_edit_result.json").exists()
     assert (artifact_dir / "generic_edit_summary.md").exists()
     result_artifact = json.loads(
         (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
     )
     assert result_artifact["status"] == "complete"
+    assert result_artifact["stop_reason"] == "finish"
     assert result_artifact["subtask_id"] == "1.1"
     assert result_artifact["iteration_count"] == 3
     assert result_artifact["loop"] == "json_actions"
@@ -605,6 +607,30 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
         "write_file": 1,
         "finish": 1,
     }
+    assert result_artifact["failed_tools"] == {}
+    assert result_artifact["action_timeline"] == [
+        {
+            "iteration": 1,
+            "tool": "read_file",
+            "ok": True,
+            "message": "Read hello.txt",
+            "path": "hello.txt",
+            "truncated": False,
+        },
+        {
+            "iteration": 2,
+            "tool": "write_file",
+            "ok": True,
+            "message": "Wrote hello.txt",
+            "path": "hello.txt",
+        },
+        {
+            "iteration": 3,
+            "tool": "finish",
+            "ok": True,
+            "message": "Updated greeting through generic edit",
+        },
+    ]
     assert result_artifact["tests"] == ["not run"]
 
     trace_text = (artifact_dir / "generic_edit_trace.json").read_text(encoding="utf-8")
@@ -615,6 +641,11 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert read_result["data"]["content_bytes"] > 0
     assert "response_excerpt" in trace["trace"][0]
     assert "response" not in trace["trace"][0]
+    timeline = json.loads(
+        (artifact_dir / "generic_edit_timeline.json").read_text(encoding="utf-8")
+    )
+    assert timeline["stop_reason"] == "finish"
+    assert timeline["timeline"] == result_artifact["action_timeline"]
 
 
 @pytest.mark.asyncio
@@ -685,10 +716,12 @@ async def test_generic_edit_runtime_prefers_native_tool_call_loop(tmp_path: Path
         )
     )
     assert result_artifact["subtask_id"] == "1.3"
+    assert result_artifact["stop_reason"] == "finish"
     assert result_artifact["iteration_count"] == 3
     assert result_artifact["loop"] == "native_tool_calls"
     assert result_artifact["action_count"] == 3
     assert result_artifact["tool_counts"]["finish"] == 1
+    assert result_artifact["action_timeline"][0]["tool_call_id"] == "call_1_1"
 
 
 @pytest.mark.asyncio

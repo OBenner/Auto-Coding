@@ -151,6 +151,7 @@ class GenericEditRuntimeSession:
                     provider_name=self.provider_name,
                     subtask_id=subtask_id,
                     status="error",
+                    stop_reason="parse_error",
                     message=str(e),
                     trace=trace,
                     summary="Generic edit runtime failed to parse provider actions.",
@@ -200,6 +201,7 @@ class GenericEditRuntimeSession:
                         provider_name=self.provider_name,
                         subtask_id=subtask_id,
                         status="complete",
+                        stop_reason="finish",
                         message=summary,
                         trace=trace,
                         summary=summary,
@@ -232,6 +234,7 @@ class GenericEditRuntimeSession:
             provider_name=self.provider_name,
             subtask_id=subtask_id,
             status="error",
+            stop_reason="max_iterations",
             message=message,
             trace=trace,
             summary=message,
@@ -281,6 +284,7 @@ class GenericEditRuntimeSession:
                     provider_name=self.provider_name,
                     subtask_id=subtask_id,
                     status="error",
+                    stop_reason="native_tool_error",
                     message=str(e),
                     trace=trace,
                     summary="Generic edit native tool-call loop failed.",
@@ -358,6 +362,7 @@ class GenericEditRuntimeSession:
                     provider_name=self.provider_name,
                     subtask_id=subtask_id,
                     status="complete",
+                    stop_reason="finish",
                     message=summary,
                     trace=trace,
                     summary=summary,
@@ -387,6 +392,7 @@ class GenericEditRuntimeSession:
             provider_name=self.provider_name,
             subtask_id=subtask_id,
             status="error",
+            stop_reason="max_iterations",
             message=message,
             trace=trace,
             summary=message,
@@ -513,6 +519,7 @@ def save_generic_edit_artifacts(
     provider_name: str,
     subtask_id: str | None,
     status: str,
+    stop_reason: str,
     message: str,
     trace: list[dict[str, Any]],
     summary: str,
@@ -523,15 +530,18 @@ def save_generic_edit_artifacts(
     artifact_dir = spec_dir / "artifacts"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     trace_path = artifact_dir / "generic_edit_trace.json"
+    timeline_path = artifact_dir / "generic_edit_timeline.json"
     summary_path = artifact_dir / "generic_edit_summary.md"
     result_path = artifact_dir / "generic_edit_result.json"
     timestamp = datetime.now(UTC).isoformat()
+    trace_summary = summarize_generic_edit_trace(trace)
 
     payload = {
         "timestamp": timestamp,
         "provider": provider_name,
         "subtask_id": subtask_id,
         "status": status,
+        "stop_reason": stop_reason,
         "message": message,
         "trace": trace,
     }
@@ -540,13 +550,27 @@ def save_generic_edit_artifacts(
         encoding="utf-8",
     )
 
+    timeline_payload = {
+        "timestamp": timestamp,
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "status": status,
+        "stop_reason": stop_reason,
+        "timeline": trace_summary["action_timeline"],
+    }
+    timeline_path.write_text(
+        json.dumps(timeline_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
     result_payload = {
         "timestamp": timestamp,
         "provider": provider_name,
         "subtask_id": subtask_id,
         "status": status,
+        "stop_reason": stop_reason,
         "message": message,
-        **summarize_generic_edit_trace(trace),
+        **trace_summary,
         "iteration_count": len(trace),
         "tests": tests or [],
         "test_count": len(tests or []),
@@ -563,10 +587,20 @@ def save_generic_edit_artifacts(
         "",
         f"Status: {status}",
         f"Provider: {provider_name}",
+        f"Stop reason: {stop_reason}",
     ]
     if subtask_id:
         lines.append(f"Subtask: {subtask_id}")
     lines.extend(["", "## Summary", "", summary])
+    if trace_summary["action_timeline"]:
+        lines.extend(["", "## Action Timeline", ""])
+        for item in trace_summary["action_timeline"]:
+            status_label = "ok" if item["ok"] else "failed"
+            path_suffix = f" `{item['path']}`" if item.get("path") else ""
+            lines.append(
+                f"- Iteration {item['iteration']}: `{item['tool']}` "
+                f"{status_label}{path_suffix} - {item['message']}"
+            )
     if tests:
         lines.extend(["", "## Suggested Verification Commands", ""])
         lines.extend(f"- `{test}`" for test in tests)
@@ -577,6 +611,7 @@ def save_generic_edit_artifacts(
 
     return {
         "generic_edit_trace": str(trace_path),
+        "generic_edit_timeline": str(timeline_path),
         "generic_edit_result": str(result_path),
         "generic_edit_summary": str(summary_path),
     }
@@ -588,25 +623,84 @@ def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
     action_count = 0
     failed_action_count = 0
     tool_counts: dict[str, int] = {}
+    failed_tools: dict[str, int] = {}
+    action_timeline: list[dict[str, Any]] = []
 
     for iteration in trace:
+        iteration_number = iteration.get("iteration")
         if iteration.get("loop"):
             loop_kind = str(iteration["loop"])
         for action_entry in iteration.get("actions", []):
             action_count += 1
             result = action_entry.get("result", action_entry)
+            request = action_entry.get("request", {})
             if isinstance(result, dict):
                 tool = str(result.get("tool") or "runtime")
                 tool_counts[tool] = tool_counts.get(tool, 0) + 1
+                is_ok = result.get("ok") is not False
                 if result.get("ok") is False:
                     failed_action_count += 1
+                    failed_tools[tool] = failed_tools.get(tool, 0) + 1
+                action_timeline.append(
+                    build_timeline_entry(
+                        iteration_number=iteration_number,
+                        tool=tool,
+                        ok=is_ok,
+                        message=str(result.get("message") or ""),
+                        request=request if isinstance(request, dict) else {},
+                        result=result,
+                    )
+                )
+            elif isinstance(result, str):
+                tool_counts["runtime"] = tool_counts.get("runtime", 0) + 1
+                action_timeline.append(
+                    {
+                        "iteration": iteration_number,
+                        "tool": "runtime",
+                        "ok": True,
+                        "message": result[:300],
+                    }
+                )
 
     return {
         "loop": loop_kind,
         "action_count": action_count,
         "failed_action_count": failed_action_count,
         "tool_counts": tool_counts,
+        "failed_tools": failed_tools,
+        "action_timeline": action_timeline,
     }
+
+
+def build_timeline_entry(
+    *,
+    iteration_number: Any,
+    tool: str,
+    ok: bool,
+    message: str,
+    request: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a compact, safe timeline item for UI/debug artifacts."""
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    entry: dict[str, Any] = {
+        "iteration": iteration_number,
+        "tool": tool,
+        "ok": ok,
+        "message": message[:300],
+    }
+    path = request.get("path") or data.get("path")
+    if path:
+        entry["path"] = str(path)
+    if "exit_code" in data:
+        entry["exit_code"] = data["exit_code"]
+    if "timed_out" in data:
+        entry["timed_out"] = data["timed_out"]
+    if "truncated" in data:
+        entry["truncated"] = data["truncated"]
+    if request.get("tool_call_id"):
+        entry["tool_call_id"] = str(request["tool_call_id"])
+    return entry
 
 
 def extract_json_object(text: str) -> str:
