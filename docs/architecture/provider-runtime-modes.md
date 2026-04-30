@@ -198,8 +198,10 @@ Auto Code validates and executes these actions locally:
 - commands pass the existing security allowlist/validator layer;
 - commands run without a shell and do not support pipes, redirection, or command
   chaining;
-- traces and summaries are saved as `generic_edit_trace.json`,
-  `generic_edit_result.json`, and `generic_edit_summary.md`.
+- traces, summaries, safe action timelines, and per-action observations are saved
+  as `generic_edit_trace.json`, `generic_edit_result.json`,
+  `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and
+  `generic_edit_summary.md`.
 
 This mode is intentionally not full autonomous parity. It does not expose MCP,
 subagents, provider-native tools, or Claude SDK session lifecycle behavior.

@@ -615,6 +615,7 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert (artifact_dir / "generic_edit_timeline.json").exists()
     assert (artifact_dir / "generic_edit_result.json").exists()
     assert (artifact_dir / "generic_edit_summary.md").exists()
+    assert (artifact_dir / "generic_edit_observations.jsonl").exists()
     result_artifact = json.loads(
         (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
     )
@@ -631,6 +632,9 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
         "finish": 1,
     }
     assert result_artifact["failed_tools"] == {}
+    assert result_artifact["observation_artifact"].endswith(
+        "generic_edit_observations.jsonl"
+    )
     assert result_artifact["action_timeline"] == [
         {
             "iteration": 1,
@@ -669,6 +673,22 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     )
     assert timeline["stop_reason"] == "finish"
     assert timeline["timeline"] == result_artifact["action_timeline"]
+    observation_lines = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert [line["result"]["tool"] for line in observation_lines] == [
+        "read_file",
+        "write_file",
+        "finish",
+    ]
+    assert observation_lines[0]["loop"] == "json_actions"
+    assert observation_lines[0]["result"]["data"]["content_redacted"] is True
+    assert trace_marker not in (
+        artifact_dir / "generic_edit_observations.jsonl"
+    ).read_text(encoding="utf-8")
 
 
 @pytest.mark.asyncio
@@ -745,6 +765,19 @@ async def test_generic_edit_runtime_prefers_native_tool_call_loop(tmp_path: Path
     assert result_artifact["action_count"] == 3
     assert result_artifact["tool_counts"]["finish"] == 1
     assert result_artifact["action_timeline"][0]["tool_call_id"] == "call_1_1"
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert observation_lines[0]["loop"] == "native_tool_calls"
+    assert observation_lines[0]["request"]["tool_call_id"] == "call_1_1"
+    assert [line["result"]["tool"] for line in observation_lines] == [
+        "read_file",
+        "write_file",
+        "finish",
+    ]
 
 
 @pytest.mark.asyncio

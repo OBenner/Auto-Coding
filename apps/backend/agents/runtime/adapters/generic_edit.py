@@ -130,6 +130,7 @@ class GenericEditRuntimeSession:
         base_prompt = build_generic_edit_prompt(message)
         prompt = base_prompt
         trace: list[dict[str, Any]] = []
+        observation_path = initialize_generic_edit_observations(spec_dir)
 
         for iteration in range(1, self.max_iterations + 1):
             response_text = await self._complete(prompt)
@@ -155,6 +156,7 @@ class GenericEditRuntimeSession:
                     message=str(e),
                     trace=trace,
                     summary="Generic edit runtime failed to parse provider actions.",
+                    observation_path=observation_path,
                 )
                 return AgentRunResult(
                     status="error",
@@ -177,6 +179,7 @@ class GenericEditRuntimeSession:
                     message=str(e),
                     trace=trace,
                     summary="Generic edit runtime rejected a non-terminal finish.",
+                    observation_path=observation_path,
                 )
                 return AgentRunResult(
                     status="error",
@@ -193,6 +196,16 @@ class GenericEditRuntimeSession:
                     message="No actions returned; return at least one action.",
                 )
                 iteration_entry["actions"].append(safe_result_for_trace(result))
+                append_generic_edit_observation(
+                    observation_path=observation_path,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    loop="json_actions",
+                    iteration=iteration,
+                    action_index=1,
+                    request={},
+                    result=result,
+                )
                 trace.append(iteration_entry)
                 prompt = build_observation_prompt(
                     base_prompt=base_prompt,
@@ -201,14 +214,26 @@ class GenericEditRuntimeSession:
                 continue
 
             action_results: list[ToolActionResult] = []
-            for action in actions:
+            for action_index, action in enumerate(actions, start=1):
                 result = await self._executor.execute(action)
                 action_results.append(result)
+                safe_request = safe_action_for_trace(action)
+                safe_result = safe_result_for_trace(result)
                 iteration_entry["actions"].append(
                     {
-                        "request": safe_action_for_trace(action),
-                        "result": safe_result_for_trace(result),
+                        "request": safe_request,
+                        "result": safe_result,
                     }
+                )
+                append_generic_edit_observation(
+                    observation_path=observation_path,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    loop="json_actions",
+                    iteration=iteration,
+                    action_index=action_index,
+                    request=safe_request,
+                    result=result,
                 )
 
                 if action_tool(action) == "finish":
@@ -229,6 +254,7 @@ class GenericEditRuntimeSession:
                         summary=summary,
                         tests=tests,
                         risks=risks,
+                        observation_path=observation_path,
                     )
                     response_lines = build_generic_edit_response(
                         summary=summary,
@@ -260,6 +286,7 @@ class GenericEditRuntimeSession:
             message=message,
             trace=trace,
             summary=message,
+            observation_path=observation_path,
         )
         return AgentRunResult(
             status="error",
@@ -275,6 +302,7 @@ class GenericEditRuntimeSession:
     ) -> AgentRunResult:
         prompt: str | None = build_native_tool_edit_prompt(message)
         trace: list[dict[str, Any]] = []
+        observation_path = initialize_generic_edit_observations(spec_dir)
 
         for iteration in range(1, self.max_iterations + 1):
             iteration_entry: dict[str, Any] = {
@@ -310,6 +338,7 @@ class GenericEditRuntimeSession:
                     message=str(e),
                     trace=trace,
                     summary="Generic edit native tool-call loop failed.",
+                    observation_path=observation_path,
                 )
                 return AgentRunResult(
                     status="error",
@@ -334,6 +363,16 @@ class GenericEditRuntimeSession:
                     ),
                 )
                 iteration_entry["actions"].append(safe_result_for_trace(result))
+                append_generic_edit_observation(
+                    observation_path=observation_path,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    loop="native_tool_calls",
+                    iteration=iteration,
+                    action_index=1,
+                    request={},
+                    result=result,
+                )
                 trace.append(iteration_entry)
                 prompt = (
                     "No local tool calls were returned. Continue the task by "
@@ -368,6 +407,7 @@ class GenericEditRuntimeSession:
                     message=str(e),
                     trace=trace,
                     summary="Generic edit runtime rejected a non-terminal finish.",
+                    observation_path=observation_path,
                 )
                 return AgentRunResult(
                     status="error",
@@ -377,17 +417,29 @@ class GenericEditRuntimeSession:
                     ),
                 )
 
-            for tool_call, action in tool_actions:
+            for action_index, (tool_call, action) in enumerate(tool_actions, start=1):
                 result = await self._executor.execute(action)
                 action_results.append(result)
+                safe_request = {
+                    "tool_call_id": str(getattr(tool_call, "id", "") or ""),
+                    **safe_action_for_trace(action),
+                }
+                safe_result = safe_result_for_trace(result)
                 iteration_entry["actions"].append(
                     {
-                        "request": {
-                            "tool_call_id": str(getattr(tool_call, "id", "") or ""),
-                            **safe_action_for_trace(action),
-                        },
-                        "result": safe_result_for_trace(result),
+                        "request": safe_request,
+                        "result": safe_result,
                     }
+                )
+                append_generic_edit_observation(
+                    observation_path=observation_path,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    loop="native_tool_calls",
+                    iteration=iteration,
+                    action_index=action_index,
+                    request=safe_request,
+                    result=result,
                 )
                 self.agent_session.add_tool_result(
                     str(getattr(tool_call, "id", "") or ""),
@@ -419,6 +471,7 @@ class GenericEditRuntimeSession:
                     summary=summary,
                     tests=tests,
                     risks=risks,
+                    observation_path=observation_path,
                 )
                 response_lines = build_generic_edit_response(
                     summary=summary,
@@ -447,6 +500,7 @@ class GenericEditRuntimeSession:
             message=message,
             trace=trace,
             summary=message,
+            observation_path=observation_path,
         )
         return AgentRunResult(
             status="error",
@@ -575,6 +629,42 @@ def build_generic_edit_response(
     return response_lines
 
 
+def initialize_generic_edit_observations(spec_dir: Path) -> Path:
+    """Create the safe JSONL observation stream for the current generic edit run."""
+    artifact_dir = spec_dir / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    observation_path = artifact_dir / "generic_edit_observations.jsonl"
+    observation_path.write_text("", encoding="utf-8")
+    return observation_path
+
+
+def append_generic_edit_observation(
+    *,
+    observation_path: Path,
+    provider_name: str,
+    subtask_id: str | None,
+    loop: str,
+    iteration: int,
+    action_index: int,
+    request: dict[str, Any],
+    result: ToolActionResult,
+) -> None:
+    """Append one redacted local action observation for UI/debug consumers."""
+    payload = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "loop": loop,
+        "iteration": iteration,
+        "action_index": action_index,
+        "request": request,
+        "result": safe_result_for_trace(result),
+    }
+    with observation_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False))
+        handle.write("\n")
+
+
 def save_generic_edit_artifacts(
     *,
     spec_dir: Path,
@@ -587,6 +677,7 @@ def save_generic_edit_artifacts(
     summary: str,
     tests: list[str] | None = None,
     risks: list[str] | None = None,
+    observation_path: Path | None = None,
 ) -> dict[str, str]:
     """Persist trace/result artifacts for a generic edit run."""
     artifact_dir = spec_dir / "artifacts"
@@ -639,6 +730,8 @@ def save_generic_edit_artifacts(
         "risks": risks or [],
         "risk_count": len(risks or []),
     }
+    if observation_path is not None:
+        result_payload["observation_artifact"] = str(observation_path)
     result_path.write_text(
         json.dumps(result_payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -671,12 +764,15 @@ def save_generic_edit_artifacts(
         lines.extend(f"- {risk}" for risk in risks)
     summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    return {
+    artifacts = {
         "generic_edit_trace": str(trace_path),
         "generic_edit_timeline": str(timeline_path),
         "generic_edit_result": str(result_path),
         "generic_edit_summary": str(summary_path),
     }
+    if observation_path is not None:
+        artifacts["generic_edit_observations"] = str(observation_path)
+    return artifacts
 
 
 def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
