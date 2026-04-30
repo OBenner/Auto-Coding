@@ -324,7 +324,21 @@ OPENAI_API_KEY=sk-...
 In this mode, Auto Code exposes a small local action loop for workspace-relative
 file reads, validated patches, bounded file writes, and security-checked single
 commands. OpenAI-compatible sessions use provider-native tool calls when
-available and fall back to the JSON action loop otherwise.
+available; direct OpenAI, Ollama, OpenRouter, and LiteLLM sessions expose this
+normalized bridge when the routed model/gateway supports tools. If native tool
+calls are rejected, Auto Code falls back to the JSON action loop.
+
+**Runtime-aware fallback for non-Claude providers:**
+
+```bash
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_RUNTIME_FALLBACK=true
+OPENAI_API_KEY=sk-...
+```
+
+This degrades to the first compatible limited runtime, usually `generic_edit`.
+It does not grant MCP/tool/subagent parity to the selected provider.
 
 **OpenAI (for memory system):**
 ```bash

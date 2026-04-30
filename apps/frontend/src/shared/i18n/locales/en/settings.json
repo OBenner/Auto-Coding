@@ -901,7 +901,9 @@
       "plannerLabel": "Planner Override",
       "coderLabel": "Coder Override",
       "qaReviewerLabel": "QA Reviewer Override",
-      "qaFixerLabel": "QA Fixer Override"
+      "qaFixerLabel": "QA Fixer Override",
+      "fallbackLabel": "Allow runtime fallback",
+      "fallbackDescription": "When full autonomous is selected with a non-Claude provider, degrade to generic edit, patch proposal, or analysis only instead of failing immediately."
     },
     "runtimeModes": {
       "useGlobal": "Use default runtime mode",
@@ -924,7 +926,8 @@
     },
     "compatibility": {
       "claudeFirst": "Claude Agent SDK remains the full autonomous runtime. Other providers work through limited runtime modes.",
-      "nonClaudeFullAutonomous": "Full autonomous mode requires Claude Agent SDK. Choose generic edit, patch proposal, or analysis only for this provider."
+      "nonClaudeFullAutonomous": "Full autonomous mode requires Claude Agent SDK. Choose generic edit, patch proposal, or analysis only for this provider.",
+      "fallbackActive": "Runtime fallback is enabled. This provider will not run full autonomous; Auto Code will degrade to a compatible limited runtime."
     },
     "models": {
       "title": "Model Selection",
@@ -960,7 +963,12 @@
     },
     "validation": {
       "apiKeyRequired": "API key is required for this provider",
-      "modelRequired": "Model selection is required"
+      "modelRequired": "Model selection is required",
+      "action": "Validate settings",
+      "validating": "Validating...",
+      "valid": "Provider settings are valid",
+      "invalid": "Provider settings need attention",
+      "availableProviders": "Configured providers: {{providers}}"
     },
     "toast": {
       "providerChanged": "AI Provider Changed",

@@ -77,6 +77,28 @@ OPENAI_API_KEY=sk-...
 
 If a phase requires capabilities the selected runtime does not provide, Auto Code fails fast with a capability error.
 
+### `AUTO_CODE_RUNTIME_FALLBACK`
+
+**Description**: Enables degraded runtime fallback for incompatible provider/runtime pairs.
+
+**Default**: `false`
+
+When enabled, Auto Code does not fallback from Claude full autonomous coding to a
+non-Claude full autonomous runtime. Instead, it resolves the provider's capability
+set and degrades to the first compatible limited runtime (`generic_edit`, then
+`patch_proposal`, then `analysis_only`).
+
+**Example**:
+```bash
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_RUNTIME_FALLBACK=true
+OPENAI_API_KEY=sk-...
+```
+
+This runs the selected OpenAI provider through `generic_edit` rather than
+pretending it supports Claude Agent SDK MCP/tools/subagents.
+
 ---
 
 ## Provider-Specific Configuration

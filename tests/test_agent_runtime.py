@@ -16,7 +16,10 @@ from agents.runtime import (
     local_action_tool_specs,
     normalize_runtime_mode,
     render_local_action_prompt,
+    requirements_for_runtime_mode,
+    resolve_runtime_mode_with_fallback,
     run_runtime_session,
+    runtime_fallback_enabled,
 )
 from agents.runtime.adapters.patch_proposal import (
     PatchProposalError,
@@ -592,6 +595,14 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert result_artifact["status"] == "complete"
     assert result_artifact["subtask_id"] == "1.1"
     assert result_artifact["iteration_count"] == 3
+    assert result_artifact["loop"] == "json_actions"
+    assert result_artifact["action_count"] == 3
+    assert result_artifact["failed_action_count"] == 0
+    assert result_artifact["tool_counts"] == {
+        "read_file": 1,
+        "write_file": 1,
+        "finish": 1,
+    }
     assert result_artifact["tests"] == ["not run"]
 
     trace_text = (artifact_dir / "generic_edit_trace.json").read_text(encoding="utf-8")
@@ -673,6 +684,9 @@ async def test_generic_edit_runtime_prefers_native_tool_call_loop(tmp_path: Path
     )
     assert result_artifact["subtask_id"] == "1.3"
     assert result_artifact["iteration_count"] == 3
+    assert result_artifact["loop"] == "native_tool_calls"
+    assert result_artifact["action_count"] == 3
+    assert result_artifact["tool_counts"]["finish"] == 1
 
 
 @pytest.mark.asyncio
@@ -860,6 +874,79 @@ def test_runtime_mode_env_resolution(monkeypatch: pytest.MonkeyPatch):
     assert get_runtime_mode("coder") == "analysis_only"
     assert normalize_runtime_mode("full-autonomous") == "full_autonomous"
     assert normalize_runtime_mode("generic-edit") == "generic_edit"
+
+
+def test_runtime_fallback_is_explicit_and_capability_aware(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("AUTO_CODE_RUNTIME_FALLBACK", raising=False)
+    assert runtime_fallback_enabled() is False
+
+    fail_fast = resolve_runtime_mode_with_fallback(
+        provider_name="openai",
+        requested_mode="full_autonomous",
+        phase="coding",
+    )
+    assert fail_fast.selected_mode == "full_autonomous"
+    assert fail_fast.fallback_applied is False
+    assert "disabled" in fail_fast.reason
+
+    monkeypatch.setenv("AUTO_CODE_RUNTIME_FALLBACK", "true")
+    degraded = resolve_runtime_mode_with_fallback(
+        provider_name="openai",
+        requested_mode="full_autonomous",
+        phase="coding",
+    )
+    assert degraded.selected_mode == "generic_edit"
+    assert degraded.fallback_applied is True
+    assert "using generic_edit" in degraded.reason
+
+    claude = resolve_runtime_mode_with_fallback(
+        provider_name="claude",
+        requested_mode="full_autonomous",
+        phase="coding",
+    )
+    assert claude.selected_mode == "full_autonomous"
+    assert claude.fallback_applied is False
+
+    analysis = resolve_runtime_mode_with_fallback(
+        provider_name="openai",
+        requested_mode="full_autonomous",
+        phase="analysis",
+    )
+    assert analysis.selected_mode == "full_autonomous"
+    assert analysis.fallback_applied is False
+
+
+def test_runtime_requirements_follow_selected_runtime_mode():
+    assert (
+        requirements_for_runtime_mode(
+            "full_autonomous",
+            phase="planning",
+        )
+        == RuntimeRequirements.planner()
+    )
+    assert (
+        requirements_for_runtime_mode(
+            "generic_edit",
+            phase="planning",
+        )
+        == RuntimeRequirements.generic_edit()
+    )
+    assert (
+        requirements_for_runtime_mode(
+            "patch_proposal",
+            phase="coding",
+        )
+        == RuntimeRequirements.patch_proposal()
+    )
+    assert (
+        requirements_for_runtime_mode(
+            "analysis_only",
+            phase="coding",
+        )
+        == RuntimeRequirements.text_only()
+    )
 
 
 @pytest.mark.asyncio

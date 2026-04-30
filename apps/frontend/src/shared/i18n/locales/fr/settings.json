@@ -849,7 +849,9 @@
       "plannerLabel": "Remplacement Planificateur",
       "coderLabel": "Remplacement Codeur",
       "qaReviewerLabel": "Remplacement QA reviewer",
-      "qaFixerLabel": "Remplacement QA fixer"
+      "qaFixerLabel": "Remplacement QA fixer",
+      "fallbackLabel": "Autoriser le fallback runtime",
+      "fallbackDescription": "Quand le mode autonome complet est choisi avec un fournisseur non-Claude, basculer vers édition générique, proposition de patch ou analyse seule au lieu d'échouer immédiatement."
     },
     "runtimeModes": {
       "useGlobal": "Utiliser le mode runtime par défaut",
@@ -872,7 +874,8 @@
     },
     "compatibility": {
       "claudeFirst": "Claude Agent SDK reste le runtime autonome complet. Les autres fournisseurs fonctionnent via des modes runtime limités.",
-      "nonClaudeFullAutonomous": "Le mode autonome complet nécessite Claude Agent SDK. Choisissez édition générique, proposition de patch ou analyse seule pour ce fournisseur."
+      "nonClaudeFullAutonomous": "Le mode autonome complet nécessite Claude Agent SDK. Choisissez édition générique, proposition de patch ou analyse seule pour ce fournisseur.",
+      "fallbackActive": "Le fallback runtime est activé. Ce fournisseur ne lancera pas le mode autonome complet ; Auto Code basculera vers un runtime limité compatible."
     },
     "models": {
       "title": "Sélection du modèle",
@@ -908,7 +911,12 @@
     },
     "validation": {
       "apiKeyRequired": "La clé API est requise pour ce fournisseur",
-      "modelRequired": "La sélection du modèle est requise"
+      "modelRequired": "La sélection du modèle est requise",
+      "action": "Valider les réglages",
+      "validating": "Validation...",
+      "valid": "Les réglages fournisseur sont valides",
+      "invalid": "Les réglages fournisseur nécessitent une attention",
+      "availableProviders": "Fournisseurs configurés : {{providers}}"
     },
     "toast": {
       "providerChanged": "Fournisseur d'IA modifié",

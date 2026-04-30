@@ -12,6 +12,14 @@ from .capabilities import (
     RuntimeCapabilityError,
     RuntimeRequirements,
 )
+from .fallback import (
+    RUNTIME_FALLBACK_ENV,
+    RuntimeFallbackDecision,
+    capabilities_for_runtime_mode,
+    requirements_for_runtime_mode,
+    resolve_runtime_mode_with_fallback,
+    runtime_fallback_enabled,
+)
 from .local_actions import (
     LocalActionExecutor,
     LocalActionToolSpec,
@@ -29,11 +37,14 @@ __all__ = [
     "AgentRunResult",
     "RuntimeCapabilities",
     "RuntimeCapabilityError",
+    "RuntimeFallbackDecision",
     "RuntimeRequirements",
+    "RUNTIME_FALLBACK_ENV",
     "RuntimeMode",
     "LocalActionExecutor",
     "LocalActionToolSpec",
     "ToolActionResult",
+    "capabilities_for_runtime_mode",
     "create_runtime_session",
     "get_runtime_mode",
     "local_action_response_schema",
@@ -41,5 +52,8 @@ __all__ = [
     "local_action_tool_specs",
     "normalize_runtime_mode",
     "render_local_action_prompt",
+    "requirements_for_runtime_mode",
+    "resolve_runtime_mode_with_fallback",
     "run_runtime_session",
+    "runtime_fallback_enabled",
 ]

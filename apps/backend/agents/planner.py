@@ -34,9 +34,10 @@ from ui import (
 
 from .runtime import (
     RuntimeCapabilityError,
-    RuntimeRequirements,
     create_runtime_session,
     get_runtime_mode,
+    requirements_for_runtime_mode,
+    resolve_runtime_mode_with_fallback,
     run_runtime_session,
 )
 from .session import run_agent_session, save_token_stats
@@ -179,11 +180,26 @@ async def run_followup_planner(
             "Planner session missing provider_name; provider-backed sessions must "
             "declare their runtime provider"
         )
+    requested_runtime_mode = get_runtime_mode("planner")
+    runtime_decision = resolve_runtime_mode_with_fallback(
+        provider_name=provider_name,
+        requested_mode=requested_runtime_mode,
+        phase="planning",
+    )
+    runtime_mode = runtime_decision.selected_mode
+    if runtime_decision.fallback_applied:
+        logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
+        print_status(
+            f"Runtime fallback: {runtime_decision.requested_mode} -> "
+            f"{runtime_mode} ({provider_name})",
+            "warning",
+        )
+
     runtime_session = create_runtime_session(
         provider_name=provider_name,
         agent_session=session,
         claude_session_runner=run_agent_session,
-        runtime_mode=get_runtime_mode("planner"),
+        runtime_mode=runtime_mode,
         project_dir=project_dir,
     )
     client = runtime_session.context_client
@@ -239,7 +255,10 @@ async def run_followup_planner(
             spec_dir,
             verbose,
             phase=LogPhase.PLANNING,
-            requirements=RuntimeRequirements.planner(),
+            requirements=requirements_for_runtime_mode(
+                runtime_mode,
+                phase="planning",
+            ),
         )
         status = result.status
         usage_metadata = result.usage_metadata

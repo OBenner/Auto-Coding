@@ -71,9 +71,10 @@ from .memory_manager import (
 )
 from .runtime import (
     RuntimeCapabilityError,
-    RuntimeRequirements,
     create_runtime_session,
     get_runtime_mode,
+    requirements_for_runtime_mode,
+    resolve_runtime_mode_with_fallback,
     run_runtime_session,
 )
 from .runtime.artifacts import save_analysis_only_artifact
@@ -1229,7 +1230,23 @@ async def run_autonomous_agent(
             else:
                 session = provider.create_session(session_config)
 
-            runtime_mode = get_runtime_mode(agent_type_for_session)
+            requested_runtime_mode = get_runtime_mode(agent_type_for_session)
+            runtime_phase = (
+                "planning" if current_log_phase == LogPhase.PLANNING else "coding"
+            )
+            runtime_decision = resolve_runtime_mode_with_fallback(
+                provider_name=provider.name,
+                requested_mode=requested_runtime_mode,
+                phase=runtime_phase,
+            )
+            runtime_mode = runtime_decision.selected_mode
+            if runtime_decision.fallback_applied:
+                logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
+                print_status(
+                    f"Runtime fallback: {runtime_decision.requested_mode} -> "
+                    f"{runtime_mode} ({provider.name})",
+                    "warning",
+                )
             runtime_session = create_runtime_session(
                 provider_name=provider.name,
                 agent_session=session,
@@ -1240,16 +1257,10 @@ async def run_autonomous_agent(
             client = runtime_session.context_client
 
             # Run in current process (legacy mode)
-            if current_log_phase == LogPhase.PLANNING:
-                requirements = RuntimeRequirements.planner()
-            elif runtime_mode == "generic_edit":
-                requirements = RuntimeRequirements.generic_edit()
-            elif runtime_mode == "patch_proposal":
-                requirements = RuntimeRequirements.patch_proposal()
-            elif runtime_mode == "analysis_only":
-                requirements = RuntimeRequirements.text_only()
-            else:
-                requirements = RuntimeRequirements.full_coder()
+            requirements = requirements_for_runtime_mode(
+                runtime_mode,
+                phase=runtime_phase,
+            )
             try:
                 result = await run_runtime_session(
                     runtime_session,

@@ -117,12 +117,18 @@ function applyProviderSettingsToVars(
     ['plannerRuntimeMode', 'AGENT_RUNTIME_MODE_PLANNER'],
     ['coderRuntimeMode', 'AGENT_RUNTIME_MODE_CODER'],
     ['qaReviewerRuntimeMode', 'AGENT_RUNTIME_MODE_QA_REVIEWER'],
+    ['qaFixerRuntimeMode', 'AGENT_RUNTIME_MODE_QA_FIXER'],
   ];
   for (const [settingKey, envKey] of keyMap) {
     const value = settings[settingKey];
     if (value !== undefined) {
       vars[envKey] = value as string;
     }
+  }
+  if (settings.runtimeFallbackEnabled !== undefined) {
+    vars['AUTO_CODE_RUNTIME_FALLBACK'] = settings.runtimeFallbackEnabled
+      ? 'true'
+      : 'false';
   }
 }
 
@@ -181,6 +187,7 @@ ${varLine('AGENT_RUNTIME_MODE_PLANNER')}
 ${varLine('AGENT_RUNTIME_MODE_CODER')}
 ${varLine('AGENT_RUNTIME_MODE_QA_REVIEWER')}
 ${varLine('AGENT_RUNTIME_MODE_QA_FIXER')}
+${varLine('AUTO_CODE_RUNTIME_FALLBACK')}
 `;
 }
 
@@ -257,6 +264,7 @@ function generateProviderEnvContent(
     'AGENT_MODEL_QA_REVIEWER', 'AUTO_CODE_RUNTIME_MODE',
     'AGENT_RUNTIME_MODE_PLANNER', 'AGENT_RUNTIME_MODE_CODER',
     'AGENT_RUNTIME_MODE_QA_REVIEWER', 'AGENT_RUNTIME_MODE_QA_FIXER',
+    'AUTO_CODE_RUNTIME_FALLBACK',
   ];
   const newVars = providerVars.filter(v => !existingVarNames.has(v) && vars[v])
     .map(v => `${v}=${vars[v]}`);
@@ -541,7 +549,9 @@ export function registerSettingsHandlers(
           runtimeMode: envVars['AUTO_CODE_RUNTIME_MODE'] as ProviderSettings['runtimeMode'],
           plannerRuntimeMode: envVars['AGENT_RUNTIME_MODE_PLANNER'] as ProviderSettings['plannerRuntimeMode'],
           coderRuntimeMode: envVars['AGENT_RUNTIME_MODE_CODER'] as ProviderSettings['coderRuntimeMode'],
-          qaReviewerRuntimeMode: envVars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as ProviderSettings['qaReviewerRuntimeMode']
+          qaReviewerRuntimeMode: envVars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as ProviderSettings['qaReviewerRuntimeMode'],
+          qaFixerRuntimeMode: envVars['AGENT_RUNTIME_MODE_QA_FIXER'] as ProviderSettings['qaFixerRuntimeMode'],
+          runtimeFallbackEnabled: envVars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true',
         };
 
         return { success: true, data: providerSettings };
@@ -1173,6 +1183,7 @@ export function registerSettingsHandlers(
           config.coderRuntimeMode = vars['AGENT_RUNTIME_MODE_CODER'] as import('../../shared/types').AgentRuntimeMode;
           config.qaReviewerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as import('../../shared/types').AgentRuntimeMode;
           config.qaFixerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_FIXER'] as import('../../shared/types').AgentRuntimeMode;
+          config.runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
         }
 
         return {
@@ -1239,6 +1250,12 @@ export function registerSettingsHandlers(
         setEnvVar('AGENT_RUNTIME_MODE_CODER', config.coderRuntimeMode);
         setEnvVar('AGENT_RUNTIME_MODE_QA_REVIEWER', config.qaReviewerRuntimeMode);
         setEnvVar('AGENT_RUNTIME_MODE_QA_FIXER', config.qaFixerRuntimeMode);
+        if (config.runtimeFallbackEnabled !== undefined) {
+          setEnvVar(
+            'AUTO_CODE_RUNTIME_FALLBACK',
+            config.runtimeFallbackEnabled ? 'true' : 'false'
+          );
+        }
 
         const newContent = generateProviderEnvContent(existingVars, existingContent);
 
@@ -1289,7 +1306,12 @@ export function registerSettingsHandlers(
           if (vars['OLLAMA_MODEL']) availableProviders.push('ollama');
 
           const runtimeMode = vars['AUTO_CODE_RUNTIME_MODE'] || 'full_autonomous';
-          if (provider !== 'claude' && runtimeMode === 'full_autonomous') {
+          const runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
+          if (
+            provider !== 'claude' &&
+            runtimeMode === 'full_autonomous' &&
+            !runtimeFallbackEnabled
+          ) {
             errors.push('Non-Claude providers require analysis_only, patch_proposal, or generic_edit runtime mode');
           }
 

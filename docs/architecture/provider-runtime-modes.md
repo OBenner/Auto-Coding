@@ -139,6 +139,22 @@ planner, QA, or tool-dependent phases that require `full_autonomous`; those
 phases will fail fast with a capability error instead of attempting an unsafe
 fallback.
 
+### Runtime-Aware Fallback
+
+Runtime fallback is opt-in:
+
+```bash
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_RUNTIME_FALLBACK=true
+OPENAI_API_KEY=sk-...
+```
+
+This does not make OpenAI a full autonomous runtime. Auto Code resolves the
+provider/runtime capability set and degrades to the first compatible limited
+mode, usually `generic_edit`, instead of falling back into an impossible
+OpenAI-full-autonomous session.
+
 ## Generic Edit Contract
 
 `generic_edit` mode asks the model to return one JSON object per iteration. Auto
@@ -167,11 +183,11 @@ The JSON-loop prompt is rendered from that manifest, and future provider-native
 function-calling adapters should use the same schemas instead of duplicating
 tool definitions.
 
-OpenAI-compatible sessions expose a low-level native tool-call bridge that can
-send these schemas as function tools and append tool results back to provider
-history. The bridge is intentionally not the default `generic_edit` execution
-path yet; the JSON action loop remains the stable mode until provider/model
-tool-call behavior is calibrated.
+OpenAI-compatible sessions expose a native tool-call bridge that can send these
+schemas as function tools and append tool results back to provider history.
+Direct OpenAI, Ollama, OpenRouter, and LiteLLM sessions use that bridge when the
+routed model/gateway supports tools; if the first native tool-call request is
+rejected, `generic_edit` falls back to the JSON action loop.
 
 Auto Code validates and executes these actions locally:
 
@@ -237,9 +253,9 @@ Examples:
 - A non-Claude provider in `patch_proposal` mode can modify files only through
   a validated unified diff.
 - A non-Claude provider in `generic_edit` mode can modify files through Auto
-  Code's local action loop. OpenAI-compatible sessions use provider-native tool
-  calls when available; other sessions can use the JSON action loop. The mode
-  still lacks MCP and subagents.
+  Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
+  sessions use provider-native tool calls when available; other sessions can use
+  the JSON action loop. The mode still lacks MCP and subagents.
 
 ## Current Boundaries
 

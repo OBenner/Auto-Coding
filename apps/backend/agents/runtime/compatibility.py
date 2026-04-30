@@ -69,7 +69,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Direct SDK sessions can use Auto Code's local JSON action loop.",
+        notes="Direct SDK sessions use native tools when available, with JSON fallback.",
     ),
     ProviderRuntimeCompatibility(
         provider="google",
@@ -85,7 +85,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Gateway provider; generic_edit depends on routed model quality.",
+        notes="Gateway provider; native tools depend on routed model/gateway support.",
     ),
     ProviderRuntimeCompatibility(
         provider="openrouter",
@@ -93,7 +93,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="OpenAI-compatible gateway with Auto Code local actions.",
+        notes="OpenAI-compatible gateway with native tools plus JSON fallback.",
     ),
     ProviderRuntimeCompatibility(
         provider="zhipuai",

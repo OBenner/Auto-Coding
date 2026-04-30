@@ -391,6 +391,8 @@ export interface ProviderSettings {
   plannerRuntimeMode?: AgentRuntimeMode;
   coderRuntimeMode?: AgentRuntimeMode;
   qaReviewerRuntimeMode?: AgentRuntimeMode;
+  qaFixerRuntimeMode?: AgentRuntimeMode;
+  runtimeFallbackEnabled?: boolean;
 }
 
 // ============================================
@@ -460,6 +462,7 @@ export interface AIProviderConfig {
   coderRuntimeMode?: AgentRuntimeMode;
   qaReviewerRuntimeMode?: AgentRuntimeMode;
   qaFixerRuntimeMode?: AgentRuntimeMode;
+  runtimeFallbackEnabled?: boolean;
 }
 
 export interface ProviderConfigValidation {

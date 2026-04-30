@@ -44,6 +44,11 @@ def build_runtime_modes_payload() -> dict[str, Any]:
                 "--runtime-mode patch_proposal for coder subtasks."
             ),
             "provider_smoke": "Use --provider-smoke before running a spec.",
+            "runtime_fallback": (
+                "Set AUTO_CODE_RUNTIME_FALLBACK=true only when you want "
+                "incompatible non-Claude full_autonomous settings to degrade "
+                "to a limited runtime."
+            ),
         },
     }
 
@@ -89,6 +94,7 @@ def format_runtime_modes_text() -> str:
             "  Generic edit:    AGENT_PROVIDER_CODER=openai AGENT_RUNTIME_MODE_CODER=generic_edit python run.py --spec 001",
             "  Analysis:        python run.py --spec 001 --provider openai --analyze",
             "  Patch proposal:  python run.py --spec 001 --provider openai --runtime-mode patch_proposal",
+            "  Runtime fallback: AUTO_CODE_RUNTIME_FALLBACK=true python run.py --spec 001 --provider openai",
             "  Provider smoke:  python run.py --provider openai --provider-smoke",
         ]
     )

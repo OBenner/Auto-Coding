@@ -130,6 +130,23 @@ def _install_fake_litellm(
     return SimpleNamespace(calls=calls)
 
 
+def _install_fake_litellm_responses(
+    monkeypatch: pytest.MonkeyPatch,
+    responses: list[SimpleNamespace],
+) -> SimpleNamespace:
+    calls: list[dict] = []
+
+    async def acompletion(**kwargs):
+        await asyncio.sleep(0)
+        calls.append(copy.deepcopy(kwargs))
+        return responses.pop(0)
+
+    module = ModuleType("litellm")
+    module.acompletion = acompletion
+    monkeypatch.setitem(sys.modules, "litellm", module)
+    return SimpleNamespace(calls=calls)
+
+
 def _install_fake_google(
     monkeypatch: pytest.MonkeyPatch,
     chunks: list[str],
@@ -330,6 +347,83 @@ async def test_openai_compatible_session_exposes_native_tool_calls(
     assert session.messages[-1]["role"] == "tool"
     assert session.messages[-1]["tool_call_id"] == "call_1"
     assert "README.md" in session.messages[-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_openrouter_session_exposes_native_tool_calls(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fake_openai = _install_fake_openai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_or_1",
+                name="read_file",
+                arguments={"path": "README.md"},
+            )
+        ],
+    )
+    provider = OpenRouterProvider(
+        ProviderConfig(provider="openrouter", openrouter_api_key="test-key")
+    )
+    session = provider.create_session(SessionConfig(name="openrouter-tools"))
+
+    response = await session.complete_with_tool_calls(
+        "Inspect the project",
+        local_action_tool_schemas(),
+    )
+    session.add_tool_result(
+        response.tool_calls[0].id,
+        response.tool_calls[0].name,
+        {"ok": True, "message": "Read README.md"},
+    )
+
+    assert response.tool_calls[0].id == "call_or_1"
+    assert response.tool_calls[0].name == "read_file"
+    assert fake_openai.calls[0]["stream"] is False
+    assert fake_openai.calls[0]["tool_choice"] == "auto"
+    assert fake_openai.instances[0].kwargs["base_url"] == (
+        "https://openrouter.ai/api/v1"
+    )
+    assert "HTTP-Referer" in fake_openai.instances[0].kwargs["default_headers"]
+    assert session.messages[-1]["role"] == "tool"
+
+
+@pytest.mark.asyncio
+async def test_litellm_session_exposes_native_tool_calls(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fake_litellm = _install_fake_litellm_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_lite_1",
+                name="read_file",
+                arguments={"path": "README.md"},
+            )
+        ],
+    )
+    provider = LiteLLMProvider(
+        ProviderConfig(provider="litellm", litellm_model="openai/gpt-4o")
+    )
+    session = provider.create_session(SessionConfig(name="litellm-tools"))
+
+    response = await session.complete_with_tool_calls(
+        "Inspect the project",
+        local_action_tool_schemas(),
+    )
+    session.add_tool_result(
+        response.tool_calls[0].id,
+        response.tool_calls[0].name,
+        {"ok": True, "message": "Read README.md"},
+    )
+
+    assert response.tool_calls[0].id == "call_lite_1"
+    assert response.tool_calls[0].name == "read_file"
+    assert fake_litellm.calls[0]["stream"] is False
+    assert fake_litellm.calls[0]["tool_choice"] == "auto"
+    assert fake_litellm.calls[0]["tools"][0]["function"]["name"] == "read_file"
+    assert session.messages[-1]["role"] == "tool"
 
 
 @pytest.mark.asyncio
@@ -541,3 +635,5 @@ async def test_openai_provider_supports_generic_edit_mode(
     )
     assert result_artifact["status"] == "complete"
     assert result_artifact["subtask_id"] == "1.2"
+    assert result_artifact["loop"] == "native_tool_calls"
+    assert result_artifact["action_count"] == 2

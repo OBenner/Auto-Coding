@@ -173,9 +173,7 @@ class OpenAICompatibleSession(AgentSession):
             self.add_user_message(message)
 
         completion_kwargs = self._completion_kwargs(stream=False)
-        completion_kwargs["tools"] = [
-            _format_openai_tool_schema(tool) for tool in tools
-        ]
+        completion_kwargs["tools"] = [format_openai_tool_schema(tool) for tool in tools]
         completion_kwargs["tool_choice"] = "auto"
 
         try:
@@ -184,11 +182,11 @@ class OpenAICompatibleSession(AgentSession):
                 return ProviderToolCallResponse(content="")
 
             message_obj = response.choices[0].message
-            content = str(getattr(message_obj, "content", "") or "")
-            tool_calls = _parse_openai_tool_calls(message_obj)
+            content = str(_get_attr_or_key(message_obj, "content", "") or "")
+            tool_calls = parse_openai_tool_calls(message_obj)
             if content or tool_calls:
                 self._messages.append(
-                    _assistant_message_from_response(
+                    assistant_message_from_tool_calls(
                         content=content,
                         tool_calls=tool_calls,
                     )
@@ -221,7 +219,7 @@ class OpenAICompatibleSession(AgentSession):
         )
 
 
-def _format_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
+def format_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
     """Convert a provider-neutral tool schema to OpenAI chat-completions shape."""
     if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
         return tool
@@ -243,13 +241,13 @@ def _format_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _parse_openai_tool_calls(message_obj: Any) -> list[ProviderToolCall]:
+def parse_openai_tool_calls(message_obj: Any) -> list[ProviderToolCall]:
     """Normalize OpenAI SDK tool-call objects into runtime-friendly records."""
     normalized: list[ProviderToolCall] = []
-    for tool_call in getattr(message_obj, "tool_calls", None) or []:
-        function = getattr(tool_call, "function", None)
-        name = str(getattr(function, "name", "") or "")
-        raw_arguments = str(getattr(function, "arguments", "") or "{}")
+    for tool_call in _get_attr_or_key(message_obj, "tool_calls", None) or []:
+        function = _get_attr_or_key(tool_call, "function", None)
+        name = str(_get_attr_or_key(function, "name", "") or "")
+        raw_arguments = str(_get_attr_or_key(function, "arguments", "") or "{}")
         try:
             parsed_arguments = json.loads(raw_arguments)
         except json.JSONDecodeError as e:
@@ -259,7 +257,7 @@ def _parse_openai_tool_calls(message_obj: Any) -> list[ProviderToolCall]:
 
         normalized.append(
             ProviderToolCall(
-                id=str(getattr(tool_call, "id", "") or ""),
+                id=str(_get_attr_or_key(tool_call, "id", "") or ""),
                 name=name,
                 arguments=parsed_arguments,
             )
@@ -267,7 +265,7 @@ def _parse_openai_tool_calls(message_obj: Any) -> list[ProviderToolCall]:
     return normalized
 
 
-def _assistant_message_from_response(
+def assistant_message_from_tool_calls(
     *,
     content: str,
     tool_calls: list[ProviderToolCall],
@@ -290,6 +288,17 @@ def _assistant_message_from_response(
             for tool_call in tool_calls
         ]
     return message
+
+
+def _get_attr_or_key(value: Any, key: str, default: Any = None) -> Any:
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+_format_openai_tool_schema = format_openai_tool_schema
+_parse_openai_tool_calls = parse_openai_tool_calls
+_assistant_message_from_response = assistant_message_from_tool_calls
 
 
 class OpenAICompatibleProvider(AIEngineProvider):

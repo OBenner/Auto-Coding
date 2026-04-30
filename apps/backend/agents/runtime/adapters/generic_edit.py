@@ -546,6 +546,7 @@ def save_generic_edit_artifacts(
         "subtask_id": subtask_id,
         "status": status,
         "message": message,
+        **summarize_generic_edit_trace(trace),
         "iteration_count": len(trace),
         "tests": tests or [],
         "test_count": len(tests or []),
@@ -578,6 +579,33 @@ def save_generic_edit_artifacts(
         "generic_edit_trace": str(trace_path),
         "generic_edit_result": str(result_path),
         "generic_edit_summary": str(summary_path),
+    }
+
+
+def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return compact trace counters for result artifacts and UI consumers."""
+    loop_kind = "json_actions"
+    action_count = 0
+    failed_action_count = 0
+    tool_counts: dict[str, int] = {}
+
+    for iteration in trace:
+        if iteration.get("loop"):
+            loop_kind = str(iteration["loop"])
+        for action_entry in iteration.get("actions", []):
+            action_count += 1
+            result = action_entry.get("result", action_entry)
+            if isinstance(result, dict):
+                tool = str(result.get("tool") or "runtime")
+                tool_counts[tool] = tool_counts.get(tool, 0) + 1
+                if result.get("ok") is False:
+                    failed_action_count += 1
+
+    return {
+        "loop": loop_kind,
+        "action_count": action_count,
+        "failed_action_count": failed_action_count,
+        "tool_counts": tool_counts,
     }
 
 

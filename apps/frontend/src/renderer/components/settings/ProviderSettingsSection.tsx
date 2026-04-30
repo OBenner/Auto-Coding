@@ -5,11 +5,13 @@ import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Switch } from '../ui/switch';
 import { SettingsSection } from './SettingsSection';
 import type {
   AgentRuntimeMode,
   AIEngineProvider,
-  AIProviderConfig
+  AIProviderConfig,
+  ProviderConfigValidation
 } from '../../../shared/types/settings';
 
 type ProviderSettingsSectionProps = Record<string, never>;
@@ -87,7 +89,9 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [validationStatus, setValidationStatus] = useState<ProviderConfigValidation | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,11 +126,19 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   );
 
   const activeRuntimeMode = config.runtimeMode ?? 'full_autonomous';
+  const runtimeFallbackEnabled = config.runtimeFallbackEnabled ?? false;
   const nonClaudeFullAutonomous = config.provider !== 'claude' && activeRuntimeMode === 'full_autonomous';
+  let compatibilityMessageKey = 'settings:aiProvider.compatibility.claudeFirst';
+  if (nonClaudeFullAutonomous) {
+    compatibilityMessageKey = runtimeFallbackEnabled
+      ? 'settings:aiProvider.compatibility.fallbackActive'
+      : 'settings:aiProvider.compatibility.nonClaudeFullAutonomous';
+  }
 
   const updateConfig = (updates: Partial<AIProviderConfig>) => {
     setConfig((current) => ({ ...current, ...updates }));
     setSaveStatus('idle');
+    setValidationStatus(null);
   };
 
   const handleProviderChange = (provider: AIEngineProvider) => {
@@ -155,6 +167,28 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       setSaveStatus('error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleValidate = async () => {
+    setValidating(true);
+    setSaveStatus('idle');
+    setValidationStatus(null);
+    try {
+      const saveResult = await window.electronAPI?.updateProviderConfig?.(config);
+      if (!saveResult?.success) {
+        setSaveStatus('error');
+        return;
+      }
+      const validationResult = await window.electronAPI?.validateProviderConfig?.();
+      setValidationStatus(
+        validationResult?.success ? validationResult.data ?? null : null
+      );
+      setSaveStatus(validationResult?.success ? 'success' : 'error');
+    } catch {
+      setSaveStatus('error');
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -403,9 +437,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 {t(selectedProvider.labelKey)}
               </h3>
               <p className="text-xs text-muted-foreground">
-                {nonClaudeFullAutonomous
-                  ? t('settings:aiProvider.compatibility.nonClaudeFullAutonomous')
-                  : t('settings:aiProvider.compatibility.claudeFirst')}
+                {t(compatibilityMessageKey)}
               </p>
             </div>
           </div>
@@ -431,6 +463,25 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
               (runtimeMode) => updateConfig({ runtimeMode: runtimeMode as AgentRuntimeMode }),
               false
             )}
+          </div>
+
+          <div className="flex max-w-xl items-start gap-3 rounded-md border border-border bg-background p-3">
+            <Switch
+              id="runtimeFallbackEnabled"
+              checked={runtimeFallbackEnabled}
+              onCheckedChange={(runtimeFallbackEnabled) =>
+                updateConfig({ runtimeFallbackEnabled })
+              }
+              disabled={loading}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="runtimeFallbackEnabled" className="text-sm font-medium text-foreground">
+                {t('settings:aiProvider.runtime.fallbackLabel')}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t('settings:aiProvider.runtime.fallbackDescription')}
+              </p>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -532,6 +583,15 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           <Button onClick={handleSave} disabled={saving || loading}>
             {saving ? t('common:buttons.saving') : t('common:buttons.save')}
           </Button>
+          <Button
+            variant="outline"
+            onClick={handleValidate}
+            disabled={saving || validating || loading}
+          >
+            {validating
+              ? t('settings:aiProvider.validation.validating')
+              : t('settings:aiProvider.validation.action')}
+          </Button>
           {saveStatus === 'success' && (
             <span className="inline-flex items-center gap-1.5 text-sm text-success">
               <CheckCircle2 className="h-4 w-4" />
@@ -545,6 +605,35 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
             </span>
           )}
         </div>
+        {validationStatus && (
+          <div className="max-w-xl rounded-md border border-border bg-muted/30 p-3 text-sm">
+            {validationStatus.isValid ? (
+              <div className="flex items-center gap-2 text-success">
+                <CheckCircle2 className="h-4 w-4" />
+                {t('settings:aiProvider.validation.valid')}
+              </div>
+            ) : (
+              <div className="space-y-2 text-destructive">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  {t('settings:aiProvider.validation.invalid')}
+                </div>
+                <ul className="list-disc space-y-1 pl-5">
+                  {validationStatus.errors.map((error) => (
+                    <li key={error}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {validationStatus.availableProviders.length > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t('settings:aiProvider.validation.availableProviders', {
+                  providers: validationStatus.availableProviders.join(', ')
+                })}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </SettingsSection>
   );

@@ -199,5 +199,6 @@ class RuntimeCapabilityError(RuntimeError):
             f"Required capabilities:\n{required}\n\n"
             f"Available capabilities:\n{available}\n\n"
             "Use Claude Agent SDK for full autonomous coding today, or run a "
-            "limited text/patch proposal phase with a compatible runtime."
+            "limited generic_edit, patch_proposal, or analysis_only phase with "
+            "a compatible runtime."
         )
