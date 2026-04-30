@@ -40,6 +40,7 @@ from .runtime import (
     resolve_runtime_mode_with_fallback,
     run_runtime_session,
 )
+from .runtime.artifacts import save_runtime_fallback_artifact
 from .session import run_agent_session, save_token_stats
 
 # Import plugin system for agent lifecycle hooks
@@ -189,9 +190,15 @@ async def run_followup_planner(
     runtime_mode = runtime_decision.selected_mode
     if runtime_decision.fallback_applied:
         logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
+        fallback_artifact = save_runtime_fallback_artifact(
+            spec_dir=spec_dir,
+            decision=runtime_decision,
+            phase="planning",
+            session_num=1,
+        )
         print_status(
             f"Runtime fallback: {runtime_decision.requested_mode} -> "
-            f"{runtime_mode} ({provider_name})",
+            f"{runtime_mode} ({provider_name}); details: {fallback_artifact}",
             "warning",
         )
 

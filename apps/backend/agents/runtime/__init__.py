@@ -7,6 +7,7 @@ inside an Auto Code workspace.
 """
 
 from .adapters import create_runtime_session
+from .artifacts import save_runtime_fallback_artifact
 from .capabilities import (
     RuntimeCapabilities,
     RuntimeCapabilityError,
@@ -56,4 +57,5 @@ __all__ = [
     "resolve_runtime_mode_with_fallback",
     "run_runtime_session",
     "runtime_fallback_enabled",
+    "save_runtime_fallback_artifact",
 ]

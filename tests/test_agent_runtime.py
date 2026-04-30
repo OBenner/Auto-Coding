@@ -21,6 +21,7 @@ from agents.runtime import (
     resolve_runtime_mode_with_fallback,
     run_runtime_session,
     runtime_fallback_enabled,
+    save_runtime_fallback_artifact,
 )
 from agents.runtime.adapters.patch_proposal import (
     PatchProposalError,
@@ -965,6 +966,16 @@ def test_runtime_fallback_is_explicit_and_capability_aware(
     assert fail_fast.selected_mode == "full_autonomous"
     assert fail_fast.fallback_applied is False
     assert "disabled" in fail_fast.reason
+    assert fail_fast.missing_capabilities == (
+        "native_tool_loop",
+        "filesystem_edit",
+        "shell",
+    )
+    assert fail_fast.compatible_fallbacks == (
+        "generic_edit",
+        "patch_proposal",
+        "analysis_only",
+    )
 
     monkeypatch.setenv("AUTO_CODE_RUNTIME_FALLBACK", "true")
     degraded = resolve_runtime_mode_with_fallback(
@@ -975,6 +986,11 @@ def test_runtime_fallback_is_explicit_and_capability_aware(
     assert degraded.selected_mode == "generic_edit"
     assert degraded.fallback_applied is True
     assert "using generic_edit" in degraded.reason
+    assert degraded.to_dict()["compatible_fallbacks"] == [
+        "generic_edit",
+        "patch_proposal",
+        "analysis_only",
+    ]
 
     claude = resolve_runtime_mode_with_fallback(
         provider_name="claude",
@@ -991,6 +1007,40 @@ def test_runtime_fallback_is_explicit_and_capability_aware(
     )
     assert analysis.selected_mode == "full_autonomous"
     assert analysis.fallback_applied is False
+
+
+def test_runtime_fallback_artifact_records_capability_decision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("AUTO_CODE_RUNTIME_FALLBACK", "true")
+    decision = resolve_runtime_mode_with_fallback(
+        provider_name="openai",
+        requested_mode="full_autonomous",
+        phase="coding",
+    )
+
+    artifact_path = save_runtime_fallback_artifact(
+        spec_dir=tmp_path,
+        decision=decision,
+        phase="coding",
+        session_num=2,
+        subtask_id="1.2",
+    )
+
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "coding"
+    assert payload["session"] == 2
+    assert payload["subtask_id"] == "1.2"
+    assert payload["decision"]["provider"] == "openai"
+    assert payload["decision"]["requested_mode"] == "full_autonomous"
+    assert payload["decision"]["selected_mode"] == "generic_edit"
+    assert payload["decision"]["fallback_applied"] is True
+    assert payload["decision"]["missing_capabilities"] == [
+        "native_tool_loop",
+        "filesystem_edit",
+        "shell",
+    ]
 
 
 def test_runtime_requirements_follow_selected_runtime_mode():

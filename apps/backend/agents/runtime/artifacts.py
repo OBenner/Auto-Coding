@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from core.file_utils import atomic_write, write_json_atomic
 
@@ -72,3 +73,48 @@ def save_analysis_only_artifact(
     )
 
     return artifact_path
+
+
+def save_runtime_fallback_artifact(
+    *,
+    spec_dir: Path,
+    decision: Any,
+    phase: str,
+    session_num: int | None = None,
+    subtask_id: str | None = None,
+) -> Path:
+    """Persist runtime fallback metadata for diagnostics and UI consumers."""
+    artifact_dir = spec_dir / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now(UTC).isoformat()
+    timestamp_token = safe_artifact_token(timestamp, "timestamp")
+    phase_token = safe_artifact_token(phase, "phase")
+    session_token = safe_artifact_token(
+        f"session-{session_num}" if session_num is not None else None,
+        "no-session",
+    )
+    subtask_token = safe_artifact_token(subtask_id, "no-subtask")
+    path = artifact_dir / (
+        "runtime_fallback_"
+        f"{phase_token}_{session_token}_{subtask_token}_{timestamp_token}.json"
+    )
+
+    decision_payload = (
+        decision.to_dict()
+        if hasattr(decision, "to_dict") and callable(decision.to_dict)
+        else {"value": str(decision)}
+    )
+    write_json_atomic(
+        path,
+        {
+            "timestamp": timestamp,
+            "phase": phase,
+            "session": session_num,
+            "subtask_id": subtask_id,
+            "decision": decision_payload,
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+    return path

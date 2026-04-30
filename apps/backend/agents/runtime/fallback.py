@@ -36,6 +36,20 @@ class RuntimeFallbackDecision:
     selected_mode: RuntimeMode
     fallback_applied: bool
     reason: str = ""
+    missing_capabilities: tuple[str, ...] = ()
+    compatible_fallbacks: tuple[RuntimeMode, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the decision for logs and artifacts."""
+        return {
+            "provider": self.provider_name,
+            "requested_mode": self.requested_mode,
+            "selected_mode": self.selected_mode,
+            "fallback_applied": self.fallback_applied,
+            "reason": self.reason,
+            "missing_capabilities": list(self.missing_capabilities),
+            "compatible_fallbacks": list(self.compatible_fallbacks),
+        }
 
 
 def runtime_fallback_enabled() -> bool:
@@ -80,6 +94,22 @@ def requirements_for_runtime_mode(
     return RuntimeRequirements.full_coder()
 
 
+def compatible_fallback_modes(
+    *,
+    provider_name: str,
+    requested_mode: RuntimeMode,
+    phase: RuntimePhase,
+) -> tuple[RuntimeMode, ...]:
+    """Return degraded runtime modes that satisfy their own requirements."""
+    compatible: list[RuntimeMode] = []
+    for candidate in _DEGRADED_FALLBACKS[requested_mode]:
+        candidate_requirements = requirements_for_runtime_mode(candidate, phase=phase)
+        candidate_capabilities = capabilities_for_runtime_mode(provider_name, candidate)
+        if candidate_capabilities.supports(candidate_requirements):
+            compatible.append(candidate)
+    return tuple(compatible)
+
+
 def resolve_runtime_mode_with_fallback(
     *,
     provider_name: str,
@@ -99,6 +129,7 @@ def resolve_runtime_mode_with_fallback(
 
     requested_capabilities = capabilities_for_runtime_mode(provider_name, requested)
     requested_requirements = requirements_for_runtime_mode(requested, phase=phase)
+    missing_capabilities = tuple(requested_capabilities.missing(requested_requirements))
     if requested_capabilities.supports(requested_requirements):
         return RuntimeFallbackDecision(
             provider_name=provider_name,
@@ -117,22 +148,33 @@ def resolve_runtime_mode_with_fallback(
                 f"{provider_name}/{requested} does not satisfy "
                 f"{requested_requirements.mode}; {RUNTIME_FALLBACK_ENV} is disabled"
             ),
-        )
-
-    for candidate in _DEGRADED_FALLBACKS[requested]:
-        candidate_requirements = requirements_for_runtime_mode(candidate, phase=phase)
-        candidate_capabilities = capabilities_for_runtime_mode(provider_name, candidate)
-        if candidate_capabilities.supports(candidate_requirements):
-            return RuntimeFallbackDecision(
+            missing_capabilities=missing_capabilities,
+            compatible_fallbacks=compatible_fallback_modes(
                 provider_name=provider_name,
                 requested_mode=requested,
-                selected_mode=candidate,
-                fallback_applied=True,
-                reason=(
-                    f"{provider_name}/{requested} cannot provide "
-                    f"{requested_requirements.mode}; using {candidate}"
-                ),
-            )
+                phase=phase,
+            ),
+        )
+
+    compatible_modes = compatible_fallback_modes(
+        provider_name=provider_name,
+        requested_mode=requested,
+        phase=phase,
+    )
+    if compatible_modes:
+        candidate = compatible_modes[0]
+        return RuntimeFallbackDecision(
+            provider_name=provider_name,
+            requested_mode=requested,
+            selected_mode=candidate,
+            fallback_applied=True,
+            reason=(
+                f"{provider_name}/{requested} cannot provide "
+                f"{requested_requirements.mode}; using {candidate}"
+            ),
+            missing_capabilities=missing_capabilities,
+            compatible_fallbacks=compatible_modes,
+        )
 
     return RuntimeFallbackDecision(
         provider_name=provider_name,
@@ -140,4 +182,5 @@ def resolve_runtime_mode_with_fallback(
         selected_mode=requested,
         fallback_applied=False,
         reason=f"No compatible runtime fallback found for {provider_name}/{requested}",
+        missing_capabilities=missing_capabilities,
     )

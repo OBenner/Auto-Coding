@@ -78,7 +78,10 @@ from .runtime import (
     resolve_runtime_mode_with_fallback,
     run_runtime_session,
 )
-from .runtime.artifacts import save_analysis_only_artifact
+from .runtime.artifacts import (
+    save_analysis_only_artifact,
+    save_runtime_fallback_artifact,
+)
 from .session import (
     post_session_processing,
     run_agent_session,
@@ -1161,9 +1164,16 @@ async def run_autonomous_agent(
         runtime_mode = runtime_decision.selected_mode
         if runtime_decision.fallback_applied:
             logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
+            fallback_artifact = save_runtime_fallback_artifact(
+                spec_dir=spec_dir,
+                decision=runtime_decision,
+                phase=runtime_phase,
+                session_num=iteration,
+                subtask_id=subtask_id,
+            )
             print_status(
                 f"Runtime fallback: {runtime_decision.requested_mode} -> "
-                f"{runtime_mode} ({provider.name})",
+                f"{runtime_mode} ({provider.name}); details: {fallback_artifact}",
                 "warning",
             )
 
