@@ -294,6 +294,7 @@ def _get_attr_or_key(value: Any, key: str, default: Any = None) -> Any:
         return value.get(key, default)
     return getattr(value, key, default)
 
+
 class OpenAICompatibleProvider(AIEngineProvider):
     """Base provider for OpenAI-compatible backends.
 

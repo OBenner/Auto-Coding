@@ -1150,7 +1150,9 @@ async def run_autonomous_agent(
         provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
         provider = create_engine_provider(provider_config)
         requested_runtime_mode = get_runtime_mode(agent_type_for_session)
-        runtime_phase = "planning" if current_log_phase == LogPhase.PLANNING else "coding"
+        runtime_phase = (
+            "planning" if current_log_phase == LogPhase.PLANNING else "coding"
+        )
         runtime_decision = resolve_runtime_mode_with_fallback(
             provider_name=provider.name,
             requested_mode=requested_runtime_mode,

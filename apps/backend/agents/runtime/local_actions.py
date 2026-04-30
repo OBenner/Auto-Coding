@@ -570,7 +570,9 @@ def bounded_positive_int(
     if value is None:
         return default
     if isinstance(value, bool):
-        raise LocalActionError(f"Action field '{field_name}' must be a positive integer")
+        raise LocalActionError(
+            f"Action field '{field_name}' must be a positive integer"
+        )
     try:
         parsed = int(value)
     except (TypeError, ValueError) as e:
