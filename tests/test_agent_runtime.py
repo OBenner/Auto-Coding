@@ -1,5 +1,4 @@
 import json
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -19,6 +18,7 @@ from agents.runtime.adapters.patch_proposal import (
     parse_patch_proposal,
     validate_workspace_relative_path,
 )
+from core.platform import run_process
 from core.providers.config import ProviderConfig
 
 
@@ -89,6 +89,29 @@ class FakeCompletionSession:
         yield " world"
 
 
+class FakeClaudeCompletionSession:
+    provider_name = "claude"
+
+    async def complete(self, message: str, stream: bool = True):
+        assert message == "analyze"
+        assert stream is True
+        yield "claude limited analysis"
+
+
+class FakeClaudeQuerySession:
+    provider_name = "claude"
+
+    def __init__(self):
+        self.client = FakeClaudeClient()
+        self.query_message = None
+
+    async def query(self, message: str):
+        self.query_message = message
+
+    async def receive_response(self):
+        yield "query limited analysis"
+
+
 @pytest.mark.asyncio
 async def test_completion_runtime_supports_text_only(tmp_path: Path):
     runtime_session = create_runtime_session(
@@ -105,6 +128,48 @@ async def test_completion_runtime_supports_text_only(tmp_path: Path):
 
     assert result.status == "complete"
     assert result.response_text == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_claude_explicit_analysis_mode_uses_limited_runtime(tmp_path: Path):
+    runtime_session = create_runtime_session(
+        provider_name="claude",
+        agent_session=FakeClaudeCompletionSession(),
+        runtime_mode="analysis_only",
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "analyze",
+        tmp_path,
+        requirements=RuntimeRequirements.text_only(),
+    )
+
+    assert runtime_session.name == "completion"
+    assert result.status == "complete"
+    assert result.response_text == "claude limited analysis"
+
+
+@pytest.mark.asyncio
+async def test_claude_limited_runtime_manages_query_client_context(tmp_path: Path):
+    session = FakeClaudeQuerySession()
+    runtime_session = create_runtime_session(
+        provider_name="claude",
+        agent_session=session,
+        runtime_mode="analysis_only",
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "analyze",
+        tmp_path,
+        requirements=RuntimeRequirements.text_only(),
+    )
+
+    assert result.response_text == "query limited analysis"
+    assert session.query_message == "analyze"
+    assert session.client.entered is True
+    assert session.client.exited is True
 
 
 @pytest.mark.asyncio
@@ -182,14 +247,14 @@ class FakeGenericEditSession:
 
 
 def _init_git_repo(path: Path) -> None:
-    subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
-    subprocess.run(
+    run_process(["git", "init"], cwd=path, capture_output=True, check=True)
+    run_process(
         ["git", "config", "user.email", "test@example.com"],
         cwd=path,
         capture_output=True,
         check=True,
     )
-    subprocess.run(
+    run_process(
         ["git", "config", "user.name", "Test User"],
         cwd=path,
         capture_output=True,
@@ -310,7 +375,15 @@ async def test_patch_proposal_runtime_rejects_unsafe_paths(tmp_path: Path):
 
 
 def test_patch_path_validator_rejects_sensitive_paths():
-    for path in (".env", ".env.development", "secrets/api-key.txt"):
+    for path in (
+        ".env",
+        ".env.development",
+        ".ssh/id_rsa",
+        ".npmrc",
+        ".pypirc",
+        ".zshrc",
+        "secrets/api-key.txt",
+    ):
         with pytest.raises(PatchProposalError):
             validate_workspace_relative_path(path)
 
@@ -375,7 +448,8 @@ def test_patch_mode_marks_subtask_completed(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     target = tmp_path / "hello.txt"
-    target.write_text("old\n", encoding="utf-8")
+    secret = "SECRET_TRACE_VALUE"
+    target.write_text(f"old\n{secret}\n", encoding="utf-8")
     session = FakeGenericEditSession(
         [
             {
@@ -427,6 +501,8 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert len(session.messages) == 3
     assert "generic_edit mode" in session.messages[0]
     assert "observations" in session.messages[1]
+    assert "generic_edit mode" in session.messages[1]
+    assert "change hello.txt" in session.messages[1]
 
     artifact_dir = tmp_path / "artifacts"
     assert (artifact_dir / "generic_edit_trace.json").exists()
@@ -439,6 +515,17 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert result_artifact["subtask_id"] == "1.1"
     assert result_artifact["iteration_count"] == 3
     assert result_artifact["tests"] == ["not run"]
+
+    trace_text = (artifact_dir / "generic_edit_trace.json").read_text(
+        encoding="utf-8"
+    )
+    assert secret not in trace_text
+    trace = json.loads(trace_text)
+    read_result = trace["trace"][0]["actions"][0]["result"]
+    assert read_result["data"]["content_redacted"] is True
+    assert read_result["data"]["content_bytes"] > 0
+    assert "response_excerpt" in trace["trace"][0]
+    assert "response" not in trace["trace"][0]
 
 
 @pytest.mark.asyncio
@@ -643,8 +730,12 @@ async def test_analysis_only_coding_saves_artifact_without_post_processing(
         verbose=False,
     )
 
-    artifact_path = spec_dir / "artifacts" / "analysis_only_coding_1.1.md"
-    metadata_path = spec_dir / "artifacts" / "analysis_only_coding_1.1.json"
+    artifact_path = (
+        spec_dir
+        / "artifacts"
+        / "analysis_only_coding_session-1_1.1_openai.md"
+    )
+    metadata_path = artifact_path.with_suffix(".json")
     assert artifact_path.exists()
     assert metadata_path.exists()
     assert "Inspect src/app.py" in artifact_path.read_text(encoding="utf-8")

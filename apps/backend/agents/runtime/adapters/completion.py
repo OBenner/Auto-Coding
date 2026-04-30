@@ -40,9 +40,14 @@ class CompletionRuntimeSession:
             if hasattr(self.agent_session, "query") and hasattr(
                 self.agent_session, "receive_response"
             ):
-                await self.agent_session.query(message)
-                async for chunk in self.agent_session.receive_response():
-                    yield str(chunk)
+                client = getattr(self.agent_session, "client", None)
+                if hasattr(client, "__aenter__") and hasattr(client, "__aexit__"):
+                    async with client:
+                        async for chunk in self._stream_query_response(message):
+                            yield chunk
+                else:
+                    async for chunk in self._stream_query_response(message):
+                        yield chunk
                 return
         except Exception as e:
             logger.error(
@@ -57,6 +62,12 @@ class CompletionRuntimeSession:
         raise AttributeError(
             f"Provider {self.provider_name} session does not expose a completion API"
         )
+
+    async def _stream_query_response(self, message: str) -> AsyncIterator[str]:
+        """Stream text from query/receive_response style sessions."""
+        await self.agent_session.query(message)
+        async for chunk in self.agent_session.receive_response():
+            yield str(chunk)
 
     async def run(
         self,

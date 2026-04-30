@@ -91,3 +91,36 @@ async def test_run_analysis_only_session_saves_artifact(
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert metadata["phase"] == "analysis"
     assert metadata["subtask_id"] is None
+    assert artifact_path.name == "analysis_only_analysis_session-1_no-subtask_openai.md"
+
+
+@pytest.mark.asyncio
+async def test_run_analysis_only_session_returns_structured_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.analysis_commands import run_analysis_only_session
+
+    spec_dir = tmp_path / ".auto-claude" / "specs" / "001-analysis"
+    spec_dir.mkdir(parents=True)
+
+    def fail_from_env(agent_type=None):
+        raise RuntimeError("missing provider config")
+
+    monkeypatch.setattr(
+        "cli.analysis_commands.ProviderConfig.from_env",
+        fail_from_env,
+    )
+
+    result = await run_analysis_only_session(
+        project_dir=tmp_path,
+        spec_dir=spec_dir,
+        model=None,
+        user_prompt=None,
+        verbose=False,
+    )
+
+    assert result["status"] == "error"
+    assert result["provider"] == "unknown"
+    assert result["artifact"] == ""
+    assert "missing provider config" in result["response"]

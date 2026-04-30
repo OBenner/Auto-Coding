@@ -470,6 +470,37 @@ def build_windows_command(cli_path: str, args: list[str]) -> list[str]:
     return [cli_path] + args
 
 
+def run_process(
+    args: list[str],
+    *,
+    cwd: Path | str | None = None,
+    input: str | bytes | None = None,
+    text: bool | None = None,
+    capture_output: bool = False,
+    timeout: int | float | None = None,
+    check: bool = False,
+) -> subprocess.CompletedProcess:
+    """
+    Run a subprocess through the shared platform command builder.
+
+    This keeps Windows .cmd/.bat handling centralized while preserving normal
+    subprocess.run semantics for callers that need stdout/stderr/return codes.
+    """
+    if not args:
+        raise ValueError("args must include an executable")
+
+    command = build_windows_command(args[0], args[1:])
+    return subprocess.run(
+        command,
+        cwd=str(cwd) if cwd is not None else None,
+        input=input,
+        text=text,
+        capture_output=capture_output,
+        timeout=timeout,
+        check=check,
+    )
+
+
 # ============================================================================
 # Environment Variables
 # ============================================================================

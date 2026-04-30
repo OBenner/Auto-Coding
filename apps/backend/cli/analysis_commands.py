@@ -96,57 +96,69 @@ async def run_analysis_only_session(
     verbose: bool = False,
 ) -> dict[str, Any]:
     """Run one text-only analysis session and persist its output."""
-    provider_config = ProviderConfig.from_env(agent_type="analysis")
-    provider = create_engine_provider(provider_config)
-    session_config = SessionConfig(
-        name="analysis-session",
-        model=model,
-        extra={"agent_type": "analysis"},
-    )
+    provider_name = "unknown"
+    try:
+        provider_config = ProviderConfig.from_env(agent_type="analysis")
+        provider = create_engine_provider(provider_config)
+        provider_name = provider.name
+        session_config = SessionConfig(
+            name="analysis-session",
+            model=model,
+            extra={"agent_type": "analysis"},
+        )
 
-    if provider.name == "claude":
-        session = provider.create_session(
-            session_config,
-            project_dir=project_dir,
+        if provider.name == "claude":
+            session = provider.create_session(
+                session_config,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                agent_type="planner",
+            )
+            runtime_session = create_runtime_session(
+                provider_name=provider.name,
+                agent_session=session,
+                claude_session_runner=run_agent_session,
+                runtime_mode="analysis_only",
+                project_dir=project_dir,
+            )
+        else:
+            session = provider.create_session(session_config)
+            runtime_session = create_runtime_session(
+                provider_name=provider.name,
+                agent_session=session,
+                runtime_mode="analysis_only",
+                project_dir=project_dir,
+            )
+
+        prompt = build_analysis_prompt(
             spec_dir=spec_dir,
-            agent_type="planner",
-        )
-        runtime_session = create_runtime_session(
-            provider_name=provider.name,
-            agent_session=session,
-            claude_session_runner=run_agent_session,
-            runtime_mode="analysis_only",
             project_dir=project_dir,
+            user_prompt=user_prompt,
         )
-    else:
-        session = provider.create_session(session_config)
-        runtime_session = create_runtime_session(
+        result = await run_runtime_session(
+            runtime_session,
+            prompt,
+            spec_dir,
+            verbose=verbose,
+            phase=LogPhase.PLANNING,
+            requirements=RuntimeRequirements.text_only(),
+        )
+        artifact_path = save_analysis_only_artifact(
+            spec_dir=spec_dir,
+            response_text=result.response_text,
             provider_name=provider.name,
-            agent_session=session,
-            runtime_mode="analysis_only",
-            project_dir=project_dir,
+            phase="analysis",
+            session_num=1,
         )
-
-    prompt = build_analysis_prompt(
-        spec_dir=spec_dir,
-        project_dir=project_dir,
-        user_prompt=user_prompt,
-    )
-    result = await run_runtime_session(
-        runtime_session,
-        prompt,
-        spec_dir,
-        verbose=verbose,
-        phase=LogPhase.PLANNING,
-        requirements=RuntimeRequirements.text_only(),
-    )
-    artifact_path = save_analysis_only_artifact(
-        spec_dir=spec_dir,
-        response_text=result.response_text,
-        provider_name=provider.name,
-        phase="analysis",
-        session_num=1,
-    )
+    except Exception as e:
+        logger.error("Analysis-only runtime failed", exc_info=True)
+        return {
+            "status": "error",
+            "provider": provider_name,
+            "runtime_mode": "analysis_only",
+            "artifact": "",
+            "response": f"Analysis-only runtime failed: {e}",
+        }
 
     return {
         "status": result.status,
@@ -180,9 +192,16 @@ def handle_analysis_command(
     if output_json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
-        print_status("Analysis-only pass complete", "success")
+        status_style = "success" if result["status"] != "error" else "error"
+        status_text = (
+            "Analysis-only pass complete"
+            if result["status"] != "error"
+            else "Analysis-only pass failed"
+        )
+        print_status(status_text, status_style)
         print_key_value("Provider", result["provider"])
-        print_key_value("Artifact", result["artifact"])
+        if result["artifact"]:
+            print_key_value("Artifact", result["artifact"])
         print()
         response = str(result["response"]).strip()
         if response:

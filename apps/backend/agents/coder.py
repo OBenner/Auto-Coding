@@ -512,7 +512,11 @@ def _mark_runtime_subtask_completed(
         if subtasks and all(item.get("status") == "completed" for item in subtasks):
             phase["status"] = "completed"
 
-    write_json_atomic(plan_file, plan, indent=2, ensure_ascii=False)
+    try:
+        write_json_atomic(plan_file, plan, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error("Failed to persist runtime subtask completion: %s", e)
+        return False
     return True
 
 

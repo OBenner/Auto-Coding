@@ -5,12 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import shlex
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from core.platform import is_windows
+from core.platform import is_windows, run_process
 from security import split_command_segments, validate_command
 
 from .adapters.patch_proposal import (
@@ -26,6 +25,8 @@ MAX_TOOL_OUTPUT_CHARS = 12000
 MAX_READ_FILE_CHARS = 20000
 MAX_COMMAND_TIMEOUT_SECONDS = 120
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 60
+TRACE_STRING_PREVIEW_CHARS = 1000
+TRACE_REDACTED_FIELDS = {"content", "output", "patch", "raw_response"}
 
 
 class LocalActionError(RuntimeError):
@@ -182,7 +183,7 @@ class LocalActionExecutor:
             )
 
         completed = await asyncio.to_thread(
-            subprocess.run,
+            run_process,
             args,
             cwd=self.project_dir,
             text=True,
@@ -214,15 +215,48 @@ def safe_action_for_trace(action: dict[str, Any]) -> dict[str, Any]:
     safe = dict(action)
     if "content" in safe:
         content = str(safe["content"])
-        safe["content_excerpt"] = content[:500]
         safe["content_bytes"] = len(content.encode("utf-8"))
+        safe["content_redacted"] = True
         del safe["content"]
     if "patch" in safe:
         patch = str(safe["patch"])
-        safe["patch_excerpt"] = patch[:1000]
         safe["patch_bytes"] = len(patch.encode("utf-8"))
+        safe["patch_redacted"] = True
         del safe["patch"]
     return safe
+
+
+def safe_result_for_trace(result: ToolActionResult) -> dict[str, Any]:
+    """Serialize a local action result without persisting raw file/output data."""
+    return {
+        "tool": result.tool,
+        "ok": result.ok,
+        "message": result.message,
+        "data": redact_trace_data(result.data),
+    }
+
+
+def redact_trace_data(value: Any) -> Any:
+    """Redact sensitive or large values before writing runtime trace artifacts."""
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        for key, item in value.items():
+            if isinstance(item, str) and key in TRACE_REDACTED_FIELDS:
+                safe[f"{key}_redacted"] = True
+                safe[f"{key}_bytes"] = len(item.encode("utf-8"))
+                safe[f"{key}_line_count"] = len(item.splitlines())
+            else:
+                safe[key] = redact_trace_data(item)
+        return safe
+    if isinstance(value, list):
+        return [redact_trace_data(item) for item in value]
+    if isinstance(value, str) and len(value) > TRACE_STRING_PREVIEW_CHARS:
+        return {
+            "excerpt": value[:TRACE_STRING_PREVIEW_CHARS],
+            "bytes": len(value.encode("utf-8")),
+            "truncated": True,
+        }
+    return value
 
 
 def action_tool(action: dict[str, Any]) -> str:

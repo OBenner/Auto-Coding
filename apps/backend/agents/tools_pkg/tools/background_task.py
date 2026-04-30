@@ -467,15 +467,22 @@ class BackgroundTaskManager:
         # Store task reference to prevent premature garbage collection
         bg_task = asyncio.create_task(self._run_command(task_id))
         bg_task.add_done_callback(
-            lambda t: (
-                self._async_tasks.pop(task_id, None)
-                or (t.exception() if not t.cancelled() and t.exception() else None)
-            )
+            lambda task: self._cleanup_background_task(task_id, task)
         )
         self._async_tasks[task_id] = bg_task
 
         logger.info(f"Started background task {task_id}: {command}")
         return task_id
+
+    def _cleanup_background_task(self, task_id: str, task: asyncio.Task) -> None:
+        """Drop completed task references and retrieve exceptions for logging."""
+        self._async_tasks.pop(task_id, None)
+        if task.cancelled():
+            return
+        try:
+            task.exception()
+        except asyncio.InvalidStateError:
+            logger.debug("Background task %s cleanup ran before completion", task_id)
 
     def get_task_status(self, task_id: str) -> dict[str, Any] | None:
         """

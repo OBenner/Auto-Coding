@@ -1,10 +1,11 @@
 """Patch proposal runtime adapter."""
 
 import json
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from core.platform import run_process
 
 from ..capabilities import RuntimeCapabilities
 from ..result import AgentRunResult
@@ -14,9 +15,20 @@ SENSITIVE_PATH_PARTS = {
     ".git",
     ".claude",
     ".mcp.json",
+    ".ssh",
     "secrets",
 }
-SENSITIVE_FILENAME_PREFIXES = (".env",)
+SENSITIVE_FILENAME_PREFIXES = (
+    ".env",
+    ".bashrc",
+    ".bash_profile",
+    ".profile",
+    ".zshrc",
+    ".zprofile",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+)
 
 PATCH_PROMPT_TEMPLATE = """\
 You are running in Auto Code patch proposal mode.
@@ -376,7 +388,7 @@ def apply_git_patch(patch: str, project_dir: Path) -> None:
     if not patch.endswith("\n"):
         patch += "\n"
 
-    check = subprocess.run(
+    check = run_process(
         ["git", "apply", "--check", "--whitespace=nowarn", "-"],
         cwd=project_dir,
         input=patch,
@@ -388,7 +400,7 @@ def apply_git_patch(patch: str, project_dir: Path) -> None:
         detail = check.stderr.strip() or check.stdout.strip()
         raise PatchProposalError(f"Patch failed validation: {detail}")
 
-    applied = subprocess.run(
+    applied = run_process(
         ["git", "apply", "--whitespace=nowarn", "-"],
         cwd=project_dir,
         input=patch,

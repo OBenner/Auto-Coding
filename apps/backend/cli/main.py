@@ -16,6 +16,8 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 
+from agents.runtime.compatibility import provider_choices, runtime_mode_choices
+
 from .analysis_commands import handle_analysis_command
 from .analytics_commands import handle_analytics_command
 from .batch_commands import (
@@ -155,15 +157,7 @@ Environment Variables:
         "--provider",
         type=str,
         default=None,
-        choices=[
-            "claude",
-            "openai",
-            "google",
-            "litellm",
-            "openrouter",
-            "zhipuai",
-            "ollama",
-        ],
+        choices=provider_choices(),
         help="AI provider to use (default: from env or claude)",
     )
 
@@ -171,16 +165,7 @@ Environment Variables:
         "--runtime-mode",
         type=str,
         default=None,
-        choices=[
-            "full-autonomous",
-            "full_autonomous",
-            "generic-edit",
-            "generic_edit",
-            "patch-proposal",
-            "patch_proposal",
-            "analysis-only",
-            "analysis_only",
-        ],
+        choices=runtime_mode_choices(),
         help="Agent runtime mode (default: full_autonomous)",
     )
 

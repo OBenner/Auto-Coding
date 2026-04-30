@@ -119,6 +119,20 @@ def runtime_mode_info_as_dicts() -> list[dict[str, str]]:
     return [asdict(mode) for mode in RUNTIME_MODE_INFO]
 
 
+def provider_choices() -> list[str]:
+    """Return provider names supported by runtime compatibility metadata."""
+    return [row.provider for row in PROVIDER_RUNTIME_COMPATIBILITY]
+
+
+def runtime_mode_choices() -> list[str]:
+    """Return CLI-friendly runtime mode choices from runtime metadata."""
+    choices: list[str] = []
+    for mode in RUNTIME_MODE_INFO:
+        choices.append(mode.mode)
+        choices.append(mode.mode.replace("_", "-"))
+    return choices
+
+
 def provider_runtime_compatibility_as_dicts() -> list[dict[str, str]]:
     """Return provider compatibility rows for JSON output."""
     return [row.to_dict() for row in PROVIDER_RUNTIME_COMPATIBILITY]

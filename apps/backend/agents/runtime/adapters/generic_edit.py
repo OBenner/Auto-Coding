@@ -12,6 +12,7 @@ from ..local_actions import (
     action_tool,
     normalize_string_list,
     safe_action_for_trace,
+    safe_result_for_trace,
 )
 from ..result import AgentRunResult
 from .completion import CompletionRuntimeSession
@@ -90,17 +91,19 @@ class GenericEditRuntimeSession:
     ) -> AgentRunResult:
         del verbose, phase
 
-        prompt = GENERIC_EDIT_PROMPT_TEMPLATE.replace(
+        base_prompt = GENERIC_EDIT_PROMPT_TEMPLATE.replace(
             "__AUTO_CODE_TASK_PROMPT__",
             message,
         )
+        prompt = base_prompt
         trace: list[dict[str, Any]] = []
 
         for iteration in range(1, self.max_iterations + 1):
             response_text = await self._complete(prompt)
             iteration_entry: dict[str, Any] = {
                 "iteration": iteration,
-                "response": response_text,
+                "response_excerpt": response_text[:1000],
+                "response_bytes": len(response_text.encode("utf-8")),
                 "actions": [],
             }
 
@@ -133,9 +136,12 @@ class GenericEditRuntimeSession:
                     ok=False,
                     message="No actions returned; return at least one action.",
                 )
-                iteration_entry["actions"].append(result.to_dict())
+                iteration_entry["actions"].append(safe_result_for_trace(result))
                 trace.append(iteration_entry)
-                prompt = build_observation_prompt([result])
+                prompt = build_observation_prompt(
+                    base_prompt=base_prompt,
+                    results=[result],
+                )
                 continue
 
             action_results: list[ToolActionResult] = []
@@ -145,7 +151,7 @@ class GenericEditRuntimeSession:
                 iteration_entry["actions"].append(
                     {
                         "request": safe_action_for_trace(action),
-                        "result": result.to_dict(),
+                        "result": safe_result_for_trace(result),
                     }
                 )
 
@@ -179,7 +185,10 @@ class GenericEditRuntimeSession:
                     )
 
             trace.append(iteration_entry)
-            prompt = build_observation_prompt(action_results)
+            prompt = build_observation_prompt(
+                base_prompt=base_prompt,
+                results=action_results,
+            )
 
         message = (
             f"Generic edit runtime reached max iterations ({self.max_iterations}) "
@@ -241,7 +250,11 @@ def normalize_actions(response: dict[str, Any]) -> list[dict[str, Any]]:
     return normalized
 
 
-def build_observation_prompt(results: list[ToolActionResult]) -> str:
+def build_observation_prompt(
+    *,
+    base_prompt: str,
+    results: list[ToolActionResult],
+) -> str:
     """Build the next user message containing local action observations."""
     payload = {
         "observations": [result.to_dict() for result in results],
@@ -250,7 +263,11 @@ def build_observation_prompt(results: list[ToolActionResult]) -> str:
             "Use finish when complete."
         ),
     }
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+    return (
+        base_prompt.rstrip()
+        + "\n\n## Local Action Observations\n\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+    )
 
 
 def build_generic_edit_response(
