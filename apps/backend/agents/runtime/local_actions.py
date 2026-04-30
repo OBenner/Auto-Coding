@@ -27,10 +27,21 @@ logger = logging.getLogger(__name__)
 MAX_TOOL_OUTPUT_CHARS = 12000
 MAX_READ_FILE_CHARS = 20000
 MAX_LIST_FILE_ENTRIES = 200
+MAX_SEARCH_MATCHES = 100
+MAX_SEARCH_QUERY_CHARS = 512
+MAX_SEARCH_FILE_BYTES = 1_000_000
+MAX_SEARCH_EXCERPT_CHARS = 300
 MAX_COMMAND_TIMEOUT_SECONDS = 120
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 60
 TRACE_STRING_PREVIEW_CHARS = 1000
-TRACE_REDACTED_FIELDS = {"content", "output", "patch", "raw_response"}
+TRACE_REDACTED_FIELDS = {
+    "content",
+    "excerpt",
+    "output",
+    "patch",
+    "query",
+    "raw_response",
+}
 DEFAULT_LIST_EXCLUDED_DIRS = {
     ".git",
     ".claude",
@@ -139,6 +150,46 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
             "path": "src",
             "recursive": False,
             "max_entries": 100,
+        },
+    ),
+    LocalActionToolSpec(
+        name="search_text",
+        description="Search workspace text files for a literal string.",
+        parameters={
+            "query": {
+                "type": "string",
+                "description": "Literal text to search for.",
+            },
+            "path": {
+                "type": "string",
+                "description": "Workspace-relative file or directory path. Defaults to the project root.",
+            },
+            "recursive": {
+                "type": "boolean",
+                "description": "Whether to walk nested directories when path is a directory.",
+            },
+            "include_hidden": {
+                "type": "boolean",
+                "description": "Whether to search hidden files and directories.",
+            },
+            "case_sensitive": {
+                "type": "boolean",
+                "description": "Whether matching should be case-sensitive.",
+            },
+            "max_matches": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_SEARCH_MATCHES,
+                "description": "Maximum number of line matches to return.",
+            },
+        },
+        required=("query",),
+        example={
+            "tool": "search_text",
+            "query": "function_name",
+            "path": "src",
+            "recursive": True,
+            "max_matches": 25,
         },
     ),
     LocalActionToolSpec(
@@ -315,6 +366,8 @@ class LocalActionExecutor:
         try:
             if tool == "list_files":
                 return self._list_files(action)
+            if tool == "search_text":
+                return self._search_text(action)
             if tool == "read_file":
                 return self._read_file(action)
             if tool == "write_file":
@@ -419,6 +472,109 @@ class LocalActionExecutor:
                 "path": path or ".",
                 "entries": entries,
                 "entry_count": len(entries),
+                "truncated": truncated,
+            },
+        )
+
+    def _search_text(self, action: dict[str, Any]) -> ToolActionResult:
+        query = bounded_string(
+            action,
+            "query",
+            maximum=MAX_SEARCH_QUERY_CHARS,
+        )
+        path = optional_workspace_path(action, "path")
+        recursive = optional_bool(action, "recursive", default=True)
+        include_hidden = optional_bool(action, "include_hidden", default=False)
+        case_sensitive = optional_bool(action, "case_sensitive", default=False)
+        max_matches = bounded_positive_int(
+            action,
+            "max_matches",
+            default=MAX_SEARCH_MATCHES,
+            maximum=MAX_SEARCH_MATCHES,
+        )
+        target = resolve_workspace_path(self.project_dir, path)
+        if not target.exists():
+            return ToolActionResult(
+                tool="search_text",
+                ok=False,
+                message=f"Path not found: {path or '.'}",
+            )
+
+        matches: list[dict[str, Any]] = []
+        searched_files = 0
+        skipped_files = 0
+        query_to_match = query if case_sensitive else query.casefold()
+
+        for file_path in iter_search_files(
+            target,
+            self.project_dir,
+            recursive=recursive,
+            include_hidden=include_hidden,
+        ):
+            relative = file_path.relative_to(self.project_dir.resolve()).as_posix()
+            try:
+                if file_path.stat().st_size > MAX_SEARCH_FILE_BYTES:
+                    skipped_files += 1
+                    continue
+            except OSError:
+                skipped_files += 1
+                continue
+
+            searched_files += 1
+            try:
+                with file_path.open("r", encoding="utf-8", errors="replace") as handle:
+                    for line_number, line in enumerate(handle, start=1):
+                        haystack = line if case_sensitive else line.casefold()
+                        if query_to_match not in haystack:
+                            continue
+                        matches.append(
+                            {
+                                "path": relative,
+                                "line": line_number,
+                                "excerpt": build_search_excerpt(line, query),
+                            }
+                        )
+                        if len(matches) >= max_matches:
+                            return self._search_text_result(
+                                path=path,
+                                matches=matches,
+                                searched_files=searched_files,
+                                skipped_files=skipped_files,
+                                truncated=True,
+                            )
+            except (OSError, UnicodeError):
+                skipped_files += 1
+
+        return self._search_text_result(
+            path=path,
+            matches=matches,
+            searched_files=searched_files,
+            skipped_files=skipped_files,
+            truncated=False,
+        )
+
+    def _search_text_result(
+        self,
+        *,
+        path: str,
+        matches: list[dict[str, Any]],
+        searched_files: int,
+        skipped_files: int,
+        truncated: bool,
+    ) -> ToolActionResult:
+        return ToolActionResult(
+            tool="search_text",
+            ok=True,
+            message=(
+                f"Found {len(matches)} line match"
+                f"{'' if len(matches) == 1 else 'es'} under {path or '.'}"
+            ),
+            data={
+                "path": path or ".",
+                "matches": matches,
+                "match_count": len(matches),
+                "searched_files": searched_files,
+                "skipped_files": skipped_files,
                 "truncated": truncated,
             },
         )
@@ -627,6 +783,11 @@ class LocalActionExecutor:
 def safe_action_for_trace(action: dict[str, Any]) -> dict[str, Any]:
     """Avoid duplicating full file contents in trace request sections."""
     safe = dict(action)
+    if "query" in safe:
+        query = str(safe["query"])
+        safe["query_bytes"] = len(query.encode("utf-8"))
+        safe["query_redacted"] = True
+        del safe["query"]
     if "content" in safe:
         content = str(safe["content"])
         safe["content_bytes"] = len(content.encode("utf-8"))
@@ -683,6 +844,16 @@ def require_string(action: dict[str, Any], field_name: str) -> str:
     value = action.get(field_name)
     if not isinstance(value, str) or not value:
         raise LocalActionError(f"Action field '{field_name}' must be a string")
+    return value
+
+
+def bounded_string(action: dict[str, Any], field_name: str, *, maximum: int) -> str:
+    """Read a required non-empty string with a maximum length."""
+    value = require_string(action, field_name)
+    if len(value) > maximum:
+        raise LocalActionError(
+            f"Action field '{field_name}' must be at most {maximum} characters"
+        )
     return value
 
 
@@ -760,6 +931,70 @@ def is_safe_list_entry(path: str, *, include_hidden: bool) -> bool:
     except PatchProposalError:
         return False
     return True
+
+
+def iter_search_files(
+    target: Path,
+    project_dir: Path,
+    *,
+    recursive: bool,
+    include_hidden: bool,
+):
+    """Yield safe searchable files under a target file or directory."""
+    resolved_project = project_dir.resolve()
+    if target.is_file():
+        relative = target.relative_to(resolved_project).as_posix()
+        if is_safe_list_entry(relative, include_hidden=include_hidden):
+            yield target
+        return
+
+    if not target.is_dir():
+        return
+
+    if recursive:
+        for root, dir_names, file_names in os.walk(target):
+            root_path = Path(root)
+            dir_names[:] = sorted(
+                name
+                for name in dir_names
+                if should_descend_directory(
+                    root_path / name,
+                    project_dir,
+                    include_hidden=include_hidden,
+                )
+            )
+            for name in sorted(file_names):
+                candidate = root_path / name
+                relative = candidate.relative_to(resolved_project).as_posix()
+                if is_safe_list_entry(relative, include_hidden=include_hidden):
+                    yield candidate
+        return
+
+    for child in sorted(target.iterdir(), key=lambda item: item.name):
+        if not child.is_file():
+            continue
+        relative = child.relative_to(resolved_project).as_posix()
+        if is_safe_list_entry(relative, include_hidden=include_hidden):
+            yield child
+
+
+def build_search_excerpt(line: str, query: str) -> str:
+    """Return a compact single-line search excerpt."""
+    normalized = " ".join(line.strip().split())
+    if len(normalized) <= MAX_SEARCH_EXCERPT_CHARS:
+        return normalized
+
+    query_index = normalized.casefold().find(query.casefold())
+    if query_index < 0:
+        return normalized[:MAX_SEARCH_EXCERPT_CHARS].rstrip() + "..."
+
+    context = max((MAX_SEARCH_EXCERPT_CHARS - len(query)) // 2, 0)
+    start = max(query_index - context, 0)
+    end = min(start + MAX_SEARCH_EXCERPT_CHARS, len(normalized))
+    start = max(end - MAX_SEARCH_EXCERPT_CHARS, 0)
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(normalized) else ""
+    return prefix + normalized[start:end].strip() + suffix
 
 
 def resolve_workspace_path(project_dir: Path, path: str) -> Path:

@@ -31,6 +31,7 @@ __AUTO_CODE_LOCAL_ACTIONS__
 Rules:
 - Use only workspace-relative paths.
 - Do not touch .git, .claude, .mcp.json, .env files, shell profiles, secrets, or credential files.
+- Use list_files and search_text to locate relevant files before reading them.
 - Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
 - Keep iterating until the task is done, then call finish.
@@ -56,6 +57,7 @@ and edit the workspace. Keep iterating until the task is done, then call finish.
 Rules:
 - Use only workspace-relative paths.
 - Do not touch .git, .claude, .mcp.json, .env files, shell profiles, secrets, or credential files.
+- Use list_files and search_text to locate relevant files before reading them.
 - Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
 - Call finish with a concise summary, verification commands, and risks when complete.

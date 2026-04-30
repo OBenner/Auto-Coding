@@ -28,7 +28,12 @@ from agents.runtime.adapters.patch_proposal import (
     parse_patch_proposal,
     validate_workspace_relative_path,
 )
-from agents.runtime.local_actions import MAX_TOOL_OUTPUT_CHARS
+from agents.runtime.local_actions import (
+    MAX_TOOL_OUTPUT_CHARS,
+    ToolActionResult,
+    safe_action_for_trace,
+    safe_result_for_trace,
+)
 from core.platform import run_process
 from core.providers.config import ProviderConfig
 
@@ -524,6 +529,7 @@ def test_patch_mode_marks_subtask_completed(tmp_path: Path):
 def test_local_action_manifest_describes_generic_edit_contract():
     expected_tools = {
         "list_files",
+        "search_text",
         "read_file",
         "write_file",
         "apply_patch",
@@ -548,6 +554,11 @@ def test_local_action_manifest_describes_generic_edit_contract():
         schema for schema in provider_schemas if schema["name"] == "list_files"
     )
     assert "max_entries" in list_files_schema["parameters"]["properties"]
+    search_text_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "search_text"
+    )
+    assert search_text_schema["parameters"]["required"] == ["query"]
+    assert "max_matches" in search_text_schema["parameters"]["properties"]
     run_command_schema = next(
         schema for schema in provider_schemas if schema["name"] == "run_command"
     )
@@ -615,6 +626,106 @@ async def test_local_action_executor_lists_files_safely(tmp_path: Path):
     assert truncated_result.ok is True
     assert truncated_result.data["entry_count"] == 1
     assert truncated_result.data["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_searches_text_safely(tmp_path: Path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text(
+        "def target_handler():\n    return 'ok'\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "README.md").write_text("TARGET_HANDLER docs\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("TARGET_HANDLER_SECRET=1\n", encoding="utf-8")
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(
+        "name: target_handler\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "pkg.js").write_text(
+        "target_handler\n",
+        encoding="utf-8",
+    )
+    executor = LocalActionExecutor(tmp_path)
+
+    result = await executor.execute(
+        {
+            "tool": "search_text",
+            "query": "target_handler",
+            "path": ".",
+            "max_matches": 20,
+        }
+    )
+
+    assert result.ok is True
+    paths = [match["path"] for match in result.data["matches"]]
+    assert "README.md" in paths
+    assert "src/app.py" in paths
+    assert ".env" not in paths
+    assert ".github/workflows/ci.yml" not in paths
+    assert "node_modules/pkg.js" not in paths
+    app_match = next(
+        match for match in result.data["matches"] if match["path"] == "src/app.py"
+    )
+    assert app_match["line"] == 1
+    assert "target_handler" in app_match["excerpt"]
+
+    hidden_result = await executor.execute(
+        {
+            "tool": "search_text",
+            "query": "target_handler",
+            "path": ".github",
+            "include_hidden": True,
+        }
+    )
+    hidden_paths = [match["path"] for match in hidden_result.data["matches"]]
+    assert hidden_result.ok is True
+    assert ".github/workflows/ci.yml" in hidden_paths
+
+    truncated_result = await executor.execute(
+        {
+            "tool": "search_text",
+            "query": "target_handler",
+            "max_matches": 1,
+        }
+    )
+    assert truncated_result.ok is True
+    assert truncated_result.data["match_count"] == 1
+    assert truncated_result.data["truncated"] is True
+
+
+def test_search_text_trace_redacts_query_and_excerpts():
+    request = safe_action_for_trace(
+        {
+            "tool": "search_text",
+            "query": "SECRET_NEEDLE",
+            "path": ".",
+        }
+    )
+    result = safe_result_for_trace(
+        ToolActionResult(
+            tool="search_text",
+            ok=True,
+            message="Found 1 line match under .",
+            data={
+                "matches": [
+                    {
+                        "path": "src/app.py",
+                        "line": 1,
+                        "excerpt": "const token = 'SECRET_NEEDLE'",
+                    }
+                ],
+            },
+        )
+    )
+
+    assert request["query_redacted"] is True
+    assert request["query_bytes"] == len("SECRET_NEEDLE")
+    assert "query" not in request
+    excerpt = result["data"]["matches"][0]["excerpt_redacted"]
+    assert excerpt is True
+    assert "SECRET_NEEDLE" not in json.dumps(result)
 
 
 @pytest.mark.asyncio
@@ -807,8 +918,9 @@ async def test_generic_edit_runtime_prefers_native_tool_call_loop(tmp_path: Path
     assert session.messages[0] is not None
     assert "function calls" in session.messages[0]
     assert session.messages[1:] == [None, None]
-    assert [schema["name"] for schema in session.tool_schemas[0]][:2] == [
+    assert [schema["name"] for schema in session.tool_schemas[0]][:3] == [
         "list_files",
+        "search_text",
         "read_file",
     ]
     assert [result["name"] for result in session.tool_results] == [
