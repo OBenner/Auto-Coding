@@ -8,13 +8,41 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from .capabilities import RuntimeRequirements
+from .capabilities import RuntimeCapabilities, RuntimeRequirements
 from .result import AgentRunResult
 from .session_engine import run_runtime_session
 
 RuntimeSessionFactory = Callable[["RuntimeSubagentTask"], Awaitable[Any] | Any]
+SubagentSupportStrategy = Literal["native", "orchestrated", "unavailable"]
+
+
+@dataclass(frozen=True)
+class RuntimeSubagentSupport:
+    """Effective subagent support for one runtime surface."""
+
+    provider_name: str
+    runtime_name: str
+    strategy: SubagentSupportStrategy
+    available: bool
+    reason: str
+    required_capabilities: tuple[str, ...] = ()
+    missing_capabilities: tuple[str, ...] = ()
+    available_capabilities: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize support metadata for UI, CLI, and artifacts."""
+        return {
+            "provider": self.provider_name,
+            "runtime": self.runtime_name,
+            "strategy": self.strategy,
+            "available": self.available,
+            "reason": self.reason,
+            "required_capabilities": list(self.required_capabilities),
+            "missing_capabilities": list(self.missing_capabilities),
+            "available_capabilities": list(self.available_capabilities),
+        }
 
 
 @dataclass(frozen=True)
@@ -56,6 +84,7 @@ class RuntimeSubagentRun:
     results: list[RuntimeSubagentResult]
     artifact_path: str | None = None
     cancelled: bool = False
+    support: RuntimeSubagentSupport | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize run for artifact output."""
@@ -63,6 +92,7 @@ class RuntimeSubagentRun:
             "status": self.status,
             "cancelled": self.cancelled,
             "artifact_path": self.artifact_path,
+            "support": self.support.to_dict() if self.support else None,
             "results": [result.to_dict() for result in self.results],
         }
 
@@ -89,6 +119,23 @@ class RuntimeSubagentOrchestrator:
         for task in tuple(self._running_tasks):
             task.cancel()
 
+    def support_for(
+        self,
+        *,
+        provider_name: str,
+        runtime_name: str,
+        capabilities: RuntimeCapabilities,
+        child_requirements: RuntimeRequirements | None = None,
+    ) -> RuntimeSubagentSupport:
+        """Return effective subagent support with this orchestrator configured."""
+        return resolve_runtime_subagent_support(
+            provider_name=provider_name,
+            runtime_name=runtime_name,
+            capabilities=capabilities,
+            orchestrator_available=True,
+            child_requirements=child_requirements,
+        )
+
     async def run(
         self,
         tasks: list[RuntimeSubagentTask],
@@ -96,10 +143,15 @@ class RuntimeSubagentOrchestrator:
         verbose: bool = False,
         phase: Any = None,
         artifact_name: str = "runtime_subagents.json",
+        support: RuntimeSubagentSupport | None = None,
     ) -> RuntimeSubagentRun:
         """Run delegated tasks with bounded parallelism and persist results."""
         if not tasks:
-            run = RuntimeSubagentRun(status="complete", results=[])
+            run = RuntimeSubagentRun(
+                status="complete",
+                results=[],
+                support=support,
+            )
             run.artifact_path = save_subagent_artifact(
                 spec_dir=self.spec_dir,
                 artifact_name=artifact_name,
@@ -169,6 +221,7 @@ class RuntimeSubagentOrchestrator:
             status=run_status,
             results=results,
             cancelled=any(result.status == "cancelled" for result in results),
+            support=support,
         )
         run.artifact_path = save_subagent_artifact(
             spec_dir=self.spec_dir,
@@ -176,6 +229,76 @@ class RuntimeSubagentOrchestrator:
             run=run,
         )
         return run
+
+
+def resolve_runtime_subagent_support(
+    *,
+    provider_name: str,
+    runtime_name: str,
+    capabilities: RuntimeCapabilities,
+    orchestrator_available: bool = False,
+    child_requirements: RuntimeRequirements | None = None,
+) -> RuntimeSubagentSupport:
+    """Return native or orchestrated subagent support without over-promising."""
+    provider = provider_name.lower()
+    requirements = child_requirements or RuntimeRequirements.text_only(mode="subagent")
+    required_capabilities = requirements.required
+    available_capabilities = tuple(capabilities.available())
+
+    if capabilities.subagents:
+        return RuntimeSubagentSupport(
+            provider_name=provider,
+            runtime_name=runtime_name,
+            strategy="native",
+            available=True,
+            reason=(f"{provider}/{runtime_name} exposes native runtime subagents."),
+            required_capabilities=required_capabilities,
+            available_capabilities=available_capabilities,
+        )
+
+    missing_capabilities = tuple(capabilities.missing(requirements))
+    if not orchestrator_available:
+        return RuntimeSubagentSupport(
+            provider_name=provider,
+            runtime_name=runtime_name,
+            strategy="unavailable",
+            available=False,
+            reason=(
+                "Subagent support requires native runtime subagents or an "
+                "explicit RuntimeSubagentOrchestrator."
+            ),
+            required_capabilities=required_capabilities,
+            missing_capabilities=missing_capabilities,
+            available_capabilities=available_capabilities,
+        )
+
+    if missing_capabilities:
+        return RuntimeSubagentSupport(
+            provider_name=provider,
+            runtime_name=runtime_name,
+            strategy="unavailable",
+            available=False,
+            reason=(
+                f"RuntimeSubagentOrchestrator cannot run {requirements.mode} "
+                "child sessions with the selected runtime capabilities."
+            ),
+            required_capabilities=required_capabilities,
+            missing_capabilities=missing_capabilities,
+            available_capabilities=available_capabilities,
+        )
+
+    return RuntimeSubagentSupport(
+        provider_name=provider,
+        runtime_name=runtime_name,
+        strategy="orchestrated",
+        available=True,
+        reason=(
+            "RuntimeSubagentOrchestrator can run isolated child sessions; this "
+            "is not Claude SDK Task tool parity."
+        ),
+        required_capabilities=required_capabilities,
+        available_capabilities=available_capabilities,
+    )
 
 
 def build_subagent_prompt(task: RuntimeSubagentTask) -> str:

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from .capabilities import RuntimeCapabilities
+from .subagents import resolve_runtime_subagent_support
+
 
 @dataclass(frozen=True)
 class RuntimeModeInfo:
@@ -23,6 +26,7 @@ class ProviderRuntimeCompatibility:
     generic_edit: str
     analysis_only: str
     patch_proposal: str
+    subagents: str
     notes: str
 
     def to_dict(self) -> dict[str, str]:
@@ -34,7 +38,7 @@ RUNTIME_MODE_INFO: tuple[RuntimeModeInfo, ...] = (
     RuntimeModeInfo(
         mode="full_autonomous",
         purpose="Full planner/coder/QA workflow",
-        capabilities="Claude Agent SDK tools, MCP, shell, filesystem edits",
+        capabilities="Claude Agent SDK tools, MCP, shell, filesystem edits, subagents",
     ),
     RuntimeModeInfo(
         mode="analysis_only",
@@ -44,13 +48,49 @@ RUNTIME_MODE_INFO: tuple[RuntimeModeInfo, ...] = (
     RuntimeModeInfo(
         mode="generic_edit",
         purpose="Provider-neutral local file, patch, and shell action loop",
-        capabilities="Text completion, structured JSON actions, local tools",
+        capabilities="Text completion, structured actions, local tools, MCP bridge",
     ),
     RuntimeModeInfo(
         mode="patch_proposal",
         purpose="Validated local application of model-proposed diffs",
         capabilities="Text completion, structured output, local patch validation",
     ),
+)
+
+
+def _subagent_strategy_label(
+    *,
+    provider_name: str,
+    runtime_name: str,
+    capabilities: RuntimeCapabilities,
+    orchestrator_available: bool,
+) -> str:
+    support = resolve_runtime_subagent_support(
+        provider_name=provider_name,
+        runtime_name=runtime_name,
+        capabilities=capabilities,
+        orchestrator_available=orchestrator_available,
+    )
+    return support.strategy if support.available else "no"
+
+
+_CLAUDE_SUBAGENTS = _subagent_strategy_label(
+    provider_name="claude",
+    runtime_name="claude_agent_sdk",
+    capabilities=RuntimeCapabilities.claude_agent_sdk(),
+    orchestrator_available=False,
+)
+_CODEX_SUBAGENTS = _subagent_strategy_label(
+    provider_name="codex",
+    runtime_name="codex_cli",
+    capabilities=RuntimeCapabilities.codex_cli(),
+    orchestrator_available=True,
+)
+_GENERIC_SUBAGENTS = _subagent_strategy_label(
+    provider_name="generic",
+    runtime_name="generic_edit",
+    capabilities=RuntimeCapabilities.generic_edit(),
+    orchestrator_available=True,
 )
 
 
@@ -61,6 +101,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="not needed",
         analysis_only="yes",
         patch_proposal="not needed",
+        subagents=_CLAUDE_SUBAGENTS,
         notes="Uses Claude Agent SDK path for the full Auto Code runtime.",
     ),
     ProviderRuntimeCompatibility(
@@ -69,6 +110,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="not needed",
         analysis_only="yes",
         patch_proposal="not needed",
+        subagents=_CODEX_SUBAGENTS,
         notes="Uses Codex CLI account login through CODEX_HOME and codex exec.",
     ),
     ProviderRuntimeCompatibility(
@@ -77,6 +119,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        subagents=_GENERIC_SUBAGENTS,
         notes="Direct SDK sessions use native tools when available, with JSON fallback.",
     ),
     ProviderRuntimeCompatibility(
@@ -85,7 +128,8 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
-        notes="Gemini can use local JSON actions; MCP parity is not implemented.",
+        subagents=_GENERIC_SUBAGENTS,
+        notes="Gemini can use local JSON actions with orchestrated child sessions.",
     ),
     ProviderRuntimeCompatibility(
         provider="litellm",
@@ -93,6 +137,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        subagents=_GENERIC_SUBAGENTS,
         notes="Gateway provider; native tools depend on routed model/gateway support.",
     ),
     ProviderRuntimeCompatibility(
@@ -101,6 +146,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        subagents=_GENERIC_SUBAGENTS,
         notes="OpenAI-compatible gateway with native tools plus JSON fallback.",
     ),
     ProviderRuntimeCompatibility(
@@ -109,6 +155,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        subagents=_GENERIC_SUBAGENTS,
         notes="OpenAI-like tool calls where available, with local JSON fallback.",
     ),
     ProviderRuntimeCompatibility(
@@ -117,6 +164,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        subagents=_GENERIC_SUBAGENTS,
         notes="Local models can attempt generic_edit without remote code sharing.",
     ),
 )

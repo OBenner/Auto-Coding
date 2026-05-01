@@ -100,7 +100,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     analysisOnly: 'supported',
     nativeTools: 'supported',
     mcp: 'unavailable',
-    subagents: 'unavailable',
+    subagents: 'limited',
     filesystemEdits: 'limited'
   },
   google: {
@@ -110,7 +110,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     analysisOnly: 'supported',
     nativeTools: 'unavailable',
     mcp: 'unavailable',
-    subagents: 'unavailable',
+    subagents: 'limited',
     filesystemEdits: 'limited'
   },
   litellm: {
@@ -120,7 +120,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     analysisOnly: 'supported',
     nativeTools: 'limited',
     mcp: 'unavailable',
-    subagents: 'unavailable',
+    subagents: 'limited',
     filesystemEdits: 'limited'
   },
   openrouter: {
@@ -130,7 +130,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     analysisOnly: 'supported',
     nativeTools: 'limited',
     mcp: 'unavailable',
-    subagents: 'unavailable',
+    subagents: 'limited',
     filesystemEdits: 'limited'
   },
   zhipuai: {
@@ -140,7 +140,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     analysisOnly: 'supported',
     nativeTools: 'limited',
     mcp: 'unavailable',
-    subagents: 'unavailable',
+    subagents: 'limited',
     filesystemEdits: 'limited'
   },
   ollama: {
@@ -150,7 +150,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     analysisOnly: 'supported',
     nativeTools: 'unavailable',
     mcp: 'unavailable',
-    subagents: 'unavailable',
+    subagents: 'limited',
     filesystemEdits: 'limited'
   }
 };

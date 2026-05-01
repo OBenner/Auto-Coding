@@ -214,8 +214,10 @@ Auto Code validates and executes these actions locally:
   `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and
   `generic_edit_summary.md`.
 
-This mode is intentionally not full autonomous parity. It does not expose MCP,
-subagents, provider-native tools, or Claude SDK session lifecycle behavior.
+This mode is intentionally not full autonomous parity. It exposes only the
+local action loop, provider-native tool calls when available, and Auto Code's
+local MCP bridge for built-in tools. It does not expose external MCP servers,
+in-session subagent spawning, or Claude SDK session lifecycle behavior.
 
 ## Patch Proposal Contract
 
@@ -269,7 +271,9 @@ Examples:
 - A non-Claude provider in `generic_edit` mode can modify files through Auto
   Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
   sessions use provider-native tool calls when available; other sessions can use
-  the JSON action loop. The mode still lacks MCP and subagents.
+  the JSON action loop. The mode can use the local Auto Code MCP bridge, while
+  parallel work requires an explicit `RuntimeSubagentOrchestrator` outside the
+  model session.
 
 ## Current Boundaries
 
@@ -277,7 +281,8 @@ This runtime engine is an integration boundary, not a generic replacement for
 the Claude Agent SDK. The generic edit runtime is the first local tool-loop
 slice; remaining work includes MCP translation, richer command/session
 streaming, broader provider-native function calling coverage, and security
-parity with the Claude SDK path.
+parity with the Claude SDK path. Non-Claude subagents are represented as
+orchestrated child runtime sessions, not Claude SDK Task tool parity.
 
 ## Related Code
 
@@ -289,6 +294,8 @@ parity with the Claude SDK path.
   persistence.
 - `apps/backend/agents/runtime/compatibility.py` - user-facing provider/runtime
   compatibility metadata.
+- `apps/backend/agents/runtime/subagents.py` - provider-neutral subagent
+  support policy and child-session orchestrator.
 - `apps/backend/agents/coder.py` - runtime selection for planning/coding phases.
 - `apps/backend/cli/analysis_commands.py` - non-mutating provider analysis CLI.
 - `apps/backend/cli/runtime_commands.py` - runtime compatibility CLI.

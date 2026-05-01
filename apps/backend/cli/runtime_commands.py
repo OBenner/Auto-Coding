@@ -65,6 +65,7 @@ def format_runtime_modes_text() -> str:
             row.generic_edit,
             row.analysis_only,
             row.patch_proposal,
+            row.subagents,
             row.notes,
         ]
         for row in PROVIDER_RUNTIME_COMPATIBILITY
@@ -85,6 +86,7 @@ def format_runtime_modes_text() -> str:
                     "Generic edit",
                     "Analysis-only",
                     "Patch proposal",
+                    "Subagents",
                     "Notes",
                 ],
                 provider_rows,

@@ -38,7 +38,9 @@ from .subagents import (
     RuntimeSubagentOrchestrator,
     RuntimeSubagentResult,
     RuntimeSubagentRun,
+    RuntimeSubagentSupport,
     RuntimeSubagentTask,
+    resolve_runtime_subagent_support,
 )
 
 __all__ = [
@@ -54,6 +56,7 @@ __all__ = [
     "RuntimeSubagentOrchestrator",
     "RuntimeSubagentResult",
     "RuntimeSubagentRun",
+    "RuntimeSubagentSupport",
     "RuntimeSubagentTask",
     "LocalActionExecutor",
     "LocalActionToolSpec",
@@ -67,6 +70,7 @@ __all__ = [
     "normalize_runtime_mode",
     "render_local_action_prompt",
     "requirements_for_runtime_mode",
+    "resolve_runtime_subagent_support",
     "resolve_runtime_mode_with_fallback",
     "run_runtime_session",
     "runtime_fallback_enabled",

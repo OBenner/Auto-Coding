@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 from agents.runtime import (
     LocalActionExecutor,
+    RuntimeCapabilities,
     RuntimeCapabilityError,
     RuntimeMcpBridge,
     RuntimeRequirements,
@@ -23,6 +24,7 @@ from agents.runtime import (
     render_local_action_prompt,
     requirements_for_runtime_mode,
     resolve_runtime_mode_with_fallback,
+    resolve_runtime_subagent_support,
     run_runtime_session,
     runtime_fallback_enabled,
     save_runtime_fallback_artifact,
@@ -366,6 +368,11 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         spec_dir=tmp_path,
         max_concurrency=2,
     )
+    support = orchestrator.support_for(
+        provider_name="openai",
+        runtime_name="completion",
+        capabilities=RuntimeCapabilities.completion_only(),
+    )
     run = await orchestrator.run(
         [
             RuntimeSubagentTask(
@@ -379,10 +386,12 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
                 role="explorer",
                 prompt="Inspect UI files",
             ),
-        ]
+        ],
+        support=support,
     )
 
     assert run.status == "complete"
+    assert run.support == support
     assert [result.response_text for result in run.results] == [
         "done explore-api",
         "done explore-ui",
@@ -390,12 +399,52 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
     assert run.artifact_path
     artifact = json.loads(Path(run.artifact_path).read_text(encoding="utf-8"))
     assert artifact["status"] == "complete"
+    assert artifact["support"]["strategy"] == "orchestrated"
+    assert artifact["support"]["available"] is True
     assert artifact["results"][0]["usage_metadata"] == {
         "input_tokens": 1,
         "output_tokens": 2,
     }
     assert "Auto Code subagent `explore-api`" in created_sessions[0].prompts[0]
     assert '"paths": [' in created_sessions[0].prompts[0]
+
+
+def test_runtime_subagent_support_distinguishes_native_and_orchestrated():
+    native = resolve_runtime_subagent_support(
+        provider_name="claude",
+        runtime_name="claude_agent_sdk",
+        capabilities=RuntimeCapabilities.claude_agent_sdk(),
+    )
+    assert native.available is True
+    assert native.strategy == "native"
+
+    unavailable = resolve_runtime_subagent_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+    )
+    assert unavailable.available is False
+    assert unavailable.strategy == "unavailable"
+    assert "RuntimeSubagentOrchestrator" in unavailable.reason
+
+    orchestrated = resolve_runtime_subagent_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        orchestrator_available=True,
+    )
+    assert orchestrated.available is True
+    assert orchestrated.strategy == "orchestrated"
+    assert "not Claude SDK Task tool parity" in orchestrated.reason
+
+    unsupported_child_runtime = resolve_runtime_subagent_support(
+        provider_name="custom",
+        runtime_name="empty",
+        capabilities=RuntimeCapabilities(),
+        orchestrator_available=True,
+    )
+    assert unsupported_child_runtime.available is False
+    assert unsupported_child_runtime.missing_capabilities == ("text_completion",)
 
 
 @pytest.mark.asyncio

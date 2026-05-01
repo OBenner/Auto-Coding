@@ -97,7 +97,8 @@ OPENAI_API_KEY=sk-...
 ```
 
 This runs the selected OpenAI provider through `generic_edit` rather than
-pretending it supports Claude Agent SDK MCP/tools/subagents.
+pretending it supports Claude Agent SDK external MCP tools or native Task
+subagents.
 
 ---
 
@@ -176,10 +177,14 @@ OPENAI_MODEL=gpt-4o
 - Analysis-only runtime mode
 - Patch proposal runtime mode
 - Generic edit runtime mode with local action tools
+- Local Auto Code MCP bridge for built-in tools
+- Orchestrated child runtime sessions when `RuntimeSubagentOrchestrator` is
+  explicitly configured
 
 #### Limitations
 
-- **No full Auto Code tool runtime**: MCP and subagents are not exposed to non-Claude providers.
+- **No full Auto Code tool runtime**: External MCP servers and native Claude
+  SDK Task subagents are not exposed to non-Claude providers.
 - **Local action boundary**: Generic edit mode exposes only workspace-relative file actions and security-validated single commands through Auto Code.
 - **No Claude-style session lifecycle**: The runtime layer treats this as a completion provider.
 

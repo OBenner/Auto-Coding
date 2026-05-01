@@ -55,6 +55,8 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert provider_rows["openai"]["full_autonomous"] == "no"
     assert provider_rows["openai"]["generic_edit"] == "experimental"
     assert provider_rows["openai"]["analysis_only"] == "yes"
+    assert provider_rows["claude"]["subagents"] == "native"
+    assert provider_rows["openai"]["subagents"] == "orchestrated"
     assert "runtime_modes" in payload
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
