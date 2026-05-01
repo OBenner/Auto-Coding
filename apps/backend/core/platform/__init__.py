@@ -461,11 +461,9 @@ def build_windows_command(cli_path: str, args: list[str]) -> list[str]:
         Command array suitable for subprocess.run
     """
     if is_windows() and cli_path.lower().endswith((".cmd", ".bat")):
-        # Use cmd.exe to execute .cmd/.bat files
+        # Use cmd.exe with CALL so quoted batch paths and arguments are preserved.
         cmd_exe = get_comspec_path()
-        # Properly escape arguments for Windows command line
-        escaped_args = subprocess.list2cmdline(args)
-        return [cmd_exe, "/d", "/s", "/c", f'"{cli_path}" {escaped_args}']
+        return [cmd_exe, "/d", "/c", "call", cli_path, *args]
 
     return [cli_path] + args
 

@@ -123,7 +123,27 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
     if sys.platform == "win32":
         fake_codex = tmp_path / "codex.cmd"
         fake_codex.write_text(
-            f'@echo off\r\n"{sys.executable}" "{fake_codex_script}" %*\r\n',
+            textwrap.dedent(
+                """\
+                @echo off
+                setlocal EnableExtensions
+                set "OUTPUT_PATH="
+                :parse
+                if "%~1"=="" goto done
+                if "%~1"=="--output-last-message" goto found_output
+                shift
+                goto parse
+                :found_output
+                shift
+                set "OUTPUT_PATH=%~1"
+                goto done
+                :done
+                if "%OUTPUT_PATH%"=="" exit /b 2
+                > "%OUTPUT_PATH%" echo final response: do codex work
+                echo codex event log
+                exit /b 0
+                """
+            ).replace("\n", "\r\n"),
             encoding="utf-8",
         )
     else:

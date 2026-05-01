@@ -654,8 +654,8 @@ class TestWindowsCommandBuilder:
 
         assert result[0].endswith("cmd.exe")
         assert "/d" in result
-        assert "/s" in result
         assert "/c" in result
+        assert "call" in result
         assert any("npm.cmd" in arg for arg in result)
 
     @patch("core.platform.is_windows", return_value=True)
