@@ -16,17 +16,20 @@ from ..local_actions import (
     safe_action_for_trace,
     safe_result_for_trace,
 )
+from ..mcp_bridge import RuntimeMcpBridge
 from ..result import AgentRunResult
 from .completion import CompletionRuntimeSession
 from .json_helpers import extract_first_json_object
 
 GENERIC_EDIT_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode.
 
-You do not have native provider tools, MCP, or subagents. Auto Code exposes a
-small local action loop. Respond with exactly one JSON object and no prose.
+You do not have native provider filesystem, shell, external MCP, or subagents.
+Auto Code exposes a small local action loop. Respond with exactly one JSON object and no prose.
 
 Available actions:
 __AUTO_CODE_LOCAL_ACTIONS__
+
+__AUTO_CODE_MCP_BRIDGE__
 
 Rules:
 - Use only workspace-relative paths.
@@ -51,9 +54,12 @@ __AUTO_CODE_TASK_PROMPT__
 
 NATIVE_TOOL_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode.
 
-You do not have provider-native filesystem, shell, MCP, or subagents. Auto Code
-exposes a small set of local tools as function calls. Use those tools to inspect
-and edit the workspace. Keep iterating until the task is done, then call finish.
+You do not have provider-native filesystem, shell, external MCP, or subagents.
+Auto Code exposes a small set of local tools as function calls. Use those tools
+to inspect and edit the workspace. Keep iterating until the task is done, then
+call finish.
+
+__AUTO_CODE_MCP_BRIDGE__
 
 Rules:
 - Use only workspace-relative paths.
@@ -98,6 +104,7 @@ class GenericEditRuntimeSession:
             agent_session=agent_session,
         )
         self._executor = LocalActionExecutor(project_dir)
+        self._mcp_bridge: RuntimeMcpBridge | None = None
 
     @property
     def context_client(self) -> Any:
@@ -113,6 +120,12 @@ class GenericEditRuntimeSession:
         subtask_id: str | None = None,
     ) -> AgentRunResult:
         del verbose, phase
+
+        self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
+            agent_session=self.agent_session,
+            spec_dir=spec_dir,
+            project_dir=self._executor.project_dir,
+        )
 
         if self._supports_native_tool_calls():
             return await self._run_native_tool_loop(
@@ -134,7 +147,7 @@ class GenericEditRuntimeSession:
         spec_dir: Path,
         subtask_id: str | None,
     ) -> AgentRunResult:
-        base_prompt = build_generic_edit_prompt(message)
+        base_prompt = build_generic_edit_prompt(message, self._mcp_bridge)
         prompt = base_prompt
         trace: list[dict[str, Any]] = []
         observation_path = initialize_generic_edit_observations(spec_dir)
@@ -222,7 +235,7 @@ class GenericEditRuntimeSession:
 
             action_results: list[ToolActionResult] = []
             for action_index, action in enumerate(actions, start=1):
-                result = await self._executor.execute(action)
+                result = await self._execute_action(action)
                 action_results.append(result)
                 safe_request = safe_action_for_trace(action)
                 safe_result = safe_result_for_trace(result)
@@ -320,7 +333,7 @@ class GenericEditRuntimeSession:
         spec_dir: Path,
         subtask_id: str | None,
     ) -> AgentRunResult:
-        prompt: str | None = build_native_tool_edit_prompt(message)
+        prompt: str | None = build_native_tool_edit_prompt(message, self._mcp_bridge)
         trace: list[dict[str, Any]] = []
         observation_path = initialize_generic_edit_observations(spec_dir)
 
@@ -336,7 +349,7 @@ class GenericEditRuntimeSession:
             try:
                 response = await self.agent_session.complete_with_tool_calls(
                     prompt,
-                    local_action_tool_schemas(),
+                    self._provider_tool_schemas(),
                 )
             except Exception as e:
                 if iteration == 1 and callable(
@@ -438,7 +451,7 @@ class GenericEditRuntimeSession:
                 )
 
             for action_index, (tool_call, action) in enumerate(tool_actions, start=1):
-                result = await self._executor.execute(action)
+                result = await self._execute_action(action)
                 action_results.append(result)
                 safe_request = {
                     "tool_call_id": str(getattr(tool_call, "id", "") or ""),
@@ -544,6 +557,17 @@ class GenericEditRuntimeSession:
             getattr(self.agent_session, "complete_with_tool_calls", None)
         ) and callable(getattr(self.agent_session, "add_tool_result", None))
 
+    def _provider_tool_schemas(self) -> list[dict[str, Any]]:
+        schemas = local_action_tool_schemas()
+        if self._mcp_bridge is not None:
+            schemas.extend(self._mcp_bridge.provider_tool_schemas())
+        return schemas
+
+    async def _execute_action(self, action: dict[str, Any]) -> ToolActionResult:
+        if self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
+            return await self._mcp_bridge.execute(action)
+        return await self._executor.execute(action)
+
     async def _complete(self, message: str) -> str:
         chunks: list[str] = []
         async for chunk in self._completion_runtime._stream_text(message):
@@ -551,22 +575,52 @@ class GenericEditRuntimeSession:
         return "".join(chunks)
 
 
-def build_generic_edit_prompt(message: str) -> str:
+def build_generic_edit_prompt(
+    message: str,
+    mcp_bridge: RuntimeMcpBridge | None = None,
+) -> str:
     """Build the generic_edit prompt from the shared local action manifest."""
-    return GENERIC_EDIT_PROMPT_TEMPLATE.replace(
-        "__AUTO_CODE_LOCAL_ACTIONS__",
-        render_local_action_prompt(),
+    return (
+        GENERIC_EDIT_PROMPT_TEMPLATE.replace(
+            "__AUTO_CODE_LOCAL_ACTIONS__",
+            render_local_action_prompt(),
+        )
+        .replace(
+            "__AUTO_CODE_MCP_BRIDGE__",
+            render_mcp_bridge_prompt(mcp_bridge),
+        )
+        .replace(
+            "__AUTO_CODE_TASK_PROMPT__",
+            message,
+        )
+    )
+
+
+def build_native_tool_edit_prompt(
+    message: str,
+    mcp_bridge: RuntimeMcpBridge | None = None,
+) -> str:
+    """Build the generic_edit prompt for provider-native tool-call sessions."""
+    return NATIVE_TOOL_PROMPT_TEMPLATE.replace(
+        "__AUTO_CODE_MCP_BRIDGE__",
+        render_mcp_bridge_prompt(mcp_bridge),
     ).replace(
         "__AUTO_CODE_TASK_PROMPT__",
         message,
     )
 
 
-def build_native_tool_edit_prompt(message: str) -> str:
-    """Build the generic_edit prompt for provider-native tool-call sessions."""
-    return NATIVE_TOOL_PROMPT_TEMPLATE.replace(
-        "__AUTO_CODE_TASK_PROMPT__",
-        message,
+def render_mcp_bridge_prompt(mcp_bridge: RuntimeMcpBridge | None) -> str:
+    """Render bridged local MCP actions for the generic edit prompt."""
+    if mcp_bridge is None or not mcp_bridge.has_tools:
+        return (
+            "Bridged MCP actions: none. External MCP servers such as Context7, "
+            "Graphiti, Linear, Electron, and Puppeteer are not available in "
+            "generic_edit mode."
+        )
+    return (
+        "Bridged Auto Code MCP actions available through the local runtime:\n"
+        + "\n".join(mcp_bridge.prompt_lines())
     )
 
 

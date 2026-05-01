@@ -30,6 +30,7 @@ from .local_actions import (
     local_action_tool_specs,
     render_local_action_prompt,
 )
+from .mcp_bridge import RuntimeMcpBridge, RuntimeMcpToolSpec
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
 from .result import AgentRunResult
 from .session_engine import run_runtime_session
@@ -42,6 +43,8 @@ __all__ = [
     "RuntimeRequirements",
     "RUNTIME_FALLBACK_ENV",
     "RuntimeMode",
+    "RuntimeMcpBridge",
+    "RuntimeMcpToolSpec",
     "LocalActionExecutor",
     "LocalActionToolSpec",
     "ToolActionResult",

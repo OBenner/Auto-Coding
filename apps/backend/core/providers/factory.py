@@ -392,6 +392,9 @@ def create_agent_session(
                 model=model,
             )
         )
+        session.agent_type = agent_type
+        session.project_dir = Path(project_dir)
+        session.spec_dir = Path(spec_dir)
 
     return session
 

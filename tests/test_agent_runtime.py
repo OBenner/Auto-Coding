@@ -10,6 +10,7 @@ import pytest
 from agents.runtime import (
     LocalActionExecutor,
     RuntimeCapabilityError,
+    RuntimeMcpBridge,
     RuntimeRequirements,
     create_runtime_session,
     get_runtime_mode,
@@ -1115,6 +1116,121 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert trace_marker not in (
         artifact_dir / "generic_edit_observations.jsonl"
     ).read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def get_build_progress(args):
+        assert args == {}
+        return {"content": [{"type": "text", "text": "Build Progress: 0/1 subtasks"}]}
+
+    monkeypatch.setattr("agents.runtime.mcp_bridge.is_tools_available", lambda: True)
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.create_all_tools",
+        lambda spec_dir, project_dir: [
+            SimpleNamespace(
+                name="get_build_progress",
+                description="Get build progress",
+                input_schema={},
+                handler=get_build_progress,
+            )
+        ],
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "check progress",
+                "actions": [{"tool": "mcp__auto-claude__get_build_progress"}],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Checked bridged MCP progress",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    session.agent_type = "coder"
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "check build progress",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    assert "Checked bridged MCP progress" in result.response_text
+    assert "mcp__auto-claude__get_build_progress" in session.messages[0]
+    assert "Build Progress: 0/1 subtasks" in session.messages[1]
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert observation_lines[0]["result"]["tool"] == (
+        "mcp__auto-claude__get_build_progress"
+    )
+    assert observation_lines[0]["result"]["data"]["server"] == "auto-claude"
+
+
+def test_runtime_mcp_bridge_filters_agent_allowed_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("agents.runtime.mcp_bridge.is_tools_available", lambda: True)
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.create_all_tools",
+        lambda spec_dir, project_dir: [
+            SimpleNamespace(
+                name="update_subtask_status",
+                description="Update subtask",
+                input_schema={"subtask_id": str, "status": str},
+                handler=lambda args: {},
+            ),
+            SimpleNamespace(
+                name="update_qa_status",
+                description="Update QA",
+                input_schema={"status": str},
+                handler=lambda args: {},
+            ),
+            SimpleNamespace(
+                name="search_team_docs",
+                description="Search docs",
+                input_schema={"query": str},
+                handler=lambda args: {},
+            ),
+        ],
+    )
+    session = SimpleNamespace(agent_type="qa_fixer")
+
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    schemas = bridge.provider_tool_schemas()
+    schema_names = {schema["name"] for schema in schemas}
+    assert "mcp__auto-claude__update_subtask_status" in schema_names
+    assert "mcp__auto-claude__update_qa_status" in schema_names
+    assert "mcp__auto-claude__search_team_docs" not in schema_names
 
 
 @pytest.mark.asyncio
