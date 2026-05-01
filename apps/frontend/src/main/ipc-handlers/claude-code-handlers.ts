@@ -54,6 +54,30 @@ function getCodexCandidatePaths(): string[] {
   return candidates.filter((candidate): candidate is string => Boolean(candidate));
 }
 
+function isNumericToken(value: string): boolean {
+  if (!value) {
+    return false;
+  }
+  return Array.from(value).every((char) => char >= '0' && char <= '9');
+}
+
+function parseVersionFromOutput(output: string): string | undefined {
+  const tokens = output
+    .replaceAll('\r', ' ')
+    .replaceAll('\n', ' ')
+    .replaceAll('\t', ' ')
+    .split(' ')
+    .filter(Boolean);
+
+  const versionToken = tokens.find((token) => {
+    const normalized = token.startsWith('v') ? token.slice(1) : token;
+    const parts = normalized.split('.');
+    return parts.length === 3 && parts.every(isNumericToken);
+  });
+
+  return versionToken || tokens.at(-1);
+}
+
 async function detectCodexCli(): Promise<ClaudeCodeVersionInfo['detectionResult']> {
   const seen = new Set<string>();
 
@@ -72,7 +96,7 @@ async function detectCodexCli(): Promise<ClaudeCodeVersionInfo['detectionResult'
         env: getAugmentedEnv(),
       });
       const output = String(result.stdout || result.stderr || '').trim();
-      const version = output.match(/(\d+\.\d+\.\d+)/)?.[1] || output.split(/\s+/).at(-1);
+      const version = parseVersionFromOutput(output);
 
       return {
         found: true,

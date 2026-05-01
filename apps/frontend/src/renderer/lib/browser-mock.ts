@@ -21,6 +21,8 @@ import {
   settingsMock
 } from './mocks';
 
+const MOCK_CODEX_CONFIG_DIR = '/mock/codex-home';
+
 // Check if we're in a browser (not Electron)
 const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined;
 
@@ -184,7 +186,7 @@ const browserMockAPI: ElectronAPI = {
     data: {
       id: `mock-codex-${Date.now()}`,
       name,
-      configDir: '/tmp/mock-codex-home',
+      configDir: MOCK_CODEX_CONFIG_DIR,
       isDefault: false,
       createdAt: new Date(),
     }
@@ -211,7 +213,7 @@ const browserMockAPI: ElectronAPI = {
     success: true,
     data: {
       terminalId: `mock-codex-login-${profileId}`,
-      configDir: '/tmp/mock-codex-home'
+      configDir: MOCK_CODEX_CONFIG_DIR
     }
   }),
 

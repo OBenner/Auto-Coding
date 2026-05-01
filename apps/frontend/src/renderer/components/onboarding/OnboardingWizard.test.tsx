@@ -14,6 +14,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { OnboardingWizard } from './OnboardingWizard';
 
+const MOCK_CODEX_CONFIG_DIR = '/mock/codex-test';
+
 // Mock react-i18next to avoid initialization issues
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -122,7 +124,7 @@ Object.defineProperty(window, 'electronAPI', {
       data: {
         id: 'codex-test',
         name: 'Test',
-        configDir: '/tmp/codex-test',
+        configDir: MOCK_CODEX_CONFIG_DIR,
         isDefault: false,
         createdAt: new Date()
       }
@@ -131,7 +133,7 @@ Object.defineProperty(window, 'electronAPI', {
     setActiveCodexProfile: vi.fn().mockResolvedValue({ success: true }),
     authenticateCodexProfile: vi.fn().mockResolvedValue({
       success: true,
-      data: { terminalId: 'codex-login-test', configDir: '/tmp/codex-test' }
+      data: { terminalId: 'codex-login-test', configDir: MOCK_CODEX_CONFIG_DIR }
     }),
     verifyCodexProfileAuth: vi.fn().mockResolvedValue({
       success: true,
