@@ -574,8 +574,20 @@ class TestLongRunningCommands:
         await asyncio.sleep(0.1)
 
         task3_id = await manager.start_task(
-            f'{sys.executable} -c "import time; time.sleep(5)"', timeout=10
+            f'{sys.executable} -c "import time; time.sleep(30)"', timeout=60
         )
+
+        # Wait for the long-running task to actually enter running state.
+        # Windows CI can schedule the background coroutine slightly later than
+        # the shorter task polling below.
+        for _ in range(30):
+            s3 = manager.get_task_status(task3_id)
+            if s3 and s3["status"] == "running":
+                break
+            await asyncio.sleep(0.5)
+
+        assert s3 is not None
+        assert s3["status"] == "running", f"Expected running, got {s3['status']}"
 
         # Poll for first two tasks to reach terminal state
         for _ in range(20):
