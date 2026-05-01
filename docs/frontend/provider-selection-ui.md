@@ -25,6 +25,8 @@ The provider selection UI follows established patterns in the Auto Code frontend
 3. **Secure credential handling** - API keys never exposed in plain text
 4. **Instant feedback** - Connection status visible at all times
 5. **Graceful degradation** - Clear messaging when features are unsupported
+6. **Runner awareness** - Users should see which local coding CLIs are installed,
+   authenticated, policy-allowed, and available as fallbacks
 
 ## Component Architecture
 
@@ -39,6 +41,186 @@ The provider selection UI follows established patterns in the Auto Code frontend
 - `ProviderConfigSection` - New component for provider configuration
 - `ConnectionStatus` - Reused for connection testing
 - `CollapsibleSection` - Reused for expandable sections
+- `ClaudeCodeStatusBadge` - Existing pattern for CLI detection, install, update,
+  and active path selection
+
+## Agent Runner UX Extension
+
+Provider selection answers "which model/provider should be used." External LLM
+CLI support adds a second question: "which local agent runner should execute
+the work." The app should treat Codex CLI, Claude Code, Gemini CLI, Aider,
+GitHub Copilot CLI, Cursor CLI, and review tools such as CodeRabbit CLI as
+agent runners with explicit status and capability metadata.
+
+### Runner Status Panel
+
+Add an "Agent Runners" panel in project settings, and surface a compact status
+summary in the sidebar near the existing Claude Code status badge.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Agent Runners                                                │
+│ ─────────────────────────────────────────────────────────── │
+│                                                             │
+│ Default implementation runner: [Codex CLI              ▼]   │
+│ Default review runner:         [CodeRabbit CLI         ▼]   │
+│ Fallback order:                [Codex, Claude, Gemini  ▼]   │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ Codex CLI                                      ✓ Ready  │ │
+│ │ /usr/local/bin/codex · authenticated · MCP enabled      │ │
+│ │ [Use by default] [Test] [Configure]                     │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ Claude Code                                   ✓ Ready   │ │
+│ │ ~/.npm/bin/claude · OAuth active                         │ │
+│ │ [Use by default] [Switch path] [Update]                  │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ Gemini CLI                      Key found · not installed│ │
+│ │ Google credentials detected                              │ │
+│ │ [Install] [Setup instructions]                          │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ CodeRabbit CLI                   Not authenticated       │ │
+│ │ Installed, but login is required for review mode         │ │
+│ │ [Authenticate] [Test]                                   │ │
+│ └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Runner Detection States
+
+Use a shared status model across all CLI runners:
+
+```typescript
+type RunnerStatus =
+  | 'ready'
+  | 'installed_not_authenticated'
+  | 'key_available_not_installed'
+  | 'not_installed'
+  | 'unsupported_version'
+  | 'blocked_by_policy'
+  | 'unavailable';
+```
+
+Recommended shared type:
+
+```typescript
+interface AgentRunnerInfo {
+  id: 'codex' | 'claude-code' | 'gemini' | 'aider' | 'copilot' | 'cursor' | 'coderabbit';
+  label: string;
+  status: RunnerStatus;
+  path?: string;
+  version?: string;
+  active: boolean;
+  authenticated: boolean;
+  installAvailable: boolean;
+  credentialSignal?: 'api-key' | 'oauth' | 'subscription' | 'config-file' | 'none';
+  capabilities: RunnerCapability[];
+  fallbackPriority?: number;
+  policyReason?: string;
+}
+```
+
+Capabilities should map to backend runner selection:
+
+```typescript
+type RunnerCapability =
+  | 'read_files'
+  | 'write_files'
+  | 'run_commands'
+  | 'mcp'
+  | 'headless'
+  | 'structured_output'
+  | 'git_aware'
+  | 'review_only'
+  | 'image_input'
+  | 'local_model'
+  | 'cost_report';
+```
+
+### Detection Behavior
+
+The main process should perform runner detection with safe commands only:
+
+1. Look for configured path first.
+2. Search common package manager and system paths.
+3. Run version checks.
+4. Run non-mutating auth checks where the CLI supports them.
+5. Detect credential signals without reading or logging secret values.
+6. Return redacted metadata to the renderer.
+
+The renderer should never receive raw API keys, OAuth tokens, or full auth
+payloads. It should only receive enough status to show the right next action.
+
+### Install And Authentication Prompts
+
+If a runner is missing but Auto Code detects a relevant credential signal, the UI
+should offer installation.
+
+Examples:
+
+- OpenAI key or ChatGPT login signal found, Codex CLI missing: show "Install
+  Codex CLI."
+- Google auth or API key signal found, Gemini CLI missing: show "Install Gemini
+  CLI."
+- GitHub Copilot entitlement signal found, Copilot CLI missing: show "Install
+  Copilot CLI."
+- Claude OAuth exists, Claude Code missing or outdated: reuse the Claude Code
+  install/update flow.
+
+Installation and authentication must be explicit user actions. The app can open
+the terminal with a command or launch the CLI login flow, but it should not
+silently install tools or mutate credentials.
+
+### Fallback Configuration
+
+Users should configure fallback behavior per runner role:
+
+```
+Implementation fallback:
+1. Codex CLI
+2. Claude Code
+3. Gemini CLI
+4. Aider
+
+Review fallback:
+1. CodeRabbit CLI
+2. Codex CLI
+3. Claude Code
+```
+
+Before starting a task, the create-spec or run confirmation UI should show the
+planned runner assignment:
+
+```
+Planner: Claude Code
+Coder: Codex CLI
+QA Review: CodeRabbit CLI
+Fallback: Gemini CLI if Codex CLI is unavailable
+```
+
+If fallback is used, the task timeline and final QA report should record:
+
+- Preferred runner.
+- Failure reason.
+- Selected fallback runner.
+- Capability or policy reason for the fallback.
+
+### UI Rules
+
+- Show runner status with icons and concise labels, not long explanations.
+- Use tooltips for details such as path, version, and capability gaps.
+- Keep installation, authentication, path switching, and policy override actions
+  separate.
+- Disable runners that are review-only when selecting an implementation runner.
+- Display capability gaps before running a task instead of failing mid-run when
+  they are knowable.
+- Store fallback order per project, with an optional global default.
 
 ## UI Design Specifications
 
