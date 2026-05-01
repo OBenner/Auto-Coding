@@ -24,6 +24,12 @@ from agents.runtime import (
     runtime_fallback_enabled,
     save_runtime_fallback_artifact,
 )
+from agents.runtime.adapters.codex_cli import (
+    build_codex_command_args,
+    build_codex_usage_metadata,
+    parse_codex_json_events,
+    summarize_codex_events,
+)
 from agents.runtime.adapters.patch_proposal import (
     PatchProposalError,
     parse_patch_proposal,
@@ -112,10 +118,12 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
             assert "--cd" in args
             assert "--sandbox" in args
             assert "--color" in args
+            assert "--json" in args
             output_path = pathlib.Path(args[args.index("--output-last-message") + 1])
             message = sys.stdin.read().strip()
             output_path.write_text(f"final response: {message}", encoding="utf-8")
-            print("codex event log")
+            print('{"type":"session.started","session_id":"codex-test-session"}')
+            print('{"type":"token_usage","usage":{"input_tokens":12,"output_tokens":7,"total_tokens":19},"cost_usd":0.001}')
             """
         ),
         encoding="utf-8",
@@ -175,6 +183,80 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
 
     assert result.status == "complete"
     assert result.response_text.rstrip("\r\n") == "final response: do codex work"
+    assert result.artifacts
+    assert (tmp_path / "artifacts" / "codex_cli_events.jsonl").exists()
+    assert (tmp_path / "artifacts" / "codex_cli_result.json").exists()
+    if sys.platform != "win32":
+        assert result.usage_metadata == {
+            "input_tokens": 12,
+            "output_tokens": 7,
+            "total_tokens": 19,
+            "cost_usd": 0.001,
+        }
+
+
+def test_codex_cli_event_parser_extracts_usage_and_session():
+    stdout = "\n".join(
+        [
+            "legacy warning",
+            json.dumps(
+                {
+                    "type": "session.started",
+                    "session_id": "codex-session-1",
+                    "account": {"email": "dev@example.com", "plan": "pro"},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "token_usage",
+                    "usage": {
+                        "prompt_tokens": 42,
+                        "completion_tokens": 11,
+                        "total_tokens": 53,
+                    },
+                    "estimated_cost_usd": "0.0042",
+                }
+            ),
+        ]
+    )
+
+    events = parse_codex_json_events(stdout)
+    summary = summarize_codex_events(events)
+
+    assert len(events) == 2
+    assert summary["session_id"] == "codex-session-1"
+    assert summary["account"] == {"email": "dev@example.com", "plan": "pro"}
+    assert summary["event_types"] == {"session.started": 1, "token_usage": 1}
+    assert summary["usage"] == {
+        "input_tokens": 42,
+        "output_tokens": 11,
+        "total_tokens": 53,
+    }
+    assert summary["cost_usd"] == 0.0042
+    assert build_codex_usage_metadata(summary) == {
+        "input_tokens": 42,
+        "output_tokens": 11,
+        "total_tokens": 53,
+        "cost_usd": 0.0042,
+    }
+
+
+def test_codex_cli_resume_command_uses_resume_subcommand(tmp_path: Path):
+    output_path = tmp_path / "last.txt"
+
+    args = build_codex_command_args(
+        project_dir=tmp_path,
+        model="gpt-5.5",
+        output_path=output_path,
+        resume_session_id="session-123",
+    )
+
+    assert args[:2] == ["exec", "resume"]
+    assert "--json" in args
+    assert "--model" in args
+    assert "--cd" not in args
+    assert "--sandbox" not in args
+    assert args[-1] == "session-123"
 
 
 class FakeCompletionSession:
@@ -1033,6 +1115,88 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert trace_marker not in (
         artifact_dir / "generic_edit_observations.jsonl"
     ).read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_records_partial_transactions_for_recovery(
+    tmp_path: Path,
+):
+    target = tmp_path / "partial.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "edit then inspect missing file",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "read_file",
+                        "path": "missing.txt",
+                    },
+                ],
+            },
+            {
+                "thought": "partial state is acceptable",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Recovered after partial action failure",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "change partial.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert "partial_failure" in session.messages[1]
+    assert "workspace is consistent" in session.messages[1]
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    assert result_artifact["transaction_count"] == 2
+    assert result_artifact["partial_failure_count"] == 1
+    assert result_artifact["recovery_required"] is True
+    assert result_artifact["transaction_status_counts"] == {
+        "partial_failure": 1,
+        "complete": 1,
+    }
+    first_transaction = result_artifact["transactions"][0]
+    assert first_transaction["status"] == "partial_failure"
+    assert first_transaction["failed_at_action_index"] == 2
+    assert first_transaction["failed_tool"] == "read_file"
+    assert first_transaction["mutating_tools"] == ["write_file"]
+    transaction_lines = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_transactions.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert [line["status"] for line in transaction_lines] == [
+        "partial_failure",
+        "complete",
+    ]
 
 
 @pytest.mark.asyncio

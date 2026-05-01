@@ -17,6 +17,7 @@ from core.providers.adapters.google import GoogleProvider
 from core.providers.adapters.litellm import LiteLLMProvider
 from core.providers.adapters.ollama import OllamaProvider
 from core.providers.adapters.openai import OpenAIProvider
+from core.providers.adapters.openai_compat import parse_openai_tool_calls
 from core.providers.adapters.openrouter import OpenRouterProvider
 from core.providers.adapters.zhipuai import ZhipuAIProvider
 from core.providers.base import SessionConfig
@@ -115,6 +116,54 @@ def _openai_tool_call_response(
 
 def _submitted_tool_names(call: dict) -> list[str]:
     return [tool["function"]["name"] for tool in call["tools"]]
+
+
+def test_provider_tool_call_parser_accepts_gateway_argument_shapes():
+    message = {
+        "tool_calls": [
+            {
+                "id": "call_dict_args",
+                "function": {
+                    "name": "read_file",
+                    "arguments": {"path": "README.md"},
+                },
+            },
+            {
+                "call_id": "call_top_level",
+                "name": "finish",
+                "args": {"summary": "done"},
+            },
+        ]
+    }
+
+    tool_calls = parse_openai_tool_calls(message)
+
+    assert [tool_call.id for tool_call in tool_calls] == [
+        "call_dict_args",
+        "call_top_level",
+    ]
+    assert [tool_call.name for tool_call in tool_calls] == ["read_file", "finish"]
+    assert tool_calls[0].arguments == {"path": "README.md"}
+    assert tool_calls[1].arguments == {"summary": "done"}
+
+
+def test_provider_tool_call_parser_accepts_gemini_part_shapes():
+    message = SimpleNamespace(
+        parts=[
+            SimpleNamespace(
+                function_call=SimpleNamespace(
+                    name="write_file",
+                    args={"path": "notes.txt", "content": "hello"},
+                )
+            )
+        ]
+    )
+
+    tool_calls = parse_openai_tool_calls(message)
+
+    assert tool_calls[0].id == "call_1"
+    assert tool_calls[0].name == "write_file"
+    assert tool_calls[0].arguments == {"path": "notes.txt", "content": "hello"}
 
 
 def _install_fake_litellm(

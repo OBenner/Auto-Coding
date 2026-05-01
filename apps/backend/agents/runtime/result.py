@@ -10,5 +10,6 @@ class AgentRunResult:
 
     status: str
     response_text: str
-    usage_metadata: dict[str, int] | None = None
+    usage_metadata: dict[str, Any] | None = None
     decision_tracker: Any = None
+    artifacts: dict[str, str] | None = None

@@ -34,6 +34,7 @@ Rules:
 - Use list_files and search_text to locate relevant files before reading them.
 - Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
+- Treat each actions array as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Keep iterating until the task is done, then call finish.
 
 Return schema:
@@ -60,6 +61,7 @@ Rules:
 - Use list_files and search_text to locate relevant files before reading them.
 - Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
+- Treat each tool-call batch as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Call finish with a concise summary, verification commands, and risks when complete.
 
 Task:
@@ -69,6 +71,9 @@ __AUTO_CODE_TASK_PROMPT__
 
 class GenericEditRuntimeError(RuntimeError):
     """Raised when the generic edit runtime cannot continue safely."""
+
+
+MUTATING_LOCAL_ACTIONS = frozenset({"write_file", "apply_patch", "run_command"})
 
 
 class GenericEditRuntimeSession:
@@ -244,6 +249,12 @@ class GenericEditRuntimeSession:
                     summary = str(action.get("summary") or result.message)
                     tests = normalize_string_list(action.get("tests"))
                     risks = normalize_string_list(action.get("risks"))
+                    iteration_entry["transaction"] = build_generic_edit_transaction(
+                        loop="json_actions",
+                        iteration=iteration,
+                        actions=actions,
+                        results=action_results,
+                    )
                     trace.append(iteration_entry)
                     artifacts = save_generic_edit_artifacts(
                         spec_dir=spec_dir,
@@ -269,10 +280,17 @@ class GenericEditRuntimeSession:
                         response_text="\n".join(response_lines),
                     )
 
+            iteration_entry["transaction"] = build_generic_edit_transaction(
+                loop="json_actions",
+                iteration=iteration,
+                actions=actions,
+                results=action_results,
+            )
             trace.append(iteration_entry)
             prompt = build_observation_prompt(
                 base_prompt=base_prompt,
                 results=action_results,
+                transaction=iteration_entry["transaction"],
             )
 
         message = (
@@ -461,6 +479,12 @@ class GenericEditRuntimeSession:
                 summary = str(finish_action.get("summary") or finish_result.message)
                 tests = normalize_string_list(finish_action.get("tests"))
                 risks = normalize_string_list(finish_action.get("risks"))
+                iteration_entry["transaction"] = build_generic_edit_transaction(
+                    loop="native_tool_calls",
+                    iteration=iteration,
+                    actions=[action for _, action in tool_actions],
+                    results=action_results,
+                )
                 trace.append(iteration_entry)
                 artifacts = save_generic_edit_artifacts(
                     spec_dir=spec_dir,
@@ -486,8 +510,14 @@ class GenericEditRuntimeSession:
                     response_text="\n".join(response_lines),
                 )
 
+            iteration_entry["transaction"] = build_generic_edit_transaction(
+                loop="native_tool_calls",
+                iteration=iteration,
+                actions=[action for _, action in tool_actions],
+                results=action_results,
+            )
             trace.append(iteration_entry)
-            prompt = None
+            prompt = build_native_recovery_prompt(iteration_entry["transaction"])
 
         message = (
             f"Generic edit native tool-call loop reached max iterations "
@@ -590,6 +620,7 @@ def build_observation_prompt(
     *,
     base_prompt: str,
     results: list[ToolActionResult],
+    transaction: dict[str, Any] | None = None,
 ) -> str:
     """Build the next user message containing local action observations."""
     payload = {
@@ -599,11 +630,98 @@ def build_observation_prompt(
             "Use finish when complete."
         ),
     }
+    if transaction is not None:
+        payload["transaction"] = transaction
+        if transaction.get("recovery_required"):
+            payload["instruction"] = (
+                "A previous action transaction partially failed. Inspect the "
+                "workspace as needed, repair or account for partial changes, "
+                "then continue. Return exactly one JSON object with actions. "
+                "Use finish only when the workspace is consistent."
+            )
     return (
         base_prompt.rstrip()
         + "\n\n## Local Action Observations\n\n"
         + json.dumps(payload, ensure_ascii=False, indent=2)
     )
+
+
+def build_native_recovery_prompt(transaction: dict[str, Any]) -> str | None:
+    """Return a next-turn prompt only when native tool execution needs recovery."""
+    if not transaction.get("recovery_required"):
+        return None
+    return (
+        "The previous local tool-call transaction partially failed. Inspect the "
+        "workspace as needed, repair or account for partial changes, then continue. "
+        "Call finish only when the workspace is consistent.\n\n"
+        + json.dumps({"transaction": transaction}, ensure_ascii=False, indent=2)
+    )
+
+
+def build_generic_edit_transaction(
+    *,
+    loop: str,
+    iteration: int,
+    actions: list[dict[str, Any]],
+    results: list[ToolActionResult],
+) -> dict[str, Any]:
+    """Build one transaction-boundary summary for a local action batch."""
+    succeeded_count = sum(1 for result in results if result.ok)
+    failed_count = sum(1 for result in results if not result.ok)
+    mutating_tools = [
+        action_tool(action)
+        for action in actions
+        if action_tool(action) in MUTATING_LOCAL_ACTIONS
+    ]
+    first_failure_index = next(
+        (index for index, result in enumerate(results, start=1) if not result.ok),
+        None,
+    )
+    partial_mutation = False
+    if first_failure_index is not None:
+        partial_mutation = any(
+            result.ok and action_tool(action) in MUTATING_LOCAL_ACTIONS
+            for action, result in zip(
+                actions[: first_failure_index - 1],
+                results[: first_failure_index - 1],
+                strict=False,
+            )
+        )
+
+    if failed_count == 0:
+        status = "complete"
+    elif partial_mutation:
+        status = "partial_failure"
+    else:
+        status = "failed"
+
+    transaction: dict[str, Any] = {
+        "id": f"{loop}-{iteration}",
+        "loop": loop,
+        "iteration": iteration,
+        "status": status,
+        "action_count": len(actions),
+        "succeeded_action_count": succeeded_count,
+        "failed_action_count": failed_count,
+        "mutating_action_count": len(mutating_tools),
+        "mutating_tools": mutating_tools,
+        "recovery_required": status == "partial_failure",
+    }
+    if first_failure_index is not None:
+        failed_result = results[first_failure_index - 1]
+        transaction.update(
+            {
+                "failed_at_action_index": first_failure_index,
+                "failed_tool": failed_result.tool,
+                "failure_message": failed_result.message,
+            }
+        )
+    if transaction["recovery_required"]:
+        transaction["recovery_message"] = (
+            "At least one mutating action succeeded before a later action failed. "
+            "Inspect affected paths and repair or confirm the workspace state before finishing."
+        )
+    return transaction
 
 
 def build_generic_edit_response(
@@ -686,10 +804,12 @@ def save_generic_edit_artifacts(
     artifact_dir.mkdir(parents=True, exist_ok=True)
     trace_path = artifact_dir / "generic_edit_trace.json"
     timeline_path = artifact_dir / "generic_edit_timeline.json"
+    transaction_path = artifact_dir / "generic_edit_transactions.jsonl"
     summary_path = artifact_dir / "generic_edit_summary.md"
     result_path = artifact_dir / "generic_edit_result.json"
     timestamp = datetime.now(UTC).isoformat()
     trace_summary = summarize_generic_edit_trace(trace)
+    transaction_summary = summarize_generic_edit_transactions(trace)
 
     payload = {
         "timestamp": timestamp,
@@ -726,6 +846,7 @@ def save_generic_edit_artifacts(
         "stop_reason": stop_reason,
         "message": message,
         **trace_summary,
+        **transaction_summary,
         "iteration_count": len(trace),
         "tests": tests or [],
         "test_count": len(tests or []),
@@ -736,6 +857,14 @@ def save_generic_edit_artifacts(
         result_payload["observation_artifact"] = str(observation_path)
     result_path.write_text(
         json.dumps(result_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    transaction_path.write_text(
+        "".join(
+            json.dumps(transaction, ensure_ascii=False) + "\n"
+            for transaction in transaction_summary["transactions"]
+        ),
         encoding="utf-8",
     )
 
@@ -769,6 +898,7 @@ def save_generic_edit_artifacts(
     artifacts = {
         "generic_edit_trace": str(trace_path),
         "generic_edit_timeline": str(timeline_path),
+        "generic_edit_transactions": str(transaction_path),
         "generic_edit_result": str(result_path),
         "generic_edit_summary": str(summary_path),
     }
@@ -829,6 +959,26 @@ def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
         "tool_counts": tool_counts,
         "failed_tools": failed_tools,
         "action_timeline": action_timeline,
+    }
+
+
+def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return transaction counters for partial-action recovery reporting."""
+    transactions = [
+        iteration["transaction"]
+        for iteration in trace
+        if isinstance(iteration.get("transaction"), dict)
+    ]
+    status_counts: dict[str, int] = {}
+    for transaction in transactions:
+        status = str(transaction.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    return {
+        "transactions": transactions,
+        "transaction_count": len(transactions),
+        "transaction_status_counts": status_counts,
+        "partial_failure_count": status_counts.get("partial_failure", 0),
+        "recovery_required": status_counts.get("partial_failure", 0) > 0,
     }
 
 

@@ -241,22 +241,17 @@ def format_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
 
 
 def parse_openai_tool_calls(message_obj: Any) -> list[ProviderToolCall]:
-    """Normalize OpenAI SDK tool-call objects into runtime-friendly records."""
+    """Normalize gateway-specific tool-call objects into runtime-friendly records."""
     normalized: list[ProviderToolCall] = []
-    for tool_call in _get_attr_or_key(message_obj, "tool_calls", None) or []:
-        function = _get_attr_or_key(tool_call, "function", None)
-        name = str(_get_attr_or_key(function, "name", "") or "")
-        raw_arguments = str(_get_attr_or_key(function, "arguments", "") or "{}")
-        try:
-            parsed_arguments = json.loads(raw_arguments)
-        except json.JSONDecodeError as e:
-            raise ProviderError(f"Invalid tool-call arguments for {name}: {e}") from e
-        if not isinstance(parsed_arguments, dict):
-            raise ProviderError(f"Tool-call arguments for {name} must be an object")
+    for index, tool_call in enumerate(iter_provider_tool_calls(message_obj), start=1):
+        name, raw_arguments = tool_call_name_and_arguments(tool_call)
+        if not name:
+            raise ProviderError("Tool call is missing a function name")
+        parsed_arguments = parse_tool_call_arguments(name, raw_arguments)
 
         normalized.append(
             ProviderToolCall(
-                id=str(_get_attr_or_key(tool_call, "id", "") or ""),
+                id=tool_call_id(tool_call, index),
                 name=name,
                 arguments=parsed_arguments,
             )
@@ -293,6 +288,97 @@ def _get_attr_or_key(value: Any, key: str, default: Any = None) -> Any:
     if isinstance(value, dict):
         return value.get(key, default)
     return getattr(value, key, default)
+
+
+def iter_provider_tool_calls(message_obj: Any) -> list[Any]:
+    """Return tool calls from OpenAI, LiteLLM, OpenRouter, and Gemini-like shapes."""
+    tool_calls = list(_get_attr_or_key(message_obj, "tool_calls", None) or [])
+    if tool_calls:
+        return tool_calls
+
+    direct_call = (
+        _get_attr_or_key(message_obj, "function_call", None)
+        or _get_attr_or_key(message_obj, "functionCall", None)
+    )
+    if direct_call:
+        return [direct_call]
+
+    calls_from_parts: list[Any] = []
+    for part in _get_attr_or_key(message_obj, "parts", None) or []:
+        function_call = (
+            _get_attr_or_key(part, "function_call", None)
+            or _get_attr_or_key(part, "functionCall", None)
+        )
+        if function_call:
+            calls_from_parts.append(function_call)
+    return calls_from_parts
+
+
+def tool_call_name_and_arguments(tool_call: Any) -> tuple[str, Any]:
+    """Extract function name and arguments from common tool-call envelopes."""
+    function = (
+        _get_attr_or_key(tool_call, "function", None)
+        or _get_attr_or_key(tool_call, "function_call", None)
+        or _get_attr_or_key(tool_call, "functionCall", None)
+        or tool_call
+    )
+    name = str(
+        _get_attr_or_key(function, "name", None)
+        or _get_attr_or_key(tool_call, "name", "")
+        or ""
+    )
+    raw_arguments = first_present_value(
+        function,
+        ("arguments", "args", "parameters", "input"),
+    )
+    if raw_arguments is None and function is not tool_call:
+        raw_arguments = first_present_value(
+            tool_call,
+            ("arguments", "args", "parameters", "input"),
+        )
+    return name, raw_arguments
+
+
+def parse_tool_call_arguments(name: str, raw_arguments: Any) -> dict[str, Any]:
+    """Parse tool arguments from JSON strings, dicts, and mapping-like objects."""
+    if raw_arguments in (None, ""):
+        return {}
+    if isinstance(raw_arguments, dict):
+        return raw_arguments
+    if isinstance(raw_arguments, str):
+        try:
+            parsed_arguments = json.loads(raw_arguments)
+        except json.JSONDecodeError as e:
+            raise ProviderError(f"Invalid tool-call arguments for {name}: {e}") from e
+    else:
+        try:
+            parsed_arguments = dict(raw_arguments)
+        except (TypeError, ValueError) as e:
+            raise ProviderError(
+                f"Tool-call arguments for {name} must be a JSON object"
+            ) from e
+    if not isinstance(parsed_arguments, dict):
+        raise ProviderError(f"Tool-call arguments for {name} must be an object")
+    return parsed_arguments
+
+
+def tool_call_id(tool_call: Any, index: int) -> str:
+    value = (
+        _get_attr_or_key(tool_call, "id", None)
+        or _get_attr_or_key(tool_call, "tool_call_id", None)
+        or _get_attr_or_key(tool_call, "call_id", None)
+        or _get_attr_or_key(tool_call, "callId", None)
+        or f"call_{index}"
+    )
+    return str(value)
+
+
+def first_present_value(value: Any, keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        candidate = _get_attr_or_key(value, key, None)
+        if candidate is not None:
+            return candidate
+    return None
 
 
 class OpenAICompatibleProvider(AIEngineProvider):

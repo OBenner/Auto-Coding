@@ -58,11 +58,15 @@ class CodexCliSession(AgentSession):
         codex_command: str,
         codex_home: str,
         model: str,
+        resume_session_id: str | None = None,
+        resume_last: bool = False,
     ):
         super().__init__(session_id, provider_name="codex")
         self.codex_command = codex_command
         self.codex_home = codex_home
         self.model = model
+        self.codex_resume_session_id = resume_session_id
+        self.codex_resume_last = resume_last
 
     @property
     def context_client(self) -> None:
@@ -92,11 +96,19 @@ class CodexCliProvider(AIEngineProvider):
             raise ProviderConfigError("Codex CLI executable was not found")
 
         model = config.model or self._config.codex_model or DEFAULT_CODEX_MODEL
+        extra = config.extra or {}
         return CodexCliSession(
             session_id=f"codex-{uuid.uuid4().hex[:12]}",
             codex_command=command,
             codex_home=_resolve_codex_home(self._config),
             model=model,
+            resume_session_id=(
+                extra.get("codex_resume_session_id")
+                or extra.get("resume_session_id")
+            ),
+            resume_last=bool(
+                extra.get("codex_resume_last") or extra.get("resume_last")
+            ),
         )
 
     async def send_message(self, message: str) -> AsyncIterator[str]:
