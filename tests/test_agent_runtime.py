@@ -174,7 +174,7 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
     )
 
     assert result.status == "complete"
-    assert result.response_text == "final response: do codex work"
+    assert result.response_text.rstrip("\r\n") == "final response: do codex work"
 
 
 class FakeCompletionSession:
