@@ -85,6 +85,12 @@ summary in the sidebar near the existing Claude Code status badge.
 │ └─────────────────────────────────────────────────────────┘ │
 │                                                             │
 │ ┌─────────────────────────────────────────────────────────┐ │
+│ │ Cursor CLI                         Installed · login req │ │
+│ │ Cursor rules detected in this project                    │ │
+│ │ [Authenticate] [Use as fallback] [Configure]             │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────────┐ │
 │ │ CodeRabbit CLI                   Not authenticated       │ │
 │ │ Installed, but login is required for review mode         │ │
 │ │ [Authenticate] [Test]                                   │ │
@@ -170,6 +176,8 @@ Examples:
   CLI."
 - GitHub Copilot entitlement signal found, Copilot CLI missing: show "Install
   Copilot CLI."
+- Cursor app, account, or project rules detected, Cursor CLI missing: show
+  "Install Cursor CLI" or "Configure Cursor CLI path."
 - Claude OAuth exists, Claude Code missing or outdated: reuse the Claude Code
   install/update flow.
 
@@ -185,8 +193,9 @@ Users should configure fallback behavior per runner role:
 Implementation fallback:
 1. Codex CLI
 2. Claude Code
-3. Gemini CLI
-4. Aider
+3. Cursor CLI
+4. Gemini CLI
+5. Aider
 
 Review fallback:
 1. CodeRabbit CLI
@@ -201,7 +210,7 @@ planned runner assignment:
 Planner: Claude Code
 Coder: Codex CLI
 QA Review: CodeRabbit CLI
-Fallback: Gemini CLI if Codex CLI is unavailable
+Fallback: Cursor CLI, then Gemini CLI if Codex CLI is unavailable
 ```
 
 If fallback is used, the task timeline and final QA report should record:
@@ -221,6 +230,8 @@ If fallback is used, the task timeline and final QA report should record:
 - Display capability gaps before running a task instead of failing mid-run when
   they are knowable.
 - Store fallback order per project, with an optional global default.
+- Surface Cursor rules or project context as a positive signal when suggesting
+  Cursor CLI as a fallback runner.
 
 ## UI Design Specifications
 

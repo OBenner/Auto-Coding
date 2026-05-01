@@ -7,7 +7,7 @@ development.
 
 | Document | Purpose |
 | --- | --- |
-| [LLM CLI Runner Strategy](./cli-runner-strategy.md) | Strategic case, goals, benefits, application experience, and support tiers for integrating external LLM coding CLIs. |
+| [LLM CLI Runner Strategy](./cli-runner-strategy.md) | Strategic case, goals, benefits, application experience, and support tiers for integrating external LLM coding CLIs, including Cursor CLI. |
 | [Implementation Roadmap](./implementation-phases.md) | Technical roadmap for multi-provider LLM support. |
 | [Migration Guide](./migration-guide.md) | Migration path from Claude-only usage to the multi-provider architecture. |
 

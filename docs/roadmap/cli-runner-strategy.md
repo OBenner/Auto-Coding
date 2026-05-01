@@ -74,6 +74,8 @@ Examples:
   control over commits.
 - Use GitHub Copilot CLI for GitHub-native issue, branch, and pull-request
   workflows.
+- Use Cursor CLI when a team already has Cursor Agent, Cursor rules, and
+  project-local Cursor configuration.
 - Use CodeRabbit CLI as an independent review gate after an implementation
   runner modifies files.
 
@@ -202,7 +204,7 @@ These should be supported after the runner interface is stable.
 | Runner | Role In Auto Code |
 | --- | --- |
 | GitHub Copilot CLI | GitHub-native issues, PRs, repository automation, and enterprise GitHub workflows. |
-| Cursor CLI | Support for teams already standardized on Cursor Agent and Cursor rules. |
+| Cursor CLI | Support for teams already standardized on Cursor Agent, Cursor rules, and Cursor-managed project context. |
 
 ### Tier 3: Generic CLI Runner Support
 
@@ -305,6 +307,8 @@ explain that Auto Code can use the runner after installation. For example:
 - Google authentication or API configuration is present, but Gemini CLI is
   missing.
 - GitHub Copilot access appears available, but Copilot CLI is missing.
+- Cursor installation, account state, or project rules are detected, but the
+  Cursor CLI is missing from the configured execution path.
 - Claude Code auth exists, but the active Claude binary is missing or outdated.
 
 Installation should always be an explicit user action. The app can open a
@@ -330,8 +334,9 @@ Example fallback policy:
 Implementation:
 1. Codex CLI
 2. Claude Code
-3. Gemini CLI
-4. Aider
+3. Cursor CLI
+4. Gemini CLI
+5. Aider
 
 Review:
 1. CodeRabbit CLI
@@ -374,6 +379,39 @@ Examples:
 
 The UI should phrase this as capability matching, not as a mysterious automatic
 override.
+
+### Cursor CLI Experience
+
+Cursor CLI should be treated as a strategic integration rather than a generic
+unknown command because many users already maintain useful Cursor-specific
+project context.
+
+Cursor-specific detection should check:
+
+- Whether the `cursor-agent` or equivalent Cursor CLI command is available.
+- Whether a supported Cursor version is installed.
+- Whether the user has an active Cursor account or CLI authentication state.
+- Whether the project contains Cursor rules or configuration that should be
+  surfaced as runner context.
+- Whether the runner supports the required task mode: headless execution,
+  file editing, command execution, review, or MCP.
+
+Recommended UI states:
+
+- `ready`: Cursor CLI is installed and authenticated.
+- `installed_not_authenticated`: Cursor CLI exists, but the user needs to log in.
+- `key_available_not_installed`: Cursor app/account signals exist, but the CLI is
+  not available from Auto Code.
+- `blocked_by_policy`: the project allows other runners but disallows Cursor for
+  this workspace.
+
+Cursor CLI should be offered as:
+
+- An implementation runner for teams that prefer Cursor Agent.
+- A fallback runner after Codex CLI or Claude Code when Cursor is configured.
+- A project-context-aware runner when Cursor rules are present.
+- A non-default strategic integration until the runner interface and output
+  normalization are stable.
 
 ## Workflow Fit
 
