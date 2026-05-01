@@ -99,8 +99,8 @@ async def test_claude_runtime_wraps_existing_session_runner(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
-    fake_codex = tmp_path / "codex"
-    fake_codex.write_text(
+    fake_codex_script = tmp_path / "codex.py"
+    fake_codex_script.write_text(
         textwrap.dedent(
             """\
             #!/usr/bin/env python3
@@ -120,7 +120,18 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
         ),
         encoding="utf-8",
     )
-    fake_codex.chmod(0o755)
+    if sys.platform == "win32":
+        fake_codex = tmp_path / "codex.cmd"
+        fake_codex.write_text(
+            f'@echo off\r\n"{sys.executable}" "{fake_codex_script}" %*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        fake_codex = tmp_path / "codex"
+        fake_codex.write_text(
+            fake_codex_script.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        fake_codex.chmod(0o755)
 
     codex_home = tmp_path / "codex-home"
     codex_home.mkdir()

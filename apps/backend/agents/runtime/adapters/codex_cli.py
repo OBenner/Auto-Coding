@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from core.platform import build_windows_command, find_executable
 from core.providers.config import DEFAULT_CODEX_MODEL
 
 from ..capabilities import RuntimeCapabilities
@@ -40,8 +41,11 @@ class CodexCliRuntimeSession:
     ) -> AgentRunResult:
         del spec_dir, verbose, phase, subtask_id
 
-        command = [
-            self.agent_session.codex_command,
+        executable = find_executable(self.agent_session.codex_command)
+        if executable is None:
+            executable = self.agent_session.codex_command
+
+        command_args = [
             "exec",
             "--cd",
             str(self.project_dir),
@@ -52,7 +56,7 @@ class CodexCliRuntimeSession:
         ]
         model = getattr(self.agent_session, "model", DEFAULT_CODEX_MODEL)
         if model and model != DEFAULT_CODEX_MODEL:
-            command.extend(["--model", str(model)])
+            command_args.extend(["--model", str(model)])
 
         env = {
             **os.environ,
@@ -60,7 +64,8 @@ class CodexCliRuntimeSession:
         }
         with tempfile.TemporaryDirectory(prefix="auto-code-codex-") as temp_dir:
             output_path = Path(temp_dir) / "last-message.txt"
-            command.extend(["--output-last-message", str(output_path)])
+            command_args.extend(["--output-last-message", str(output_path)])
+            command = build_windows_command(executable, command_args)
 
             process = await asyncio.create_subprocess_exec(
                 *command,

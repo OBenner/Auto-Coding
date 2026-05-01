@@ -21,8 +21,15 @@ interface CodexProfileStoreData {
 
 const STORE_VERSION = 1;
 
+function getUserDataPath(): string {
+  if (typeof app?.getPath === 'function') {
+    return app.getPath('userData');
+  }
+  return path.join(homedir(), '.auto-coding');
+}
+
 function getCodexProfilesDir(): string {
-  return path.join(app.getPath('userData'), 'codex-profiles');
+  return path.join(getUserDataPath(), 'codex-profiles');
 }
 
 function expandHomePath(value: string): string {
@@ -88,7 +95,7 @@ export class CodexProfileManager {
   private initialized = false;
 
   constructor() {
-    this.configDir = path.join(app.getPath('userData'), 'config');
+    this.configDir = path.join(getUserDataPath(), 'config');
     this.storePath = path.join(this.configDir, 'codex-profiles.json');
     this.data = this.createDefaultData();
   }
