@@ -12,6 +12,8 @@ from agents.runtime import (
     RuntimeCapabilityError,
     RuntimeMcpBridge,
     RuntimeRequirements,
+    RuntimeSubagentOrchestrator,
+    RuntimeSubagentTask,
     create_runtime_session,
     get_runtime_mode,
     local_action_response_schema,
@@ -297,6 +299,41 @@ class FakeClaudeQuerySession:
         yield "query limited analysis"
 
 
+class FakeSubagentRuntimeSession:
+    provider_name = "openai"
+    name = "fake_subagent"
+
+    def __init__(self, response: str, status: str = "complete"):
+        from agents.runtime import RuntimeCapabilities
+
+        self.response = response
+        self.status = status
+        self.capabilities = RuntimeCapabilities.completion_only()
+        self.prompts: list[str] = []
+        self.cancelled = False
+
+    async def run(
+        self,
+        *,
+        message: str,
+        spec_dir: Path,
+        verbose: bool,
+        phase,
+        subtask_id: str | None = None,
+    ):
+        del spec_dir, verbose, phase, subtask_id
+        self.prompts.append(message)
+        return SimpleNamespace(
+            status=self.status,
+            response_text=self.response,
+            usage_metadata={"input_tokens": 1, "output_tokens": 2},
+            artifacts=None,
+        )
+
+    async def cancel(self):
+        self.cancelled = True
+
+
 @pytest.mark.asyncio
 async def test_completion_runtime_supports_text_only(tmp_path: Path):
     runtime_session = create_runtime_session(
@@ -313,6 +350,52 @@ async def test_completion_runtime_supports_text_only(tmp_path: Path):
 
     assert result.status == "complete"
     assert result.response_text == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path):
+    created_sessions: list[FakeSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = FakeSubagentRuntimeSession(f"done {task.id}")
+        created_sessions.append(session)
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_concurrency=2,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="explore-api",
+                role="explorer",
+                prompt="Inspect API files",
+                metadata={"paths": ["apps/backend"]},
+            ),
+            RuntimeSubagentTask(
+                id="explore-ui",
+                role="explorer",
+                prompt="Inspect UI files",
+            ),
+        ]
+    )
+
+    assert run.status == "complete"
+    assert [result.response_text for result in run.results] == [
+        "done explore-api",
+        "done explore-ui",
+    ]
+    assert run.artifact_path
+    artifact = json.loads(Path(run.artifact_path).read_text(encoding="utf-8"))
+    assert artifact["status"] == "complete"
+    assert artifact["results"][0]["usage_metadata"] == {
+        "input_tokens": 1,
+        "output_tokens": 2,
+    }
+    assert "Auto Code subagent `explore-api`" in created_sessions[0].prompts[0]
+    assert '"paths": [' in created_sessions[0].prompts[0]
 
 
 @pytest.mark.asyncio

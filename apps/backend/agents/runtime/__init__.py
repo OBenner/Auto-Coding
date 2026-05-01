@@ -34,6 +34,12 @@ from .mcp_bridge import RuntimeMcpBridge, RuntimeMcpToolSpec
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
 from .result import AgentRunResult
 from .session_engine import run_runtime_session
+from .subagents import (
+    RuntimeSubagentOrchestrator,
+    RuntimeSubagentResult,
+    RuntimeSubagentRun,
+    RuntimeSubagentTask,
+)
 
 __all__ = [
     "AgentRunResult",
@@ -45,6 +51,10 @@ __all__ = [
     "RuntimeMode",
     "RuntimeMcpBridge",
     "RuntimeMcpToolSpec",
+    "RuntimeSubagentOrchestrator",
+    "RuntimeSubagentResult",
+    "RuntimeSubagentRun",
+    "RuntimeSubagentTask",
     "LocalActionExecutor",
     "LocalActionToolSpec",
     "ToolActionResult",
