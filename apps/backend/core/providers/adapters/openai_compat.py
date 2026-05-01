@@ -296,19 +296,17 @@ def iter_provider_tool_calls(message_obj: Any) -> list[Any]:
     if tool_calls:
         return tool_calls
 
-    direct_call = (
-        _get_attr_or_key(message_obj, "function_call", None)
-        or _get_attr_or_key(message_obj, "functionCall", None)
-    )
+    direct_call = _get_attr_or_key(
+        message_obj, "function_call", None
+    ) or _get_attr_or_key(message_obj, "functionCall", None)
     if direct_call:
         return [direct_call]
 
     calls_from_parts: list[Any] = []
     for part in _get_attr_or_key(message_obj, "parts", None) or []:
-        function_call = (
-            _get_attr_or_key(part, "function_call", None)
-            or _get_attr_or_key(part, "functionCall", None)
-        )
+        function_call = _get_attr_or_key(
+            part, "function_call", None
+        ) or _get_attr_or_key(part, "functionCall", None)
         if function_call:
             calls_from_parts.append(function_call)
     return calls_from_parts

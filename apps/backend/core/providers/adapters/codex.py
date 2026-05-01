@@ -103,8 +103,7 @@ class CodexCliProvider(AIEngineProvider):
             codex_home=_resolve_codex_home(self._config),
             model=model,
             resume_session_id=(
-                extra.get("codex_resume_session_id")
-                or extra.get("resume_session_id")
+                extra.get("codex_resume_session_id") or extra.get("resume_session_id")
             ),
             resume_last=bool(
                 extra.get("codex_resume_last") or extra.get("resume_last")
