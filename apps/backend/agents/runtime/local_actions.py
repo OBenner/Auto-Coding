@@ -46,6 +46,8 @@ TRACE_REDACTED_FIELDS = {
     "raw_response",
     "text",
 }
+EXAMPLE_WORKSPACE_FILE_PATH = "relative/path.py"
+WORKSPACE_FILE_PATH_DESCRIPTION = "Workspace-relative file path."
 DEFAULT_LIST_EXCLUDED_DIRS = {
     ".git",
     ".claude",
@@ -137,7 +139,7 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
         example={
             "tool": "stat_path",
-            "path": "relative/path.py",
+            "path": EXAMPLE_WORKSPACE_FILE_PATH,
         },
     ),
     LocalActionToolSpec(
@@ -216,7 +218,7 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         parameters={
             "path": {
                 "type": "string",
-                "description": "Workspace-relative file path.",
+                "description": WORKSPACE_FILE_PATH_DESCRIPTION,
             },
             "max_chars": {
                 "type": "integer",
@@ -228,7 +230,7 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         required=("path",),
         example={
             "tool": "read_file",
-            "path": "relative/path.py",
+            "path": EXAMPLE_WORKSPACE_FILE_PATH,
             "max_chars": 12000,
         },
     ),
@@ -238,7 +240,7 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         parameters={
             "path": {
                 "type": "string",
-                "description": "Workspace-relative file path.",
+                "description": WORKSPACE_FILE_PATH_DESCRIPTION,
             },
             "start_line": {
                 "type": "integer",
@@ -255,7 +257,7 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         required=("path",),
         example={
             "tool": "read_file_range",
-            "path": "relative/path.py",
+            "path": EXAMPLE_WORKSPACE_FILE_PATH,
             "start_line": 40,
             "max_lines": DEFAULT_READ_RANGE_LINES,
         },
@@ -281,7 +283,7 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         required=("paths",),
         example={
             "tool": "read_many_files",
-            "paths": ["relative/path.py", "relative/other.py"],
+            "paths": [EXAMPLE_WORKSPACE_FILE_PATH, "relative/other.py"],
             "max_chars_per_file": 8000,
         },
     ),
@@ -291,7 +293,7 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         parameters={
             "path": {
                 "type": "string",
-                "description": "Workspace-relative file path.",
+                "description": WORKSPACE_FILE_PATH_DESCRIPTION,
             },
             "content": {
                 "type": "string",
@@ -301,7 +303,7 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         required=("path", "content"),
         example={
             "tool": "write_file",
-            "path": "relative/path.py",
+            "path": EXAMPLE_WORKSPACE_FILE_PATH,
             "content": "complete file content",
         },
     ),
@@ -435,35 +437,7 @@ class LocalActionExecutor:
         """Execute one local action and return a structured result."""
         tool = action_tool(action)
         try:
-            if tool == "stat_path":
-                return self._stat_path(action)
-            if tool == "list_files":
-                return self._list_files(action)
-            if tool == "search_text":
-                return self._search_text(action)
-            if tool == "read_file":
-                return self._read_file(action)
-            if tool == "read_file_range":
-                return self._read_file_range(action)
-            if tool == "read_many_files":
-                return self._read_many_files(action)
-            if tool == "write_file":
-                return self._write_file(action)
-            if tool == "apply_patch":
-                return self._apply_patch(action)
-            if tool == "run_command":
-                return await self._run_command(action)
-            if tool == "finish":
-                return ToolActionResult(
-                    tool=tool,
-                    ok=True,
-                    message=str(action.get("summary") or "Local actions completed"),
-                )
-            return ToolActionResult(
-                tool=tool or "unknown",
-                ok=False,
-                message=f"Unknown tool: {tool or '<missing>'}",
-            )
+            return await self._execute_known_action(tool, action)
         except (LocalActionError, PatchProposalError) as e:
             return ToolActionResult(tool=tool or "unknown", ok=False, message=str(e))
         except Exception as e:
@@ -473,6 +447,40 @@ class LocalActionExecutor:
                 ok=False,
                 message=f"Action failed unexpectedly: {e}",
             )
+
+    async def _execute_known_action(
+        self,
+        tool: str,
+        action: dict[str, Any],
+    ) -> ToolActionResult:
+        if tool == "run_command":
+            return await self._run_command(action)
+        if tool == "finish":
+            return ToolActionResult(
+                tool=tool,
+                ok=True,
+                message=str(action.get("summary") or "Local actions completed"),
+            )
+        handler = self._sync_action_handlers().get(tool)
+        if handler is None:
+            return ToolActionResult(
+                tool=tool or "unknown",
+                ok=False,
+                message=f"Unknown tool: {tool or '<missing>'}",
+            )
+        return handler(action)
+
+    def _sync_action_handlers(self):
+        return {
+            "stat_path": self._stat_path,
+            "list_files": self._list_files,
+            "search_text": self._search_text,
+            "read_file": self._read_file,
+            "read_file_range": self._read_file_range,
+            "read_many_files": self._read_many_files,
+            "write_file": self._write_file,
+            "apply_patch": self._apply_patch,
+        }
 
     def _stat_path(self, action: dict[str, Any]) -> ToolActionResult:
         path = optional_workspace_path(action, "path")
@@ -529,51 +537,12 @@ class LocalActionExecutor:
                 message=f"Directory not found: {path or '.'}",
             )
 
-        entries: list[dict[str, Any]] = []
-        truncated = False
-
-        def add_entry(candidate: Path) -> bool:
-            nonlocal truncated
-            relative = candidate.relative_to(self.project_dir.resolve()).as_posix()
-            if not is_safe_list_entry(relative, include_hidden=include_hidden):
-                return True
-            if len(entries) >= max_entries:
-                truncated = True
-                return False
-            entry: dict[str, Any] = {
-                "path": relative,
-                "type": "directory" if candidate.is_dir() else "file",
-            }
-            if candidate.is_file():
-                try:
-                    entry["bytes"] = candidate.stat().st_size
-                except OSError:
-                    entry["bytes"] = None
-            entries.append(entry)
-            return True
-
-        if recursive:
-            for root, dir_names, file_names in os.walk(target):
-                root_path = Path(root)
-                dir_names[:] = sorted(
-                    name
-                    for name in dir_names
-                    if should_descend_directory(
-                        root_path / name,
-                        self.project_dir,
-                        include_hidden=include_hidden,
-                    )
-                )
-                for name in [*dir_names, *sorted(file_names)]:
-                    if not add_entry(root_path / name):
-                        dir_names[:] = []
-                        break
-                if truncated:
-                    break
-        else:
-            for child in sorted(target.iterdir(), key=lambda item: item.name):
-                if not add_entry(child):
-                    break
+        entries, truncated = self._collect_list_entries(
+            target=target,
+            recursive=recursive,
+            include_hidden=include_hidden,
+            max_entries=max_entries,
+        )
 
         return ToolActionResult(
             tool="list_files",
@@ -589,6 +558,48 @@ class LocalActionExecutor:
                 "truncated": truncated,
             },
         )
+
+    def _collect_list_entries(
+        self,
+        *,
+        target: Path,
+        recursive: bool,
+        include_hidden: bool,
+        max_entries: int,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        entries: list[dict[str, Any]] = []
+        candidates = (
+            iter_list_files_recursive(
+                target, self.project_dir, include_hidden=include_hidden
+            )
+            if recursive
+            else iter_list_files_shallow(target)
+        )
+        for candidate in candidates:
+            if not self._append_list_entry(
+                entries=entries,
+                candidate=candidate,
+                include_hidden=include_hidden,
+                max_entries=max_entries,
+            ):
+                return entries, True
+        return entries, False
+
+    def _append_list_entry(
+        self,
+        *,
+        entries: list[dict[str, Any]],
+        candidate: Path,
+        include_hidden: bool,
+        max_entries: int,
+    ) -> bool:
+        relative = candidate.relative_to(self.project_dir.resolve()).as_posix()
+        if not is_safe_list_entry(relative, include_hidden=include_hidden):
+            return True
+        if len(entries) >= max_entries:
+            return False
+        entries.append(build_list_entry(candidate, relative))
+        return True
 
     def _search_text(self, action: dict[str, Any]) -> ToolActionResult:
         query = bounded_string(
@@ -1178,6 +1189,47 @@ def is_safe_list_entry(path: str, *, include_hidden: bool) -> bool:
     except PatchProposalError:
         return False
     return True
+
+
+def iter_list_files_shallow(target: Path):
+    """Yield direct children for list_files in deterministic order."""
+    yield from sorted(target.iterdir(), key=lambda item: item.name)
+
+
+def iter_list_files_recursive(
+    target: Path,
+    project_dir: Path,
+    *,
+    include_hidden: bool,
+):
+    """Yield recursive list_files entries while pruning unsafe directories."""
+    for root, dir_names, file_names in os.walk(target):
+        root_path = Path(root)
+        dir_names[:] = sorted(
+            name
+            for name in dir_names
+            if should_descend_directory(
+                root_path / name,
+                project_dir,
+                include_hidden=include_hidden,
+            )
+        )
+        for name in [*dir_names, *sorted(file_names)]:
+            yield root_path / name
+
+
+def build_list_entry(candidate: Path, relative: str) -> dict[str, Any]:
+    """Build one redacted list_files entry."""
+    entry: dict[str, Any] = {
+        "path": relative,
+        "type": "directory" if candidate.is_dir() else "file",
+    }
+    if candidate.is_file():
+        try:
+            entry["bytes"] = candidate.stat().st_size
+        except OSError:
+            entry["bytes"] = None
+    return entry
 
 
 def iter_search_files(

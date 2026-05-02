@@ -254,11 +254,18 @@ def _normalize_runtime_mode(runtime_mode: str | None) -> str | None:
 def _normalize_capabilities(
     required_capabilities: Iterable[str] | str | None,
 ) -> tuple[str, ...]:
+    values = _capability_values(required_capabilities)
+    return tuple(dict.fromkeys(values))
+
+
+def _capability_values(
+    required_capabilities: Iterable[str] | str | None,
+) -> list[str]:
     if required_capabilities is None:
-        return ()
+        return []
     if isinstance(required_capabilities, str):
-        return (required_capabilities,)
-    return tuple(dict.fromkeys(required_capabilities))
+        return [required_capabilities]
+    return list(required_capabilities)
 
 
 def detect_cli_runner_availability(

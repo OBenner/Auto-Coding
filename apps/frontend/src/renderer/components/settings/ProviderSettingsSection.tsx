@@ -250,6 +250,91 @@ function getCapabilityStatusClass(status: CapabilityStatus): string {
   }
 }
 
+function isFullAutonomousProvider(provider: AIEngineProvider): boolean {
+  return provider === 'claude' || provider === 'codex';
+}
+
+function countFullAutonomousSelections(config: AIProviderConfig, activeRuntimeMode: AgentRuntimeMode): number {
+  return [
+    activeRuntimeMode,
+    config.plannerRuntimeMode,
+    config.coderRuntimeMode,
+    config.qaReviewerRuntimeMode,
+    config.qaFixerRuntimeMode
+  ].filter((mode) => mode === 'full_autonomous').length;
+}
+
+function getCompatibilityMessageKey(
+  nonClaudeFullAutonomous: boolean,
+  runtimeFallbackEnabled: boolean,
+  cliRunnerRouterEnabled: boolean
+): string {
+  if (!nonClaudeFullAutonomous) {
+    return 'settings:aiProvider.compatibility.claudeFirst';
+  }
+  if (runtimeFallbackEnabled) {
+    return 'settings:aiProvider.compatibility.fallbackActive';
+  }
+  if (cliRunnerRouterEnabled) {
+    return 'settings:aiProvider.compatibility.runnerRouterActive';
+  }
+  return 'settings:aiProvider.compatibility.nonClaudeFullAutonomous';
+}
+
+function getRuntimeNoticeKey(
+  fullAutonomousProvider: boolean,
+  fullAutonomousSelectionCount: number,
+  runtimeFallbackEnabled: boolean,
+  cliRunnerRouterEnabled: boolean
+): string | null {
+  if (fullAutonomousProvider || fullAutonomousSelectionCount === 0) {
+    return null;
+  }
+  if (runtimeFallbackEnabled) {
+    return 'settings:aiProvider.runtime.validation.fallbackWillApply';
+  }
+  if (cliRunnerRouterEnabled) {
+    return 'settings:aiProvider.runtime.validation.runnerRouterWillApply';
+  }
+  return 'settings:aiProvider.runtime.validation.fullAutonomousUnavailable';
+}
+
+function getCostInfo(config: AIProviderConfig, primaryModel: string) {
+  if (config.provider === 'ollama') {
+    return {
+      model: primaryModel,
+      isLocal: true,
+      estimate: null,
+      pricingModel: null
+    };
+  }
+
+  const pricingModel = normalizePricingModel(primaryModel);
+  if (!pricingModel) {
+    return {
+      model: primaryModel,
+      isLocal: false,
+      estimate: null,
+      pricingModel: null
+    };
+  }
+
+  return {
+    model: primaryModel,
+    isLocal: false,
+    estimate: estimateSessionCost(
+      pricingModel,
+      COST_ESTIMATE_INPUT_TOKENS,
+      COST_ESTIMATE_OUTPUT_TOKENS
+    ),
+    pricingModel
+  };
+}
+
+function getElectronAPI() {
+  return (globalThis as unknown as Partial<Window>).electronAPI;
+}
+
 function ProviderField({
   id,
   label,
@@ -306,7 +391,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     let cancelled = false;
     (async () => {
       try {
-        const result = await window.electronAPI?.getProviderConfig?.();
+        const result = await getElectronAPI()?.getProviderConfig?.();
         if (!cancelled && result?.success && result.data) {
           setConfig(
             normalizeProviderRuntimeConfig({
@@ -339,68 +424,23 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const activeRuntimeMode = config.runtimeMode ?? 'full_autonomous';
   const runtimeFallbackEnabled = config.runtimeFallbackEnabled ?? false;
   const cliRunnerRouterEnabled = config.cliRunnerRouterEnabled ?? false;
-  const fullAutonomousProvider = config.provider === 'claude' || config.provider === 'codex';
+  const fullAutonomousProvider = isFullAutonomousProvider(config.provider);
   const nonClaudeFullAutonomous = !fullAutonomousProvider && activeRuntimeMode === 'full_autonomous';
-  let compatibilityMessageKey = 'settings:aiProvider.compatibility.claudeFirst';
-  if (nonClaudeFullAutonomous) {
-    if (runtimeFallbackEnabled) {
-      compatibilityMessageKey = 'settings:aiProvider.compatibility.fallbackActive';
-    } else if (cliRunnerRouterEnabled) {
-      compatibilityMessageKey = 'settings:aiProvider.compatibility.runnerRouterActive';
-    } else {
-      compatibilityMessageKey = 'settings:aiProvider.compatibility.nonClaudeFullAutonomous';
-    }
-  }
+  const compatibilityMessageKey = getCompatibilityMessageKey(
+    nonClaudeFullAutonomous,
+    runtimeFallbackEnabled,
+    cliRunnerRouterEnabled
+  );
   const selectedCapabilities = PROVIDER_CAPABILITY_MATRIX[config.provider];
-  const fullAutonomousSelectionCount = [
-    activeRuntimeMode,
-    config.plannerRuntimeMode,
-    config.coderRuntimeMode,
-    config.qaReviewerRuntimeMode,
-    config.qaFixerRuntimeMode
-  ].filter((mode) => mode === 'full_autonomous').length;
-  let runtimeNoticeKey: string | null = null;
-  if (!fullAutonomousProvider && fullAutonomousSelectionCount > 0) {
-    if (runtimeFallbackEnabled) {
-      runtimeNoticeKey = 'settings:aiProvider.runtime.validation.fallbackWillApply';
-    } else if (cliRunnerRouterEnabled) {
-      runtimeNoticeKey = 'settings:aiProvider.runtime.validation.runnerRouterWillApply';
-    } else {
-      runtimeNoticeKey = 'settings:aiProvider.runtime.validation.fullAutonomousUnavailable';
-    }
-  }
+  const fullAutonomousSelectionCount = countFullAutonomousSelections(config, activeRuntimeMode);
+  const runtimeNoticeKey = getRuntimeNoticeKey(
+    fullAutonomousProvider,
+    fullAutonomousSelectionCount,
+    runtimeFallbackEnabled,
+    cliRunnerRouterEnabled
+  );
   const primaryModel = getPrimaryProviderModel(config);
-  const costInfo = useMemo(() => {
-    if (config.provider === 'ollama') {
-      return {
-        model: primaryModel,
-        isLocal: true,
-        estimate: null,
-        pricingModel: null
-      };
-    }
-
-    const pricingModel = normalizePricingModel(primaryModel);
-    if (!pricingModel) {
-      return {
-        model: primaryModel,
-        isLocal: false,
-        estimate: null,
-        pricingModel: null
-      };
-    }
-
-    return {
-      model: primaryModel,
-      isLocal: false,
-      estimate: estimateSessionCost(
-        pricingModel,
-        COST_ESTIMATE_INPUT_TOKENS,
-        COST_ESTIMATE_OUTPUT_TOKENS
-      ),
-      pricingModel
-    };
-  }, [config.provider, primaryModel]);
+  const costInfo = useMemo(() => getCostInfo(config, primaryModel), [config, primaryModel]);
 
   const updateConfig = (updates: Partial<AIProviderConfig>) => {
     setConfig((current) => normalizeProviderRuntimeConfig({ ...current, ...updates }));
@@ -412,7 +452,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const handleProviderChange = (provider: AIEngineProvider) => {
     updateConfig({
       provider,
-      runtimeMode: provider === 'claude' || provider === 'codex' ? 'full_autonomous' : config.runtimeMode
+      runtimeMode: isFullAutonomousProvider(provider) ? 'full_autonomous' : config.runtimeMode
     });
   };
 
@@ -431,7 +471,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     try {
       const nextConfig = normalizeProviderRuntimeConfig(config);
       setConfig(nextConfig);
-      const result = await window.electronAPI?.updateProviderConfig?.(nextConfig);
+      const result = await getElectronAPI()?.updateProviderConfig?.(nextConfig);
       setSaveStatus(result?.success ? 'success' : 'error');
     } catch {
       setSaveStatus('error');
@@ -448,12 +488,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     try {
       const nextConfig = normalizeProviderRuntimeConfig(config);
       setConfig(nextConfig);
-      const saveResult = await window.electronAPI?.updateProviderConfig?.(nextConfig);
+      const saveResult = await getElectronAPI()?.updateProviderConfig?.(nextConfig);
       if (!saveResult?.success) {
         setSaveStatus('error');
         return;
       }
-      const validationResult = await window.electronAPI?.validateProviderConfig?.();
+      const validationResult = await getElectronAPI()?.validateProviderConfig?.();
       setValidationStatus(
         validationResult?.success ? validationResult.data ?? null : null
       );
@@ -473,7 +513,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     try {
       const nextConfig = normalizeProviderRuntimeConfig(config);
       setConfig(nextConfig);
-      const saveResult = await window.electronAPI?.updateProviderConfig?.(nextConfig);
+      const saveResult = await getElectronAPI()?.updateProviderConfig?.(nextConfig);
       if (!saveResult?.success) {
         setSaveStatus('error');
         setConnectionTestStatus({
@@ -486,7 +526,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
         return;
       }
 
-      const testResult = await window.electronAPI?.testProviderConfig?.();
+      const testResult = await getElectronAPI()?.testProviderConfig?.();
       if (testResult?.success && testResult.data) {
         setConnectionTestStatus(testResult.data);
         setSaveStatus('success');

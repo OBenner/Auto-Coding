@@ -21,6 +21,8 @@ from ..result import AgentRunResult
 from .completion import CompletionRuntimeSession
 from .json_helpers import extract_first_json_object
 
+GENERIC_EDIT_CANCELLED_MESSAGE = "Generic edit runtime was cancelled."
+
 GENERIC_EDIT_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode.
 
 You do not have native provider filesystem, shell, external MCP, or subagents.
@@ -163,13 +165,13 @@ class GenericEditRuntimeSession:
             if self._cancel_requested:
                 return AgentRunResult(
                     status="cancelled",
-                    response_text="Generic edit runtime was cancelled.",
+                    response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
                 )
             response_text = await self._complete(prompt)
             if self._cancel_requested:
                 return AgentRunResult(
                     status="cancelled",
-                    response_text="Generic edit runtime was cancelled.",
+                    response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
                 )
             iteration_entry: dict[str, Any] = {
                 "iteration": iteration,
@@ -257,7 +259,7 @@ class GenericEditRuntimeSession:
                 if self._cancel_requested:
                     return AgentRunResult(
                         status="cancelled",
-                        response_text="Generic edit runtime was cancelled.",
+                        response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
                     )
                 result = await self._execute_action(action)
                 action_results.append(result)
@@ -367,7 +369,7 @@ class GenericEditRuntimeSession:
             if self._cancel_requested:
                 return AgentRunResult(
                     status="cancelled",
-                    response_text="Generic edit runtime was cancelled.",
+                    response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
                 )
             iteration_entry: dict[str, Any] = {
                 "iteration": iteration,
@@ -385,7 +387,7 @@ class GenericEditRuntimeSession:
                 if self._cancel_requested:
                     return AgentRunResult(
                         status="cancelled",
-                        response_text="Generic edit runtime was cancelled.",
+                        response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
                     )
             except Exception as e:
                 if iteration == 1 and callable(
@@ -492,7 +494,7 @@ class GenericEditRuntimeSession:
                 if self._cancel_requested:
                     return AgentRunResult(
                         status="cancelled",
-                        response_text="Generic edit runtime was cancelled.",
+                        response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
                     )
                 result = await self._execute_action(action)
                 action_results.append(result)
@@ -933,45 +935,109 @@ def save_generic_edit_artifacts(
     """Persist trace/result artifacts for a generic edit run."""
     artifact_dir = spec_dir / "artifacts"
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    trace_path = artifact_dir / "generic_edit_trace.json"
-    timeline_path = artifact_dir / "generic_edit_timeline.json"
-    transaction_path = artifact_dir / "generic_edit_transactions.jsonl"
-    summary_path = artifact_dir / "generic_edit_summary.md"
-    result_path = artifact_dir / "generic_edit_result.json"
+    paths = generic_edit_artifact_paths(artifact_dir)
     timestamp = datetime.now(UTC).isoformat()
     trace_summary = summarize_generic_edit_trace(trace)
     transaction_summary = summarize_generic_edit_transactions(trace)
 
-    payload = {
-        "timestamp": timestamp,
-        "provider": provider_name,
-        "subtask_id": subtask_id,
-        "status": status,
-        "stop_reason": stop_reason,
-        "message": message,
-        "mcp_support": mcp_support,
-        "trace": trace,
+    write_json_artifact(
+        paths["trace"],
+        {
+            "timestamp": timestamp,
+            "provider": provider_name,
+            "subtask_id": subtask_id,
+            "status": status,
+            "stop_reason": stop_reason,
+            "message": message,
+            "mcp_support": mcp_support,
+            "trace": trace,
+        },
+    )
+    write_json_artifact(
+        paths["timeline"],
+        {
+            "timestamp": timestamp,
+            "provider": provider_name,
+            "subtask_id": subtask_id,
+            "status": status,
+            "stop_reason": stop_reason,
+            "mcp_support": mcp_support,
+            "timeline": trace_summary["action_timeline"],
+        },
+    )
+    result_payload = build_generic_edit_result_payload(
+        timestamp=timestamp,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        status=status,
+        stop_reason=stop_reason,
+        message=message,
+        trace=trace,
+        trace_summary=trace_summary,
+        transaction_summary=transaction_summary,
+        tests=tests,
+        risks=risks,
+        mcp_support=mcp_support,
+    )
+    if observation_path is not None:
+        result_payload["observation_artifact"] = str(observation_path)
+    write_json_artifact(paths["result"], result_payload)
+    write_generic_edit_transactions(paths["transactions"], transaction_summary)
+    paths["summary"].write_text(
+        build_generic_edit_summary_markdown(
+            provider_name=provider_name,
+            subtask_id=subtask_id,
+            status=status,
+            stop_reason=stop_reason,
+            summary=summary,
+            trace_summary=trace_summary,
+            transaction_summary=transaction_summary,
+            tests=tests,
+            risks=risks,
+            mcp_support=mcp_support,
+        ),
+        encoding="utf-8",
+    )
+
+    artifacts = generic_edit_artifact_payload(paths)
+    if observation_path is not None:
+        artifacts["generic_edit_observations"] = str(observation_path)
+    return artifacts
+
+
+def generic_edit_artifact_paths(artifact_dir: Path) -> dict[str, Path]:
+    return {
+        "trace": artifact_dir / "generic_edit_trace.json",
+        "timeline": artifact_dir / "generic_edit_timeline.json",
+        "transactions": artifact_dir / "generic_edit_transactions.jsonl",
+        "summary": artifact_dir / "generic_edit_summary.md",
+        "result": artifact_dir / "generic_edit_result.json",
     }
-    trace_path.write_text(
+
+
+def write_json_artifact(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
-    timeline_payload = {
-        "timestamp": timestamp,
-        "provider": provider_name,
-        "subtask_id": subtask_id,
-        "status": status,
-        "stop_reason": stop_reason,
-        "mcp_support": mcp_support,
-        "timeline": trace_summary["action_timeline"],
-    }
-    timeline_path.write_text(
-        json.dumps(timeline_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
 
-    result_payload = {
+def build_generic_edit_result_payload(
+    *,
+    timestamp: str,
+    provider_name: str,
+    subtask_id: str | None,
+    status: str,
+    stop_reason: str,
+    message: str,
+    trace: list[dict[str, Any]],
+    trace_summary: dict[str, Any],
+    transaction_summary: dict[str, Any],
+    tests: list[str] | None,
+    risks: list[str] | None,
+    mcp_support: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
         "timestamp": timestamp,
         "provider": provider_name,
         "subtask_id": subtask_id,
@@ -987,14 +1053,13 @@ def save_generic_edit_artifacts(
         "risks": risks or [],
         "risk_count": len(risks or []),
     }
-    if observation_path is not None:
-        result_payload["observation_artifact"] = str(observation_path)
-    result_path.write_text(
-        json.dumps(result_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
 
-    transaction_path.write_text(
+
+def write_generic_edit_transactions(
+    path: Path,
+    transaction_summary: dict[str, Any],
+) -> None:
+    path.write_text(
         "".join(
             json.dumps(transaction, ensure_ascii=False) + "\n"
             for transaction in transaction_summary["transactions"]
@@ -1002,75 +1067,119 @@ def save_generic_edit_artifacts(
         encoding="utf-8",
     )
 
+
+def build_generic_edit_summary_markdown(
+    *,
+    provider_name: str,
+    subtask_id: str | None,
+    status: str,
+    stop_reason: str,
+    summary: str,
+    trace_summary: dict[str, Any],
+    transaction_summary: dict[str, Any],
+    tests: list[str] | None,
+    risks: list[str] | None,
+    mcp_support: dict[str, Any] | None,
+) -> str:
     lines = [
         "# Generic Edit Summary",
         "",
         f"Status: {status}",
         f"Provider: {provider_name}",
         f"Stop reason: {stop_reason}",
+        *generic_edit_subtask_lines(subtask_id),
+        *generic_edit_mcp_lines(mcp_support),
+        "",
+        "## Summary",
+        "",
+        summary,
+        *generic_edit_timeline_lines(trace_summary["action_timeline"]),
+        *generic_edit_recovery_lines(transaction_summary),
+        *generic_edit_test_lines(tests),
+        *generic_edit_risk_lines(risks),
     ]
-    if subtask_id:
-        lines.append(f"Subtask: {subtask_id}")
-    if mcp_support:
-        lines.extend(
-            [
-                "",
-                "## Runtime Support",
-                "",
-                f"- MCP: `{mcp_support.get('strategy', 'unknown')}` - "
-                f"{mcp_support.get('reason', '')}",
-            ]
-        )
-    lines.extend(["", "## Summary", "", summary])
-    if trace_summary["action_timeline"]:
-        lines.extend(["", "## Action Timeline", ""])
-        for item in trace_summary["action_timeline"]:
-            status_label = "ok" if item["ok"] else "failed"
-            path_suffix = f" `{item['path']}`" if item.get("path") else ""
-            lines.append(
-                f"- Iteration {item['iteration']}: `{item['tool']}` "
-                f"{status_label}{path_suffix} - {item['message']}"
-            )
-    if transaction_summary["partial_failure_count"]:
-        recovery_state = (
-            "resolved"
-            if transaction_summary["recovery_resolved"]
-            else "requires follow-up"
-        )
-        lines.extend(
-            [
-                "",
-                "## Recovery",
-                "",
-                f"- Partial failures: {transaction_summary['partial_failure_count']}",
-                f"- Recovery state: {recovery_state}",
-            ]
-        )
-    if tests:
-        lines.extend(["", "## Suggested Verification Commands", ""])
-        lines.extend(f"- `{test}`" for test in tests)
-    if risks:
-        lines.extend(["", "## Risks", ""])
-        lines.extend(f"- {risk}" for risk in risks)
-    summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return "\n".join(lines) + "\n"
 
-    artifacts = {
-        "generic_edit_trace": str(trace_path),
-        "generic_edit_timeline": str(timeline_path),
-        "generic_edit_transactions": str(transaction_path),
-        "generic_edit_result": str(result_path),
-        "generic_edit_summary": str(summary_path),
+
+def generic_edit_subtask_lines(subtask_id: str | None) -> list[str]:
+    return [f"Subtask: {subtask_id}"] if subtask_id else []
+
+
+def generic_edit_mcp_lines(mcp_support: dict[str, Any] | None) -> list[str]:
+    if not mcp_support:
+        return []
+    return [
+        "",
+        "## Runtime Support",
+        "",
+        f"- MCP: `{mcp_support.get('strategy', 'unknown')}` - "
+        f"{mcp_support.get('reason', '')}",
+    ]
+
+
+def generic_edit_timeline_lines(action_timeline: list[dict[str, Any]]) -> list[str]:
+    if not action_timeline:
+        return []
+    lines = ["", "## Action Timeline", ""]
+    lines.extend(generic_edit_timeline_line(item) for item in action_timeline)
+    return lines
+
+
+def generic_edit_timeline_line(item: dict[str, Any]) -> str:
+    status_label = "ok" if item["ok"] else "failed"
+    path_suffix = f" `{item['path']}`" if item.get("path") else ""
+    return (
+        f"- Iteration {item['iteration']}: `{item['tool']}` "
+        f"{status_label}{path_suffix} - {item['message']}"
+    )
+
+
+def generic_edit_recovery_lines(transaction_summary: dict[str, Any]) -> list[str]:
+    if not transaction_summary["partial_failure_count"]:
+        return []
+    recovery_state = (
+        "resolved" if transaction_summary["recovery_resolved"] else "requires follow-up"
+    )
+    return [
+        "",
+        "## Recovery",
+        "",
+        f"- Partial failures: {transaction_summary['partial_failure_count']}",
+        f"- Recovery state: {recovery_state}",
+    ]
+
+
+def generic_edit_test_lines(tests: list[str] | None) -> list[str]:
+    if not tests:
+        return []
+    return [
+        "",
+        "## Suggested Verification Commands",
+        "",
+        *[f"- `{test}`" for test in tests],
+    ]
+
+
+def generic_edit_risk_lines(risks: list[str] | None) -> list[str]:
+    if not risks:
+        return []
+    return ["", "## Risks", "", *[f"- {risk}" for risk in risks]]
+
+
+def generic_edit_artifact_payload(paths: dict[str, Path]) -> dict[str, str]:
+    return {
+        "generic_edit_trace": str(paths["trace"]),
+        "generic_edit_timeline": str(paths["timeline"]),
+        "generic_edit_transactions": str(paths["transactions"]),
+        "generic_edit_result": str(paths["result"]),
+        "generic_edit_summary": str(paths["summary"]),
     }
-    if observation_path is not None:
-        artifacts["generic_edit_observations"] = str(observation_path)
-    return artifacts
 
 
 def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
     """Return compact trace counters for result artifacts and UI consumers."""
     loop_kind = "json_actions"
-    action_count = 0
-    failed_action_count = 0
+    counters = {"action_count": 0, "failed_action_count": 0}
     tool_counts: dict[str, int] = {}
     failed_tools: dict[str, int] = {}
     action_timeline: list[dict[str, Any]] = []
@@ -1080,45 +1189,90 @@ def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
         if iteration.get("loop"):
             loop_kind = str(iteration["loop"])
         for action_entry in iteration.get("actions", []):
-            action_count += 1
-            result = action_entry.get("result", action_entry)
-            request = action_entry.get("request", {})
-            if isinstance(result, dict):
-                tool = str(result.get("tool") or "runtime")
-                tool_counts[tool] = tool_counts.get(tool, 0) + 1
-                is_ok = result.get("ok") is not False
-                if result.get("ok") is False:
-                    failed_action_count += 1
-                    failed_tools[tool] = failed_tools.get(tool, 0) + 1
-                action_timeline.append(
-                    build_timeline_entry(
-                        iteration_number=iteration_number,
-                        tool=tool,
-                        ok=is_ok,
-                        message=str(result.get("message") or ""),
-                        request=request if isinstance(request, dict) else {},
-                        result=result,
-                    )
-                )
-            elif isinstance(result, str):
-                tool_counts["runtime"] = tool_counts.get("runtime", 0) + 1
-                action_timeline.append(
-                    {
-                        "iteration": iteration_number,
-                        "tool": "runtime",
-                        "ok": True,
-                        "message": result[:300],
-                    }
-                )
+            summarize_trace_action_entry(
+                action_entry=action_entry,
+                iteration_number=iteration_number,
+                counters=counters,
+                tool_counts=tool_counts,
+                failed_tools=failed_tools,
+                action_timeline=action_timeline,
+            )
 
     return {
         "loop": loop_kind,
-        "action_count": action_count,
-        "failed_action_count": failed_action_count,
+        "action_count": counters["action_count"],
+        "failed_action_count": counters["failed_action_count"],
         "tool_counts": tool_counts,
         "failed_tools": failed_tools,
         "action_timeline": action_timeline,
     }
+
+
+def summarize_trace_action_entry(
+    *,
+    action_entry: dict[str, Any],
+    iteration_number: Any,
+    counters: dict[str, int],
+    tool_counts: dict[str, int],
+    failed_tools: dict[str, int],
+    action_timeline: list[dict[str, Any]],
+) -> None:
+    counters["action_count"] += 1
+    result = action_entry.get("result", action_entry)
+    request = action_entry.get("request", {})
+    if isinstance(result, dict):
+        append_dict_trace_action(
+            result=result,
+            request=request if isinstance(request, dict) else {},
+            iteration_number=iteration_number,
+            counters=counters,
+            tool_counts=tool_counts,
+            failed_tools=failed_tools,
+            action_timeline=action_timeline,
+        )
+        return
+    if isinstance(result, str):
+        increment_count(tool_counts, "runtime")
+        action_timeline.append(
+            {
+                "iteration": iteration_number,
+                "tool": "runtime",
+                "ok": True,
+                "message": result[:300],
+            }
+        )
+
+
+def append_dict_trace_action(
+    *,
+    result: dict[str, Any],
+    request: dict[str, Any],
+    iteration_number: Any,
+    counters: dict[str, int],
+    tool_counts: dict[str, int],
+    failed_tools: dict[str, int],
+    action_timeline: list[dict[str, Any]],
+) -> None:
+    tool = str(result.get("tool") or "runtime")
+    increment_count(tool_counts, tool)
+    is_ok = result.get("ok") is not False
+    if result.get("ok") is False:
+        counters["failed_action_count"] += 1
+        increment_count(failed_tools, tool)
+    action_timeline.append(
+        build_timeline_entry(
+            iteration_number=iteration_number,
+            tool=tool,
+            ok=is_ok,
+            message=str(result.get("message") or ""),
+            request=request,
+            result=result,
+        )
+    )
+
+
+def increment_count(counts: dict[str, int], key: str) -> None:
+    counts[key] = counts.get(key, 0) + 1
 
 
 def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str, Any]:

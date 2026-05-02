@@ -8,6 +8,8 @@ from .capabilities import RuntimeCapabilities
 from .mcp_bridge import resolve_runtime_mcp_support
 from .subagents import resolve_runtime_subagent_support
 
+NOT_NEEDED = "not needed"
+
 
 @dataclass(frozen=True)
 class RuntimeModeInfo:
@@ -135,9 +137,9 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
     ProviderRuntimeCompatibility(
         provider="claude",
         full_autonomous="yes",
-        generic_edit="not needed",
+        generic_edit=NOT_NEEDED,
         analysis_only="yes",
-        patch_proposal="not needed",
+        patch_proposal=NOT_NEEDED,
         mcp_tools=_CLAUDE_MCP,
         subagents=_CLAUDE_SUBAGENTS,
         notes="Uses Claude Agent SDK path for the full Auto Code runtime.",
@@ -145,9 +147,9 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
     ProviderRuntimeCompatibility(
         provider="codex",
         full_autonomous="yes",
-        generic_edit="not needed",
+        generic_edit=NOT_NEEDED,
         analysis_only="yes",
-        patch_proposal="not needed",
+        patch_proposal=NOT_NEEDED,
         mcp_tools=_CODEX_MCP,
         subagents=_CODEX_SUBAGENTS,
         notes="Uses Codex CLI account login through CODEX_HOME and codex exec.",
