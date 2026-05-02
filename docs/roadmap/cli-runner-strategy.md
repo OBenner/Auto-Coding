@@ -351,7 +351,8 @@ compact execution plan:
 Planner: Claude Code
 Coder: Codex CLI
 Review: CodeRabbit CLI
-Fallback: Gemini CLI if Codex CLI is unavailable
+Fallback: Cursor CLI, then Gemini CLI if Codex CLI is unavailable
+Generic fallback pool: OpenCode, Goose, Amp, Qwen Code, DeepV Code / Codeep
 ```
 
 If fallback happens during a run, the final artifact should record why:
