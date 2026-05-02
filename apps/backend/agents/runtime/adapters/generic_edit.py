@@ -105,10 +105,16 @@ class GenericEditRuntimeSession:
         )
         self._executor = LocalActionExecutor(project_dir)
         self._mcp_bridge: RuntimeMcpBridge | None = None
+        self._cancel_requested = False
 
     @property
     def context_client(self) -> Any:
         return None
+
+    async def cancel(self) -> bool:
+        """Request cancellation for the generic edit loop."""
+        self._cancel_requested = True
+        return await self._completion_runtime.cancel()
 
     async def run(
         self,
@@ -121,6 +127,7 @@ class GenericEditRuntimeSession:
     ) -> AgentRunResult:
         del verbose, phase
 
+        self._cancel_requested = False
         self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
             agent_session=self.agent_session,
             spec_dir=spec_dir,
@@ -153,7 +160,17 @@ class GenericEditRuntimeSession:
         observation_path = initialize_generic_edit_observations(spec_dir)
 
         for iteration in range(1, self.max_iterations + 1):
+            if self._cancel_requested:
+                return AgentRunResult(
+                    status="cancelled",
+                    response_text="Generic edit runtime was cancelled.",
+                )
             response_text = await self._complete(prompt)
+            if self._cancel_requested:
+                return AgentRunResult(
+                    status="cancelled",
+                    response_text="Generic edit runtime was cancelled.",
+                )
             iteration_entry: dict[str, Any] = {
                 "iteration": iteration,
                 "response_excerpt": response_text[:1000],
@@ -237,6 +254,11 @@ class GenericEditRuntimeSession:
 
             action_results: list[ToolActionResult] = []
             for action_index, action in enumerate(actions, start=1):
+                if self._cancel_requested:
+                    return AgentRunResult(
+                        status="cancelled",
+                        response_text="Generic edit runtime was cancelled.",
+                    )
                 result = await self._execute_action(action)
                 action_results.append(result)
                 safe_request = safe_action_for_trace(action)
@@ -342,6 +364,11 @@ class GenericEditRuntimeSession:
         observation_path = initialize_generic_edit_observations(spec_dir)
 
         for iteration in range(1, self.max_iterations + 1):
+            if self._cancel_requested:
+                return AgentRunResult(
+                    status="cancelled",
+                    response_text="Generic edit runtime was cancelled.",
+                )
             iteration_entry: dict[str, Any] = {
                 "iteration": iteration,
                 "loop": "native_tool_calls",
@@ -355,6 +382,11 @@ class GenericEditRuntimeSession:
                     prompt,
                     self._provider_tool_schemas(),
                 )
+                if self._cancel_requested:
+                    return AgentRunResult(
+                        status="cancelled",
+                        response_text="Generic edit runtime was cancelled.",
+                    )
             except Exception as e:
                 if iteration == 1 and callable(
                     getattr(self.agent_session, "complete", None)
@@ -457,6 +489,11 @@ class GenericEditRuntimeSession:
                 )
 
             for action_index, (tool_call, action) in enumerate(tool_actions, start=1):
+                if self._cancel_requested:
+                    return AgentRunResult(
+                        status="cancelled",
+                        response_text="Generic edit runtime was cancelled.",
+                    )
                 result = await self._execute_action(action)
                 action_results.append(result)
                 safe_request = {

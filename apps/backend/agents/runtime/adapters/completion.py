@@ -1,5 +1,6 @@
 """Completion-only runtime adapter."""
 
+import inspect
 import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -25,10 +26,22 @@ class CompletionRuntimeSession:
     def __init__(self, *, provider_name: str, agent_session: Any):
         self.provider_name = provider_name
         self.agent_session = agent_session
+        self._cancel_requested = False
 
     @property
     def context_client(self) -> Any:
         return None
+
+    async def cancel(self) -> bool:
+        """Request cancellation and forward it to the provider session if possible."""
+        self._cancel_requested = True
+        cancel_hook = getattr(self.agent_session, "cancel", None)
+        if not callable(cancel_hook):
+            return False
+        result = cancel_hook()
+        if inspect.isawaitable(result):
+            result = await result
+        return True if result is None else bool(result)
 
     async def _stream_text(self, message: str) -> AsyncIterator[str]:
         streamer = self._select_streamer()
@@ -36,9 +49,13 @@ class CompletionRuntimeSession:
             raise AttributeError(
                 f"Provider {self.provider_name} session does not expose a completion API"
             )
+        if self._cancel_requested:
+            return
 
         try:
             async for chunk in streamer(message):
+                if self._cancel_requested:
+                    return
                 yield chunk
         except Exception as e:
             logger.error(
@@ -98,9 +115,26 @@ class CompletionRuntimeSession:
     ) -> AgentRunResult:
         del spec_dir, verbose, phase, subtask_id
 
+        if self._cancel_requested:
+            return AgentRunResult(
+                status="cancelled",
+                response_text="Completion runtime was cancelled before start.",
+            )
+
         chunks: list[str] = []
         async for chunk in self._stream_text(message):
+            if self._cancel_requested:
+                return AgentRunResult(
+                    status="cancelled",
+                    response_text="Completion runtime was cancelled.",
+                )
             chunks.append(chunk)
+
+        if self._cancel_requested:
+            return AgentRunResult(
+                status="cancelled",
+                response_text="Completion runtime was cancelled.",
+            )
 
         return AgentRunResult(
             status="complete",

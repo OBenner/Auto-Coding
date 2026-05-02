@@ -89,10 +89,16 @@ class PatchProposalRuntimeSession:
             provider_name=provider_name,
             agent_session=agent_session,
         )
+        self._cancel_requested = False
 
     @property
     def context_client(self) -> Any:
         return None
+
+    async def cancel(self) -> bool:
+        """Request cancellation for the patch proposal completion."""
+        self._cancel_requested = True
+        return await self._completion_runtime.cancel()
 
     async def run(
         self,
@@ -105,8 +111,14 @@ class PatchProposalRuntimeSession:
     ) -> AgentRunResult:
         del verbose, phase
 
+        self._cancel_requested = False
         prompt = PATCH_PROMPT_TEMPLATE.replace("__AUTO_CODE_TASK_PROMPT__", message)
         proposal_text = await self._complete(prompt)
+        if self._cancel_requested:
+            return AgentRunResult(
+                status="cancelled",
+                response_text="Patch proposal runtime was cancelled.",
+            )
         proposal: dict[str, Any] | None = None
         patch = ""
         artifacts: dict[str, str] = {}

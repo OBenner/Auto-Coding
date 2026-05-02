@@ -355,6 +355,21 @@ class FakeClaudeCompletionSession:
         yield "claude limited analysis"
 
 
+class FakeCancellableCompletionSession:
+    provider_name = "openai"
+
+    def __init__(self):
+        self.cancelled = False
+
+    async def complete(self, message: str, stream: bool = True):
+        await asyncio.sleep(0)
+        yield "should not be returned after cancellation"
+
+    async def cancel(self):
+        self.cancelled = True
+        return True
+
+
 class FakeClaudeQuerySession:
     provider_name = "claude"
 
@@ -422,6 +437,27 @@ async def test_completion_runtime_supports_text_only(tmp_path: Path):
 
     assert result.status == "complete"
     assert result.response_text == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_completion_runtime_cancel_forwards_to_provider(tmp_path: Path):
+    session = FakeCancellableCompletionSession()
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="analysis_only",
+    )
+
+    assert await runtime_session.cancel() is True
+    result = await run_runtime_session(
+        runtime_session,
+        "analyze",
+        tmp_path,
+        requirements=RuntimeRequirements.text_only(),
+    )
+
+    assert session.cancelled is True
+    assert result.status == "cancelled"
 
 
 @pytest.mark.asyncio
@@ -631,6 +667,26 @@ class FakeGenericEditSession:
         assert stream is True
         self.messages.append(message)
         yield self.responses.pop(0)
+
+
+class FakeBlockingGenericEditSession(FakeGenericEditSession):
+    def __init__(self):
+        super().__init__([{"actions": [{"tool": "finish", "summary": "done"}]}])
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.cancelled = False
+
+    async def complete(self, message: str, stream: bool = True):
+        assert stream is True
+        self.messages.append(message)
+        self.started.set()
+        await self.release.wait()
+        yield self.responses.pop(0)
+
+    async def cancel(self):
+        self.cancelled = True
+        self.release.set()
+        return True
 
 
 class FakeNativeToolCallSession:
@@ -1375,6 +1431,35 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
     assert trace_marker not in (
         artifact_dir / "generic_edit_observations.jsonl"
     ).read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_cancel_stops_action_loop(tmp_path: Path):
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    session = FakeBlockingGenericEditSession()
+    runtime_session = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=session,
+        project_dir=tmp_path,
+    )
+
+    run_task = asyncio.create_task(
+        run_runtime_session(
+            runtime_session,
+            "cancel generic edit",
+            tmp_path,
+            requirements=RuntimeRequirements.generic_edit(),
+        )
+    )
+    await session.started.wait()
+
+    assert await runtime_session.cancel() is True
+    result = await run_task
+
+    assert session.cancelled is True
+    assert result.status == "cancelled"
+    assert not (tmp_path / "artifacts" / "generic_edit_trace.json").exists()
 
 
 @pytest.mark.asyncio
