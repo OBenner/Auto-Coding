@@ -42,6 +42,11 @@ MCP_SERVER_CATALOG: dict[str, dict[str, Any]] = {
         "bridgeable": False,
         "notes": "External Linear MCP server; requires native MCP runtime.",
     },
+    "browser": {
+        "display_name": "Browser automation",
+        "bridgeable": False,
+        "notes": "External browser automation MCP server; requires native MCP runtime.",
+    },
     "electron": {
         "display_name": "Electron",
         "bridgeable": False,

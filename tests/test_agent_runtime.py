@@ -1908,7 +1908,7 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
 
 def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
     statuses = describe_mcp_server_statuses(
-        requested_servers=("auto-claude", "context7", "custom-mcp"),
+        requested_servers=("auto-claude", "context7", "browser", "custom-mcp"),
         available_servers=("auto-claude",),
         native_available=False,
     )
@@ -1917,6 +1917,8 @@ def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
     assert status_by_server["auto-claude"]["runtime_path"] == "local_bridge"
     assert status_by_server["auto-claude"]["bridgeable"] is True
     assert status_by_server["context7"]["runtime_path"] == "native_required"
+    assert status_by_server["browser"]["runtime_path"] == "native_required"
+    assert status_by_server["browser"]["display_name"] == "Browser automation"
     assert status_by_server["custom-mcp"]["runtime_path"] == "unsupported"
 
 
