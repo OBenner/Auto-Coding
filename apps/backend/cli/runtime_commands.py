@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agents.runtime.cli_profiles import (
+    CLI_RUNNER_PROFILES,
+    cli_runner_profiles_as_dicts,
+)
 from agents.runtime.compatibility import (
     PROVIDER_RUNTIME_COMPATIBILITY,
     RUNTIME_MODE_INFO,
@@ -32,6 +36,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
     return {
         "runtime_modes": runtime_mode_info_as_dicts(),
         "providers": provider_runtime_compatibility_as_dicts(),
+        "cli_runner_profiles": cli_runner_profiles_as_dicts(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -71,6 +76,17 @@ def format_runtime_modes_text() -> str:
         ]
         for row in PROVIDER_RUNTIME_COMPATIBILITY
     ]
+    cli_runner_rows = [
+        [
+            profile.runner_id,
+            profile.tier,
+            profile.role,
+            profile.runner_status,
+            ", ".join(profile.supported_runtime_modes),
+            ", ".join(profile.capability_tags),
+        ]
+        for profile in CLI_RUNNER_PROFILES
+    ]
 
     return "\n\n".join(
         [
@@ -92,6 +108,11 @@ def format_runtime_modes_text() -> str:
                     "Notes",
                 ],
                 provider_rows,
+            ),
+            "CLI Runner Profiles",
+            _format_table(
+                ["Runner", "Tier", "Role", "Status", "Runtime modes", "Capabilities"],
+                cli_runner_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",

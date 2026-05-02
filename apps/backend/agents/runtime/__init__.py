@@ -13,6 +13,11 @@ from .capabilities import (
     RuntimeCapabilityError,
     RuntimeRequirements,
 )
+from .cli_profiles import (
+    CLI_RUNNER_PROFILES,
+    CliRunnerProfile,
+    cli_runner_profiles_as_dicts,
+)
 from .fallback import (
     RUNTIME_FALLBACK_ENV,
     RuntimeFallbackDecision,
@@ -55,6 +60,8 @@ __all__ = [
     "RuntimeFallbackDecision",
     "RuntimeRequirements",
     "RUNTIME_FALLBACK_ENV",
+    "CLI_RUNNER_PROFILES",
+    "CliRunnerProfile",
     "RuntimeMode",
     "RuntimeMcpBridge",
     "RuntimeMcpSupport",
@@ -68,6 +75,7 @@ __all__ = [
     "LocalActionToolSpec",
     "ToolActionResult",
     "capabilities_for_runtime_mode",
+    "cli_runner_profiles_as_dicts",
     "create_runtime_session",
     "get_runtime_mode",
     "local_action_response_schema",

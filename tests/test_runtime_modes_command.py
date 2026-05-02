@@ -39,6 +39,9 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "openai" in output
     assert "generic_edit" in output
     assert "patch_proposal" in output
+    assert "CLI Runner Profiles" in output
+    assert "codex_cli" in output
+    assert "generic_cli_pool" in output
     assert "--provider-smoke" in output
     assert payload["providers"][0]["provider"] == "claude"
 
@@ -60,5 +63,10 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert provider_rows["claude"]["subagents"] == "native"
     assert provider_rows["openai"]["subagents"] == "orchestrated"
     assert "runtime_modes" in payload
+    runner_rows = {row["runner_id"]: row for row in payload["cli_runner_profiles"]}
+    assert runner_rows["codex_cli"]["runner_status"] == "wired"
+    assert "full_autonomous" in runner_rows["codex_cli"]["supported_runtime_modes"]
+    assert runner_rows["coderabbit_cli"]["role"] == "review"
+    assert runner_rows["generic_cli_pool"]["tier"] == "generic_pool"
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
