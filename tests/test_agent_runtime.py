@@ -36,7 +36,9 @@ from agents.runtime import (
 from agents.runtime.adapters.codex_cli import (
     build_codex_command_args,
     build_codex_usage_metadata,
+    codex_resume_metadata,
     parse_codex_json_events,
+    summarize_codex_account,
     summarize_codex_events,
 )
 from agents.runtime.adapters.patch_proposal import (
@@ -197,6 +199,19 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
     assert (tmp_path / "artifacts" / "codex_cli_events.jsonl").exists()
     assert (tmp_path / "artifacts" / "codex_cli_result.json").exists()
     if sys.platform != "win32":
+        result_payload = json.loads(
+            (tmp_path / "artifacts" / "codex_cli_result.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert result_payload["session_id"] == "codex-test-session"
+        assert result_payload["usage"] == {
+            "input_tokens": 12,
+            "output_tokens": 7,
+            "total_tokens": 19,
+        }
+        assert result_payload["cost_usd"] == 0.001
+        assert result_payload["account_summary"] is None
         assert result.usage_metadata == {
             "input_tokens": 12,
             "output_tokens": 7,
@@ -271,6 +286,36 @@ def test_codex_cli_resume_command_uses_resume_subcommand(tmp_path: Path):
     assert "--cd" not in args
     assert "--sandbox" not in args
     assert args[-1] == "session-123"
+    assert codex_resume_metadata(args) == {
+        "resumed": True,
+        "last": False,
+        "session_id": "session-123",
+    }
+
+    resume_last_args = build_codex_command_args(
+        project_dir=tmp_path,
+        model="codex-default",
+        output_path=output_path,
+        resume_last=True,
+    )
+    assert codex_resume_metadata(resume_last_args) == {
+        "resumed": True,
+        "last": True,
+        "session_id": None,
+    }
+
+
+def test_codex_cli_account_summary_omits_credentials():
+    summary = summarize_codex_account(
+        {
+            "email": "dev@example.com",
+            "plan": "pro",
+            "token": "secret",
+            "api_key": "also-secret",
+        }
+    )
+
+    assert summary == {"email": "dev@example.com", "plan": "pro"}
 
 
 def test_provider_tool_call_parser_handles_responses_output_blocks():

@@ -301,6 +301,11 @@ def save_codex_cli_artifacts(
         "returncode": returncode,
         "mode": "resume" if command_args[:2] == ["exec", "resume"] else "exec",
         "resumed": command_args[:2] == ["exec", "resume"],
+        "resume": codex_resume_metadata(command_args),
+        "session_id": event_summary.get("session_id"),
+        "usage": event_summary.get("usage", {}),
+        "cost_usd": event_summary.get("cost_usd"),
+        "account_summary": summarize_codex_account(event_summary.get("account")),
         "command_options": safe_codex_command_options(command_args),
         "event_summary": event_summary,
         "non_json_stdout_line_count": len(non_json_stdout_lines),
@@ -321,6 +326,52 @@ def save_codex_cli_artifacts(
         stderr_path.write_text(stderr_text, encoding="utf-8")
         artifacts["codex_cli_stderr"] = str(stderr_path)
     return artifacts
+
+
+def codex_resume_metadata(command_args: list[str]) -> dict[str, Any]:
+    """Return resume intent from sanitized command args."""
+    resumed = command_args[:2] == ["exec", "resume"]
+    positional_args: list[str] = []
+    skip_next = False
+    for arg in command_args[2:] if resumed else ():
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in {"--model", "--output-last-message"}:
+            skip_next = True
+            continue
+        if arg.startswith("--"):
+            continue
+        positional_args.append(arg)
+    return {
+        "resumed": resumed,
+        "last": "--last" in command_args,
+        "session_id": positional_args[-1] if positional_args else None,
+    }
+
+
+def summarize_codex_account(account: Any) -> dict[str, Any] | None:
+    """Return account metadata useful for UI without copying credentials."""
+    if account is None:
+        return None
+    if isinstance(account, str):
+        return {"label": account}
+    if not isinstance(account, dict):
+        return {"type": type(account).__name__}
+
+    allowed_keys = (
+        "email",
+        "username",
+        "login",
+        "name",
+        "plan",
+        "tier",
+        "organization",
+        "org",
+        "id",
+        "type",
+    )
+    return {key: account[key] for key in allowed_keys if key in account}
 
 
 def safe_codex_command_options(command_args: list[str]) -> list[str]:

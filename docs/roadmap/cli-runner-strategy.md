@@ -197,6 +197,11 @@ structured output handling, and regression tests.
 | Aider | Git-native focused editing and BYOK/local-model workflows. |
 | CodeRabbit CLI | Independent review and quality gate, not an implementation runner. |
 
+The current Codex CLI adapter persists `codex_cli_events.jsonl` and
+`codex_cli_result.json`; the result artifact lifts session id, usage, cost,
+sanitized account summary, and resume metadata into stable top-level fields for
+settings and cost UI consumers.
+
 ### Tier 2: Strategic Integrations
 
 These should be supported after the runner interface is stable.
