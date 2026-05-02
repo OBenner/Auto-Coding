@@ -494,9 +494,10 @@ LITELLM_API_KEY=your-key-here
 OPENROUTER_API_KEY=your-key-here
 OPENROUTER_MODEL=anthropic/claude-sonnet-4
 
-# Fallback Configuration
-FALLBACK_ENABLED=true
-FALLBACK_PROVIDER=claude
+# Runtime Mode Configuration
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AGENT_RUNTIME_MODE_CODER=generic_edit
+AUTO_CODE_RUNTIME_FALLBACK=false
 
 # Retry Configuration
 MAX_RETRIES=3

@@ -162,6 +162,10 @@ Code executes the requested local actions, sends observations back to the model,
 and repeats until the model returns `finish` or the runtime reaches its
 iteration limit.
 
+When the provider session exposes native tool calls, `generic_edit` uses those
+tool calls by default and falls back to the JSON action loop only when native
+tool calls are unavailable.
+
 Supported actions:
 
 ```json
@@ -172,6 +176,7 @@ Supported actions:
     { "tool": "list_files", "path": "src", "recursive": false, "max_entries": 100 },
     { "tool": "search_text", "query": "function_name", "path": "src", "recursive": true, "max_matches": 25 },
     { "tool": "read_file", "path": "relative/path.py", "max_chars": 12000 },
+    { "tool": "read_file_range", "path": "relative/path.py", "start_line": 40, "max_lines": 120 },
     { "tool": "read_many_files", "paths": ["relative/path.py", "relative/other.py"], "max_chars_per_file": 8000 },
     { "tool": "write_file", "path": "relative/path.py", "content": "..." },
     { "tool": "apply_patch", "patch": "unified diff" },
