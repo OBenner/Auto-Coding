@@ -19,6 +19,7 @@ def create_runtime_session(
     runtime_mode: str = "full_autonomous",
     project_dir: Path | None = None,
     agent_type: str | None = None,
+    subagent_session_factory: Callable[..., Awaitable[Any] | Any] | None = None,
 ) -> Any:
     """Create a runtime adapter for a provider session."""
 
@@ -42,6 +43,7 @@ def create_runtime_session(
             agent_session=agent_session,
             project_dir=project_dir,
             agent_type=agent_type,
+            subagent_session_factory=subagent_session_factory,
         )
 
     if runtime_mode == "analysis_only":

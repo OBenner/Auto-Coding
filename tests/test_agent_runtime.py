@@ -51,6 +51,7 @@ from agents.runtime.adapters.patch_proposal import (
     validate_workspace_relative_path,
 )
 from agents.runtime.local_actions import (
+    MAX_SUBAGENT_TASKS,
     MAX_TOOL_OUTPUT_CHARS,
     ToolActionResult,
     safe_action_for_trace,
@@ -1145,6 +1146,7 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "run_command",
         "git_status",
         "git_diff",
+        "run_subagents",
         "finish",
     }
     specs = local_action_tool_specs()
@@ -1201,6 +1203,14 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert git_diff_schema["parameters"]["properties"]["max_chars"]["maximum"] == (
         MAX_TOOL_OUTPUT_CHARS
+    )
+    run_subagents_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "run_subagents"
+    )
+    assert run_subagents_schema["parameters"]["required"] == ["tasks"]
+    assert (
+        run_subagents_schema["parameters"]["properties"]["tasks"]["maxItems"]
+        == MAX_SUBAGENT_TASKS
     )
 
 
@@ -1693,6 +1703,87 @@ async def test_generic_edit_runtime_cancel_stops_action_loop(tmp_path: Path):
     assert session.cancelled is True
     assert result.status == "cancelled"
     assert not (tmp_path / "artifacts" / "generic_edit_trace.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
+    created_sessions: list[FakeSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = FakeSubagentRuntimeSession(f"findings from {task.id}")
+        created_sessions.append(session)
+        return session
+
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "parallel analysis",
+                "actions": [
+                    {
+                        "tool": "run_subagents",
+                        "tasks": [
+                            {
+                                "id": "inspect-api",
+                                "role": "explorer",
+                                "prompt": "Inspect API files",
+                                "metadata": {"paths": ["apps/backend"]},
+                            },
+                            {
+                                "id": "inspect-ui",
+                                "role": "reviewer",
+                                "prompt": "Review UI settings",
+                            },
+                        ],
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Used runtime subagents",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        subagent_session_factory=session_factory,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "inspect independently",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.1",
+    )
+
+    assert result.status == "continue"
+    assert len(created_sessions) == 2
+    assert "Auto Code subagent `inspect-api`" in created_sessions[0].prompts[0]
+    assert "findings from inspect-api" in session.messages[1]
+    artifact_path = tmp_path / "artifacts" / "generic_edit_subagents_1_1_1.json"
+    assert artifact_path.exists()
+    subagent_artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert subagent_artifact["status"] == "complete"
+    assert subagent_artifact["support"]["strategy"] == "orchestrated"
+    assert subagent_artifact["summary"]["result_count"] == 2
+
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    request = trace["trace"][0]["actions"][0]["request"]
+    assert request["tool"] == "run_subagents"
+    assert request["tasks_redacted"] is True
+    assert request["task_count"] == 2
 
 
 @pytest.mark.asyncio

@@ -217,6 +217,7 @@ Supported actions:
     { "tool": "run_command", "command": "pytest tests/test_file.py -q", "timeout": 60 },
     { "tool": "git_status", "path": ".", "include_untracked": true },
     { "tool": "git_diff", "path": "relative/path.py", "max_chars": 8000 },
+    { "tool": "run_subagents", "tasks": [{ "id": "inspect-api", "role": "explorer", "prompt": "Inspect the API layer and report relevant files." }] },
     { "tool": "finish", "summary": "what changed", "tests": ["commands run"], "risks": [] }
   ]
 }
@@ -257,6 +258,9 @@ Auto Code validates and executes these actions locally:
   chaining;
 - git status and diff inspection use fixed git subcommands, workspace-relative
   path scoping, and bounded output instead of arbitrary shell commands;
+- runtime subagents run as bounded read-only child sessions for analysis,
+  exploration, review, or comparison work; they do not receive Claude SDK Task
+  tool parity or independent mutating runtime privileges;
 - traces, summaries, safe action timelines, and per-action observations are saved
   as `generic_edit_trace.json`, `generic_edit_result.json`,
   `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and
@@ -326,22 +330,22 @@ Examples:
 - A non-Claude provider in `patch_proposal` mode can modify files only through
   a validated unified diff.
 - A non-Claude provider in `generic_edit` mode can modify files through Auto
-  Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
-  sessions use provider-native tool calls when available; other sessions can use
-  the JSON action loop. The mode can use the local Auto Code MCP bridge, while
-  parallel work requires an explicit `RuntimeSubagentOrchestrator` outside the
-  model session.
+Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
+sessions use provider-native tool calls when available; other sessions can use
+the JSON action loop. The mode can use the local Auto Code MCP bridge, while
+parallel read-only work can use `run_subagents` when the caller wires a
+`RuntimeSubagentOrchestrator` session factory.
 
 ## Current Boundaries
 
 This runtime engine is an integration boundary, not a generic replacement for
 the Claude Agent SDK. The generic edit runtime is the first local tool-loop
 slice; remaining work includes MCP translation, richer command/session
-streaming, broader provider-native function calling coverage, and security
-parity with the Claude SDK path. Non-Claude subagents are represented as
-orchestrated child runtime sessions, not Claude SDK Task tool parity. Their
-artifacts include aggregate child-session summaries so status dashboards can
-show complete/error/cancelled counts without re-parsing every child result.
+streaming, broader CLI runner execution, and security parity with the Claude SDK
+path. Non-Claude subagents are represented as orchestrated read-only child
+runtime sessions, not Claude SDK Task tool parity. Their artifacts include
+aggregate child-session summaries so status dashboards can show
+complete/error/cancelled counts without re-parsing every child result.
 
 ## Related Code
 

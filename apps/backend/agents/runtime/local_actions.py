@@ -36,6 +36,11 @@ MAX_COMMAND_TIMEOUT_SECONDS = 120
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 60
 DEFAULT_GIT_TIMEOUT_SECONDS = 30
 MAX_GIT_DIFF_CHARS = MAX_TOOL_OUTPUT_CHARS
+MAX_SUBAGENT_TASKS = 4
+MAX_SUBAGENT_PROMPT_CHARS = 4000
+MAX_SUBAGENT_ID_CHARS = 80
+MAX_SUBAGENT_ROLE_CHARS = 40
+MAX_SUBAGENT_RESULT_CHARS = 2000
 MAX_READ_RANGE_LINES = 400
 DEFAULT_READ_RANGE_LINES = 120
 TRACE_STRING_PREVIEW_CHARS = 1000
@@ -46,6 +51,7 @@ TRACE_REDACTED_FIELDS = {
     "patch",
     "query",
     "raw_response",
+    "response_text",
     "text",
 }
 EXAMPLE_WORKSPACE_FILE_PATH = "relative/path.py"
@@ -392,6 +398,58 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
     ),
     LocalActionToolSpec(
+        name="run_subagents",
+        description=(
+            "Run bounded read-only runtime subagents for parallel analysis and "
+            "return their findings."
+        ),
+        parameters={
+            "tasks": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": MAX_SUBAGENT_TASKS,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "maxLength": MAX_SUBAGENT_ID_CHARS,
+                            "description": "Stable task id for the child session.",
+                        },
+                        "role": {
+                            "type": "string",
+                            "maxLength": MAX_SUBAGENT_ROLE_CHARS,
+                            "description": "Short role label, such as explorer or reviewer.",
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "maxLength": MAX_SUBAGENT_PROMPT_CHARS,
+                            "description": "Delegated read-only analysis task.",
+                        },
+                        "metadata": {
+                            "type": "object",
+                            "description": "Optional structured context for the child task.",
+                        },
+                    },
+                    "required": ["id", "prompt"],
+                    "additionalProperties": False,
+                },
+                "description": "Read-only child runtime tasks to run.",
+            },
+        },
+        required=("tasks",),
+        example={
+            "tool": "run_subagents",
+            "tasks": [
+                {
+                    "id": "inspect-api",
+                    "role": "explorer",
+                    "prompt": "Inspect the API layer and report relevant files.",
+                }
+            ],
+        },
+    ),
+    LocalActionToolSpec(
         name="finish",
         description="Finish the local action loop with a summary.",
         parameters={
@@ -509,6 +567,15 @@ class LocalActionExecutor:
             return await self._git_status(action)
         if tool == "git_diff":
             return await self._git_diff(action)
+        if tool == "run_subagents":
+            return ToolActionResult(
+                tool=tool,
+                ok=False,
+                message=(
+                    "run_subagents requires a runtime subagent orchestrator and "
+                    "cannot be executed by the standalone local action executor."
+                ),
+            )
         if tool == "finish":
             return ToolActionResult(
                 tool=tool,
@@ -1189,6 +1256,11 @@ def safe_action_for_trace(action: dict[str, Any]) -> dict[str, Any]:
         safe["patch_bytes"] = len(patch.encode("utf-8"))
         safe["patch_redacted"] = True
         del safe["patch"]
+    if "tasks" in safe:
+        tasks = safe["tasks"]
+        safe["task_count"] = len(tasks) if isinstance(tasks, list) else None
+        safe["tasks_redacted"] = True
+        del safe["tasks"]
     return safe
 
 

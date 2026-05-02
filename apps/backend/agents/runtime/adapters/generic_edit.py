@@ -5,8 +5,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ..capabilities import RuntimeCapabilities
+from ..capabilities import RuntimeCapabilities, RuntimeRequirements
 from ..local_actions import (
+    MAX_SUBAGENT_ID_CHARS,
+    MAX_SUBAGENT_PROMPT_CHARS,
+    MAX_SUBAGENT_RESULT_CHARS,
+    MAX_SUBAGENT_ROLE_CHARS,
+    MAX_SUBAGENT_TASKS,
     LocalActionExecutor,
     ToolActionResult,
     action_tool,
@@ -18,6 +23,11 @@ from ..local_actions import (
 )
 from ..mcp_bridge import RuntimeMcpBridge, resolve_runtime_mcp_support
 from ..result import AgentRunResult
+from ..subagents import (
+    RuntimeSessionFactory,
+    RuntimeSubagentOrchestrator,
+    RuntimeSubagentTask,
+)
 from .completion import CompletionRuntimeSession
 from .json_helpers import extract_first_json_object
 
@@ -25,8 +35,10 @@ GENERIC_EDIT_CANCELLED_MESSAGE = "Generic edit runtime was cancelled."
 
 GENERIC_EDIT_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode.
 
-You do not have native provider filesystem, shell, external MCP, or subagents.
-Auto Code exposes a small local action loop. Respond with exactly one JSON object and no prose.
+You do not have native provider filesystem, shell, or external MCP. Auto Code
+exposes a small local action loop. When run_subagents is available, it runs
+bounded read-only child sessions for parallel analysis; it is not Claude SDK
+Task tool parity. Respond with exactly one JSON object and no prose.
 
 Available actions:
 __AUTO_CODE_LOCAL_ACTIONS__
@@ -39,6 +51,7 @@ Rules:
 - Use list_files and search_text to locate relevant files before reading them.
 - Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
+- Use run_subagents only for read-only exploration, review, or comparison work.
 - Treat each actions array as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Keep iterating until the task is done, then call finish.
 
@@ -56,10 +69,11 @@ __AUTO_CODE_TASK_PROMPT__
 
 NATIVE_TOOL_PROMPT_TEMPLATE = """You are running in Auto Code generic_edit mode.
 
-You do not have provider-native filesystem, shell, external MCP, or subagents.
-Auto Code exposes a small set of local tools as function calls. Use those tools
-to inspect and edit the workspace. Keep iterating until the task is done, then
-call finish.
+You do not have provider-native filesystem, shell, or external MCP. Auto Code
+exposes a small set of local tools as function calls. Use those tools to inspect
+and edit the workspace. When run_subagents is available, it runs bounded
+read-only child sessions for parallel analysis; it is not Claude SDK Task tool
+parity. Keep iterating until the task is done, then call finish.
 
 __AUTO_CODE_MCP_BRIDGE__
 
@@ -69,6 +83,7 @@ Rules:
 - Use list_files and search_text to locate relevant files before reading them.
 - Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
+- Use run_subagents only for read-only exploration, review, or comparison work.
 - Treat each tool-call batch as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Call finish with a concise summary, verification commands, and risks when complete.
 
@@ -97,11 +112,17 @@ class GenericEditRuntimeSession:
         agent_session: Any,
         project_dir: Path,
         agent_type: str | None = None,
+        subagent_session_factory: RuntimeSessionFactory | None = None,
+        max_subagent_concurrency: int = 2,
         max_iterations: int = 8,
     ):
         self.provider_name = provider_name
         self.agent_session = agent_session
         self.agent_type = agent_type
+        self._subagent_session_factory = subagent_session_factory
+        self._max_subagent_concurrency = max(1, max_subagent_concurrency)
+        self._subagent_orchestrator: RuntimeSubagentOrchestrator | None = None
+        self._subagent_run_count = 0
         self.max_iterations = max_iterations
         self._completion_runtime = CompletionRuntimeSession(
             provider_name=provider_name,
@@ -118,7 +139,11 @@ class GenericEditRuntimeSession:
     async def cancel(self) -> bool:
         """Request cancellation for the generic edit loop."""
         self._cancel_requested = True
-        return await self._completion_runtime.cancel()
+        completion_cancelled = await self._completion_runtime.cancel()
+        if self._subagent_orchestrator is None:
+            return completion_cancelled
+        await self._subagent_orchestrator.cancel()
+        return True
 
     async def run(
         self,
@@ -129,8 +154,6 @@ class GenericEditRuntimeSession:
         phase: Any,
         subtask_id: str | None = None,
     ) -> AgentRunResult:
-        del verbose, phase
-
         self._cancel_requested = False
         self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
             agent_session=self.agent_session,
@@ -143,12 +166,16 @@ class GenericEditRuntimeSession:
             return await self._run_native_tool_loop(
                 message=message,
                 spec_dir=spec_dir,
+                verbose=verbose,
+                phase=phase,
                 subtask_id=subtask_id,
             )
 
         return await self._run_json_action_loop(
             message=message,
             spec_dir=spec_dir,
+            verbose=verbose,
+            phase=phase,
             subtask_id=subtask_id,
         )
 
@@ -157,6 +184,8 @@ class GenericEditRuntimeSession:
         *,
         message: str,
         spec_dir: Path,
+        verbose: bool,
+        phase: Any,
         subtask_id: str | None,
     ) -> AgentRunResult:
         base_prompt = build_generic_edit_prompt(message, self._mcp_bridge)
@@ -264,7 +293,13 @@ class GenericEditRuntimeSession:
                         status="cancelled",
                         response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
                     )
-                result = await self._execute_action(action)
+                result = await self._execute_action(
+                    action,
+                    spec_dir=spec_dir,
+                    verbose=verbose,
+                    phase=phase,
+                    subtask_id=subtask_id,
+                )
                 action_results.append(result)
                 safe_request = safe_action_for_trace(action)
                 safe_result = safe_result_for_trace(result)
@@ -362,6 +397,8 @@ class GenericEditRuntimeSession:
         *,
         message: str,
         spec_dir: Path,
+        verbose: bool,
+        phase: Any,
         subtask_id: str | None,
     ) -> AgentRunResult:
         prompt: str | None = build_native_tool_edit_prompt(message, self._mcp_bridge)
@@ -399,6 +436,8 @@ class GenericEditRuntimeSession:
                     return await self._run_json_action_loop(
                         message=message,
                         spec_dir=spec_dir,
+                        verbose=verbose,
+                        phase=phase,
                         subtask_id=subtask_id,
                     )
                 iteration_entry["error"] = str(e)
@@ -499,7 +538,13 @@ class GenericEditRuntimeSession:
                         status="cancelled",
                         response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
                     )
-                result = await self._execute_action(action)
+                result = await self._execute_action(
+                    action,
+                    spec_dir=spec_dir,
+                    verbose=verbose,
+                    phase=phase,
+                    subtask_id=subtask_id,
+                )
                 action_results.append(result)
                 safe_request = {
                     "tool_call_id": str(getattr(tool_call, "id", "") or ""),
@@ -613,10 +658,121 @@ class GenericEditRuntimeSession:
             schemas.extend(self._mcp_bridge.provider_tool_schemas())
         return schemas
 
-    async def _execute_action(self, action: dict[str, Any]) -> ToolActionResult:
+    async def _execute_action(
+        self,
+        action: dict[str, Any],
+        *,
+        spec_dir: Path,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None,
+    ) -> ToolActionResult:
+        if action_tool(action) == "run_subagents":
+            return await self._run_subagents_action(
+                action,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=phase,
+                subtask_id=subtask_id,
+            )
         if self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
             return await self._mcp_bridge.execute(action)
         return await self._executor.execute(action)
+
+    async def _run_subagents_action(
+        self,
+        action: dict[str, Any],
+        *,
+        spec_dir: Path,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None,
+    ) -> ToolActionResult:
+        if self._subagent_session_factory is None:
+            return ToolActionResult(
+                tool="run_subagents",
+                ok=False,
+                message=(
+                    "Runtime subagents are not configured for this generic_edit "
+                    "session."
+                ),
+            )
+
+        try:
+            tasks = parse_runtime_subagent_action_tasks(action, subtask_id=subtask_id)
+        except GenericEditRuntimeError as e:
+            return ToolActionResult(
+                tool="run_subagents",
+                ok=False,
+                message=str(e),
+            )
+
+        self._subagent_run_count += 1
+        orchestrator = RuntimeSubagentOrchestrator(
+            session_factory=self._subagent_session_factory,
+            spec_dir=spec_dir,
+            max_concurrency=self._max_subagent_concurrency,
+        )
+        support = orchestrator.support_for(
+            provider_name=self.provider_name,
+            runtime_name=self.name,
+            capabilities=self.capabilities,
+            child_requirements=RuntimeRequirements.text_only(mode="subagent"),
+        )
+        if not support.available:
+            return ToolActionResult(
+                tool="run_subagents",
+                ok=False,
+                message=support.reason,
+                data={"support": support.to_dict()},
+            )
+
+        self._subagent_orchestrator = orchestrator
+        try:
+            run = await orchestrator.run(
+                tasks,
+                verbose=verbose,
+                phase=phase,
+                artifact_name=generic_edit_subagent_artifact_name(
+                    subtask_id=subtask_id,
+                    run_count=self._subagent_run_count,
+                ),
+                support=support,
+            )
+        finally:
+            self._subagent_orchestrator = None
+
+        run_payload = run.to_dict()
+        return ToolActionResult(
+            tool="run_subagents",
+            ok=run.status in {"complete", "continue"},
+            message=(
+                f"Runtime subagents finished with status {run.status} "
+                f"({len(run.results)} task(s))."
+            ),
+            data={
+                "status": run.status,
+                "artifact_path": run.artifact_path,
+                "cancelled": run.cancelled,
+                "support": run_payload["support"],
+                "summary": run_payload["summary"],
+                "results": [
+                    {
+                        "id": result.id,
+                        "role": result.role,
+                        "status": result.status,
+                        "response_text": result.response_text[
+                            :MAX_SUBAGENT_RESULT_CHARS
+                        ],
+                        "truncated": (
+                            len(result.response_text) > MAX_SUBAGENT_RESULT_CHARS
+                        ),
+                        "error": result.error,
+                    }
+                    for result in run.results
+                ],
+            },
+        )
 
     def _mcp_support_payload(self) -> dict[str, Any]:
         """Return runtime MCP support metadata for generic edit artifacts."""
@@ -749,6 +905,93 @@ def validate_terminal_finish(actions: list[dict[str, Any]]) -> None:
             raise GenericEditRuntimeError(
                 "Generic edit action 'finish' must be the final action"
             )
+
+
+def parse_runtime_subagent_action_tasks(
+    action: dict[str, Any],
+    *,
+    subtask_id: str | None,
+) -> list[RuntimeSubagentTask]:
+    """Parse a run_subagents local action into bounded read-only child tasks."""
+    raw_tasks = action.get("tasks")
+    if not isinstance(raw_tasks, list) or not raw_tasks:
+        raise GenericEditRuntimeError("run_subagents field 'tasks' must be a list")
+    if len(raw_tasks) > MAX_SUBAGENT_TASKS:
+        raise GenericEditRuntimeError(
+            f"run_subagents supports at most {MAX_SUBAGENT_TASKS} tasks"
+        )
+
+    tasks: list[RuntimeSubagentTask] = []
+    for index, raw_task in enumerate(raw_tasks, start=1):
+        if not isinstance(raw_task, dict):
+            raise GenericEditRuntimeError(
+                f"run_subagents task #{index} must be an object"
+            )
+        tasks.append(parse_runtime_subagent_action_task(raw_task, index, subtask_id))
+    return tasks
+
+
+def parse_runtime_subagent_action_task(
+    raw_task: dict[str, Any],
+    index: int,
+    subtask_id: str | None,
+) -> RuntimeSubagentTask:
+    """Parse one run_subagents task payload."""
+    task_id = bounded_subagent_string(
+        raw_task.get("id") or f"subagent-{index}",
+        field_name=f"tasks[{index}].id",
+        maximum=MAX_SUBAGENT_ID_CHARS,
+    )
+    prompt = bounded_subagent_string(
+        raw_task.get("prompt"),
+        field_name=f"tasks[{index}].prompt",
+        maximum=MAX_SUBAGENT_PROMPT_CHARS,
+    )
+    role = bounded_subagent_string(
+        raw_task.get("role") or "worker",
+        field_name=f"tasks[{index}].role",
+        maximum=MAX_SUBAGENT_ROLE_CHARS,
+    )
+    metadata = raw_task.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        raise GenericEditRuntimeError(
+            f"run_subagents task #{index} field 'metadata' must be an object"
+        )
+    return RuntimeSubagentTask(
+        id=task_id,
+        role=role,
+        prompt=prompt,
+        requirements=RuntimeRequirements.text_only(mode="subagent"),
+        subtask_id=subtask_id,
+        metadata=metadata,
+    )
+
+
+def bounded_subagent_string(value: Any, *, field_name: str, maximum: int) -> str:
+    """Read a required bounded run_subagents string field."""
+    if not isinstance(value, str) or not value.strip():
+        raise GenericEditRuntimeError(
+            f"run_subagents field '{field_name}' must be a non-empty string"
+        )
+    stripped = value.strip()
+    if len(stripped) > maximum:
+        raise GenericEditRuntimeError(
+            f"run_subagents field '{field_name}' must be at most {maximum} characters"
+        )
+    return stripped
+
+
+def generic_edit_subagent_artifact_name(
+    *,
+    subtask_id: str | None,
+    run_count: int,
+) -> str:
+    """Return a stable artifact filename for one generic_edit subagent run."""
+    raw_scope = subtask_id or "session"
+    scope = "".join(
+        char if char.isalnum() or char in {"-", "_"} else "_" for char in raw_scope
+    )
+    return f"generic_edit_subagents_{scope}_{run_count}.json"
 
 
 def build_observation_prompt(

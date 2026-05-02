@@ -1283,6 +1283,48 @@ async def run_autonomous_agent(
             else:
                 session = provider.create_session(session_config)
 
+            subagent_session_factory = None
+            if runtime_mode == "generic_edit":
+
+                def subagent_session_factory(
+                    task,
+                    *,
+                    child_agent_type=agent_type_for_session,
+                    child_model=phase_model,
+                    child_provider=provider,
+                    child_subtask_id=subtask_id,
+                    child_thinking_budget=phase_thinking_budget,
+                ):
+                    child_session_config = SessionConfig(
+                        name=f"{child_agent_type}-subagent-{task.id}",
+                        model=child_model,
+                        extra={
+                            "agent_type": child_agent_type,
+                            "parent_subtask_id": child_subtask_id,
+                            "runtime_subagent_id": task.id,
+                        },
+                    )
+                    if child_provider.name == "claude":
+                        child_session = child_provider.create_session(
+                            child_session_config,
+                            project_dir=project_dir,
+                            spec_dir=spec_dir,
+                            agent_type=child_agent_type,
+                            max_thinking_tokens=child_thinking_budget,
+                        )
+                    else:
+                        child_session = child_provider.create_session(
+                            child_session_config
+                        )
+                    return create_runtime_session(
+                        provider_name=child_provider.name,
+                        agent_session=child_session,
+                        claude_session_runner=run_agent_session,
+                        runtime_mode="analysis_only",
+                        project_dir=project_dir,
+                        agent_type=child_agent_type,
+                    )
+
             runtime_session = create_runtime_session(
                 provider_name=provider.name,
                 agent_session=session,
@@ -1290,6 +1332,7 @@ async def run_autonomous_agent(
                 runtime_mode=runtime_mode,
                 project_dir=project_dir,
                 agent_type=agent_type_for_session,
+                subagent_session_factory=subagent_session_factory,
             )
             client = runtime_session.context_client
 
