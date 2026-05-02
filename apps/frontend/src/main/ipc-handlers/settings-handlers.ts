@@ -153,6 +153,11 @@ function applyProviderSettingsToVars(
       ? 'true'
       : 'false';
   }
+  if (settings.cliRunnerRouterEnabled !== undefined) {
+    vars['AUTO_CODE_CLI_RUNNER_ROUTER'] = settings.cliRunnerRouterEnabled
+      ? 'true'
+      : 'false';
+  }
 }
 
 /**
@@ -214,6 +219,7 @@ ${varLine('AGENT_RUNTIME_MODE_CODER')}
 ${varLine('AGENT_RUNTIME_MODE_QA_REVIEWER')}
 ${varLine('AGENT_RUNTIME_MODE_QA_FIXER')}
 ${varLine('AUTO_CODE_RUNTIME_FALLBACK')}
+${varLine('AUTO_CODE_CLI_RUNNER_ROUTER')}
 `;
 }
 
@@ -291,7 +297,7 @@ function generateProviderEnvContent(
     'AGENT_MODEL_QA_REVIEWER', 'AUTO_CODE_RUNTIME_MODE',
     'AGENT_RUNTIME_MODE_PLANNER', 'AGENT_RUNTIME_MODE_CODER',
     'AGENT_RUNTIME_MODE_QA_REVIEWER', 'AGENT_RUNTIME_MODE_QA_FIXER',
-    'AUTO_CODE_RUNTIME_FALLBACK',
+    'AUTO_CODE_RUNTIME_FALLBACK', 'AUTO_CODE_CLI_RUNNER_ROUTER',
   ];
   const newVars = providerVars.filter(v => !existingVarNames.has(v) && vars[v])
     .map(v => `${v}=${vars[v]}`);
@@ -308,7 +314,13 @@ function collectRuntimeCompatibilityErrors(
   vars: Record<string, string>
 ): string[] {
   const runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
-  if (provider === 'claude' || provider === 'codex' || runtimeFallbackEnabled) {
+  const cliRunnerRouterEnabled = vars['AUTO_CODE_CLI_RUNNER_ROUTER'] === 'true';
+  if (
+    provider === 'claude' ||
+    provider === 'codex' ||
+    runtimeFallbackEnabled ||
+    cliRunnerRouterEnabled
+  ) {
     return [];
   }
 
@@ -324,7 +336,7 @@ function collectRuntimeCompatibilityErrors(
     .filter(([, mode]) => mode === 'full_autonomous')
     .map(
       ([label]) =>
-        `Non-Claude providers cannot use ${label} full_autonomous runtime unless runtime fallback is enabled`
+        `Non-Claude providers cannot use ${label} full_autonomous runtime unless runtime fallback or CLI runner routing is enabled`
     );
 }
 
@@ -747,6 +759,7 @@ export function registerSettingsHandlers(
           qaReviewerRuntimeMode: envVars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as ProviderSettings['qaReviewerRuntimeMode'],
           qaFixerRuntimeMode: envVars['AGENT_RUNTIME_MODE_QA_FIXER'] as ProviderSettings['qaFixerRuntimeMode'],
           runtimeFallbackEnabled: envVars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true',
+          cliRunnerRouterEnabled: envVars['AUTO_CODE_CLI_RUNNER_ROUTER'] === 'true',
         };
 
         return { success: true, data: providerSettings };
@@ -1380,6 +1393,7 @@ export function registerSettingsHandlers(
           config.qaReviewerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as import('../../shared/types').AgentRuntimeMode;
           config.qaFixerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_FIXER'] as import('../../shared/types').AgentRuntimeMode;
           config.runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
+          config.cliRunnerRouterEnabled = vars['AUTO_CODE_CLI_RUNNER_ROUTER'] === 'true';
         }
 
         return {
@@ -1451,6 +1465,12 @@ export function registerSettingsHandlers(
           setEnvVar(
             'AUTO_CODE_RUNTIME_FALLBACK',
             config.runtimeFallbackEnabled ? 'true' : 'false'
+          );
+        }
+        if (config.cliRunnerRouterEnabled !== undefined) {
+          setEnvVar(
+            'AUTO_CODE_CLI_RUNNER_ROUTER',
+            config.cliRunnerRouterEnabled ? 'true' : 'false'
           );
         }
 

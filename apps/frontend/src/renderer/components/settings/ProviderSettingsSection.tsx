@@ -187,11 +187,12 @@ function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderCon
   }
 
   const normalized: AIProviderConfig = { ...config };
-  if (normalized.runtimeMode === 'full_autonomous') {
+  const allowFullAutonomous = normalized.runtimeFallbackEnabled || normalized.cliRunnerRouterEnabled;
+  if (normalized.runtimeMode === 'full_autonomous' && !allowFullAutonomous) {
     normalized.runtimeMode = NON_CLAUDE_DEFAULT_RUNTIME_MODE;
   }
   for (const key of RUNTIME_OVERRIDE_KEYS) {
-    if (normalized[key] === 'full_autonomous') {
+    if (normalized[key] === 'full_autonomous' && !allowFullAutonomous) {
       normalized[key] = undefined;
     }
   }
@@ -337,13 +338,18 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
 
   const activeRuntimeMode = config.runtimeMode ?? 'full_autonomous';
   const runtimeFallbackEnabled = config.runtimeFallbackEnabled ?? false;
+  const cliRunnerRouterEnabled = config.cliRunnerRouterEnabled ?? false;
   const fullAutonomousProvider = config.provider === 'claude' || config.provider === 'codex';
   const nonClaudeFullAutonomous = !fullAutonomousProvider && activeRuntimeMode === 'full_autonomous';
   let compatibilityMessageKey = 'settings:aiProvider.compatibility.claudeFirst';
   if (nonClaudeFullAutonomous) {
-    compatibilityMessageKey = runtimeFallbackEnabled
-      ? 'settings:aiProvider.compatibility.fallbackActive'
-      : 'settings:aiProvider.compatibility.nonClaudeFullAutonomous';
+    if (runtimeFallbackEnabled) {
+      compatibilityMessageKey = 'settings:aiProvider.compatibility.fallbackActive';
+    } else if (cliRunnerRouterEnabled) {
+      compatibilityMessageKey = 'settings:aiProvider.compatibility.runnerRouterActive';
+    } else {
+      compatibilityMessageKey = 'settings:aiProvider.compatibility.nonClaudeFullAutonomous';
+    }
   }
   const selectedCapabilities = PROVIDER_CAPABILITY_MATRIX[config.provider];
   const fullAutonomousSelectionCount = [
@@ -353,11 +359,16 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     config.qaReviewerRuntimeMode,
     config.qaFixerRuntimeMode
   ].filter((mode) => mode === 'full_autonomous').length;
-  const runtimeNoticeKey = !fullAutonomousProvider && fullAutonomousSelectionCount > 0
-    ? runtimeFallbackEnabled
-      ? 'settings:aiProvider.runtime.validation.fallbackWillApply'
-      : 'settings:aiProvider.runtime.validation.fullAutonomousUnavailable'
-    : null;
+  let runtimeNoticeKey: string | null = null;
+  if (!fullAutonomousProvider && fullAutonomousSelectionCount > 0) {
+    if (runtimeFallbackEnabled) {
+      runtimeNoticeKey = 'settings:aiProvider.runtime.validation.fallbackWillApply';
+    } else if (cliRunnerRouterEnabled) {
+      runtimeNoticeKey = 'settings:aiProvider.runtime.validation.runnerRouterWillApply';
+    } else {
+      runtimeNoticeKey = 'settings:aiProvider.runtime.validation.fullAutonomousUnavailable';
+    }
+  }
   const primaryModel = getPrimaryProviderModel(config);
   const costInfo = useMemo(() => {
     if (config.provider === 'ollama') {
@@ -1000,6 +1011,25 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
               </Label>
               <p className="text-xs text-muted-foreground">
                 {t('settings:aiProvider.runtime.fallbackDescription')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex max-w-xl items-start gap-3 rounded-md border border-border bg-background p-3">
+            <Switch
+              id="cliRunnerRouterEnabled"
+              checked={cliRunnerRouterEnabled}
+              onCheckedChange={(cliRunnerRouterEnabled) =>
+                updateConfig({ cliRunnerRouterEnabled })
+              }
+              disabled={loading}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="cliRunnerRouterEnabled" className="text-sm font-medium text-foreground">
+                {t('settings:aiProvider.runtime.runnerRouterLabel')}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t('settings:aiProvider.runtime.runnerRouterDescription')}
               </p>
             </div>
           </div>

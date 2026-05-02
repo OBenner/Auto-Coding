@@ -889,9 +889,12 @@
       "qaFixerLabel": "Remplacement QA fixer",
       "fallbackLabel": "Autoriser le fallback runtime",
       "fallbackDescription": "Quand le mode autonome complet est choisi avec un fournisseur non-Claude, basculer vers édition générique, proposition de patch ou analyse seule au lieu d'échouer immédiatement.",
+      "runnerRouterLabel": "Router l'autonome complet vers un runner CLI",
+      "runnerRouterDescription": "Quand le mode autonome complet est choisi avec un fournisseur direct, router vers un runner CLI configuré comme Codex CLI au lieu de lancer ce fournisseur directement.",
       "validation": {
         "fullAutonomousUnavailable": "Le runtime autonome complet est disponible uniquement via Claude Agent SDK. Choisissez un runtime limité ou activez le fallback.",
-        "fallbackWillApply": "Le mode autonome complet est sélectionné, mais ce fournisseur basculera vers un runtime limité compatible avant l'exécution."
+        "fallbackWillApply": "Le mode autonome complet est sélectionné, mais ce fournisseur basculera vers un runtime limité compatible avant l'exécution.",
+        "runnerRouterWillApply": "Le mode autonome complet est sélectionné, mais Auto Code routera l'exécution vers un runner CLI configuré quand il est disponible."
       }
     },
     "runtimeModes": {
@@ -916,7 +919,8 @@
     "compatibility": {
       "claudeFirst": "Claude Agent SDK reste le runtime autonome complet. Les autres fournisseurs fonctionnent via des modes runtime limités.",
       "nonClaudeFullAutonomous": "Le mode autonome complet nécessite Claude Agent SDK. Choisissez édition générique, proposition de patch ou analyse seule pour ce fournisseur.",
-      "fallbackActive": "Le fallback runtime est activé. Ce fournisseur ne lancera pas le mode autonome complet ; Auto Code basculera vers un runtime limité compatible."
+      "fallbackActive": "Le fallback runtime est activé. Ce fournisseur ne lancera pas le mode autonome complet ; Auto Code basculera vers un runtime limité compatible.",
+      "runnerRouterActive": "Le routage vers un runner CLI est activé. Auto Code routera l'exécution autonome complète vers un runner CLI configuré comme Codex CLI quand il est disponible."
     },
     "compatibilityMatrix": {
       "title": "Compatibilité runtime",
