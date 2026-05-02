@@ -41,6 +41,7 @@ from agents.runtime.adapters.codex_cli import (
     summarize_codex_account,
     summarize_codex_events,
 )
+from agents.runtime.adapters.generic_edit import summarize_generic_edit_transactions
 from agents.runtime.adapters.patch_proposal import (
     PatchProposalError,
     parse_patch_proposal,
@@ -1882,6 +1883,9 @@ async def test_generic_edit_runtime_records_partial_transactions_for_recovery(
         "partial_failure": 1,
         "complete": 1,
     }
+    assert result_artifact["partial_failure_transaction_ids"] == ["json_actions-1"]
+    assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["unresolved_partial_failure_count"] == 0
     first_transaction = result_artifact["transactions"][0]
     assert first_transaction["status"] == "partial_failure"
     assert first_transaction["failed_at_action_index"] == 2
@@ -1897,6 +1901,31 @@ async def test_generic_edit_runtime_records_partial_transactions_for_recovery(
         "partial_failure",
         "complete",
     ]
+    summary_markdown = (artifact_dir / "generic_edit_summary.md").read_text(
+        encoding="utf-8"
+    )
+    assert "## Recovery" in summary_markdown
+    assert "Recovery state: resolved" in summary_markdown
+
+
+def test_generic_edit_transaction_summary_marks_unresolved_partial_failure():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                }
+            }
+        ]
+    )
+
+    assert summary["partial_failure_count"] == 1
+    assert summary["partial_failure_transaction_ids"] == ["json_actions-1"]
+    assert summary["recovery_required"] is True
+    assert summary["recovery_resolved"] is False
+    assert summary["unresolved_partial_failure_count"] == 1
 
 
 @pytest.mark.asyncio

@@ -1031,6 +1031,21 @@ def save_generic_edit_artifacts(
                 f"- Iteration {item['iteration']}: `{item['tool']}` "
                 f"{status_label}{path_suffix} - {item['message']}"
             )
+    if transaction_summary["partial_failure_count"]:
+        recovery_state = (
+            "resolved"
+            if transaction_summary["recovery_resolved"]
+            else "requires follow-up"
+        )
+        lines.extend(
+            [
+                "",
+                "## Recovery",
+                "",
+                f"- Partial failures: {transaction_summary['partial_failure_count']}",
+                f"- Recovery state: {recovery_state}",
+            ]
+        )
     if tests:
         lines.extend(["", "## Suggested Verification Commands", ""])
         lines.extend(f"- `{test}`" for test in tests)
@@ -1114,15 +1129,35 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
         if isinstance(iteration.get("transaction"), dict)
     ]
     status_counts: dict[str, int] = {}
-    for transaction in transactions:
+    partial_failure_indexes: list[int] = []
+    partial_failure_transaction_ids: list[str] = []
+    for index, transaction in enumerate(transactions):
         status = str(transaction.get("status") or "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
+        if status == "partial_failure":
+            partial_failure_indexes.append(index)
+            partial_failure_transaction_ids.append(str(transaction.get("id") or index))
+    last_partial_failure_index = (
+        max(partial_failure_indexes) if partial_failure_indexes else None
+    )
+    recovery_resolved = True
+    if last_partial_failure_index is not None:
+        recovery_resolved = any(
+            str(transaction.get("status") or "") == "complete"
+            for transaction in transactions[last_partial_failure_index + 1 :]
+        )
+    partial_failure_count = status_counts.get("partial_failure", 0)
     return {
         "transactions": transactions,
         "transaction_count": len(transactions),
         "transaction_status_counts": status_counts,
-        "partial_failure_count": status_counts.get("partial_failure", 0),
-        "recovery_required": status_counts.get("partial_failure", 0) > 0,
+        "partial_failure_count": partial_failure_count,
+        "partial_failure_transaction_ids": partial_failure_transaction_ids,
+        "recovery_required": partial_failure_count > 0,
+        "recovery_resolved": recovery_resolved,
+        "unresolved_partial_failure_count": (
+            0 if recovery_resolved else partial_failure_count
+        ),
     }
 
 

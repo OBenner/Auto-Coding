@@ -238,7 +238,9 @@ Auto Code validates and executes these actions locally:
 - traces, summaries, safe action timelines, and per-action observations are saved
   as `generic_edit_trace.json`, `generic_edit_result.json`,
   `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and
-  `generic_edit_summary.md`.
+  `generic_edit_summary.md`;
+- transaction summaries include partial-failure ids, whether recovery was
+  resolved by a later complete transaction, and any unresolved partial failures.
 
 This mode is intentionally not full autonomous parity. It exposes only the
 local action loop, provider-native tool calls when available, and Auto Code's
