@@ -1715,12 +1715,12 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
             },
         ]
     )
-    session.agent_type = "coder"
     runtime_session = create_runtime_session(
         provider_name="openai",
         agent_session=session,
         runtime_mode="generic_edit",
         project_dir=tmp_path,
+        agent_type="coder",
     )
 
     result = await run_runtime_session(

@@ -96,10 +96,12 @@ class GenericEditRuntimeSession:
         provider_name: str,
         agent_session: Any,
         project_dir: Path,
+        agent_type: str | None = None,
         max_iterations: int = 8,
     ):
         self.provider_name = provider_name
         self.agent_session = agent_session
+        self.agent_type = agent_type
         self.max_iterations = max_iterations
         self._completion_runtime = CompletionRuntimeSession(
             provider_name=provider_name,
@@ -134,6 +136,7 @@ class GenericEditRuntimeSession:
             agent_session=self.agent_session,
             spec_dir=spec_dir,
             project_dir=self._executor.project_dir,
+            agent_type=self.agent_type,
         )
 
         if self._supports_native_tool_calls():

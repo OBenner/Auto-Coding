@@ -18,6 +18,7 @@ def create_runtime_session(
     claude_session_runner: Callable[..., Awaitable[tuple]] | None = None,
     runtime_mode: str = "full_autonomous",
     project_dir: Path | None = None,
+    agent_type: str | None = None,
 ) -> Any:
     """Create a runtime adapter for a provider session."""
 
@@ -40,6 +41,7 @@ def create_runtime_session(
             provider_name=provider_name,
             agent_session=agent_session,
             project_dir=project_dir,
+            agent_type=agent_type,
         )
 
     if runtime_mode == "analysis_only":

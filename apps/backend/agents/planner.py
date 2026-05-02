@@ -234,6 +234,7 @@ async def run_followup_planner(
         claude_session_runner=run_agent_session,
         runtime_mode=runtime_mode,
         project_dir=project_dir,
+        agent_type="planner",
     )
     client = runtime_session.context_client
 

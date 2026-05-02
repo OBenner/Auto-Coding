@@ -152,13 +152,16 @@ class RuntimeMcpBridge:
         agent_session: Any,
         spec_dir: Path,
         project_dir: Path,
+        agent_type: str | None = None,
     ) -> RuntimeMcpBridge | None:
         """Build a bridge when the agent config requests auto-claude MCP tools."""
-        agent_type = str(getattr(agent_session, "agent_type", "") or "")
+        resolved_agent_type = str(
+            agent_type or getattr(agent_session, "agent_type", "") or ""
+        )
         configured_tools = getattr(agent_session, "auto_claude_tools", None)
         configured_servers = getattr(agent_session, "mcp_servers", None)
-        if configured_tools is None and agent_type:
-            config = get_agent_config(agent_type)
+        if configured_tools is None and resolved_agent_type:
+            config = get_agent_config(resolved_agent_type)
             configured_tools = config.get("auto_claude_tools", [])
             configured_servers = config.get("mcp_servers", [])
         requested_servers = normalize_mcp_server_names(configured_servers or ())
