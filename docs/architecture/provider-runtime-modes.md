@@ -167,6 +167,10 @@ requested runtime mode, the selected runtime mode, and any compatible degraded
 modes. It does not automatically switch a direct provider session to a different
 CLI runner; that remains a separate runner-router decision.
 
+The `--runtime-modes` command also exposes a `runtime_fallback_matrix` payload.
+It shows the fail-fast selected mode, opt-in fallback selected mode, compatible
+degraded modes, and runner candidates for each provider/runtime pair.
+
 ## Generic Edit Contract
 
 `generic_edit` mode asks the model to return one JSON object per iteration. Auto

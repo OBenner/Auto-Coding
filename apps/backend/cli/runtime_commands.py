@@ -17,6 +17,7 @@ from agents.runtime.compatibility import (
     provider_runtime_compatibility_as_dicts,
     runtime_mode_info_as_dicts,
 )
+from agents.runtime.fallback import RuntimePhase, resolve_runtime_mode_with_fallback
 
 
 def _format_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -31,6 +32,67 @@ def _format_table(headers: list[str], rows: list[list[str]]) -> str:
         "  ".join(cell.ljust(width) for cell, width in zip(row, widths)) for row in rows
     ]
     return "\n".join([header, divider, *body])
+
+
+def _runner_candidate_ids_by_mode(
+    runner_candidates: dict[str, Any] | None,
+) -> dict[str, list[str]]:
+    """Extract compact runner IDs from fallback candidate diagnostics."""
+    if not runner_candidates:
+        return {}
+    modes = runner_candidates.get("modes", {})
+    if not isinstance(modes, dict):
+        return {}
+    return {
+        mode: list(selection.get("selected_runner_ids", []))
+        for mode, selection in modes.items()
+        if isinstance(selection, dict)
+    }
+
+
+def build_runtime_fallback_matrix(
+    *,
+    phase: RuntimePhase = "coding",
+) -> list[dict[str, Any]]:
+    """Build fail-fast and opt-in fallback diagnostics for every provider/mode."""
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        for mode in RUNTIME_MODE_INFO:
+            fail_fast = resolve_runtime_mode_with_fallback(
+                provider_name=provider_row.provider,
+                requested_mode=mode.mode,
+                phase=phase,
+                allow_fallback=False,
+            )
+            fallback = resolve_runtime_mode_with_fallback(
+                provider_name=provider_row.provider,
+                requested_mode=mode.mode,
+                phase=phase,
+                allow_fallback=True,
+            )
+            runner_candidates = (
+                fallback.runner_candidates or fail_fast.runner_candidates
+            )
+            matrix.append(
+                {
+                    "provider": provider_row.provider,
+                    "phase": phase,
+                    "requested_mode": mode.mode,
+                    "fail_fast_selected_mode": fail_fast.selected_mode,
+                    "fallback_selected_mode": fallback.selected_mode,
+                    "fallback_applied": fallback.fallback_applied,
+                    "fallback_reason": fallback.reason,
+                    "missing_capabilities": list(fail_fast.missing_capabilities),
+                    "compatible_fallbacks": list(fail_fast.compatible_fallbacks),
+                    "runner_candidate_ids_by_mode": _runner_candidate_ids_by_mode(
+                        runner_candidates,
+                    ),
+                    "selected_mode_runner_candidates": (runner_candidates or {}).get(
+                        "selected_mode_runner_candidates", []
+                    ),
+                }
+            )
+    return matrix
 
 
 def build_runtime_modes_payload() -> dict[str, Any]:
@@ -48,6 +110,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
             include_detection=True,
         ),
         "cli_runner_selection": cli_runner_selection,
+        "runtime_fallback_matrix": build_runtime_fallback_matrix(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -111,6 +174,18 @@ def format_runtime_modes_text() -> str:
         ]
         for mode in RUNTIME_MODE_INFO
     ]
+    runtime_fallback_rows = [
+        [
+            row["provider"],
+            row["requested_mode"],
+            ", ".join(row["missing_capabilities"]) or "none",
+            ", ".join(row["compatible_fallbacks"]) or "none",
+            row["fallback_selected_mode"],
+            ", ".join(row["selected_mode_runner_candidates"]) or "none",
+        ]
+        for row in build_runtime_fallback_matrix()
+        if row["requested_mode"] == "full_autonomous" or row["missing_capabilities"]
+    ]
 
     return "\n\n".join(
         [
@@ -150,6 +225,18 @@ def format_runtime_modes_text() -> str:
             _format_table(
                 ["Runtime mode", "Eligible runners"],
                 cli_runner_selection_rows,
+            ),
+            "Runtime Fallback Matrix (coding)",
+            _format_table(
+                [
+                    "Provider",
+                    "Requested",
+                    "Missing capabilities",
+                    "Compatible fallbacks",
+                    "Opt-in selected",
+                    "Runner candidates",
+                ],
+                runtime_fallback_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",

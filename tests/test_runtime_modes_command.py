@@ -41,6 +41,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "patch_proposal" in output
     assert "CLI Runner Profiles" in output
     assert "CLI Runner Selection" in output
+    assert "Runtime Fallback Matrix" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
     assert "--provider-smoke" in output
@@ -88,6 +89,29 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert "aider" in selection_rows["generic_edit"]["selected_runner_ids"]
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
+    fallback_rows = {
+        (row["provider"], row["requested_mode"]): row
+        for row in payload["runtime_fallback_matrix"]
+    }
+    openai_full = fallback_rows[("openai", "full_autonomous")]
+    assert openai_full["fail_fast_selected_mode"] == "full_autonomous"
+    assert openai_full["fallback_selected_mode"] == "generic_edit"
+    assert openai_full["fallback_applied"] is True
+    assert openai_full["compatible_fallbacks"] == [
+        "generic_edit",
+        "patch_proposal",
+        "analysis_only",
+    ]
+    assert openai_full["runner_candidate_ids_by_mode"]["full_autonomous"] == [
+        "codex_cli",
+        "claude_code",
+        "zai_claude_code",
+    ]
+    assert openai_full["selected_mode_runner_candidates"] == [
+        "aider",
+        "cursor_cli",
+    ]
+    assert fallback_rows[("claude", "full_autonomous")]["fallback_applied"] is False
 
 
 def test_cli_runner_selection_filters_runtime_mode():
