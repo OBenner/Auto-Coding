@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import tempfile
@@ -10,11 +9,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from core.platform import build_windows_command, find_executable
 from core.providers.config import DEFAULT_CODEX_MODEL
 
 from ..capabilities import RuntimeCapabilities
 from ..result import AgentRunResult
+from .cli_runner import CliRuntimeCommand, CliRuntimeProcess
 
 
 class CodexCliRuntimeSession:
@@ -27,8 +26,7 @@ class CodexCliRuntimeSession:
     def __init__(self, *, agent_session: Any, project_dir: Path):
         self.agent_session = agent_session
         self.project_dir = project_dir
-        self._current_process: asyncio.subprocess.Process | None = None
-        self._cancel_requested = False
+        self._process = CliRuntimeProcess()
 
     @property
     def context_client(self) -> None:
@@ -36,18 +34,7 @@ class CodexCliRuntimeSession:
 
     async def cancel(self) -> bool:
         """Cancel the active Codex CLI process, if one is running."""
-        process = self._current_process
-        if process is None or process.returncode is not None:
-            return False
-
-        self._cancel_requested = True
-        process.terminate()
-        try:
-            await asyncio.wait_for(process.wait(), timeout=10)
-        except TimeoutError:
-            process.kill()
-            await process.wait()
-        return True
+        return await self._process.cancel()
 
     async def run(
         self,
@@ -60,16 +47,11 @@ class CodexCliRuntimeSession:
     ) -> AgentRunResult:
         del verbose, phase
 
-        executable = find_executable(self.agent_session.codex_command)
-        if executable is None:
-            executable = self.agent_session.codex_command
-
         model = getattr(self.agent_session, "model", DEFAULT_CODEX_MODEL)
         env = {
             **os.environ,
             "CODEX_HOME": str(self.agent_session.codex_home),
         }
-        self._cancel_requested = False
         with tempfile.TemporaryDirectory(prefix="auto-code-codex-") as temp_dir:
             output_path = Path(temp_dir) / "last-message.txt"
             command_args = build_codex_command_args(
@@ -85,41 +67,29 @@ class CodexCliRuntimeSession:
                     getattr(self.agent_session, "codex_resume_last", False)
                 ),
             )
-            command = build_windows_command(executable, command_args)
-
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(self.project_dir),
-                env=env,
-            )
-            self._current_process = process
-            try:
-                stdout, stderr = await process.communicate(message.encode("utf-8"))
-            finally:
-                self._current_process = None
-
-            final_message = ""
-            if output_path.exists():
-                final_message = output_path.read_text(
-                    encoding="utf-8",
-                    errors="replace",
+            process_result = await self._process.run(
+                CliRuntimeCommand(
+                    executable=self.agent_session.codex_command,
+                    args=command_args,
+                    cwd=self.project_dir,
+                    env=env,
+                    stdin_text=message,
+                    final_message_path=output_path,
                 )
-
-        stdout_text = stdout.decode("utf-8", errors="replace")
-        stderr_text = stderr.decode("utf-8", errors="replace")
+            )
+        stdout_text = process_result.stdout_text
+        stderr_text = process_result.stderr_text
+        final_message = process_result.final_message
         events = parse_codex_json_events(stdout_text)
         event_summary = summarize_codex_events(events)
-        status = "complete" if process.returncode == 0 else "error"
-        if self._cancel_requested:
+        status = "complete" if process_result.returncode == 0 else "error"
+        if process_result.cancelled:
             status = "cancelled"
         artifacts = save_codex_cli_artifacts(
             spec_dir=spec_dir,
             subtask_id=subtask_id,
             status=status,
-            returncode=process.returncode,
+            returncode=process_result.returncode,
             command_args=command_args,
             events=events,
             event_summary=event_summary,
@@ -145,7 +115,7 @@ class CodexCliRuntimeSession:
                 f"Codex CLI run was cancelled. Artifacts: {artifacts['codex_cli_result']}"
             )
         if (
-            process.returncode != 0
+            process_result.returncode != 0
             and stderr_text.strip()
             and stderr_text not in response_parts
         ):
