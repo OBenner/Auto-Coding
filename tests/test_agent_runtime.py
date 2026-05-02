@@ -1123,6 +1123,8 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "write_file",
         "apply_patch",
         "run_command",
+        "git_status",
+        "git_diff",
         "finish",
     }
     specs = local_action_tool_specs()
@@ -1170,6 +1172,53 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert run_command_schema["parameters"]["required"] == ["command"]
     assert "timeout" in run_command_schema["parameters"]["properties"]
+    git_status_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "git_status"
+    )
+    assert "include_untracked" in git_status_schema["parameters"]["properties"]
+    git_diff_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "git_diff"
+    )
+    assert git_diff_schema["parameters"]["properties"]["max_chars"]["maximum"] == (
+        MAX_TOOL_OUTPUT_CHARS
+    )
+
+
+@pytest.mark.asyncio
+async def test_local_actions_inspect_git_status_and_diff(tmp_path: Path):
+    _init_git_repo(tmp_path)
+    target = tmp_path / "hello.txt"
+    target.write_text("old\n", encoding="utf-8")
+    run_process(
+        ["git", "add", "hello.txt"], cwd=tmp_path, capture_output=True, check=True
+    )
+    run_process(
+        ["git", "commit", "-m", "initial"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    target.write_text("new\n", encoding="utf-8")
+
+    executor = LocalActionExecutor(tmp_path)
+    status = await executor.execute({"tool": "git_status"})
+    diff = await executor.execute(
+        {"tool": "git_diff", "path": "hello.txt", "max_chars": 1000}
+    )
+    stat = await executor.execute(
+        {"tool": "git_diff", "path": "hello.txt", "stat": True}
+    )
+
+    assert status.ok is True
+    assert "hello.txt" in status.data["changed_files"]
+    assert status.data["changed_file_count"] == 1
+    assert diff.ok is True
+    assert "--- a/hello.txt" in diff.data["diff"]
+    assert "-old" in diff.data["diff"]
+    assert "+new" in diff.data["diff"]
+    assert diff.data["truncated"] is False
+    assert stat.ok is True
+    assert "hello.txt" in stat.data["diff"]
 
 
 @pytest.mark.asyncio
@@ -2510,7 +2559,7 @@ def test_runtime_fallback_artifact_records_capability_decision(
     assert payload["decision"]["runner_candidates"]["selected_mode"] == ("generic_edit")
     assert payload["decision"]["runner_candidates"][
         "selected_mode_runner_candidates"
-    ] == ["aider", "cursor_cli"]
+    ] == ["aider", "cursor_cli", "opencode", "goose", "amp", "qwen_code"]
 
 
 def test_runtime_runner_router_is_explicit_for_direct_full_autonomous(

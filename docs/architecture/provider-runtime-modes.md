@@ -215,6 +215,8 @@ Supported actions:
     { "tool": "write_file", "path": "relative/path.py", "content": "..." },
     { "tool": "apply_patch", "patch": "unified diff" },
     { "tool": "run_command", "command": "pytest tests/test_file.py -q", "timeout": 60 },
+    { "tool": "git_status", "path": ".", "include_untracked": true },
+    { "tool": "git_diff", "path": "relative/path.py", "max_chars": 8000 },
     { "tool": "finish", "summary": "what changed", "tests": ["commands run"], "risks": [] }
   ]
 }
@@ -253,6 +255,8 @@ Auto Code validates and executes these actions locally:
 - commands pass the existing security allowlist/validator layer;
 - commands run without a shell and do not support pipes, redirection, or command
   chaining;
+- git status and diff inspection use fixed git subcommands, workspace-relative
+  path scoping, and bounded output instead of arbitrary shell commands;
 - traces, summaries, safe action timelines, and per-action observations are saved
   as `generic_edit_trace.json`, `generic_edit_result.json`,
   `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and

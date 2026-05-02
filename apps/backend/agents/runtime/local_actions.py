@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from core.platform import is_windows
+from core.platform import find_executable, is_windows
 from security import split_command_segments, validate_command
 
 from .adapters.patch_proposal import (
@@ -34,6 +34,8 @@ MAX_SEARCH_FILE_BYTES = 1_000_000
 MAX_SEARCH_EXCERPT_CHARS = 300
 MAX_COMMAND_TIMEOUT_SECONDS = 120
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 60
+DEFAULT_GIT_TIMEOUT_SECONDS = 30
+MAX_GIT_DIFF_CHARS = MAX_TOOL_OUTPUT_CHARS
 MAX_READ_RANGE_LINES = 400
 DEFAULT_READ_RANGE_LINES = 120
 TRACE_STRING_PREVIEW_CHARS = 1000
@@ -342,6 +344,54 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
     ),
     LocalActionToolSpec(
+        name="git_status",
+        description="Inspect git worktree status without invoking a shell.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": "Optional workspace-relative path to scope status.",
+            },
+            "include_untracked": {
+                "type": "boolean",
+                "description": "Whether to include untracked files.",
+            },
+        },
+        example={
+            "tool": "git_status",
+            "path": ".",
+            "include_untracked": True,
+        },
+    ),
+    LocalActionToolSpec(
+        name="git_diff",
+        description="Read a bounded git diff from the workspace.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": "Optional workspace-relative path to scope diff.",
+            },
+            "cached": {
+                "type": "boolean",
+                "description": "Whether to inspect staged changes.",
+            },
+            "stat": {
+                "type": "boolean",
+                "description": "Whether to return diffstat instead of full patch text.",
+            },
+            "max_chars": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_GIT_DIFF_CHARS,
+                "description": "Maximum diff characters to return.",
+            },
+        },
+        example={
+            "tool": "git_diff",
+            "path": EXAMPLE_WORKSPACE_FILE_PATH,
+            "max_chars": 8000,
+        },
+    ),
+    LocalActionToolSpec(
         name="finish",
         description="Finish the local action loop with a summary.",
         parameters={
@@ -455,6 +505,10 @@ class LocalActionExecutor:
     ) -> ToolActionResult:
         if tool == "run_command":
             return await self._run_command(action)
+        if tool == "git_status":
+            return await self._git_status(action)
+        if tool == "git_diff":
+            return await self._git_diff(action)
         if tool == "finish":
             return ToolActionResult(
                 tool=tool,
@@ -937,6 +991,112 @@ class LocalActionExecutor:
             },
         )
 
+    async def _git_status(self, action: dict[str, Any]) -> ToolActionResult:
+        path = optional_workspace_path(action, "path")
+        include_untracked = optional_bool(
+            action,
+            "include_untracked",
+            default=True,
+        )
+        args = ["status", "--short", "--branch"]
+        args.append(
+            "--untracked-files=all" if include_untracked else "--untracked-files=no"
+        )
+        if path:
+            args.extend(["--", path])
+
+        completed = await self._run_git(args)
+        if completed.returncode != 0 or completed.timed_out or completed.truncated:
+            return git_command_failure_result("git_status", completed)
+
+        lines = [line for line in completed.output.splitlines() if line]
+        branch = next((line[3:] for line in lines if line.startswith("## ")), None)
+        status_lines = [line for line in lines if not line.startswith("## ")]
+        changed_files = [
+            parsed_path
+            for parsed_path in (parse_git_status_path(line) for line in status_lines)
+            if parsed_path
+        ]
+        changed_file_count = len(changed_files)
+        return ToolActionResult(
+            tool="git_status",
+            ok=True,
+            message=(
+                "Git status clean"
+                if changed_file_count == 0
+                else f"Git status has {changed_file_count} changed path(s)"
+            ),
+            data={
+                "path": path or ".",
+                "branch": branch,
+                "status_lines": status_lines,
+                "changed_files": changed_files,
+                "changed_file_count": changed_file_count,
+                "include_untracked": include_untracked,
+                "truncated": False,
+            },
+        )
+
+    async def _git_diff(self, action: dict[str, Any]) -> ToolActionResult:
+        path = optional_workspace_path(action, "path")
+        cached = optional_bool(action, "cached", default=False)
+        stat = optional_bool(action, "stat", default=False)
+        max_chars = bounded_positive_int(
+            action,
+            "max_chars",
+            default=MAX_GIT_DIFF_CHARS,
+            maximum=MAX_GIT_DIFF_CHARS,
+        )
+
+        args = ["diff", "--no-ext-diff"]
+        if cached:
+            args.append("--cached")
+        if stat:
+            args.append("--stat")
+        if path:
+            args.extend(["--", path])
+
+        completed = await self._run_git(args)
+        if completed.returncode != 0 or completed.timed_out or completed.truncated:
+            return git_command_failure_result("git_diff", completed)
+
+        diff_text = completed.output
+        truncated = len(diff_text) > max_chars
+        if truncated:
+            diff_text = diff_text[:max_chars] + "\n...[truncated]"
+
+        return ToolActionResult(
+            tool="git_diff",
+            ok=True,
+            message=(
+                "No git diff for requested scope"
+                if not completed.output
+                else f"Read git diff ({len(completed.output)} characters)"
+            ),
+            data={
+                "path": path or ".",
+                "cached": cached,
+                "stat": stat,
+                "diff": diff_text,
+                "bytes": len(completed.output.encode("utf-8")),
+                "truncated": truncated,
+            },
+        )
+
+    async def _run_git(self, args: list[str]) -> CommandExecution:
+        git_executable = find_executable("git")
+        if git_executable is None:
+            return CommandExecution(
+                returncode=127,
+                output="git executable was not found",
+                truncated=False,
+                timed_out=False,
+            )
+        return await self._run_subprocess_bounded(
+            [git_executable, *args],
+            timeout=DEFAULT_GIT_TIMEOUT_SECONDS,
+        )
+
     async def _run_subprocess_bounded(
         self,
         args: list[str],
@@ -1294,6 +1454,37 @@ def build_search_excerpt(line: str, query: str) -> str:
     prefix = "..." if start > 0 else ""
     suffix = "..." if end < len(normalized) else ""
     return prefix + normalized[start:end].strip() + suffix
+
+
+def parse_git_status_path(line: str) -> str:
+    """Extract the current path from one git status --short line."""
+    payload = line[3:].strip() if len(line) > 3 else line.strip()
+    if " -> " in payload:
+        payload = payload.rsplit(" -> ", 1)[-1]
+    return payload.strip('"')
+
+
+def git_command_failure_result(
+    tool: str, completed: CommandExecution
+) -> ToolActionResult:
+    """Build a consistent local-action result for failed fixed git commands."""
+    if completed.timed_out:
+        message = f"{tool} timed out"
+    elif completed.truncated:
+        message = f"{tool} output exceeded {MAX_TOOL_OUTPUT_CHARS} characters"
+    else:
+        message = f"{tool} failed with exit code {completed.returncode}"
+    return ToolActionResult(
+        tool=tool,
+        ok=False,
+        message=message,
+        data={
+            "exit_code": completed.returncode,
+            "output": completed.output,
+            "truncated": completed.truncated,
+            "timed_out": completed.timed_out,
+        },
+    )
 
 
 def resolve_workspace_path(project_dir: Path, path: str) -> Path:
