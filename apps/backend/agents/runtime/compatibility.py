@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 from .capabilities import RuntimeCapabilities
+from .mcp_bridge import resolve_runtime_mcp_support
 from .subagents import resolve_runtime_subagent_support
 
 
@@ -26,6 +27,7 @@ class ProviderRuntimeCompatibility:
     generic_edit: str
     analysis_only: str
     patch_proposal: str
+    mcp_tools: str
     subagents: str
     notes: str
 
@@ -74,6 +76,23 @@ def _subagent_strategy_label(
     return support.strategy if support.available else "no"
 
 
+def _mcp_strategy_label(
+    *,
+    provider_name: str,
+    runtime_name: str,
+    capabilities: RuntimeCapabilities,
+    bridge_available: bool,
+) -> str:
+    support = resolve_runtime_mcp_support(
+        provider_name=provider_name,
+        runtime_name=runtime_name,
+        capabilities=capabilities,
+        bridge_available=bridge_available,
+        tool_count=1 if bridge_available else 0,
+    )
+    return support.strategy if support.available else "no"
+
+
 _CLAUDE_SUBAGENTS = _subagent_strategy_label(
     provider_name="claude",
     runtime_name="claude_agent_sdk",
@@ -92,6 +111,24 @@ _GENERIC_SUBAGENTS = _subagent_strategy_label(
     capabilities=RuntimeCapabilities.generic_edit(),
     orchestrator_available=True,
 )
+_CLAUDE_MCP = _mcp_strategy_label(
+    provider_name="claude",
+    runtime_name="claude_agent_sdk",
+    capabilities=RuntimeCapabilities.claude_agent_sdk(),
+    bridge_available=False,
+)
+_CODEX_MCP = _mcp_strategy_label(
+    provider_name="codex",
+    runtime_name="codex_cli",
+    capabilities=RuntimeCapabilities.codex_cli(),
+    bridge_available=False,
+)
+_GENERIC_MCP = _mcp_strategy_label(
+    provider_name="generic",
+    runtime_name="generic_edit",
+    capabilities=RuntimeCapabilities.generic_edit(),
+    bridge_available=True,
+)
 
 
 PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
@@ -101,6 +138,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="not needed",
         analysis_only="yes",
         patch_proposal="not needed",
+        mcp_tools=_CLAUDE_MCP,
         subagents=_CLAUDE_SUBAGENTS,
         notes="Uses Claude Agent SDK path for the full Auto Code runtime.",
     ),
@@ -110,6 +148,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="not needed",
         analysis_only="yes",
         patch_proposal="not needed",
+        mcp_tools=_CODEX_MCP,
         subagents=_CODEX_SUBAGENTS,
         notes="Uses Codex CLI account login through CODEX_HOME and codex exec.",
     ),
@@ -119,6 +158,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        mcp_tools=_GENERIC_MCP,
         subagents=_GENERIC_SUBAGENTS,
         notes="Direct SDK sessions use native tools when available, with JSON fallback.",
     ),
@@ -128,6 +168,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        mcp_tools=_GENERIC_MCP,
         subagents=_GENERIC_SUBAGENTS,
         notes="Gemini can use local JSON actions with orchestrated child sessions.",
     ),
@@ -137,6 +178,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        mcp_tools=_GENERIC_MCP,
         subagents=_GENERIC_SUBAGENTS,
         notes="Gateway provider; native tools depend on routed model/gateway support.",
     ),
@@ -146,6 +188,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        mcp_tools=_GENERIC_MCP,
         subagents=_GENERIC_SUBAGENTS,
         notes="OpenAI-compatible gateway with native tools plus JSON fallback.",
     ),
@@ -155,6 +198,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        mcp_tools=_GENERIC_MCP,
         subagents=_GENERIC_SUBAGENTS,
         notes="OpenAI-like tool calls where available, with local JSON fallback.",
     ),
@@ -164,6 +208,7 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         generic_edit="experimental",
         analysis_only="yes",
         patch_proposal="limited",
+        mcp_tools=_GENERIC_MCP,
         subagents=_GENERIC_SUBAGENTS,
         notes="Local models can attempt generic_edit without remote code sharing.",
     ),

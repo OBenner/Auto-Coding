@@ -23,6 +23,7 @@ from agents.runtime import (
     normalize_runtime_mode,
     render_local_action_prompt,
     requirements_for_runtime_mode,
+    resolve_runtime_mcp_support,
     resolve_runtime_mode_with_fallback,
     resolve_runtime_subagent_support,
     run_runtime_session,
@@ -1363,6 +1364,54 @@ def test_runtime_mcp_bridge_filters_agent_allowed_tools(
     assert "mcp__auto-claude__update_subtask_status" in schema_names
     assert "mcp__auto-claude__update_qa_status" in schema_names
     assert "mcp__auto-claude__search_team_docs" not in schema_names
+    support = bridge.support_for(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+    )
+    assert support.strategy == "local_bridge"
+    assert support.server == "auto-claude"
+    assert support.tool_count == 2
+
+
+def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
+    native = resolve_runtime_mcp_support(
+        provider_name="claude",
+        runtime_name="claude_agent_sdk",
+        capabilities=RuntimeCapabilities.claude_agent_sdk(),
+    )
+    assert native.available is True
+    assert native.strategy == "native"
+
+    unavailable = resolve_runtime_mcp_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+    )
+    assert unavailable.available is False
+    assert unavailable.strategy == "unavailable"
+
+    local_bridge = resolve_runtime_mcp_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        bridge_available=True,
+        tool_count=3,
+    )
+    assert local_bridge.available is True
+    assert local_bridge.strategy == "local_bridge"
+    assert local_bridge.tool_count == 3
+    assert "external MCP servers" in local_bridge.reason
+
+    unsupported_bridge_runtime = resolve_runtime_mcp_support(
+        provider_name="custom",
+        runtime_name="completion",
+        capabilities=RuntimeCapabilities.completion_only(),
+        bridge_available=True,
+        tool_count=1,
+    )
+    assert unsupported_bridge_runtime.available is False
+    assert "cannot expose" in unsupported_bridge_runtime.reason
 
 
 @pytest.mark.asyncio

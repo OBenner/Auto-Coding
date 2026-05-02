@@ -65,6 +65,7 @@ def format_runtime_modes_text() -> str:
             row.generic_edit,
             row.analysis_only,
             row.patch_proposal,
+            row.mcp_tools,
             row.subagents,
             row.notes,
         ]
@@ -86,6 +87,7 @@ def format_runtime_modes_text() -> str:
                     "Generic edit",
                     "Analysis-only",
                     "Patch proposal",
+                    "MCP",
                     "Subagents",
                     "Notes",
                 ],

@@ -10,14 +10,43 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from agents.tools_pkg.models import get_agent_config
 from agents.tools_pkg.registry import create_all_tools, is_tools_available
 
+from .capabilities import RuntimeCapabilities
 from .local_actions import ToolActionResult, action_tool, safe_action_for_trace
 
 MCP_AUTO_CLAUDE_PREFIX = "mcp__auto-claude__"
+McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
+
+
+@dataclass(frozen=True)
+class RuntimeMcpSupport:
+    """Effective MCP support for one runtime surface."""
+
+    provider_name: str
+    runtime_name: str
+    strategy: McpSupportStrategy
+    available: bool
+    reason: str
+    server: str | None = None
+    tool_count: int = 0
+    available_capabilities: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize MCP support metadata for UI, CLI, and artifacts."""
+        return {
+            "provider": self.provider_name,
+            "runtime": self.runtime_name,
+            "strategy": self.strategy,
+            "available": self.available,
+            "reason": self.reason,
+            "server": self.server,
+            "tool_count": self.tool_count,
+            "available_capabilities": list(self.available_capabilities),
+        }
 
 
 @dataclass(frozen=True)
@@ -164,6 +193,83 @@ class RuntimeMcpBridge:
             "tool_count": len(self._tools),
             "tools": [tool.exposed_name for tool in self._tools],
         }
+
+    def support_for(
+        self,
+        *,
+        provider_name: str,
+        runtime_name: str,
+        capabilities: RuntimeCapabilities,
+    ) -> RuntimeMcpSupport:
+        """Return effective MCP support with this bridge configured."""
+        return resolve_runtime_mcp_support(
+            provider_name=provider_name,
+            runtime_name=runtime_name,
+            capabilities=capabilities,
+            bridge_available=self.has_tools,
+            tool_count=len(self._tools),
+        )
+
+
+def resolve_runtime_mcp_support(
+    *,
+    provider_name: str,
+    runtime_name: str,
+    capabilities: RuntimeCapabilities,
+    bridge_available: bool = False,
+    tool_count: int = 0,
+) -> RuntimeMcpSupport:
+    """Return native or local-bridge MCP support without claiming full parity."""
+    provider = provider_name.lower()
+    available_capabilities = tuple(capabilities.available())
+
+    if capabilities.mcp:
+        return RuntimeMcpSupport(
+            provider_name=provider,
+            runtime_name=runtime_name,
+            strategy="native",
+            available=True,
+            reason=f"{provider}/{runtime_name} exposes native MCP tools.",
+            server=None,
+            tool_count=tool_count,
+            available_capabilities=available_capabilities,
+        )
+
+    if bridge_available and capabilities.function_tools:
+        return RuntimeMcpSupport(
+            provider_name=provider,
+            runtime_name=runtime_name,
+            strategy="local_bridge",
+            available=True,
+            reason=(
+                "Auto Code can bridge local auto-claude tools into this runtime; "
+                "external MCP servers still require native runtime support."
+            ),
+            server="auto-claude",
+            tool_count=tool_count,
+            available_capabilities=available_capabilities,
+        )
+
+    if bridge_available:
+        reason = (
+            "A local MCP bridge is configured, but the runtime cannot expose "
+            "local action/function tools."
+        )
+    else:
+        reason = (
+            "MCP support requires native runtime MCP or a configured local "
+            "Auto Code MCP bridge."
+        )
+    return RuntimeMcpSupport(
+        provider_name=provider,
+        runtime_name=runtime_name,
+        strategy="unavailable",
+        available=False,
+        reason=reason,
+        server="auto-claude" if bridge_available else None,
+        tool_count=tool_count,
+        available_capabilities=available_capabilities,
+    )
 
 
 def load_auto_claude_bridge_tools(

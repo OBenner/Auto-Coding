@@ -99,7 +99,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     patchProposal: 'supported',
     analysisOnly: 'supported',
     nativeTools: 'supported',
-    mcp: 'unavailable',
+    mcp: 'limited',
     subagents: 'limited',
     filesystemEdits: 'limited'
   },
@@ -109,7 +109,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     patchProposal: 'supported',
     analysisOnly: 'supported',
     nativeTools: 'unavailable',
-    mcp: 'unavailable',
+    mcp: 'limited',
     subagents: 'limited',
     filesystemEdits: 'limited'
   },
@@ -119,7 +119,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     patchProposal: 'supported',
     analysisOnly: 'supported',
     nativeTools: 'limited',
-    mcp: 'unavailable',
+    mcp: 'limited',
     subagents: 'limited',
     filesystemEdits: 'limited'
   },
@@ -129,7 +129,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     patchProposal: 'supported',
     analysisOnly: 'supported',
     nativeTools: 'limited',
-    mcp: 'unavailable',
+    mcp: 'limited',
     subagents: 'limited',
     filesystemEdits: 'limited'
   },
@@ -139,7 +139,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     patchProposal: 'supported',
     analysisOnly: 'supported',
     nativeTools: 'limited',
-    mcp: 'unavailable',
+    mcp: 'limited',
     subagents: 'limited',
     filesystemEdits: 'limited'
   },
@@ -149,7 +149,7 @@ const PROVIDER_CAPABILITY_MATRIX: Record<
     patchProposal: 'supported',
     analysisOnly: 'supported',
     nativeTools: 'unavailable',
-    mcp: 'unavailable',
+    mcp: 'limited',
     subagents: 'limited',
     filesystemEdits: 'limited'
   }
