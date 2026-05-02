@@ -263,7 +263,6 @@ class RuntimeMcpBridge:
                     requested_servers=self.requested_servers,
                     available_servers=self.available_servers,
                     native_available=False,
-                    bridge_available=self.has_tools,
                 )
             ],
         }
@@ -319,7 +318,6 @@ def resolve_runtime_mcp_support(
                 requested_servers=requested_servers,
                 available_servers=requested_servers,
                 native_available=True,
-                bridge_available=bridge_available,
             ),
         )
 
@@ -349,7 +347,6 @@ def resolve_runtime_mcp_support(
                 requested_servers=requested_servers,
                 available_servers=available_servers,
                 native_available=False,
-                bridge_available=True,
             ),
         )
 
@@ -380,7 +377,6 @@ def resolve_runtime_mcp_support(
             requested_servers=requested_servers,
             available_servers=(),
             native_available=False,
-            bridge_available=bridge_available,
         ),
     )
 
@@ -390,7 +386,6 @@ def describe_mcp_server_statuses(
     requested_servers: tuple[str, ...],
     available_servers: tuple[str, ...],
     native_available: bool,
-    bridge_available: bool,
 ) -> tuple[dict[str, Any], ...]:
     """Return per-server MCP bridge status for diagnostics and settings UI."""
     requested_servers = normalize_mcp_server_names(requested_servers)

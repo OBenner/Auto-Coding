@@ -119,6 +119,7 @@ class RuntimeSubagentOrchestrator:
         self._cancel_event.set()
         for task in tuple(self._running_tasks):
             task.cancel()
+        await asyncio.sleep(0)
 
     def support_for(
         self,

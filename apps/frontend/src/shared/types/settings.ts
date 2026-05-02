@@ -481,7 +481,7 @@ export interface ProviderConnectionTestResult {
   success: boolean;
   provider: AIEngineProvider | string;
   model?: string | null;
-  runtimeMode: AgentRuntimeMode | string;
+  runtimeMode: string;
   message: string;
   responseExcerpt?: string | null;
   errorDetails?: string | null;

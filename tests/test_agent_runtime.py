@@ -1862,7 +1862,6 @@ def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
         requested_servers=("auto-claude", "context7", "custom-mcp"),
         available_servers=("auto-claude",),
         native_available=False,
-        bridge_available=True,
     )
 
     status_by_server = {status["server"]: status for status in statuses}

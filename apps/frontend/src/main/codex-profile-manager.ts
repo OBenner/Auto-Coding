@@ -7,10 +7,10 @@
  */
 
 import { app } from 'electron';
-import { existsSync, readFileSync } from 'fs';
-import { mkdir, readFile, writeFile } from 'fs/promises';
-import { homedir } from 'os';
-import path from 'path';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import type { CodexProfile, CodexProfileSettings } from '../shared/types';
 
 interface CodexProfileStoreData {
@@ -39,9 +39,9 @@ function expandHomePath(value: string): string {
 function sanitizeProfileSlug(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '') || 'profile';
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/-+/g, '-')
+    .replaceAll(/^-|-$/g, '') || 'profile';
 }
 
 function isValidCodexConfigDir(configDir: string): boolean {
@@ -347,16 +347,12 @@ export class CodexProfileManager {
 let codexProfileManager: CodexProfileManager | null = null;
 
 export async function initializeCodexProfileManager(): Promise<CodexProfileManager> {
-  if (!codexProfileManager) {
-    codexProfileManager = new CodexProfileManager();
-  }
+  codexProfileManager ??= new CodexProfileManager();
   await codexProfileManager.initialize();
   return codexProfileManager;
 }
 
 export function getCodexProfileManager(): CodexProfileManager {
-  if (!codexProfileManager) {
-    codexProfileManager = new CodexProfileManager();
-  }
+  codexProfileManager ??= new CodexProfileManager();
   return codexProfileManager;
 }
