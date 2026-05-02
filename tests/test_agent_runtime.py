@@ -2431,7 +2431,7 @@ def test_runtime_fallback_is_explicit_and_capability_aware(
     ] == ["codex_cli", "claude_code", "zai_claude_code"]
     assert fail_fast_payload["runner_candidates"]["modes"]["generic_edit"][
         "selected_runner_ids"
-    ] == ["aider", "cursor_cli"]
+    ] == ["aider", "cursor_cli", "opencode", "goose", "amp", "qwen_code"]
 
     monkeypatch.setenv("AUTO_CODE_RUNTIME_FALLBACK", "true")
     degraded = resolve_runtime_mode_with_fallback(
@@ -2452,6 +2452,10 @@ def test_runtime_fallback_is_explicit_and_capability_aware(
     assert degraded_payload["runner_candidates"]["selected_mode_runner_candidates"] == [
         "aider",
         "cursor_cli",
+        "opencode",
+        "goose",
+        "amp",
+        "qwen_code",
     ]
 
     claude = resolve_runtime_mode_with_fallback(
