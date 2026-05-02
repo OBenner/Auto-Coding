@@ -32,6 +32,9 @@ MAX_SEARCH_MATCHES = 100
 MAX_SEARCH_QUERY_CHARS = 512
 MAX_SEARCH_FILE_BYTES = 1_000_000
 MAX_SEARCH_EXCERPT_CHARS = 300
+MAX_REPLACE_TEXT_CHARS = 8000
+MAX_REPLACE_COUNT = 100
+MAX_REPLACE_FILE_BYTES = 1_000_000
 MAX_COMMAND_TIMEOUT_SECONDS = 120
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 60
 DEFAULT_GIT_TIMEOUT_SECONDS = 30
@@ -47,6 +50,8 @@ TRACE_STRING_PREVIEW_CHARS = 1000
 TRACE_REDACTED_FIELDS = {
     "content",
     "excerpt",
+    "new",
+    "old",
     "output",
     "patch",
     "query",
@@ -313,6 +318,81 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
             "tool": "write_file",
             "path": EXAMPLE_WORKSPACE_FILE_PATH,
             "content": "complete file content",
+        },
+    ),
+    LocalActionToolSpec(
+        name="replace_text",
+        description="Replace exact text in a UTF-8 workspace file.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": WORKSPACE_FILE_PATH_DESCRIPTION,
+            },
+            "old": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": MAX_REPLACE_TEXT_CHARS,
+                "description": "Exact text to replace.",
+            },
+            "new": {
+                "type": "string",
+                "maxLength": MAX_REPLACE_TEXT_CHARS,
+                "description": "Replacement text. May be empty.",
+            },
+            "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_REPLACE_COUNT,
+                "description": "Maximum number of replacements. Defaults to 1.",
+            },
+        },
+        required=("path", "old", "new"),
+        example={
+            "tool": "replace_text",
+            "path": EXAMPLE_WORKSPACE_FILE_PATH,
+            "old": "old_name",
+            "new": "new_name",
+            "count": 1,
+        },
+    ),
+    LocalActionToolSpec(
+        name="delete_file",
+        description="Delete a single workspace file.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": WORKSPACE_FILE_PATH_DESCRIPTION,
+            },
+        },
+        required=("path",),
+        example={
+            "tool": "delete_file",
+            "path": EXAMPLE_WORKSPACE_FILE_PATH,
+        },
+    ),
+    LocalActionToolSpec(
+        name="move_file",
+        description="Move or rename a single workspace file.",
+        parameters={
+            "source": {
+                "type": "string",
+                "description": "Workspace-relative source file path.",
+            },
+            "destination": {
+                "type": "string",
+                "description": "Workspace-relative destination file path.",
+            },
+            "overwrite": {
+                "type": "boolean",
+                "description": "Whether to overwrite an existing destination file.",
+            },
+        },
+        required=("source", "destination"),
+        example={
+            "tool": "move_file",
+            "source": EXAMPLE_WORKSPACE_FILE_PATH,
+            "destination": "relative/new-name.py",
+            "overwrite": False,
         },
     ),
     LocalActionToolSpec(
@@ -600,6 +680,9 @@ class LocalActionExecutor:
             "read_file_range": self._read_file_range,
             "read_many_files": self._read_many_files,
             "write_file": self._write_file,
+            "replace_text": self._replace_text,
+            "delete_file": self._delete_file,
+            "move_file": self._move_file,
             "apply_patch": self._apply_patch,
         }
 
@@ -977,6 +1060,139 @@ class LocalActionExecutor:
             data={"path": path, "bytes": len(content.encode("utf-8"))},
         )
 
+    def _replace_text(self, action: dict[str, Any]) -> ToolActionResult:
+        path = require_string(action, "path")
+        old = bounded_string(action, "old", maximum=MAX_REPLACE_TEXT_CHARS)
+        new = bounded_optional_string(
+            action,
+            "new",
+            maximum=MAX_REPLACE_TEXT_CHARS,
+        )
+        count = bounded_positive_int(
+            action,
+            "count",
+            default=1,
+            maximum=MAX_REPLACE_COUNT,
+        )
+        if old == new:
+            return ToolActionResult(
+                tool="replace_text",
+                ok=False,
+                message="Replacement text is identical to the search text.",
+            )
+
+        target = resolve_workspace_path(self.project_dir, path)
+        if not target.exists() or not target.is_file():
+            return ToolActionResult(
+                tool="replace_text",
+                ok=False,
+                message=f"File not found: {path}",
+            )
+        file_size = target.stat().st_size
+        if file_size > MAX_REPLACE_FILE_BYTES:
+            return ToolActionResult(
+                tool="replace_text",
+                ok=False,
+                message=(
+                    f"File exceeds replace_text limit of {MAX_REPLACE_FILE_BYTES} "
+                    f"bytes: {path}"
+                ),
+                data={"path": path, "bytes": file_size},
+            )
+
+        content = target.read_text(encoding="utf-8", errors="replace")
+        occurrences = content.count(old)
+        if occurrences == 0:
+            return ToolActionResult(
+                tool="replace_text",
+                ok=False,
+                message=f"Search text was not found in {path}",
+                data={"path": path, "occurrences": 0},
+            )
+
+        replacement_count = min(count, occurrences)
+        updated = content.replace(old, new, replacement_count)
+        target.write_text(updated, encoding="utf-8")
+        remaining_occurrences = occurrences - replacement_count
+        return ToolActionResult(
+            tool="replace_text",
+            ok=True,
+            message=f"Replaced {replacement_count} occurrence(s) in {path}",
+            data={
+                "path": path,
+                "replacements": replacement_count,
+                "remaining_occurrences": remaining_occurrences,
+                "bytes": len(updated.encode("utf-8")),
+            },
+        )
+
+    def _delete_file(self, action: dict[str, Any]) -> ToolActionResult:
+        path = require_string(action, "path")
+        target = resolve_workspace_path(self.project_dir, path)
+        if not target.exists() or not target.is_file():
+            return ToolActionResult(
+                tool="delete_file",
+                ok=False,
+                message=f"File not found: {path}",
+            )
+
+        size = target.stat().st_size
+        target.unlink()
+        return ToolActionResult(
+            tool="delete_file",
+            ok=True,
+            message=f"Deleted {path}",
+            data={"path": path, "bytes": size},
+        )
+
+    def _move_file(self, action: dict[str, Any]) -> ToolActionResult:
+        source = require_string(action, "source")
+        destination = require_string(action, "destination")
+        overwrite = optional_bool(action, "overwrite", default=False)
+        source_path = resolve_workspace_path(self.project_dir, source)
+        destination_path = resolve_workspace_path(self.project_dir, destination)
+
+        if source_path == destination_path:
+            return ToolActionResult(
+                tool="move_file",
+                ok=False,
+                message="Source and destination are the same path.",
+            )
+        if not source_path.exists() or not source_path.is_file():
+            return ToolActionResult(
+                tool="move_file",
+                ok=False,
+                message=f"Source file not found: {source}",
+            )
+        if destination_path.exists():
+            if destination_path.is_dir():
+                return ToolActionResult(
+                    tool="move_file",
+                    ok=False,
+                    message=f"Destination is a directory: {destination}",
+                )
+            if not overwrite:
+                return ToolActionResult(
+                    tool="move_file",
+                    ok=False,
+                    message=f"Destination already exists: {destination}",
+                )
+
+        size = source_path.stat().st_size
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.replace(destination_path)
+        return ToolActionResult(
+            tool="move_file",
+            ok=True,
+            message=f"Moved {source} to {destination}",
+            data={
+                "source": source,
+                "destination": destination,
+                "overwrite": overwrite,
+                "bytes": size,
+            },
+        )
+
     def _apply_patch(self, action: dict[str, Any]) -> ToolActionResult:
         patch = require_string(action, "patch")
         validate_patch_paths(patch)
@@ -1251,6 +1467,12 @@ def safe_action_for_trace(action: dict[str, Any]) -> dict[str, Any]:
         safe["content_bytes"] = len(content.encode("utf-8"))
         safe["content_redacted"] = True
         del safe["content"]
+    for field_name in ("old", "new"):
+        if field_name in safe:
+            value = str(safe[field_name])
+            safe[f"{field_name}_bytes"] = len(value.encode("utf-8"))
+            safe[f"{field_name}_redacted"] = True
+            del safe[field_name]
     if "patch" in safe:
         patch = str(safe["patch"])
         safe["patch_bytes"] = len(patch.encode("utf-8"))
@@ -1313,6 +1535,23 @@ def require_string(action: dict[str, Any], field_name: str) -> str:
 def bounded_string(action: dict[str, Any], field_name: str, *, maximum: int) -> str:
     """Read a required non-empty string with a maximum length."""
     value = require_string(action, field_name)
+    if len(value) > maximum:
+        raise LocalActionError(
+            f"Action field '{field_name}' must be at most {maximum} characters"
+        )
+    return value
+
+
+def bounded_optional_string(
+    action: dict[str, Any],
+    field_name: str,
+    *,
+    maximum: int,
+) -> str:
+    """Read a required string that may be empty but must stay bounded."""
+    value = action.get(field_name)
+    if not isinstance(value, str):
+        raise LocalActionError(f"Action field '{field_name}' must be a string")
     if len(value) > maximum:
         raise LocalActionError(
             f"Action field '{field_name}' must be at most {maximum} characters"

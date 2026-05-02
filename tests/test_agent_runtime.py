@@ -51,6 +51,8 @@ from agents.runtime.adapters.patch_proposal import (
     validate_workspace_relative_path,
 )
 from agents.runtime.local_actions import (
+    MAX_REPLACE_COUNT,
+    MAX_REPLACE_TEXT_CHARS,
     MAX_SUBAGENT_TASKS,
     MAX_TOOL_OUTPUT_CHARS,
     ToolActionResult,
@@ -1142,6 +1144,9 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "read_file_range",
         "read_many_files",
         "write_file",
+        "replace_text",
+        "delete_file",
+        "move_file",
         "apply_patch",
         "run_command",
         "git_status",
@@ -1189,6 +1194,23 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert read_many_schema["parameters"]["required"] == ["paths"]
     assert read_many_schema["parameters"]["properties"]["paths"]["maxItems"] == 10
+    replace_text_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "replace_text"
+    )
+    assert replace_text_schema["parameters"]["required"] == ["path", "old", "new"]
+    assert (
+        replace_text_schema["parameters"]["properties"]["old"]["maxLength"]
+        == MAX_REPLACE_TEXT_CHARS
+    )
+    assert (
+        replace_text_schema["parameters"]["properties"]["count"]["maximum"]
+        == MAX_REPLACE_COUNT
+    )
+    move_file_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "move_file"
+    )
+    assert move_file_schema["parameters"]["required"] == ["source", "destination"]
+    assert "overwrite" in move_file_schema["parameters"]["properties"]
     run_command_schema = next(
         schema for schema in provider_schemas if schema["name"] == "run_command"
     )
@@ -1532,6 +1554,102 @@ async def test_local_action_executor_reads_many_files_safely(tmp_path: Path):
     assert files_by_path["src/two.py"]["content"] == "two"
     assert files_by_path["src/missing.py"]["ok"] is False
     assert "content" not in files_by_path["src/missing.py"]
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_mutates_files_with_bounded_actions(
+    tmp_path: Path,
+):
+    (tmp_path / "src").mkdir()
+    target = tmp_path / "src" / "app.py"
+    target.write_text("old_name = 1\nold_name = 2\n", encoding="utf-8")
+    executor = LocalActionExecutor(tmp_path)
+
+    replace_result = await executor.execute(
+        {
+            "tool": "replace_text",
+            "path": "src/app.py",
+            "old": "old_name",
+            "new": "new_name",
+            "count": 1,
+        }
+    )
+
+    assert replace_result.ok is True
+    assert replace_result.data["replacements"] == 1
+    assert replace_result.data["remaining_occurrences"] == 1
+    assert target.read_text(encoding="utf-8") == "new_name = 1\nold_name = 2\n"
+    safe_request = safe_action_for_trace(
+        {
+            "tool": "replace_text",
+            "path": "src/app.py",
+            "old": "old_name",
+            "new": "new_name",
+        }
+    )
+    assert safe_request["old_redacted"] is True
+    assert safe_request["new_redacted"] is True
+    assert "old_name" not in json.dumps(safe_request)
+
+    move_result = await executor.execute(
+        {
+            "tool": "move_file",
+            "source": "src/app.py",
+            "destination": "src/renamed.py",
+        }
+    )
+
+    assert move_result.ok is True
+    assert not target.exists()
+    moved = tmp_path / "src" / "renamed.py"
+    assert moved.read_text(encoding="utf-8").startswith("new_name")
+
+    delete_result = await executor.execute(
+        {
+            "tool": "delete_file",
+            "path": "src/renamed.py",
+        }
+    )
+
+    assert delete_result.ok is True
+    assert not moved.exists()
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_rejects_unsafe_file_mutations(tmp_path: Path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("hello\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("SECRET=1\n", encoding="utf-8")
+    executor = LocalActionExecutor(tmp_path)
+
+    replace_missing = await executor.execute(
+        {
+            "tool": "replace_text",
+            "path": "src/app.py",
+            "old": "missing",
+            "new": "",
+        }
+    )
+    delete_sensitive = await executor.execute(
+        {
+            "tool": "delete_file",
+            "path": ".env",
+        }
+    )
+    move_over_existing = await executor.execute(
+        {
+            "tool": "move_file",
+            "source": "src/app.py",
+            "destination": ".env",
+        }
+    )
+
+    assert replace_missing.ok is False
+    assert "not found" in replace_missing.message
+    assert delete_sensitive.ok is False
+    assert move_over_existing.ok is False
+    assert (tmp_path / "src" / "app.py").exists()
+    assert (tmp_path / ".env").exists()
 
 
 @pytest.mark.asyncio

@@ -49,7 +49,8 @@ Rules:
 - Use only workspace-relative paths.
 - Do not touch .git, .claude, .mcp.json, .env files, shell profiles, secrets, or credential files.
 - Use list_files and search_text to locate relevant files before reading them.
-- Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
+- Prefer apply_patch for multi-file edits. Use replace_text, move_file, delete_file,
+  or write_file for small targeted file changes.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
 - Use run_subagents only for read-only exploration, review, or comparison work.
 - Treat each actions array as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
@@ -81,7 +82,8 @@ Rules:
 - Use only workspace-relative paths.
 - Do not touch .git, .claude, .mcp.json, .env files, shell profiles, secrets, or credential files.
 - Use list_files and search_text to locate relevant files before reading them.
-- Prefer apply_patch for code edits. Use write_file only when replacing a small text file is clearer.
+- Prefer apply_patch for multi-file edits. Use replace_text, move_file, delete_file,
+  or write_file for small targeted file changes.
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
 - Use run_subagents only for read-only exploration, review, or comparison work.
 - Treat each tool-call batch as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
@@ -96,7 +98,16 @@ class GenericEditRuntimeError(RuntimeError):
     """Raised when the generic edit runtime cannot continue safely."""
 
 
-MUTATING_LOCAL_ACTIONS = frozenset({"write_file", "apply_patch", "run_command"})
+MUTATING_LOCAL_ACTIONS = frozenset(
+    {
+        "write_file",
+        "replace_text",
+        "delete_file",
+        "move_file",
+        "apply_patch",
+        "run_command",
+    }
+)
 
 
 class GenericEditRuntimeSession:
