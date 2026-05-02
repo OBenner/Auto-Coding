@@ -19,6 +19,7 @@ from .capabilities import RuntimeCapabilities
 from .local_actions import ToolActionResult, action_tool, safe_action_for_trace
 
 MCP_AUTO_CLAUDE_PREFIX = "mcp__auto-claude__"
+LOCAL_BRIDGE_SERVER = "auto-claude"
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
 
 
@@ -34,6 +35,9 @@ class RuntimeMcpSupport:
     server: str | None = None
     tool_count: int = 0
     available_capabilities: tuple[str, ...] = ()
+    requested_servers: tuple[str, ...] = ()
+    available_servers: tuple[str, ...] = ()
+    unavailable_servers: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize MCP support metadata for UI, CLI, and artifacts."""
@@ -46,6 +50,9 @@ class RuntimeMcpSupport:
             "server": self.server,
             "tool_count": self.tool_count,
             "available_capabilities": list(self.available_capabilities),
+            "requested_servers": list(self.requested_servers),
+            "available_servers": list(self.available_servers),
+            "unavailable_servers": list(self.unavailable_servers),
         }
 
 
@@ -87,10 +94,12 @@ class RuntimeMcpBridge:
         spec_dir: Path,
         project_dir: Path,
         allowed_tools: set[str],
+        requested_servers: tuple[str, ...] = (),
     ):
         self.spec_dir = spec_dir
         self.project_dir = project_dir
         self.allowed_tools = allowed_tools
+        self.requested_servers = requested_servers
         self._tools = load_auto_claude_bridge_tools(
             spec_dir=spec_dir,
             project_dir=project_dir,
@@ -111,26 +120,43 @@ class RuntimeMcpBridge:
         """Build a bridge when the agent config requests auto-claude MCP tools."""
         agent_type = str(getattr(agent_session, "agent_type", "") or "")
         configured_tools = getattr(agent_session, "auto_claude_tools", None)
+        configured_servers = getattr(agent_session, "mcp_servers", None)
         if configured_tools is None and agent_type:
             config = get_agent_config(agent_type)
             configured_tools = config.get("auto_claude_tools", [])
-        if not configured_tools:
+            configured_servers = config.get("mcp_servers", [])
+        requested_servers = normalize_mcp_server_names(configured_servers or ())
+        if not configured_tools and not requested_servers:
             return None
 
         allowed_tools = {
             normalize_auto_claude_tool_name(str(tool_name))
-            for tool_name in configured_tools
+            for tool_name in configured_tools or ()
         }
         bridge = cls(
             spec_dir=spec_dir,
             project_dir=project_dir,
             allowed_tools=allowed_tools,
+            requested_servers=requested_servers,
         )
-        return bridge if bridge.has_tools else None
+        return bridge if bridge.has_tools or bridge.requested_servers else None
 
     @property
     def has_tools(self) -> bool:
         return bool(self._tools)
+
+    @property
+    def available_servers(self) -> tuple[str, ...]:
+        """Return MCP servers available through this local bridge."""
+        return (LOCAL_BRIDGE_SERVER,) if self.has_tools else ()
+
+    @property
+    def unavailable_servers(self) -> tuple[str, ...]:
+        """Return requested MCP servers that this local bridge cannot expose."""
+        available = set(self.available_servers)
+        return tuple(
+            server for server in self.requested_servers if server not in available
+        )
 
     def provider_tool_schemas(self) -> list[dict[str, Any]]:
         """Return provider-native schemas for bridged tools."""
@@ -188,10 +214,13 @@ class RuntimeMcpBridge:
     def report(self) -> dict[str, Any]:
         """Return compact bridge metadata for artifacts/debug output."""
         return {
-            "server": "auto-claude",
+            "server": LOCAL_BRIDGE_SERVER,
             "available": self.has_tools,
             "tool_count": len(self._tools),
             "tools": [tool.exposed_name for tool in self._tools],
+            "requested_servers": list(self.requested_servers),
+            "available_servers": list(self.available_servers),
+            "unavailable_servers": list(self.unavailable_servers),
         }
 
     def support_for(
@@ -208,6 +237,8 @@ class RuntimeMcpBridge:
             capabilities=capabilities,
             bridge_available=self.has_tools,
             tool_count=len(self._tools),
+            requested_servers=self.requested_servers,
+            available_servers=self.available_servers,
         )
 
 
@@ -218,10 +249,13 @@ def resolve_runtime_mcp_support(
     capabilities: RuntimeCapabilities,
     bridge_available: bool = False,
     tool_count: int = 0,
+    requested_servers: tuple[str, ...] = (),
+    available_servers: tuple[str, ...] = (),
 ) -> RuntimeMcpSupport:
     """Return native or local-bridge MCP support without claiming full parity."""
     provider = provider_name.lower()
     available_capabilities = tuple(capabilities.available())
+    requested_servers = normalize_mcp_server_names(requested_servers)
 
     if capabilities.mcp:
         return RuntimeMcpSupport(
@@ -233,9 +267,18 @@ def resolve_runtime_mcp_support(
             server=None,
             tool_count=tool_count,
             available_capabilities=available_capabilities,
+            requested_servers=requested_servers,
+            available_servers=requested_servers,
+            unavailable_servers=(),
         )
 
     if bridge_available and capabilities.function_tools:
+        available_servers = normalize_mcp_server_names(
+            available_servers or (LOCAL_BRIDGE_SERVER,)
+        )
+        unavailable_servers = tuple(
+            server for server in requested_servers if server not in available_servers
+        )
         return RuntimeMcpSupport(
             provider_name=provider,
             runtime_name=runtime_name,
@@ -245,9 +288,12 @@ def resolve_runtime_mcp_support(
                 "Auto Code can bridge local auto-claude tools into this runtime; "
                 "external MCP servers still require native runtime support."
             ),
-            server="auto-claude",
+            server=LOCAL_BRIDGE_SERVER,
             tool_count=tool_count,
             available_capabilities=available_capabilities,
+            requested_servers=requested_servers,
+            available_servers=available_servers,
+            unavailable_servers=unavailable_servers,
         )
 
     if bridge_available:
@@ -260,15 +306,19 @@ def resolve_runtime_mcp_support(
             "MCP support requires native runtime MCP or a configured local "
             "Auto Code MCP bridge."
         )
+    unavailable_servers = requested_servers
     return RuntimeMcpSupport(
         provider_name=provider,
         runtime_name=runtime_name,
         strategy="unavailable",
         available=False,
         reason=reason,
-        server="auto-claude" if bridge_available else None,
+        server=LOCAL_BRIDGE_SERVER if bridge_available else None,
         tool_count=tool_count,
         available_capabilities=available_capabilities,
+        requested_servers=requested_servers,
+        available_servers=(),
+        unavailable_servers=unavailable_servers,
     )
 
 
@@ -279,7 +329,7 @@ def load_auto_claude_bridge_tools(
     allowed_tools: set[str],
 ) -> list[RuntimeMcpToolSpec]:
     """Load SDK-declared Auto Code tools for direct invocation."""
-    if not is_tools_available():
+    if not allowed_tools or not is_tools_available():
         return []
 
     specs: list[RuntimeMcpToolSpec] = []
@@ -289,7 +339,7 @@ def load_auto_claude_bridge_tools(
             continue
         specs.append(
             RuntimeMcpToolSpec(
-                server="auto-claude",
+                server=LOCAL_BRIDGE_SERVER,
                 name=name,
                 exposed_name=f"{MCP_AUTO_CLAUDE_PREFIX}{name}",
                 description=str(getattr(sdk_tool, "description", "") or ""),
@@ -300,6 +350,32 @@ def load_auto_claude_bridge_tools(
             )
         )
     return specs
+
+
+def normalize_mcp_server_names(server_names: Any) -> tuple[str, ...]:
+    """Normalize configured MCP server names while preserving order."""
+    if isinstance(server_names, str):
+        server_iterable = (server_names,)
+    else:
+        server_iterable = server_names
+    normalized: list[str] = []
+    for server_name in server_iterable or ():
+        server = normalize_mcp_server_name(str(server_name))
+        if server and server not in normalized:
+            normalized.append(server)
+    return tuple(normalized)
+
+
+def normalize_mcp_server_name(server_name: str) -> str:
+    """Normalize common MCP server aliases used by agent configs."""
+    server = server_name.strip()
+    if server.startswith("mcp__"):
+        parts = server.split("__")
+        if len(parts) >= 2:
+            server = parts[1]
+    if server == "graphiti-memory":
+        return "graphiti"
+    return server
 
 
 def normalize_auto_claude_tool_name(tool_name: str) -> str:

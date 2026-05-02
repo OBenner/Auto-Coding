@@ -1596,22 +1596,56 @@ def test_runtime_mcp_bridge_filters_agent_allowed_tools(
     assert support.tool_count == 2
 
 
+def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
+    from agents.runtime.adapters.generic_edit import render_mcp_bridge_prompt
+
+    session = SimpleNamespace(agent_type="spec_researcher")
+
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    assert bridge.has_tools is False
+    assert bridge.requested_servers == ("context7",)
+    assert bridge.available_servers == ()
+    assert bridge.unavailable_servers == ("context7",)
+    assert "context7" in render_mcp_bridge_prompt(bridge)
+
+    support = bridge.support_for(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+    )
+    support_payload = support.to_dict()
+    assert support.strategy == "unavailable"
+    assert support_payload["requested_servers"] == ["context7"]
+    assert support_payload["available_servers"] == []
+    assert support_payload["unavailable_servers"] == ["context7"]
+
+
 def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     native = resolve_runtime_mcp_support(
         provider_name="claude",
         runtime_name="claude_agent_sdk",
         capabilities=RuntimeCapabilities.claude_agent_sdk(),
+        requested_servers=("context7", "graphiti-memory"),
     )
     assert native.available is True
     assert native.strategy == "native"
+    assert native.available_servers == ("context7", "graphiti")
 
     unavailable = resolve_runtime_mcp_support(
         provider_name="openai",
         runtime_name="generic_edit",
         capabilities=RuntimeCapabilities.generic_edit(),
+        requested_servers=("context7",),
     )
     assert unavailable.available is False
     assert unavailable.strategy == "unavailable"
+    assert unavailable.unavailable_servers == ("context7",)
 
     local_bridge = resolve_runtime_mcp_support(
         provider_name="openai",
@@ -1619,10 +1653,14 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
         capabilities=RuntimeCapabilities.generic_edit(),
         bridge_available=True,
         tool_count=3,
+        requested_servers=("context7", "auto-claude"),
+        available_servers=("auto-claude",),
     )
     assert local_bridge.available is True
     assert local_bridge.strategy == "local_bridge"
     assert local_bridge.tool_count == 3
+    assert local_bridge.available_servers == ("auto-claude",)
+    assert local_bridge.unavailable_servers == ("context7",)
     assert "external MCP servers" in local_bridge.reason
 
     unsupported_bridge_runtime = resolve_runtime_mcp_support(

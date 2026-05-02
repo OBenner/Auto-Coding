@@ -675,16 +675,29 @@ def build_native_tool_edit_prompt(
 
 def render_mcp_bridge_prompt(mcp_bridge: RuntimeMcpBridge | None) -> str:
     """Render bridged local MCP actions for the generic edit prompt."""
-    if mcp_bridge is None or not mcp_bridge.has_tools:
+    if mcp_bridge is None:
         return (
             "Bridged MCP actions: none. External MCP servers such as Context7, "
             "Graphiti, Linear, Electron, and Puppeteer are not available in "
             "generic_edit mode."
         )
-    return (
-        "Bridged Auto Code MCP actions available through the local runtime:\n"
-        + "\n".join(mcp_bridge.prompt_lines())
-    )
+    if not mcp_bridge.has_tools:
+        unavailable = ", ".join(mcp_bridge.unavailable_servers) or "none"
+        return (
+            "Bridged MCP actions: none. Requested MCP servers unavailable in "
+            f"generic_edit mode: {unavailable}."
+        )
+
+    lines = [
+        "Bridged Auto Code MCP actions available through the local runtime:",
+        *mcp_bridge.prompt_lines(),
+    ]
+    if mcp_bridge.unavailable_servers:
+        lines.append(
+            "Unavailable external MCP servers in generic_edit mode: "
+            + ", ".join(mcp_bridge.unavailable_servers)
+        )
+    return "\n".join(lines)
 
 
 def parse_generic_edit_response(text: str) -> dict[str, Any]:
