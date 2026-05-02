@@ -44,6 +44,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "Runtime Fallback Matrix" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
+    assert "opencode" in output
     assert "--provider-smoke" in output
     assert payload["providers"][0]["provider"] == "claude"
 
@@ -79,6 +80,11 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert (
         runner_rows["generic_cli_pool"]["availability"]["status"] == "not_configurable"
     )
+    assert runner_rows["opencode"]["tier"] == "generic_pool"
+    assert "multi_provider" in runner_rows["opencode"]["capability_tags"]
+    assert runner_rows["goose"]["role"] == "fallback"
+    assert "mcp" in runner_rows["goose"]["capability_tags"]
+    assert runner_rows["qwen_code"]["runner_status"] == "planned"
     selection_rows = payload["cli_runner_selection"]
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
         "codex_cli",
@@ -111,6 +117,10 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert openai_full["selected_mode_runner_candidates"] == [
         "aider",
         "cursor_cli",
+        "opencode",
+        "goose",
+        "amp",
+        "qwen_code",
     ]
     assert fallback_rows[("claude", "full_autonomous")]["fallback_applied"] is False
 
@@ -123,6 +133,10 @@ def test_cli_runner_selection_filters_runtime_mode():
         "gemini_cli",
         "coderabbit_cli",
         "github_copilot_cli",
+        "opencode",
+        "goose",
+        "qwen_code",
+        "deepv_code",
         "generic_cli_pool",
     )
 
