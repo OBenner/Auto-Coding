@@ -181,7 +181,7 @@ class OpenAICompatibleSession(AgentSession):
                 return ProviderToolCallResponse(content="")
 
             message_obj = response.choices[0].message
-            content = str(_get_attr_or_key(message_obj, "content", "") or "")
+            content = provider_message_content(message_obj)
             tool_calls = parse_openai_tool_calls(message_obj)
             if content or tool_calls:
                 self._messages.append(
@@ -288,6 +288,28 @@ def _get_attr_or_key(value: Any, key: str, default: Any = None) -> Any:
     if isinstance(value, dict):
         return value.get(key, default)
     return getattr(value, key, default)
+
+
+def provider_message_content(message_obj: Any) -> str:
+    """Extract text content from common provider message object shapes."""
+    content = _get_attr_or_key(message_obj, "content", "")
+    if isinstance(content, str):
+        return content
+    if content is None:
+        return ""
+    if isinstance(content, list):
+        return "".join(content_part_text(part) for part in content)
+    return str(content)
+
+
+def content_part_text(part: Any) -> str:
+    """Extract text from one provider content part."""
+    text = _get_attr_or_key(part, "text", None)
+    if isinstance(text, str):
+        return text
+    if isinstance(part, str):
+        return part
+    return ""
 
 
 def iter_provider_tool_calls(message_obj: Any) -> list[Any]:

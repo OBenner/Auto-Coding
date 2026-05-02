@@ -35,6 +35,7 @@ from core.providers.adapters.openai_compat import (
     assistant_message_from_tool_calls,
     format_openai_tool_schema,
     parse_openai_tool_calls,
+    provider_message_content,
 )
 from core.providers.base import (
     AgentSession,
@@ -271,7 +272,7 @@ class LiteLLMSession(AgentSession):
                 return ProviderToolCallResponse(content="")
 
             message_obj = response.choices[0].message
-            content = str(getattr(message_obj, "content", "") or "")
+            content = provider_message_content(message_obj)
             tool_calls = parse_openai_tool_calls(message_obj)
             if content or tool_calls:
                 self._messages.append(

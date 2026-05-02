@@ -57,7 +57,10 @@ from agents.runtime.local_actions import (
     safe_result_for_trace,
 )
 from core.platform import run_process
-from core.providers.adapters.openai_compat import parse_openai_tool_calls
+from core.providers.adapters.openai_compat import (
+    parse_openai_tool_calls,
+    provider_message_content,
+)
 from core.providers.config import ProviderConfig
 
 
@@ -435,6 +438,23 @@ def test_provider_tool_call_parser_handles_streaming_delta_envelopes():
     assert tool_calls[0].id == "delta_call"
     assert tool_calls[0].name == "search_text"
     assert tool_calls[0].arguments == {"query": "OpenRouter"}
+
+
+def test_provider_message_content_handles_gateway_shapes():
+    assert provider_message_content({"content": "plain text"}) == "plain text"
+    assert (
+        provider_message_content(
+            {
+                "content": [
+                    {"type": "text", "text": "hello "},
+                    {"text": "world"},
+                    {"type": "tool_call", "name": "read_file"},
+                ]
+            }
+        )
+        == "hello world"
+    )
+    assert provider_message_content(SimpleNamespace(content=None)) == ""
 
 
 class FakeCompletionSession:
