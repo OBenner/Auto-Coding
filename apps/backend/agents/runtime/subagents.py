@@ -194,12 +194,7 @@ class RuntimeSubagentOrchestrator:
                     cancel_hook = getattr(runtime_session, "cancel", None)
                     if callable(cancel_hook):
                         await maybe_await(cancel_hook())
-                    return RuntimeSubagentResult(
-                        id=task.id,
-                        role=task.role,
-                        status="cancelled",
-                        response_text="Subagent task was cancelled.",
-                    )
+                    raise
                 except Exception as e:
                     return RuntimeSubagentResult(
                         id=task.id,
@@ -209,12 +204,21 @@ class RuntimeSubagentOrchestrator:
                         error=str(e),
                     )
 
-        running = [asyncio.create_task(run_one(task)) for task in tasks]
-        self._running_tasks.update(running)
+        running = [(task, asyncio.create_task(run_one(task))) for task in tasks]
+        asyncio_tasks = [asyncio_task for _, asyncio_task in running]
+        self._running_tasks.update(asyncio_tasks)
         try:
-            results = await asyncio.gather(*running)
+            raw_results = await asyncio.gather(
+                *asyncio_tasks,
+                return_exceptions=True,
+            )
         finally:
-            self._running_tasks.difference_update(running)
+            self._running_tasks.difference_update(asyncio_tasks)
+
+        results = [
+            normalize_subagent_result(task, raw_result)
+            for (task, _), raw_result in zip(running, raw_results, strict=True)
+        ]
 
         run_status = summarize_subagent_status(results)
         run = RuntimeSubagentRun(
@@ -323,6 +327,29 @@ def summarize_subagent_status(results: list[RuntimeSubagentResult]) -> str:
     if any(result.status == "continue" for result in results):
         return "continue"
     return "complete"
+
+
+def normalize_subagent_result(
+    task: RuntimeSubagentTask,
+    raw_result: RuntimeSubagentResult | BaseException,
+) -> RuntimeSubagentResult:
+    """Convert gathered child task outcomes into runtime subagent results."""
+    if isinstance(raw_result, RuntimeSubagentResult):
+        return raw_result
+    if isinstance(raw_result, asyncio.CancelledError):
+        return RuntimeSubagentResult(
+            id=task.id,
+            role=task.role,
+            status="cancelled",
+            response_text="Subagent task was cancelled.",
+        )
+    return RuntimeSubagentResult(
+        id=task.id,
+        role=task.role,
+        status="error",
+        response_text="",
+        error=str(raw_result),
+    )
 
 
 def save_subagent_artifact(

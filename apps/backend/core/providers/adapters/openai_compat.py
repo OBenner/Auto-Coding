@@ -12,7 +12,7 @@ streaming/completion logic.
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from typing import TYPE_CHECKING, Any
 
 from core.providers.base import (
@@ -292,7 +292,7 @@ def _get_attr_or_key(value: Any, key: str, default: Any = None) -> Any:
 
 def iter_provider_tool_calls(message_obj: Any) -> list[Any]:
     """Return tool calls from OpenAI, LiteLLM, OpenRouter, and Gemini-like shapes."""
-    tool_calls = list(_get_attr_or_key(message_obj, "tool_calls", None) or [])
+    tool_calls = as_sequence(_get_attr_or_key(message_obj, "tool_calls", None))
     if tool_calls:
         return tool_calls
 
@@ -303,12 +303,11 @@ def iter_provider_tool_calls(message_obj: Any) -> list[Any]:
         return [direct_call]
 
     calls_from_parts: list[Any] = []
-    for part in _get_attr_or_key(message_obj, "parts", None) or []:
-        function_call = _get_attr_or_key(
-            part, "function_call", None
-        ) or _get_attr_or_key(part, "functionCall", None)
-        if function_call:
-            calls_from_parts.append(function_call)
+    for container_name in ("output", "content", "parts"):
+        for part in as_sequence(_get_attr_or_key(message_obj, container_name, None)):
+            function_call = tool_call_from_part(part)
+            if function_call:
+                calls_from_parts.append(function_call)
     return calls_from_parts
 
 
@@ -327,12 +326,12 @@ def tool_call_name_and_arguments(tool_call: Any) -> tuple[str, Any]:
     )
     raw_arguments = first_present_value(
         function,
-        ("arguments", "args", "parameters", "input"),
+        ("arguments", "args", "parameters", "input", "input_json", "tool_input"),
     )
     if raw_arguments is None and function is not tool_call:
         raw_arguments = first_present_value(
             tool_call,
-            ("arguments", "args", "parameters", "input"),
+            ("arguments", "args", "parameters", "input", "input_json", "tool_input"),
         )
     return name, raw_arguments
 
@@ -341,20 +340,15 @@ def parse_tool_call_arguments(name: str, raw_arguments: Any) -> dict[str, Any]:
     """Parse tool arguments from JSON strings, dicts, and mapping-like objects."""
     if raw_arguments in (None, ""):
         return {}
-    if isinstance(raw_arguments, dict):
-        return raw_arguments
+    if isinstance(raw_arguments, Mapping):
+        return dict(raw_arguments)
     if isinstance(raw_arguments, str):
         try:
             parsed_arguments = json.loads(raw_arguments)
         except json.JSONDecodeError as e:
             raise ProviderError(f"Invalid tool-call arguments for {name}: {e}") from e
     else:
-        try:
-            parsed_arguments = dict(raw_arguments)
-        except (TypeError, ValueError) as e:
-            raise ProviderError(
-                f"Tool-call arguments for {name} must be a JSON object"
-            ) from e
+        parsed_arguments = dump_mapping_like_arguments(name, raw_arguments)
     if not isinstance(parsed_arguments, dict):
         raise ProviderError(f"Tool-call arguments for {name} must be an object")
     return parsed_arguments
@@ -369,6 +363,66 @@ def tool_call_id(tool_call: Any, index: int) -> str:
         or f"call_{index}"
     )
     return str(value)
+
+
+def as_sequence(value: Any) -> list[Any]:
+    """Return a provider field as a list without treating dicts as iterables."""
+    if value is None:
+        return []
+    if isinstance(value, Mapping):
+        return [value]
+    if isinstance(value, str | bytes):
+        return []
+    try:
+        return list(value)
+    except TypeError:
+        return [value]
+
+
+def tool_call_from_part(part: Any) -> Any | None:
+    """Extract a callable tool block from common response part formats."""
+    function_call = _get_attr_or_key(part, "function_call", None) or _get_attr_or_key(
+        part, "functionCall", None
+    )
+    if function_call:
+        return function_call
+
+    part_type = str(_get_attr_or_key(part, "type", "") or "").lower()
+    if part_type in {"function_call", "tool_call", "tool_use"}:
+        return part
+
+    if (
+        _get_attr_or_key(part, "name", None)
+        and first_present_value(
+            part,
+            ("arguments", "args", "parameters", "input", "input_json", "tool_input"),
+        )
+        is not None
+    ):
+        return part
+
+    return None
+
+
+def dump_mapping_like_arguments(name: str, raw_arguments: Any) -> dict[str, Any]:
+    """Convert SDK-specific argument containers to plain dictionaries."""
+    for method_name in ("model_dump", "to_dict", "dict"):
+        method = getattr(raw_arguments, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            dumped = method()
+        except TypeError:
+            continue
+        if isinstance(dumped, Mapping):
+            return dict(dumped)
+
+    try:
+        return dict(raw_arguments)
+    except (TypeError, ValueError) as e:
+        raise ProviderError(
+            f"Tool-call arguments for {name} must be a JSON object"
+        ) from e
 
 
 def first_present_value(value: Any, keys: tuple[str, ...]) -> Any:

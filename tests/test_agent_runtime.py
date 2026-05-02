@@ -48,6 +48,7 @@ from agents.runtime.local_actions import (
     safe_result_for_trace,
 )
 from core.platform import run_process
+from core.providers.adapters.openai_compat import parse_openai_tool_calls
 from core.providers.config import ProviderConfig
 
 
@@ -238,13 +239,17 @@ def test_codex_cli_event_parser_extracts_usage_and_session():
         "output_tokens": 11,
         "total_tokens": 53,
     }
-    assert summary["cost_usd"] == 0.0042
-    assert build_codex_usage_metadata(summary) == {
+    assert summary["cost_usd"] == pytest.approx(0.0042)
+    usage_metadata = build_codex_usage_metadata(summary)
+    assert usage_metadata
+    assert {
+        key: value for key, value in usage_metadata.items() if key != "cost_usd"
+    } == {
         "input_tokens": 42,
         "output_tokens": 11,
         "total_tokens": 53,
-        "cost_usd": 0.0042,
     }
+    assert usage_metadata["cost_usd"] == pytest.approx(0.0042)
 
 
 def test_codex_cli_resume_command_uses_resume_subcommand(tmp_path: Path):
@@ -263,6 +268,70 @@ def test_codex_cli_resume_command_uses_resume_subcommand(tmp_path: Path):
     assert "--cd" not in args
     assert "--sandbox" not in args
     assert args[-1] == "session-123"
+
+
+def test_provider_tool_call_parser_handles_responses_output_blocks():
+    message_obj = {
+        "output": [
+            {
+                "type": "function_call",
+                "call_id": "call_read",
+                "name": "read_file",
+                "arguments": json.dumps({"path": "apps/backend/run.py"}),
+            }
+        ]
+    }
+
+    tool_calls = parse_openai_tool_calls(message_obj)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "call_read"
+    assert tool_calls[0].name == "read_file"
+    assert tool_calls[0].arguments == {"path": "apps/backend/run.py"}
+
+
+def test_provider_tool_call_parser_handles_anthropic_content_blocks():
+    message_obj = {
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "toolu_search",
+                "name": "search_text",
+                "input": {"query": "RuntimeSubagentOrchestrator"},
+            }
+        ]
+    }
+
+    tool_calls = parse_openai_tool_calls(message_obj)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "toolu_search"
+    assert tool_calls[0].name == "search_text"
+    assert tool_calls[0].arguments == {"query": "RuntimeSubagentOrchestrator"}
+
+
+def test_provider_tool_call_parser_handles_gemini_function_call_parts():
+    class DumpableArgs:
+        def model_dump(self):
+            return {"path": "apps/backend"}
+
+    message_obj = {
+        "parts": [
+            {
+                "functionCall": {
+                    "name": "stat_path",
+                    "args": DumpableArgs(),
+                }
+            }
+        ]
+    }
+
+    tool_calls = parse_openai_tool_calls(message_obj)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "call_1"
+    assert tool_calls[0].name == "stat_path"
+    assert tool_calls[0].arguments == {"path": "apps/backend"}
 
 
 class FakeCompletionSession:
@@ -829,6 +898,7 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "list_files",
         "search_text",
         "read_file",
+        "read_file_range",
         "read_many_files",
         "write_file",
         "apply_patch",
@@ -862,6 +932,14 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert search_text_schema["parameters"]["required"] == ["query"]
     assert "max_matches" in search_text_schema["parameters"]["properties"]
+    read_file_range_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "read_file_range"
+    )
+    assert read_file_range_schema["parameters"]["required"] == ["path"]
+    assert (
+        read_file_range_schema["parameters"]["properties"]["max_lines"]["maximum"]
+        == 400
+    )
     read_many_schema = next(
         schema for schema in provider_schemas if schema["name"] == "read_many_files"
     )
@@ -1082,6 +1160,53 @@ def test_search_text_trace_redacts_query_and_excerpts():
     excerpt = result["data"]["matches"][0]["excerpt_redacted"]
     assert excerpt is True
     assert "SECRET_NEEDLE" not in json.dumps(result)
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_reads_file_ranges_safely(tmp_path: Path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text(
+        "\n".join(
+            [
+                "line one",
+                "line two",
+                "line three",
+                "line four",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    executor = LocalActionExecutor(tmp_path)
+
+    result = await executor.execute(
+        {
+            "tool": "read_file_range",
+            "path": "src/app.py",
+            "start_line": 2,
+            "max_lines": 2,
+        }
+    )
+
+    assert result.ok is True
+    assert result.data["start_line"] == 2
+    assert result.data["end_line"] == 3
+    assert result.data["line_count"] == 2
+    assert result.data["truncated"] is True
+    assert result.data["content"] == "2: line two\n3: line three"
+    assert result.data["lines"] == [
+        {"line": 2, "text": "line two"},
+        {"line": 3, "text": "line three"},
+    ]
+    assert safe_result_for_trace(result)["data"]["lines"][0]["text_redacted"] is True
+
+    missing_result = await executor.execute(
+        {
+            "tool": "read_file_range",
+            "path": "src/missing.py",
+        }
+    )
+    assert missing_result.ok is False
 
 
 @pytest.mark.asyncio

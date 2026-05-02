@@ -34,6 +34,8 @@ MAX_SEARCH_FILE_BYTES = 1_000_000
 MAX_SEARCH_EXCERPT_CHARS = 300
 MAX_COMMAND_TIMEOUT_SECONDS = 120
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 60
+MAX_READ_RANGE_LINES = 400
+DEFAULT_READ_RANGE_LINES = 120
 TRACE_STRING_PREVIEW_CHARS = 1000
 TRACE_REDACTED_FIELDS = {
     "content",
@@ -42,6 +44,7 @@ TRACE_REDACTED_FIELDS = {
     "patch",
     "query",
     "raw_response",
+    "text",
 }
 DEFAULT_LIST_EXCLUDED_DIRS = {
     ".git",
@@ -230,6 +233,34 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
     ),
     LocalActionToolSpec(
+        name="read_file_range",
+        description="Read a bounded line range from a UTF-8 workspace file.",
+        parameters={
+            "path": {
+                "type": "string",
+                "description": "Workspace-relative file path.",
+            },
+            "start_line": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "1-based line number to start reading from.",
+            },
+            "max_lines": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_READ_RANGE_LINES,
+                "description": "Maximum number of lines to read.",
+            },
+        },
+        required=("path",),
+        example={
+            "tool": "read_file_range",
+            "path": "relative/path.py",
+            "start_line": 40,
+            "max_lines": DEFAULT_READ_RANGE_LINES,
+        },
+    ),
+    LocalActionToolSpec(
         name="read_many_files",
         description="Read several UTF-8 text files from the workspace.",
         parameters={
@@ -412,6 +443,8 @@ class LocalActionExecutor:
                 return self._search_text(action)
             if tool == "read_file":
                 return self._read_file(action)
+            if tool == "read_file_range":
+                return self._read_file_range(action)
             if tool == "read_many_files":
                 return self._read_many_files(action)
             if tool == "write_file":
@@ -719,6 +752,62 @@ class LocalActionExecutor:
                 "files": files,
                 "file_count": len(files),
                 "read_count": read_count,
+            },
+        )
+
+    def _read_file_range(self, action: dict[str, Any]) -> ToolActionResult:
+        path = require_string(action, "path")
+        start_line = bounded_positive_int(
+            action,
+            "start_line",
+            default=1,
+            maximum=1_000_000,
+        )
+        max_lines = bounded_positive_int(
+            action,
+            "max_lines",
+            default=DEFAULT_READ_RANGE_LINES,
+            maximum=MAX_READ_RANGE_LINES,
+        )
+        target = resolve_workspace_path(self.project_dir, path)
+        if not target.exists() or not target.is_file():
+            return ToolActionResult(
+                tool="read_file_range",
+                ok=False,
+                message=f"File not found: {path}",
+            )
+
+        lines: list[dict[str, Any]] = []
+        truncated = False
+        with target.open("r", encoding="utf-8", errors="replace") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                if line_number < start_line:
+                    continue
+                if len(lines) >= max_lines:
+                    truncated = True
+                    break
+                lines.append(
+                    {
+                        "line": line_number,
+                        "text": line.rstrip("\r\n"),
+                    }
+                )
+
+        end_line = lines[-1]["line"] if lines else start_line - 1
+        content = "\n".join(f"{line['line']}: {line['text']}" for line in lines)
+        return ToolActionResult(
+            tool="read_file_range",
+            ok=True,
+            message=f"Read {len(lines)} line(s) from {path}",
+            data={
+                "path": path,
+                "start_line": start_line,
+                "end_line": end_line,
+                "max_lines": max_lines,
+                "lines": lines,
+                "content": content,
+                "line_count": len(lines),
+                "truncated": truncated,
             },
         )
 
