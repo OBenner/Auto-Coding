@@ -292,6 +292,24 @@ def _get_attr_or_key(value: Any, key: str, default: Any = None) -> Any:
 
 def iter_provider_tool_calls(message_obj: Any) -> list[Any]:
     """Return tool calls from OpenAI, LiteLLM, OpenRouter, and Gemini-like shapes."""
+    for nested_name in ("message", "delta"):
+        nested_message = _get_attr_or_key(message_obj, nested_name, None)
+        if nested_message and nested_message is not message_obj:
+            nested_calls = iter_provider_tool_calls(nested_message)
+            if nested_calls:
+                return nested_calls
+
+    calls_from_choices: list[Any] = []
+    for choice in as_sequence(_get_attr_or_key(message_obj, "choices", None)):
+        choice_message = _get_attr_or_key(choice, "message", None) or _get_attr_or_key(
+            choice, "delta", None
+        )
+        if not choice_message:
+            continue
+        calls_from_choices.extend(iter_provider_tool_calls(choice_message))
+    if calls_from_choices:
+        return calls_from_choices
+
     tool_calls = as_sequence(_get_attr_or_key(message_obj, "tool_calls", None))
     if tool_calls:
         return tool_calls

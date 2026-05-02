@@ -383,6 +383,57 @@ def test_provider_tool_call_parser_handles_gemini_function_call_parts():
     assert tool_calls[0].arguments == {"path": "apps/backend"}
 
 
+def test_provider_tool_call_parser_handles_gateway_choice_envelopes():
+    message_obj = {
+        "choices": [
+            {
+                "message": {
+                    "tool_calls": [
+                        {
+                            "id": "gateway_call",
+                            "type": "function",
+                            "function": {
+                                "name": "read_file",
+                                "arguments": {"path": "apps/backend/run.py"},
+                            },
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    tool_calls = parse_openai_tool_calls(message_obj)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "gateway_call"
+    assert tool_calls[0].name == "read_file"
+    assert tool_calls[0].arguments == {"path": "apps/backend/run.py"}
+
+
+def test_provider_tool_call_parser_handles_streaming_delta_envelopes():
+    message_obj = {
+        "delta": {
+            "tool_calls": [
+                {
+                    "call_id": "delta_call",
+                    "function": {
+                        "name": "search_text",
+                        "arguments": json.dumps({"query": "OpenRouter"}),
+                    },
+                }
+            ]
+        }
+    }
+
+    tool_calls = parse_openai_tool_calls(message_obj)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "delta_call"
+    assert tool_calls[0].name == "search_text"
+    assert tool_calls[0].arguments == {"query": "OpenRouter"}
+
+
 class FakeCompletionSession:
     provider_name = "openai"
 

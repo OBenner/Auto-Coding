@@ -249,6 +249,10 @@ in-session subagent spawning, or Claude SDK session lifecycle behavior. MCP
 support artifacts include per-server statuses such as `local_bridge`,
 `native_required`, and `unsupported`, so non-Claude runs can explain exactly
 which requested MCP servers are available and which remain native-runtime-only.
+OpenAI-compatible tool-call parsing normalizes direct message objects, gateway
+`choices[].message` envelopes, streaming `delta` envelopes, and content/part
+blocks used by OpenAI, LiteLLM, OpenRouter, Gemini-like, and Anthropic-like
+responses.
 
 ## Patch Proposal Contract
 
