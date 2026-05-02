@@ -118,3 +118,48 @@ def save_runtime_fallback_artifact(
         ensure_ascii=False,
     )
     return path
+
+
+def save_runtime_runner_route_artifact(
+    *,
+    spec_dir: Path,
+    route: Any,
+    phase: str,
+    session_num: int | None = None,
+    subtask_id: str | None = None,
+) -> Path:
+    """Persist runtime runner routing metadata for diagnostics and UI consumers."""
+    artifact_dir = spec_dir / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now(UTC).isoformat()
+    timestamp_token = safe_artifact_token(timestamp, "timestamp")
+    phase_token = safe_artifact_token(phase, "phase")
+    session_token = safe_artifact_token(
+        f"session-{session_num}" if session_num is not None else None,
+        "no-session",
+    )
+    subtask_token = safe_artifact_token(subtask_id, "no-subtask")
+    path = artifact_dir / (
+        "runtime_runner_route_"
+        f"{phase_token}_{session_token}_{subtask_token}_{timestamp_token}.json"
+    )
+
+    route_payload = (
+        route.to_dict()
+        if hasattr(route, "to_dict") and callable(route.to_dict)
+        else {"value": str(route)}
+    )
+    write_json_atomic(
+        path,
+        {
+            "timestamp": timestamp,
+            "phase": phase,
+            "session": session_num,
+            "subtask_id": subtask_id,
+            "route": route_payload,
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+    return path

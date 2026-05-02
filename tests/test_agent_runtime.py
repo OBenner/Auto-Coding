@@ -33,6 +33,7 @@ from agents.runtime import (
     runtime_fallback_enabled,
     runtime_runner_router_enabled,
     save_runtime_fallback_artifact,
+    save_runtime_runner_route_artifact,
     summarize_subagent_results,
 )
 from agents.runtime.adapters.codex_cli import (
@@ -2554,6 +2555,37 @@ def test_runtime_runner_router_routes_to_wired_codex_cli(tmp_path: Path):
     assert route.selected_provider == "codex"
     assert route.selected_mode == "full_autonomous"
     assert route.runner_id == "codex_cli"
+
+
+def test_runtime_runner_route_artifact_records_route_decision(tmp_path: Path):
+    route = resolve_runtime_runner_route(
+        provider_config=ProviderConfig(provider="openai"),
+        provider_name="openai",
+        requested_mode="full_autonomous",
+        phase="coding",
+        allow_router=False,
+    )
+
+    artifact_path = save_runtime_runner_route_artifact(
+        spec_dir=tmp_path,
+        route=route,
+        phase="coding",
+        session_num=3,
+        subtask_id="2.1",
+    )
+
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "coding"
+    assert payload["session"] == 3
+    assert payload["subtask_id"] == "2.1"
+    assert payload["route"]["requested_provider"] == "openai"
+    assert payload["route"]["selected_provider"] == "openai"
+    assert payload["route"]["status"] == "disabled"
+    assert payload["route"]["runner_selection"]["selected_runner_ids"] == [
+        "codex_cli",
+        "claude_code",
+        "zai_claude_code",
+    ]
 
 
 def test_runtime_runner_router_keeps_limited_runtimes_direct():

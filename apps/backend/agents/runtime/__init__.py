@@ -7,7 +7,10 @@ inside an Auto Code workspace.
 """
 
 from .adapters import create_runtime_session
-from .artifacts import save_runtime_fallback_artifact
+from .artifacts import (
+    save_runtime_fallback_artifact,
+    save_runtime_runner_route_artifact,
+)
 from .capabilities import (
     RuntimeCapabilities,
     RuntimeCapabilityError,
@@ -116,6 +119,7 @@ __all__ = [
     "runtime_fallback_enabled",
     "runtime_runner_router_enabled",
     "save_runtime_fallback_artifact",
+    "save_runtime_runner_route_artifact",
     "select_cli_runner_profiles",
     "summarize_subagent_results",
 ]

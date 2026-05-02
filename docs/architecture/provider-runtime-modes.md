@@ -187,6 +187,7 @@ to a wired CLI runner instead of failing fast or degrading to a limited runtime.
 The first wired route is `codex_cli`, and it is selected only when the Codex CLI
 provider is available. Limited runtime modes such as `generic_edit`,
 `patch_proposal`, and `analysis_only` stay on the configured direct provider.
+Applied runner routes are persisted as `runtime_runner_route_*.json` artifacts.
 
 ## Generic Edit Contract
 

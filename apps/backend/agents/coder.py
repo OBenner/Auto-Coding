@@ -89,6 +89,7 @@ from .runtime import (
 from .runtime.artifacts import (
     save_analysis_only_artifact,
     save_runtime_fallback_artifact,
+    save_runtime_runner_route_artifact,
 )
 from .session import (
     post_session_processing,
@@ -1004,6 +1005,14 @@ async def run_autonomous_agent(
                 "warning",
             )
             logger.info("Runtime runner route selected: %s", runner_route.to_dict())
+            route_artifact = save_runtime_runner_route_artifact(
+                spec_dir=spec_dir,
+                route=runner_route,
+                phase=current_phase,
+                session_num=iteration,
+                subtask_id=subtask_id,
+            )
+            print_status(f"Runner route details: {route_artifact}", "info")
 
         # Filled after provider/runtime resolution. Process isolation creates
         # its Claude client in the child process, so parent-side plugin hooks

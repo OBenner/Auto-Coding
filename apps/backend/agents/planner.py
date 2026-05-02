@@ -41,7 +41,10 @@ from .runtime import (
     resolve_runtime_runner_route,
     run_runtime_session,
 )
-from .runtime.artifacts import save_runtime_fallback_artifact
+from .runtime.artifacts import (
+    save_runtime_fallback_artifact,
+    save_runtime_runner_route_artifact,
+)
 from .session import run_agent_session, save_token_stats
 
 # Import plugin system for agent lifecycle hooks
@@ -97,6 +100,12 @@ def create_planner_session(
             )
             model = routed_model
         logger.info("Runtime runner route selected: %s", runner_route.to_dict())
+        save_runtime_runner_route_artifact(
+            spec_dir=spec_dir,
+            route=runner_route,
+            phase="planning",
+            session_num=1,
+        )
 
     provider = create_engine_provider(config)
 
