@@ -243,7 +243,10 @@ Auto Code validates and executes these actions locally:
 This mode is intentionally not full autonomous parity. It exposes only the
 local action loop, provider-native tool calls when available, and Auto Code's
 local MCP bridge for built-in tools. It does not expose external MCP servers,
-in-session subagent spawning, or Claude SDK session lifecycle behavior.
+in-session subagent spawning, or Claude SDK session lifecycle behavior. MCP
+support artifacts include per-server statuses such as `local_bridge`,
+`native_required`, and `unsupported`, so non-Claude runs can explain exactly
+which requested MCP servers are available and which remain native-runtime-only.
 
 ## Patch Proposal Contract
 

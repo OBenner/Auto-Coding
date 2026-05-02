@@ -42,9 +42,11 @@ from .local_actions import (
     render_local_action_prompt,
 )
 from .mcp_bridge import (
+    MCP_SERVER_CATALOG,
     RuntimeMcpBridge,
     RuntimeMcpSupport,
     RuntimeMcpToolSpec,
+    describe_mcp_server_statuses,
     resolve_runtime_mcp_support,
 )
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
@@ -68,6 +70,7 @@ __all__ = [
     "RuntimeRequirements",
     "RUNTIME_FALLBACK_ENV",
     "CLI_RUNNER_PROFILES",
+    "MCP_SERVER_CATALOG",
     "CliRunnerAvailability",
     "CliRunnerProfile",
     "CliRunnerRejection",
@@ -88,6 +91,7 @@ __all__ = [
     "cli_runner_profiles_as_dicts",
     "create_runtime_session",
     "detect_cli_runner_availability",
+    "describe_mcp_server_statuses",
     "get_runtime_mode",
     "local_action_response_schema",
     "local_action_tool_schemas",

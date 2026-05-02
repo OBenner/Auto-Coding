@@ -17,6 +17,7 @@ from agents.runtime import (
     RuntimeSubagentResult,
     RuntimeSubagentTask,
     create_runtime_session,
+    describe_mcp_server_statuses,
     get_runtime_mode,
     local_action_response_schema,
     local_action_tool_schemas,
@@ -1605,6 +1606,13 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
     assert result_artifact["mcp_support"]["bridge"]["tools"] == [
         "mcp__auto-claude__get_build_progress"
     ]
+    bridge_statuses = {
+        status["server"]: status
+        for status in result_artifact["mcp_support"]["bridge"]["server_statuses"]
+    }
+    assert bridge_statuses["auto-claude"]["runtime_path"] == "local_bridge"
+    assert bridge_statuses["context7"]["runtime_path"] == "native_required"
+    assert bridge_statuses["graphiti"]["runtime_path"] == "native_required"
 
 
 def test_runtime_mcp_bridge_filters_agent_allowed_tools(
@@ -1687,6 +1695,9 @@ def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
     assert support_payload["requested_servers"] == ["context7"]
     assert support_payload["available_servers"] == []
     assert support_payload["unavailable_servers"] == ["context7"]
+    assert support_payload["server_statuses"][0]["server"] == "context7"
+    assert support_payload["server_statuses"][0]["runtime_path"] == "native_required"
+    assert support_payload["server_statuses"][0]["bridgeable"] is False
 
 
 def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
@@ -1699,6 +1710,10 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     assert native.available is True
     assert native.strategy == "native"
     assert native.available_servers == ("context7", "graphiti")
+    assert [status["runtime_path"] for status in native.server_statuses] == [
+        "native",
+        "native",
+    ]
 
     unavailable = resolve_runtime_mcp_support(
         provider_name="openai",
@@ -1709,6 +1724,7 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     assert unavailable.available is False
     assert unavailable.strategy == "unavailable"
     assert unavailable.unavailable_servers == ("context7",)
+    assert unavailable.server_statuses[0]["runtime_path"] == "native_required"
 
     local_bridge = resolve_runtime_mcp_support(
         provider_name="openai",
@@ -1724,6 +1740,10 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     assert local_bridge.tool_count == 3
     assert local_bridge.available_servers == ("auto-claude",)
     assert local_bridge.unavailable_servers == ("context7",)
+    assert [status["runtime_path"] for status in local_bridge.server_statuses] == [
+        "native_required",
+        "local_bridge",
+    ]
     assert "external MCP servers" in local_bridge.reason
 
     unsupported_bridge_runtime = resolve_runtime_mcp_support(
@@ -1735,6 +1755,21 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     )
     assert unsupported_bridge_runtime.available is False
     assert "cannot expose" in unsupported_bridge_runtime.reason
+
+
+def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
+    statuses = describe_mcp_server_statuses(
+        requested_servers=("auto-claude", "context7", "custom-mcp"),
+        available_servers=("auto-claude",),
+        native_available=False,
+        bridge_available=True,
+    )
+
+    status_by_server = {status["server"]: status for status in statuses}
+    assert status_by_server["auto-claude"]["runtime_path"] == "local_bridge"
+    assert status_by_server["auto-claude"]["bridgeable"] is True
+    assert status_by_server["context7"]["runtime_path"] == "native_required"
+    assert status_by_server["custom-mcp"]["runtime_path"] == "unsupported"
 
 
 @pytest.mark.asyncio

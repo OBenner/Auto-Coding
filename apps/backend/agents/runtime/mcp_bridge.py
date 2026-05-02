@@ -21,6 +21,38 @@ from .local_actions import ToolActionResult, action_tool, safe_action_for_trace
 MCP_AUTO_CLAUDE_PREFIX = "mcp__auto-claude__"
 LOCAL_BRIDGE_SERVER = "auto-claude"
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
+MCP_SERVER_CATALOG: dict[str, dict[str, Any]] = {
+    LOCAL_BRIDGE_SERVER: {
+        "display_name": "Auto Code local tools",
+        "bridgeable": True,
+        "notes": "In-process Auto Code tools can be exposed through local actions.",
+    },
+    "context7": {
+        "display_name": "Context7",
+        "bridgeable": False,
+        "notes": "External documentation MCP server; requires native MCP runtime.",
+    },
+    "graphiti": {
+        "display_name": "Graphiti",
+        "bridgeable": False,
+        "notes": "External memory MCP server; requires native MCP runtime.",
+    },
+    "linear": {
+        "display_name": "Linear",
+        "bridgeable": False,
+        "notes": "External Linear MCP server; requires native MCP runtime.",
+    },
+    "electron": {
+        "display_name": "Electron",
+        "bridgeable": False,
+        "notes": "External Electron automation MCP server; requires native MCP runtime.",
+    },
+    "puppeteer": {
+        "display_name": "Puppeteer",
+        "bridgeable": False,
+        "notes": "External browser automation MCP server; requires native MCP runtime.",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -38,6 +70,7 @@ class RuntimeMcpSupport:
     requested_servers: tuple[str, ...] = ()
     available_servers: tuple[str, ...] = ()
     unavailable_servers: tuple[str, ...] = ()
+    server_statuses: tuple[dict[str, Any], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize MCP support metadata for UI, CLI, and artifacts."""
@@ -53,6 +86,9 @@ class RuntimeMcpSupport:
             "requested_servers": list(self.requested_servers),
             "available_servers": list(self.available_servers),
             "unavailable_servers": list(self.unavailable_servers),
+            "server_statuses": [
+                dict(server_status) for server_status in self.server_statuses
+            ],
         }
 
 
@@ -221,6 +257,15 @@ class RuntimeMcpBridge:
             "requested_servers": list(self.requested_servers),
             "available_servers": list(self.available_servers),
             "unavailable_servers": list(self.unavailable_servers),
+            "server_statuses": [
+                dict(server_status)
+                for server_status in describe_mcp_server_statuses(
+                    requested_servers=self.requested_servers,
+                    available_servers=self.available_servers,
+                    native_available=False,
+                    bridge_available=self.has_tools,
+                )
+            ],
         }
 
     def support_for(
@@ -270,6 +315,12 @@ def resolve_runtime_mcp_support(
             requested_servers=requested_servers,
             available_servers=requested_servers,
             unavailable_servers=(),
+            server_statuses=describe_mcp_server_statuses(
+                requested_servers=requested_servers,
+                available_servers=requested_servers,
+                native_available=True,
+                bridge_available=bridge_available,
+            ),
         )
 
     if bridge_available and capabilities.function_tools:
@@ -294,6 +345,12 @@ def resolve_runtime_mcp_support(
             requested_servers=requested_servers,
             available_servers=available_servers,
             unavailable_servers=unavailable_servers,
+            server_statuses=describe_mcp_server_statuses(
+                requested_servers=requested_servers,
+                available_servers=available_servers,
+                native_available=False,
+                bridge_available=True,
+            ),
         )
 
     if bridge_available:
@@ -319,7 +376,64 @@ def resolve_runtime_mcp_support(
         requested_servers=requested_servers,
         available_servers=(),
         unavailable_servers=unavailable_servers,
+        server_statuses=describe_mcp_server_statuses(
+            requested_servers=requested_servers,
+            available_servers=(),
+            native_available=False,
+            bridge_available=bridge_available,
+        ),
     )
+
+
+def describe_mcp_server_statuses(
+    *,
+    requested_servers: tuple[str, ...],
+    available_servers: tuple[str, ...],
+    native_available: bool,
+    bridge_available: bool,
+) -> tuple[dict[str, Any], ...]:
+    """Return per-server MCP bridge status for diagnostics and settings UI."""
+    requested_servers = normalize_mcp_server_names(requested_servers)
+    available = set(normalize_mcp_server_names(available_servers))
+    statuses: list[dict[str, Any]] = []
+
+    for server in requested_servers:
+        catalog_entry = MCP_SERVER_CATALOG.get(server, {})
+        bridgeable = bool(catalog_entry.get("bridgeable", False))
+        if native_available:
+            availability = "available"
+            runtime_path = "native"
+            reason = "Available through the selected runtime's native MCP support."
+        elif server in available:
+            availability = "available"
+            runtime_path = "local_bridge"
+            reason = "Available through Auto Code's local MCP bridge."
+        elif bridgeable:
+            availability = "unavailable"
+            runtime_path = "local_bridge_required"
+            reason = "Local bridge tools were requested but are not configured."
+        elif server in MCP_SERVER_CATALOG:
+            availability = "unavailable"
+            runtime_path = "native_required"
+            reason = "External MCP server requires native MCP runtime support."
+        else:
+            availability = "unavailable"
+            runtime_path = "unsupported"
+            reason = "No local bridge policy is registered for this MCP server."
+
+        statuses.append(
+            {
+                "server": server,
+                "display_name": str(catalog_entry.get("display_name", server)),
+                "availability": availability,
+                "runtime_path": runtime_path,
+                "bridgeable": bridgeable,
+                "reason": reason,
+                "notes": str(catalog_entry.get("notes", "")),
+            }
+        )
+
+    return tuple(statuses)
 
 
 def load_auto_claude_bridge_tools(
