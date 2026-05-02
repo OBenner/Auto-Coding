@@ -9,6 +9,7 @@ from agents.runtime.cli_profiles import (
     CLI_RUNNER_PROFILES,
     cli_runner_profiles_as_dicts,
     detect_cli_runner_availability,
+    select_cli_runner_profiles,
 )
 from agents.runtime.compatibility import (
     PROVIDER_RUNTIME_COMPATIBILITY,
@@ -34,12 +35,19 @@ def _format_table(headers: list[str], rows: list[list[str]]) -> str:
 
 def build_runtime_modes_payload() -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
+    cli_runner_selection = {
+        mode.mode: select_cli_runner_profiles(runtime_mode=mode.mode).to_dict(
+            include_detection=True,
+        )
+        for mode in RUNTIME_MODE_INFO
+    }
     return {
         "runtime_modes": runtime_mode_info_as_dicts(),
         "providers": provider_runtime_compatibility_as_dicts(),
         "cli_runner_profiles": cli_runner_profiles_as_dicts(
             include_detection=True,
         ),
+        "cli_runner_selection": cli_runner_selection,
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -93,6 +101,16 @@ def format_runtime_modes_text() -> str:
         ]
         for profile in CLI_RUNNER_PROFILES
     ]
+    cli_runner_selection_rows = [
+        [
+            mode.mode,
+            ", ".join(
+                select_cli_runner_profiles(runtime_mode=mode.mode).selected_runner_ids
+            )
+            or "none",
+        ]
+        for mode in RUNTIME_MODE_INFO
+    ]
 
     return "\n\n".join(
         [
@@ -127,6 +145,11 @@ def format_runtime_modes_text() -> str:
                     "Capabilities",
                 ],
                 cli_runner_rows,
+            ),
+            "CLI Runner Selection",
+            _format_table(
+                ["Runtime mode", "Eligible runners"],
+                cli_runner_selection_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",

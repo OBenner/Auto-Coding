@@ -17,8 +17,11 @@ from .cli_profiles import (
     CLI_RUNNER_PROFILES,
     CliRunnerAvailability,
     CliRunnerProfile,
+    CliRunnerRejection,
+    CliRunnerSelection,
     cli_runner_profiles_as_dicts,
     detect_cli_runner_availability,
+    select_cli_runner_profiles,
 )
 from .fallback import (
     RUNTIME_FALLBACK_ENV,
@@ -65,6 +68,8 @@ __all__ = [
     "CLI_RUNNER_PROFILES",
     "CliRunnerAvailability",
     "CliRunnerProfile",
+    "CliRunnerRejection",
+    "CliRunnerSelection",
     "RuntimeMode",
     "RuntimeMcpBridge",
     "RuntimeMcpSupport",
@@ -94,4 +99,5 @@ __all__ = [
     "run_runtime_session",
     "runtime_fallback_enabled",
     "save_runtime_fallback_artifact",
+    "select_cli_runner_profiles",
 ]

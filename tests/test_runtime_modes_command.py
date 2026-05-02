@@ -40,6 +40,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "generic_edit" in output
     assert "patch_proposal" in output
     assert "CLI Runner Profiles" in output
+    assert "CLI Runner Selection" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
     assert "--provider-smoke" in output
@@ -74,5 +75,69 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert (
         runner_rows["generic_cli_pool"]["availability"]["status"] == "not_configurable"
     )
+    selection_rows = payload["cli_runner_selection"]
+    assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
+        "codex_cli",
+        "claude_code",
+    ]
+    assert "gemini_cli" in selection_rows["analysis_only"]["selected_runner_ids"]
+    assert "aider" in selection_rows["generic_edit"]["selected_runner_ids"]
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
+
+
+def test_cli_runner_selection_filters_runtime_mode():
+    from agents.runtime.cli_profiles import select_cli_runner_profiles
+
+    analysis_selection = select_cli_runner_profiles(runtime_mode="analysis-only")
+    assert analysis_selection.selected_runner_ids == (
+        "gemini_cli",
+        "coderabbit_cli",
+        "github_copilot_cli",
+        "generic_cli_pool",
+    )
+
+    full_autonomous_selection = select_cli_runner_profiles(
+        runtime_mode="full_autonomous",
+    )
+    assert full_autonomous_selection.selected_runner_ids == (
+        "codex_cli",
+        "claude_code",
+    )
+
+
+def test_cli_runner_selection_filters_capability():
+    from agents.runtime.cli_profiles import select_cli_runner_profiles
+
+    selection = select_cli_runner_profiles(required_capabilities=("review_only",))
+
+    assert selection.selected_runner_ids == ("coderabbit_cli",)
+    rejected_reasons = {
+        rejection.runner_id: rejection.reasons
+        for rejection in selection.rejected_profiles
+    }
+    assert rejected_reasons["codex_cli"] == ("missing_capability:review_only",)
+
+
+def test_cli_runner_selection_can_require_installed_runner(monkeypatch):
+    from agents.runtime import cli_profiles
+
+    def fake_find_executable(candidate: str) -> str | None:
+        if candidate == "gemini":
+            return "/usr/local/bin/gemini"
+        return None
+
+    monkeypatch.setattr(cli_profiles, "find_executable", fake_find_executable)
+
+    selection = cli_profiles.select_cli_runner_profiles(
+        runtime_mode="analysis_only",
+        installed_only=True,
+    )
+
+    assert selection.selected_runner_ids == ("gemini_cli",)
+    rejected_reasons = {
+        rejection.runner_id: rejection.reasons
+        for rejection in selection.rejected_profiles
+    }
+    assert "not_found" in rejected_reasons["coderabbit_cli"]
+    assert "not_configurable" in rejected_reasons["generic_cli_pool"]
