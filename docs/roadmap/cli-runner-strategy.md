@@ -205,6 +205,7 @@ These should be supported after the runner interface is stable.
 | --- | --- |
 | GitHub Copilot CLI | GitHub-native issues, PRs, repository automation, and enterprise GitHub workflows. |
 | Cursor CLI | Support for teams already standardized on Cursor Agent, Cursor rules, and Cursor-managed project context. |
+| Z.AI via Claude Code | Claude Code-compatible GLM path through Z.AI's Anthropic-compatible endpoint; separate from the direct ZhipuAI/Z.AI provider adapter. |
 
 ### Tier 3: Generic CLI Runner Support
 

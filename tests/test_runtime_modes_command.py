@@ -71,6 +71,8 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert "executable_present" in runner_rows["codex_cli"]["availability"]
     assert "codex" in runner_rows["codex_cli"]["executable_candidates"]
     assert runner_rows["coderabbit_cli"]["role"] == "review"
+    assert runner_rows["zai_claude_code"]["runner_status"] == "planned"
+    assert "anthropic_compatible" in runner_rows["zai_claude_code"]["capability_tags"]
     assert runner_rows["generic_cli_pool"]["tier"] == "generic_pool"
     assert (
         runner_rows["generic_cli_pool"]["availability"]["status"] == "not_configurable"
@@ -79,6 +81,7 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
         "codex_cli",
         "claude_code",
+        "zai_claude_code",
     ]
     assert "gemini_cli" in selection_rows["analysis_only"]["selected_runner_ids"]
     assert "aider" in selection_rows["generic_edit"]["selected_runner_ids"]
@@ -103,6 +106,7 @@ def test_cli_runner_selection_filters_runtime_mode():
     assert full_autonomous_selection.selected_runner_ids == (
         "codex_cli",
         "claude_code",
+        "zai_claude_code",
     )
 
 
@@ -117,6 +121,11 @@ def test_cli_runner_selection_filters_capability():
         for rejection in selection.rejected_profiles
     }
     assert rejected_reasons["codex_cli"] == ("missing_capability:review_only",)
+
+    anthropic_selection = select_cli_runner_profiles(
+        required_capabilities=("anthropic_compatible",),
+    )
+    assert anthropic_selection.selected_runner_ids == ("zai_claude_code",)
 
 
 def test_cli_runner_selection_can_require_installed_runner(monkeypatch):

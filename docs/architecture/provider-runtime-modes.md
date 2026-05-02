@@ -26,7 +26,7 @@ capabilities required by the current phase.
 
 | Runtime mode | Purpose | Required capabilities | Typical providers |
 |--------------|---------|-----------------------|-------------------|
-| `full_autonomous` | Full planner/coder/QA workflow with tools and filesystem access | Tools, MCP, shell, filesystem edits, workspace access, structured output | Claude Agent SDK |
+| `full_autonomous` | Full planner/coder/QA workflow with tools and filesystem access | Tools, MCP, shell, filesystem edits, workspace access, structured output | Claude Agent SDK, Codex CLI, Claude Code-compatible runners |
 | `generic_edit` | Experimental local action loop for coder subtasks | Text completion, structured JSON actions, local file/patch/shell tools | OpenAI, Google, LiteLLM, OpenRouter, ZhipuAI, Ollama |
 | `patch_proposal` | Model proposes a patch; Auto Code validates and applies it locally | Text completion, structured output, local patch application | OpenAI, Google, LiteLLM, OpenRouter, ZhipuAI, Ollama |
 | `analysis_only` | Text-only analysis without edits or tools | Text completion or streaming | OpenAI, Google, LiteLLM, OpenRouter, ZhipuAI, Ollama |
@@ -47,12 +47,18 @@ python run.py --runtime-modes --json
 | `google` | No | Experimental | Limited | Limited | Gemini can use local JSON actions; MCP parity is not implemented. |
 | `litellm` | No | Experimental | Limited | Limited | Gateway provider; native tools depend on routed model/gateway support. |
 | `openrouter` | No | Experimental | Limited | Limited | OpenAI-compatible gateway with native tools plus JSON fallback. |
-| `zhipuai` | No | Experimental | Limited | Limited | OpenAI-like tool calls where available, with local JSON fallback. |
+| `zhipuai` | No | Experimental | Limited | Limited | Direct ZhipuAI/Z.AI chat path is OpenAI-like and limited. Z.AI's Claude-compatible endpoint is tracked as a separate Claude Code runner profile. |
 | `ollama` | No | Experimental | Limited | Limited | Local models can attempt generic edit without remote code sharing. |
 
 `Limited` means the provider is allowed only when the selected runtime mode does
 not require missing capabilities. It does not imply the provider has been
 validated for every agent phase or every model.
+
+`zhipuai` in this table means Auto Code's direct ZhipuAI/Z.AI provider adapter.
+Z.AI also exposes a Claude/Anthropic-compatible endpoint for Claude Code-style
+clients. Auto Code tracks that separately as the `zai_claude_code` CLI runner
+profile because the full autonomous behavior comes from the Claude Code runtime
+surface, not from the direct ZhipuAI chat-completions adapter.
 
 ## Configuration
 
@@ -198,6 +204,11 @@ Direct OpenAI, Ollama, OpenRouter, LiteLLM, and ZhipuAI sessions use that
 bridge when the routed model/gateway supports tools; if the first native
 tool-call request is rejected, `generic_edit` falls back to the JSON action
 loop.
+
+Z.AI through Claude Code is intentionally not routed through this generic edit
+contract. That path uses an Anthropic-compatible endpoint with a Claude
+Code-compatible CLI runtime and is represented by the `zai_claude_code` runner
+profile.
 
 Auto Code validates and executes these actions locally:
 

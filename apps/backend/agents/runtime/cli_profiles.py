@@ -142,6 +142,33 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         notes="Compatibility path for existing Claude Code workflows.",
     ),
     CliRunnerProfile(
+        runner_id="zai_claude_code",
+        display_name="Z.AI via Claude Code",
+        tier="strategic",
+        role="implementation",
+        runner_status="planned",
+        capability_tags=(
+            "headless",
+            "filesystem_edit",
+            "shell",
+            "mcp",
+            "subagents",
+            "anthropic_compatible",
+            "claude_code_compatible",
+            "byok",
+        ),
+        supported_runtime_modes=("full_autonomous",),
+        command_hint=(
+            "ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic "
+            "ANTHROPIC_AUTH_TOKEN=<zai-key> claude"
+        ),
+        executable_candidates=("claude",),
+        notes=(
+            "Claude Code-compatible Z.AI GLM path; separate from the direct "
+            "zhipuai OpenAI-like provider adapter."
+        ),
+    ),
+    CliRunnerProfile(
         runner_id="gemini_cli",
         display_name="Gemini CLI",
         tier="first_class",

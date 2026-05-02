@@ -382,8 +382,11 @@ first-class runner integrations and generic CLI fallback support.
      repository workflows.
    - Cursor CLI: support teams standardized on Cursor Agent, Cursor rules, and
      Cursor-managed project context.
+   - Z.AI via Claude Code: support GLM models through Z.AI's
+     Anthropic-compatible endpoint as a Claude Code-compatible runner profile,
+     separate from the direct ZhipuAI/Z.AI provider adapter.
    - **Deliverable:** detection, setup guidance, capability policy, and fallback
-     integration for both strategic runners.
+     integration for strategic runners.
 
 4. **Generic CLI Runner Contract**
    - Support OpenCode, Goose, Amp, Qwen Code, DeepV Code / Codeep, and similar

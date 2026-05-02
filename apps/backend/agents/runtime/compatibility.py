@@ -200,7 +200,10 @@ PROVIDER_RUNTIME_COMPATIBILITY: tuple[ProviderRuntimeCompatibility, ...] = (
         patch_proposal="limited",
         mcp_tools=_GENERIC_MCP,
         subagents=_GENERIC_SUBAGENTS,
-        notes="OpenAI-like tool calls where available, with local JSON fallback.",
+        notes=(
+            "Direct ZhipuAI/Z.AI chat path is OpenAI-like and limited; the "
+            "Claude-compatible Z.AI path is tracked as a Claude Code CLI runner."
+        ),
     ),
     ProviderRuntimeCompatibility(
         provider="ollama",
