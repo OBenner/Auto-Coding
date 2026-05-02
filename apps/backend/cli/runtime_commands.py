@@ -8,6 +8,7 @@ from typing import Any
 from agents.runtime.cli_profiles import (
     CLI_RUNNER_PROFILES,
     cli_runner_profiles_as_dicts,
+    detect_cli_runner_availability,
 )
 from agents.runtime.compatibility import (
     PROVIDER_RUNTIME_COMPATIBILITY,
@@ -36,7 +37,9 @@ def build_runtime_modes_payload() -> dict[str, Any]:
     return {
         "runtime_modes": runtime_mode_info_as_dicts(),
         "providers": provider_runtime_compatibility_as_dicts(),
-        "cli_runner_profiles": cli_runner_profiles_as_dicts(),
+        "cli_runner_profiles": cli_runner_profiles_as_dicts(
+            include_detection=True,
+        ),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -82,6 +85,9 @@ def format_runtime_modes_text() -> str:
             profile.tier,
             profile.role,
             profile.runner_status,
+            "yes"
+            if detect_cli_runner_availability(profile).executable_present
+            else "no",
             ", ".join(profile.supported_runtime_modes),
             ", ".join(profile.capability_tags),
         ]
@@ -111,7 +117,15 @@ def format_runtime_modes_text() -> str:
             ),
             "CLI Runner Profiles",
             _format_table(
-                ["Runner", "Tier", "Role", "Status", "Runtime modes", "Capabilities"],
+                [
+                    "Runner",
+                    "Tier",
+                    "Role",
+                    "Status",
+                    "Executable",
+                    "Runtime modes",
+                    "Capabilities",
+                ],
                 cli_runner_rows,
             ),
             "Recommended commands",

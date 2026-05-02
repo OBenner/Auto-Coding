@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
+from core.platform import find_executable
+
 RunnerTier = Literal["first_class", "strategic", "generic_pool"]
 RunnerRole = Literal["implementation", "analysis", "review", "fallback"]
 
@@ -21,14 +23,33 @@ class CliRunnerProfile:
     capability_tags: tuple[str, ...]
     supported_runtime_modes: tuple[str, ...]
     command_hint: str
+    executable_candidates: tuple[str, ...]
     notes: str
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, include_detection: bool = False) -> dict[str, Any]:
         """Serialize runner metadata for CLI, UI, and future policy checks."""
         payload = asdict(self)
         payload["capability_tags"] = list(self.capability_tags)
         payload["supported_runtime_modes"] = list(self.supported_runtime_modes)
+        payload["executable_candidates"] = list(self.executable_candidates)
+        if include_detection:
+            payload["availability"] = detect_cli_runner_availability(self).to_dict()
         return payload
+
+
+@dataclass(frozen=True)
+class CliRunnerAvailability:
+    """Local executable detection result for one CLI runner profile."""
+
+    runner_id: str
+    executable_present: bool
+    resolved_executable: str | None
+    matched_candidate: str | None
+    status: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize availability metadata for diagnostics and settings UI."""
+        return asdict(self)
 
 
 CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
@@ -47,6 +68,7 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         ),
         supported_runtime_modes=("full_autonomous",),
         command_hint="codex exec",
+        executable_candidates=("codex",),
         notes="Current account-backed CLI runtime adapter.",
     ),
     CliRunnerProfile(
@@ -64,6 +86,7 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         ),
         supported_runtime_modes=("full_autonomous",),
         command_hint="claude",
+        executable_candidates=("claude",),
         notes="Compatibility path for existing Claude Code workflows.",
     ),
     CliRunnerProfile(
@@ -75,6 +98,7 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         capability_tags=("headless", "large_context", "analysis", "fallback"),
         supported_runtime_modes=("analysis_only", "patch_proposal"),
         command_hint="gemini",
+        executable_candidates=("gemini",),
         notes="Best suited for discovery, repository analysis, and fallback.",
     ),
     CliRunnerProfile(
@@ -86,6 +110,7 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         capability_tags=("git_aware", "filesystem_edit", "byok", "local_model"),
         supported_runtime_modes=("generic_edit", "patch_proposal"),
         command_hint="aider",
+        executable_candidates=("aider",),
         notes="Focused git-native editing runner.",
     ),
     CliRunnerProfile(
@@ -97,6 +122,7 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         capability_tags=("review_only", "git_aware", "quality_gate"),
         supported_runtime_modes=("analysis_only",),
         command_hint="coderabbit",
+        executable_candidates=("coderabbit",),
         notes="Independent review gate rather than an implementation runner.",
     ),
     CliRunnerProfile(
@@ -108,6 +134,7 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         capability_tags=("github_native", "enterprise", "issue_pr_workflows"),
         supported_runtime_modes=("analysis_only", "patch_proposal"),
         command_hint="gh copilot",
+        executable_candidates=("gh",),
         notes="Strategic GitHub-native workflow integration.",
     ),
     CliRunnerProfile(
@@ -119,6 +146,7 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         capability_tags=("project_rules", "workspace_context", "fallback"),
         supported_runtime_modes=("generic_edit", "patch_proposal"),
         command_hint="cursor-agent or configured Cursor CLI",
+        executable_candidates=("cursor-agent", "cursor"),
         notes="Use when teams already rely on Cursor rules and account state.",
     ),
     CliRunnerProfile(
@@ -130,11 +158,43 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
         capability_tags=("policy_wrapped", "headless_probe", "capability_declared"),
         supported_runtime_modes=("analysis_only", "patch_proposal"),
         command_hint="configured per runner",
+        executable_candidates=(),
         notes="For OpenCode, Goose, Amp, Qwen Code, DeepV Code, and similar CLIs.",
     ),
 )
 
 
-def cli_runner_profiles_as_dicts() -> list[dict[str, Any]]:
+def detect_cli_runner_availability(
+    profile: CliRunnerProfile,
+) -> CliRunnerAvailability:
+    """Detect whether a runner executable is present without invoking it."""
+    for candidate in profile.executable_candidates:
+        resolved = find_executable(candidate)
+        if resolved:
+            return CliRunnerAvailability(
+                runner_id=profile.runner_id,
+                executable_present=True,
+                resolved_executable=resolved,
+                matched_candidate=candidate,
+                status="executable_present",
+            )
+
+    status = "not_configurable" if not profile.executable_candidates else "not_found"
+    return CliRunnerAvailability(
+        runner_id=profile.runner_id,
+        executable_present=False,
+        resolved_executable=None,
+        matched_candidate=None,
+        status=status,
+    )
+
+
+def cli_runner_profiles_as_dicts(
+    *,
+    include_detection: bool = False,
+) -> list[dict[str, Any]]:
     """Return all configured CLI runner profiles as dictionaries."""
-    return [profile.to_dict() for profile in CLI_RUNNER_PROFILES]
+    return [
+        profile.to_dict(include_detection=include_detection)
+        for profile in CLI_RUNNER_PROFILES
+    ]

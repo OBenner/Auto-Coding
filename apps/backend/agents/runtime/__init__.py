@@ -15,8 +15,10 @@ from .capabilities import (
 )
 from .cli_profiles import (
     CLI_RUNNER_PROFILES,
+    CliRunnerAvailability,
     CliRunnerProfile,
     cli_runner_profiles_as_dicts,
+    detect_cli_runner_availability,
 )
 from .fallback import (
     RUNTIME_FALLBACK_ENV,
@@ -61,6 +63,7 @@ __all__ = [
     "RuntimeRequirements",
     "RUNTIME_FALLBACK_ENV",
     "CLI_RUNNER_PROFILES",
+    "CliRunnerAvailability",
     "CliRunnerProfile",
     "RuntimeMode",
     "RuntimeMcpBridge",
@@ -77,6 +80,7 @@ __all__ = [
     "capabilities_for_runtime_mode",
     "cli_runner_profiles_as_dicts",
     "create_runtime_session",
+    "detect_cli_runner_availability",
     "get_runtime_mode",
     "local_action_response_schema",
     "local_action_tool_schemas",

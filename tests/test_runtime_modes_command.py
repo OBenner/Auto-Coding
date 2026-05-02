@@ -66,7 +66,13 @@ def test_runtime_modes_command_outputs_json(capsys):
     runner_rows = {row["runner_id"]: row for row in payload["cli_runner_profiles"]}
     assert runner_rows["codex_cli"]["runner_status"] == "wired"
     assert "full_autonomous" in runner_rows["codex_cli"]["supported_runtime_modes"]
+    assert "availability" in runner_rows["codex_cli"]
+    assert "executable_present" in runner_rows["codex_cli"]["availability"]
+    assert "codex" in runner_rows["codex_cli"]["executable_candidates"]
     assert runner_rows["coderabbit_cli"]["role"] == "review"
     assert runner_rows["generic_cli_pool"]["tier"] == "generic_pool"
+    assert (
+        runner_rows["generic_cli_pool"]["availability"]["status"] == "not_configurable"
+    )
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
