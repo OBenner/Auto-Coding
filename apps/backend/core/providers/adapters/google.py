@@ -32,11 +32,21 @@ Example:
 
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
+from core.providers.adapters.openai_compat import (
+    as_sequence,
+    parse_openai_tool_calls,
+)
+from core.providers.base import (
+    AgentSession,
+    AIEngineProvider,
+    ProviderToolCall,
+    ProviderToolCallResponse,
+    SessionConfig,
+)
 from core.providers.exceptions import (
     ProviderConfigError,
     ProviderError,
@@ -99,7 +109,7 @@ class GoogleAgentSession(AgentSession):
         self._project_dir = project_dir
         self._spec_dir = spec_dir
         self._chat = None
-        self._message_history: list[dict[str, str]] = []
+        self._message_history: list[dict[str, Any]] = []
 
     @property
     def model(self) -> Any:
@@ -115,6 +125,11 @@ class GoogleAgentSession(AgentSession):
     def spec_dir(self) -> Path | None:
         """Get the spec directory."""
         return self._spec_dir
+
+    @property
+    def messages(self) -> list[dict[str, Any]]:
+        """Return a copy of provider-neutral session history."""
+        return list(self._message_history)
 
     async def query(self, message: str) -> None:
         """Send a query to the Google Gemini model.
@@ -172,12 +187,195 @@ class GoogleAgentSession(AgentSession):
             logger.error(f"Error receiving response from Google: {e}")
             raise ProviderError(f"Error receiving response: {e}") from e
 
+    async def complete_with_tool_calls(
+        self,
+        message: str | None,
+        tools: list[dict[str, Any]],
+    ) -> ProviderToolCallResponse:
+        """Send a Gemini request with provider-native function declarations."""
+        if not self._is_active:
+            raise ProviderError("Session is closed")
+
+        if message:
+            self._message_history.append(
+                {
+                    "role": "user",
+                    "content": message,
+                    "parts": [{"text": message}],
+                }
+            )
+
+        try:
+            response = self._model.generate_content(
+                google_contents_from_history(self._message_history),
+                tools=format_google_tool_schemas(tools),
+            )
+        except Exception as e:
+            logger.error("Google tool-call completion error: %s", e)
+            raise ProviderError(f"Google tool-call completion failed: {e}") from e
+
+        content = extract_google_text(response)
+        tool_calls = parse_openai_tool_calls({"parts": google_response_parts(response)})
+        if content or tool_calls:
+            self._message_history.append(
+                google_assistant_message(
+                    content=content,
+                    tool_calls=tool_calls,
+                )
+            )
+        return ProviderToolCallResponse(
+            content=content,
+            tool_calls=tuple(tool_calls),
+        )
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        """Append a Gemini function response to the session history."""
+        response_payload = (
+            dict(result) if isinstance(result, Mapping) else {"result": result}
+        )
+        self._message_history.append(
+            {
+                "role": "function",
+                "tool_call_id": tool_call_id,
+                "parts": [
+                    {
+                        "function_response": {
+                            "name": name,
+                            "response": response_payload,
+                        }
+                    }
+                ],
+            }
+        )
+
     def close(self) -> None:
         """Close the session."""
         super().close()
         self._chat = None
         self._message_history.clear()
         logger.debug(f"Google session {self.session_id} closed")
+
+
+def format_google_tool_schemas(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert provider-neutral tool specs to Gemini function declarations."""
+    declarations: list[dict[str, Any]] = []
+    for tool in tools:
+        function = (
+            tool.get("function") if isinstance(tool.get("function"), dict) else tool
+        )
+        name = str(function.get("name") or "")
+        if not name:
+            continue
+        declarations.append(
+            {
+                "name": name,
+                "description": str(function.get("description") or ""),
+                "parameters": sanitize_google_schema(
+                    function.get(
+                        "parameters",
+                        {
+                            "type": "object",
+                            "properties": {},
+                        },
+                    )
+                ),
+            }
+        )
+    return [{"function_declarations": declarations}] if declarations else []
+
+
+def sanitize_google_schema(value: Any) -> Any:
+    """Remove JSON-schema fields Gemini function declarations commonly reject."""
+    if isinstance(value, Mapping):
+        return {
+            key: sanitize_google_schema(item)
+            for key, item in value.items()
+            if key not in {"additionalProperties", "$schema"}
+        }
+    if isinstance(value, list):
+        return [sanitize_google_schema(item) for item in value]
+    return value
+
+
+def google_contents_from_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return Gemini contents from the provider-neutral session history."""
+    contents: list[dict[str, Any]] = []
+    for entry in history:
+        parts = entry.get("parts")
+        if not parts and entry.get("content"):
+            parts = [{"text": str(entry["content"])}]
+        if not parts:
+            continue
+        contents.append(
+            {
+                "role": google_role(entry.get("role")),
+                "parts": parts,
+            }
+        )
+    return contents
+
+
+def google_role(role: Any) -> str:
+    """Map internal/provider-neutral roles to Gemini content roles."""
+    if role in {"assistant", "model"}:
+        return "model"
+    if role in {"function", "tool"}:
+        return "function"
+    return "user"
+
+
+def google_response_parts(response: Any) -> list[Any]:
+    """Extract Gemini response parts from direct and candidate response shapes."""
+    direct_parts = as_sequence(getattr(response, "parts", None))
+    if direct_parts:
+        return direct_parts
+
+    parts: list[Any] = []
+    for candidate in as_sequence(getattr(response, "candidates", None)):
+        content = getattr(candidate, "content", None)
+        parts.extend(as_sequence(getattr(content, "parts", None)))
+    return parts
+
+
+def extract_google_text(response: Any) -> str:
+    """Extract text content without forcing Gemini SDK .text on tool-call replies."""
+    try:
+        text = getattr(response, "text", None)
+    except Exception:
+        text = None
+    if isinstance(text, str):
+        return text
+    parts = [
+        str(getattr(part, "text", ""))
+        for part in google_response_parts(response)
+        if getattr(part, "text", None)
+    ]
+    return "".join(parts)
+
+
+def google_assistant_message(
+    *,
+    content: str,
+    tool_calls: list[ProviderToolCall],
+) -> dict[str, Any]:
+    """Build a Gemini-style model history entry for text and function calls."""
+    parts: list[dict[str, Any]] = []
+    if content:
+        parts.append({"text": content})
+    parts.extend(
+        {
+            "function_call": {
+                "name": tool_call.name,
+                "args": tool_call.arguments,
+            }
+        }
+        for tool_call in tool_calls
+    )
+    return {
+        "role": "model",
+        "content": content,
+        "parts": parts,
+    }
 
 
 class GoogleProvider(AIEngineProvider):

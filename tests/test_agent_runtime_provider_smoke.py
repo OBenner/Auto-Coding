@@ -253,6 +253,64 @@ def _install_fake_google(
     )
 
 
+def _google_tool_response(name: str, arguments: dict) -> SimpleNamespace:
+    return SimpleNamespace(
+        parts=[
+            SimpleNamespace(
+                function_call=SimpleNamespace(
+                    name=name,
+                    args=arguments,
+                )
+            )
+        ]
+    )
+
+
+def _install_fake_google_tool_responses(
+    monkeypatch: pytest.MonkeyPatch,
+    responses: list[SimpleNamespace],
+) -> SimpleNamespace:
+    configured: list[str] = []
+    model_calls: list[dict] = []
+    generate_calls: list[dict] = []
+
+    class FakeGenerativeModel:
+        def __init__(self, model_name: str, system_instruction: str = ""):
+            model_calls.append(
+                {
+                    "model_name": model_name,
+                    "system_instruction": system_instruction,
+                }
+            )
+
+        def generate_content(self, contents, tools=None):
+            generate_calls.append(
+                {
+                    "contents": copy.deepcopy(contents),
+                    "tools": copy.deepcopy(tools),
+                }
+            )
+            return responses.pop(0)
+
+    def configure(api_key: str):
+        configured.append(api_key)
+
+    google_pkg = ModuleType("google")
+    google_pkg.__path__ = []
+    genai = ModuleType("google.generativeai")
+    genai.configure = configure
+    genai.GenerativeModel = FakeGenerativeModel
+    google_pkg.generativeai = genai
+
+    monkeypatch.setitem(sys.modules, "google", google_pkg)
+    monkeypatch.setitem(sys.modules, "google.generativeai", genai)
+    return SimpleNamespace(
+        configured=configured,
+        model_calls=model_calls,
+        generate_calls=generate_calls,
+    )
+
+
 def _install_fake_zai(
     monkeypatch: pytest.MonkeyPatch,
     chunks: list[str],
@@ -569,6 +627,63 @@ async def test_zhipuai_session_exposes_native_tool_calls(
 
 
 @pytest.mark.asyncio
+async def test_google_session_exposes_native_tool_calls(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fake_google = _install_fake_google_tool_responses(
+        monkeypatch,
+        [
+            _google_tool_response(
+                "read_file",
+                {"path": "README.md", "max_chars": 1000},
+            )
+        ],
+    )
+    provider = GoogleProvider(
+        ProviderConfig(
+            provider="google",
+            google_api_key="test-key",
+            google_model="gemini-2.0-flash",
+        )
+    )
+    session = provider.create_session(SessionConfig(name="google-tools"))
+
+    response = await session.complete_with_tool_calls(
+        "Inspect the project",
+        local_action_tool_schemas(),
+    )
+    session.add_tool_result(
+        response.tool_calls[0].id,
+        response.tool_calls[0].name,
+        {"ok": True, "message": "Read README.md"},
+    )
+
+    assert response.content == ""
+    assert response.tool_calls[0].id == "call_1"
+    assert response.tool_calls[0].name == "read_file"
+    assert response.tool_calls[0].arguments == {
+        "path": "README.md",
+        "max_chars": 1000,
+    }
+    assert fake_google.configured == ["test-key"]
+    declarations = fake_google.generate_calls[0]["tools"][0]["function_declarations"]
+    assert [declaration["name"] for declaration in declarations[:4]] == [
+        "stat_path",
+        "list_files",
+        "search_text",
+        "read_file",
+    ]
+    assert "additionalProperties" not in declarations[0]["parameters"]
+    assert session.messages[-2]["role"] == "model"
+    assert session.messages[-2]["parts"][0]["function_call"]["name"] == "read_file"
+    assert session.messages[-1]["role"] == "function"
+    assert session.messages[-1]["tool_call_id"] == "call_1"
+    assert session.messages[-1]["parts"][0]["function_response"]["name"] == (
+        "read_file"
+    )
+
+
+@pytest.mark.asyncio
 async def test_litellm_provider_supports_analysis_only(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -782,5 +897,71 @@ async def test_openai_provider_supports_generic_edit_mode(
     )
     assert result_artifact["status"] == "complete"
     assert result_artifact["subtask_id"] == "1.2"
+    assert result_artifact["loop"] == "native_tool_calls"
+    assert result_artifact["action_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_google_provider_supports_generic_edit_native_tools(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    target = tmp_path / "google-generic.txt"
+    target.write_text("old\n", encoding="utf-8")
+    fake_google = _install_fake_google_tool_responses(
+        monkeypatch,
+        [
+            _google_tool_response(
+                "write_file",
+                {"path": "google-generic.txt", "content": "new\n"},
+            ),
+            _google_tool_response(
+                "finish",
+                {
+                    "summary": "Google provider generic edit smoke",
+                    "tests": [],
+                    "risks": [],
+                },
+            ),
+        ],
+    )
+    provider = GoogleProvider(
+        ProviderConfig(
+            provider="google",
+            google_api_key="test-key",
+            google_model="gemini-2.0-flash",
+        )
+    )
+    session = provider.create_session(SessionConfig(name="google-generic-edit"))
+    runtime_session = create_runtime_session(
+        provider_name="google",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "update google-generic.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.3",
+    )
+
+    assert result.status == "continue"
+    assert "Google provider generic edit smoke" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert len(fake_google.generate_calls) == 2
+    function_response = fake_google.generate_calls[1]["contents"][-1]["parts"][0][
+        "function_response"
+    ]
+    assert function_response["name"] == "write_file"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["subtask_id"] == "1.3"
     assert result_artifact["loop"] == "native_tool_calls"
     assert result_artifact["action_count"] == 2
