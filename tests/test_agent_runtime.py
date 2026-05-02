@@ -1192,6 +1192,7 @@ async def test_generic_edit_runtime_runs_local_action_loop(tmp_path: Path):
         "finish": 1,
     }
     assert result_artifact["failed_tools"] == {}
+    assert result_artifact["mcp_support"]["strategy"] == "unavailable"
     assert result_artifact["observation_artifact"].endswith(
         "generic_edit_observations.jsonl"
     )
@@ -1320,6 +1321,17 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
         "mcp__auto-claude__get_build_progress"
     )
     assert observation_lines[0]["result"]["data"]["server"] == "auto-claude"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["mcp_support"]["strategy"] == "local_bridge"
+    assert result_artifact["mcp_support"]["server"] == "auto-claude"
+    assert result_artifact["mcp_support"]["tool_count"] == 1
+    assert result_artifact["mcp_support"]["bridge"]["tools"] == [
+        "mcp__auto-claude__get_build_progress"
+    ]
 
 
 def test_runtime_mcp_bridge_filters_agent_allowed_tools(

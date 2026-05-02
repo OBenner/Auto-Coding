@@ -16,7 +16,7 @@ from ..local_actions import (
     safe_action_for_trace,
     safe_result_for_trace,
 )
-from ..mcp_bridge import RuntimeMcpBridge
+from ..mcp_bridge import RuntimeMcpBridge, resolve_runtime_mcp_support
 from ..result import AgentRunResult
 from .completion import CompletionRuntimeSession
 from .json_helpers import extract_first_json_object
@@ -177,6 +177,7 @@ class GenericEditRuntimeSession:
                     trace=trace,
                     summary="Generic edit runtime failed to parse provider actions.",
                     observation_path=observation_path,
+                    mcp_support=self._mcp_support_payload(),
                 )
                 return AgentRunResult(
                     status="error",
@@ -200,6 +201,7 @@ class GenericEditRuntimeSession:
                     trace=trace,
                     summary="Generic edit runtime rejected a non-terminal finish.",
                     observation_path=observation_path,
+                    mcp_support=self._mcp_support_payload(),
                 )
                 return AgentRunResult(
                     status="error",
@@ -281,6 +283,7 @@ class GenericEditRuntimeSession:
                         tests=tests,
                         risks=risks,
                         observation_path=observation_path,
+                        mcp_support=self._mcp_support_payload(),
                     )
                     response_lines = build_generic_edit_response(
                         summary=summary,
@@ -320,6 +323,7 @@ class GenericEditRuntimeSession:
             trace=trace,
             summary=message,
             observation_path=observation_path,
+            mcp_support=self._mcp_support_payload(),
         )
         return AgentRunResult(
             status="error",
@@ -372,6 +376,7 @@ class GenericEditRuntimeSession:
                     trace=trace,
                     summary="Generic edit native tool-call loop failed.",
                     observation_path=observation_path,
+                    mcp_support=self._mcp_support_payload(),
                 )
                 return AgentRunResult(
                     status="error",
@@ -441,6 +446,7 @@ class GenericEditRuntimeSession:
                     trace=trace,
                     summary="Generic edit runtime rejected a non-terminal finish.",
                     observation_path=observation_path,
+                    mcp_support=self._mcp_support_payload(),
                 )
                 return AgentRunResult(
                     status="error",
@@ -511,6 +517,7 @@ class GenericEditRuntimeSession:
                     tests=tests,
                     risks=risks,
                     observation_path=observation_path,
+                    mcp_support=self._mcp_support_payload(),
                 )
                 response_lines = build_generic_edit_response(
                     summary=summary,
@@ -546,6 +553,7 @@ class GenericEditRuntimeSession:
             trace=trace,
             summary=message,
             observation_path=observation_path,
+            mcp_support=self._mcp_support_payload(),
         )
         return AgentRunResult(
             status="error",
@@ -567,6 +575,24 @@ class GenericEditRuntimeSession:
         if self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
             return await self._mcp_bridge.execute(action)
         return await self._executor.execute(action)
+
+    def _mcp_support_payload(self) -> dict[str, Any]:
+        """Return runtime MCP support metadata for generic edit artifacts."""
+        if self._mcp_bridge is not None:
+            support = self._mcp_bridge.support_for(
+                provider_name=self.provider_name,
+                runtime_name=self.name,
+                capabilities=self.capabilities,
+            )
+            payload = support.to_dict()
+            payload["bridge"] = self._mcp_bridge.report()
+            return payload
+
+        return resolve_runtime_mcp_support(
+            provider_name=self.provider_name,
+            runtime_name=self.name,
+            capabilities=self.capabilities,
+        ).to_dict()
 
     async def _complete(self, message: str) -> str:
         chunks: list[str] = []
@@ -852,6 +878,7 @@ def save_generic_edit_artifacts(
     tests: list[str] | None = None,
     risks: list[str] | None = None,
     observation_path: Path | None = None,
+    mcp_support: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """Persist trace/result artifacts for a generic edit run."""
     artifact_dir = spec_dir / "artifacts"
@@ -872,6 +899,7 @@ def save_generic_edit_artifacts(
         "status": status,
         "stop_reason": stop_reason,
         "message": message,
+        "mcp_support": mcp_support,
         "trace": trace,
     }
     trace_path.write_text(
@@ -885,6 +913,7 @@ def save_generic_edit_artifacts(
         "subtask_id": subtask_id,
         "status": status,
         "stop_reason": stop_reason,
+        "mcp_support": mcp_support,
         "timeline": trace_summary["action_timeline"],
     }
     timeline_path.write_text(
@@ -899,6 +928,7 @@ def save_generic_edit_artifacts(
         "status": status,
         "stop_reason": stop_reason,
         "message": message,
+        "mcp_support": mcp_support,
         **trace_summary,
         **transaction_summary,
         "iteration_count": len(trace),
@@ -931,6 +961,16 @@ def save_generic_edit_artifacts(
     ]
     if subtask_id:
         lines.append(f"Subtask: {subtask_id}")
+    if mcp_support:
+        lines.extend(
+            [
+                "",
+                "## Runtime Support",
+                "",
+                f"- MCP: `{mcp_support.get('strategy', 'unknown')}` - "
+                f"{mcp_support.get('reason', '')}",
+            ]
+        )
     lines.extend(["", "## Summary", "", summary])
     if trace_summary["action_timeline"]:
         lines.extend(["", "## Action Timeline", ""])
