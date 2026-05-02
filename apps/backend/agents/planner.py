@@ -38,6 +38,7 @@ from .runtime import (
     get_runtime_mode,
     requirements_for_runtime_mode,
     resolve_runtime_mode_with_fallback,
+    resolve_runtime_runner_route,
     run_runtime_session,
 )
 from .runtime.artifacts import save_runtime_fallback_artifact
@@ -81,6 +82,22 @@ def create_planner_session(
     """
     # Create provider from environment configuration (with per-agent overrides)
     config = ProviderConfig.from_env(agent_type="planner")
+    runner_route = resolve_runtime_runner_route(
+        provider_config=config,
+        provider_name=config.provider,
+        requested_mode=get_runtime_mode("planner"),
+        phase="planning",
+    )
+    if runner_route.route_applied:
+        routed_model = config.get_model_for(runner_route.selected_provider)
+        if routed_model:
+            config = config.with_provider_model(
+                runner_route.selected_provider,
+                routed_model,
+            )
+            model = routed_model
+        logger.info("Runtime runner route selected: %s", runner_route.to_dict())
+
     provider = create_engine_provider(config)
 
     # For Claude provider, pass provider-specific kwargs

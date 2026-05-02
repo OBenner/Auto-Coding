@@ -82,6 +82,7 @@ from .runtime import (
     get_runtime_mode,
     requirements_for_runtime_mode,
     resolve_runtime_mode_with_fallback,
+    resolve_runtime_runner_route,
     run_runtime_session,
     runtime_fallback_enabled,
 )
@@ -981,6 +982,28 @@ async def run_autonomous_agent(
                 "info",
             )
             logger.info("Smart routing selected: %s", route)
+
+        runner_route = resolve_runtime_runner_route(
+            provider_config=provider_config,
+            provider_name=provider_config.provider,
+            requested_mode=requested_runtime_mode,
+            phase=current_phase,
+        )
+        if runner_route.route_applied:
+            routed_model = provider_config.get_model_for(runner_route.selected_provider)
+            if routed_model:
+                provider_config = provider_config.with_provider_model(
+                    runner_route.selected_provider,
+                    routed_model,
+                )
+                phase_model = routed_model
+            print_status(
+                f"Runner routing: {runner_route.requested_provider}/"
+                f"{runner_route.requested_mode} -> "
+                f"{runner_route.selected_provider}/{runner_route.runner_id}",
+                "warning",
+            )
+            logger.info("Runtime runner route selected: %s", runner_route.to_dict())
 
         # Filled after provider/runtime resolution. Process isolation creates
         # its Claude client in the child process, so parent-side plugin hooks

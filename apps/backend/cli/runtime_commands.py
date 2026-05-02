@@ -128,6 +128,11 @@ def build_runtime_modes_payload() -> dict[str, Any]:
                 "incompatible non-Claude full_autonomous settings to degrade "
                 "to a limited runtime."
             ),
+            "runner_router": (
+                "Set AUTO_CODE_CLI_RUNNER_ROUTER=true only when you want "
+                "incompatible direct full_autonomous requests to route to a "
+                "wired CLI runner such as Codex CLI."
+            ),
         },
     }
 
@@ -244,6 +249,7 @@ def format_runtime_modes_text() -> str:
             "  Analysis:        python run.py --spec 001 --provider openai --analyze",
             "  Patch proposal:  python run.py --spec 001 --provider openai --runtime-mode patch_proposal",
             "  Runtime fallback: AUTO_CODE_RUNTIME_FALLBACK=true python run.py --spec 001 --provider openai",
+            "  Runner router:   AUTO_CODE_CLI_RUNNER_ROUTER=true python run.py --spec 001 --provider openai",
             "  Provider smoke:  python run.py --provider openai --provider-smoke",
         ]
     )

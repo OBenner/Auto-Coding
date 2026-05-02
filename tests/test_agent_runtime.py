@@ -27,9 +27,11 @@ from agents.runtime import (
     requirements_for_runtime_mode,
     resolve_runtime_mcp_support,
     resolve_runtime_mode_with_fallback,
+    resolve_runtime_runner_route,
     resolve_runtime_subagent_support,
     run_runtime_session,
     runtime_fallback_enabled,
+    runtime_runner_router_enabled,
     save_runtime_fallback_artifact,
     summarize_subagent_results,
 )
@@ -2505,6 +2507,67 @@ def test_runtime_fallback_artifact_records_capability_decision(
     assert payload["decision"]["runner_candidates"][
         "selected_mode_runner_candidates"
     ] == ["aider", "cursor_cli"]
+
+
+def test_runtime_runner_router_is_explicit_for_direct_full_autonomous(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("AUTO_CODE_CLI_RUNNER_ROUTER", raising=False)
+    assert runtime_runner_router_enabled() is False
+
+    route = resolve_runtime_runner_route(
+        provider_config=ProviderConfig(provider="openai"),
+        provider_name="openai",
+        requested_mode="full_autonomous",
+        phase="coding",
+    )
+
+    assert route.route_applied is False
+    assert route.status == "disabled"
+    assert route.selected_provider == "openai"
+    assert route.runner_selection
+    assert route.runner_selection.selected_runner_ids[:1] == ("codex_cli",)
+
+
+def test_runtime_runner_router_routes_to_wired_codex_cli(tmp_path: Path):
+    codex_bin = tmp_path / "codex"
+    codex_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text("{}", encoding="utf-8")
+    config = ProviderConfig(
+        provider="openai",
+        codex_cli_path=str(codex_bin),
+        codex_home=str(codex_home),
+    )
+
+    route = resolve_runtime_runner_route(
+        provider_config=config,
+        provider_name="openai",
+        requested_mode="full-autonomous",
+        phase="coding",
+        allow_router=True,
+    )
+
+    assert route.route_applied is True
+    assert route.status == "routed"
+    assert route.selected_provider == "codex"
+    assert route.selected_mode == "full_autonomous"
+    assert route.runner_id == "codex_cli"
+
+
+def test_runtime_runner_router_keeps_limited_runtimes_direct():
+    route = resolve_runtime_runner_route(
+        provider_config=ProviderConfig(provider="openai"),
+        provider_name="openai",
+        requested_mode="generic_edit",
+        phase="coding",
+        allow_router=True,
+    )
+
+    assert route.route_applied is False
+    assert route.status == "native"
+    assert route.selected_provider == "openai"
 
 
 def test_runtime_requirements_follow_selected_runtime_mode():

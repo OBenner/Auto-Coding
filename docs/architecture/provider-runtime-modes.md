@@ -171,6 +171,23 @@ The `--runtime-modes` command also exposes a `runtime_fallback_matrix` payload.
 It shows the fail-fast selected mode, opt-in fallback selected mode, compatible
 degraded modes, and runner candidates for each provider/runtime pair.
 
+### CLI Runner Router
+
+CLI runner routing is also opt-in:
+
+```bash
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_CLI_RUNNER_ROUTER=true
+CODEX_HOME=/path/to/codex-profile
+```
+
+When enabled, Auto Code may route a direct non-Claude `full_autonomous` request
+to a wired CLI runner instead of failing fast or degrading to a limited runtime.
+The first wired route is `codex_cli`, and it is selected only when the Codex CLI
+provider is available. Limited runtime modes such as `generic_edit`,
+`patch_proposal`, and `analysis_only` stay on the configured direct provider.
+
 ## Generic Edit Contract
 
 `generic_edit` mode asks the model to return one JSON object per iteration. Auto

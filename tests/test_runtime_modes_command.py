@@ -89,6 +89,7 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert "aider" in selection_rows["generic_edit"]["selected_runner_ids"]
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
+    assert "runner_router" in payload["recommendations"]
     fallback_rows = {
         (row["provider"], row["requested_mode"]): row
         for row in payload["runtime_fallback_matrix"]

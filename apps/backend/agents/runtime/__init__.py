@@ -51,6 +51,12 @@ from .mcp_bridge import (
 )
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
 from .result import AgentRunResult
+from .runner_router import (
+    RUNNER_ROUTER_ENV,
+    RuntimeRunnerRoute,
+    resolve_runtime_runner_route,
+    runtime_runner_router_enabled,
+)
 from .session_engine import run_runtime_session
 from .subagents import (
     RuntimeSubagentOrchestrator,
@@ -69,6 +75,7 @@ __all__ = [
     "RuntimeFallbackDecision",
     "RuntimeRequirements",
     "RUNTIME_FALLBACK_ENV",
+    "RUNNER_ROUTER_ENV",
     "CLI_RUNNER_PROFILES",
     "MCP_SERVER_CATALOG",
     "CliRunnerAvailability",
@@ -79,6 +86,7 @@ __all__ = [
     "RuntimeMcpBridge",
     "RuntimeMcpSupport",
     "RuntimeMcpToolSpec",
+    "RuntimeRunnerRoute",
     "RuntimeSubagentOrchestrator",
     "RuntimeSubagentResult",
     "RuntimeSubagentRun",
@@ -102,9 +110,11 @@ __all__ = [
     "resolve_runtime_mcp_support",
     "resolve_runtime_subagent_support",
     "resolve_runtime_mode_with_fallback",
+    "resolve_runtime_runner_route",
     "run_runtime_session",
     "runner_candidates_for_modes",
     "runtime_fallback_enabled",
+    "runtime_runner_router_enabled",
     "save_runtime_fallback_artifact",
     "select_cli_runner_profiles",
     "summarize_subagent_results",

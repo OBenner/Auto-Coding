@@ -100,6 +100,30 @@ This runs the selected OpenAI provider through `generic_edit` rather than
 pretending it supports Claude Agent SDK external MCP tools or native Task
 subagents.
 
+### `AUTO_CODE_CLI_RUNNER_ROUTER`
+
+**Description**: Enables opt-in routing from an incompatible direct
+`full_autonomous` provider request to a wired CLI-backed runtime.
+
+**Default**: `false`
+
+When enabled, Auto Code can route a non-Claude direct `full_autonomous` request
+to the Codex CLI runtime if the Codex provider is available. This is separate
+from runtime fallback: runner routing preserves `full_autonomous` by switching
+to a capable CLI runner, while runtime fallback degrades to limited modes such
+as `generic_edit`.
+
+**Example**:
+```bash
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_CLI_RUNNER_ROUTER=true
+CODEX_HOME=/path/to/codex-profile
+OPENAI_API_KEY=sk-...
+```
+
+Limited runtime modes remain on the configured direct provider.
+
 ---
 
 ## Provider-Specific Configuration
