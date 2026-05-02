@@ -93,6 +93,7 @@ class RuntimeSubagentRun:
             "cancelled": self.cancelled,
             "artifact_path": self.artifact_path,
             "support": self.support.to_dict() if self.support else None,
+            "summary": summarize_subagent_results(self.results),
             "results": [result.to_dict() for result in self.results],
         }
 
@@ -327,6 +328,41 @@ def summarize_subagent_status(results: list[RuntimeSubagentResult]) -> str:
     if any(result.status == "continue" for result in results):
         return "continue"
     return "complete"
+
+
+def summarize_subagent_results(results: list[RuntimeSubagentResult]) -> dict[str, Any]:
+    """Return artifact-friendly counters and result ids for child sessions."""
+    status_counts: dict[str, int] = {}
+    complete_result_ids: list[str] = []
+    continue_result_ids: list[str] = []
+    error_result_ids: list[str] = []
+    cancelled_result_ids: list[str] = []
+    artifact_result_ids: list[str] = []
+
+    for result in results:
+        status_counts[result.status] = status_counts.get(result.status, 0) + 1
+        if result.status == "complete":
+            complete_result_ids.append(result.id)
+        elif result.status == "continue":
+            continue_result_ids.append(result.id)
+        elif result.status == "error":
+            error_result_ids.append(result.id)
+        elif result.status == "cancelled":
+            cancelled_result_ids.append(result.id)
+        if result.artifacts:
+            artifact_result_ids.append(result.id)
+
+    return {
+        "result_count": len(results),
+        "status_counts": status_counts,
+        "complete_result_ids": complete_result_ids,
+        "continue_result_ids": continue_result_ids,
+        "error_result_ids": error_result_ids,
+        "cancelled_result_ids": cancelled_result_ids,
+        "artifact_result_ids": artifact_result_ids,
+        "has_errors": bool(error_result_ids),
+        "has_cancelled": bool(cancelled_result_ids),
+    }
 
 
 def normalize_subagent_result(

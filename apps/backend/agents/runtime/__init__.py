@@ -57,6 +57,7 @@ from .subagents import (
     RuntimeSubagentSupport,
     RuntimeSubagentTask,
     resolve_runtime_subagent_support,
+    summarize_subagent_results,
 )
 
 __all__ = [
@@ -102,4 +103,5 @@ __all__ = [
     "runtime_fallback_enabled",
     "save_runtime_fallback_artifact",
     "select_cli_runner_profiles",
+    "summarize_subagent_results",
 ]

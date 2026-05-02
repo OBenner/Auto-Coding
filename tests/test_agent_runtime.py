@@ -14,6 +14,7 @@ from agents.runtime import (
     RuntimeMcpBridge,
     RuntimeRequirements,
     RuntimeSubagentOrchestrator,
+    RuntimeSubagentResult,
     RuntimeSubagentTask,
     create_runtime_session,
     get_runtime_mode,
@@ -29,6 +30,7 @@ from agents.runtime import (
     run_runtime_session,
     runtime_fallback_enabled,
     save_runtime_fallback_artifact,
+    summarize_subagent_results,
 )
 from agents.runtime.adapters.codex_cli import (
     build_codex_command_args,
@@ -507,12 +509,73 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
     assert artifact["status"] == "complete"
     assert artifact["support"]["strategy"] == "orchestrated"
     assert artifact["support"]["available"] is True
+    assert artifact["summary"] == {
+        "result_count": 2,
+        "status_counts": {"complete": 2},
+        "complete_result_ids": ["explore-api", "explore-ui"],
+        "continue_result_ids": [],
+        "error_result_ids": [],
+        "cancelled_result_ids": [],
+        "artifact_result_ids": [],
+        "has_errors": False,
+        "has_cancelled": False,
+    }
     assert artifact["results"][0]["usage_metadata"] == {
         "input_tokens": 1,
         "output_tokens": 2,
     }
     assert "Auto Code subagent `explore-api`" in created_sessions[0].prompts[0]
     assert '"paths": [' in created_sessions[0].prompts[0]
+
+
+def test_runtime_subagent_result_summary_counts_mixed_statuses():
+    summary = summarize_subagent_results(
+        [
+            RuntimeSubagentResult(
+                id="code",
+                role="worker",
+                status="complete",
+                response_text="done",
+                artifacts={"patch": "artifacts/code.patch"},
+            ),
+            RuntimeSubagentResult(
+                id="inspect",
+                role="explorer",
+                status="continue",
+                response_text="needs follow-up",
+            ),
+            RuntimeSubagentResult(
+                id="test",
+                role="worker",
+                status="error",
+                response_text="",
+                error="pytest failed",
+            ),
+            RuntimeSubagentResult(
+                id="docs",
+                role="worker",
+                status="cancelled",
+                response_text="cancelled",
+            ),
+        ]
+    )
+
+    assert summary == {
+        "result_count": 4,
+        "status_counts": {
+            "complete": 1,
+            "continue": 1,
+            "error": 1,
+            "cancelled": 1,
+        },
+        "complete_result_ids": ["code"],
+        "continue_result_ids": ["inspect"],
+        "error_result_ids": ["test"],
+        "cancelled_result_ids": ["docs"],
+        "artifact_result_ids": ["code"],
+        "has_errors": True,
+        "has_cancelled": True,
+    }
 
 
 def test_runtime_subagent_support_distinguishes_native_and_orchestrated():

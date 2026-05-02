@@ -304,7 +304,9 @@ the Claude Agent SDK. The generic edit runtime is the first local tool-loop
 slice; remaining work includes MCP translation, richer command/session
 streaming, broader provider-native function calling coverage, and security
 parity with the Claude SDK path. Non-Claude subagents are represented as
-orchestrated child runtime sessions, not Claude SDK Task tool parity.
+orchestrated child runtime sessions, not Claude SDK Task tool parity. Their
+artifacts include aggregate child-session summaries so status dashboards can
+show complete/error/cancelled counts without re-parsing every child result.
 
 ## Related Code
 
