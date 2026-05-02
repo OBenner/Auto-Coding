@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from .capabilities import RuntimeCapabilities, RuntimeRequirements
+from .cli_profiles import select_cli_runner_profiles
 from .modes import RuntimeMode, normalize_runtime_mode
 
 RuntimePhase = Literal["planning", "coding", "analysis"]
@@ -38,10 +39,11 @@ class RuntimeFallbackDecision:
     reason: str = ""
     missing_capabilities: tuple[str, ...] = ()
     compatible_fallbacks: tuple[RuntimeMode, ...] = ()
+    runner_candidates: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Serialize the decision for logs and artifacts."""
-        return {
+        payload: dict[str, object] = {
             "provider": self.provider_name,
             "requested_mode": self.requested_mode,
             "selected_mode": self.selected_mode,
@@ -50,6 +52,9 @@ class RuntimeFallbackDecision:
             "missing_capabilities": list(self.missing_capabilities),
             "compatible_fallbacks": list(self.compatible_fallbacks),
         }
+        if self.runner_candidates is not None:
+            payload["runner_candidates"] = self.runner_candidates
+        return payload
 
 
 def runtime_fallback_enabled() -> bool:
@@ -112,6 +117,31 @@ def compatible_fallback_modes(
     return tuple(compatible)
 
 
+def runner_candidates_for_modes(
+    *,
+    requested_mode: RuntimeMode,
+    selected_mode: RuntimeMode,
+    compatible_modes: tuple[RuntimeMode, ...] = (),
+) -> dict[str, Any]:
+    """Return CLI runner candidates for fallback diagnostics without selecting one."""
+    modes = tuple(dict.fromkeys((requested_mode, selected_mode, *compatible_modes)))
+    mode_candidates = {
+        mode: select_cli_runner_profiles(runtime_mode=mode).to_dict(
+            include_detection=False,
+        )
+        for mode in modes
+    }
+    selected_mode_candidates = mode_candidates[selected_mode]["selected_runner_ids"]
+    return {
+        "selection_kind": "runtime_mode_candidate_snapshot",
+        "selected_runner_id": None,
+        "requested_mode": requested_mode,
+        "selected_mode": selected_mode,
+        "selected_mode_runner_candidates": selected_mode_candidates,
+        "modes": mode_candidates,
+    }
+
+
 def resolve_runtime_mode_with_fallback(
     *,
     provider_name: str,
@@ -138,7 +168,17 @@ def resolve_runtime_mode_with_fallback(
             requested_mode=requested,
             selected_mode=requested,
             fallback_applied=False,
+            runner_candidates=runner_candidates_for_modes(
+                requested_mode=requested,
+                selected_mode=requested,
+            ),
         )
+
+    compatible_modes = compatible_fallback_modes(
+        provider_name=provider_name,
+        requested_mode=requested,
+        phase=phase,
+    )
 
     if not allow:
         return RuntimeFallbackDecision(
@@ -151,18 +191,14 @@ def resolve_runtime_mode_with_fallback(
                 f"{requested_requirements.mode}; {RUNTIME_FALLBACK_ENV} is disabled"
             ),
             missing_capabilities=missing_capabilities,
-            compatible_fallbacks=compatible_fallback_modes(
-                provider_name=provider_name,
+            compatible_fallbacks=compatible_modes,
+            runner_candidates=runner_candidates_for_modes(
                 requested_mode=requested,
-                phase=phase,
+                selected_mode=requested,
+                compatible_modes=compatible_modes,
             ),
         )
 
-    compatible_modes = compatible_fallback_modes(
-        provider_name=provider_name,
-        requested_mode=requested,
-        phase=phase,
-    )
     if compatible_modes:
         candidate = compatible_modes[0]
         return RuntimeFallbackDecision(
@@ -176,6 +212,11 @@ def resolve_runtime_mode_with_fallback(
             ),
             missing_capabilities=missing_capabilities,
             compatible_fallbacks=compatible_modes,
+            runner_candidates=runner_candidates_for_modes(
+                requested_mode=requested,
+                selected_mode=candidate,
+                compatible_modes=compatible_modes,
+            ),
         )
 
     return RuntimeFallbackDecision(
@@ -185,4 +226,8 @@ def resolve_runtime_mode_with_fallback(
         fallback_applied=False,
         reason=f"No compatible runtime fallback found for {provider_name}/{requested}",
         missing_capabilities=missing_capabilities,
+        runner_candidates=runner_candidates_for_modes(
+            requested_mode=requested,
+            selected_mode=requested,
+        ),
     )

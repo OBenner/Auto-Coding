@@ -29,6 +29,7 @@ from .fallback import (
     capabilities_for_runtime_mode,
     requirements_for_runtime_mode,
     resolve_runtime_mode_with_fallback,
+    runner_candidates_for_modes,
     runtime_fallback_enabled,
 )
 from .local_actions import (
@@ -97,6 +98,7 @@ __all__ = [
     "resolve_runtime_subagent_support",
     "resolve_runtime_mode_with_fallback",
     "run_runtime_session",
+    "runner_candidates_for_modes",
     "runtime_fallback_enabled",
     "save_runtime_fallback_artifact",
     "select_cli_runner_profiles",

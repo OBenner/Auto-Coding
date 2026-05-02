@@ -73,6 +73,7 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert runner_rows["coderabbit_cli"]["role"] == "review"
     assert runner_rows["zai_claude_code"]["runner_status"] == "planned"
     assert "anthropic_compatible" in runner_rows["zai_claude_code"]["capability_tags"]
+    assert "zai_compatible" in runner_rows["zai_claude_code"]["capability_tags"]
     assert runner_rows["generic_cli_pool"]["tier"] == "generic_pool"
     assert (
         runner_rows["generic_cli_pool"]["availability"]["status"] == "not_configurable"
@@ -126,6 +127,11 @@ def test_cli_runner_selection_filters_capability():
         required_capabilities=("anthropic_compatible",),
     )
     assert anthropic_selection.selected_runner_ids == ("zai_claude_code",)
+
+    zai_selection = select_cli_runner_profiles(
+        required_capabilities=("zai_compatible",),
+    )
+    assert zai_selection.selected_runner_ids == ("zai_claude_code",)
 
 
 def test_cli_runner_selection_can_require_installed_runner(monkeypatch):

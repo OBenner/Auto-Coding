@@ -155,6 +155,8 @@ CLI_RUNNER_PROFILES: tuple[CliRunnerProfile, ...] = (
             "subagents",
             "anthropic_compatible",
             "claude_code_compatible",
+            "zai_compatible",
+            "glm",
             "byok",
         ),
         supported_runtime_modes=("full_autonomous",),

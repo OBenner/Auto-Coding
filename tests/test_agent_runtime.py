@@ -2196,6 +2196,17 @@ def test_runtime_fallback_is_explicit_and_capability_aware(
         "patch_proposal",
         "analysis_only",
     )
+    fail_fast_payload = fail_fast.to_dict()
+    assert fail_fast_payload["runner_candidates"]["selected_runner_id"] is None
+    assert fail_fast_payload["runner_candidates"]["selected_mode"] == (
+        "full_autonomous"
+    )
+    assert fail_fast_payload["runner_candidates"]["modes"]["full_autonomous"][
+        "selected_runner_ids"
+    ] == ["codex_cli", "claude_code", "zai_claude_code"]
+    assert fail_fast_payload["runner_candidates"]["modes"]["generic_edit"][
+        "selected_runner_ids"
+    ] == ["aider", "cursor_cli"]
 
     monkeypatch.setenv("AUTO_CODE_RUNTIME_FALLBACK", "true")
     degraded = resolve_runtime_mode_with_fallback(
@@ -2210,6 +2221,12 @@ def test_runtime_fallback_is_explicit_and_capability_aware(
         "generic_edit",
         "patch_proposal",
         "analysis_only",
+    ]
+    degraded_payload = degraded.to_dict()
+    assert degraded_payload["runner_candidates"]["selected_mode"] == "generic_edit"
+    assert degraded_payload["runner_candidates"]["selected_mode_runner_candidates"] == [
+        "aider",
+        "cursor_cli",
     ]
 
     claude = resolve_runtime_mode_with_fallback(
@@ -2261,6 +2278,10 @@ def test_runtime_fallback_artifact_records_capability_decision(
         "filesystem_edit",
         "shell",
     ]
+    assert payload["decision"]["runner_candidates"]["selected_mode"] == ("generic_edit")
+    assert payload["decision"]["runner_candidates"][
+        "selected_mode_runner_candidates"
+    ] == ["aider", "cursor_cli"]
 
 
 def test_runtime_requirements_follow_selected_runtime_mode():

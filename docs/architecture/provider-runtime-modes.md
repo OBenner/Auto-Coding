@@ -161,6 +161,12 @@ provider/runtime capability set and degrades to the first compatible limited
 mode, usually `generic_edit`, instead of falling back into an impossible
 OpenAI-full-autonomous session.
 
+Runtime fallback artifacts also include `runner_candidates`. This is a
+capability snapshot for CLI-runner routing: it records runner candidates for the
+requested runtime mode, the selected runtime mode, and any compatible degraded
+modes. It does not automatically switch a direct provider session to a different
+CLI runner; that remains a separate runner-router decision.
+
 ## Generic Edit Contract
 
 `generic_edit` mode asks the model to return one JSON object per iteration. Auto

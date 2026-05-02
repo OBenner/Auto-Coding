@@ -406,6 +406,9 @@ first-class runner integrations and generic CLI fallback support.
      CLI that lacks filesystem edits, MCP, or subagent support.
    - Record selected runner, skipped candidates, capability gaps, and fallback
      reason in task artifacts.
+   - Current runtime fallback artifacts record runner candidates for requested,
+     selected, and compatible degraded modes; actual runner selection remains a
+     router step.
    - **Deliverable:** runner-aware fallback decisions and artifacts.
 
 6. **Frontend Runner Settings**
