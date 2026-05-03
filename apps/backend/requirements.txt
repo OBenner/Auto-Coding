@@ -65,7 +65,7 @@ sentry-sdk>=2.0.0
 
 # Performance Profiling Tools
 # py-spy: Sampling profiler for Python programs (low overhead)
-py-spy>=0.4.1
+py-spy>=0.4.2
 # memory-profiler: Memory usage profiling for Python code
 memory-profiler>=0.61.0
 
