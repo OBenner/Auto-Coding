@@ -22,7 +22,12 @@ from ..local_actions import (
     safe_action_for_trace,
     safe_result_for_trace,
 )
-from ..mcp_bridge import RuntimeMcpBridge, resolve_runtime_mcp_support
+from ..mcp_bridge import (
+    RuntimeMcpBridge,
+    is_mcp_action_name,
+    resolve_runtime_mcp_support,
+    unavailable_mcp_action_result,
+)
 from ..result import AgentRunResult
 from ..subagents import (
     RuntimeSessionFactory,
@@ -955,6 +960,11 @@ class GenericEditRuntimeSession:
             )
         if self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
             return await self._mcp_bridge.execute(action)
+        if is_mcp_action_name(action_tool(action)):
+            return unavailable_mcp_action_result(
+                action,
+                support=self._mcp_support_payload(),
+            )
         return await self._executor.execute(action)
 
     async def _run_subagents_action(

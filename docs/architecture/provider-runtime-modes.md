@@ -295,7 +295,10 @@ built-in tools. It does not expose external MCP servers or Claude SDK session
 lifecycle behavior. MCP support artifacts include per-server statuses such as
 `local_bridge`, `native_required`, and `unsupported`, so non-Claude runs can
 explain exactly which requested MCP servers are available and which remain
-native-runtime-only.
+native-runtime-only. If a provider emits an unavailable MCP tool call such as
+`mcp__context7__resolve-library-id`, `generic_edit` records a structured
+observation with the server name, support strategy, runtime path, and server
+status instead of collapsing the failure into a generic unknown-tool error.
 OpenAI-compatible tool-call parsing normalizes direct message objects, gateway
 `choices[].message` envelopes, streaming `delta` envelopes, and content/part
 blocks used by OpenAI, LiteLLM, OpenRouter, Gemini-like, and Anthropic-like

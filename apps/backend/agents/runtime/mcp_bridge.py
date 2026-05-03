@@ -495,6 +495,86 @@ def normalize_mcp_server_name(server_name: str) -> str:
     return server
 
 
+def is_mcp_action_name(tool_name: str) -> bool:
+    """Return whether a local action name looks like an MCP tool call."""
+    return tool_name.startswith("mcp__")
+
+
+def mcp_server_from_action_name(tool_name: str) -> str | None:
+    """Extract the MCP server portion from a tool name such as mcp__context7__x."""
+    if not is_mcp_action_name(tool_name):
+        return None
+    server = normalize_mcp_server_name(tool_name)
+    return server or None
+
+
+def unavailable_mcp_action_result(
+    action: dict[str, Any],
+    *,
+    support: dict[str, Any] | RuntimeMcpSupport | None,
+) -> ToolActionResult:
+    """Return a structured observation for MCP calls unavailable in this runtime."""
+    tool_name = action_tool(action)
+    server = mcp_server_from_action_name(tool_name) or "unknown"
+    support_payload = (
+        support.to_dict() if isinstance(support, RuntimeMcpSupport) else support or {}
+    )
+    status = find_mcp_server_status(support_payload, server)
+    available_servers = tuple(
+        str(name) for name in support_payload.get("available_servers", ())
+    )
+
+    if server in available_servers:
+        reason = (
+            "The MCP server is available, but this specific tool is not exposed "
+            "to the selected runtime/session."
+        )
+        runtime_path = "tool_not_exposed"
+    else:
+        reason = str(status.get("reason") or support_payload.get("reason") or "")
+        runtime_path = str(
+            status.get("runtime_path")
+            or support_payload.get("strategy")
+            or "unavailable"
+        )
+
+    return ToolActionResult(
+        tool=tool_name or "mcp",
+        ok=False,
+        message=(
+            f"MCP tool {tool_name or '<missing>'} is not available in this "
+            f"runtime. {reason}".strip()
+        ),
+        data={
+            "server": server,
+            "runtime_path": runtime_path,
+            "support_strategy": support_payload.get("strategy"),
+            "available_servers": list(available_servers),
+            "unavailable_servers": list(support_payload.get("unavailable_servers", ())),
+            "server_status": status,
+        },
+    )
+
+
+def find_mcp_server_status(
+    support_payload: dict[str, Any],
+    server: str,
+) -> dict[str, Any]:
+    """Return one server status from an MCP support payload when available."""
+    for status in support_payload.get("server_statuses", ()) or ():
+        if isinstance(status, dict) and status.get("server") == server:
+            return dict(status)
+    return {
+        "server": server,
+        "display_name": MCP_SERVER_CATALOG.get(server, {}).get("display_name", server),
+        "availability": "unavailable",
+        "runtime_path": "unsupported",
+        "bridgeable": bool(MCP_SERVER_CATALOG.get(server, {}).get("bridgeable", False)),
+        "reason": "No MCP support metadata is available for this runtime.",
+        "notes": str(MCP_SERVER_CATALOG.get(server, {}).get("notes", "")),
+    }
+
+
 def normalize_auto_claude_tool_name(tool_name: str) -> str:
     """Normalize configured MCP names to bare SDK tool names."""
     if tool_name.startswith(MCP_AUTO_CLAUDE_PREFIX):

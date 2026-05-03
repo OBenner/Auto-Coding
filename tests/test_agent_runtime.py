@@ -2333,6 +2333,73 @@ def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
     assert support_payload["server_statuses"][0]["bridgeable"] is False
 
 
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
+    tmp_path: Path,
+):
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "ask docs",
+                "actions": [
+                    {
+                        "tool": "mcp__context7__resolve-library-id",
+                        "libraryName": "pytest",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Recorded MCP gap",
+                        "tests": [],
+                        "risks": ["Context7 requires a native MCP runtime."],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        agent_type="spec_researcher",
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "resolve docs",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    assert "Recorded MCP gap" in result.response_text
+    assert "native MCP runtime support" in session.messages[1]
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    result_payload = observation_lines[0]["result"]
+    assert result_payload["ok"] is False
+    assert result_payload["tool"] == "mcp__context7__resolve-library-id"
+    assert result_payload["data"]["server"] == "context7"
+    assert result_payload["data"]["runtime_path"] == "native_required"
+    assert result_payload["data"]["support_strategy"] == "unavailable"
+    assert result_payload["data"]["server_status"]["bridgeable"] is False
+    artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact["mcp_support"]["unavailable_servers"] == ["context7"]
+
+
 def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     native = resolve_runtime_mcp_support(
         provider_name="claude",
