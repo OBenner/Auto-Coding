@@ -735,9 +735,11 @@ class LocalActionExecutor:
                 },
             )
 
-        path_type = (
-            "directory" if target.is_dir() else "file" if target.is_file() else "other"
-        )
+        path_type = "other"
+        if target.is_dir():
+            path_type = "directory"
+        elif target.is_file():
+            path_type = "file"
         data: dict[str, Any] = {
             "path": display_path,
             "exists": True,
@@ -1289,7 +1291,7 @@ class LocalActionExecutor:
                 message=f"Command blocked by security validation: {reason}",
             )
 
-        completed = await self._run_subprocess_bounded(args, timeout)
+        completed = await self._run_subprocess_bounded(args, timeout_seconds=timeout)
         output = completed.output
         if completed.truncated:
             output = output[:MAX_TOOL_OUTPUT_CHARS] + "\n...[truncated]"
@@ -1419,13 +1421,13 @@ class LocalActionExecutor:
             )
         return await self._run_subprocess_bounded(
             [git_executable, *args],
-            timeout=DEFAULT_GIT_TIMEOUT_SECONDS,
+            timeout_seconds=DEFAULT_GIT_TIMEOUT_SECONDS,
         )
 
     async def _run_subprocess_bounded(
         self,
         args: list[str],
-        timeout: int,
+        timeout_seconds: int,
     ) -> CommandExecution:
         process = await asyncio.create_subprocess_exec(
             *args,
@@ -1445,7 +1447,7 @@ class LocalActionExecutor:
         timed_out = await wait_for_process_streams(
             process,
             (stdout_task, stderr_task),
-            timeout=timeout,
+            timeout_seconds=timeout_seconds,
         )
         await ensure_process_finished(process)
 
@@ -1483,11 +1485,11 @@ async def wait_for_process_streams(
     process: Any,
     tasks: tuple[asyncio.Task, asyncio.Task],
     *,
-    timeout: int,
+    timeout_seconds: int,
 ) -> bool:
     """Wait for stdout/stderr capture tasks and return whether they timed out."""
     try:
-        async with asyncio.timeout(timeout):
+        async with asyncio.timeout(timeout_seconds):
             await asyncio.gather(*tasks)
     except TimeoutError:
         kill_process(process)

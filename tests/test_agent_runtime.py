@@ -223,14 +223,12 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
             "output_tokens": 7,
             "total_tokens": 19,
         }
-        assert result_payload["cost_usd"] == 0.001
+        assert result_payload["cost_usd"] == pytest.approx(0.001)
         assert result_payload["account_summary"] is None
-        assert result.usage_metadata == {
-            "input_tokens": 12,
-            "output_tokens": 7,
-            "total_tokens": 19,
-            "cost_usd": 0.001,
-        }
+        assert result.usage_metadata["input_tokens"] == 12
+        assert result.usage_metadata["output_tokens"] == 7
+        assert result.usage_metadata["total_tokens"] == 19
+        assert result.usage_metadata["cost_usd"] == pytest.approx(0.001)
 
 
 @pytest.mark.asyncio
@@ -629,6 +627,7 @@ class FakeCancellableCompletionSession:
         yield "should not be returned after cancellation"
 
     async def cancel(self):
+        await asyncio.sleep(0)
         self.cancelled = True
         return True
 
@@ -671,6 +670,7 @@ class FakeSubagentRuntimeSession:
         phase,
         subtask_id: str | None = None,
     ):
+        await asyncio.sleep(0)
         del spec_dir, verbose, phase, subtask_id
         self.prompts.append(message)
         return SimpleNamespace(
@@ -681,6 +681,7 @@ class FakeSubagentRuntimeSession:
         )
 
     async def cancel(self):
+        await asyncio.sleep(0)
         self.cancelled = True
 
 
@@ -1062,6 +1063,7 @@ class FakeBlockingGenericEditSession(FakeGenericEditSession):
         yield self.responses.pop(0)
 
     async def cancel(self):
+        await asyncio.sleep(0)
         self.cancelled = True
         self.release.set()
         return True
@@ -2101,6 +2103,7 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
     monkeypatch: pytest.MonkeyPatch,
 ):
     async def get_build_progress(args):
+        await asyncio.sleep(0)
         assert args == {}
         return {"content": [{"type": "text", "text": "Build Progress: 0/1 subtasks"}]}
 
@@ -2798,7 +2801,7 @@ async def test_local_action_executor_bounds_command_output(tmp_path: Path):
 
     completed = await executor._run_subprocess_bounded(
         [sys.executable, "-c", "print('x' * 20000)"],
-        timeout=10,
+        timeout_seconds=10,
     )
 
     assert completed.truncated is True
