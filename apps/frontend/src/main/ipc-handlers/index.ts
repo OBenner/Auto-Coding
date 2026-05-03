@@ -36,6 +36,7 @@ import { registerDebugHandlers } from './debug-handlers';
 import { registerClaudeCodeHandlers } from './claude-code-handlers';
 import { registerMcpHandlers } from './mcp-handlers';
 import { registerProfileHandlers } from './profile-handlers';
+import { registerCodexProfileHandlers } from './codex-profile-handlers';
 import { registerSecurityHandlers } from './security-handlers';
 import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
@@ -147,6 +148,9 @@ export function setupIpcHandlers(
   // API Profile handlers (custom Anthropic-compatible endpoints)
   registerProfileHandlers();
 
+  // Codex/OpenAI account profile handlers
+  registerCodexProfileHandlers();
+
   // Security profile handlers
   registerSecurityHandlers();
 
@@ -215,6 +219,7 @@ export { registerDebugHandlers } from './debug-handlers';
 export { registerClaudeCodeHandlers } from './claude-code-handlers';
 export { registerMcpHandlers } from './mcp-handlers';
 export { registerProfileHandlers } from './profile-handlers';
+export { registerCodexProfileHandlers } from './codex-profile-handlers';
 export { registerSecurityHandlers } from './security-handlers';
 export { registerScreenshotHandlers } from './screenshot-handlers';
 export { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';

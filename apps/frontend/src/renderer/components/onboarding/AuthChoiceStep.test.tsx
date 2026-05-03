@@ -14,11 +14,33 @@ import '@testing-library/jest-dom';
 import { AuthChoiceStep } from './AuthChoiceStep';
 import type { APIProfile } from '@shared/types/profile';
 
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'authChoice.title': 'Choose Your Authentication Method',
+        'authChoice.subtitle': 'Select how you want to authenticate with AI runtimes. You can change this later in Settings.',
+        'authChoice.oauthTitle': 'Sign in with Anthropic',
+        'authChoice.oauthDesc': 'Use your Anthropic account to authenticate. Simple and secure OAuth flow.',
+        'authChoice.codexTitle': 'Sign in with OpenAI/Codex',
+        'authChoice.codexDesc': 'Use Codex CLI account login with an isolated CODEX_HOME profile for OpenAI/Codex sessions.',
+        'authChoice.apiKeyTitle': 'Use Custom API Key',
+        'authChoice.apiKeyDesc': 'Bring your own API key from Anthropic or a compatible API provider. Highly experimental; may incur significant costs.',
+        'authChoice.storageNote': 'OAuth profiles and API keys are stored separately so each runtime can receive the right environment.',
+        'authChoice.skip': 'Skip for now',
+      };
+      return translations[key] || key;
+    },
+    i18n: { language: 'en' },
+  }),
+}));
+
 // Mock the settings store
 const mockGoToNext = vi.fn();
 const mockGoToPrevious = vi.fn();
 const mockSkipWizard = vi.fn();
 const mockOnAPIKeyPathComplete = vi.fn();
+const mockOnCodexOAuthPath = vi.fn();
 
 // Dynamic profiles state for testing
 let mockProfiles: APIProfile[] = [];
@@ -37,7 +59,7 @@ const mockUseSettingsStore = (selector?: (state: any) => any) => {
     deleteProfile: vi.fn(),
     setActiveProfile: vi.fn()
   };
-  if (!selector || selector.toString().includes('profiles')) {
+  if (!selector) {
     return state;
   }
   return selector(state);
@@ -49,11 +71,20 @@ vi.mock('../../stores/settings-store', () => ({
 
 // Mock ProfileEditDialog
 vi.mock('../settings/ProfileEditDialog', () => ({
-  ProfileEditDialog: ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) => {
+  ProfileEditDialog: ({
+    open,
+    onOpenChange,
+    onSaved
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSaved?: () => void;
+  }) => {
     if (!open) return null;
     return (
       <div data-testid="profile-edit-dialog">
         <button type="button" onClick={() => onOpenChange(false)}>Close Dialog</button>
+        <button type="button" onClick={() => onSaved?.()}>Save Profile</button>
       </div>
     );
   }
@@ -85,11 +116,14 @@ describe('AuthChoiceStep', () => {
       // Check for API Key option
       expect(screen.getByText('Use Custom API Key')).toBeInTheDocument();
 
+      // Check for Codex option
+      expect(screen.getByText('Sign in with OpenAI/Codex')).toBeInTheDocument();
+
       // Check for skip button
       expect(screen.getByText('Skip for now')).toBeInTheDocument();
     });
 
-    it('should display two auth option cards with equal visual weight', () => {
+    it('should display auth option cards with equal visual weight', () => {
       const { container } = render(
         <AuthChoiceStep
           onNext={mockGoToNext}
@@ -98,10 +132,10 @@ describe('AuthChoiceStep', () => {
         />
       );
 
-      // Check for grid layout with two columns
+      // Check for grid layout with three desktop columns
       const grid = container.querySelector('.grid');
       expect(grid).toBeInTheDocument();
-      expect(grid?.className).toContain('lg:grid-cols-2');
+      expect(grid?.className).toContain('lg:grid-cols-3');
     });
 
     it('should show icons for each auth option', () => {
@@ -116,6 +150,25 @@ describe('AuthChoiceStep', () => {
       // Both cards should have icon containers
       const iconContainers = document.querySelectorAll('.bg-primary\\/10');
       expect(iconContainers.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Codex OAuth Button Handler', () => {
+    it('should call onCodexOAuthPath when Codex OAuth button is clicked', () => {
+      render(
+        <AuthChoiceStep
+          onNext={mockGoToNext}
+          onBack={mockGoToPrevious}
+          onSkip={mockSkipWizard}
+          onCodexOAuthPath={mockOnCodexOAuthPath}
+        />
+      );
+
+      const codexButton = screen.getByText('Sign in with OpenAI/Codex').closest('.cursor-pointer');
+      if (codexButton) fireEvent.click(codexButton);
+
+      expect(mockOnCodexOAuthPath).toHaveBeenCalledTimes(1);
+      expect(mockGoToNext).not.toHaveBeenCalled();
     });
   });
 
@@ -169,6 +222,32 @@ describe('AuthChoiceStep', () => {
       expect(screen.getByTestId('profile-edit-dialog')).toBeInTheDocument();
     });
 
+    it('should continue API key path when a profile already exists', () => {
+      mockProfiles = [{
+        id: 'profile-existing',
+        name: 'z.ai',
+        baseUrl: 'https://api.z.ai/api/anthropic',
+        apiKey: 'sk-existing',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }];
+
+      render(
+        <AuthChoiceStep
+          onNext={mockGoToNext}
+          onBack={mockGoToPrevious}
+          onSkip={mockSkipWizard}
+          onAPIKeyPathComplete={mockOnAPIKeyPathComplete}
+        />
+      );
+
+      const apiKeyButton = screen.getByText('Use Custom API Key').closest('.cursor-pointer');
+      if (apiKeyButton) fireEvent.click(apiKeyButton);
+
+      expect(mockOnAPIKeyPathComplete).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('profile-edit-dialog')).not.toBeInTheDocument();
+    });
+
     it('should accept onAPIKeyPathComplete callback prop', async () => {
       // This test verifies the component accepts the callback prop
       // Full integration testing of profile creation detection requires E2E tests
@@ -197,6 +276,24 @@ describe('AuthChoiceStep', () => {
 
       // Callback should NOT be called when no profile was created (profiles still empty)
       expect(mockOnAPIKeyPathComplete).not.toHaveBeenCalled();
+    });
+
+    it('should call onAPIKeyPathComplete when profile dialog reports a successful save', () => {
+      render(
+        <AuthChoiceStep
+          onNext={mockGoToNext}
+          onBack={mockGoToPrevious}
+          onSkip={mockSkipWizard}
+          onAPIKeyPathComplete={mockOnAPIKeyPathComplete}
+        />
+      );
+
+      const apiKeyButton = screen.getByText('Use Custom API Key').closest('.cursor-pointer');
+      if (apiKeyButton) fireEvent.click(apiKeyButton);
+
+      fireEvent.click(screen.getByText('Save Profile'));
+
+      expect(mockOnAPIKeyPathComplete).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -296,7 +393,7 @@ describe('AuthChoiceStep', () => {
         />
       );
 
-      expect(screen.getByText(/Both options provide full access to Claude Code features/)).toBeInTheDocument();
+      expect(screen.getByText(/OAuth profiles and API keys are stored separately/)).toBeInTheDocument();
     });
   });
 
@@ -310,13 +407,14 @@ describe('AuthChoiceStep', () => {
         />
       );
 
-      // Two main options visible
+      // Main options visible
       expect(screen.getByText('Sign in with Anthropic')).toBeInTheDocument();
+      expect(screen.getByText('Sign in with OpenAI/Codex')).toBeInTheDocument();
       expect(screen.getByText('Use Custom API Key')).toBeInTheDocument();
 
-      // Both should be clickable cards
+      // Options should be clickable cards
       const cards = document.querySelectorAll('.cursor-pointer');
-      expect(cards.length).toBeGreaterThanOrEqual(2);
+      expect(cards.length).toBeGreaterThanOrEqual(3);
     });
   });
 });

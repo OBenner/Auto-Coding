@@ -16,6 +16,9 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 
+from agents.runtime.compatibility import provider_choices, runtime_mode_choices
+
+from .analysis_commands import handle_analysis_command
 from .analytics_commands import handle_analytics_command
 from .batch_commands import (
     handle_batch_cleanup_command,
@@ -38,11 +41,16 @@ from .predictive_scan_commands import (
     handle_predictive_scan_command,
     handle_predictive_scan_status_command,
 )
+from .provider_smoke_commands import (
+    DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS,
+    handle_provider_smoke_command,
+)
 from .qa_commands import (
     handle_qa_command,
     handle_qa_status_command,
     handle_review_status_command,
 )
+from .runtime_commands import handle_runtime_modes_command
 from .scheduler_commands import (
     handle_schedule_cancel_command,
     handle_schedule_command,
@@ -149,8 +157,58 @@ Environment Variables:
         "--provider",
         type=str,
         default=None,
-        choices=["claude", "litellm", "openrouter", "zhipuai"],
+        choices=provider_choices(),
         help="AI provider to use (default: from env or claude)",
+    )
+
+    parser.add_argument(
+        "--runtime-mode",
+        type=str,
+        default=None,
+        choices=runtime_mode_choices(),
+        help="Agent runtime mode (default: full_autonomous)",
+    )
+
+    parser.add_argument(
+        "--runtime-modes",
+        action="store_true",
+        help="Show provider/runtime compatibility and exit",
+    )
+
+    parser.add_argument(
+        "--provider-smoke",
+        action="store_true",
+        help="Run an opt-in text-only smoke check for the configured provider",
+    )
+
+    parser.add_argument(
+        "--provider-smoke-prompt",
+        type=str,
+        default=None,
+        help="With --provider-smoke: custom prompt for the smoke request",
+    )
+
+    parser.add_argument(
+        "--provider-smoke-timeout",
+        type=float,
+        default=DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS,
+        help=(
+            "With --provider-smoke: timeout in seconds "
+            f"(default: {DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS:g})"
+        ),
+    )
+
+    parser.add_argument(
+        "--analyze",
+        action="store_true",
+        help="Run a non-mutating analysis-only pass for a spec",
+    )
+
+    parser.add_argument(
+        "--analysis-prompt",
+        type=str,
+        default=None,
+        help="With --analyze: custom analysis question or focus",
     )
 
     parser.add_argument(
@@ -679,6 +737,31 @@ def _run_cli() -> None:
 
     # Get provider from CLI arg (default: from env or claude)
     provider = args.provider
+    if provider:
+        os.environ["AI_ENGINE_PROVIDER"] = provider
+
+    if args.runtime_mode:
+        from agents.runtime import normalize_runtime_mode
+
+        os.environ["AUTO_CODE_RUNTIME_MODE"] = normalize_runtime_mode(args.runtime_mode)
+
+    # Handle --runtime-modes command before requiring a spec.
+    if args.runtime_modes:
+        handle_runtime_modes_command(output_json=args.json)
+        return
+
+    # Handle --provider-smoke command before requiring a spec.
+    if args.provider_smoke:
+        result = handle_provider_smoke_command(
+            project_dir=project_dir,
+            model=model,
+            prompt=args.provider_smoke_prompt,
+            timeout_seconds=args.provider_smoke_timeout,
+            output_json=args.json,
+        )
+        if not result.success:
+            sys.exit(1)
+        return
 
     # Handle --list command
     if args.list:
@@ -1022,6 +1105,17 @@ def _run_cli() -> None:
 
     if args.review_status:
         handle_review_status_command(spec_dir)
+        return
+
+    if args.analyze:
+        handle_analysis_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            model=model,
+            user_prompt=args.analysis_prompt,
+            verbose=args.verbose,
+            output_json=args.json,
+        )
         return
 
     if args.qa:

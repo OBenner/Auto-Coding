@@ -14,6 +14,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { OnboardingWizard } from './OnboardingWizard';
 
+const MOCK_CODEX_CONFIG_DIR = '/mock/codex-test';
+
 // Mock react-i18next to avoid initialization issues
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -38,11 +40,41 @@ vi.mock('react-i18next', () => ({
         'authChoice.subtitle': 'Select how you want to authenticate',
         'authChoice.oauthTitle': 'Sign in with Anthropic',
         'authChoice.oauthDesc': 'OAuth authentication',
+        'authChoice.codexTitle': 'Sign in with OpenAI/Codex',
+        'authChoice.codexDesc': 'Codex CLI authentication',
         'authChoice.apiKeyTitle': 'Use Custom API Key',
         'authChoice.apiKeyDesc': 'Enter your own API key',
+        'authChoice.storageNote': 'OAuth profiles and API keys are stored separately',
         'authChoice.skip': 'Skip for now',
+        'codexOauth.title': 'Sign in with OpenAI/Codex',
+        'codexOauth.description': 'Connect a Codex account profile',
+        'codexOauth.labels.accountName': 'Account name',
+        'codexOauth.labels.namePlaceholder': 'Profile name',
+        'codexOauth.loadingProfiles': 'Loading profiles...',
+        'codexOauth.buttons.add': 'Add',
+        'codexOauth.buttons.back': 'Back',
+        'codexOauth.buttons.skip': 'Skip',
+        'codexOauth.buttons.continue': 'Continue',
+        'claudeCode.title': 'Claude Code CLI',
+        'claudeCode.description': 'Install or update the Claude Code CLI to enable AI-powered features',
+        'claudeCode.detecting': 'Checking Claude Code installation...',
+        'claudeCode.status.installed': 'Installed',
+        'codexCli.title': 'Codex CLI',
+        'codexCli.description': 'Install or update the Codex CLI',
+        'codexCli.detecting': 'Checking Codex CLI installation...',
+        'codexCli.status.installed': 'Installed',
+        'codexCli.info.title': 'What is Codex CLI?',
+        'codexCli.info.description': 'Codex CLI manages OpenAI/Codex account authentication.',
+        'codexCli.version.current': 'Current Version',
+        'codexCli.version.latest': 'Latest Version',
+        'codexCli.version.path': 'Path',
+        'codexCli.learnMore': 'Learn more about Codex',
         // Common translations
-        'common:actions.close': 'Close'
+        'common:actions.close': 'Close',
+        'common:buttons.back': 'Back',
+        'common:buttons.skip': 'Skip',
+        'common:buttons.continue': 'Continue',
+        'common:buttons.continueAnyway': 'Continue Anyway'
       };
       return translations[key] || key;
     },
@@ -82,7 +114,51 @@ Object.defineProperty(window, 'electronAPI', {
     onTerminalOAuthToken: vi.fn(() => vi.fn()), // Returns unsubscribe function
     getOAuthToken: vi.fn().mockResolvedValue(null),
     startOAuthFlow: vi.fn().mockResolvedValue({ success: true }),
-    loadProfiles: vi.fn().mockResolvedValue([])
+    loadProfiles: vi.fn().mockResolvedValue([]),
+    getCodexProfiles: vi.fn().mockResolvedValue({
+      success: true,
+      data: { profiles: [], activeProfileId: null }
+    }),
+    createCodexProfile: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        id: 'codex-test',
+        name: 'Test',
+        configDir: MOCK_CODEX_CONFIG_DIR,
+        isDefault: false,
+        createdAt: new Date()
+      }
+    }),
+    saveCodexProfile: vi.fn().mockResolvedValue({ success: true }),
+    setActiveCodexProfile: vi.fn().mockResolvedValue({ success: true }),
+    authenticateCodexProfile: vi.fn().mockResolvedValue({
+      success: true,
+      data: { terminalId: 'codex-login-test', configDir: MOCK_CODEX_CONFIG_DIR }
+    }),
+    verifyCodexProfileAuth: vi.fn().mockResolvedValue({
+      success: true,
+      data: { authenticated: true }
+    }),
+    checkClaudeCodeVersion: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        installed: true,
+        version: '2.1.49',
+        latestVersion: '2.1.49',
+        isOutdated: false,
+        path: '/usr/local/bin/claude'
+      }
+    }),
+    checkCodexCodeVersion: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        installed: '0.128.0',
+        latest: 'unknown',
+        isOutdated: false,
+        path: '/Applications/Codex.app/Contents/Resources/codex'
+      }
+    }),
+    installClaudeCode: vi.fn().mockResolvedValue({ success: true })
   },
   writable: true
 });
@@ -95,6 +171,7 @@ describe('OnboardingWizard Integration Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockProfiles.length = 0;
   });
 
   describe('OAuth Path Navigation', () => {
@@ -185,6 +262,54 @@ describe('OnboardingWizard Integration Tests', () => {
       const oauthStepText = screen.queryByText(/OAuth Authentication/);
       // Before API key selection, oauth text from different context shouldn't be visible
       expect(oauthStepText).toBeNull();
+    });
+
+    it('should skip only oauth and continue to CLI when an API profile already exists', async () => {
+      mockProfiles.push({ id: 'profile-existing', name: 'z.ai' });
+
+      render(<OnboardingWizard {...defaultProps} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
+      await waitFor(() => {
+        expect(screen.getByText(/Choose Your Authentication Method/)).toBeInTheDocument();
+      });
+
+      const apiKeyButton = screen.getByTestId('auth-option-apikey');
+      fireEvent.click(apiKeyButton);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Claude Code CLI' })).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText(/^Memory$/)).not.toBeInTheDocument();
+    });
+
+    it('should reset runtime to Claude-compatible CLI when API key is chosen after visiting Codex path', async () => {
+      mockProfiles.push({ id: 'profile-existing', name: 'z.ai' });
+
+      render(<OnboardingWizard {...defaultProps} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Get Started/ }));
+      await waitFor(() => {
+        expect(screen.getByText(/Choose Your Authentication Method/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('auth-option-codex'));
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Sign in with OpenAI/Codex' })).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      await waitFor(() => {
+        expect(screen.getByText(/Choose Your Authentication Method/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('auth-option-apikey'));
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Claude Code CLI' })).toBeInTheDocument();
+      });
+
+      expect(screen.queryByRole('heading', { name: 'Codex CLI' })).not.toBeInTheDocument();
     });
   });
 

@@ -302,6 +302,8 @@ export interface AppSettings {
   onboardingCompleted?: boolean;
   // Selected AI provider (anthropic, openrouter, groq, etc.)
   selectedProviderId?: string;
+  // Backend AI engine provider used for runtime routing
+  aiProvider?: AIEngineProvider;
   // Fallback model ID to use if primary model unavailable
   fallbackModelId?: string;
   // Selected agent profile for preset model/thinking configurations
@@ -380,12 +382,21 @@ export interface SourceEnvCheckResult {
 // Provider Settings for Multi-Model Support (used by ProviderSettingsSection)
 export interface ProviderSettings {
   provider?: AIEngineProvider;
+  codexModel?: string;
   openaiApiKey?: string;
   googleApiKey?: string;
   openrouterApiKey?: string;
+  zhipuaiApiKey?: string;
   plannerModel?: string;
   coderModel?: string;
   qaModel?: string;
+  runtimeMode?: AgentRuntimeMode;
+  plannerRuntimeMode?: AgentRuntimeMode;
+  coderRuntimeMode?: AgentRuntimeMode;
+  qaReviewerRuntimeMode?: AgentRuntimeMode;
+  qaFixerRuntimeMode?: AgentRuntimeMode;
+  runtimeFallbackEnabled?: boolean;
+  cliRunnerRouterEnabled?: boolean;
 }
 
 // ============================================
@@ -423,12 +434,14 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombi
 // AI Provider Configuration (Backend .env sync)
 // ============================================
 
-export type AIEngineProvider = 'claude' | 'openai' | 'google' | 'litellm' | 'openrouter' | 'zhipuai' | 'ollama';
+export type AIEngineProvider = 'claude' | 'codex' | 'openai' | 'google' | 'litellm' | 'openrouter' | 'zhipuai' | 'ollama';
+export type AgentRuntimeMode = 'full_autonomous' | 'analysis_only' | 'patch_proposal' | 'generic_edit';
 
 export interface AIProviderConfig {
   provider: AIEngineProvider;
   anthropicApiKey?: string;
   claudeModel?: string;
+  codexModel?: string;
   openaiApiKey?: string;
   openaiModel?: string;
   openaiBaseUrl?: string;
@@ -448,10 +461,28 @@ export interface AIProviderConfig {
   plannerModel?: string;
   coderModel?: string;
   qaModel?: string;
+  // Runtime mode overrides
+  runtimeMode?: AgentRuntimeMode;
+  plannerRuntimeMode?: AgentRuntimeMode;
+  coderRuntimeMode?: AgentRuntimeMode;
+  qaReviewerRuntimeMode?: AgentRuntimeMode;
+  qaFixerRuntimeMode?: AgentRuntimeMode;
+  runtimeFallbackEnabled?: boolean;
+  cliRunnerRouterEnabled?: boolean;
 }
 
 export interface ProviderConfigValidation {
   isValid: boolean;
   errors: string[];
   availableProviders: AIEngineProvider[];
+}
+
+export interface ProviderConnectionTestResult {
+  success: boolean;
+  provider: AIEngineProvider | string;
+  model?: string | null;
+  runtimeMode: string;
+  message: string;
+  responseExcerpt?: string | null;
+  errorDetails?: string | null;
 }

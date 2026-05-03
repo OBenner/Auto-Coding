@@ -15,6 +15,7 @@ import { DebugAPI, createDebugAPI } from './modules/debug-api';
 import { ClaudeCodeAPI, createClaudeCodeAPI } from './modules/claude-code-api';
 import { McpAPI, createMcpAPI } from './modules/mcp-api';
 import { ProfileAPI, createProfileAPI } from './profile-api';
+import { CodexProfileAPI, createCodexProfileAPI } from './codex-profile-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
@@ -45,6 +46,7 @@ export interface ElectronAPI extends
   ClaudeCodeAPI,
   McpAPI,
   ProfileAPI,
+  CodexProfileAPI,
   ScreenshotAPI,
   PluginAPI,
   ContextViewerAPI,
@@ -80,6 +82,7 @@ export const createElectronAPI = (): ElectronAPI => {
     ...createClaudeCodeAPI(),
     ...createMcpAPI(),
     ...createProfileAPI(),
+    ...createCodexProfileAPI(),
     ...createScreenshotAPI(),
     ...createPluginAPI(),
     ...createContextViewerAPI(),
@@ -107,6 +110,7 @@ export {
   createTemplateAPI,
   createAppUpdateAPI,
   createProfileAPI,
+  createCodexProfileAPI,
   createGitHubAPI,
   createDebugAPI,
   createClaudeCodeAPI,

@@ -10,7 +10,9 @@ import type { TerminalProcess, WindowGetter, WindowsShellType } from './types';
 import { isWindows, getWindowsShellPaths } from '../platform';
 import { IPC_CHANNELS } from '../../shared/constants';
 import { getClaudeProfileManager } from '../claude-profile-manager';
+import { getCodexProfileManager } from '../codex-profile-manager';
 import { readSettingsFile } from '../settings-utils';
+import { getAugmentedEnv } from '../env-utils';
 import { debugLog, debugError } from '../../shared/utils/debug-logger';
 import type { SupportedTerminal } from '../../shared/types/settings';
 
@@ -150,6 +152,7 @@ export function spawnPtyProcess(
   // be present in the shell environment. Without this, Claude Code would
   // show "Claude API" instead of "Claude Max" when ANTHROPIC_API_KEY is set.
   const { DEBUG: _DEBUG, ANTHROPIC_API_KEY: _ANTHROPIC_API_KEY, ...cleanEnv } = process.env;
+  const augmentedEnv = getAugmentedEnv();
 
   const ptyProcess = pty.spawn(shell, shellArgs, {
     name: 'xterm-256color',
@@ -158,6 +161,7 @@ export function spawnPtyProcess(
     cwd: cwd || os.homedir(),
     env: {
       ...cleanEnv,
+      ...augmentedEnv,
       ...profileEnv,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
@@ -409,5 +413,8 @@ export function killPty(terminal: TerminalProcess, waitForExit?: boolean): Promi
  */
 export function getActiveProfileEnv(): Record<string, string> {
   const profileManager = getClaudeProfileManager();
-  return profileManager.getActiveProfileEnv();
+  return {
+    ...profileManager.getActiveProfileEnv(),
+    ...getCodexProfileManager().getActiveProfileEnv(),
+  };
 }

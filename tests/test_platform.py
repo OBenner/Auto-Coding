@@ -6,6 +6,7 @@ different operating systems.
 """
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -32,6 +33,7 @@ from core.platform import (
     is_unix,
     is_windows,
     requires_shell,
+    run_process,
     validate_cli_path,
     with_executable_extension,
 )
@@ -652,8 +654,8 @@ class TestWindowsCommandBuilder:
 
         assert result[0].endswith("cmd.exe")
         assert "/d" in result
-        assert "/s" in result
         assert "/c" in result
+        assert "call" in result
         assert any("npm.cmd" in arg for arg in result)
 
     @patch("core.platform.is_windows", return_value=True)
@@ -668,6 +670,34 @@ class TestWindowsCommandBuilder:
         result = build_windows_command("/usr/bin/node", ["script.js"])
 
         assert result == ["/usr/bin/node", "script.js"]
+
+    @patch("core.platform.subprocess.run")
+    @patch("core.platform.find_executable", return_value="C:\\Tools\\npm.cmd")
+    @patch("core.platform.is_windows", return_value=True)
+    @patch.dict(
+        os.environ,
+        {"SystemRoot": "C:\\Windows", "ComSpec": "C:\\Windows\\System32\\cmd.exe"},
+    )
+    def test_run_process_resolves_bare_batch_executable(
+        self,
+        mock_is_windows,
+        mock_find_executable,
+        mock_run,
+    ):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+        run_process(["npm", "install"], capture_output=True, text=True)
+
+        command = mock_run.call_args.args[0]
+        assert command[0].endswith("cmd.exe")
+        assert "/c" in command
+        assert any("npm.cmd" in part for part in command)
+        mock_find_executable.assert_called_once_with("npm")
 
 
 # ============================================================================

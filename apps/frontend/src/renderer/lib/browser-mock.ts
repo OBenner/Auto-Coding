@@ -21,6 +21,8 @@ import {
   settingsMock
 } from './mocks';
 
+const MOCK_CODEX_CONFIG_DIR = '/mock/codex-home';
+
 // Check if we're in a browser (not Electron)
 const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined;
 
@@ -167,6 +169,58 @@ const browserMockAPI: ElectronAPI = {
     success: true,
     data: {
       models: []
+    }
+  }),
+
+  // Codex/OpenAI account profile management
+  getCodexProfiles: async () => ({
+    success: true,
+    data: {
+      profiles: [],
+      activeProfileId: null
+    }
+  }),
+
+  createCodexProfile: async (name: string) => ({
+    success: true,
+    data: {
+      id: `mock-codex-${Date.now()}`,
+      name,
+      configDir: MOCK_CODEX_CONFIG_DIR,
+      isDefault: false,
+      createdAt: new Date(),
+    }
+  }),
+
+  saveCodexProfile: async (profile) => ({
+    success: true,
+    data: profile
+  }),
+
+  deleteCodexProfile: async (_profileId: string) => ({
+    success: true
+  }),
+
+  renameCodexProfile: async (_profileId: string, _newName: string) => ({
+    success: true
+  }),
+
+  setActiveCodexProfile: async (_profileId: string) => ({
+    success: true
+  }),
+
+  authenticateCodexProfile: async (profileId: string) => ({
+    success: true,
+    data: {
+      terminalId: `mock-codex-login-${profileId}`,
+      configDir: MOCK_CODEX_CONFIG_DIR
+    }
+  }),
+
+  verifyCodexProfileAuth: async () => ({
+    success: true,
+    data: {
+      authenticated: false
     }
   }),
 
@@ -608,6 +662,22 @@ const browserMockAPI: ElectronAPI = {
         path: '/usr/local/bin/claude',
         source: 'system-path' as const,
         message: 'Claude Code CLI found'
+      }
+    }
+  }),
+  checkCodexCodeVersion: async () => ({
+    success: true,
+    data: {
+      installed: '0.128.0',
+      latest: 'unknown',
+      isOutdated: false,
+      path: '/Applications/Codex.app/Contents/Resources/codex',
+      detectionResult: {
+        found: true,
+        path: '/Applications/Codex.app/Contents/Resources/codex',
+        version: '0.128.0',
+        source: 'system-path',
+        message: 'Using Codex CLI'
       }
     }
   }),

@@ -46,6 +46,7 @@ def _make_session():
     """Create a mock session object with a .client attribute."""
     session = MagicMock()
     session.client = _make_async_client()
+    session.provider_name = "claude"
     return session
 
 

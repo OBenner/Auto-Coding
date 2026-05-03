@@ -81,6 +81,56 @@
       "authStartFailedMessage": "Échec du démarrage de l'authentification. Veuillez réessayer."
     }
   },
+  "authChoice": {
+    "title": "Choisissez votre méthode d'authentification",
+    "subtitle": "Sélectionnez comment vous voulez vous authentifier auprès des runtimes IA. Vous pourrez changer cela plus tard dans les paramètres.",
+    "oauthTitle": "Se connecter avec Anthropic",
+    "oauthDesc": "Utilisez votre compte Anthropic pour vous authentifier avec un flux OAuth simple et sécurisé.",
+    "codexTitle": "Se connecter avec OpenAI/Codex",
+    "codexDesc": "Utilisez la connexion de compte Codex CLI avec un profil CODEX_HOME isolé pour les sessions OpenAI/Codex.",
+    "apiKeyTitle": "Utiliser une clé API personnalisée",
+    "apiKeyDesc": "Utilisez votre propre clé API Anthropic ou d'un fournisseur compatible. Très expérimental ; peut entraîner des coûts importants.",
+    "storageNote": "Les profils OAuth et les clés API sont stockés séparément afin que chaque runtime reçoive le bon environnement.",
+    "skip": "Passer pour le moment"
+  },
+  "codexOauth": {
+    "title": "Se connecter avec OpenAI/Codex",
+    "description": "Connectez un profil de compte Codex avec le flux de connexion Codex CLI.",
+    "loadingProfiles": "Chargement des profils...",
+    "labels": {
+      "accountName": "Nom du compte",
+      "namePlaceholder": "Nom du profil (ex : Travail, Personnel)"
+    },
+    "badges": {
+      "default": "Par défaut",
+      "active": "Actif",
+      "authenticated": "Authentifié",
+      "needsAuth": "Auth requise"
+    },
+    "buttons": {
+      "add": "Ajouter",
+      "setActive": "Définir actif",
+      "authenticate": "Authentifier",
+      "back": "Retour",
+      "skip": "Passer",
+      "continue": "Continuer"
+    },
+    "aria": {
+      "deleteProfile": "Supprimer le profil Codex"
+    },
+    "errors": {
+      "loadProfiles": "Échec du chargement des profils Codex",
+      "prepareAuth": "Échec de la préparation de l'authentification Codex",
+      "startAuth": "Échec du démarrage de l'authentification Codex",
+      "addProfile": "Échec de l'ajout du profil Codex",
+      "setActiveProfile": "Échec de l'activation du profil Codex",
+      "deleteProfile": "Échec de la suppression du profil Codex"
+    },
+    "toast": {
+      "connectedTitle": "Compte Codex connecté",
+      "connectedDescription": "Auto-Coding utilisera ce profil de compte Codex/OpenAI pour les sessions Codex CLI."
+    }
+  },
   "memory": {
     "title": "Mémoire",
     "description": "Configurer la mémoire persistante entre sessions pour les agents",
@@ -189,7 +239,8 @@
     },
     "version": {
       "current": "Version actuelle",
-      "latest": "Dernière version"
+      "latest": "Dernière version",
+      "path": "Chemin"
     },
     "install": {
       "button": "Installer Claude Code",
@@ -198,7 +249,41 @@
       "success": "Commande d'installation envoyée au terminal. Veuillez terminer l'installation là-bas.",
       "instructions": "L'installateur s'ouvrira dans votre terminal. Suivez les instructions pour terminer l'installation."
     },
-    "learnMore": "En savoir plus sur Claude Code"
+    "learnMore": "En savoir plus sur Claude Code",
+    "errors": {
+      "versionCheckApiMissing": "API de vérification de version indisponible",
+      "versionCheckFailed": "Échec de la vérification de version",
+      "statusCheckFailed": "Erreur lors de la vérification du statut",
+      "installApiMissing": "API d'installation indisponible",
+      "installFailed": "Échec du démarrage de l'installation",
+      "unknownError": "Erreur inconnue"
+    }
+  },
+  "codexCli": {
+    "title": "Codex CLI",
+    "description": "Installez ou mettez à jour Codex CLI pour activer les sessions de compte OpenAI/Codex",
+    "detecting": "Vérification de l'installation de Codex CLI...",
+    "info": {
+      "title": "Qu'est-ce que Codex CLI ?",
+      "description": "Codex CLI gère l'authentification des comptes OpenAI/Codex et fournit le runtime CODEX_HOME utilisé par Auto-Coding."
+    },
+    "status": {
+      "installed": "Installé",
+      "outdated": "Mise à jour disponible",
+      "notFound": "Non installé"
+    },
+    "version": {
+      "current": "Version actuelle",
+      "latest": "Dernière version",
+      "path": "Chemin"
+    },
+    "learnMore": "En savoir plus sur Codex",
+    "errors": {
+      "versionCheckApiMissing": "API de vérification de version indisponible",
+      "versionCheckFailed": "Échec de la vérification de version",
+      "statusCheckFailed": "Erreur lors de la vérification du statut",
+      "unknownError": "Erreur inconnue"
+    }
   },
   "devtools": {
     "title": "Outils de développement",

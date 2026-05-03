@@ -10,6 +10,7 @@ import type { IdeationConfig, Idea } from '../../shared/types';
 import { AUTO_BUILD_PATHS } from '../../shared/constants';
 import { detectRateLimit, createSDKRateLimitInfo, getBestAvailableProfileEnv } from '../rate-limit-detector';
 import { getAPIProfileEnv } from '../services/profile';
+import { getCodexProfileManager } from '../codex-profile-manager';
 import { getOAuthModeClearVars } from './env-utils';
 import { debugLog, debugError } from '../../shared/utils/debug-logger';
 import { stripAnsiCodes } from '../../shared/utils/ansi-sanitizer';
@@ -332,6 +333,7 @@ export class AgentQueueManager {
 
     // Get active API profile environment variables
     const apiProfileEnv = await getAPIProfileEnv();
+    const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
 
     // Get OAuth mode clearing vars (clears stale ANTHROPIC_* vars when in OAuth mode)
     const oauthModeClearVars = getOAuthModeClearVars(apiProfileEnv);
@@ -359,7 +361,8 @@ export class AgentQueueManager {
     // 4. oauthModeClearVars (clear stale ANTHROPIC_* vars when in OAuth mode)
     // 5. profileEnv (Electron app OAuth token)
     // 6. apiProfileEnv (Active API profile config - highest priority for ANTHROPIC_* vars)
-    // 7. Our specific overrides
+    // 7. codexProfileEnv (CODEX_HOME for selected Codex/OpenAI account profile)
+    // 8. Our specific overrides
     const finalEnv = {
       ...process.env,
       ...pythonEnv,
@@ -367,6 +370,7 @@ export class AgentQueueManager {
       ...oauthModeClearVars,
       ...profileEnv,
       ...apiProfileEnv,
+      ...codexProfileEnv,
       PYTHONPATH: combinedPythonPath,
       PYTHONUNBUFFERED: '1',
       PYTHONUTF8: '1'
@@ -660,6 +664,7 @@ export class AgentQueueManager {
 
     // Get active API profile environment variables
     const apiProfileEnv = await getAPIProfileEnv();
+    const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
 
     // Get OAuth mode clearing vars (clears stale ANTHROPIC_* vars when in OAuth mode)
     const oauthModeClearVars = getOAuthModeClearVars(apiProfileEnv);
@@ -687,7 +692,8 @@ export class AgentQueueManager {
     // 4. oauthModeClearVars (clear stale ANTHROPIC_* vars when in OAuth mode)
     // 5. profileEnv (Electron app OAuth token)
     // 6. apiProfileEnv (Active API profile config - highest priority for ANTHROPIC_* vars)
-    // 7. Our specific overrides
+    // 7. codexProfileEnv (CODEX_HOME for selected Codex/OpenAI account profile)
+    // 8. Our specific overrides
     const finalEnv = {
       ...process.env,
       ...pythonEnv,
@@ -695,6 +701,7 @@ export class AgentQueueManager {
       ...oauthModeClearVars,
       ...profileEnv,
       ...apiProfileEnv,
+      ...codexProfileEnv,
       PYTHONPATH: combinedPythonPath,
       PYTHONUNBUFFERED: '1',
       PYTHONUTF8: '1'

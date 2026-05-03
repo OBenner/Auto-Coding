@@ -39,7 +39,7 @@
     },
     "accounts": {
       "title": "Comptes",
-      "description": "Comptes Claude & endpoints API"
+      "description": "Claude, Codex & endpoints API"
     },
     "security": {
       "title": "Sécurité",
@@ -578,9 +578,10 @@
   },
   "accounts": {
     "title": "Comptes",
-    "description": "Gérer les comptes Claude et les endpoints API",
+    "description": "Gérer les comptes Claude, les comptes Codex et les endpoints API",
     "tabs": {
       "claudeCode": "Claude Code",
+      "codex": "Codex CLI",
       "customEndpoints": "Endpoints personnalisés"
     },
     "claudeCode": {
@@ -599,6 +600,33 @@
       "emailPlaceholder": "Email (optionnel, pour l'affichage)",
       "saveToken": "Enregistrer le token",
       "accountNamePlaceholder": "Nom du compte (ex: Travail, Personnel)"
+    },
+    "codex": {
+      "description": "Authentifiez des comptes OpenAI/Codex pour le runtime Codex CLI.",
+      "accountLoginTitle": "La connexion Codex n'est pas une clé API",
+      "accountLoginDescription": "La connexion Codex stocke les identifiants du compte sous CODEX_HOME pour Codex CLI. Elle ne crée pas et n'affiche pas OPENAI_API_KEY ; le mode API OpenAI direct nécessite toujours une clé.",
+      "noAccountsYet": "Aucun compte Codex configuré",
+      "noEmail": "Aucun email détecté",
+      "default": "Par défaut",
+      "active": "Actif",
+      "authenticated": "Authentifié",
+      "needsAuth": "Auth requise",
+      "authenticate": "Authentifier",
+      "authenticating": "Authentification...",
+      "setActive": "Définir actif",
+      "configDir": "CODEX_HOME : {{path}}",
+      "accountNamePlaceholder": "Nom du compte Codex (ex: OpenAI Travail)",
+      "tooltips": {
+        "reauthenticate": "Réauthentifier le profil Codex",
+        "delete": "Supprimer le profil Codex"
+      },
+      "toast": {
+        "loadProfilesFailed": "Échec du chargement des profils Codex",
+        "addProfileFailed": "Échec de l'ajout du profil Codex",
+        "deleteProfileFailed": "Échec de la suppression du profil Codex",
+        "setActiveProfileFailed": "Échec de la définition du profil Codex actif",
+        "authFailed": "Échec de l'authentification Codex"
+      }
     },
     "customEndpoints": {
       "description": "Configurez des endpoints API compatibles Anthropic personnalisés",
@@ -730,6 +758,18 @@
         "name": "Claude Agent SDK",
         "description": "SDK Agent Claude d'Anthropic (par défaut, recommandé)"
       },
+      "codex": {
+        "name": "Codex CLI",
+        "description": "Runtime de compte OpenAI/Codex utilisant le profil Codex actif"
+      },
+      "openai": {
+        "name": "OpenAI",
+        "description": "Runtime SDK OpenAI direct pour les modes limités"
+      },
+      "google": {
+        "name": "Google Gemini",
+        "description": "Runtime SDK Google Gemini pour les modes limités"
+      },
       "litellm": {
         "name": "LiteLLM",
         "description": "Interface unifiée supportant plus de 100 fournisseurs LLM"
@@ -741,6 +781,10 @@
       "zhipuai": {
         "name": "ZhipuAI (GLM)",
         "description": "Modèles GLM de Zhipu AI (glm-4, glm-4-flash)"
+      },
+      "ollama": {
+        "name": "Ollama",
+        "description": "Modèles locaux compatibles OpenAI sans coût d'API distant"
       }
     },
     "apiKeys": {
@@ -764,6 +808,137 @@
         "label": "Clé API ZhipuAI",
         "placeholder": "Entrez votre clé API ZhipuAI",
         "description": "Requise pour les modèles GLM (glm-4, glm-4-flash)"
+      },
+      "litellm": {
+        "label": "Clé API LiteLLM",
+        "placeholder": "Clé API du fournisseur, si nécessaire",
+        "description": "Clé API optionnelle de passerelle pour la route LiteLLM sélectionnée"
+      }
+    },
+    "providerModels": {
+      "claude": {
+        "label": "Modèle Claude",
+        "placeholder": "claude-sonnet-4-5-20250929",
+        "description": "Remplacement optionnel du modèle Claude Agent SDK"
+      },
+      "codex": {
+        "label": "Modèle Codex",
+        "placeholder": "codex-default",
+        "description": "Modèle optionnel transmis à codex exec ; laissez vide pour le défaut Codex"
+      },
+      "openai": {
+        "label": "Modèle OpenAI",
+        "placeholder": "gpt-4o",
+        "description": "Modèle utilisé pour les sessions OpenAI directes"
+      },
+      "google": {
+        "label": "Modèle Gemini",
+        "placeholder": "gemini-2.0-flash",
+        "description": "Modèle utilisé pour les sessions Google Gemini"
+      },
+      "litellm": {
+        "label": "Modèle LiteLLM",
+        "placeholder": "openai/gpt-4o",
+        "description": "Route de modèle LiteLLM"
+      },
+      "openrouter": {
+        "label": "Modèle OpenRouter",
+        "placeholder": "anthropic/claude-sonnet-4",
+        "description": "Route de modèle OpenRouter"
+      },
+      "zhipuai": {
+        "label": "Modèle ZhipuAI",
+        "placeholder": "glm-4-flash-250414",
+        "description": "Modèle GLM utilisé pour les sessions ZhipuAI"
+      },
+      "ollama": {
+        "label": "Modèle Ollama",
+        "placeholder": "llama3.1",
+        "description": "Nom du modèle local installé dans Ollama"
+      }
+    },
+    "baseUrls": {
+      "openai": {
+        "label": "URL de base OpenAI",
+        "placeholder": "https://api.openai.com/v1",
+        "description": "Remplacement optionnel du point de terminaison compatible OpenAI"
+      },
+      "litellm": {
+        "label": "Base API LiteLLM",
+        "placeholder": "https://api.example.com/v1",
+        "description": "Point de terminaison optionnel de passerelle LiteLLM"
+      },
+      "openrouter": {
+        "label": "URL de base OpenRouter",
+        "placeholder": "https://openrouter.ai/api/v1",
+        "description": "Remplacement optionnel du point de terminaison compatible OpenRouter"
+      },
+      "ollama": {
+        "label": "URL de base Ollama",
+        "placeholder": "http://localhost:11434",
+        "description": "URL du serveur Ollama local"
+      }
+    },
+    "runtime": {
+      "title": "Mode runtime",
+      "description": "Détermine si un fournisseur peut modifier les fichiers, proposer des patchs ou seulement analyser du texte.",
+      "globalLabel": "Mode runtime par défaut",
+      "plannerLabel": "Remplacement Planificateur",
+      "coderLabel": "Remplacement Codeur",
+      "qaReviewerLabel": "Remplacement QA reviewer",
+      "qaFixerLabel": "Remplacement QA fixer",
+      "fallbackLabel": "Autoriser le fallback runtime",
+      "fallbackDescription": "Quand le mode autonome complet est choisi avec un fournisseur non-Claude, basculer vers édition générique, proposition de patch ou analyse seule au lieu d'échouer immédiatement.",
+      "runnerRouterLabel": "Router l'autonome complet vers un runner CLI",
+      "runnerRouterDescription": "Quand le mode autonome complet est choisi avec un fournisseur direct, router vers un runner CLI configuré comme Codex CLI au lieu de lancer ce fournisseur directement.",
+      "validation": {
+        "fullAutonomousUnavailable": "Le runtime autonome complet est disponible uniquement via Claude Agent SDK. Choisissez un runtime limité ou activez le fallback.",
+        "fallbackWillApply": "Le mode autonome complet est sélectionné, mais ce fournisseur basculera vers un runtime limité compatible avant l'exécution.",
+        "runnerRouterWillApply": "Le mode autonome complet est sélectionné, mais Auto Code routera l'exécution vers un runner CLI configuré quand il est disponible."
+      }
+    },
+    "runtimeModes": {
+      "useGlobal": "Utiliser le mode runtime par défaut",
+      "fullAutonomous": {
+        "name": "Autonome complet",
+        "description": "Outils Claude Agent SDK, MCP, shell et éditions de fichiers"
+      },
+      "genericEdit": {
+        "name": "Édition générique",
+        "description": "Boucle d'outils locale neutre pour éditions de fichiers et commandes"
+      },
+      "patchProposal": {
+        "name": "Proposition de patch",
+        "description": "Le modèle propose des patchs validés qu'Auto Code applique localement"
+      },
+      "analysisOnly": {
+        "name": "Analyse seule",
+        "description": "Analyse textuelle sans modification de fichiers"
+      }
+    },
+    "compatibility": {
+      "claudeFirst": "Claude Agent SDK reste le runtime autonome complet. Les autres fournisseurs fonctionnent via des modes runtime limités.",
+      "nonClaudeFullAutonomous": "Le mode autonome complet nécessite Claude Agent SDK. Choisissez édition générique, proposition de patch ou analyse seule pour ce fournisseur.",
+      "fallbackActive": "Le fallback runtime est activé. Ce fournisseur ne lancera pas le mode autonome complet ; Auto Code basculera vers un runtime limité compatible.",
+      "runnerRouterActive": "Le routage vers un runner CLI est activé. Auto Code routera l'exécution autonome complète vers un runner CLI configuré comme Codex CLI quand il est disponible."
+    },
+    "compatibilityMatrix": {
+      "title": "Compatibilité runtime",
+      "description": "Capacités actuelles pour {{provider}}",
+      "capabilities": {
+        "fullAutonomous": "Autonome complet",
+        "genericEdit": "Édition générique",
+        "patchProposal": "Proposition de patch",
+        "analysisOnly": "Analyse seule",
+        "nativeTools": "Outils natifs fournisseur",
+        "mcp": "Outils MCP",
+        "subagents": "Sous-agents",
+        "filesystemEdits": "Éditions de fichiers"
+      },
+      "status": {
+        "supported": "Supporté",
+        "limited": "Limité",
+        "unavailable": "Indisponible"
       }
     },
     "models": {
@@ -787,6 +962,7 @@
     },
     "configuration": {
       "title": "Configuration du fournisseur",
+      "description": "Ces valeurs sont écrites dans le fichier .env backend utilisé par les nouvelles sessions d'agent.",
       "apiKey": "Clé API",
       "apiKeyPlaceholder": "Entrez votre clé API",
       "apiKeyDescription": "Requise pour les fournisseurs LiteLLM et OpenRouter",
@@ -799,7 +975,39 @@
     },
     "validation": {
       "apiKeyRequired": "La clé API est requise pour ce fournisseur",
-      "modelRequired": "La sélection du modèle est requise"
+      "modelRequired": "La sélection du modèle est requise",
+      "action": "Valider les réglages",
+      "validating": "Validation...",
+      "valid": "Les réglages fournisseur sont valides",
+      "invalid": "Les réglages fournisseur nécessitent une attention",
+      "availableProviders": "Fournisseurs configurés : {{providers}}"
+    },
+    "connectionTest": {
+      "action": "Tester le fournisseur",
+      "testing": "Test...",
+      "success": "La connexion fournisseur fonctionne",
+      "failure": "Le test fournisseur a échoué",
+      "provider": "Fournisseur",
+      "model": "Modèle",
+      "runtime": "Runtime",
+      "defaultModel": "Modèle par défaut",
+      "unavailable": "Le smoke check fournisseur est indisponible.",
+      "saveFailed": "Impossible d'enregistrer les réglages fournisseur avant le test."
+    },
+    "cost": {
+      "title": "Aperçu du coût",
+      "description": "Tarification de référence pour le modèle fournisseur sélectionné. Les exécutions réelles varient selon la tâche et la taille du contexte.",
+      "referenceEstimate": "Estimation de session de référence",
+      "referenceTokens": "Basé sur {{input}} tokens d'entrée et {{output}} tokens de sortie.",
+      "modelLabel": "Modèle configuré",
+      "pricingModelLabel": "Modèle de tarification",
+      "inputLabel": "Entrée",
+      "outputLabel": "Sortie",
+      "perMillion": "${{amount}} / 1M tokens",
+      "localTitle": "{{model}} s'exécute localement",
+      "localDescription": "Ollama n'a pas de coût de tokens d'API distante. Les coûts de calcul local et d'infrastructure s'appliquent toujours.",
+      "pricingUnavailableTitle": "Aucune donnée de prix pour {{model}}",
+      "pricingUnavailableDescription": "Auto Code peut quand même utiliser ce modèle, mais l'interface ne peut pas encore estimer son coût API."
     },
     "toast": {
       "providerChanged": "Fournisseur d'IA modifié",

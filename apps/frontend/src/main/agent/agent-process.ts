@@ -16,6 +16,7 @@ import { detectRateLimit, createSDKRateLimitInfo, getBestAvailableProfileEnv, de
 import { getAPIProfileEnv } from '../services/profile';
 import { projectStore } from '../project-store';
 import { getClaudeProfileManager } from '../claude-profile-manager';
+import { getCodexProfileManager } from '../codex-profile-manager';
 import { parsePythonCommand, validatePythonPath } from '../python-detector';
 import { pythonEnvManager, getConfiguredPythonPath } from '../python-env-manager';
 import { buildMemoryEnvVars } from '../memory-env-builder';
@@ -188,6 +189,7 @@ export class AgentProcessManager {
     // Get best available Claude profile environment (automatically handles rate limits)
     const profileResult = getBestAvailableProfileEnv();
     const profileEnv = profileResult.env;
+    const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
     // Use getAugmentedEnv() to ensure common tool paths (dotnet, homebrew, etc.)
     // are available even when app is launched from Finder/Dock
     const augmentedEnv = getAugmentedEnv();
@@ -221,6 +223,7 @@ export class AgentProcessManager {
       ...ghCliEnv,
       ...extraEnv,
       ...profileEnv,
+      ...codexProfileEnv,
       PYTHONUNBUFFERED: '1',
       PYTHONIOENCODING: 'utf-8',
       PYTHONUTF8: '1'
@@ -555,7 +558,8 @@ export class AgentProcessManager {
         ...env, // Already includes process.env, extraEnv, profileEnv, PYTHONUNBUFFERED, PYTHONUTF8
         ...pythonEnv, // Include Python environment (PYTHONPATH for bundled packages)
         ...oauthModeClearVars, // Clear stale ANTHROPIC_* vars when in OAuth mode
-        ...apiProfileEnv // Include active API profile config (highest priority for ANTHROPIC_* vars)
+        ...apiProfileEnv, // Include active API profile config (highest priority for ANTHROPIC_* vars)
+        ...getCodexProfileManager().getActiveProfileEnv()
       }
     });
 

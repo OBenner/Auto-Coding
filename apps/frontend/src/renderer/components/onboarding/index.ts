@@ -7,6 +7,7 @@ export { OnboardingWizard } from './OnboardingWizard';
 export { WelcomeStep } from './WelcomeStep';
 export { AuthChoiceStep } from './AuthChoiceStep';
 export { OAuthStep } from './OAuthStep';
+export { CodexOAuthStep } from './CodexOAuthStep';
 export { PrivacyStep } from './PrivacyStep';
 export { MemoryStep } from './MemoryStep';
 export { OllamaModelSelector } from './OllamaModelSelector';

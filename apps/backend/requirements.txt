@@ -30,9 +30,9 @@ google-generativeai>=0.8.0
 # Provides consistent API for OpenAI, Anthropic, Azure, Google, Ollama, etc.
 litellm==1.83.7
 
-# OpenAI SDK - Required for OpenRouter integration
-# OpenRouter uses OpenAI-compatible API
-openai>=2.32.0
+# OpenAI SDK - Required by OpenAI-compatible providers and LiteLLM.
+# Keep this aligned with the pinned LiteLLM requirement.
+openai==2.30.0
 
 # zAI SDK - GLM model provider (智谱AI / zhipu AI)
 zai-sdk>=0.2.2

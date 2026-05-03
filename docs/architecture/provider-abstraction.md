@@ -6,6 +6,12 @@ The **Provider Abstraction Layer** enables Auto Code to support multiple AI back
 
 The provider abstraction layer solves the problem of vendor lock-in by defining a common interface for AI engine providers. Agents interact with `AIEngineProvider` instances rather than directly with specific SDKs, making it possible to swap between Claude, LiteLLM, and OpenRouter without changing agent code.
 
+Provider selection is not the same thing as runtime capability. A provider
+adapter can create a text session while still lacking the full autonomous coding
+surface Auto Code needs for tools, MCP, shell commands, filesystem edits, and
+security hooks. Runtime modes are documented separately in
+[Provider Runtime Modes](provider-runtime-modes.md).
+
 **Key benefits:**
 - **Vendor independence**: Switch between AI providers by changing configuration
 - **Consistent interface**: All providers implement the same `AIEngineProvider` contract
@@ -26,8 +32,13 @@ core/providers/
 ├── exceptions.py            # Provider exception hierarchy
 └── adapters/                # Provider implementations
     ├── claude.py            # Claude Agent SDK adapter
-    ├── litellm.py           # LiteLLM adapter (100+ LLMs)
-    └── openrouter.py        # OpenRouter adapter (400+ models)
+    ├── google.py            # Google Gemini adapter
+    ├── litellm.py           # LiteLLM adapter
+    ├── ollama.py            # Ollama adapter
+    ├── openai.py            # OpenAI adapter
+    ├── openai_compat.py     # Shared OpenAI-compatible base
+    ├── openrouter.py        # OpenRouter adapter
+    └── zhipuai.py           # ZhipuAI adapter
 ```
 
 **Design patterns:**
@@ -35,6 +46,12 @@ core/providers/
 - **Adapter Pattern**: Each adapter wraps a specific SDK to implement `AIEngineProvider`
 - **Template Method**: Base class defines interface, adapters provide implementation
 - **Strategy Pattern**: Runtime selection of provider strategy
+
+The runtime engine sits above this provider layer. It wraps provider sessions in
+runtime adapters and checks whether the selected runtime can satisfy the current
+agent phase. Claude sessions use the full SDK runtime; non-Claude sessions are
+limited to text-only or patch proposal modes until a generic tool/edit runtime
+exists.
 
 ## Core Interfaces
 
@@ -708,6 +725,7 @@ OPENROUTER_MODEL=anthropic/claude-sonnet-4
 
 ## Related Documentation
 
+- [Provider Runtime Modes](provider-runtime-modes.md)
 - [Provider Factory Implementation](../apps/backend/core/providers/factory.py)
 - [Claude Adapter](../apps/backend/core/providers/adapters/claude.py)
 - [LiteLLM Adapter](../apps/backend/core/providers/adapters/litellm.py)

@@ -1,17 +1,24 @@
 # Implementation Roadmap
 
-This document provides a structured roadmap for implementing multi-provider LLM support in Auto Code, enabling seamless integration of OpenAI models alongside the existing Claude SDK provider.
+This document provides a structured roadmap for implementing multi-provider LLM
+and CLI runner support in Auto Code, enabling provider APIs, account-backed
+coding CLIs, review CLIs, and local/BYOK runners alongside the existing
+Claude-first workflow.
 
 ## Overview
 
-The implementation is organized into **7 phases** that progress from foundational architecture through integration and validation. Phases are designed to maximize parallel execution while respecting dependencies, with an estimated **2.5x speedup** over sequential implementation through parallel phase execution.
+The implementation is organized into **8 phases** that progress from
+foundational architecture through integration, runner support, and validation.
+Phases are designed to maximize parallel execution while respecting
+dependencies.
 
 **Implementation strategy:**
 - Build on existing provider abstraction layer
 - Maintain backward compatibility with Claude provider
-- Design for extensibility (future providers)
+- Design for extensibility across direct providers and CLI runners
 - Prioritize security parity across providers
 - Enable provider switching without code changes
+- Enable runner switching without weakening workflow isolation, auditability, or QA
 
 ## Phase Dependencies
 
@@ -21,13 +28,14 @@ Phase 2 (Compatibility Analysis) ─────┤
 Phase 3 (MCP Integration Design) ─────┤
 Phase 5 (Model Mapping) ──────────────┤→ Phase 7 (Roadmap & Testing)
 Phase 6 (Configuration & UI) ─────────┤
+Phase 8 (CLI Runner Support) ─────────┤
                                         │
 Phase 4 (Security Wrapper) ────────────┘
      (depends on Phase 2)
 ```
 
 **Parallel execution groups:**
-- **Group A** (Phases 1, 2, 3, 5, 6): Can execute in parallel
+- **Group A** (Phases 1, 2, 3, 5, 6, 8): Can execute in parallel once shared runtime contracts are stable
 - **Group B** (Phase 4): Requires Phase 2 completion
 - **Group C** (Phase 7): Requires all design phases complete
 
@@ -331,34 +339,139 @@ Create comprehensive implementation roadmap, testing strategy, and migration gui
 
 ---
 
+## Phase 8: Multi-CLI Runner Support
+
+**Status:** 🚧 In Progress (runner strategy documented; runtime contracts started)
+
+**Description:**
+Extend the multi-provider runtime engine so Auto Code can orchestrate external
+LLM coding CLIs and review CLIs through a common runner contract instead of
+adding ad hoc integrations in planner, coder, QA reviewer, or QA fixer modules.
+
+This phase is based on `docs/roadmap/cli-runner-strategy.md` and covers both
+first-class runner integrations and generic CLI fallback support.
+
+**Implementation Tasks:**
+
+1. **Runner Contract and Registry**
+   - Define `AgentRunner`, `ReviewRunner`, `RunnerCapabilities`,
+     `RunnerPolicy`, `RunnerResult`, and `RunnerRegistry`.
+   - Normalize lifecycle operations: detect, authenticate, start, stream events,
+     cancel, resume, collect artifacts, and close.
+   - Map runner capabilities to runtime requirements without claiming Claude SDK
+     parity where it does not exist.
+   - **Deliverable:** backend runner contract under `apps/backend/agents/runtime/`
+     or a sibling `runners/cli/` package.
+
+2. **First-Class CLI Runners**
+   - Codex CLI: keep as the default account-backed coding runner and finish
+     event/cost/resume reporting.
+   - Claude Code: keep as the compatibility runner for current full autonomous
+     workflows.
+   - Gemini CLI: support large-context discovery, repository analysis, and
+     research-heavy phases.
+   - Aider: support focused git-native edits, BYOK/local-model flows, and
+     explicit patch/change review.
+   - CodeRabbit CLI: support independent review and quality gate workflows,
+     not implementation work.
+   - **Deliverable:** explicit runner adapters, smoke checks, and capability
+     rows for each first-class CLI.
+
+3. **Strategic CLI Integrations**
+   - GitHub Copilot CLI: support GitHub-native issue, branch, PR, and enterprise
+     repository workflows.
+   - Cursor CLI: support teams standardized on Cursor Agent, Cursor rules, and
+     Cursor-managed project context.
+   - Z.AI via Claude Code: support GLM models through Z.AI's
+     Anthropic-compatible endpoint as a Claude Code-compatible runner profile,
+     separate from the direct ZhipuAI/Z.AI provider adapter.
+   - **Deliverable:** detection, setup guidance, capability policy, and fallback
+     integration for strategic runners.
+
+4. **Generic CLI Runner Contract**
+   - Support OpenCode, Goose, Amp, Qwen Code, DeepV Code / Codeep, and similar
+     emerging CLIs through a conservative generic runner adapter.
+   - Require explicit capability declarations for file edits, command execution,
+     MCP, headless mode, structured output, review-only mode, local model use,
+     image input, and cost reporting.
+   - Start with analysis/review/patch proposal flows unless a runner has a
+     proven edit/runtime contract.
+   - **Deliverable:** generic CLI config schema and compatibility tests.
+
+5. **Runner Selection and Fallback**
+   - Extend runtime-aware fallback so it can choose among direct providers and
+     CLI runners by capability, policy, account state, cost preference, and task
+     type.
+   - Prevent unsafe fallback, such as replacing Claude full autonomous with a
+     CLI that lacks filesystem edits, MCP, or subagent support.
+   - Record selected runner, skipped candidates, capability gaps, and fallback
+     reason in task artifacts.
+   - Current runtime fallback artifacts record runner candidates for requested,
+     selected, and compatible degraded modes; actual runner selection remains a
+     router step.
+   - **Deliverable:** runner-aware fallback decisions and artifacts.
+
+6. **Frontend Runner Settings**
+   - Add runner status cards for installed, authenticated, unsupported version,
+     blocked by policy, missing but credential-signal present, and unavailable.
+   - Let users set default implementation, research/discovery, review, QA, and
+     fallback runners.
+   - Surface runner cost, account, policy, and compatibility warnings next to
+     runtime settings.
+   - **Deliverable:** provider and runner settings UI backed by runtime
+     compatibility payloads.
+
+**Dependencies:** Shared runtime capability contracts from Phases 1, 2, 4, and
+6. Codex CLI work can continue immediately; the generic runner adapter depends
+on stable policy and artifact contracts.
+
+**Risks & Mitigation:**
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| CLI output is inconsistent across tools | High | Prefer structured modes where available; add parser fixtures and conservative fallback |
+| A runner cannot run headlessly or safely edit files | High | Gate by capabilities; allow analysis/review-only use until edit contract is proven |
+| Authentication flows differ by vendor | Medium | Keep auth detection separate from execution; surface setup state in UI |
+| Generic runner becomes too permissive | High | Require explicit capability declarations and block unknown mutating behavior |
+| Review-only tools are accidentally used for implementation | Medium | Add `review_only` capability and fail-fast assignment checks |
+
+**Parallelism:** Runner detection, UI design, and parser fixtures can progress in
+parallel with direct provider runtime work. Mutating runner execution should wait
+for the security/policy wrapper to be stable.
+
+---
+
 ## Implementation Execution Strategy
 
 ### Recommended Execution Order
 
-**Step 1: Parallel Design Phases** (Maximum Parallelism)
-- Execute Phases 1, 2, 3, 5, 6 in parallel with 3-5 workers
-- **Benefit:** 2.5x faster than sequential execution
-- **Duration:** All design phases complete simultaneously
+**Step 1: Parallel Design And Runner Contract Phases**
+- Execute Phases 1, 2, 3, 5, 6, and the non-mutating parts of Phase 8 in
+  parallel where ownership is clear.
+- Keep direct-provider work and CLI-runner work behind the same capability,
+  policy, artifact, and fallback contracts.
 
 **Step 2: Security Wrapper Design**
 - Execute Phase 4 after Phase 2 completes
-- **Duration:** Short phase (builds on Phase 2 analysis)
+- Apply the same policy model to direct providers and mutating CLI runners.
 
 **Step 3: Roadmap & Testing**
 - Execute Phase 7 after all design phases complete
-- **Duration:** Synthesizes learnings from all phases
+- Synthesize validation coverage for providers, runners, UI, fallback, and
+  migration.
 
 ### Parallel Execution Group Summary
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ Group A: Parallel Design Phases (3-5 workers recommended)  │
+│ Group A: Parallel Design And Runner Contract Phases        │
 ├─────────────────────────────────────────────────────────────┤
 │ Phase 1: Provider Abstraction Enhancement                  │
 │ Phase 2: Compatibility Analysis                           │
 │ Phase 3: MCP Integration Design                           │
 │ Phase 5: Model Mapping Strategy                           │
 │ Phase 6: Configuration & UX                               │
+│ Phase 8: CLI Runner Support                               │
 └─────────────────────────────────────────────────────────────┘
                            ↓ (completes)
 ┌─────────────────────────────────────────────────────────────┐
@@ -368,7 +481,7 @@ Create comprehensive implementation roadmap, testing strategy, and migration gui
 └─────────────────────────────────────────────────────────────┘
                            ↓ (completes)
 ┌─────────────────────────────────────────────────────────────┐
-│ Group C: Roadmap & Testing (depends on all design phases)  │
+│ Group C: Roadmap & Testing (depends on design phases)      │
 ├─────────────────────────────────────────────────────────────┤
 │ Phase 7: Implementation Roadmap & Testing Strategy        │
 └─────────────────────────────────────────────────────────────┘
@@ -379,10 +492,14 @@ Create comprehensive implementation roadmap, testing strategy, and migration gui
 **High-Risk Phases** (require extra attention):
 - **Phase 3 (MCP Integration):** High complexity - consider prototyping early
 - **Phase 4 (Security Wrapper):** High security impact - requires thorough testing
+- **Phase 8 (CLI Runner Support):** High variance across runner output,
+  authentication, and safe edit behavior
 
 **Medium-Risk Phases:**
 - **Phase 2 (Compatibility Analysis):** Foundation for security wrapper
 - **Phase 5 (Model Mapping):** Mappings may not be functionally equivalent
+- **Phase 8 non-mutating runners:** Detection, analysis, and review-only use are
+  lower risk than mutating runner execution
 
 **Low-Risk Phases:**
 - **Phase 1 (Provider Abstraction):** Builds on existing patterns
@@ -392,13 +509,14 @@ Create comprehensive implementation roadmap, testing strategy, and migration gui
 
 The implementation roadmap is complete when:
 
-- [ ] All 7 phases have detailed implementation tasks
+- [ ] All 8 phases have detailed implementation tasks
 - [ ] Dependencies between phases are clearly documented
 - [ ] Parallel execution strategy is defined
 - [ ] Risk mitigation strategies exist for each phase
-- [ ] Effort levels are estimated for each phase
 - [ ] Testing strategy covers all providers and features
+- [ ] Testing strategy covers first-class, strategic, and generic CLI runners
 - [ ] Migration guide provides clear upgrade path
+- [ ] CLI runner strategy is linked to runtime capability and policy contracts
 - [ ] Rollback strategy is documented
 - [ ] Stakeholder review confirms roadmap is actionable
 
@@ -407,12 +525,15 @@ The implementation roadmap is complete when:
 After roadmap completion:
 
 1. **Stakeholder Review** - Present roadmap to team for feedback
-2. **Resource Planning** - Assign developers to parallel phase groups
+2. **Ownership Planning** - Assign clear ownership for direct providers,
+   runner contracts, UI, docs, and validation
 3. **Prototype Validation** - Build proof-of-concept for high-risk phases
 4. **Implementation Kickoff** - Begin with Group A parallel phases
 5. **Progress Tracking** - Use implementation_plan.json for status tracking
-6. **Regular Syncs** - Weekly check-ins on parallel phase progress
-7. **Integration Testing** - Validate provider switching after Group C
+6. **Runner Contract Validation** - Verify Codex CLI, Claude Code, Gemini CLI,
+   Aider, CodeRabbit CLI, GitHub Copilot CLI, Cursor CLI, and generic CLI
+   adapters against the same capability checks
+7. **Integration Testing** - Validate provider and runner switching after Group C
 
 ## References
 
@@ -421,6 +542,7 @@ After roadmap completion:
 - **Architecture Documents:** `./docs/architecture/*.md`
 - **Compatibility Analysis:** `./docs/compatibility/*.md`
 - **Configuration:** `./docs/configuration/*.md`
+- **CLI Runner Strategy:** `./docs/roadmap/cli-runner-strategy.md`
 
 ---
 

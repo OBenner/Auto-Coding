@@ -81,6 +81,56 @@
       "authStartFailedMessage": "Failed to start authentication. Please try again."
     }
   },
+  "authChoice": {
+    "title": "Choose Your Authentication Method",
+    "subtitle": "Select how you want to authenticate with AI runtimes. You can change this later in Settings.",
+    "oauthTitle": "Sign in with Anthropic",
+    "oauthDesc": "Use your Anthropic account to authenticate. Simple and secure OAuth flow.",
+    "codexTitle": "Sign in with OpenAI/Codex",
+    "codexDesc": "Use Codex CLI account login with an isolated CODEX_HOME profile for OpenAI/Codex sessions.",
+    "apiKeyTitle": "Use Custom API Key",
+    "apiKeyDesc": "Bring your own API key from Anthropic or a compatible API provider. Highly experimental; may incur significant costs.",
+    "storageNote": "OAuth profiles and API keys are stored separately so each runtime can receive the right environment.",
+    "skip": "Skip for now"
+  },
+  "codexOauth": {
+    "title": "Sign in with OpenAI/Codex",
+    "description": "Connect a Codex account profile with the Codex CLI login flow.",
+    "loadingProfiles": "Loading profiles...",
+    "labels": {
+      "accountName": "Account name",
+      "namePlaceholder": "Profile name (e.g., Work, Personal)"
+    },
+    "badges": {
+      "default": "Default",
+      "active": "Active",
+      "authenticated": "Authenticated",
+      "needsAuth": "Needs Auth"
+    },
+    "buttons": {
+      "add": "Add",
+      "setActive": "Set Active",
+      "authenticate": "Authenticate",
+      "back": "Back",
+      "skip": "Skip",
+      "continue": "Continue"
+    },
+    "aria": {
+      "deleteProfile": "Delete Codex profile"
+    },
+    "errors": {
+      "loadProfiles": "Failed to load Codex profiles",
+      "prepareAuth": "Failed to prepare Codex authentication",
+      "startAuth": "Failed to start Codex authentication",
+      "addProfile": "Failed to add Codex profile",
+      "setActiveProfile": "Failed to set active Codex profile",
+      "deleteProfile": "Failed to delete Codex profile"
+    },
+    "toast": {
+      "connectedTitle": "Codex account connected",
+      "connectedDescription": "Auto-Coding will use this Codex/OpenAI account profile for Codex CLI sessions."
+    }
+  },
   "memory": {
     "title": "Memory",
     "description": "Configure persistent cross-session memory for agents",
@@ -199,7 +249,8 @@
     },
     "version": {
       "current": "Current Version",
-      "latest": "Latest Version"
+      "latest": "Latest Version",
+      "path": "Path"
     },
     "install": {
       "button": "Install Claude Code",
@@ -208,7 +259,41 @@
       "success": "Installation command sent to terminal. Please complete the installation there.",
       "instructions": "The installer will open in your terminal. Follow the prompts to complete installation."
     },
-    "learnMore": "Learn more about Claude Code"
+    "learnMore": "Learn more about Claude Code",
+    "errors": {
+      "versionCheckApiMissing": "Version check API not available",
+      "versionCheckFailed": "Failed to check version",
+      "statusCheckFailed": "Error checking status",
+      "installApiMissing": "Install API not available",
+      "installFailed": "Failed to start installation",
+      "unknownError": "Unknown error"
+    }
+  },
+  "codexCli": {
+    "title": "Codex CLI",
+    "description": "Install or update the Codex CLI to enable OpenAI/Codex account sessions",
+    "detecting": "Checking Codex CLI installation...",
+    "info": {
+      "title": "What is Codex CLI?",
+      "description": "Codex CLI manages OpenAI/Codex account authentication and provides the CODEX_HOME runtime used by Auto-Coding."
+    },
+    "status": {
+      "installed": "Installed",
+      "outdated": "Update Available",
+      "notFound": "Not Installed"
+    },
+    "version": {
+      "current": "Current Version",
+      "latest": "Latest Version",
+      "path": "Path"
+    },
+    "learnMore": "Learn more about Codex",
+    "errors": {
+      "versionCheckApiMissing": "Version check API not available",
+      "versionCheckFailed": "Failed to check version",
+      "statusCheckFailed": "Error checking status",
+      "unknownError": "Unknown error"
+    }
   },
   "devtools": {
     "title": "Developer Tools",

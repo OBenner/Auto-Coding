@@ -1,11 +1,11 @@
 /**
- * AccountSettings - Unified account management for Claude Code and Custom Endpoints
+ * AccountSettings - Unified account management for Claude Code, Codex CLI, and Custom Endpoints
  *
  * Consolidates the former "Integrations" and "API Profiles" settings into a single
  * tabbed interface with shared automatic account switching controls.
  *
  * Structure:
- * - Tabs: "Claude Code" (OAuth accounts) | "Custom Endpoints" (API profiles)
+ * - Tabs: "Claude Code" (OAuth accounts) | "Codex CLI" (OpenAI/Codex accounts) | "Custom Endpoints" (API profiles)
  * - Persistent: Automatic Account Switching section (below tabs)
  */
 import { useState, useEffect, useCallback } from 'react';
@@ -47,7 +47,7 @@ import { maskApiKey } from '../../lib/profile-utils';
 import { loadClaudeProfiles as loadGlobalClaudeProfiles } from '../../stores/claude-profile-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useToast } from '../../hooks/use-toast';
-import type { AppSettings, ClaudeProfile, ClaudeAutoSwitchSettings, ProfileUsageSummary } from '../../../shared/types';
+import type { AppSettings, ClaudeProfile, ClaudeAutoSwitchSettings, ProfileUsageSummary, CodexProfile } from '../../../shared/types';
 import type { APIProfile } from '@shared/types/profile';
 import {
   AlertDialog,
@@ -66,6 +66,8 @@ interface AccountSettingsProps {
   isOpen: boolean;
 }
 
+type AccountTab = 'claude-code' | 'codex' | 'custom-endpoints';
+
 /**
  * Unified account settings with tabs for Claude Code and Custom Endpoints
  */
@@ -75,7 +77,7 @@ export function AccountSettings({ settings: _settings, onSettingsChange: _onSett
   const { toast } = useToast();
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'claude-code' | 'custom-endpoints'>('claude-code');
+  const [activeTab, setActiveTab] = useState<AccountTab>('claude-code');
 
   // ============================================
   // Claude Code (OAuth) state
@@ -97,6 +99,23 @@ export function AccountSettings({ settings: _settings, onSettingsChange: _onSett
 
   // Auth terminal state
   const [authTerminal, setAuthTerminal] = useState<{
+    terminalId: string;
+    configDir: string;
+    profileId: string;
+    profileName: string;
+  } | null>(null);
+
+  // ============================================
+  // Codex CLI (OpenAI/Codex account) state
+  // ============================================
+  const [codexProfiles, setCodexProfiles] = useState<CodexProfile[]>([]);
+  const [activeCodexProfileId, setActiveCodexProfileId] = useState<string | null>(null);
+  const [isLoadingCodexProfiles, setIsLoadingCodexProfiles] = useState(false);
+  const [newCodexProfileName, setNewCodexProfileName] = useState('');
+  const [isAddingCodexProfile, setIsAddingCodexProfile] = useState(false);
+  const [deletingCodexProfileId, setDeletingCodexProfileId] = useState<string | null>(null);
+  const [authenticatingCodexProfileId, setAuthenticatingCodexProfileId] = useState<string | null>(null);
+  const [codexAuthTerminal, setCodexAuthTerminal] = useState<{
     terminalId: string;
     configDir: string;
     profileId: string;
@@ -253,6 +272,7 @@ export function AccountSettings({ settings: _settings, onSettingsChange: _onSett
   useEffect(() => {
     if (isOpen) {
       loadClaudeProfiles();
+      loadCodexProfiles();
       loadAutoSwitchSettings();
       loadPriorityOrder();
       // Force refresh usage data when Settings opens to get fresh data
@@ -498,6 +518,171 @@ export function AccountSettings({ settings: _settings, onSettingsChange: _onSett
     // Don't auto-close on error
   }, []);
 
+  // ============================================
+  // Codex CLI (OpenAI/Codex account) handlers
+  // ============================================
+  const loadCodexProfiles = async () => {
+    setIsLoadingCodexProfiles(true);
+    try {
+      const result = await window.electronAPI.getCodexProfiles();
+      if (result.success && result.data) {
+        setCodexProfiles(result.data.profiles);
+        setActiveCodexProfileId(result.data.activeProfileId);
+      } else if (!result.success) {
+        toast({
+          variant: 'destructive',
+          title: t('accounts.codex.toast.loadProfilesFailed'),
+          description: result.error || t('accounts.toast.tryAgain'),
+        });
+      }
+    } catch (err) {
+      console.warn('[AccountSettings] Failed to load Codex profiles:', err);
+      toast({
+        variant: 'destructive',
+        title: t('accounts.codex.toast.loadProfilesFailed'),
+        description: t('accounts.toast.tryAgain'),
+      });
+    } finally {
+      setIsLoadingCodexProfiles(false);
+    }
+  };
+
+  const startCodexAuthentication = async (profile: CodexProfile) => {
+    setAuthenticatingCodexProfileId(profile.id);
+    try {
+      const result = await window.electronAPI.authenticateCodexProfile(profile.id);
+      if (!result.success || !result.data) {
+        toast({
+          variant: 'destructive',
+          title: t('accounts.codex.toast.authFailed'),
+          description: result.error || t('accounts.toast.tryAgain'),
+        });
+        setAuthenticatingCodexProfileId(null);
+        return;
+      }
+
+      setCodexAuthTerminal({
+        terminalId: result.data.terminalId,
+        configDir: result.data.configDir,
+        profileId: profile.id,
+        profileName: profile.name,
+      });
+    } catch (err) {
+      console.warn('[AccountSettings] Failed to authenticate Codex profile:', err);
+      toast({
+        variant: 'destructive',
+        title: t('accounts.codex.toast.authFailed'),
+        description: t('accounts.toast.tryAgain'),
+      });
+      setAuthenticatingCodexProfileId(null);
+    }
+  };
+
+  const handleAddCodexProfile = async () => {
+    if (!newCodexProfileName.trim()) return;
+
+    setIsAddingCodexProfile(true);
+    try {
+      const profileName = newCodexProfileName.trim();
+      const result = await window.electronAPI.createCodexProfile(profileName);
+
+      if (!result.success || !result.data) {
+        toast({
+          variant: 'destructive',
+          title: t('accounts.codex.toast.addProfileFailed'),
+          description: result.error || t('accounts.toast.tryAgain'),
+        });
+        return;
+      }
+
+      await window.electronAPI.setActiveCodexProfile(result.data.id);
+      setNewCodexProfileName('');
+      await loadCodexProfiles();
+      await startCodexAuthentication(result.data);
+    } catch (err) {
+      console.warn('[AccountSettings] Failed to add Codex profile:', err);
+      toast({
+        variant: 'destructive',
+        title: t('accounts.codex.toast.addProfileFailed'),
+        description: t('accounts.toast.tryAgain'),
+      });
+    } finally {
+      setIsAddingCodexProfile(false);
+    }
+  };
+
+  const handleSetActiveCodexProfile = async (profileId: string) => {
+    try {
+      const result = await window.electronAPI.setActiveCodexProfile(profileId);
+      if (result.success) {
+        setActiveCodexProfileId(profileId);
+        await loadCodexProfiles();
+      } else {
+        toast({
+          variant: 'destructive',
+          title: t('accounts.codex.toast.setActiveProfileFailed'),
+          description: result.error || t('accounts.toast.tryAgain'),
+        });
+      }
+    } catch (err) {
+      console.warn('[AccountSettings] Failed to set active Codex profile:', err);
+      toast({
+        variant: 'destructive',
+        title: t('accounts.codex.toast.setActiveProfileFailed'),
+        description: t('accounts.toast.tryAgain'),
+      });
+    }
+  };
+
+  const handleDeleteCodexProfile = async (profileId: string) => {
+    setDeletingCodexProfileId(profileId);
+    try {
+      const result = await window.electronAPI.deleteCodexProfile(profileId);
+      if (result.success) {
+        await loadCodexProfiles();
+      } else {
+        toast({
+          variant: 'destructive',
+          title: t('accounts.codex.toast.deleteProfileFailed'),
+          description: result.error || t('accounts.toast.tryAgain'),
+        });
+      }
+    } catch (err) {
+      console.warn('[AccountSettings] Failed to delete Codex profile:', err);
+      toast({
+        variant: 'destructive',
+        title: t('accounts.codex.toast.deleteProfileFailed'),
+        description: t('accounts.toast.tryAgain'),
+      });
+    } finally {
+      setDeletingCodexProfileId(null);
+    }
+  };
+
+  const handleCodexAuthTerminalClose = async () => {
+    const profileId = codexAuthTerminal?.profileId;
+    setCodexAuthTerminal(null);
+    setAuthenticatingCodexProfileId(null);
+    if (profileId) {
+      await window.electronAPI.verifyCodexProfileAuth(profileId).catch(() => undefined);
+      await loadCodexProfiles();
+    }
+  };
+
+  const handleCodexAuthTerminalSuccess = async () => {
+    const profileId = codexAuthTerminal?.profileId;
+    setCodexAuthTerminal(null);
+    setAuthenticatingCodexProfileId(null);
+    if (profileId) {
+      await window.electronAPI.verifyCodexProfileAuth(profileId).catch(() => undefined);
+    }
+    await loadCodexProfiles();
+  };
+
+  const handleCodexAuthTerminalError = () => {
+    // Keep the terminal open so the user can see the Codex CLI error.
+  };
+
   const toggleTokenEntry = (profileId: string) => {
     if (expandedTokenProfileId === profileId) {
       setExpandedTokenProfileId(null);
@@ -670,12 +855,16 @@ export function AccountSettings({ settings: _settings, onSettingsChange: _onSett
       description={t('accounts.description')}
     >
       <div className="space-y-6">
-        {/* Tabs for Claude Code vs Custom Endpoints */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'claude-code' | 'custom-endpoints')}>
+        {/* Tabs for Claude Code, Codex CLI, and Custom Endpoints */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AccountTab)}>
           <TabsList className="w-full justify-start">
             <TabsTrigger value="claude-code" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               {t('accounts.tabs.claudeCode')}
+            </TabsTrigger>
+            <TabsTrigger value="codex" className="flex items-center gap-2">
+              <LogIn className="h-4 w-4" />
+              {t('accounts.tabs.codex')}
             </TabsTrigger>
             <TabsTrigger value="custom-endpoints" className="flex items-center gap-2">
               <Server className="h-4 w-4" />
@@ -1068,6 +1257,221 @@ export function AccountSettings({ settings: _settings, onSettingsChange: _onSett
                   className="gap-1 shrink-0"
                 >
                   {isAddingProfile ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Plus className="h-3 w-3" />
+                  )}
+                  {tCommon('buttons.add')}
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Codex CLI Tab Content */}
+          <TabsContent value="codex">
+            <div className="rounded-lg bg-muted/30 border border-border p-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                {t('accounts.codex.description')}
+              </p>
+
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 mb-4 flex items-start gap-3">
+                <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {t('accounts.codex.accountLoginTitle')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('accounts.codex.accountLoginDescription')}
+                  </p>
+                </div>
+              </div>
+
+              {isLoadingCodexProfiles ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : codexProfiles.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border p-4 text-center mb-4">
+                  <p className="text-sm text-muted-foreground">{t('accounts.codex.noAccountsYet')}</p>
+                </div>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {codexProfiles.map((profile) => {
+                    const isActive = profile.id === activeCodexProfileId;
+
+                    return (
+                      <div
+                        key={profile.id}
+                        className={cn(
+                          "rounded-lg border transition-colors p-3",
+                          isActive
+                            ? "border-primary bg-primary/5"
+                            : "border-border bg-background"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={cn(
+                              "h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0",
+                              isActive
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            )}>
+                              {profile.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-foreground">{profile.name}</span>
+                                {profile.isDefault && (
+                                  <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{t('accounts.codex.default')}</span>
+                                )}
+                                {isActive && (
+                                  <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    <Star className="h-3 w-3" />
+                                    {t('accounts.codex.active')}
+                                  </span>
+                                )}
+                                {profile.isAuthenticated ? (
+                                  <span className="text-xs bg-success/20 text-success px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    <Check className="h-3 w-3" />
+                                    {t('accounts.codex.authenticated')}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs bg-warning/20 text-warning px-1.5 py-0.5 rounded">
+                                    {t('accounts.codex.needsAuth')}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {profile.email || t('accounts.codex.noEmail')}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground truncate font-mono" title={profile.configDir}>
+                                {t('accounts.codex.configDir', { path: profile.configDir })}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {!profile.isAuthenticated ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => startCodexAuthentication(profile)}
+                                disabled={authenticatingCodexProfileId === profile.id}
+                                className="gap-1 h-7 text-xs"
+                              >
+                                {authenticatingCodexProfileId === profile.id ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    {t('accounts.codex.authenticating')}
+                                  </>
+                                ) : (
+                                  <>
+                                    <LogIn className="h-3 w-3" />
+                                    {t('accounts.codex.authenticate')}
+                                  </>
+                                )}
+                              </Button>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => startCodexAuthentication(profile)}
+                                    disabled={authenticatingCodexProfileId === profile.id}
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                  >
+                                    {authenticatingCodexProfileId === profile.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <RefreshCw className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t('accounts.codex.tooltips.reauthenticate')}</TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            {!isActive && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSetActiveCodexProfile(profile.id)}
+                                className="gap-1 h-7 text-xs"
+                              >
+                                <Check className="h-3 w-3" />
+                                {t('accounts.codex.setActive')}
+                              </Button>
+                            )}
+
+                            {!profile.isDefault && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteCodexProfile(profile.id)}
+                                    disabled={deletingCodexProfileId === profile.id}
+                                    className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  >
+                                    {deletingCodexProfileId === profile.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t('accounts.codex.tooltips.delete')}</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {codexAuthTerminal && (
+                <div className="mb-4">
+                  <div className="rounded-lg border border-primary/30 overflow-hidden" style={{ height: '320px' }}>
+                    <AuthTerminal
+                      terminalId={codexAuthTerminal.terminalId}
+                      configDir={codexAuthTerminal.configDir}
+                      profileName={codexAuthTerminal.profileName}
+                      loginCommand="codex login"
+                      env={{ CODEX_HOME: codexAuthTerminal.configDir }}
+                      authProvider="codex"
+                      successOnExitCode
+                      onClose={handleCodexAuthTerminalClose}
+                      onAuthSuccess={handleCodexAuthTerminalSuccess}
+                      onAuthError={handleCodexAuthTerminalError}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder={t('accounts.codex.accountNamePlaceholder')}
+                  value={newCodexProfileName}
+                  onChange={(e) => setNewCodexProfileName(e.target.value)}
+                  className="flex-1 h-8 text-sm"
+                  disabled={!!codexAuthTerminal}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newCodexProfileName.trim()) {
+                      handleAddCodexProfile();
+                    }
+                  }}
+                />
+                <Button
+                  onClick={handleAddCodexProfile}
+                  disabled={!newCodexProfileName.trim() || isAddingCodexProfile || !!codexAuthTerminal}
+                  size="sm"
+                  className="gap-1 shrink-0"
+                >
+                  {isAddingCodexProfile ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
                     <Plus className="h-3 w-3" />
