@@ -156,81 +156,30 @@ class RuntimeSubagentOrchestrator:
     ) -> RuntimeSubagentRun:
         """Run delegated tasks with bounded parallelism and persist results."""
         if not tasks:
-            run = RuntimeSubagentRun(
-                status="complete",
-                results=[],
-                support=support,
-            )
-            run.artifact_path = save_subagent_artifact(
-                spec_dir=self.spec_dir,
+            return self._save_run(
+                RuntimeSubagentRun(
+                    status="complete",
+                    results=[],
+                    support=support,
+                ),
                 artifact_name=artifact_name,
-                run=run,
             )
-            return run
 
         semaphore = asyncio.Semaphore(self.max_concurrency)
-
-        async def run_one(task: RuntimeSubagentTask) -> RuntimeSubagentResult:
-            async with semaphore:
-                if self._cancel_event.is_set():
-                    return RuntimeSubagentResult(
-                        id=task.id,
-                        role=task.role,
-                        status="cancelled",
-                        response_text="Subagent task was cancelled before start.",
+        running = [
+            (
+                task,
+                asyncio.create_task(
+                    self._run_one(
+                        task,
+                        semaphore=semaphore,
+                        verbose=verbose,
+                        phase=phase,
                     )
-
-                runtime_session = await maybe_await(self.session_factory(task))
-                try:
-                    result: AgentRunResult = await asyncio.wait_for(
-                        run_runtime_session(
-                            runtime_session,
-                            build_subagent_prompt(task),
-                            self.spec_dir,
-                            verbose=verbose,
-                            phase=phase,
-                            requirements=task.requirements,
-                            subtask_id=task.subtask_id or task.id,
-                        ),
-                        timeout=self.max_task_seconds,
-                    )
-                    return RuntimeSubagentResult(
-                        id=task.id,
-                        role=task.role,
-                        status=result.status,
-                        response_text=result.response_text,
-                        usage_metadata=result.usage_metadata,
-                        artifacts=result.artifacts,
-                    )
-                except asyncio.CancelledError:
-                    cancel_hook = getattr(runtime_session, "cancel", None)
-                    if callable(cancel_hook):
-                        await maybe_await(cancel_hook())
-                    raise
-                except TimeoutError:
-                    cancel_hook = getattr(runtime_session, "cancel", None)
-                    if callable(cancel_hook):
-                        await maybe_await(cancel_hook())
-                    return RuntimeSubagentResult(
-                        id=task.id,
-                        role=task.role,
-                        status="error",
-                        response_text="",
-                        error=(
-                            "Subagent task timed out after "
-                            f"{self.max_task_seconds:g} seconds."
-                        ),
-                    )
-                except Exception as e:
-                    return RuntimeSubagentResult(
-                        id=task.id,
-                        role=task.role,
-                        status="error",
-                        response_text="",
-                        error=str(e),
-                    )
-
-        running = [(task, asyncio.create_task(run_one(task))) for task in tasks]
+                ),
+            )
+            for task in tasks
+        ]
         asyncio_tasks = [asyncio_task for _, asyncio_task in running]
         self._running_tasks.update(asyncio_tasks)
         try:
@@ -253,12 +202,143 @@ class RuntimeSubagentOrchestrator:
             cancelled=any(result.status == "cancelled" for result in results),
             support=support,
         )
+        return self._save_run(run, artifact_name=artifact_name)
+
+    async def _run_one(
+        self,
+        task: RuntimeSubagentTask,
+        *,
+        semaphore: asyncio.Semaphore,
+        verbose: bool,
+        phase: Any,
+    ) -> RuntimeSubagentResult:
+        """Run one child task behind the orchestrator semaphore."""
+        async with semaphore:
+            if self._cancel_event.is_set():
+                return cancelled_subagent_result(task, before_start=True)
+
+            runtime_session = await maybe_await(self.session_factory(task))
+            try:
+                result = await self._run_child_session(
+                    runtime_session,
+                    task,
+                    verbose=verbose,
+                    phase=phase,
+                )
+            except asyncio.CancelledError:
+                await cancel_runtime_session(runtime_session)
+                raise
+            except TimeoutError:
+                await cancel_runtime_session(runtime_session)
+                return timeout_subagent_result(task, self.max_task_seconds)
+            except Exception as e:
+                return error_subagent_result(task, str(e))
+            return runtime_result_to_subagent_result(task, result)
+
+    async def _run_child_session(
+        self,
+        runtime_session: Any,
+        task: RuntimeSubagentTask,
+        *,
+        verbose: bool,
+        phase: Any,
+    ) -> AgentRunResult:
+        """Run one child runtime session with the configured timeout."""
+        return await asyncio.wait_for(
+            run_runtime_session(
+                runtime_session,
+                build_subagent_prompt(task),
+                self.spec_dir,
+                verbose=verbose,
+                phase=phase,
+                requirements=task.requirements,
+                subtask_id=task.subtask_id or task.id,
+            ),
+            timeout=self.max_task_seconds,
+        )
+
+    def _save_run(
+        self,
+        run: RuntimeSubagentRun,
+        *,
+        artifact_name: str,
+    ) -> RuntimeSubagentRun:
+        """Persist an orchestration run and return it."""
         run.artifact_path = save_subagent_artifact(
             spec_dir=self.spec_dir,
             artifact_name=artifact_name,
             run=run,
         )
         return run
+
+
+def runtime_result_to_subagent_result(
+    task: RuntimeSubagentTask,
+    result: AgentRunResult,
+) -> RuntimeSubagentResult:
+    """Convert a child runtime result into the subagent result surface."""
+    return RuntimeSubagentResult(
+        id=task.id,
+        role=task.role,
+        status=result.status,
+        response_text=result.response_text,
+        usage_metadata=result.usage_metadata,
+        artifacts=result.artifacts,
+    )
+
+
+def cancelled_subagent_result(
+    task: RuntimeSubagentTask,
+    *,
+    before_start: bool = False,
+) -> RuntimeSubagentResult:
+    """Return the standard cancelled child-session result."""
+    message = (
+        "Subagent task was cancelled before start."
+        if before_start
+        else "Subagent task was cancelled."
+    )
+    return RuntimeSubagentResult(
+        id=task.id,
+        role=task.role,
+        status="cancelled",
+        response_text=message,
+    )
+
+
+def timeout_subagent_result(
+    task: RuntimeSubagentTask,
+    timeout_seconds: float,
+) -> RuntimeSubagentResult:
+    """Return a timeout result for one child session."""
+    return RuntimeSubagentResult(
+        id=task.id,
+        role=task.role,
+        status="error",
+        response_text="",
+        error=f"Subagent task timed out after {timeout_seconds:g} seconds.",
+    )
+
+
+def error_subagent_result(
+    task: RuntimeSubagentTask,
+    error: str,
+) -> RuntimeSubagentResult:
+    """Return a child-session error result."""
+    return RuntimeSubagentResult(
+        id=task.id,
+        role=task.role,
+        status="error",
+        response_text="",
+        error=error,
+    )
+
+
+async def cancel_runtime_session(runtime_session: Any) -> None:
+    """Forward cancellation to a runtime session when supported."""
+    cancel_hook = getattr(runtime_session, "cancel", None)
+    if callable(cancel_hook):
+        await maybe_await(cancel_hook())
 
 
 def resolve_runtime_subagent_support(
