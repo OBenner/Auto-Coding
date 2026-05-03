@@ -22,7 +22,8 @@ import type {
   AIEngineProvider,
   AIProviderConfig,
   ProviderConfigValidation,
-  ProviderConnectionTestResult
+  ProviderConnectionTestResult,
+  ProviderRuntimeDiagnostics
 } from '../../../shared/types/settings';
 
 type ProviderSettingsSectionProps = Record<string, never>;
@@ -329,6 +330,30 @@ function getCostInfo(config: AIProviderConfig, primaryModel: string) {
     ),
     pricingModel
   };
+}
+
+function formatRuntimeDiagnosticValue(value?: string | null): string {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return '';
+  }
+  return trimmed.replace(/_/g, ' ');
+}
+
+function formatRuntimeDiagnosticList(values?: string[] | null): string {
+  if (!values?.length) {
+    return '';
+  }
+  return values
+    .map((value) => formatRuntimeDiagnosticValue(value))
+    .filter(Boolean)
+    .join(', ');
+}
+
+function hasRuntimeDiagnostics(
+  diagnostics?: ProviderRuntimeDiagnostics | null
+): diagnostics is ProviderRuntimeDiagnostics {
+  return Boolean(diagnostics);
 }
 
 function getElectronAPI() {
@@ -730,6 +755,19 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
 
     const isSuccess = connectionTestStatus.success;
     const Icon = isSuccess ? CheckCircle2 : AlertTriangle;
+    const runtimeDiagnostics = hasRuntimeDiagnostics(connectionTestStatus.runtimeDiagnostics)
+      ? connectionTestStatus.runtimeDiagnostics
+      : null;
+    const smokeScope = runtimeDiagnostics?.smokeScope === 'text_completion_only'
+      ? t('settings:aiProvider.connectionTest.textCompletionOnly')
+      : formatRuntimeDiagnosticValue(runtimeDiagnostics?.smokeScope);
+    const requestedRuntime = formatRuntimeDiagnosticValue(runtimeDiagnostics?.requestedRuntimeMode);
+    const validatedRuntime = formatRuntimeDiagnosticValue(runtimeDiagnostics?.validatedRuntimeMode);
+    const validatedScope = formatRuntimeDiagnosticList(runtimeDiagnostics?.validatedRequirements);
+    const requestedCapabilities = formatRuntimeDiagnosticList(runtimeDiagnostics?.requestedRuntimeCapabilities);
+    const missingFullAutonomous = formatRuntimeDiagnosticList(
+      runtimeDiagnostics?.fullAutonomousMissingCapabilities
+    );
     return (
       <div className={`max-w-xl rounded-md border p-3 text-sm ${
         isSuccess
@@ -764,6 +802,57 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
             <dd className="font-medium text-foreground">{connectionTestStatus.runtimeMode}</dd>
           </div>
         </dl>
+        {runtimeDiagnostics && (
+          <div className="mt-3 border-t border-border/70 pt-3 text-xs text-muted-foreground">
+            <div className="flex items-start gap-2">
+              <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">
+                  {t('settings:aiProvider.connectionTest.runtimeDiagnostics')}
+                </p>
+                <p>{t('settings:aiProvider.connectionTest.diagnosticsNote')}</p>
+              </div>
+            </div>
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+              {smokeScope && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.smokeScope')}</dt>
+                  <dd className="font-medium text-foreground">{smokeScope}</dd>
+                </div>
+              )}
+              {requestedRuntime && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.requestedRuntime')}</dt>
+                  <dd className="font-medium text-foreground">{requestedRuntime}</dd>
+                </div>
+              )}
+              {validatedRuntime && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.validatedRuntime')}</dt>
+                  <dd className="font-medium text-foreground">{validatedRuntime}</dd>
+                </div>
+              )}
+              {validatedScope && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.validatedScope')}</dt>
+                  <dd className="font-medium text-foreground">{validatedScope}</dd>
+                </div>
+              )}
+              {requestedCapabilities && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.requestedCapabilities')}</dt>
+                  <dd className="font-medium text-foreground">{requestedCapabilities}</dd>
+                </div>
+              )}
+              <div>
+                <dt>{t('settings:aiProvider.connectionTest.missingFullAutonomous')}</dt>
+                <dd className="font-medium text-foreground">
+                  {missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        )}
         {connectionTestStatus.responseExcerpt && (
           <p className="mt-3 rounded-md bg-background/80 p-2 text-xs text-foreground">
             {connectionTestStatus.responseExcerpt}

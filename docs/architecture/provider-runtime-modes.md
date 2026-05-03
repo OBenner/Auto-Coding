@@ -140,7 +140,10 @@ python run.py --provider openai --model gpt-4o --provider-smoke --json
 ```
 
 The smoke check sends a short text-only request through the provider abstraction
-and reports whether the configured key/model can return a response.
+and reports whether the configured key/model can return a response. Its JSON
+output includes `runtime_diagnostics` to make the boundary explicit: provider
+smoke validates text completion only, not `generic_edit`, MCP, subagents, or
+`full_autonomous` coding behavior.
 
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
@@ -243,7 +246,8 @@ schemas as function tools and append tool results back to provider history.
 Direct OpenAI, Ollama, OpenRouter, LiteLLM, and ZhipuAI sessions use that
 bridge when the routed model/gateway supports tools; if the first native
 tool-call request is rejected, `generic_edit` falls back to the JSON action
-loop.
+loop and records `native_tool_fallbacks` in the result and summary artifacts so
+the gateway/model limitation is visible.
 
 The native tool-call parser accepts the common gateway shapes Auto Code sees in
 practice: OpenAI Chat Completions `tool_calls`, OpenAI Responses `output`
@@ -277,7 +281,8 @@ Auto Code validates and executes these actions locally:
 - runtime subagents run as bounded read-only child sessions for analysis,
   exploration, review, or comparison work; they do not receive Claude SDK Task
   tool parity or independent mutating runtime privileges, and each child
-  session has a timeout/cancellation guard;
+  session has an isolated context envelope, bounded retry metadata, and a
+  timeout/cancellation guard;
 - JSON and native tool-call batches stop after the first failed local action, so
   later actions in the same batch do not run against a partially failed
   transaction;
@@ -300,7 +305,13 @@ built-in tools. It does not expose external MCP servers or Claude SDK session
 lifecycle behavior. MCP support artifacts include per-server statuses such as
 `local_bridge`, `native_required`, and `unsupported`, so non-Claude runs can
 explain exactly which requested MCP servers are available and which remain
-native-runtime-only. If a provider emits an unavailable MCP tool call such as
+native-runtime-only. MCP support artifacts also include a `bridge_plan` with
+`ready`, `partial`, or `blocked` status, native-required servers, bridged
+servers, unsupported servers, and the next runtime action needed. Bridged local
+MCP tools also carry explicit permission/audit metadata in `tool_policies`, and
+each bridged call appends a redacted `mcp_bridge_audit.jsonl` event with the
+tool, permission, mutation flag, action, status, and result summary. If a provider
+emits an unavailable MCP tool call such as
 `mcp__context7__resolve-library-id`, `generic_edit` records a structured
 observation with the server name, support strategy, runtime path, and server
 status instead of collapsing the failure into a generic unknown-tool error.
@@ -384,7 +395,8 @@ does not imply that every listed CLI already has a production execution adapter.
 
 Non-Claude subagents are represented as orchestrated read-only child runtime
 sessions, not Claude SDK Task tool parity. Their artifacts include aggregate
-child-session summaries so status dashboards can show complete/error/cancelled
+child-session summaries, per-child result artifacts, attempt histories, and a
+read-only merge plan so status dashboards can show complete/error/cancelled
 counts without re-parsing every child result.
 
 ## Related Code
@@ -393,6 +405,8 @@ counts without re-parsing every child result.
   engine, and adapters.
 - `apps/backend/agents/runtime/local_actions.py` - reusable local action
   executor used by generic edit's JSON and provider-native tool-call loops.
+- `apps/backend/agents/runtime/mcp_bridge.py` - local MCP bridge status,
+  permission policy, and audit artifacts for direct-provider runtimes.
 - `apps/backend/agents/runtime/cli_profiles.py` - CLI runner profile registry,
   executable detection, and selection diagnostics.
 - `apps/backend/agents/runtime/runner_router.py` - opt-in routing from impossible

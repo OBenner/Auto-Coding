@@ -21,6 +21,7 @@ from .adapters.patch_proposal import (
     validate_patch_paths,
     validate_workspace_relative_path,
 )
+from .subagents import MAX_SUBAGENT_ATTEMPTS
 
 logger = logging.getLogger(__name__)
 
@@ -543,6 +544,30 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
                             "type": "object",
                             "description": "Optional structured context for the child task.",
                         },
+                        "context": {
+                            "type": "object",
+                            "description": (
+                                "Optional isolated child-session context that is "
+                                "kept separate from sibling subagents."
+                            ),
+                        },
+                        "merge_policy": {
+                            "type": "string",
+                            "enum": ["read_only"],
+                            "description": (
+                                "Merge contract for the child output. generic_edit "
+                                "subagents are read-only."
+                            ),
+                        },
+                        "max_attempts": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": MAX_SUBAGENT_ATTEMPTS,
+                            "description": (
+                                "Maximum isolated attempts for transient child "
+                                "runtime failures."
+                            ),
+                        },
                     },
                     "required": ["id", "prompt"],
                     "additionalProperties": False,
@@ -558,6 +583,8 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
                     "id": "inspect-api",
                     "role": "explorer",
                     "prompt": "Inspect the API layer and report relevant files.",
+                    "context": {"focus": "backend routing"},
+                    "max_attempts": 2,
                 }
             ],
         },

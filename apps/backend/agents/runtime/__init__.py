@@ -46,10 +46,15 @@ from .local_actions import (
 )
 from .mcp_bridge import (
     MCP_SERVER_CATALOG,
+    RuntimeMcpBridgePlan,
     RuntimeMcpBridge,
     RuntimeMcpSupport,
+    RuntimeMcpToolPolicy,
     RuntimeMcpToolSpec,
+    build_mcp_bridge_plan,
     describe_mcp_server_statuses,
+    mcp_bridge_audit_path,
+    policy_for_auto_claude_tool,
     resolve_runtime_mcp_support,
 )
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
@@ -62,11 +67,14 @@ from .runner_router import (
 )
 from .session_engine import run_runtime_session
 from .subagents import (
+    MAX_SUBAGENT_ATTEMPTS,
+    RuntimeSubagentAttempt,
     RuntimeSubagentOrchestrator,
     RuntimeSubagentResult,
     RuntimeSubagentRun,
     RuntimeSubagentSupport,
     RuntimeSubagentTask,
+    build_subagent_merge_plan,
     resolve_runtime_subagent_support,
     summarize_subagent_results,
 )
@@ -87,9 +95,12 @@ __all__ = [
     "CliRunnerSelection",
     "RuntimeMode",
     "RuntimeMcpBridge",
+    "RuntimeMcpBridgePlan",
     "RuntimeMcpSupport",
+    "RuntimeMcpToolPolicy",
     "RuntimeMcpToolSpec",
     "RuntimeRunnerRoute",
+    "RuntimeSubagentAttempt",
     "RuntimeSubagentOrchestrator",
     "RuntimeSubagentResult",
     "RuntimeSubagentRun",
@@ -98,6 +109,9 @@ __all__ = [
     "LocalActionExecutor",
     "LocalActionToolSpec",
     "ToolActionResult",
+    "MAX_SUBAGENT_ATTEMPTS",
+    "build_mcp_bridge_plan",
+    "build_subagent_merge_plan",
     "capabilities_for_runtime_mode",
     "cli_runner_profiles_as_dicts",
     "create_runtime_session",
@@ -107,7 +121,9 @@ __all__ = [
     "local_action_response_schema",
     "local_action_tool_schemas",
     "local_action_tool_specs",
+    "mcp_bridge_audit_path",
     "normalize_runtime_mode",
+    "policy_for_auto_claude_tool",
     "render_local_action_prompt",
     "requirements_for_runtime_mode",
     "resolve_runtime_mcp_support",

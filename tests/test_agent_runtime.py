@@ -23,6 +23,7 @@ from agents.runtime import (
     local_action_response_schema,
     local_action_tool_schemas,
     local_action_tool_specs,
+    mcp_bridge_audit_path,
     normalize_runtime_mode,
     render_local_action_prompt,
     requirements_for_runtime_mode,
@@ -930,6 +931,15 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
     assert artifact["status"] == "complete"
     assert artifact["support"]["strategy"] == "orchestrated"
     assert artifact["support"]["available"] is True
+    assert artifact["merge_plan"] == {
+        "strategy": "read_only",
+        "requires_parent_merge": False,
+        "read_only_result_ids": ["explore-api", "explore-ui"],
+        "mutating_result_ids": [],
+        "write_scopes": {},
+        "conflict_result_ids": [],
+        "has_conflicts": False,
+    }
     assert artifact["summary"] == {
         "result_count": 2,
         "status_counts": {"complete": 2},
@@ -945,7 +955,18 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "input_tokens": 1,
         "output_tokens": 2,
     }
+    child_artifact_path = Path(artifact["results"][0]["artifact_path"])
+    assert child_artifact_path.exists()
+    child_artifact = json.loads(child_artifact_path.read_text(encoding="utf-8"))
+    assert child_artifact["parent_artifact"] == "runtime_subagents.json"
+    assert child_artifact["merge_contract"] == {
+        "merge_policy": "read_only",
+        "write_scope": [],
+        "requires_parent_merge": False,
+    }
     assert "Auto Code subagent `explore-api`" in created_sessions[0].prompts[0]
+    assert "Isolation contract:" in created_sessions[0].prompts[0]
+    assert "Merge policy: read_only" in created_sessions[0].prompts[0]
     assert '"paths": [' in created_sessions[0].prompts[0]
 
 
@@ -981,6 +1002,58 @@ async def test_runtime_subagent_orchestrator_times_out_child_sessions(
     assert created_sessions[0].cancelled is True
     artifact = json.loads(Path(run.artifact_path or "").read_text(encoding="utf-8"))
     assert artifact["summary"]["error_result_ids"] == ["slow-review"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_subagent_orchestrator_retries_isolated_child_attempts(
+    tmp_path: Path,
+):
+    created_sessions: list[FakeSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        status = "error" if len(created_sessions) == 0 else "complete"
+        response = f"{status} {task.id}"
+        session = FakeSubagentRuntimeSession(response, status=status)
+        created_sessions.append(session)
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="inspect-retry",
+                role="explorer",
+                prompt="Inspect flaky source",
+                context={"focus": "runtime retries"},
+                max_attempts=2,
+            ),
+        ]
+    )
+
+    assert run.status == "complete"
+    assert len(created_sessions) == 2
+    assert run.results[0].response_text == "complete inspect-retry"
+    assert run.results[0].attempt_count == 2
+    assert [attempt.status for attempt in run.results[0].attempts] == [
+        "error",
+        "complete",
+    ]
+    assert "Attempt: 1 of 2" in created_sessions[0].prompts[0]
+    assert "Attempt: 2 of 2" in created_sessions[1].prompts[0]
+    assert '"focus": "runtime retries"' in created_sessions[1].prompts[0]
+
+    artifact = json.loads(Path(run.artifact_path or "").read_text(encoding="utf-8"))
+    result_payload = artifact["results"][0]
+    assert result_payload["context"] == {"focus": "runtime retries"}
+    assert result_payload["attempt_count"] == 2
+    assert [attempt["status"] for attempt in result_payload["attempts"]] == [
+        "error",
+        "complete",
+    ]
+    assert Path(result_payload["artifact_path"]).exists()
 
 
 def test_runtime_subagent_result_summary_counts_mixed_statuses():
@@ -1566,6 +1639,11 @@ def test_local_action_manifest_describes_generic_edit_contract():
         run_subagents_schema["parameters"]["properties"]["tasks"]["maxItems"]
         == MAX_SUBAGENT_TASKS
     )
+    task_properties = run_subagents_schema["parameters"]["properties"]["tasks"][
+        "items"
+    ]["properties"]
+    assert task_properties["merge_policy"]["enum"] == ["read_only"]
+    assert task_properties["max_attempts"]["maximum"] >= 2
 
 
 @pytest.mark.asyncio
@@ -2177,6 +2255,8 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
                                 "role": "explorer",
                                 "prompt": "Inspect API files",
                                 "metadata": {"paths": ["apps/backend"]},
+                                "context": {"focus": "backend"},
+                                "max_attempts": 2,
                             },
                             {
                                 "id": "inspect-ui",
@@ -2219,6 +2299,7 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
     assert result.status == "continue"
     assert len(created_sessions) == 2
     assert "Auto Code subagent `inspect-api`" in created_sessions[0].prompts[0]
+    assert '"focus": "backend"' in created_sessions[0].prompts[0]
     assert "findings from inspect-api" in session.messages[1]
     artifact_path = tmp_path / "artifacts" / "generic_edit_subagents_1_1_1.json"
     assert artifact_path.exists()
@@ -2226,6 +2307,19 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
     assert subagent_artifact["status"] == "complete"
     assert subagent_artifact["support"]["strategy"] == "orchestrated"
     assert subagent_artifact["summary"]["result_count"] == 2
+    assert subagent_artifact["merge_plan"]["strategy"] == "read_only"
+    assert subagent_artifact["results"][0]["context"] == {"focus": "backend"}
+    assert Path(subagent_artifact["results"][0]["artifact_path"]).exists()
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    subagent_observation = observation_lines[0]["result"]["data"]
+    assert subagent_observation["results"][0]["attempt_count"] == 1
+    assert subagent_observation["results"][0]["merge_policy"] == "read_only"
+    assert Path(subagent_observation["results"][0]["artifact_path"]).exists()
 
     trace = json.loads(
         (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
@@ -2306,6 +2400,21 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
         "mcp__auto-claude__get_build_progress"
     )
     assert observation_lines[0]["result"]["data"]["server"] == "auto-claude"
+    assert observation_lines[0]["result"]["data"]["permission"] == "read_build_state"
+    assert observation_lines[0]["result"]["data"]["mutating"] is False
+    assert observation_lines[0]["result"]["data"]["audit_required"] is True
+    audit_path = Path(observation_lines[0]["result"]["data"]["audit_artifact"])
+    assert audit_path == mcp_bridge_audit_path(tmp_path)
+    assert audit_path.exists()
+    audit_lines = [
+        json.loads(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert audit_lines[0]["status"] == "ok"
+    assert audit_lines[0]["server"] == "auto-claude"
+    assert audit_lines[0]["exposed_name"] == "mcp__auto-claude__get_build_progress"
+    assert audit_lines[0]["permission"] == "read_build_state"
+    assert audit_lines[0]["mutating"] is False
     result_artifact = json.loads(
         (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
             encoding="utf-8"
@@ -2317,6 +2426,17 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
     assert result_artifact["mcp_support"]["bridge"]["tools"] == [
         "mcp__auto-claude__get_build_progress"
     ]
+    assert result_artifact["mcp_support"]["bridge"]["tool_policies"] == [
+        {
+            "server": "auto-claude",
+            "name": "get_build_progress",
+            "exposed_name": "mcp__auto-claude__get_build_progress",
+            "permission": "read_build_state",
+            "audit_level": "read",
+            "mutating": False,
+            "audit_required": True,
+        }
+    ]
     bridge_statuses = {
         status["server"]: status
         for status in result_artifact["mcp_support"]["bridge"]["server_statuses"]
@@ -2324,6 +2444,11 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
     assert bridge_statuses["auto-claude"]["runtime_path"] == "local_bridge"
     assert bridge_statuses["context7"]["runtime_path"] == "native_required"
     assert bridge_statuses["graphiti"]["runtime_path"] == "native_required"
+    bridge_plan = result_artifact["mcp_support"]["bridge_plan"]
+    assert bridge_plan["status"] == "partial"
+    assert bridge_plan["bridged_servers"] == ["auto-claude"]
+    assert bridge_plan["native_required_servers"] == ["context7", "graphiti"]
+    assert bridge_plan["action_required"] == "use_native_mcp_runtime"
 
 
 def test_runtime_mcp_bridge_filters_agent_allowed_tools(
@@ -2368,6 +2493,15 @@ def test_runtime_mcp_bridge_filters_agent_allowed_tools(
     assert "mcp__auto-claude__update_subtask_status" in schema_names
     assert "mcp__auto-claude__update_qa_status" in schema_names
     assert "mcp__auto-claude__search_team_docs" not in schema_names
+    policy_by_tool = {
+        policy["name"]: policy for policy in bridge.report()["tool_policies"]
+    }
+    assert policy_by_tool["update_subtask_status"]["permission"] == (
+        "write_build_state"
+    )
+    assert policy_by_tool["update_subtask_status"]["audit_level"] == "write"
+    assert policy_by_tool["update_subtask_status"]["mutating"] is True
+    assert policy_by_tool["update_qa_status"]["permission"] == "write_qa_state"
     support = bridge.support_for(
         provider_name="openai",
         runtime_name="generic_edit",
@@ -2409,6 +2543,11 @@ def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
     assert support_payload["server_statuses"][0]["server"] == "context7"
     assert support_payload["server_statuses"][0]["runtime_path"] == "native_required"
     assert support_payload["server_statuses"][0]["bridgeable"] is False
+    assert support_payload["bridge_plan"]["status"] == "blocked"
+    assert support_payload["bridge_plan"]["native_required_servers"] == ["context7"]
+    assert support_payload["bridge_plan"]["action_required"] == (
+        "use_native_mcp_runtime"
+    )
 
 
 @pytest.mark.asyncio
@@ -2470,6 +2609,9 @@ async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
     assert result_payload["data"]["runtime_path"] == "native_required"
     assert result_payload["data"]["support_strategy"] == "unavailable"
     assert result_payload["data"]["server_status"]["bridgeable"] is False
+    assert result_payload["data"]["bridge_plan"]["recommended_runtime_path"] == (
+        "native_mcp_runtime"
+    )
     artifact = json.loads(
         (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
             encoding="utf-8"
@@ -2492,6 +2634,9 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
         "native",
         "native",
     ]
+    native_plan = native.to_dict()["bridge_plan"]
+    assert native_plan["status"] == "ready"
+    assert native_plan["action_required"] == "none"
 
     unavailable = resolve_runtime_mcp_support(
         provider_name="openai",
@@ -2503,6 +2648,9 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     assert unavailable.strategy == "unavailable"
     assert unavailable.unavailable_servers == ("context7",)
     assert unavailable.server_statuses[0]["runtime_path"] == "native_required"
+    unavailable_plan = unavailable.to_dict()["bridge_plan"]
+    assert unavailable_plan["status"] == "blocked"
+    assert unavailable_plan["recommended_runtime_path"] == "native_mcp_runtime"
 
     local_bridge = resolve_runtime_mcp_support(
         provider_name="openai",
@@ -2523,6 +2671,11 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
         "local_bridge",
     ]
     assert "external MCP servers" in local_bridge.reason
+    local_bridge_plan = local_bridge.to_dict()["bridge_plan"]
+    assert local_bridge_plan["status"] == "partial"
+    assert local_bridge_plan["bridged_servers"] == ["auto-claude"]
+    assert local_bridge_plan["native_required_servers"] == ["context7"]
+    assert local_bridge_plan["recommended_runtime_path"] == "native_mcp_runtime"
 
     unsupported_bridge_runtime = resolve_runtime_mcp_support(
         provider_name="custom",
@@ -2533,6 +2686,9 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     )
     assert unsupported_bridge_runtime.available is False
     assert "cannot expose" in unsupported_bridge_runtime.reason
+    assert unsupported_bridge_runtime.to_dict()["bridge_plan"]["status"] == (
+        "not_requested"
+    )
 
 
 def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
@@ -3105,7 +3261,29 @@ async def test_generic_edit_runtime_falls_back_when_native_tools_rejected(
     trace = json.loads(
         (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
     )
-    assert "loop" not in trace["trace"][0]
+    assert trace["trace"][0]["loop"] == "native_tool_calls"
+    assert trace["trace"][0]["native_tool_fallback"] == {
+        "provider": "openai",
+        "from_loop": "native_tool_calls",
+        "to_loop": "json_actions",
+        "reason": "native_tool_request_failed",
+        "message": "provider rejected tool calls",
+        "tool_schema_count": len(local_action_tool_schemas()),
+    }
+    assert trace["trace"][1]["loop"] == "json_actions"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["native_tool_fallback_count"] == 1
+    assert result_artifact["native_tool_fallbacks"][0]["reason"] == (
+        "native_tool_request_failed"
+    )
+    summary_markdown = (tmp_path / "artifacts" / "generic_edit_summary.md").read_text(
+        encoding="utf-8"
+    )
+    assert "## Native Tool Fallback" in summary_markdown
 
 
 @pytest.mark.asyncio

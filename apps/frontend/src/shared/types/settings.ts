@@ -477,6 +477,16 @@ export interface ProviderConfigValidation {
   availableProviders: AIEngineProvider[];
 }
 
+export interface ProviderRuntimeDiagnostics {
+  smokeScope?: string;
+  requestedRuntimeMode?: string;
+  validatedRuntimeMode?: string;
+  validatedRequirements?: string[];
+  requestedRuntimeCapabilities?: string[];
+  fullAutonomousMissingCapabilities?: string[];
+  note?: string;
+}
+
 export interface ProviderConnectionTestResult {
   success: boolean;
   provider: AIEngineProvider | string;
@@ -485,4 +495,5 @@ export interface ProviderConnectionTestResult {
   message: string;
   responseExcerpt?: string | null;
   errorDetails?: string | null;
+  runtimeDiagnostics?: ProviderRuntimeDiagnostics | null;
 }

@@ -18,7 +18,8 @@ import type {
   ProviderSettings,
   AIEngineProvider,
   AgentRuntimeMode,
-  ProviderConnectionTestResult
+  ProviderConnectionTestResult,
+  ProviderRuntimeDiagnostics
 } from '../../shared/types';
 import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
@@ -348,6 +349,15 @@ type ProviderSmokeCliResult = {
   message?: string;
   response_excerpt?: string | null;
   error_details?: string | null;
+  runtime_diagnostics?: {
+    smoke_scope?: string;
+    requested_runtime_mode?: string;
+    validated_runtime_mode?: string;
+    validated_requirements?: string[];
+    requested_runtime_capabilities?: string[];
+    full_autonomous_missing_capabilities?: string[];
+    note?: string;
+  } | null;
 };
 
 function textFromExecOutput(output: unknown): string {
@@ -375,6 +385,30 @@ function extractProviderSmokeJson(output: string): ProviderSmokeCliResult | null
   return null;
 }
 
+function arrayFromUnknown(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
+function mapProviderRuntimeDiagnostics(
+  diagnostics: ProviderSmokeCliResult['runtime_diagnostics']
+): ProviderRuntimeDiagnostics | null {
+  if (!diagnostics || typeof diagnostics !== 'object') {
+    return null;
+  }
+
+  return {
+    smokeScope: diagnostics.smoke_scope,
+    requestedRuntimeMode: diagnostics.requested_runtime_mode,
+    validatedRuntimeMode: diagnostics.validated_runtime_mode,
+    validatedRequirements: arrayFromUnknown(diagnostics.validated_requirements),
+    requestedRuntimeCapabilities: arrayFromUnknown(diagnostics.requested_runtime_capabilities),
+    fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
+    note: diagnostics.note
+  };
+}
+
 function mapProviderSmokeResult(
   result: ProviderSmokeCliResult
 ): ProviderConnectionTestResult {
@@ -386,6 +420,7 @@ function mapProviderSmokeResult(
     message: result.message ?? 'Provider smoke check completed',
     responseExcerpt: result.response_excerpt ?? null,
     errorDetails: result.error_details ?? null,
+    runtimeDiagnostics: mapProviderRuntimeDiagnostics(result.runtime_diagnostics),
   };
 }
 

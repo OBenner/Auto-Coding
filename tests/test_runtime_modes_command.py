@@ -42,6 +42,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "CLI Runner Profiles" in output
     assert "CLI Runner Selection" in output
     assert "Runtime Fallback Matrix" in output
+    assert "MCP Bridge Plan Matrix" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
     assert "opencode" in output
@@ -96,6 +97,18 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
+    mcp_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["mcp_bridge_plan_matrix"]
+    }
+    claude_mcp = mcp_rows[("claude", "full_autonomous")]
+    assert claude_mcp["status"] == "ready"
+    assert claude_mcp["action_required"] == "none"
+    openai_generic_mcp = mcp_rows[("openai", "generic_edit")]
+    assert openai_generic_mcp["status"] == "partial"
+    assert openai_generic_mcp["bridged_servers"] == ["auto-claude"]
+    assert "context7" in openai_generic_mcp["native_required_servers"]
+    assert openai_generic_mcp["action_required"] == "use_native_mcp_runtime"
     fallback_rows = {
         (row["provider"], row["requested_mode"]): row
         for row in payload["runtime_fallback_matrix"]

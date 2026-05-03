@@ -6,12 +6,13 @@ import asyncio
 import json
 import logging
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agents.runtime import RuntimeRequirements, run_runtime_session
+from agents.runtime import RuntimeRequirements, get_runtime_mode, run_runtime_session
 from agents.runtime.adapters.completion import CompletionRuntimeSession
+from agents.runtime.fallback import capabilities_for_runtime_mode
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.factory import create_engine_provider
@@ -37,6 +38,7 @@ class ProviderSmokeResult:
     message: str
     response_excerpt: str | None = None
     error_details: str | None = None
+    runtime_diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize result for JSON output."""
@@ -83,6 +85,39 @@ def _provider_validation_errors(provider: Any) -> list[str]:
     return ["Provider configuration is invalid"]
 
 
+def build_provider_smoke_runtime_diagnostics(
+    *,
+    provider_name: str,
+    requested_runtime_mode: str | None = None,
+) -> dict[str, Any]:
+    """Return the runtime scope covered by a provider smoke check."""
+    requested_mode = requested_runtime_mode or get_runtime_mode("analysis")
+    smoke_requirements = RuntimeRequirements.text_only(mode="provider_smoke")
+    requested_capabilities = capabilities_for_runtime_mode(
+        provider_name,
+        requested_mode,
+    )
+    full_autonomous_capabilities = capabilities_for_runtime_mode(
+        provider_name,
+        "full_autonomous",
+    )
+    full_autonomous_requirements = RuntimeRequirements.full_coder()
+    return {
+        "smoke_scope": "text_completion_only",
+        "requested_runtime_mode": requested_mode,
+        "validated_runtime_mode": "analysis_only",
+        "validated_requirements": list(smoke_requirements.required),
+        "requested_runtime_capabilities": requested_capabilities.available(),
+        "full_autonomous_missing_capabilities": full_autonomous_capabilities.missing(
+            full_autonomous_requirements,
+        ),
+        "note": (
+            "Provider smoke validates text completion only; run runtime-specific "
+            "tests before treating a provider as autonomous."
+        ),
+    }
+
+
 async def run_provider_smoke_check(
     *,
     project_dir: Path,
@@ -94,6 +129,9 @@ async def run_provider_smoke_check(
     provider_config = ProviderConfig.from_env(agent_type="analysis")
     provider_name = provider_config.provider
     resolved_model = model or provider_config.get_model_for_provider()
+    runtime_diagnostics = build_provider_smoke_runtime_diagnostics(
+        provider_name=provider_name,
+    )
 
     try:
         provider = create_engine_provider(provider_config)
@@ -106,8 +144,12 @@ async def run_provider_smoke_check(
             runtime_mode="analysis_only",
             message=f"Could not create provider {provider_name}: {e}",
             error_details=str(e),
+            runtime_diagnostics=runtime_diagnostics,
         )
 
+    runtime_diagnostics = build_provider_smoke_runtime_diagnostics(
+        provider_name=provider.name,
+    )
     validation_errors = _provider_validation_errors(provider)
     if validation_errors:
         return ProviderSmokeResult(
@@ -117,6 +159,7 @@ async def run_provider_smoke_check(
             runtime_mode="analysis_only",
             message="Provider configuration is incomplete",
             error_details="; ".join(validation_errors),
+            runtime_diagnostics=runtime_diagnostics,
         )
 
     session_config = SessionConfig(
@@ -144,6 +187,7 @@ async def run_provider_smoke_check(
                     prompt=prompt,
                     timeout_seconds=timeout_seconds,
                     model=resolved_model,
+                    runtime_diagnostics=runtime_diagnostics,
                 )
 
         provider.create_session(session_config)
@@ -152,6 +196,7 @@ async def run_provider_smoke_check(
             prompt=prompt,
             timeout_seconds=timeout_seconds,
             model=resolved_model,
+            runtime_diagnostics=runtime_diagnostics,
         )
     except Exception as e:
         logger.debug("Provider smoke check failed", exc_info=True)
@@ -162,6 +207,7 @@ async def run_provider_smoke_check(
             runtime_mode="analysis_only",
             message=f"Provider smoke check failed: {e}",
             error_details=str(e),
+            runtime_diagnostics=runtime_diagnostics,
         )
 
 
@@ -171,6 +217,7 @@ async def _complete_provider_smoke(
     prompt: str | None,
     timeout_seconds: float,
     model: str | None,
+    runtime_diagnostics: dict[str, Any],
 ) -> ProviderSmokeResult:
     smoke_prompt = prompt or DEFAULT_PROVIDER_SMOKE_PROMPT
     runtime_session = CompletionRuntimeSession(
@@ -196,6 +243,7 @@ async def _complete_provider_smoke(
             model=model,
             runtime_mode="analysis_only",
             message="Provider returned an empty response",
+            runtime_diagnostics=runtime_diagnostics,
         )
 
     return ProviderSmokeResult(
@@ -205,6 +253,7 @@ async def _complete_provider_smoke(
         runtime_mode="analysis_only",
         message="Provider smoke check passed",
         response_excerpt=_response_excerpt(response_text),
+        runtime_diagnostics=runtime_diagnostics,
     )
 
 
@@ -236,6 +285,11 @@ def handle_provider_smoke_command(
         print_key_value("Provider", result.provider)
         print_key_value("Model", result.model or "default")
         print_key_value("Runtime mode", result.runtime_mode)
+        if result.runtime_diagnostics:
+            print_key_value(
+                "Smoke scope",
+                str(result.runtime_diagnostics.get("smoke_scope", "unknown")),
+            )
         if result.response_excerpt:
             print_key_value("Response", result.response_excerpt)
         if result.error_details:
