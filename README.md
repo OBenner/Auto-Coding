@@ -11,6 +11,7 @@ Describe what you want. Auto Code creates the spec, writes the code, runs QA, an
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=OBenner_Auto-Coding&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=OBenner_Auto-Coding)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)]()
 [![Version](https://img.shields.io/badge/version-3.0.0-orange?style=flat-square)](https://github.com/OBenner/Auto-Coding/releases)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-0ea5e9?style=flat-square)](https://obenner.github.io/Auto-Coding/)
 
 </div>
 
@@ -103,13 +104,14 @@ Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also avai
 
 **Looking for something specific?**
 
+- **[Documentation Site](https://obenner.github.io/Auto-Coding/)** - Public product docs, roadmap, architecture, and Markdown reader
 - **[📖 Documentation Portal](guides/DOCUMENTATION-PORTAL.md)** - Comprehensive guide to all documentation
 - **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
 - **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
 - **[✅ Verification Checklist](docs/VERIFICATION-CHECKLIST.md)** - Documentation quality verification
 
 **Quick links:**
-- [Quick Start Guide](guides/QUICK-START.md) - Get started in 15 minutes
+- [Quick Start Guide](guides/QUICK-START.md) - Set up Auto Code and run your first task
 - [CLI Usage Guide](guides/CLI-USAGE.md) - Terminal-only usage
 - [Troubleshooting Guide](guides/TROUBLESHOOTING.md) - Having issues?
 
@@ -117,9 +119,9 @@ Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also avai
 
 ## Quick Start
 
-Get started in under 15 minutes with our comprehensive [Quick Start Guide](guides/QUICK-START.md).
+Set up Auto Code and run your first task with the [Quick Start Guide](guides/QUICK-START.md).
 
-**TL;DR:** Download → Connect Claude → Open Project → Create Task → Watch agents build → Review & merge
+**TL;DR:** Download → Configure a runtime → Open Project → Create Task → Watch agents build → Review & merge
 
 [Download the latest release](https://github.com/OBenner/Auto-Coding/releases) for your platform.
 

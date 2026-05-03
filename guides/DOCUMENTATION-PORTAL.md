@@ -14,7 +14,7 @@ Auto Code/
 ├── CLAUDE.md                    # Architecture for AI agents
 ├── CHANGELOG.md                 # Release history
 ├── guides/                      # User and developer guides
-│   ├── QUICK-START.md          # Get started in 15 minutes
+│   ├── QUICK-START.md          # First-run setup and runtime selection
 │   ├── CLI-USAGE.md            # Terminal-only usage
 │   ├── ADVANCED-USAGE.md       # Advanced patterns and customization
 │   ├── AGENT-CUSTOMIZATION.md  # Customize agents and prompts
@@ -25,12 +25,14 @@ Auto Code/
 │   ├── search/                 # Search index and strategies
 │   │   ├── INDEX.md            # Comprehensive searchable index
 │   │   └── SEARCH-GUIDE.md     # Effective search techniques
+│   ├── audit/                  # Documentation audits and freshness reviews
 │   ├── features/               # Feature documentation
 │   ├── modules/                # Architecture by module
 │   ├── api/                    # API references
 │   ├── templates/              # Reusable documentation templates
 │   └── integration/            # Integration and testing docs
-└── apps/                        # Application-specific documentation
+├── site/                         # GitHub Pages product documentation portal
+└── apps/                         # Application-specific documentation
     ├── backend/README.md        # Backend architecture and usage
     └── frontend/README.md       # Frontend architecture and usage
 ```
@@ -54,6 +56,7 @@ Auto Code/
 | **Advanced features** | [Advanced Usage](ADVANCED-USAGE.md) | `guides/` |
 | **Customize agents** | [Agent Customization](AGENT-CUSTOMIZATION.md) | `guides/` |
 | **Troubleshoot issues** | [Troubleshooting](TROUBLESHOOTING.md) | `guides/` |
+| **Check current documentation drift** | [Documentation Freshness Audit](../docs/audit/DOCS-FRESHNESS-AUDIT.md) | `docs/audit/` |
 
 ### For Developers/Contributors
 
@@ -127,7 +130,7 @@ Auto Code/
 
 | Document | Description | Location |
 |----------|-------------|----------|
-| **[Quick Start](QUICK-START.md)** | Get started in 15 minutes | `guides/` |
+| **[Quick Start](QUICK-START.md)** | Configure a runtime and run the first task | `guides/` |
 | **[Main README](../README.md)** | Project overview, downloads, features | Root |
 | **[CLI Usage](CLI-USAGE.md)** | Terminal-only usage | `guides/` |
 

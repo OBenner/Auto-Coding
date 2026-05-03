@@ -10,8 +10,12 @@ This document covers terminal-only usage of Auto Code. **For most users, we reco
 
 ## Prerequisites
 
-- Python 3.9+
-- Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
+- Python 3.12+
+- Git
+- At least one configured runtime:
+  - Claude Code OAuth for the existing full SDK runtime
+  - Codex CLI with a logged-in `CODEX_HOME` profile for the Codex CLI runner
+  - API-key providers for compatible limited modes only
 
 ### Installing Python
 
@@ -79,12 +83,19 @@ python3 -m venv .venv && source .venv/bin/activate && pip install -r requirement
 ```bash
 cp .env.example .env
 
-# Get your OAuth token
+# Claude full-runtime path: get your OAuth token
 claude setup-token
 
-# Add the token to apps/backend/.env
+# Add the token to apps/backend/.env when using the Claude runtime
 # CLAUDE_CODE_OAUTH_TOKEN=your-token-here
+
+# Codex CLI runner path: make sure codex is logged in and CODEX_HOME is set
+# CODEX_HOME=/path/to/codex-profile
 ```
+
+Direct provider API keys can be used for compatible runtime modes such as
+`analysis_only`, `patch_proposal`, and `generic_edit`. They do not automatically
+provide full autonomous tools, MCP, shell, filesystem, or subagent behavior.
 
 ## Creating Specs
 
@@ -158,7 +169,7 @@ Auto Code uses Git worktrees for isolated builds:
 
 ```bash
 # Test the feature in the isolated workspace
-cd .worktrees/auto-claude/
+cd .worktrees/<spec-name>/
 npm run dev  # or your project's run command
 
 # Return to backend directory to run management commands

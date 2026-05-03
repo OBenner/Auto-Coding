@@ -25,6 +25,14 @@ The challenge was to support multiple AI backends without fragmenting the codeba
 
 We will introduce a **Provider Abstraction Layer** in `core/providers/` that defines a unified `AIEngineProvider` interface. All provider-specific logic will be encapsulated in adapter modules. Agent code will interact exclusively with `AIEngineProvider` instances — never directly with provider SDKs.
 
+**Current implementation note:** The runtime model has evolved since this ADR was
+accepted. Provider selection is now paired with explicit runtime modes. Claude
+remains the default full SDK runtime, Codex CLI is available as a CLI-backed
+full autonomous runner when configured, and direct API providers use limited
+runtime modes such as `analysis_only`, `patch_proposal`, and `generic_edit`.
+Use `AI_ENGINE_PROVIDER` for current provider selection; older references to
+`CLAUDE_PROVIDER` are historical context.
+
 The layer ships with three first-class adapters:
 - **`claude`** — Claude Agent SDK (wraps the existing `create_client()` / `create_simple_client()` infrastructure)
 - **`litellm`** — LiteLLM (100+ LLMs via a single unified API)
@@ -34,13 +42,13 @@ Provider selection is driven by configuration:
 
 ```python
 # Via environment variable
-CLAUDE_PROVIDER=litellm
+AI_ENGINE_PROVIDER=litellm
 LITELLM_MODEL=gpt-4o
 
 # Or programmatically
 from core.providers import create_engine_provider, ProviderConfig
 
-config = ProviderConfig.from_env()  # reads CLAUDE_PROVIDER and related vars
+config = ProviderConfig.from_env()  # reads AI_ENGINE_PROVIDER and related vars
 provider = create_engine_provider(config)
 session = provider.create_session(SessionConfig(name="coder", system_prompt="..."))
 ```
@@ -90,7 +98,7 @@ The Claude provider remains the default and the reference implementation. Its ad
 ### Neutral
 
 - `core/client.py` (`create_client()`, `create_simple_client()`) is preserved as the Claude-specific entry point. The Claude adapter wraps these functions rather than replacing them, maintaining backwards compatibility.
-- `ProviderConfig` is a dataclass loaded from environment variables. The provider-selection variable is `CLAUDE_PROVIDER` (defaulting to `"claude"`). This naming is intentional — it signals that Claude is the primary, supported path.
+- `ProviderConfig` is a dataclass loaded from environment variables. The current provider-selection variable is `AI_ENGINE_PROVIDER` (defaulting to `"claude"`). Older `CLAUDE_PROVIDER` examples are historical and should not be copied into new configuration.
 - The module structure (`core/providers/`, `core/providers/adapters/`) is separate from `core/client.py`. Existing code that imports `core.client` directly continues to work unchanged.
 
 ## Implementation notes
@@ -118,11 +126,11 @@ core/providers/
 4. Document required environment variables in `ProviderConfig.from_env()`.
 5. Add integration tests in `tests/test_providers.py`.
 
-**Environment variables (all optional except `CLAUDE_PROVIDER` when not using Claude):**
+**Environment variables (all optional except `AI_ENGINE_PROVIDER` when not using Claude):**
 
 | Variable | Default | Description |
 |---|---|---|
-| `CLAUDE_PROVIDER` | `claude` | Active provider: `claude`, `litellm`, `openrouter` |
+| `AI_ENGINE_PROVIDER` | `claude` | Active provider: `claude`, `codex`, `openai`, `litellm`, `openrouter`, `google`, `zhipuai`, `ollama` |
 | `LITELLM_MODEL` | `gpt-4o` | Model identifier passed to LiteLLM |
 | `LITELLM_API_KEY` | — | API key for the underlying LLM service |
 | `LITELLM_API_BASE` | — | Base URL override (e.g., for Azure or Ollama) |

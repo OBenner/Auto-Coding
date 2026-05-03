@@ -112,6 +112,8 @@ Auto Code documentation is spread across multiple locations, each serving a spec
 | **apps/backend/** | Backend-specific documentation | Agent implementations, core modules |
 | **apps/frontend/** | Frontend-specific documentation | Components, state management, UI patterns |
 | **.auto-claude/specs/** | Feature specifications | Individual feature specs created by spec pipeline |
+| **site/** | GitHub Pages docs portal | Multi-language public docs and roadmap status |
+| **docs/audit/** | Documentation audits and coverage reviews | Freshness audit, feature coverage gap analysis |
 
 ## Style Guidelines
 
@@ -140,8 +142,11 @@ Follow these naming patterns for consistency:
 ### When to Update Documentation
 
 - **Immediately**: When adding/removing features, changing APIs, or modifying architecture
+- **Runtime/provider changes**: Update architecture docs, user guides, and the GitHub Pages portal together
 - **Before PR**: Documentation changes should be part of the same PR as code changes
 - **During QA**: QA agents verify documentation completeness
+
+See [Documentation Freshness Audit](audit/DOCS-FRESHNESS-AUDIT.md) for the current cleanup queue and stale-doc risks.
 
 ### Documentation Lifecycle
 
