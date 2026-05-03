@@ -6,7 +6,12 @@ This document describes the environment variable schema for configuring AI engin
 
 Auto Code supports multiple AI engine providers through a unified configuration interface. Providers are selected and configured through environment variables.
 
-Provider selection does not guarantee full autonomous coding capability. Claude remains the full autonomous runtime. Non-Claude providers are limited to runtime modes such as `analysis_only` and `patch_proposal` unless a future runtime supplies equivalent tools, MCP, shell, filesystem, and security behavior. See [Provider Runtime Modes](../architecture/provider-runtime-modes.md).
+Provider selection does not guarantee full autonomous coding capability. Claude
+remains the default full autonomous runtime, and Codex CLI is the first wired
+non-Claude full autonomous CLI runtime. Direct API providers such as OpenAI,
+Google, LiteLLM, OpenRouter, ZhipuAI, and Ollama run through limited modes such
+as `analysis_only`, `patch_proposal`, and `generic_edit`. See
+[Provider Runtime Modes](../architecture/provider-runtime-modes.md).
 
 ## Core Configuration Variables
 
@@ -35,11 +40,11 @@ export AI_ENGINE_PROVIDER=claude
 
 **Runtime Override**:
 ```bash
-# Override for single command
-AI_ENGINE_PROVIDER=openai python run.py --spec 001
+# Override for a limited analysis command
+AI_ENGINE_PROVIDER=openai python run.py --spec 001 --analyze
 
 # Or use command-line flag
-python run.py --spec 001 --provider openai
+python run.py --spec 001 --provider openai --runtime-mode generic_edit
 ```
 
 ---
@@ -171,7 +176,9 @@ CLAUDE_MODEL=claude-sonnet-4-5-20250929
 
 ### OpenAI API (`openai`)
 
-OpenAI integration for text completion, analysis-only phases, and patch proposal mode. It does not currently provide full autonomous coding parity with the Claude Agent SDK.
+OpenAI integration for text completion, analysis-only phases, patch proposal
+mode, and the experimental generic edit local action runtime. It does not
+provide full autonomous coding parity with the Claude Agent SDK.
 
 #### Required Variables
 
@@ -335,56 +342,56 @@ if requires_extended_thinking:
 
 ---
 
-## Fallback Strategy
+## Runtime Fallback Strategy
 
-### Automatic Provider Fallback (Proposed)
+### Capability-Aware Runtime Fallback
 
-When a provider fails, the system can automatically fall back to an alternative provider:
+Runtime fallback does not switch from one direct provider to another provider.
+It resolves the selected provider/runtime capabilities and degrades an
+incompatible request to the first compatible limited runtime mode.
 
 #### Configuration
 
 ```bash
-# Enable automatic fallback
-FALLBACK_ENABLED=true
-
-# Specify fallback provider
-FALLBACK_PROVIDER=claude
-
-# Fallback trigger conditions
-FALLBACK_ON_RATE_LIMIT=true
-FALLBACK_ON_AUTH_ERROR=false
-FALLBACK_ON_TIMEOUT=true
-FALLBACK_ON_FEATURE_UNSUPPORTED=true
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_RUNTIME_FALLBACK=true
 ```
 
 #### Fallback Behavior
 
-| Error Type | Fallback Behavior | Default |
-|------------|-------------------|---------|
-| Rate limit (429) | Retry with fallback after N attempts | Enabled |
-| Authentication (401) | Fail fast, no fallback | Disabled |
-| Timeout | Retry with fallback | Enabled |
-| Feature not supported | Use fallback if available | Enabled |
-| Network error | Retry with exponential backoff, then fallback | Enabled |
+| Request | Fallback Behavior | Default |
+|---------|-------------------|---------|
+| Direct provider + `full_autonomous` | Degrade to `generic_edit`, then `patch_proposal`, then `analysis_only` if compatible | Disabled |
+| Direct provider + limited mode | Stay on requested limited mode | N/A |
+| Claude full autonomous | Stay on Claude Agent SDK runtime | N/A |
+| Codex full autonomous | Stay on Codex CLI runtime | N/A |
 
 #### Fallback Flow
 
 ```
-Request to Provider A
+Provider/runtime request
     ↓
-Error occurs
+Capability check
     ↓
-Is error retryable?
+Compatible?
     ↓ Yes                    ↓ No
-Retry Provider A          Check fallback enabled
-    ↓                           ↓ Yes    ↓ No
-Max retries reached?      Use Fallback B    Fail
-    ↓ Yes    ↓ No
-Provider A failed       Success with B
-    ↓
-Check fallback enabled
-    ↓ Yes
-Use Fallback Provider B
+Run requested runtime     Is AUTO_CODE_RUNTIME_FALLBACK=true?
+                              ↓ Yes             ↓ No
+                          Use limited mode     Fail fast
+```
+
+### CLI Runner Routing
+
+CLI runner routing is separate from runtime fallback. It preserves
+`full_autonomous` by routing an impossible direct-provider request to a wired
+CLI runtime such as Codex CLI.
+
+```bash
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_CLI_RUNNER_ROUTER=true
+CODEX_HOME=/path/to/codex-profile
 ```
 
 ### Retry Strategy
@@ -543,15 +550,16 @@ To rotate API keys without downtime:
 
 ## Advanced Configuration
 
-### Provider Switching at Runtime (Proposed)
+### Per-Agent Provider Selection
 
-Agents can switch providers mid-execution based on task requirements:
+Use per-agent provider and runtime variables to keep full autonomous phases on
+Claude while routing selected phases to limited direct-provider runtimes:
 
-```python
-# Pseudo-code
-if task.requires_native_mcp and current_provider != "claude":
-    switch_to_provider("claude")
-    logger.info("Switched to Claude for MCP support")
+```bash
+AI_ENGINE_PROVIDER=claude
+AGENT_PROVIDER_CODER=openai
+AGENT_MODEL_CODER=gpt-4o
+AGENT_RUNTIME_MODE_CODER=generic_edit
 ```
 
 ### Conditional Provider Selection
@@ -567,17 +575,11 @@ def select_provider_for_task(task):
         return get_default_provider()
 ```
 
-### Provider Health Monitoring (Proposed)
+### Provider Smoke Checks
 
 ```bash
-# Health check configuration
-PROVIDER_HEALTH_CHECK_ENABLED=true
-PROVIDER_HEALTH_CHECK_INTERVAL=300  # seconds
-PROVIDER_HEALTH_CHECK_TIMEOUT=10    # seconds
-
-# Unhealthy provider handling
-PROVIDER_AUTO_DISABLE_ON_FAILURE=true
-PROVIDER_AUTO_REENABLE_INTERVAL=600  # seconds
+python run.py --provider openai --provider-smoke
+python run.py --provider openai --provider-smoke --json
 ```
 
 ---
@@ -663,27 +665,30 @@ AI_ENGINE_PROVIDER=claude  # Start with default
 OPENAI_API_KEY=sk-proj-...
 ```
 
-**Step 3: Test secondary provider**
+**Step 3: Test the secondary provider in a limited runtime**
 
 ```bash
-AI_ENGINE_PROVIDER=openai python run.py --spec 001
+python run.py --provider openai --provider-smoke
+python run.py --provider openai --analyze
 ```
 
-**Step 4: Enable fallback (optional)**
+**Step 4: Enable runtime-aware fallback (optional)**
 
 ```bash
 # .env
-FALLBACK_ENABLED=true
-FALLBACK_PROVIDER=claude
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_RUNTIME_FALLBACK=true
 ```
 
-**Step 5: Update agent configurations (optional)**
+**Step 5: Update per-agent provider/runtime configuration (optional)**
 
 ```bash
-# Use different providers for different agents
-PLANNER_PROVIDER=claude
-CODER_PROVIDER=openai
-QA_REVIEWER_PROVIDER=claude
+# Keep Claude for full autonomous phases and use OpenAI for coder local edits
+AI_ENGINE_PROVIDER=claude
+AGENT_PROVIDER_CODER=openai
+AGENT_MODEL_CODER=gpt-4o
+AGENT_RUNTIME_MODE_CODER=generic_edit
 ```
 
 ---
@@ -707,23 +712,30 @@ AI_ENGINE_PROVIDER=claude
 CLAUDE_MODEL=claude-sonnet-4-5-20250929
 ANTHROPIC_API_KEY=sk-ant-prod-key
 
-# Enable fallback for resilience
-FALLBACK_ENABLED=true
-FALLBACK_PROVIDER=openai
+# Optional limited fallback path for direct provider runs
+AUTO_CODE_RUNTIME_FALLBACK=true
 OPENAI_API_KEY=sk-proj-prod-key
 ```
 
 ### Cost-Optimized Environment
 
 ```bash
-# Use OpenAI for cost savings (assuming lower pricing)
-AI_ENGINE_PROVIDER=openai
-OPENAI_MODEL=gpt-4o
+# Keep full autonomous phases on Claude and route coder to generic_edit
+AI_ENGINE_PROVIDER=claude
+AGENT_PROVIDER_CODER=openai
+AGENT_MODEL_CODER=gpt-4o
+AGENT_RUNTIME_MODE_CODER=generic_edit
 OPENAI_API_KEY=sk-proj-...
+```
 
-# Fallback to Claude for complex tasks
-FALLBACK_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-...
+### Codex CLI Full Autonomous Environment
+
+```bash
+# Use Codex CLI account runtime through an isolated CODEX_HOME
+AI_ENGINE_PROVIDER=codex
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+CODEX_HOME=/path/to/codex-profile
+CODEX_MODEL=codex-default
 ```
 
 ### Testing Environment
@@ -748,8 +760,13 @@ Complete list of all environment variables:
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `AI_ENGINE_PROVIDER` | string | `claude` | Selected AI provider |
-| `FALLBACK_ENABLED` | boolean | `false` | Enable automatic fallback |
-| `FALLBACK_PROVIDER` | string | `claude` | Fallback provider |
+| `AUTO_CODE_RUNTIME_MODE` | string | `full_autonomous` | Default runtime mode |
+| `AGENT_RUNTIME_MODE_PLANNER` | string | unset | Planner runtime override |
+| `AGENT_RUNTIME_MODE_CODER` | string | unset | Coder runtime override |
+| `AGENT_RUNTIME_MODE_QA_REVIEWER` | string | unset | QA reviewer runtime override |
+| `AGENT_RUNTIME_MODE_QA_FIXER` | string | unset | QA fixer runtime override |
+| `AUTO_CODE_RUNTIME_FALLBACK` | boolean | `false` | Enable capability-aware limited runtime fallback |
+| `AUTO_CODE_CLI_RUNNER_ROUTER` | boolean | `false` | Route impossible direct full-autonomous requests to wired CLI runners |
 | `MAX_RETRIES` | integer | `3` | Maximum retry attempts |
 | `RETRY_BACKOFF_BASE` | integer | `1` | Base backoff time (seconds) |
 | `RETRY_BACKOFF_MAX` | integer | `60` | Maximum backoff time (seconds) |
@@ -760,6 +777,13 @@ Complete list of all environment variables:
 |----------|------|---------|-------------|
 | `ANTHROPIC_API_KEY` | string | (required) | Anthropic API key |
 | `CLAUDE_MODEL` | string | `claude-sonnet-4-5-20250929` | Default model |
+
+#### Codex CLI Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `CODEX_HOME` | string | user profile | Codex CLI account/profile directory |
+| `CODEX_MODEL` | string | `codex-default` | Codex CLI model override |
 
 #### OpenAI Variables
 
@@ -785,22 +809,41 @@ Complete list of all environment variables:
 | `OPENROUTER_MODEL` | string | `anthropic/claude-sonnet-4` | Default model |
 | `OPENROUTER_BASE_URL` | string | `https://openrouter.ai/api/v1` | API base URL |
 
+#### Google Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `GOOGLE_API_KEY` | string | (required) | Google Gemini API key |
+| `GOOGLE_MODEL` | string | `gemini-2.0-flash` | Default Gemini model |
+
+#### ZhipuAI Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ZHIPUAI_API_KEY` | string | (required) | ZhipuAI/Z.AI API key |
+| `ZHIPUAI_MODEL` | string | provider default | Default GLM model |
+
+#### Ollama Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `OLLAMA_BASE_URL` | string | `http://localhost:11434/v1` | Ollama OpenAI-compatible endpoint |
+| `OLLAMA_MODEL` | string | provider default | Ollama model |
+
 ### Provider Feature Matrix
 
-| Feature | Claude | OpenAI | LiteLLM | OpenRouter |
-|---------|--------|--------|---------|------------|
-| Native MCP | ✅ | ⚠️* | ❌ | ❌ |
-| Security Hooks | ✅ | ⚠️* | ❌ | ❌ |
-| Agent Orchestration | ✅ | ⚠️* | ❌ | ❌ |
-| Extended Thinking | ✅ | ❌ | ❌ | ❌ |
-| Streaming | ✅ | ✅ | ✅ | ✅ |
-| Function Calling | ✅ | ✅ | ✅ | ✅ |
-| Session Management | ✅ | ⚠️* | ❌ | ❌ |
-
-*Requires custom implementation
+| Feature | Claude | Codex CLI | OpenAI | Google | LiteLLM | OpenRouter | ZhipuAI | Ollama |
+|---------|--------|-----------|--------|--------|---------|------------|---------|--------|
+| Full autonomous runtime | Yes | Yes | No | No | No | No | No | No |
+| `generic_edit` local actions | Not needed | Not needed | Experimental | Experimental | Experimental | Experimental | Experimental | Experimental |
+| External MCP parity | Yes | CLI-dependent | No | No | No | No | No | No |
+| Local MCP bridge diagnostics | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Runtime subagents | Claude SDK Task | CLI-dependent | Read-only orchestrated | Read-only orchestrated | Read-only orchestrated | Read-only orchestrated | Read-only orchestrated | Read-only orchestrated |
+| Streaming/text completion | Yes | CLI events | Yes | Yes | Yes | Yes | Yes | Yes |
+| Provider-native function tools | Yes | CLI-dependent | Yes | Yes | Gateway-dependent | Gateway-dependent | Yes | Model-dependent |
 
 ---
 
 **Document Version:** 1.0
-**Last Updated:** 2026-04-30
+**Last Updated:** 2026-05-03
 **Status:** Active limited multi-provider support
