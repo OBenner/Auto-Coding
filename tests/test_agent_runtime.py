@@ -578,6 +578,67 @@ def test_provider_tool_call_parser_handles_streaming_delta_envelopes():
     assert tool_calls[0].arguments == {"query": "OpenRouter"}
 
 
+def test_provider_tool_call_parser_coalesces_streaming_delta_fragments():
+    message_obj = {
+        "choices": [
+            {
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "chunked_call",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": '{"path":"notes.txt"',
+                            },
+                        }
+                    ]
+                }
+            },
+            {
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "function": {
+                                "arguments": ',"content":"hello"}',
+                            },
+                        }
+                    ]
+                }
+            },
+        ]
+    }
+
+    tool_calls = parse_openai_tool_calls(message_obj)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "chunked_call"
+    assert tool_calls[0].name == "write_file"
+    assert tool_calls[0].arguments == {"path": "notes.txt", "content": "hello"}
+
+
+def test_provider_tool_call_parser_handles_bedrock_tool_use_blocks():
+    message_obj = {
+        "content": [
+            {
+                "toolUse": {
+                    "toolUseId": "bedrock_tool_use",
+                    "name": "read_file",
+                    "inputJson": {"path": "README.md"},
+                }
+            }
+        ]
+    }
+
+    tool_calls = parse_openai_tool_calls(message_obj)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "bedrock_tool_use"
+    assert tool_calls[0].name == "read_file"
+    assert tool_calls[0].arguments == {"path": "README.md"}
+
+
 def test_provider_message_content_handles_gateway_shapes():
     assert provider_message_content({"content": "plain text"}) == "plain text"
     assert (

@@ -244,6 +244,12 @@ bridge when the routed model/gateway supports tools; if the first native
 tool-call request is rejected, `generic_edit` falls back to the JSON action
 loop.
 
+The native tool-call parser accepts the common gateway shapes Auto Code sees in
+practice: OpenAI Chat Completions `tool_calls`, OpenAI Responses `output`
+function-call blocks, Anthropic-style `tool_use` content blocks, Bedrock-style
+`toolUse` blocks, Gemini `functionCall` parts, gateway `choices[].message`
+envelopes, and streaming `delta` fragments with chunked JSON arguments.
+
 Z.AI through Claude Code is intentionally not routed through this generic edit
 contract. That path uses an Anthropic-compatible endpoint with a Claude
 Code-compatible CLI runtime and is represented by the `zai_claude_code` runner

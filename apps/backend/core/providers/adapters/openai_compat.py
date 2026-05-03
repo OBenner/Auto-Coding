@@ -243,7 +243,10 @@ def format_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
 def parse_openai_tool_calls(message_obj: Any) -> list[ProviderToolCall]:
     """Normalize gateway-specific tool-call objects into runtime-friendly records."""
     normalized: list[ProviderToolCall] = []
-    for index, tool_call in enumerate(iter_provider_tool_calls(message_obj), start=1):
+    tool_calls = coalesce_provider_tool_call_fragments(
+        iter_provider_tool_calls(message_obj)
+    )
+    for index, tool_call in enumerate(tool_calls, start=1):
         name, raw_arguments = tool_call_name_and_arguments(tool_call)
         if not name:
             raise ProviderError("Tool call is missing a function name")
@@ -358,9 +361,10 @@ def direct_provider_tool_calls(message_obj: Any) -> list[Any]:
     if tool_calls:
         return tool_calls
 
-    direct_call = _get_attr_or_key(
-        message_obj, "function_call", None
-    ) or _get_attr_or_key(message_obj, "functionCall", None)
+    direct_call = first_present_value(
+        message_obj,
+        ("function_call", "functionCall", "tool_use", "toolUse"),
+    )
     if direct_call:
         return [direct_call]
     return []
@@ -380,9 +384,10 @@ def part_provider_tool_calls(message_obj: Any) -> list[Any]:
 def tool_call_name_and_arguments(tool_call: Any) -> tuple[str, Any]:
     """Extract function name and arguments from common tool-call envelopes."""
     function = (
-        _get_attr_or_key(tool_call, "function", None)
-        or _get_attr_or_key(tool_call, "function_call", None)
-        or _get_attr_or_key(tool_call, "functionCall", None)
+        first_present_value(
+            tool_call,
+            ("function", "function_call", "functionCall", "tool_use", "toolUse"),
+        )
         or tool_call
     )
     name = str(
@@ -392,12 +397,12 @@ def tool_call_name_and_arguments(tool_call: Any) -> tuple[str, Any]:
     )
     raw_arguments = first_present_value(
         function,
-        ("arguments", "args", "parameters", "input", "input_json", "tool_input"),
+        TOOL_ARGUMENT_KEYS,
     )
     if raw_arguments is None and function is not tool_call:
         raw_arguments = first_present_value(
             tool_call,
-            ("arguments", "args", "parameters", "input", "input_json", "tool_input"),
+            TOOL_ARGUMENT_KEYS,
         )
     return name, raw_arguments
 
@@ -421,14 +426,130 @@ def parse_tool_call_arguments(name: str, raw_arguments: Any) -> dict[str, Any]:
 
 
 def tool_call_id(tool_call: Any, index: int) -> str:
-    value = (
-        _get_attr_or_key(tool_call, "id", None)
-        or _get_attr_or_key(tool_call, "tool_call_id", None)
-        or _get_attr_or_key(tool_call, "call_id", None)
-        or _get_attr_or_key(tool_call, "callId", None)
-        or f"call_{index}"
-    )
+    value = explicit_tool_call_id(tool_call) or f"call_{index}"
     return str(value)
+
+
+TOOL_ARGUMENT_KEYS = (
+    "arguments",
+    "arguments_json",
+    "argumentsJson",
+    "args",
+    "parameters",
+    "parameters_json",
+    "parametersJson",
+    "input",
+    "input_json",
+    "inputJson",
+    "tool_input",
+    "toolInput",
+)
+
+
+def explicit_tool_call_id(tool_call: Any) -> Any:
+    """Return a provider-supplied tool-call id without synthesizing a fallback."""
+    return first_present_value(
+        tool_call,
+        (
+            "id",
+            "tool_call_id",
+            "toolCallId",
+            "call_id",
+            "callId",
+            "tool_use_id",
+            "toolUseId",
+        ),
+    )
+
+
+def tool_call_index(tool_call: Any) -> Any:
+    """Return a provider-supplied streaming tool-call index when present."""
+    return first_present_value(tool_call, ("index", "tool_call_index", "toolCallIndex"))
+
+
+def coalesce_provider_tool_call_fragments(tool_calls: list[Any]) -> list[Any]:
+    """Merge streaming tool-call deltas that split arguments across chunks."""
+    grouped: list[dict[str, Any]] = []
+    groups_by_key: dict[str, dict[str, Any]] = {}
+
+    for position, tool_call in enumerate(tool_calls, start=1):
+        key = tool_call_fragment_key(tool_call, position)
+        fragment = provider_tool_call_fragment(tool_call)
+        existing = groups_by_key.get(key)
+        if existing is None:
+            groups_by_key[key] = fragment
+            grouped.append(fragment)
+            continue
+        merge_tool_call_fragment(existing, fragment)
+
+    return [
+        provider_tool_call_from_fragment(fragment, index)
+        for index, fragment in enumerate(grouped, start=1)
+    ]
+
+
+def tool_call_fragment_key(tool_call: Any, position: int) -> str:
+    """Return a stable grouping key for streaming tool-call fragments."""
+    index = tool_call_index(tool_call)
+    if index is not None:
+        return f"index:{index}"
+    call_id = explicit_tool_call_id(tool_call)
+    if call_id is not None:
+        return f"id:{call_id}"
+    return f"position:{position}"
+
+
+def provider_tool_call_fragment(tool_call: Any) -> dict[str, Any]:
+    """Extract mergeable id/name/argument fields from one raw tool-call block."""
+    name, raw_arguments = tool_call_name_and_arguments(tool_call)
+    return {
+        "id": explicit_tool_call_id(tool_call),
+        "name": name,
+        "arguments": raw_arguments,
+    }
+
+
+def merge_tool_call_fragment(
+    target: dict[str, Any],
+    fragment: dict[str, Any],
+) -> None:
+    """Merge one streaming tool-call fragment into an accumulated fragment."""
+    if not target.get("id") and fragment.get("id"):
+        target["id"] = fragment["id"]
+    if not target.get("name") and fragment.get("name"):
+        target["name"] = fragment["name"]
+    target["arguments"] = merge_tool_call_arguments(
+        target.get("arguments"),
+        fragment.get("arguments"),
+    )
+
+
+def merge_tool_call_arguments(existing: Any, incoming: Any) -> Any:
+    """Merge argument fragments while preserving full-object argument payloads."""
+    if incoming in (None, ""):
+        return existing
+    if existing in (None, ""):
+        return incoming
+    if isinstance(existing, str) and isinstance(incoming, str):
+        return existing + incoming
+    if isinstance(existing, Mapping) and isinstance(incoming, Mapping):
+        return {**dict(existing), **dict(incoming)}
+    return incoming
+
+
+def provider_tool_call_from_fragment(
+    fragment: dict[str, Any],
+    index: int,
+) -> dict[str, Any]:
+    """Build a regular OpenAI-shaped tool call from a merged fragment."""
+    call_id = fragment.get("id") or f"call_{index}"
+    return {
+        "id": call_id,
+        "function": {
+            "name": fragment.get("name", ""),
+            "arguments": fragment.get("arguments"),
+        },
+    }
 
 
 def as_sequence(value: Any) -> list[Any]:
@@ -447,23 +568,20 @@ def as_sequence(value: Any) -> list[Any]:
 
 def tool_call_from_part(part: Any) -> Any | None:
     """Extract a callable tool block from common response part formats."""
-    function_call = _get_attr_or_key(part, "function_call", None) or _get_attr_or_key(
-        part, "functionCall", None
+    function_call = first_present_value(
+        part,
+        ("function_call", "functionCall", "tool_use", "toolUse"),
     )
     if function_call:
         return function_call
 
     part_type = str(_get_attr_or_key(part, "type", "") or "").lower()
-    if part_type in {"function_call", "tool_call", "tool_use"}:
+    if part_type in {"function_call", "tool_call", "tool_use", "tooluse"}:
         return part
 
     if (
         _get_attr_or_key(part, "name", None)
-        and first_present_value(
-            part,
-            ("arguments", "args", "parameters", "input", "input_json", "tool_input"),
-        )
-        is not None
+        and first_present_value(part, TOOL_ARGUMENT_KEYS) is not None
     ):
         return part
 
