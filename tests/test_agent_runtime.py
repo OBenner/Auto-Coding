@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import sys
 import textwrap
 from pathlib import Path
@@ -36,6 +37,7 @@ from agents.runtime import (
     save_runtime_runner_route_artifact,
     summarize_subagent_results,
 )
+from agents.runtime.adapters.cli_runner import CliRuntimeCommand, CliRuntimeProcess
 from agents.runtime.adapters.codex_cli import (
     build_codex_command_args,
     build_codex_usage_metadata,
@@ -437,6 +439,30 @@ def test_codex_cli_account_summary_omits_credentials():
     )
 
     assert summary == {"email": "dev@example.com", "plan": "pro"}
+
+
+@pytest.mark.asyncio
+async def test_cli_runtime_process_truncates_large_output(tmp_path: Path):
+    script = tmp_path / "large_output.py"
+    script.write_text(
+        "import sys\nsys.stdout.write('x' * 1000)\n",
+        encoding="utf-8",
+    )
+    process = CliRuntimeProcess(max_output_chars=128)
+
+    result = await process.run(
+        CliRuntimeCommand(
+            executable=sys.executable,
+            args=[str(script)],
+            cwd=tmp_path,
+            env=os.environ,
+            stdin_text="",
+        )
+    )
+
+    assert result.truncated is True
+    assert len(result.stdout_text) == 128
+    assert result.stderr_text == ""
 
 
 def test_provider_tool_call_parser_handles_responses_output_blocks():

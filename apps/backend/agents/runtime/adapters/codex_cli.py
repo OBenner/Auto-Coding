@@ -99,6 +99,7 @@ class CodexCliRuntimeSession:
             stderr_text=stderr_text,
             final_message=final_message,
             event_final_message=event_final_message if not final_message else "",
+            output_truncated=process_result.truncated,
         )
 
         response_parts = []
@@ -116,6 +117,11 @@ class CodexCliRuntimeSession:
         if status == "cancelled":
             response_parts.append(
                 f"Codex CLI run was cancelled. Artifacts: {artifacts['codex_cli_result']}"
+            )
+        if process_result.truncated:
+            response_parts.append(
+                "Codex CLI output exceeded the runtime capture limit and the "
+                f"process was terminated. Artifacts: {artifacts['codex_cli_result']}"
             )
         if (
             process_result.returncode != 0
@@ -400,6 +406,7 @@ def save_codex_cli_artifacts(
     stderr_text: str,
     final_message: str,
     event_final_message: str = "",
+    output_truncated: bool = False,
 ) -> dict[str, str]:
     """Persist Codex CLI event and result artifacts for UI/debug consumers."""
     artifact_dir = spec_dir / "artifacts"
@@ -421,6 +428,7 @@ def save_codex_cli_artifacts(
         "subtask_id": subtask_id,
         "status": status,
         "returncode": returncode,
+        "output_truncated": output_truncated,
         "mode": "resume" if command_args[:2] == ["exec", "resume"] else "exec",
         "resumed": command_args[:2] == ["exec", "resume"],
         "resume": codex_resume_metadata(command_args),
