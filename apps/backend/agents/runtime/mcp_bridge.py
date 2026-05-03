@@ -101,7 +101,7 @@ class RuntimeMcpSupport:
     server_statuses: tuple[dict[str, Any], ...] = ()
 
     @property
-    def bridge_plan(self) -> "RuntimeMcpBridgePlan":
+    def bridge_plan(self) -> RuntimeMcpBridgePlan:
         """Return a normalized plan for UI, policy, and artifact consumers."""
         return build_mcp_bridge_plan(
             provider_name=self.provider_name,
