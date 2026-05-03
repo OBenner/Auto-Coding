@@ -40,6 +40,7 @@ from agents.runtime import (
 from agents.runtime.adapters.cli_runner import CliRuntimeCommand, CliRuntimeProcess
 from agents.runtime.adapters.codex_cli import (
     build_codex_command_args,
+    build_codex_event_timeline,
     build_codex_usage_metadata,
     codex_resume_metadata,
     extract_codex_final_message,
@@ -210,6 +211,7 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
     assert result.response_text.rstrip("\r\n") == "final response: do codex work"
     assert result.artifacts
     assert (tmp_path / "artifacts" / "codex_cli_events.jsonl").exists()
+    assert (tmp_path / "artifacts" / "codex_cli_timeline.json").exists()
     assert (tmp_path / "artifacts" / "codex_cli_result.json").exists()
     if sys.platform != "win32":
         result_payload = json.loads(
@@ -229,6 +231,22 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
         assert result.usage_metadata["output_tokens"] == 7
         assert result.usage_metadata["total_tokens"] == 19
         assert result.usage_metadata["cost_usd"] == pytest.approx(0.001)
+        timeline_payload = json.loads(
+            (tmp_path / "artifacts" / "codex_cli_timeline.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert timeline_payload["session_id"] == "codex-test-session"
+        assert timeline_payload["event_count"] == 2
+        assert timeline_payload["events"][0]["type"] == "session.started"
+        assert timeline_payload["events"][1]["usage"] == {
+            "input_tokens": 12,
+            "output_tokens": 7,
+            "total_tokens": 19,
+        }
+        assert result.artifacts["codex_cli_timeline"].endswith(
+            "codex_cli_timeline.json"
+        )
 
 
 @pytest.mark.asyncio
@@ -389,6 +407,40 @@ def test_codex_cli_event_parser_extracts_final_message_from_events():
     assert extract_codex_final_message(parse_codex_json_events(stdout)) == (
         "final from events"
     )
+
+
+def test_codex_cli_event_timeline_summarizes_safe_fields():
+    events = [
+        {
+            "type": "session.started",
+            "session_id": "codex-session-1",
+            "account": {"email": "dev@example.com", "token": "secret"},
+        },
+        {
+            "type": "response.completed",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "x" * 600}],
+            },
+            "usage": {"input_tokens": 2, "output_tokens": 3},
+            "cost_usd": 0.01,
+        },
+    ]
+
+    timeline = build_codex_event_timeline(events)
+
+    assert timeline[0] == {
+        "index": 1,
+        "type": "session.started",
+        "session_id": "codex-session-1",
+    }
+    assert timeline[1]["type"] == "response.completed"
+    assert timeline[1]["role"] == "assistant"
+    assert len(timeline[1]["text_excerpt"]) == 500
+    assert timeline[1]["text_truncated"] is True
+    assert timeline[1]["usage"] == {"input_tokens": 2, "output_tokens": 3}
+    assert timeline[1]["cost_usd"] == pytest.approx(0.01)
+    assert "account" not in timeline[0]
 
 
 def test_codex_cli_resume_command_uses_resume_subcommand(tmp_path: Path):

@@ -15,6 +15,25 @@ from ..capabilities import RuntimeCapabilities
 from ..result import AgentRunResult
 from .cli_runner import CliRuntimeCommand, CliRuntimeProcess
 
+MAX_CODEX_EVENT_TEXT_EXCERPT_CHARS = 500
+CODEX_SESSION_ID_PATHS: tuple[tuple[str, ...], ...] = (
+    ("session_id",),
+    ("sessionId",),
+    ("conversation_id",),
+    ("conversationId",),
+    ("thread_id",),
+    ("threadId",),
+    ("session", "id"),
+    ("conversation", "id"),
+)
+CODEX_COST_KEYS = (
+    "cost_usd",
+    "total_cost_usd",
+    "estimated_cost_usd",
+    "cost",
+    "total_cost",
+)
+
 
 class CodexCliRuntimeSession:
     """Run Auto Code prompts through `codex exec`."""
@@ -209,19 +228,7 @@ def summarize_codex_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         if event_type:
             event_types[event_type] = event_types.get(event_type, 0) + 1
         if summary["session_id"] is None:
-            summary["session_id"] = first_string_at_paths(
-                event,
-                (
-                    ("session_id",),
-                    ("sessionId",),
-                    ("conversation_id",),
-                    ("conversationId",),
-                    ("thread_id",),
-                    ("threadId",),
-                    ("session", "id"),
-                    ("conversation", "id"),
-                ),
-            )
+            summary["session_id"] = first_string_at_paths(event, CODEX_SESSION_ID_PATHS)
         if summary["account"] is None:
             summary["account"] = first_value_at_paths(
                 event,
@@ -234,16 +241,7 @@ def summarize_codex_events(events: list[dict[str, Any]]) -> dict[str, Any]:
                 ),
             )
         merge_codex_usage(summary["usage"], event)
-        cost = extract_max_number(
-            event,
-            (
-                "cost_usd",
-                "total_cost_usd",
-                "estimated_cost_usd",
-                "cost",
-                "total_cost",
-            ),
-        )
+        cost = extract_max_number(event, CODEX_COST_KEYS)
         if cost is not None:
             summary["cost_usd"] = max(float(summary["cost_usd"] or 0.0), cost)
 
@@ -413,8 +411,28 @@ def save_codex_cli_artifacts(
     artifact_dir.mkdir(parents=True, exist_ok=True)
     events_path = artifact_dir / "codex_cli_events.jsonl"
     result_path = artifact_dir / "codex_cli_result.json"
+    timeline_path = artifact_dir / "codex_cli_timeline.json"
     events_path.write_text(
         "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events),
+        encoding="utf-8",
+    )
+
+    event_timeline = build_codex_event_timeline(events)
+    timeline_path.write_text(
+        json.dumps(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "provider": "codex",
+                "runtime": "codex_cli",
+                "subtask_id": subtask_id,
+                "status": status,
+                "session_id": event_summary.get("session_id"),
+                "event_count": len(events),
+                "events": event_timeline,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
 
@@ -438,6 +456,7 @@ def save_codex_cli_artifacts(
         "account_summary": summarize_codex_account(event_summary.get("account")),
         "command_options": safe_codex_command_options(command_args),
         "event_summary": event_summary,
+        "event_timeline_count": len(event_timeline),
         "non_json_stdout_line_count": len(non_json_stdout_lines),
         "stderr_excerpt": stderr_text[:2000],
         "final_message_excerpt": final_message[:2000],
@@ -450,6 +469,7 @@ def save_codex_cli_artifacts(
 
     artifacts = {
         "codex_cli_events": str(events_path),
+        "codex_cli_timeline": str(timeline_path),
         "codex_cli_result": str(result_path),
     }
     if stderr_text.strip():
@@ -457,6 +477,35 @@ def save_codex_cli_artifacts(
         stderr_path.write_text(stderr_text, encoding="utf-8")
         artifacts["codex_cli_stderr"] = str(stderr_path)
     return artifacts
+
+
+def build_codex_event_timeline(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a compact, safe event timeline for UI/debug consumers."""
+    timeline: list[dict[str, Any]] = []
+    for index, event in enumerate(events, start=1):
+        entry: dict[str, Any] = {
+            "index": index,
+            "type": codex_event_type(event) or "unknown",
+        }
+        session_id = first_string_at_paths(event, CODEX_SESSION_ID_PATHS)
+        if session_id:
+            entry["session_id"] = session_id
+        role = first_string_at_paths(event, CODEX_MESSAGE_ROLE_PATHS)
+        if role:
+            entry["role"] = role
+        text = codex_message_text(event)
+        if text:
+            entry["text_excerpt"] = text[:MAX_CODEX_EVENT_TEXT_EXCERPT_CHARS]
+            entry["text_truncated"] = len(text) > MAX_CODEX_EVENT_TEXT_EXCERPT_CHARS
+        usage: dict[str, int] = {}
+        merge_codex_usage(usage, event)
+        if usage:
+            entry["usage"] = usage
+        cost = extract_max_number(event, CODEX_COST_KEYS)
+        if cost is not None:
+            entry["cost_usd"] = cost
+        timeline.append(entry)
+    return timeline
 
 
 def codex_resume_metadata(command_args: list[str]) -> dict[str, Any]:
