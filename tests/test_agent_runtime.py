@@ -2581,6 +2581,107 @@ async def test_generic_edit_runtime_records_partial_transactions_for_recovery(
     assert "Recovery state: resolved" in summary_markdown
 
 
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failure(
+    tmp_path: Path,
+):
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then fail",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "finish too early",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "done without recovery",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "make partial edit",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "error"
+    assert "rejected finish" in result.response_text
+    assert "json_actions-1" in result.response_text
+    artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact["status"] == "error"
+    assert artifact["stop_reason"] == "unresolved_partial_failure"
+    assert artifact["unresolved_partial_failure_ids"] == ["json_actions-1"]
+    assert artifact["recovery_resolved"] is False
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_native_tools_reject_finish_with_unresolved_partial_failure(
+    tmp_path: Path,
+):
+    session = FakeNativeToolCallSession(
+        [
+            [
+                {
+                    "name": "write_file",
+                    "arguments": {"path": "partial.txt", "content": "changed\n"},
+                },
+                {"name": "read_file", "arguments": {"path": "missing.txt"}},
+            ],
+            [{"name": "finish", "arguments": {"summary": "done too early"}}],
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "make partial edit through native tools",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "error"
+    assert "native_tool_calls-1" in result.response_text
+    artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact["status"] == "error"
+    assert artifact["stop_reason"] == "unresolved_partial_failure"
+    assert artifact["unresolved_partial_failure_ids"] == ["native_tool_calls-1"]
+    assert session.tool_results[-1]["name"] == "finish"
+
+
 def test_generic_edit_transaction_summary_marks_unresolved_partial_failure():
     summary = summarize_generic_edit_transactions(
         [

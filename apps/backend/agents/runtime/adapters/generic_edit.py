@@ -525,6 +525,14 @@ class GenericEditRuntimeSession:
             actions=actions,
             results=action_results,
         )
+        finish_trace = [*trace, iteration_entry]
+        if has_unresolved_partial_failure(finish_trace):
+            return self._unresolved_partial_failure_finish_result(
+                trace=finish_trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
         trace.append(iteration_entry)
         artifacts = save_generic_edit_artifacts(
             spec_dir=spec_dir,
@@ -904,6 +912,14 @@ class GenericEditRuntimeSession:
             actions=[action for _, action in tool_actions],
             results=action_results,
         )
+        finish_trace = [*trace, iteration_entry]
+        if has_unresolved_partial_failure(finish_trace):
+            return self._unresolved_partial_failure_finish_result(
+                trace=finish_trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
         trace.append(iteration_entry)
         artifacts = save_generic_edit_artifacts(
             spec_dir=spec_dir,
@@ -928,6 +944,38 @@ class GenericEditRuntimeSession:
         return AgentRunResult(
             status="continue",
             response_text="\n".join(response_lines),
+        )
+
+    def _unresolved_partial_failure_finish_result(
+        self,
+        *,
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        """Reject finish when an earlier partial mutation has not been recovered."""
+        transaction_summary = summarize_generic_edit_transactions(trace)
+        unresolved_ids = transaction_summary["unresolved_partial_failure_ids"]
+        message = (
+            "Generic edit runtime rejected finish because partial-failure "
+            f"transaction(s) remain unresolved: {', '.join(unresolved_ids)}."
+        )
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="error",
+            stop_reason="unresolved_partial_failure",
+            message=message,
+            trace=trace,
+            summary=message,
+            observation_path=observation_path,
+            mcp_support=self._mcp_support_payload(),
+        )
+        return AgentRunResult(
+            status="error",
+            response_text=f"{message}\nArtifacts: {artifacts['generic_edit_trace']}",
         )
 
     def _supports_native_tool_calls(self) -> bool:
@@ -2066,6 +2114,14 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
         "unresolved_partial_failure_count": len(unresolved_partial_failure_ids),
         "unresolved_partial_failure_ids": unresolved_partial_failure_ids,
     }
+
+
+def has_unresolved_partial_failure(trace: list[dict[str, Any]]) -> bool:
+    """Return true when finish would leave a partial mutation unresolved."""
+    return (
+        summarize_generic_edit_transactions(trace)["unresolved_partial_failure_count"]
+        > 0
+    )
 
 
 def transaction_resolves_partial_failure(

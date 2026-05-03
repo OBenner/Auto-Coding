@@ -286,7 +286,10 @@ Auto Code validates and executes these actions locally:
 - transaction summaries include tool sequences, affected/mutated paths,
   partial-failure ids, the last partial-failure path set, whether recovery was
   resolved by a later covered inspection/repair or workspace verification
-  transaction, and any unresolved partial failures.
+  transaction, and any unresolved partial failures;
+- `finish` is rejected when a previous partial-failure transaction remains
+  unresolved, so limited runtimes cannot report success after a partially
+  applied mutating batch.
 
 This mode is intentionally not full autonomous parity. It exposes the local
 action loop, provider-native tool calls when available, bounded runtime
