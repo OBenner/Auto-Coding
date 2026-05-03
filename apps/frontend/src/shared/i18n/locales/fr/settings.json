@@ -1004,6 +1004,25 @@
       "unavailable": "Le smoke check fournisseur est indisponible.",
       "saveFailed": "Impossible d'enregistrer les réglages fournisseur avant le test."
     },
+    "controlPlane": {
+      "title": "Panneau de contrôle runtime",
+      "description": "Diagnostics backend en direct pour le fournisseur et le runtime sélectionnés.",
+      "refresh": "Actualiser",
+      "loading": "Chargement des diagnostics runtime...",
+      "unavailable": "Les diagnostics runtime sont indisponibles.",
+      "error": "Échec des diagnostics runtime : {{error}}",
+      "none": "Aucun",
+      "mcpBridgeTitle": "Bridge MCP",
+      "fallbackTitle": "Fallback et runners",
+      "mcpStatus": "Statut MCP",
+      "mcpAction": "Action requise",
+      "bridgedServers": "Serveurs bridgés",
+      "nativeRequiredServers": "Serveurs nécessitant le natif",
+      "selectedRuntime": "Runtime sélectionné",
+      "runnerCandidates": "Runners candidats",
+      "missingCapabilities": "Capacités manquantes",
+      "compatibleFallbacks": "Fallbacks compatibles"
+    },
     "cost": {
       "title": "Aperçu du coût",
       "description": "Tarification de référence pour le modèle fournisseur sélectionné. Les exécutions réelles varient selon la tâche et la taille du contexte.",

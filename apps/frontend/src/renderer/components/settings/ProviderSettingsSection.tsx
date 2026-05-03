@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -7,6 +7,7 @@ import {
   CircleSlash,
   DollarSign,
   Info,
+  RefreshCw,
   ShieldCheck,
   XCircle
 } from 'lucide-react';
@@ -23,7 +24,10 @@ import type {
   AIProviderConfig,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
-  ProviderRuntimeDiagnostics
+  ProviderRuntimeDiagnostics,
+  RuntimeControlPlaneDiagnostics,
+  RuntimeFallbackMatrixRow,
+  RuntimeMcpBridgePlanRow
 } from '../../../shared/types/settings';
 
 type ProviderSettingsSectionProps = Record<string, never>;
@@ -356,6 +360,26 @@ function hasRuntimeDiagnostics(
   return Boolean(diagnostics);
 }
 
+function findMcpBridgePlanRow(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  provider: AIEngineProvider,
+  runtimeMode: AgentRuntimeMode
+): RuntimeMcpBridgePlanRow | null {
+  return diagnostics?.mcp_bridge_plan_matrix?.find(
+    (row) => row.provider === provider && row.runtime_mode === runtimeMode
+  ) ?? null;
+}
+
+function findFallbackMatrixRow(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  provider: AIEngineProvider,
+  runtimeMode: AgentRuntimeMode
+): RuntimeFallbackMatrixRow | null {
+  return diagnostics?.runtime_fallback_matrix?.find(
+    (row) => row.provider === provider && row.requested_mode === runtimeMode
+  ) ?? null;
+}
+
 function getElectronAPI() {
   return (globalThis as unknown as Partial<Window>).electronAPI;
 }
@@ -411,6 +435,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [validationStatus, setValidationStatus] = useState<ProviderConfigValidation | null>(null);
   const [connectionTestStatus, setConnectionTestStatus] = useState<ProviderConnectionTestResult | null>(null);
+  const [runtimeControlPlaneDiagnostics, setRuntimeControlPlaneDiagnostics] =
+    useState<RuntimeControlPlaneDiagnostics | null>(null);
+  const [runtimeControlPlaneLoading, setRuntimeControlPlaneLoading] = useState(false);
+  const [runtimeControlPlaneError, setRuntimeControlPlaneError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -440,6 +468,34 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       cancelled = true;
     };
   }, []);
+
+  const loadRuntimeControlPlaneDiagnostics = useCallback(async () => {
+    setRuntimeControlPlaneLoading(true);
+    setRuntimeControlPlaneError(null);
+    try {
+      const result = await getElectronAPI()?.getProviderRuntimeDiagnostics?.();
+      if (result?.success && result.data) {
+        setRuntimeControlPlaneDiagnostics(result.data);
+      } else {
+        setRuntimeControlPlaneDiagnostics(null);
+        setRuntimeControlPlaneError(
+          result?.error ?? t('settings:aiProvider.controlPlane.unavailable')
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : t('settings:aiProvider.controlPlane.unavailable');
+      setRuntimeControlPlaneDiagnostics(null);
+      setRuntimeControlPlaneError(message);
+    } finally {
+      setRuntimeControlPlaneLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void loadRuntimeControlPlaneDiagnostics();
+  }, [loadRuntimeControlPlaneDiagnostics]);
 
   const selectedProvider = useMemo(
     () => PROVIDER_OPTIONS.find((provider) => provider.value === config.provider) ?? PROVIDER_OPTIONS[0],
@@ -659,6 +715,141 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       </div>
     </div>
   );
+
+  const renderRuntimeControlPlane = () => {
+    const mcpPlan = findMcpBridgePlanRow(
+      runtimeControlPlaneDiagnostics,
+      config.provider,
+      activeRuntimeMode
+    );
+    const fallbackRow = findFallbackMatrixRow(
+      runtimeControlPlaneDiagnostics,
+      config.provider,
+      activeRuntimeMode
+    );
+    const noneLabel = t('settings:aiProvider.controlPlane.none');
+    const formatControlPlaneValue = (value?: string | null) => {
+      const formatted = formatRuntimeDiagnosticValue(value);
+      return formatted && formatted !== 'none' ? formatted : noneLabel;
+    };
+    const formatControlPlaneList = (values?: string[] | null) =>
+      formatRuntimeDiagnosticList(values) || noneLabel;
+    const mcpStatus = mcpPlan ? formatControlPlaneValue(mcpPlan.status) : noneLabel;
+    const mcpAction = mcpPlan ? formatControlPlaneValue(mcpPlan.action_required) : noneLabel;
+    const fallbackSelected = fallbackRow
+      ? formatControlPlaneValue(fallbackRow.fallback_selected_mode)
+      : noneLabel;
+    const runnerCandidates = formatControlPlaneList(
+      fallbackRow?.selected_mode_runner_candidates
+    );
+
+    return (
+      <div className="space-y-3 border-t border-border pt-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-2">
+            <Activity className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <h3 className="text-sm font-medium text-foreground">
+                {t('settings:aiProvider.controlPlane.title')}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {t('settings:aiProvider.controlPlane.description')}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            className="h-8 gap-2 self-start text-xs"
+            onClick={loadRuntimeControlPlaneDiagnostics}
+            disabled={runtimeControlPlaneLoading}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${
+              runtimeControlPlaneLoading ? 'animate-spin' : ''
+            }`}
+            />
+            {t('settings:aiProvider.controlPlane.refresh')}
+          </Button>
+        </div>
+
+        {runtimeControlPlaneLoading && !runtimeControlPlaneDiagnostics ? (
+          <p className="max-w-xl rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
+            {t('settings:aiProvider.controlPlane.loading')}
+          </p>
+        ) : runtimeControlPlaneError ? (
+          <div className="flex max-w-xl items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <p>
+              {t('settings:aiProvider.controlPlane.error', {
+                error: runtimeControlPlaneError
+              })}
+            </p>
+          </div>
+        ) : runtimeControlPlaneDiagnostics ? (
+          <div className="grid gap-3 xl:grid-cols-2">
+            <div className="rounded-md border border-border bg-background p-3">
+              <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                {t('settings:aiProvider.controlPlane.mcpBridgeTitle')}
+              </h4>
+              <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.mcpStatus')}</dt>
+                  <dd className="font-medium text-foreground">{mcpStatus}</dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.mcpAction')}</dt>
+                  <dd className="font-medium text-foreground">{mcpAction}</dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.bridgedServers')}</dt>
+                  <dd className="font-medium text-foreground">
+                    {formatControlPlaneList(mcpPlan?.bridged_servers)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.nativeRequiredServers')}</dt>
+                  <dd className="font-medium text-foreground">
+                    {formatControlPlaneList(mcpPlan?.native_required_servers)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div className="rounded-md border border-border bg-background p-3">
+              <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                {t('settings:aiProvider.controlPlane.fallbackTitle')}
+              </h4>
+              <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.selectedRuntime')}</dt>
+                  <dd className="font-medium text-foreground">{fallbackSelected}</dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.runnerCandidates')}</dt>
+                  <dd className="font-medium text-foreground">{runnerCandidates}</dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.missingCapabilities')}</dt>
+                  <dd className="font-medium text-foreground">
+                    {formatControlPlaneList(fallbackRow?.missing_capabilities)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.compatibleFallbacks')}</dt>
+                  <dd className="font-medium text-foreground">
+                    {formatControlPlaneList(fallbackRow?.compatible_fallbacks)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        ) : (
+          <p className="max-w-xl rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
+            {t('settings:aiProvider.controlPlane.unavailable')}
+          </p>
+        )}
+      </div>
+    );
+  };
 
   const renderCostPanel = () => (
     <div className="space-y-3 border-t border-border pt-4">
@@ -1102,6 +1293,8 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
         </div>
 
         {renderCapabilityMatrix()}
+
+        {renderRuntimeControlPlane()}
 
         <div className="space-y-4 border-t border-border pt-4">
           <div>

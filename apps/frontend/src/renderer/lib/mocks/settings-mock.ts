@@ -79,6 +79,46 @@ export const settingsMock = {
       responseExcerpt: 'Browser mock provider is reachable.'
     }
   }),
+  getProviderRuntimeDiagnostics: async () => ({
+    success: true,
+    data: {
+      runtime_fallback_matrix: [
+        {
+          provider: 'claude' as const,
+          phase: 'coding',
+          requested_mode: 'full_autonomous' as const,
+          fail_fast_selected_mode: 'full_autonomous' as const,
+          fallback_selected_mode: 'full_autonomous' as const,
+          fallback_applied: false,
+          fallback_reason: 'compatible',
+          missing_capabilities: [],
+          compatible_fallbacks: [],
+          runner_candidate_ids_by_mode: {
+            full_autonomous: ['claude-sdk']
+          },
+          selected_mode_runner_candidates: ['claude-sdk']
+        }
+      ],
+      mcp_bridge_plan_matrix: [
+        {
+          provider: 'claude' as const,
+          runtime_mode: 'full_autonomous' as const,
+          strategy: 'native',
+          available: true,
+          status: 'available',
+          action_required: 'none',
+          recommended_runtime_path: 'native',
+          available_servers: ['context7', 'graphiti'],
+          unavailable_servers: [],
+          native_required_servers: ['context7', 'graphiti'],
+          local_bridge_required_servers: [],
+          unsupported_servers: [],
+          bridged_servers: []
+        }
+      ],
+      recommendations: {}
+    }
+  }),
 
   // App Info
   getAppVersion: async () => '0.1.0-browser',

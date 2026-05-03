@@ -1056,6 +1056,25 @@
       "unavailable": "Provider smoke check is unavailable.",
       "saveFailed": "Could not save provider settings before testing."
     },
+    "controlPlane": {
+      "title": "Runtime control plane",
+      "description": "Live backend compatibility diagnostics for the selected provider and runtime.",
+      "refresh": "Refresh",
+      "loading": "Loading runtime diagnostics...",
+      "unavailable": "Runtime diagnostics are unavailable.",
+      "error": "Runtime diagnostics failed: {{error}}",
+      "none": "None",
+      "mcpBridgeTitle": "MCP bridge",
+      "fallbackTitle": "Fallback and runners",
+      "mcpStatus": "MCP status",
+      "mcpAction": "Action required",
+      "bridgedServers": "Bridged servers",
+      "nativeRequiredServers": "Native-required servers",
+      "selectedRuntime": "Selected runtime",
+      "runnerCandidates": "Runner candidates",
+      "missingCapabilities": "Missing capabilities",
+      "compatibleFallbacks": "Compatible fallbacks"
+    },
     "cost": {
       "title": "Cost Preview",
       "description": "Reference pricing for the selected provider model. Actual agent runs vary by task and context size.",

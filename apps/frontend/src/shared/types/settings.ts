@@ -497,3 +497,39 @@ export interface ProviderConnectionTestResult {
   errorDetails?: string | null;
   runtimeDiagnostics?: ProviderRuntimeDiagnostics | null;
 }
+
+export interface RuntimeMcpBridgePlanRow {
+  provider: AIEngineProvider | string;
+  runtime_mode: AgentRuntimeMode | string;
+  strategy: string;
+  available: boolean;
+  status: string;
+  action_required: string;
+  recommended_runtime_path: string;
+  available_servers: string[];
+  unavailable_servers: string[];
+  native_required_servers: string[];
+  local_bridge_required_servers: string[];
+  unsupported_servers: string[];
+  bridged_servers: string[];
+}
+
+export interface RuntimeFallbackMatrixRow {
+  provider: AIEngineProvider | string;
+  phase: string;
+  requested_mode: AgentRuntimeMode | string;
+  fail_fast_selected_mode: AgentRuntimeMode | string;
+  fallback_selected_mode: AgentRuntimeMode | string;
+  fallback_applied: boolean;
+  fallback_reason: string;
+  missing_capabilities: string[];
+  compatible_fallbacks: string[];
+  runner_candidate_ids_by_mode: Record<string, string[]>;
+  selected_mode_runner_candidates: string[];
+}
+
+export interface RuntimeControlPlaneDiagnostics {
+  runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
+  mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
+  recommendations?: Record<string, string>;
+}
