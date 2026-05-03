@@ -1,6 +1,7 @@
 """Provider-neutral local edit/tool runtime."""
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -96,6 +97,25 @@ __AUTO_CODE_TASK_PROMPT__
 
 class GenericEditRuntimeError(RuntimeError):
     """Raised when the generic edit runtime cannot continue safely."""
+
+
+@dataclass
+class NativeToolExecutionResult:
+    """Actions executed during one native provider tool-call iteration."""
+
+    action_results: list[ToolActionResult]
+    finish_action: dict[str, Any] | None = None
+    finish_result: ToolActionResult | None = None
+    cancelled: bool = False
+
+    @property
+    def finish_ready(self) -> bool:
+        """Return true when the terminal finish action completed cleanly."""
+        return (
+            self.finish_action is not None
+            and self.finish_result is not None
+            and all(action_result.ok for action_result in self.action_results)
+        )
 
 
 MUTATING_LOCAL_ACTIONS = frozenset(
@@ -418,60 +438,23 @@ class GenericEditRuntimeSession:
 
         for iteration in range(1, self.max_iterations + 1):
             if self._cancel_requested:
-                return AgentRunResult(
-                    status="cancelled",
-                    response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
-                )
-            iteration_entry: dict[str, Any] = {
-                "iteration": iteration,
-                "loop": "native_tool_calls",
-                "response_excerpt": "",
-                "response_bytes": 0,
-                "actions": [],
-            }
+                return generic_edit_cancelled_result()
+            iteration_entry = native_tool_iteration_entry(iteration)
 
-            try:
-                response = await self.agent_session.complete_with_tool_calls(
-                    prompt,
-                    self._provider_tool_schemas(),
-                )
-                if self._cancel_requested:
-                    return AgentRunResult(
-                        status="cancelled",
-                        response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
-                    )
-            except Exception as e:
-                if iteration == 1 and callable(
-                    getattr(self.agent_session, "complete", None)
-                ):
-                    return await self._run_json_action_loop(
-                        message=message,
-                        spec_dir=spec_dir,
-                        verbose=verbose,
-                        phase=phase,
-                        subtask_id=subtask_id,
-                    )
-                iteration_entry["error"] = str(e)
-                trace.append(iteration_entry)
-                artifacts = save_generic_edit_artifacts(
-                    spec_dir=spec_dir,
-                    provider_name=self.provider_name,
-                    subtask_id=subtask_id,
-                    status="error",
-                    stop_reason="native_tool_error",
-                    message=str(e),
-                    trace=trace,
-                    summary="Generic edit native tool-call loop failed.",
-                    observation_path=observation_path,
-                    mcp_support=self._mcp_support_payload(),
-                )
-                return AgentRunResult(
-                    status="error",
-                    response_text=(
-                        f"Generic edit native tool-call loop failed: {e}\n"
-                        f"Artifacts: {artifacts['generic_edit_trace']}"
-                    ),
-                )
+            response, terminal_result = await self._complete_native_tool_iteration(
+                prompt=prompt,
+                iteration=iteration,
+                iteration_entry=iteration_entry,
+                trace=trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                message=message,
+                verbose=verbose,
+                phase=phase,
+                subtask_id=subtask_id,
+            )
+            if terminal_result is not None:
+                return terminal_result
 
             response_content = str(getattr(response, "content", "") or "")
             tool_calls = tuple(getattr(response, "tool_calls", ()) or ())
@@ -479,160 +462,60 @@ class GenericEditRuntimeSession:
             iteration_entry["response_bytes"] = len(response_content.encode("utf-8"))
 
             if not tool_calls:
-                result = ToolActionResult(
-                    tool="runtime",
-                    ok=False,
-                    message=(
-                        "No local tool calls returned; call at least one local "
-                        "tool or finish."
-                    ),
-                )
-                iteration_entry["actions"].append(safe_result_for_trace(result))
-                append_generic_edit_observation(
+                prompt = record_native_empty_tool_response(
+                    iteration_entry=iteration_entry,
                     observation_path=observation_path,
                     provider_name=self.provider_name,
                     subtask_id=subtask_id,
-                    loop="native_tool_calls",
                     iteration=iteration,
-                    action_index=1,
-                    request={},
-                    result=result,
                 )
                 trace.append(iteration_entry)
-                prompt = (
-                    "No local tool calls were returned. Continue the task by "
-                    "calling one or more local tools, or call finish when complete."
-                )
                 continue
 
-            action_results: list[ToolActionResult] = []
-            finish_action: dict[str, Any] | None = None
-            finish_result: ToolActionResult | None = None
-            tool_actions = [
-                (
-                    tool_call,
-                    {
-                        "tool": str(getattr(tool_call, "name", "") or ""),
-                        **dict(getattr(tool_call, "arguments", {}) or {}),
-                    },
-                )
-                for tool_call in tool_calls
-            ]
-            try:
-                validate_terminal_finish([action for _, action in tool_actions])
-            except GenericEditRuntimeError as e:
-                iteration_entry["error"] = str(e)
-                trace.append(iteration_entry)
-                artifacts = save_generic_edit_artifacts(
-                    spec_dir=spec_dir,
-                    provider_name=self.provider_name,
-                    subtask_id=subtask_id,
-                    status="error",
-                    stop_reason="non_terminal_finish",
-                    message=str(e),
+            tool_actions = build_native_tool_actions(tool_calls)
+            terminal_result = self._reject_invalid_native_tool_batch(
+                tool_actions=tool_actions,
+                iteration_entry=iteration_entry,
+                trace=trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
+            if terminal_result is not None:
+                return terminal_result
+
+            execution = await self._execute_native_tool_actions(
+                tool_actions=tool_actions,
+                iteration_entry=iteration_entry,
+                observation_path=observation_path,
+                iteration=iteration,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=phase,
+                subtask_id=subtask_id,
+            )
+            if execution.cancelled:
+                return generic_edit_cancelled_result()
+
+            if execution.finish_ready:
+                return self._finish_native_tool_loop(
+                    finish_action=execution.finish_action or {},
+                    finish_result=execution.finish_result,
+                    tool_actions=tool_actions,
+                    action_results=execution.action_results,
+                    iteration_entry=iteration_entry,
                     trace=trace,
-                    summary="Generic edit runtime rejected a non-terminal finish.",
-                    observation_path=observation_path,
-                    mcp_support=self._mcp_support_payload(),
-                )
-                return AgentRunResult(
-                    status="error",
-                    response_text=(
-                        f"Generic edit runtime rejected provider tool calls: {e}\n"
-                        f"Artifacts: {artifacts['generic_edit_trace']}"
-                    ),
-                )
-
-            for action_index, (tool_call, action) in enumerate(tool_actions, start=1):
-                if self._cancel_requested:
-                    return AgentRunResult(
-                        status="cancelled",
-                        response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
-                    )
-                result = await self._execute_action(
-                    action,
                     spec_dir=spec_dir,
-                    verbose=verbose,
-                    phase=phase,
-                    subtask_id=subtask_id,
-                )
-                action_results.append(result)
-                safe_request = {
-                    "tool_call_id": str(getattr(tool_call, "id", "") or ""),
-                    **safe_action_for_trace(action),
-                }
-                safe_result = safe_result_for_trace(result)
-                iteration_entry["actions"].append(
-                    {
-                        "request": safe_request,
-                        "result": safe_result,
-                    }
-                )
-                append_generic_edit_observation(
                     observation_path=observation_path,
-                    provider_name=self.provider_name,
-                    subtask_id=subtask_id,
-                    loop="native_tool_calls",
                     iteration=iteration,
-                    action_index=action_index,
-                    request=safe_request,
-                    result=result,
-                )
-                self.agent_session.add_tool_result(
-                    str(getattr(tool_call, "id", "") or ""),
-                    action_tool(action),
-                    result.to_dict(),
-                )
-
-                if action_tool(action) == "finish":
-                    finish_action = action
-                    finish_result = result
-
-            if (
-                finish_action is not None
-                and finish_result is not None
-                and all(action_result.ok for action_result in action_results)
-            ):
-                summary = str(finish_action.get("summary") or finish_result.message)
-                tests = normalize_string_list(finish_action.get("tests"))
-                risks = normalize_string_list(finish_action.get("risks"))
-                iteration_entry["transaction"] = build_generic_edit_transaction(
-                    loop="native_tool_calls",
-                    iteration=iteration,
-                    actions=[action for _, action in tool_actions],
-                    results=action_results,
-                )
-                trace.append(iteration_entry)
-                artifacts = save_generic_edit_artifacts(
-                    spec_dir=spec_dir,
-                    provider_name=self.provider_name,
                     subtask_id=subtask_id,
-                    status="complete",
-                    stop_reason="finish",
-                    message=summary,
-                    trace=trace,
-                    summary=summary,
-                    tests=tests,
-                    risks=risks,
-                    observation_path=observation_path,
-                    mcp_support=self._mcp_support_payload(),
-                )
-                response_lines = build_generic_edit_response(
-                    summary=summary,
-                    artifacts=artifacts,
-                    tests=tests,
-                    risks=risks,
-                )
-                return AgentRunResult(
-                    status="continue",
-                    response_text="\n".join(response_lines),
                 )
 
             iteration_entry["transaction"] = build_generic_edit_transaction(
                 loop="native_tool_calls",
                 iteration=iteration,
                 actions=[action for _, action in tool_actions],
-                results=action_results,
+                results=execution.action_results,
             )
             trace.append(iteration_entry)
             prompt = build_native_recovery_prompt(iteration_entry["transaction"])
@@ -656,6 +539,228 @@ class GenericEditRuntimeSession:
         return AgentRunResult(
             status="error",
             response_text=f"{message}\nArtifacts: {artifacts['generic_edit_trace']}",
+        )
+
+    async def _complete_native_tool_iteration(
+        self,
+        *,
+        prompt: str | None,
+        iteration: int,
+        iteration_entry: dict[str, Any],
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        message: str,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None,
+    ) -> tuple[Any, AgentRunResult | None]:
+        """Request one native tool-call response or return a terminal result."""
+        try:
+            response = await self.agent_session.complete_with_tool_calls(
+                prompt,
+                self._provider_tool_schemas(),
+            )
+        except Exception as e:
+            if iteration == 1 and callable(
+                getattr(self.agent_session, "complete", None)
+            ):
+                fallback = await self._run_json_action_loop(
+                    message=message,
+                    spec_dir=spec_dir,
+                    verbose=verbose,
+                    phase=phase,
+                    subtask_id=subtask_id,
+                )
+                return None, fallback
+            return None, self._native_tool_error_result(
+                error=e,
+                iteration_entry=iteration_entry,
+                trace=trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
+
+        if self._cancel_requested:
+            return None, generic_edit_cancelled_result()
+        return response, None
+
+    def _native_tool_error_result(
+        self,
+        *,
+        error: Exception,
+        iteration_entry: dict[str, Any],
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        """Persist and return a native tool-call request failure."""
+        iteration_entry["error"] = str(error)
+        trace.append(iteration_entry)
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="error",
+            stop_reason="native_tool_error",
+            message=str(error),
+            trace=trace,
+            summary="Generic edit native tool-call loop failed.",
+            observation_path=observation_path,
+            mcp_support=self._mcp_support_payload(),
+        )
+        return AgentRunResult(
+            status="error",
+            response_text=(
+                f"Generic edit native tool-call loop failed: {error}\n"
+                f"Artifacts: {artifacts['generic_edit_trace']}"
+            ),
+        )
+
+    def _reject_invalid_native_tool_batch(
+        self,
+        *,
+        tool_actions: list[tuple[Any, dict[str, Any]]],
+        iteration_entry: dict[str, Any],
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult | None:
+        """Reject provider tool-call batches that violate finish ordering."""
+        try:
+            validate_terminal_finish([action for _, action in tool_actions])
+        except GenericEditRuntimeError as e:
+            iteration_entry["error"] = str(e)
+            trace.append(iteration_entry)
+            artifacts = save_generic_edit_artifacts(
+                spec_dir=spec_dir,
+                provider_name=self.provider_name,
+                subtask_id=subtask_id,
+                status="error",
+                stop_reason="non_terminal_finish",
+                message=str(e),
+                trace=trace,
+                summary="Generic edit runtime rejected a non-terminal finish.",
+                observation_path=observation_path,
+                mcp_support=self._mcp_support_payload(),
+            )
+            return AgentRunResult(
+                status="error",
+                response_text=(
+                    f"Generic edit runtime rejected provider tool calls: {e}\n"
+                    f"Artifacts: {artifacts['generic_edit_trace']}"
+                ),
+            )
+        return None
+
+    async def _execute_native_tool_actions(
+        self,
+        *,
+        tool_actions: list[tuple[Any, dict[str, Any]]],
+        iteration_entry: dict[str, Any],
+        observation_path: Path,
+        iteration: int,
+        spec_dir: Path,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None,
+    ) -> NativeToolExecutionResult:
+        """Execute provider-native tool calls through local action handlers."""
+        execution = NativeToolExecutionResult(action_results=[])
+        for action_index, (tool_call, action) in enumerate(tool_actions, start=1):
+            if self._cancel_requested:
+                execution.cancelled = True
+                return execution
+            result = await self._execute_action(
+                action,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=phase,
+                subtask_id=subtask_id,
+            )
+            execution.action_results.append(result)
+            safe_request = {
+                "tool_call_id": str(getattr(tool_call, "id", "") or ""),
+                **safe_action_for_trace(action),
+            }
+            iteration_entry["actions"].append(
+                {
+                    "request": safe_request,
+                    "result": safe_result_for_trace(result),
+                }
+            )
+            append_generic_edit_observation(
+                observation_path=observation_path,
+                provider_name=self.provider_name,
+                subtask_id=subtask_id,
+                loop="native_tool_calls",
+                iteration=iteration,
+                action_index=action_index,
+                request=safe_request,
+                result=result,
+            )
+            self.agent_session.add_tool_result(
+                str(getattr(tool_call, "id", "") or ""),
+                action_tool(action),
+                result.to_dict(),
+            )
+            if action_tool(action) == "finish":
+                execution.finish_action = action
+                execution.finish_result = result
+        return execution
+
+    def _finish_native_tool_loop(
+        self,
+        *,
+        finish_action: dict[str, Any],
+        finish_result: ToolActionResult | None,
+        tool_actions: list[tuple[Any, dict[str, Any]]],
+        action_results: list[ToolActionResult],
+        iteration_entry: dict[str, Any],
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        iteration: int,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        """Persist and return a successful native tool-call finish."""
+        finish_message = finish_result.message if finish_result else "Finished"
+        summary = str(finish_action.get("summary") or finish_message)
+        tests = normalize_string_list(finish_action.get("tests"))
+        risks = normalize_string_list(finish_action.get("risks"))
+        iteration_entry["transaction"] = build_generic_edit_transaction(
+            loop="native_tool_calls",
+            iteration=iteration,
+            actions=[action for _, action in tool_actions],
+            results=action_results,
+        )
+        trace.append(iteration_entry)
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="complete",
+            stop_reason="finish",
+            message=summary,
+            trace=trace,
+            summary=summary,
+            tests=tests,
+            risks=risks,
+            observation_path=observation_path,
+            mcp_support=self._mcp_support_payload(),
+        )
+        response_lines = build_generic_edit_response(
+            summary=summary,
+            artifacts=artifacts,
+            tests=tests,
+            risks=risks,
+        )
+        return AgentRunResult(
+            status="continue",
+            response_text="\n".join(response_lines),
         )
 
     def _supports_native_tool_calls(self) -> bool:
@@ -808,6 +913,74 @@ class GenericEditRuntimeSession:
         async for chunk in self._completion_runtime._stream_text(message):
             chunks.append(chunk)
         return "".join(chunks)
+
+
+def generic_edit_cancelled_result() -> AgentRunResult:
+    """Return the standard generic_edit cancellation result."""
+    return AgentRunResult(
+        status="cancelled",
+        response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
+    )
+
+
+def native_tool_iteration_entry(iteration: int) -> dict[str, Any]:
+    """Return the trace scaffold for one native tool-call iteration."""
+    return {
+        "iteration": iteration,
+        "loop": "native_tool_calls",
+        "response_excerpt": "",
+        "response_bytes": 0,
+        "actions": [],
+    }
+
+
+def record_native_empty_tool_response(
+    *,
+    iteration_entry: dict[str, Any],
+    observation_path: Path,
+    provider_name: str,
+    subtask_id: str | None,
+    iteration: int,
+) -> str:
+    """Record a native provider response that did not include tool calls."""
+    result = ToolActionResult(
+        tool="runtime",
+        ok=False,
+        message=(
+            "No local tool calls returned; call at least one local tool or finish."
+        ),
+    )
+    iteration_entry["actions"].append(safe_result_for_trace(result))
+    append_generic_edit_observation(
+        observation_path=observation_path,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        loop="native_tool_calls",
+        iteration=iteration,
+        action_index=1,
+        request={},
+        result=result,
+    )
+    return (
+        "No local tool calls were returned. Continue the task by calling one or "
+        "more local tools, or call finish when complete."
+    )
+
+
+def build_native_tool_actions(
+    tool_calls: tuple[Any, ...],
+) -> list[tuple[Any, dict[str, Any]]]:
+    """Convert provider-native tool call objects into local action payloads."""
+    return [
+        (
+            tool_call,
+            {
+                "tool": str(getattr(tool_call, "name", "") or ""),
+                **dict(getattr(tool_call, "arguments", {}) or {}),
+            },
+        )
+        for tool_call in tool_calls
+    ]
 
 
 def build_generic_edit_prompt(

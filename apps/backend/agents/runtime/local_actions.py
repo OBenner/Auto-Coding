@@ -140,6 +140,39 @@ class CommandExecution:
     timed_out: bool
 
 
+@dataclass
+class SearchTextState:
+    """Mutable progress for a bounded workspace text search."""
+
+    matches: list[dict[str, Any]] = field(default_factory=list)
+    searched_files: int = 0
+    skipped_files: int = 0
+    truncated: bool = False
+
+
+@dataclass
+class BoundedOutputCapture:
+    """Shared output budget across stdout/stderr readers."""
+
+    remaining: int = MAX_TOOL_OUTPUT_CHARS
+    truncated: bool = False
+
+    def append(self, text: str, parts: list[str]) -> bool:
+        """Append bounded text and return whether capture should continue."""
+        consumed_chars = 0
+        if self.remaining > 0:
+            piece = text[: self.remaining]
+            parts.append(piece)
+            self.remaining -= len(piece)
+            consumed_chars = len(piece)
+
+        if len(text) <= consumed_chars and self.remaining > 0:
+            return True
+
+        self.truncated = True
+        return False
+
+
 LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
     LocalActionToolSpec(
         name="stat_path",
@@ -829,58 +862,67 @@ class LocalActionExecutor:
                 message=f"Path not found: {path or '.'}",
             )
 
-        matches: list[dict[str, Any]] = []
-        searched_files = 0
-        skipped_files = 0
         query_to_match = query if case_sensitive else query.casefold()
-
+        state = SearchTextState()
         for file_path in iter_search_files(
             target,
             self.project_dir,
             recursive=recursive,
             include_hidden=include_hidden,
         ):
-            relative = file_path.relative_to(self.project_dir.resolve()).as_posix()
-            try:
-                if file_path.stat().st_size > MAX_SEARCH_FILE_BYTES:
-                    skipped_files += 1
-                    continue
-            except OSError:
-                skipped_files += 1
-                continue
-
-            searched_files += 1
-            try:
-                with file_path.open("r", encoding="utf-8", errors="replace") as handle:
-                    for line_number, line in enumerate(handle, start=1):
-                        haystack = line if case_sensitive else line.casefold()
-                        if query_to_match not in haystack:
-                            continue
-                        matches.append(
-                            {
-                                "path": relative,
-                                "line": line_number,
-                                "excerpt": build_search_excerpt(line, query),
-                            }
-                        )
-                        if len(matches) >= max_matches:
-                            return self._search_text_result(
-                                path=path,
-                                matches=matches,
-                                searched_files=searched_files,
-                                skipped_files=skipped_files,
-                                truncated=True,
-                            )
-            except (OSError, UnicodeError):
-                skipped_files += 1
+            self._search_one_file(
+                file_path=file_path,
+                query=query,
+                query_to_match=query_to_match,
+                case_sensitive=case_sensitive,
+                max_matches=max_matches,
+                state=state,
+            )
+            if state.truncated:
+                break
 
         return self._search_text_result(
             path=path,
-            matches=matches,
-            searched_files=searched_files,
-            skipped_files=skipped_files,
-            truncated=False,
+            matches=state.matches,
+            searched_files=state.searched_files,
+            skipped_files=state.skipped_files,
+            truncated=state.truncated,
         )
+
+    def _search_one_file(
+        self,
+        *,
+        file_path: Path,
+        query: str,
+        query_to_match: str,
+        case_sensitive: bool,
+        max_matches: int,
+        state: SearchTextState,
+    ) -> None:
+        """Search one file and update shared bounded search state."""
+        if not is_searchable_file(file_path):
+            state.skipped_files += 1
+            return
+
+        state.searched_files += 1
+        relative = file_path.relative_to(self.project_dir.resolve()).as_posix()
+        try:
+            with file_path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line_number, line in enumerate(handle, start=1):
+                    if not line_matches_query(line, query_to_match, case_sensitive):
+                        continue
+                    state.matches.append(
+                        {
+                            "path": relative,
+                            "line": line_number,
+                            "excerpt": build_search_excerpt(line, query),
+                        }
+                    )
+                    if len(state.matches) >= max_matches:
+                        state.truncated = True
+                        return
+        except (OSError, UnicodeError):
+            state.skipped_files += 1
 
     def _search_text_result(
         self,
@@ -1393,53 +1435,19 @@ class LocalActionExecutor:
         )
         stdout_parts: list[str] = []
         stderr_parts: list[str] = []
-        remaining = MAX_TOOL_OUTPUT_CHARS
-        truncated = False
-
-        async def capture_stream(
-            stream: asyncio.StreamReader | None,
-            parts: list[str],
-        ) -> None:
-            nonlocal remaining, truncated
-            if stream is None:
-                return
-            while True:
-                chunk = await stream.read(4096)
-                if not chunk:
-                    break
-                text = chunk.decode("utf-8", errors="replace")
-                consumed_chars = 0
-                if remaining > 0:
-                    piece = text[:remaining]
-                    parts.append(piece)
-                    remaining -= len(piece)
-                    consumed_chars = len(piece)
-                if len(text) > consumed_chars or remaining <= 0:
-                    truncated = True
-                    if process.returncode is None:
-                        process.terminate()
-                    break
-
-        stdout_task = asyncio.create_task(capture_stream(process.stdout, stdout_parts))
-        stderr_task = asyncio.create_task(capture_stream(process.stderr, stderr_parts))
-        timed_out = False
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(stdout_task, stderr_task),
-                timeout=timeout,
-            )
-        except TimeoutError:
-            timed_out = True
-            if process.returncode is None:
-                process.kill()
-            await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
-
-        if process.returncode is None:
-            try:
-                await asyncio.wait_for(process.wait(), timeout=1)
-            except TimeoutError:
-                process.kill()
-                await process.wait()
+        capture = BoundedOutputCapture()
+        stdout_task = asyncio.create_task(
+            capture_process_stream(process.stdout, stdout_parts, capture, process)
+        )
+        stderr_task = asyncio.create_task(
+            capture_process_stream(process.stderr, stderr_parts, capture, process)
+        )
+        timed_out = await wait_for_process_streams(
+            process,
+            (stdout_task, stderr_task),
+            timeout=timeout,
+        )
+        await ensure_process_finished(process)
 
         output = "\n".join(
             part.strip()
@@ -1449,9 +1457,67 @@ class LocalActionExecutor:
         return CommandExecution(
             returncode=process.returncode if process.returncode is not None else -1,
             output=output,
-            truncated=truncated,
+            truncated=capture.truncated,
             timed_out=timed_out,
         )
+
+
+async def capture_process_stream(
+    stream: asyncio.StreamReader | None,
+    parts: list[str],
+    capture: BoundedOutputCapture,
+    process: Any,
+) -> None:
+    """Capture one process stream until EOF or the shared output cap is reached."""
+    if stream is None:
+        return
+    while chunk := await stream.read(4096):
+        text = chunk.decode("utf-8", errors="replace")
+        if capture.append(text, parts):
+            continue
+        terminate_process(process)
+        break
+
+
+async def wait_for_process_streams(
+    process: Any,
+    tasks: tuple[asyncio.Task, asyncio.Task],
+    *,
+    timeout: int,
+) -> bool:
+    """Wait for stdout/stderr capture tasks and return whether they timed out."""
+    try:
+        async with asyncio.timeout(timeout):
+            await asyncio.gather(*tasks)
+    except TimeoutError:
+        kill_process(process)
+        await asyncio.gather(*tasks, return_exceptions=True)
+        return True
+    return False
+
+
+async def ensure_process_finished(process: Any) -> None:
+    """Wait briefly for a process after stream capture and kill if needed."""
+    if process.returncode is not None:
+        return
+    try:
+        async with asyncio.timeout(1):
+            await process.wait()
+    except TimeoutError:
+        kill_process(process)
+        await process.wait()
+
+
+def terminate_process(process: Any) -> None:
+    """Terminate a process if it is still running."""
+    if process.returncode is None:
+        process.terminate()
+
+
+def kill_process(process: Any) -> None:
+    """Kill a process if it is still running."""
+    if process.returncode is None:
+        process.kill()
 
 
 def safe_action_for_trace(action: dict[str, Any]) -> dict[str, Any]:
@@ -1703,6 +1769,20 @@ def build_list_entry(candidate: Path, relative: str) -> dict[str, Any]:
     return entry
 
 
+def is_searchable_file(file_path: Path) -> bool:
+    """Return whether a file can be searched within local action bounds."""
+    try:
+        return file_path.stat().st_size <= MAX_SEARCH_FILE_BYTES
+    except OSError:
+        return False
+
+
+def line_matches_query(line: str, query_to_match: str, case_sensitive: bool) -> bool:
+    """Return whether one line contains the normalized search query."""
+    haystack = line if case_sensitive else line.casefold()
+    return query_to_match in haystack
+
+
 def iter_search_files(
     target: Path,
     project_dir: Path,
@@ -1722,24 +1802,52 @@ def iter_search_files(
         return
 
     if recursive:
-        for root, dir_names, file_names in os.walk(target):
-            root_path = Path(root)
-            dir_names[:] = sorted(
-                name
-                for name in dir_names
-                if should_descend_directory(
-                    root_path / name,
-                    project_dir,
-                    include_hidden=include_hidden,
-                )
-            )
-            for name in sorted(file_names):
-                candidate = root_path / name
-                relative = candidate.relative_to(resolved_project).as_posix()
-                if is_safe_list_entry(relative, include_hidden=include_hidden):
-                    yield candidate
+        yield from iter_search_files_recursive(
+            target,
+            project_dir,
+            include_hidden=include_hidden,
+        )
         return
 
+    yield from iter_search_files_shallow(
+        target,
+        resolved_project=resolved_project,
+        include_hidden=include_hidden,
+    )
+
+
+def iter_search_files_recursive(
+    target: Path,
+    project_dir: Path,
+    *,
+    include_hidden: bool,
+):
+    """Yield safe searchable files from a recursive directory walk."""
+    resolved_project = project_dir.resolve()
+    for root, dir_names, file_names in os.walk(target):
+        root_path = Path(root)
+        dir_names[:] = sorted(
+            name
+            for name in dir_names
+            if should_descend_directory(
+                root_path / name,
+                project_dir,
+                include_hidden=include_hidden,
+            )
+        )
+        for candidate in sorted(root_path / name for name in file_names):
+            relative = candidate.relative_to(resolved_project).as_posix()
+            if is_safe_list_entry(relative, include_hidden=include_hidden):
+                yield candidate
+
+
+def iter_search_files_shallow(
+    target: Path,
+    *,
+    resolved_project: Path,
+    include_hidden: bool,
+):
+    """Yield safe searchable files from one directory level."""
     for child in sorted(target.iterdir(), key=lambda item: item.name):
         if not child.is_file():
             continue

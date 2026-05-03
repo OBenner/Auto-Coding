@@ -387,31 +387,19 @@ def select_cli_runner_profiles(
     rejected: list[CliRunnerRejection] = []
 
     for profile in profiles:
-        reasons: list[str] = []
-        if normalized_mode and normalized_mode not in profile.supported_runtime_modes:
-            reasons.append("runtime_mode_unsupported")
-        missing_capabilities = [
-            capability
-            for capability in normalized_capabilities
-            if capability not in profile.capability_tags
-        ]
-        reasons.extend(
-            f"missing_capability:{capability}" for capability in missing_capabilities
+        reasons = cli_runner_rejection_reasons(
+            profile=profile,
+            runtime_mode=normalized_mode,
+            required_capabilities=normalized_capabilities,
+            role=role,
+            tier=tier,
+            installed_only=installed_only,
         )
-        if role and profile.role != role:
-            reasons.append("role_mismatch")
-        if tier and profile.tier != tier:
-            reasons.append("tier_mismatch")
-        if installed_only:
-            availability = detect_cli_runner_availability(profile)
-            if not availability.executable_present:
-                reasons.append(availability.status)
-
         if reasons:
             rejected.append(
                 CliRunnerRejection(
                     runner_id=profile.runner_id,
-                    reasons=tuple(reasons),
+                    reasons=reasons,
                 )
             )
         else:
@@ -426,6 +414,41 @@ def select_cli_runner_profiles(
         selected_profiles=tuple(selected),
         rejected_profiles=tuple(rejected),
     )
+
+
+def cli_runner_rejection_reasons(
+    *,
+    profile: CliRunnerProfile,
+    runtime_mode: str | None,
+    required_capabilities: tuple[str, ...],
+    role: RunnerRole | None,
+    tier: RunnerTier | None,
+    installed_only: bool,
+) -> tuple[str, ...]:
+    """Return why a CLI runner profile does not match the selection policy."""
+    reasons: list[str] = []
+    if runtime_mode and runtime_mode not in profile.supported_runtime_modes:
+        reasons.append("runtime_mode_unsupported")
+    reasons.extend(
+        f"missing_capability:{capability}"
+        for capability in required_capabilities
+        if capability not in profile.capability_tags
+    )
+    if role and profile.role != role:
+        reasons.append("role_mismatch")
+    if tier and profile.tier != tier:
+        reasons.append("tier_mismatch")
+    if installed_only:
+        reasons.extend(cli_runner_installation_rejection(profile))
+    return tuple(reasons)
+
+
+def cli_runner_installation_rejection(profile: CliRunnerProfile) -> tuple[str, ...]:
+    """Return installation-related rejection reasons for one runner profile."""
+    availability = detect_cli_runner_availability(profile)
+    if availability.executable_present:
+        return ()
+    return (availability.status,)
 
 
 def cli_runner_profiles_as_dicts(
