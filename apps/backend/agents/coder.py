@@ -1014,9 +1014,8 @@ async def run_autonomous_agent(
             )
             print_status(f"Runner route details: {route_artifact}", "info")
 
-        # Filled after provider/runtime resolution. Process isolation creates
-        # its Claude client in the child process, so parent-side plugin hooks
-        # may still see None in that mode.
+        # Filled after provider/runtime resolution so plugin hooks can see the
+        # runtime context client before the session starts.
         client = None
 
         # Generate appropriate prompt
@@ -1262,7 +1261,7 @@ async def run_autonomous_agent(
             use_process_isolation = False
 
         runtime_session = None
-        if not use_process_isolation:
+        if not use_process_isolation or provider.name == "claude":
             session_config = SessionConfig(
                 name=f"{agent_type_for_session}-session-{iteration}",
                 model=phase_model,
