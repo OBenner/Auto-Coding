@@ -16,6 +16,7 @@ from .session_engine import run_runtime_session
 
 RuntimeSessionFactory = Callable[["RuntimeSubagentTask"], Awaitable[Any] | Any]
 SubagentSupportStrategy = Literal["native", "orchestrated", "unavailable"]
+DEFAULT_SUBAGENT_TIMEOUT_SECONDS = 180.0
 
 
 @dataclass(frozen=True)
@@ -107,10 +108,16 @@ class RuntimeSubagentOrchestrator:
         session_factory: RuntimeSessionFactory,
         spec_dir: Path,
         max_concurrency: int = 2,
+        max_task_seconds: float = DEFAULT_SUBAGENT_TIMEOUT_SECONDS,
     ):
         self.session_factory = session_factory
         self.spec_dir = spec_dir
         self.max_concurrency = max(1, max_concurrency)
+        self.max_task_seconds = (
+            max_task_seconds
+            if max_task_seconds > 0
+            else DEFAULT_SUBAGENT_TIMEOUT_SECONDS
+        )
         self._cancel_event = asyncio.Event()
         self._running_tasks: set[asyncio.Task] = set()
 
@@ -175,14 +182,17 @@ class RuntimeSubagentOrchestrator:
 
                 runtime_session = await maybe_await(self.session_factory(task))
                 try:
-                    result: AgentRunResult = await run_runtime_session(
-                        runtime_session,
-                        build_subagent_prompt(task),
-                        self.spec_dir,
-                        verbose=verbose,
-                        phase=phase,
-                        requirements=task.requirements,
-                        subtask_id=task.subtask_id or task.id,
+                    result: AgentRunResult = await asyncio.wait_for(
+                        run_runtime_session(
+                            runtime_session,
+                            build_subagent_prompt(task),
+                            self.spec_dir,
+                            verbose=verbose,
+                            phase=phase,
+                            requirements=task.requirements,
+                            subtask_id=task.subtask_id or task.id,
+                        ),
+                        timeout=self.max_task_seconds,
                     )
                     return RuntimeSubagentResult(
                         id=task.id,
@@ -197,6 +207,20 @@ class RuntimeSubagentOrchestrator:
                     if callable(cancel_hook):
                         await maybe_await(cancel_hook())
                     raise
+                except TimeoutError:
+                    cancel_hook = getattr(runtime_session, "cancel", None)
+                    if callable(cancel_hook):
+                        await maybe_await(cancel_hook())
+                    return RuntimeSubagentResult(
+                        id=task.id,
+                        role=task.role,
+                        status="error",
+                        response_text="",
+                        error=(
+                            "Subagent task timed out after "
+                            f"{self.max_task_seconds:g} seconds."
+                        ),
+                    )
                 except Exception as e:
                     return RuntimeSubagentResult(
                         id=task.id,

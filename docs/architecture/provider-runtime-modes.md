@@ -265,7 +265,8 @@ Auto Code validates and executes these actions locally:
   path scoping, and bounded output instead of arbitrary shell commands;
 - runtime subagents run as bounded read-only child sessions for analysis,
   exploration, review, or comparison work; they do not receive Claude SDK Task
-  tool parity or independent mutating runtime privileges;
+  tool parity or independent mutating runtime privileges, and each child
+  session has a timeout/cancellation guard;
 - JSON and native tool-call batches stop after the first failed local action, so
   later actions in the same batch do not run against a partially failed
   transaction;

@@ -164,6 +164,7 @@ class GenericEditRuntimeSession:
         agent_type: str | None = None,
         subagent_session_factory: RuntimeSessionFactory | None = None,
         max_subagent_concurrency: int = 2,
+        max_subagent_task_seconds: float = 180.0,
         max_iterations: int = 8,
     ):
         self.provider_name = provider_name
@@ -171,6 +172,7 @@ class GenericEditRuntimeSession:
         self.agent_type = agent_type
         self._subagent_session_factory = subagent_session_factory
         self._max_subagent_concurrency = max(1, max_subagent_concurrency)
+        self._max_subagent_task_seconds = max_subagent_task_seconds
         self._subagent_orchestrator: RuntimeSubagentOrchestrator | None = None
         self._subagent_run_count = 0
         self.max_iterations = max_iterations
@@ -987,6 +989,7 @@ class GenericEditRuntimeSession:
             session_factory=self._subagent_session_factory,
             spec_dir=spec_dir,
             max_concurrency=self._max_subagent_concurrency,
+            max_task_seconds=self._max_subagent_task_seconds,
         )
         support = orchestrator.support_for(
             provider_name=self.provider_name,

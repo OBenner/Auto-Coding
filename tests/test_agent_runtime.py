@@ -658,6 +658,26 @@ class FakeSubagentRuntimeSession:
         self.cancelled = True
 
 
+class SlowSubagentRuntimeSession(FakeSubagentRuntimeSession):
+    async def run(
+        self,
+        *,
+        message: str,
+        spec_dir: Path,
+        verbose: bool,
+        phase,
+        subtask_id: str | None = None,
+    ):
+        del message, spec_dir, verbose, phase, subtask_id
+        await asyncio.sleep(10)
+        return SimpleNamespace(
+            status="complete",
+            response_text="too late",
+            usage_metadata=None,
+            artifacts=None,
+        )
+
+
 @pytest.mark.asyncio
 async def test_completion_runtime_supports_text_only(tmp_path: Path):
     runtime_session = create_runtime_session(
@@ -761,6 +781,40 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
     }
     assert "Auto Code subagent `explore-api`" in created_sessions[0].prompts[0]
     assert '"paths": [' in created_sessions[0].prompts[0]
+
+
+@pytest.mark.asyncio
+async def test_runtime_subagent_orchestrator_times_out_child_sessions(
+    tmp_path: Path,
+):
+    created_sessions: list[SlowSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = SlowSubagentRuntimeSession(f"done {task.id}")
+        created_sessions.append(session)
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_task_seconds=0.01,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="slow-review",
+                role="reviewer",
+                prompt="Never finishes in time",
+            ),
+        ]
+    )
+
+    assert run.status == "error"
+    assert run.results[0].status == "error"
+    assert "timed out" in str(run.results[0].error)
+    assert created_sessions[0].cancelled is True
+    artifact = json.loads(Path(run.artifact_path or "").read_text(encoding="utf-8"))
+    assert artifact["summary"]["error_result_ids"] == ["slow-review"]
 
 
 def test_runtime_subagent_result_summary_counts_mixed_statuses():
