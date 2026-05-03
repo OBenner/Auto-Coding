@@ -70,6 +70,27 @@ GOOGLE_MODELS = [
 # Default model
 DEFAULT_GOOGLE_MODEL = "gemini-2.0-flash"
 SESSION_CLOSED_MESSAGE = "Session is closed"
+GOOGLE_SCHEMA_UNSUPPORTED_KEYS = frozenset(
+    {
+        "$schema",
+        "additionalProperties",
+        "allOf",
+        "anyOf",
+        "default",
+        "examples",
+        "exclusiveMaximum",
+        "exclusiveMinimum",
+        "maxItems",
+        "maxLength",
+        "maximum",
+        "minItems",
+        "minLength",
+        "minimum",
+        "oneOf",
+        "pattern",
+        "title",
+    }
+)
 
 
 class GoogleAgentSession(AgentSession):
@@ -291,7 +312,7 @@ def sanitize_google_schema(value: Any) -> Any:
         return {
             key: sanitize_google_schema(item)
             for key, item in value.items()
-            if key not in {"additionalProperties", "$schema"}
+            if key not in GOOGLE_SCHEMA_UNSUPPORTED_KEYS
         }
     if isinstance(value, list):
         return [sanitize_google_schema(item) for item in value]

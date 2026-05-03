@@ -1462,11 +1462,23 @@ def build_generic_edit_transaction(
     """Build one transaction-boundary summary for a local action batch."""
     succeeded_count = sum(1 for result in results if result.ok)
     failed_count = sum(1 for result in results if not result.ok)
+    tool_sequence = [action_tool(action) for action in actions if action_tool(action)]
     mutating_tools = [
         action_tool(action)
         for action in actions
         if action_tool(action) in MUTATING_LOCAL_ACTIONS
     ]
+    affected_paths = sorted(
+        dict.fromkeys(path for action in actions for path in action_path_values(action))
+    )
+    mutated_paths = sorted(
+        dict.fromkeys(
+            path
+            for action in actions
+            if action_tool(action) in MUTATING_LOCAL_ACTIONS
+            for path in action_path_values(action)
+        )
+    )
     first_failure_index = next(
         (index for index, result in enumerate(results, start=1) if not result.ok),
         None,
@@ -1495,11 +1507,18 @@ def build_generic_edit_transaction(
         "iteration": iteration,
         "status": status,
         "action_count": len(actions),
+        "tool_sequence": tool_sequence,
         "succeeded_action_count": succeeded_count,
         "failed_action_count": failed_count,
         "mutating_action_count": len(mutating_tools),
         "mutating_tools": mutating_tools,
+        "affected_paths": affected_paths,
+        "mutated_paths": mutated_paths,
         "recovery_required": status == "partial_failure",
+        "can_resolve_partial_failure": transaction_can_resolve_partial_failure(
+            status=status,
+            tool_sequence=tool_sequence,
+        ),
     }
     if first_failure_index is not None:
         failed_result = results[first_failure_index - 1]
@@ -1516,6 +1535,30 @@ def build_generic_edit_transaction(
             "Inspect affected paths and repair or confirm the workspace state before finishing."
         )
     return transaction
+
+
+def action_path_values(action: dict[str, Any]) -> list[str]:
+    """Return workspace path fields from an action without reading sensitive data."""
+    paths: list[str] = []
+    for field_name in ("path", "source", "destination"):
+        value = action.get(field_name)
+        if isinstance(value, str) and value:
+            paths.append(value)
+    raw_paths = action.get("paths")
+    if isinstance(raw_paths, list):
+        paths.extend(path for path in raw_paths if isinstance(path, str) and path)
+    return paths
+
+
+def transaction_can_resolve_partial_failure(
+    *,
+    status: str,
+    tool_sequence: list[str],
+) -> bool:
+    """Return true when a later transaction can credibly resolve partial edits."""
+    if status != "complete":
+        return False
+    return any(tool and tool != "finish" for tool in tool_sequence)
 
 
 def build_generic_edit_response(
@@ -1947,6 +1990,7 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
     status_counts: dict[str, int] = {}
     partial_failure_indexes: list[int] = []
     partial_failure_transaction_ids: list[str] = []
+    recovery_transaction_ids: list[str] = []
     for index, transaction in enumerate(transactions):
         status = str(transaction.get("status") or "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
@@ -1958,22 +2002,30 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
     )
     recovery_resolved = True
     if last_partial_failure_index is not None:
-        recovery_resolved = any(
-            str(transaction.get("status") or "") == "complete"
-            for transaction in transactions[last_partial_failure_index + 1 :]
-        )
+        recovery_transaction_ids = [
+            str(transaction.get("id") or index)
+            for index, transaction in enumerate(
+                transactions[last_partial_failure_index + 1 :],
+                start=last_partial_failure_index + 1,
+            )
+            if bool(transaction.get("can_resolve_partial_failure"))
+        ]
+        recovery_resolved = bool(recovery_transaction_ids)
     partial_failure_count = status_counts.get("partial_failure", 0)
+    unresolved_partial_failure_ids = (
+        [] if recovery_resolved else partial_failure_transaction_ids
+    )
     return {
         "transactions": transactions,
         "transaction_count": len(transactions),
         "transaction_status_counts": status_counts,
         "partial_failure_count": partial_failure_count,
         "partial_failure_transaction_ids": partial_failure_transaction_ids,
+        "recovery_transaction_ids": recovery_transaction_ids,
         "recovery_required": partial_failure_count > 0,
         "recovery_resolved": recovery_resolved,
-        "unresolved_partial_failure_count": (
-            0 if recovery_resolved else partial_failure_count
-        ),
+        "unresolved_partial_failure_count": len(unresolved_partial_failure_ids),
+        "unresolved_partial_failure_ids": unresolved_partial_failure_ids,
     }
 
 

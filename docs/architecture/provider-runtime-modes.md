@@ -46,7 +46,7 @@ python run.py --runtime-modes --json
 |----------|------------------------|--------------|---------------|----------------|-------|
 | `claude` | Yes | Not needed | Yes | Not needed | Uses the Claude Agent SDK path and keeps existing behavior. |
 | `openai` | No | Experimental | Limited | Limited | Direct OpenAI SDK sessions use native tool calls when available, with JSON fallback. |
-| `google` | No | Experimental | Limited | Limited | Gemini can use local JSON actions; MCP parity is not implemented. |
+| `google` | No | Experimental | Limited | Limited | Gemini can use local actions with Gemini-compatible tool schemas; MCP parity is not implemented. |
 | `litellm` | No | Experimental | Limited | Limited | Gateway provider; native tools depend on routed model/gateway support. |
 | `openrouter` | No | Experimental | Limited | Limited | OpenAI-compatible gateway with native tools plus JSON fallback. |
 | `zhipuai` | No | Experimental | Limited | Limited | Direct ZhipuAI/Z.AI chat path is OpenAI-like and limited. Z.AI's Claude-compatible endpoint is tracked as a separate Claude Code runner profile. |
@@ -273,8 +273,9 @@ Auto Code validates and executes these actions locally:
   as `generic_edit_trace.json`, `generic_edit_result.json`,
   `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and
   `generic_edit_summary.md`;
-- transaction summaries include partial-failure ids, whether recovery was
-  resolved by a later complete transaction, and any unresolved partial failures.
+- transaction summaries include tool sequences, affected/mutated paths,
+  partial-failure ids, whether recovery was resolved by a later non-finish
+  transaction, and any unresolved partial failures.
 
 This mode is intentionally not full autonomous parity. It exposes the local
 action loop, provider-native tool calls when available, bounded runtime
@@ -345,7 +346,8 @@ Examples:
   parallel read-only work can use `run_subagents` when the caller wires a
   `RuntimeSubagentOrchestrator` session factory. Local action batches halt after
   the first failed action and persist transaction/recovery metadata before the
-  next provider iteration.
+  next provider iteration. Recovery is only marked resolved after a subsequent
+  successful inspection or repair action, not by `finish` alone.
 
 ## Explicit Boundaries In This PR
 

@@ -13,7 +13,7 @@ from agents.runtime import (
     run_runtime_session,
 )
 from core.platform import run_process
-from core.providers.adapters.google import GoogleProvider
+from core.providers.adapters.google import GoogleProvider, sanitize_google_schema
 from core.providers.adapters.litellm import LiteLLMProvider
 from core.providers.adapters.ollama import OllamaProvider
 from core.providers.adapters.openai import OpenAIProvider
@@ -674,6 +674,7 @@ async def test_google_session_exposes_native_tool_calls(
         "read_file",
     ]
     assert "additionalProperties" not in declarations[0]["parameters"]
+    assert "maximum" not in declarations[3]["parameters"]["properties"]["max_chars"]
     assert session.messages[-2]["role"] == "model"
     assert session.messages[-2]["parts"][0]["function_call"]["name"] == "read_file"
     assert session.messages[-1]["role"] == "function"
@@ -681,6 +682,39 @@ async def test_google_session_exposes_native_tool_calls(
     assert session.messages[-1]["parts"][0]["function_response"]["name"] == (
         "read_file"
     )
+
+
+def test_google_schema_sanitizer_strips_json_schema_validation_keywords():
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "path": {"type": "string", "minLength": 1, "maxLength": 80},
+            "count": {"type": "integer", "minimum": 1, "maximum": 10},
+            "items": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {"oneOf": [{"type": "string"}]},
+            },
+        },
+        "required": ["path"],
+    }
+
+    sanitized = sanitize_google_schema(schema)
+
+    assert sanitized == {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string"},
+            "count": {"type": "integer"},
+            "items": {
+                "type": "array",
+                "items": {},
+            },
+        },
+        "required": ["path"],
+    }
 
 
 @pytest.mark.asyncio
