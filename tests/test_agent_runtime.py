@@ -927,7 +927,9 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "done explore-ui",
     ]
     assert run.artifact_path
-    artifact = json.loads(Path(run.artifact_path).read_text(encoding="utf-8"))
+    artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
+    assert run.artifact_path == str(artifact_path)
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["status"] == "complete"
     assert artifact["support"]["strategy"] == "orchestrated"
     assert artifact["support"]["available"] is True
@@ -955,7 +957,8 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "input_tokens": 1,
         "output_tokens": 2,
     }
-    child_artifact_path = Path(artifact["results"][0]["artifact_path"])
+    child_artifact_path = tmp_path / "artifacts" / "runtime_subagents__explore-api.json"
+    assert artifact["results"][0]["artifact_path"] == str(child_artifact_path)
     assert child_artifact_path.exists()
     child_artifact = json.loads(child_artifact_path.read_text(encoding="utf-8"))
     assert child_artifact["parent_artifact"] == "runtime_subagents.json"
@@ -1000,7 +1003,9 @@ async def test_runtime_subagent_orchestrator_times_out_child_sessions(
     assert run.results[0].status == "error"
     assert "timed out" in str(run.results[0].error)
     assert created_sessions[0].cancelled is True
-    artifact = json.loads(Path(run.artifact_path or "").read_text(encoding="utf-8"))
+    artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
+    assert run.artifact_path == str(artifact_path)
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["summary"]["error_result_ids"] == ["slow-review"]
 
 
@@ -1045,7 +1050,9 @@ async def test_runtime_subagent_orchestrator_retries_isolated_child_attempts(
     assert "Attempt: 2 of 2" in created_sessions[1].prompts[0]
     assert '"focus": "runtime retries"' in created_sessions[1].prompts[0]
 
-    artifact = json.loads(Path(run.artifact_path or "").read_text(encoding="utf-8"))
+    artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
+    assert run.artifact_path == str(artifact_path)
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     result_payload = artifact["results"][0]
     assert result_payload["context"] == {"focus": "runtime retries"}
     assert result_payload["attempt_count"] == 2
@@ -1053,7 +1060,11 @@ async def test_runtime_subagent_orchestrator_retries_isolated_child_attempts(
         "error",
         "complete",
     ]
-    assert Path(result_payload["artifact_path"]).exists()
+    child_artifact_path = (
+        tmp_path / "artifacts" / "runtime_subagents__inspect-retry.json"
+    )
+    assert result_payload["artifact_path"] == str(child_artifact_path)
+    assert child_artifact_path.exists()
 
 
 def test_runtime_subagent_result_summary_counts_mixed_statuses():
@@ -2407,8 +2418,7 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
     assert audit_path == mcp_bridge_audit_path(tmp_path)
     assert audit_path.exists()
     audit_lines = [
-        json.loads(line)
-        for line in audit_path.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
     ]
     assert audit_lines[0]["status"] == "ok"
     assert audit_lines[0]["server"] == "auto-claude"

@@ -341,7 +341,7 @@ function formatRuntimeDiagnosticValue(value?: string | null): string {
   if (!trimmed) {
     return '';
   }
-  return trimmed.replace(/_/g, ' ');
+  return trimmed.replaceAll('_', ' ');
 }
 
 function formatRuntimeDiagnosticList(values?: string[] | null): string {
@@ -494,7 +494,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   }, [t]);
 
   useEffect(() => {
-    void loadRuntimeControlPlaneDiagnostics();
+    loadRuntimeControlPlaneDiagnostics();
   }, [loadRuntimeControlPlaneDiagnostics]);
 
   const selectedProvider = useMemo(

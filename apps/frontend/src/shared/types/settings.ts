@@ -499,8 +499,8 @@ export interface ProviderConnectionTestResult {
 }
 
 export interface RuntimeMcpBridgePlanRow {
-  provider: AIEngineProvider | string;
-  runtime_mode: AgentRuntimeMode | string;
+  provider: string;
+  runtime_mode: string;
   strategy: string;
   available: boolean;
   status: string;
@@ -515,11 +515,11 @@ export interface RuntimeMcpBridgePlanRow {
 }
 
 export interface RuntimeFallbackMatrixRow {
-  provider: AIEngineProvider | string;
+  provider: string;
   phase: string;
-  requested_mode: AgentRuntimeMode | string;
-  fail_fast_selected_mode: AgentRuntimeMode | string;
-  fallback_selected_mode: AgentRuntimeMode | string;
+  requested_mode: string;
+  fail_fast_selected_mode: string;
+  fallback_selected_mode: string;
   fallback_applied: boolean;
   fallback_reason: string;
   missing_capabilities: string[];
