@@ -32,7 +32,7 @@ litellm==1.83.7
 
 # OpenAI SDK - Required by OpenAI-compatible providers and LiteLLM.
 # Keep this aligned with the pinned LiteLLM requirement.
-openai==2.30.0
+openai==2.33.0
 
 # zAI SDK - GLM model provider (智谱AI / zhipu AI)
 zai-sdk>=0.2.2
