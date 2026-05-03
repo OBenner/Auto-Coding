@@ -267,7 +267,18 @@ rm -rf .auto-claude/specs/XXX/graphiti/
 
 ## LLM Provider Configuration
 
-Auto Code supports multiple LLM providers beyond Claude. This is useful for:
+Auto Code supports multiple LLM providers beyond Claude, but provider support
+has two layers:
+
+- The provider adapter creates a model session.
+- The runtime mode decides whether that session can use tools, MCP, shell
+  commands, filesystem edits, or only text/patch proposals.
+
+Claude remains required for full autonomous coding. Other providers can run
+`analysis_only`, `patch_proposal`, or the experimental `generic_edit` local
+tool runtime. See [Provider Runtime Modes](../docs/architecture/provider-runtime-modes.md).
+
+Multi-provider support is useful for:
 - Cost optimization (mix and match providers)
 - Redundancy and failover
 - Feature-specific model selection
@@ -284,7 +295,50 @@ Auto Code supports multiple LLM providers beyond Claude. This is useful for:
 
 ### Configuring Alternative Providers
 
-**Note:** The Claude Code OAuth token is **always required** for the agent SDK, but you can use alternative providers for specific tasks.
+**Note:** The Claude Code OAuth token is required for the full agent SDK runtime. Alternative providers can be used for specific limited phases when configured with a compatible runtime mode.
+
+**Patch proposal mode for coder subtasks:**
+
+```bash
+AI_ENGINE_PROVIDER=claude
+AGENT_PROVIDER_CODER=openai
+AGENT_MODEL_CODER=gpt-4o
+AGENT_RUNTIME_MODE_CODER=patch_proposal
+OPENAI_API_KEY=sk-...
+```
+
+In this mode, the provider returns a structured unified diff. Auto Code validates
+the diff locally before applying it and does not give the provider direct tool or
+filesystem access.
+
+**Generic edit mode for coder subtasks:**
+
+```bash
+AI_ENGINE_PROVIDER=claude
+AGENT_PROVIDER_CODER=openai
+AGENT_MODEL_CODER=gpt-4o
+AGENT_RUNTIME_MODE_CODER=generic_edit
+OPENAI_API_KEY=sk-...
+```
+
+In this mode, Auto Code exposes a small local action loop for workspace-relative
+file reads, validated patches, bounded file writes, and security-checked single
+commands. OpenAI-compatible sessions use provider-native tool calls when
+available; direct OpenAI, Ollama, OpenRouter, and LiteLLM sessions expose this
+normalized bridge when the routed model/gateway supports tools. If native tool
+calls are rejected, Auto Code falls back to the JSON action loop.
+
+**Runtime-aware fallback for non-Claude providers:**
+
+```bash
+AI_ENGINE_PROVIDER=openai
+AUTO_CODE_RUNTIME_MODE=full_autonomous
+AUTO_CODE_RUNTIME_FALLBACK=true
+OPENAI_API_KEY=sk-...
+```
+
+This degrades to the first compatible limited runtime, usually `generic_edit`.
+It does not grant MCP/tool/subagent parity to the selected provider.
 
 **OpenAI (for memory system):**
 ```bash

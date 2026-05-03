@@ -14,8 +14,10 @@ from pathlib import Path
 from context.constants import SKIP_DIRS
 from core.file_utils import write_json_atomic
 from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.factory import create_engine_provider
+from core.providers.task_router import TaskComplexityRouter
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -24,7 +26,12 @@ from linear_updater import (
     linear_task_stuck,
 )
 from notifications import notify_stuck_subtask
-from phase_config import get_phase_model, get_phase_thinking_budget, resolve_model_id
+from phase_config import (
+    get_phase_model,
+    get_phase_thinking_budget,
+    is_phase_model_locked,
+    resolve_model_id,
+)
 from phase_event import ExecutionPhase, emit_phase
 from progress import (
     count_subtasks,
@@ -68,6 +75,21 @@ from .memory_manager import (
     get_failure_patterns,
     get_graphiti_context,
     get_pattern_suggestions,
+)
+from .runtime import (
+    RuntimeCapabilityError,
+    create_runtime_session,
+    get_runtime_mode,
+    requirements_for_runtime_mode,
+    resolve_runtime_mode_with_fallback,
+    resolve_runtime_runner_route,
+    run_runtime_session,
+    runtime_fallback_enabled,
+)
+from .runtime.artifacts import (
+    save_analysis_only_artifact,
+    save_runtime_fallback_artifact,
+    save_runtime_runner_route_artifact,
 )
 from .session import (
     post_session_processing,
@@ -468,6 +490,57 @@ def validate_subtask_files(
         }
 
     return {"success": True, "missing_files": [], "invalid_paths": []}
+
+
+def _mark_runtime_subtask_completed(
+    spec_dir: Path,
+    subtask_id: str,
+    completed_by: str,
+) -> bool:
+    """Mark a subtask completed after a limited local runtime applies changes."""
+    plan_file = spec_dir / "implementation_plan.json"
+    plan = load_implementation_plan(spec_dir)
+    if not plan:
+        return False
+
+    subtask = find_subtask_in_plan(plan, subtask_id)
+    if not subtask:
+        return False
+
+    subtask["status"] = "completed"
+    subtask["completed_by"] = completed_by
+
+    try:
+        from datetime import UTC, datetime
+
+        subtask["completed_at"] = datetime.now(UTC).isoformat()
+    except (OSError, OverflowError, ValueError):
+        logger.debug(
+            "Unable to timestamp runtime completion for subtask %s",
+            subtask_id,
+            exc_info=True,
+        )
+
+    for phase in plan.get("phases", []):
+        subtasks = phase.get("subtasks", [])
+        if subtasks and all(item.get("status") == "completed" for item in subtasks):
+            phase["status"] = "completed"
+
+    try:
+        write_json_atomic(plan_file, plan, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error("Failed to persist runtime subtask completion: %s", e)
+        return False
+    return True
+
+
+def _mark_patch_subtask_completed(spec_dir: Path, subtask_id: str) -> bool:
+    """Mark a subtask completed after Auto Code applies a patch proposal."""
+    return _mark_runtime_subtask_completed(
+        spec_dir,
+        subtask_id,
+        completed_by="patch_proposal",
+    )
 
 
 def _display_context_window_usage(
@@ -878,10 +951,71 @@ async def run_autonomous_agent(
 
         # Use appropriate agent_type for correct tool permissions and thinking budget
         agent_type_for_session = "planner" if first_run else "coder"
+        provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
+        requested_runtime_mode = get_runtime_mode(agent_type_for_session)
+        route_allowed_providers = None
+        if (
+            requested_runtime_mode == "full_autonomous"
+            and not runtime_fallback_enabled()
+        ):
+            route_allowed_providers = {"claude", "codex"}
 
-        # Defer provider/session creation until we know process isolation is not used.
-        # When process isolation is enabled the subprocess creates its own client,
-        # so building one here would be wasted work.
+        if (
+            next_subtask
+            and current_phase == "coding"
+            and not override_model
+            and model is None
+            and not is_phase_model_locked(spec_dir, current_phase)
+        ):
+            route = TaskComplexityRouter().route(
+                next_subtask,
+                agent_type=agent_type_for_session,
+                provider_config=provider_config,
+                allowed_providers=route_allowed_providers,
+            )
+            provider_config = provider_config.with_provider_model(
+                route.provider,
+                route.model,
+            )
+            phase_model = route.model
+            print_status(
+                f"Smart routing: {route.complexity} -> {route.provider}/{route.model}",
+                "info",
+            )
+            logger.info("Smart routing selected: %s", route)
+
+        runner_route = resolve_runtime_runner_route(
+            provider_config=provider_config,
+            provider_name=provider_config.provider,
+            requested_mode=requested_runtime_mode,
+            phase=current_phase,
+        )
+        if runner_route.route_applied:
+            routed_model = provider_config.get_model_for(runner_route.selected_provider)
+            if routed_model:
+                provider_config = provider_config.with_provider_model(
+                    runner_route.selected_provider,
+                    routed_model,
+                )
+                phase_model = routed_model
+            print_status(
+                f"Runner routing: {runner_route.requested_provider}/"
+                f"{runner_route.requested_mode} -> "
+                f"{runner_route.selected_provider}/{runner_route.runner_id}",
+                "warning",
+            )
+            logger.info("Runtime runner route selected: %s", runner_route.to_dict())
+            route_artifact = save_runtime_runner_route_artifact(
+                spec_dir=spec_dir,
+                route=runner_route,
+                phase=current_phase,
+                session_num=iteration,
+                subtask_id=subtask_id,
+            )
+            print_status(f"Runner route details: {route_artifact}", "info")
+
+        # Filled after provider/runtime resolution so plugin hooks can see the
+        # runtime context client before the session starts.
         client = None
 
         # Generate appropriate prompt
@@ -1078,6 +1212,129 @@ async def run_autonomous_agent(
             task_logger.set_subtask(subtask_id)
             task_logger.set_session(iteration)
 
+        # Check if process isolation is enabled. Provider/runtime resolution
+        # happens before plugin hooks so hooks see the active runtime client in
+        # non-isolated mode.
+        use_process_isolation = (
+            os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
+        )
+        analysis_only_terminal_message: str | None = None
+
+        provider = create_engine_provider(provider_config)
+        runtime_phase = (
+            "planning" if current_log_phase == LogPhase.PLANNING else "coding"
+        )
+        runtime_decision = resolve_runtime_mode_with_fallback(
+            provider_name=provider.name,
+            requested_mode=requested_runtime_mode,
+            phase=runtime_phase,
+        )
+        runtime_mode = runtime_decision.selected_mode
+        if runtime_decision.fallback_applied:
+            logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
+            fallback_artifact = save_runtime_fallback_artifact(
+                spec_dir=spec_dir,
+                decision=runtime_decision,
+                phase=runtime_phase,
+                session_num=iteration,
+                subtask_id=subtask_id,
+            )
+            print_status(
+                f"Runtime fallback: {runtime_decision.requested_mode} -> "
+                f"{runtime_mode} ({provider.name}); details: {fallback_artifact}",
+                "warning",
+            )
+
+        if use_process_isolation and (
+            provider.name != "claude" or runtime_mode != "full_autonomous"
+        ):
+            logger.warning(
+                "Process isolation disabled for provider=%s runtime=%s",
+                provider.name,
+                runtime_mode,
+            )
+            print_status(
+                "Process isolation disabled because the selected provider/runtime "
+                "must use the in-process runtime engine",
+                "warning",
+            )
+            use_process_isolation = False
+
+        runtime_session = None
+        if not use_process_isolation or provider.name == "claude":
+            session_config = SessionConfig(
+                name=f"{agent_type_for_session}-session-{iteration}",
+                model=phase_model,
+                extra={
+                    "agent_type": agent_type_for_session,
+                    "max_thinking_tokens": phase_thinking_budget,
+                },
+            )
+
+            if provider.name == "claude":
+                session = provider.create_session(
+                    session_config,
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    agent_type=agent_type_for_session,
+                    max_thinking_tokens=phase_thinking_budget,
+                )
+            else:
+                session = provider.create_session(session_config)
+
+            subagent_session_factory = None
+            if runtime_mode == "generic_edit":
+
+                def subagent_session_factory(
+                    task,
+                    *,
+                    child_agent_type=agent_type_for_session,
+                    child_model=phase_model,
+                    child_provider=provider,
+                    child_subtask_id=subtask_id,
+                    child_thinking_budget=phase_thinking_budget,
+                ):
+                    child_session_config = SessionConfig(
+                        name=f"{child_agent_type}-subagent-{task.id}",
+                        model=child_model,
+                        extra={
+                            "agent_type": child_agent_type,
+                            "parent_subtask_id": child_subtask_id,
+                            "runtime_subagent_id": task.id,
+                        },
+                    )
+                    if child_provider.name == "claude":
+                        child_session = child_provider.create_session(
+                            child_session_config,
+                            project_dir=project_dir,
+                            spec_dir=spec_dir,
+                            agent_type=child_agent_type,
+                            max_thinking_tokens=child_thinking_budget,
+                        )
+                    else:
+                        child_session = child_provider.create_session(
+                            child_session_config
+                        )
+                    return create_runtime_session(
+                        provider_name=child_provider.name,
+                        agent_session=child_session,
+                        claude_session_runner=run_agent_session,
+                        runtime_mode="analysis_only",
+                        project_dir=project_dir,
+                        agent_type=child_agent_type,
+                    )
+
+            runtime_session = create_runtime_session(
+                provider_name=provider.name,
+                agent_session=session,
+                claude_session_runner=run_agent_session,
+                runtime_mode=runtime_mode,
+                project_dir=project_dir,
+                agent_type=agent_type_for_session,
+                subagent_session_factory=subagent_session_factory,
+            )
+            client = runtime_session.context_client
+
         # Call before_session hook for enabled agent plugins
         if PLUGINS_AVAILABLE:
             try:
@@ -1097,6 +1354,9 @@ async def run_autonomous_agent(
                         metadata={
                             "subtask_id": subtask_id,
                             "iteration": iteration,
+                            "provider": provider.name,
+                            "runtime_mode": runtime_mode,
+                            "process_isolation": use_process_isolation,
                             "attempt": recovery_manager.get_attempt_count(subtask_id)
                             + 1
                             if subtask_id
@@ -1118,14 +1378,8 @@ async def run_autonomous_agent(
             except Exception as e:
                 logger.warning(f"Failed to call before_session hooks: {e}")
 
-        # Check if process isolation is enabled
-        use_process_isolation = (
-            os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
-        )
-
         if use_process_isolation:
             # Run in isolated subprocess for crash resistance
-            agent_type = "planner" if first_run else "coder"
             if verbose or iteration == 1:
                 print_status(
                     "Process isolation: ENABLED (crash-resistant mode)", "info"
@@ -1133,59 +1387,90 @@ async def run_autonomous_agent(
             status, response, usage_metadata = await run_agent_session_isolated(
                 project_dir=project_dir,
                 spec_dir=spec_dir,
-                agent_type=agent_type,
+                agent_type=agent_type_for_session,
                 model=phase_model,
                 starting_message=prompt,
                 system_prompt=None,
                 max_thinking_tokens=phase_thinking_budget,
-                session_name=f"{agent_type}-session-{iteration}",
+                session_name=f"{agent_type_for_session}-session-{iteration}",
                 limits=None,  # Use default ResourceLimits
             )
         else:
-            # Create provider/session now (deferred to avoid wasted work when
-            # process isolation is enabled).
-            provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
-            provider = create_engine_provider(provider_config)
-
-            from core.providers.base import SessionConfig
-
-            session_config = SessionConfig(
-                name=f"{agent_type_for_session}-session-{iteration}",
-                model=phase_model,
-                extra={
-                    "agent_type": agent_type_for_session,
-                    "max_thinking_tokens": phase_thinking_budget,
-                },
-            )
-
-            if provider.name == "claude":
-                session = provider.create_session(
-                    session_config,
-                    project_dir=project_dir,
-                    spec_dir=spec_dir,
-                    agent_type=agent_type_for_session,
-                    max_thinking_tokens=phase_thinking_budget,
-                )
-            else:
-                session = provider.create_session(session_config)
-
-            if not hasattr(session, "client"):
-                raise AttributeError(
-                    f"Provider {provider.name} session missing 'client' attribute"
-                )
-
-            client = session.client
-
             # Run in current process (legacy mode)
-            async with client:
-                (
-                    status,
-                    response,
-                    usage_metadata,
-                    _decision_tracker,
-                ) = await run_agent_session(
-                    client, prompt, spec_dir, verbose, phase=current_log_phase
+            if runtime_session is None:
+                raise RuntimeError("Runtime session was not initialized")
+            requirements = requirements_for_runtime_mode(
+                runtime_mode,
+                phase=runtime_phase,
+            )
+            try:
+                result = await run_runtime_session(
+                    runtime_session,
+                    prompt,
+                    spec_dir,
+                    verbose,
+                    phase=current_log_phase,
+                    requirements=requirements,
+                    subtask_id=subtask_id,
                 )
+            except RuntimeCapabilityError as e:
+                logger.error(str(e))
+                print_status(str(e), "error")
+                if task_logger:
+                    task_logger.log_error(str(e), current_log_phase)
+                status_manager.update(state=BuildState.ERROR)
+                return
+
+            status = result.status
+            usage_metadata = result.usage_metadata
+
+            if runtime_mode == "analysis_only" and current_log_phase == LogPhase.CODING:
+                artifact_path = save_analysis_only_artifact(
+                    spec_dir=spec_dir,
+                    response_text=result.response_text,
+                    provider_name=provider.name,
+                    phase="coding",
+                    session_num=iteration,
+                    subtask_id=subtask_id,
+                )
+                analysis_only_terminal_message = (
+                    "Analysis-only runtime completed text analysis but cannot "
+                    "complete coding subtasks because it has no workspace edit "
+                    "or tool capabilities. Saved model output to "
+                    f"{artifact_path}. Use patch_proposal for validated diffs "
+                    "or Claude/full_autonomous for autonomous coding."
+                )
+                status = "error"
+                status_manager.update(state=BuildState.ERROR)
+
+            if (
+                runtime_mode in {"patch_proposal", "generic_edit"}
+                and current_log_phase == LogPhase.CODING
+                and subtask_id
+                and status != "error"
+            ):
+                if _mark_runtime_subtask_completed(
+                    spec_dir,
+                    subtask_id,
+                    completed_by=runtime_mode,
+                ):
+                    print_status(
+                        f"Marked subtask {subtask_id} completed from {runtime_mode}",
+                        "success",
+                    )
+                    if is_build_complete(spec_dir):
+                        status = "complete"
+                else:
+                    message = (
+                        f"{runtime_mode} completed but subtask status could not be "
+                        f"updated for {subtask_id}"
+                    )
+                    logger.error(message)
+                    print_status(message, "error")
+                    if task_logger:
+                        task_logger.log_error(message, current_log_phase)
+                    status = "error"
+                    status_manager.update(state=BuildState.ERROR)
 
         # Call after_session hook for enabled agent plugins
         if PLUGINS_AVAILABLE:
@@ -1224,6 +1509,47 @@ async def run_autonomous_agent(
                             )
             except Exception as e:
                 logger.warning(f"Failed to call after_session hooks: {e}")
+
+        if analysis_only_terminal_message:
+            logger.error(analysis_only_terminal_message)
+            print_status(analysis_only_terminal_message, "error")
+            if task_logger:
+                task_logger.log_error(
+                    analysis_only_terminal_message,
+                    current_log_phase,
+                )
+            if subtask_id:
+                if not reset_subtask_to_pending(spec_dir, subtask_id):
+                    logger.error(
+                        "Could not reset analysis-only subtask %s to pending in %s",
+                        subtask_id,
+                        spec_dir,
+                    )
+                    print_status(
+                        f"Could not reset subtask {subtask_id} to pending",
+                        "error",
+                    )
+                recovery_manager.record_attempt(
+                    subtask_id=subtask_id,
+                    session=iteration,
+                    success=False,
+                    approach="Analysis-only runtime produced a text artifact",
+                    error=analysis_only_terminal_message,
+                )
+                subtasks = count_subtasks_detailed(spec_dir)
+                status_manager.update_subtasks(
+                    completed=subtasks["completed"],
+                    total=subtasks["total"],
+                    in_progress=0,
+                )
+            if sync_spec_to_source(spec_dir, source_spec_dir):
+                print_status("Analysis artifact synced to main project", "success")
+            emit_phase(
+                ExecutionPhase.FAILED,
+                "Analysis-only runtime cannot complete coding subtasks",
+                subtask=subtask_id,
+            )
+            return
 
         # Save token statistics for coding phase
         if usage_metadata and current_log_phase == LogPhase.CODING:

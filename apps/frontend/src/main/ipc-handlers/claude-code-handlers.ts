@@ -25,6 +25,7 @@ import { getClaudeProfileManager } from '../claude-profile-manager';
 import { isValidConfigDir } from '../utils/config-path-validator';
 import { clearKeychainCache } from '../claude-profile/credential-utils';
 import { getUsageMonitor } from '../claude-profile/usage-monitor';
+import { findExecutable, getAugmentedEnv } from '../env-utils';
 import semver from 'semver';
 
 const execFileAsync = promisify(execFile);
@@ -34,6 +35,87 @@ let cachedLatestVersion: { version: string; timestamp: number } | null = null;
 let cachedVersionList: { versions: string[]; timestamp: number } | null = null;
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 const VERSION_LIST_CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour for version list
+
+function getCodexCandidatePaths(): string[] {
+  const candidates = [
+    findExecutable('codex'),
+  ];
+
+  if (isMacOS()) {
+    candidates.push('/Applications/Codex.app/Contents/Resources/codex');
+  }
+
+  candidates.push(
+    path.join(os.homedir(), '.local', 'bin', 'codex'),
+    '/opt/homebrew/bin/codex',
+    '/usr/local/bin/codex'
+  );
+
+  return candidates.filter((candidate): candidate is string => Boolean(candidate));
+}
+
+function isNumericToken(value: string): boolean {
+  if (!value) {
+    return false;
+  }
+  return Array.from(value).every((char) => char >= '0' && char <= '9');
+}
+
+function parseVersionFromOutput(output: string): string | undefined {
+  const tokens = output
+    .replaceAll('\r', ' ')
+    .replaceAll('\n', ' ')
+    .replaceAll('\t', ' ')
+    .split(' ')
+    .filter(Boolean);
+
+  const versionToken = tokens.find((token) => {
+    const normalized = token.startsWith('v') ? token.slice(1) : token;
+    const parts = normalized.split('.');
+    return parts.length === 3 && parts.every(isNumericToken);
+  });
+
+  return versionToken || tokens.at(-1);
+}
+
+async function detectCodexCli(): Promise<ClaudeCodeVersionInfo['detectionResult']> {
+  const seen = new Set<string>();
+
+  for (const candidate of getCodexCandidatePaths()) {
+    const normalizedPath = path.resolve(candidate);
+    if (seen.has(normalizedPath) || !existsSync(candidate)) {
+      continue;
+    }
+    seen.add(normalizedPath);
+
+    try {
+      const result = await execFileAsync(candidate, ['--version'], {
+        encoding: 'utf-8',
+        timeout: 5000,
+        windowsHide: true,
+        env: getAugmentedEnv(),
+      });
+      const output = String(result.stdout || result.stderr || '').trim();
+      const version = parseVersionFromOutput(output);
+
+      return {
+        found: true,
+        path: normalizedPath,
+        version,
+        source: normalizedPath.includes('/Applications/Codex.app/') ? 'bundled' : 'system-path',
+        message: `Using Codex CLI: ${normalizedPath}`,
+      };
+    } catch (error) {
+      console.warn('[Codex CLI] Validation failed for', normalizedPath, error);
+    }
+  }
+
+  return {
+    found: false,
+    source: 'fallback',
+    message: 'Codex CLI not found. Install Codex or ensure codex is available on PATH.',
+  };
+}
 
 /**
  * Validate a Claude CLI path and get its version
@@ -915,6 +997,35 @@ function checkProfileAuthentication(configDir: string): AuthCheckResult {
  * Register Claude Code IPC handlers
  */
 export function registerClaudeCodeHandlers(): void {
+  ipcMain.handle(
+    IPC_CHANNELS.CODEX_CODE_CHECK_VERSION,
+    async (): Promise<IPCResult<ClaudeCodeVersionInfo>> => {
+      try {
+        console.warn('[Codex CLI] Checking version...');
+        const detectionResult = await detectCodexCli();
+        const installed = detectionResult.found ? detectionResult.version || null : null;
+
+        return {
+          success: true,
+          data: {
+            installed,
+            latest: 'unknown',
+            isOutdated: false,
+            path: detectionResult.path,
+            detectionResult,
+          },
+        };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[Codex CLI] Check failed:', errorMsg, error);
+        return {
+          success: false,
+          error: `Failed to check Codex CLI version: ${errorMsg}`,
+        };
+      }
+    }
+  );
+
   // Check Claude Code version
   ipcMain.handle(
     IPC_CHANNELS.CLAUDE_CODE_CHECK_VERSION,

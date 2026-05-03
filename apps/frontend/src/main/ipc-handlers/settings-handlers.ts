@@ -1,6 +1,7 @@
 import { ipcMain, dialog, app, shell } from 'electron';
 import { existsSync, writeFileSync, mkdirSync, statSync, readFileSync } from 'fs';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { is } from '@electron-toolkit/utils';
@@ -15,7 +16,9 @@ import type {
   SourceEnvConfig,
   SourceEnvCheckResult,
   ProviderSettings,
-  AIEngineProvider
+  AIEngineProvider,
+  AgentRuntimeMode,
+  ProviderConnectionTestResult
 } from '../../shared/types';
 import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
@@ -25,8 +28,27 @@ import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preW
 import { parseEnvFile } from './utils';
 import { getCurrentOS, isMacOS, isWindows } from '../platform';
 import { projectStore } from '../project-store';
+import { getBestAvailableProfileEnv } from '../rate-limit-detector';
+import { getAPIProfileEnv } from '../services/profile';
+import { getCodexProfileManager } from '../codex-profile-manager';
 
 const settingsPath = getSettingsPath();
+const execFileAsync = promisify(execFile);
+const PROVIDER_SMOKE_TIMEOUT_SECONDS = 30;
+const PROVIDER_SMOKE_PROCESS_TIMEOUT_MS = 45_000;
+
+function hasClaudeProviderAuth(vars: Record<string, string>): boolean {
+  return Boolean(
+    vars['ANTHROPIC_API_KEY'] ||
+    vars['ANTHROPIC_AUTH_TOKEN'] ||
+    vars['CLAUDE_CODE_OAUTH_TOKEN'] ||
+    vars['CLAUDE_CONFIG_DIR']
+  );
+}
+
+function hasCodexProviderAuth(vars: Record<string, string>): boolean {
+  return Boolean(vars['CODEX_HOME']);
+}
 
 /**
  * Auto-detect the auto-claude source path relative to the app location.
@@ -106,22 +128,35 @@ function applyProviderSettingsToVars(
     vars['AI_ENGINE_PROVIDER'] = settings.provider;
   }
   const keyMap: Array<[keyof ProviderSettings, string]> = [
+    ['codexModel', 'CODEX_MODEL'],
     ['openaiApiKey', 'OPENAI_API_KEY'],
     ['googleApiKey', 'GOOGLE_API_KEY'],
     ['openrouterApiKey', 'OPENROUTER_API_KEY'],
+    ['zhipuaiApiKey', 'ZHIPUAI_API_KEY'],
     ['plannerModel', 'AGENT_MODEL_PLANNER'],
     ['coderModel', 'AGENT_MODEL_CODER'],
     ['qaModel', 'AGENT_MODEL_QA_REVIEWER'],
+    ['runtimeMode', 'AUTO_CODE_RUNTIME_MODE'],
+    ['plannerRuntimeMode', 'AGENT_RUNTIME_MODE_PLANNER'],
+    ['coderRuntimeMode', 'AGENT_RUNTIME_MODE_CODER'],
+    ['qaReviewerRuntimeMode', 'AGENT_RUNTIME_MODE_QA_REVIEWER'],
+    ['qaFixerRuntimeMode', 'AGENT_RUNTIME_MODE_QA_FIXER'],
   ];
   for (const [settingKey, envKey] of keyMap) {
     const value = settings[settingKey];
     if (value !== undefined) {
-      if (value) {
-        vars[envKey] = value as string;
-      } else {
-        delete vars[envKey];
-      }
+      vars[envKey] = value as string;
     }
+  }
+  if (settings.runtimeFallbackEnabled !== undefined) {
+    vars['AUTO_CODE_RUNTIME_FALLBACK'] = settings.runtimeFallbackEnabled
+      ? 'true'
+      : 'false';
+  }
+  if (settings.cliRunnerRouterEnabled !== undefined) {
+    vars['AUTO_CODE_CLI_RUNNER_ROUTER'] = settings.cliRunnerRouterEnabled
+      ? 'true'
+      : 'false';
   }
 }
 
@@ -149,14 +184,42 @@ function generateFreshEnvContent(vars: Record<string, string>): string {
 AI_ENGINE_PROVIDER=${vars['AI_ENGINE_PROVIDER'] || 'claude'}
 
 # Provider API Keys
+${varLine('ANTHROPIC_API_KEY')}
 ${varLine('OPENAI_API_KEY')}
 ${varLine('GOOGLE_API_KEY')}
+${varLine('LITELLM_API_KEY')}
 ${varLine('OPENROUTER_API_KEY')}
+${varLine('ZHIPUAI_API_KEY')}
+
+# Provider Models and Endpoints
+${varLine('CLAUDE_MODEL')}
+${varLine('CODEX_MODEL')}
+${varLine('CODEX_HOME')}
+${varLine('CODEX_CLI_PATH')}
+${varLine('OPENAI_MODEL')}
+${varLine('OPENAI_BASE_URL')}
+${varLine('GOOGLE_MODEL')}
+${varLine('LITELLM_MODEL')}
+${varLine('LITELLM_API_BASE')}
+${varLine('OPENROUTER_MODEL')}
+${varLine('OPENROUTER_BASE_URL')}
+${varLine('ZHIPUAI_MODEL')}
+${varLine('OLLAMA_MODEL')}
+${varLine('OLLAMA_BASE_URL')}
 
 # Per-Agent Model Configuration
 ${varLine('AGENT_MODEL_PLANNER')}
 ${varLine('AGENT_MODEL_CODER')}
 ${varLine('AGENT_MODEL_QA_REVIEWER')}
+
+# Runtime Mode Configuration
+${varLine('AUTO_CODE_RUNTIME_MODE')}
+${varLine('AGENT_RUNTIME_MODE_PLANNER')}
+${varLine('AGENT_RUNTIME_MODE_CODER')}
+${varLine('AGENT_RUNTIME_MODE_QA_REVIEWER')}
+${varLine('AGENT_RUNTIME_MODE_QA_FIXER')}
+${varLine('AUTO_CODE_RUNTIME_FALLBACK')}
+${varLine('AUTO_CODE_CLI_RUNNER_ROUTER')}
 `;
 }
 
@@ -223,8 +286,18 @@ function generateProviderEnvContent(
   );
 
   const providerVars = [
-    'AI_ENGINE_PROVIDER', 'OPENAI_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY',
-    'AGENT_MODEL_PLANNER', 'AGENT_MODEL_CODER', 'AGENT_MODEL_QA_REVIEWER',
+    'AI_ENGINE_PROVIDER', 'ANTHROPIC_API_KEY', 'CLAUDE_MODEL',
+    'CODEX_MODEL', 'CODEX_HOME', 'CODEX_CLI_PATH',
+    'OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_BASE_URL',
+    'GOOGLE_API_KEY', 'GOOGLE_MODEL',
+    'LITELLM_MODEL', 'LITELLM_API_BASE', 'LITELLM_API_KEY',
+    'OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'OPENROUTER_BASE_URL',
+    'ZHIPUAI_API_KEY', 'ZHIPUAI_MODEL', 'OLLAMA_MODEL', 'OLLAMA_BASE_URL',
+    'AGENT_MODEL_PLANNER', 'AGENT_MODEL_CODER',
+    'AGENT_MODEL_QA_REVIEWER', 'AUTO_CODE_RUNTIME_MODE',
+    'AGENT_RUNTIME_MODE_PLANNER', 'AGENT_RUNTIME_MODE_CODER',
+    'AGENT_RUNTIME_MODE_QA_REVIEWER', 'AGENT_RUNTIME_MODE_QA_FIXER',
+    'AUTO_CODE_RUNTIME_FALLBACK', 'AUTO_CODE_CLI_RUNNER_ROUTER',
   ];
   const newVars = providerVars.filter(v => !existingVarNames.has(v) && vars[v])
     .map(v => `${v}=${vars[v]}`);
@@ -234,6 +307,180 @@ function generateProviderEnvContent(
   }
 
   return updatedLines.join('\n');
+}
+
+function collectRuntimeCompatibilityErrors(
+  provider: AIEngineProvider,
+  vars: Record<string, string>
+): string[] {
+  const runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
+  const cliRunnerRouterEnabled = vars['AUTO_CODE_CLI_RUNNER_ROUTER'] === 'true';
+  if (
+    provider === 'claude' ||
+    provider === 'codex' ||
+    runtimeFallbackEnabled ||
+    cliRunnerRouterEnabled
+  ) {
+    return [];
+  }
+
+  const runtimeChecks: Array<[string, AgentRuntimeMode | undefined]> = [
+    ['default', (vars['AUTO_CODE_RUNTIME_MODE'] || 'full_autonomous') as AgentRuntimeMode],
+    ['planner', vars['AGENT_RUNTIME_MODE_PLANNER'] as AgentRuntimeMode | undefined],
+    ['coder', vars['AGENT_RUNTIME_MODE_CODER'] as AgentRuntimeMode | undefined],
+    ['QA reviewer', vars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as AgentRuntimeMode | undefined],
+    ['QA fixer', vars['AGENT_RUNTIME_MODE_QA_FIXER'] as AgentRuntimeMode | undefined],
+  ];
+
+  return runtimeChecks
+    .filter(([, mode]) => mode === 'full_autonomous')
+    .map(
+      ([label]) =>
+        `Non-Claude providers cannot use ${label} full_autonomous runtime unless runtime fallback or CLI runner routing is enabled`
+    );
+}
+
+type ProviderSmokeCliResult = {
+  success?: boolean;
+  provider?: string;
+  model?: string | null;
+  runtime_mode?: string;
+  message?: string;
+  response_excerpt?: string | null;
+  error_details?: string | null;
+};
+
+function textFromExecOutput(output: unknown): string {
+  if (Buffer.isBuffer(output)) {
+    return output.toString('utf-8');
+  }
+  return typeof output === 'string' ? output : '';
+}
+
+function extractProviderSmokeJson(output: string): ProviderSmokeCliResult | null {
+  const start = output.indexOf('{');
+  const end = output.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(output.slice(start, end + 1)) as unknown;
+    if (parsed && typeof parsed === 'object') {
+      return parsed as ProviderSmokeCliResult;
+    }
+  } catch (_error) {
+    return null;
+  }
+  return null;
+}
+
+function mapProviderSmokeResult(
+  result: ProviderSmokeCliResult
+): ProviderConnectionTestResult {
+  return {
+    success: result.success === true,
+    provider: result.provider ?? 'unknown',
+    model: result.model ?? null,
+    runtimeMode: result.runtime_mode ?? 'analysis_only',
+    message: result.message ?? 'Provider smoke check completed',
+    responseExcerpt: result.response_excerpt ?? null,
+    errorDetails: result.error_details ?? null,
+  };
+}
+
+function readProviderSmokeResult(
+  stdout: unknown,
+  stderr: unknown
+): ProviderConnectionTestResult | null {
+  const stdoutText = textFromExecOutput(stdout);
+  const stderrText = textFromExecOutput(stderr);
+  const parsed = extractProviderSmokeJson(stdoutText) ?? extractProviderSmokeJson(stderrText);
+  return parsed ? mapProviderSmokeResult(parsed) : null;
+}
+
+async function runProviderConnectionTest(
+  sourcePath: string,
+  envPath: string
+): Promise<IPCResult<ProviderConnectionTestResult>> {
+  const pythonPath = getToolPath('python');
+  if (!pythonPath) {
+    return {
+      success: false,
+      error: 'Python not found. Please install Python 3.12 or higher.'
+    };
+  }
+
+  const runPyPath = path.join(sourcePath, 'run.py');
+  if (!existsSync(runPyPath)) {
+    return {
+      success: false,
+      error: 'Backend run.py not found. Cannot run provider smoke check.'
+    };
+  }
+
+  const envVars = existsSync(envPath)
+    ? parseEnvFile(readEnvFileSafe(envPath))
+    : {};
+  const profileEnv = getBestAvailableProfileEnv().env;
+  const apiProfileEnv = await getAPIProfileEnv();
+  const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      pythonPath,
+      [
+        runPyPath,
+        '--provider-smoke',
+        '--json',
+        '--provider-smoke-timeout',
+        String(PROVIDER_SMOKE_TIMEOUT_SECONDS)
+      ],
+      {
+        cwd: sourcePath,
+        encoding: 'utf-8',
+        env: {
+          ...process.env,
+          ...envVars,
+          ...profileEnv,
+          ...apiProfileEnv,
+          ...codexProfileEnv,
+          PYTHONIOENCODING: 'utf-8'
+        },
+        maxBuffer: 1024 * 1024,
+        timeout: PROVIDER_SMOKE_PROCESS_TIMEOUT_MS,
+      }
+    );
+
+    const result = readProviderSmokeResult(stdout, stderr);
+    if (result) {
+      return { success: true, data: result };
+    }
+
+    return {
+      success: false,
+      error: 'Provider smoke check did not return JSON output.'
+    };
+  } catch (error) {
+    const err = error as Error & {
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+      killed?: boolean;
+      signal?: string | null;
+    };
+    const result = readProviderSmokeResult(err.stdout, err.stderr);
+    if (result) {
+      return { success: true, data: result };
+    }
+
+    const details = textFromExecOutput(err.stderr) || err.message;
+    return {
+      success: false,
+      error: err.killed || err.signal === 'SIGTERM'
+        ? 'Provider smoke check timed out.'
+        : details
+    };
+  }
 }
 
 /**
@@ -502,9 +749,17 @@ export function registerSettingsHandlers(
           openaiApiKey: envVars['OPENAI_API_KEY'] || '',
           googleApiKey: envVars['GOOGLE_API_KEY'] || '',
           openrouterApiKey: envVars['OPENROUTER_API_KEY'] || '',
+          zhipuaiApiKey: envVars['ZHIPUAI_API_KEY'] || '',
           plannerModel: envVars['AGENT_MODEL_PLANNER'] || '',
           coderModel: envVars['AGENT_MODEL_CODER'] || '',
-          qaModel: envVars['AGENT_MODEL_QA_REVIEWER'] || ''
+          qaModel: envVars['AGENT_MODEL_QA_REVIEWER'] || '',
+          runtimeMode: envVars['AUTO_CODE_RUNTIME_MODE'] as ProviderSettings['runtimeMode'],
+          plannerRuntimeMode: envVars['AGENT_RUNTIME_MODE_PLANNER'] as ProviderSettings['plannerRuntimeMode'],
+          coderRuntimeMode: envVars['AGENT_RUNTIME_MODE_CODER'] as ProviderSettings['coderRuntimeMode'],
+          qaReviewerRuntimeMode: envVars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as ProviderSettings['qaReviewerRuntimeMode'],
+          qaFixerRuntimeMode: envVars['AGENT_RUNTIME_MODE_QA_FIXER'] as ProviderSettings['qaFixerRuntimeMode'],
+          runtimeFallbackEnabled: envVars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true',
+          cliRunnerRouterEnabled: envVars['AUTO_CODE_CLI_RUNNER_ROUTER'] === 'true',
         };
 
         return { success: true, data: providerSettings };
@@ -1113,6 +1368,7 @@ export function registerSettingsHandlers(
           config.provider = (vars['AI_ENGINE_PROVIDER'] || 'claude') as import('../../shared/types').AIEngineProvider;
           config.anthropicApiKey = vars['ANTHROPIC_API_KEY'];
           config.claudeModel = vars['CLAUDE_MODEL'];
+          config.codexModel = vars['CODEX_MODEL'];
           config.openaiApiKey = vars['OPENAI_API_KEY'];
           config.openaiModel = vars['OPENAI_MODEL'];
           config.openaiBaseUrl = vars['OPENAI_BASE_URL'];
@@ -1124,8 +1380,20 @@ export function registerSettingsHandlers(
           config.openrouterApiKey = vars['OPENROUTER_API_KEY'];
           config.openrouterModel = vars['OPENROUTER_MODEL'];
           config.openrouterBaseUrl = vars['OPENROUTER_BASE_URL'];
+          config.zhipuaiApiKey = vars['ZHIPUAI_API_KEY'];
+          config.zhipuaiModel = vars['ZHIPUAI_MODEL'];
           config.ollamaModel = vars['OLLAMA_MODEL'];
           config.ollamaBaseUrl = vars['OLLAMA_BASE_URL'];
+          config.plannerModel = vars['AGENT_MODEL_PLANNER'];
+          config.coderModel = vars['AGENT_MODEL_CODER'];
+          config.qaModel = vars['AGENT_MODEL_QA_REVIEWER'];
+          config.runtimeMode = vars['AUTO_CODE_RUNTIME_MODE'] as import('../../shared/types').AgentRuntimeMode;
+          config.plannerRuntimeMode = vars['AGENT_RUNTIME_MODE_PLANNER'] as import('../../shared/types').AgentRuntimeMode;
+          config.coderRuntimeMode = vars['AGENT_RUNTIME_MODE_CODER'] as import('../../shared/types').AgentRuntimeMode;
+          config.qaReviewerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as import('../../shared/types').AgentRuntimeMode;
+          config.qaFixerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_FIXER'] as import('../../shared/types').AgentRuntimeMode;
+          config.runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
+          config.cliRunnerRouterEnabled = vars['AUTO_CODE_CLI_RUNNER_ROUTER'] === 'true';
         }
 
         return {
@@ -1158,34 +1426,55 @@ export function registerSettingsHandlers(
           };
         }
 
-        let existingVars: Record<string, string> = {};
-        try {
-          const content = readFileSync(envPath, 'utf-8');
-          existingVars = parseEnvFile(content);
-        } catch {
-          // File doesn't exist yet, start with empty vars
+        const existingContent = readEnvFileSafe(envPath);
+        const existingVars = parseEnvFile(existingContent);
+        const setEnvVar = (key: string, value: string | undefined): void => {
+          if (value !== undefined) {
+            existingVars[key] = value;
+          }
+        };
+
+        setEnvVar('AI_ENGINE_PROVIDER', config.provider);
+        setEnvVar('ANTHROPIC_API_KEY', config.anthropicApiKey);
+        setEnvVar('CLAUDE_MODEL', config.claudeModel);
+        setEnvVar('CODEX_MODEL', config.codexModel);
+        setEnvVar('OPENAI_API_KEY', config.openaiApiKey);
+        setEnvVar('OPENAI_MODEL', config.openaiModel);
+        setEnvVar('OPENAI_BASE_URL', config.openaiBaseUrl);
+        setEnvVar('GOOGLE_API_KEY', config.googleApiKey);
+        setEnvVar('GOOGLE_MODEL', config.googleModel);
+        setEnvVar('LITELLM_MODEL', config.litellmModel);
+        setEnvVar('LITELLM_API_BASE', config.litellmApiBase);
+        setEnvVar('LITELLM_API_KEY', config.litellmApiKey);
+        setEnvVar('OPENROUTER_API_KEY', config.openrouterApiKey);
+        setEnvVar('OPENROUTER_MODEL', config.openrouterModel);
+        setEnvVar('OPENROUTER_BASE_URL', config.openrouterBaseUrl);
+        setEnvVar('ZHIPUAI_API_KEY', config.zhipuaiApiKey);
+        setEnvVar('ZHIPUAI_MODEL', config.zhipuaiModel);
+        setEnvVar('OLLAMA_MODEL', config.ollamaModel);
+        setEnvVar('OLLAMA_BASE_URL', config.ollamaBaseUrl);
+        setEnvVar('AGENT_MODEL_PLANNER', config.plannerModel);
+        setEnvVar('AGENT_MODEL_CODER', config.coderModel);
+        setEnvVar('AGENT_MODEL_QA_REVIEWER', config.qaModel);
+        setEnvVar('AUTO_CODE_RUNTIME_MODE', config.runtimeMode);
+        setEnvVar('AGENT_RUNTIME_MODE_PLANNER', config.plannerRuntimeMode);
+        setEnvVar('AGENT_RUNTIME_MODE_CODER', config.coderRuntimeMode);
+        setEnvVar('AGENT_RUNTIME_MODE_QA_REVIEWER', config.qaReviewerRuntimeMode);
+        setEnvVar('AGENT_RUNTIME_MODE_QA_FIXER', config.qaFixerRuntimeMode);
+        if (config.runtimeFallbackEnabled !== undefined) {
+          setEnvVar(
+            'AUTO_CODE_RUNTIME_FALLBACK',
+            config.runtimeFallbackEnabled ? 'true' : 'false'
+          );
+        }
+        if (config.cliRunnerRouterEnabled !== undefined) {
+          setEnvVar(
+            'AUTO_CODE_CLI_RUNNER_ROUTER',
+            config.cliRunnerRouterEnabled ? 'true' : 'false'
+          );
         }
 
-        if (config.provider !== undefined) existingVars['AI_ENGINE_PROVIDER'] = config.provider;
-        if (config.anthropicApiKey !== undefined) existingVars['ANTHROPIC_API_KEY'] = config.anthropicApiKey;
-        if (config.claudeModel !== undefined) existingVars['CLAUDE_MODEL'] = config.claudeModel;
-        if (config.openaiApiKey !== undefined) existingVars['OPENAI_API_KEY'] = config.openaiApiKey;
-        if (config.openaiModel !== undefined) existingVars['OPENAI_MODEL'] = config.openaiModel;
-        if (config.openaiBaseUrl !== undefined) existingVars['OPENAI_BASE_URL'] = config.openaiBaseUrl;
-        if (config.googleApiKey !== undefined) existingVars['GOOGLE_API_KEY'] = config.googleApiKey;
-        if (config.googleModel !== undefined) existingVars['GOOGLE_MODEL'] = config.googleModel;
-        if (config.litellmModel !== undefined) existingVars['LITELLM_MODEL'] = config.litellmModel;
-        if (config.litellmApiBase !== undefined) existingVars['LITELLM_API_BASE'] = config.litellmApiBase;
-        if (config.litellmApiKey !== undefined) existingVars['LITELLM_API_KEY'] = config.litellmApiKey;
-        if (config.openrouterApiKey !== undefined) existingVars['OPENROUTER_API_KEY'] = config.openrouterApiKey;
-        if (config.openrouterModel !== undefined) existingVars['OPENROUTER_MODEL'] = config.openrouterModel;
-        if (config.openrouterBaseUrl !== undefined) existingVars['OPENROUTER_BASE_URL'] = config.openrouterBaseUrl;
-        if (config.ollamaModel !== undefined) existingVars['OLLAMA_MODEL'] = config.ollamaModel;
-        if (config.ollamaBaseUrl !== undefined) existingVars['OLLAMA_BASE_URL'] = config.ollamaBaseUrl;
-
-        const newContent = Object.entries(existingVars)
-          .map(([key, value]) => `${key}=${value}`)
-          .join('\n');
+        const newContent = generateProviderEnvContent(existingVars, existingContent);
 
         writeFileSync(envPath, newContent, 'utf-8');
 
@@ -1222,34 +1511,53 @@ export function registerSettingsHandlers(
         if (existsSync(envPath)) {
           const content = readFileSync(envPath, 'utf-8');
           const vars = parseEnvFile(content);
+          const profileEnv = getBestAvailableProfileEnv().env;
+          const apiProfileEnv = await getAPIProfileEnv();
+          const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
+          const effectiveVars = {
+            ...vars,
+            ...profileEnv,
+            ...apiProfileEnv,
+            ...codexProfileEnv,
+          };
 
           const provider = (vars['AI_ENGINE_PROVIDER'] || 'claude') as import('../../shared/types').AIEngineProvider;
 
-          if (vars['ANTHROPIC_API_KEY']) availableProviders.push('claude');
-          if (vars['OPENAI_API_KEY']) availableProviders.push('openai');
-          if (vars['GOOGLE_API_KEY']) availableProviders.push('google');
-          if (vars['LITELLM_MODEL']) availableProviders.push('litellm');
-          if (vars['OPENROUTER_API_KEY']) availableProviders.push('openrouter');
-          if (vars['OLLAMA_MODEL']) availableProviders.push('ollama');
+          if (hasClaudeProviderAuth(effectiveVars)) availableProviders.push('claude');
+          if (hasCodexProviderAuth(effectiveVars)) availableProviders.push('codex');
+          if (effectiveVars['OPENAI_API_KEY']) availableProviders.push('openai');
+          if (effectiveVars['GOOGLE_API_KEY']) availableProviders.push('google');
+          if (effectiveVars['LITELLM_MODEL']) availableProviders.push('litellm');
+          if (effectiveVars['OPENROUTER_API_KEY']) availableProviders.push('openrouter');
+          if (effectiveVars['ZHIPUAI_API_KEY']) availableProviders.push('zhipuai');
+          if (effectiveVars['OLLAMA_MODEL']) availableProviders.push('ollama');
+
+          errors.push(...collectRuntimeCompatibilityErrors(provider, vars));
 
           switch (provider) {
             case 'claude':
-              if (!vars['ANTHROPIC_API_KEY']) errors.push('Claude provider requires ANTHROPIC_API_KEY environment variable');
+              if (!hasClaudeProviderAuth(effectiveVars)) errors.push('Claude provider requires Claude OAuth credentials, an active API profile, or ANTHROPIC_API_KEY');
+              break;
+            case 'codex':
+              if (!hasCodexProviderAuth(effectiveVars)) errors.push('Codex provider requires an active Codex profile or CODEX_HOME');
               break;
             case 'openai':
-              if (!vars['OPENAI_API_KEY']) errors.push('OpenAI provider requires OPENAI_API_KEY environment variable');
+              if (!effectiveVars['OPENAI_API_KEY']) errors.push('OpenAI provider requires OPENAI_API_KEY environment variable');
               break;
             case 'google':
-              if (!vars['GOOGLE_API_KEY']) errors.push('Google provider requires GOOGLE_API_KEY environment variable');
+              if (!effectiveVars['GOOGLE_API_KEY']) errors.push('Google provider requires GOOGLE_API_KEY environment variable');
               break;
             case 'litellm':
-              if (!vars['LITELLM_MODEL']) errors.push('LiteLLM provider requires LITELLM_MODEL environment variable');
+              if (!effectiveVars['LITELLM_MODEL']) errors.push('LiteLLM provider requires LITELLM_MODEL environment variable');
               break;
             case 'openrouter':
-              if (!vars['OPENROUTER_API_KEY']) errors.push('OpenRouter provider requires OPENROUTER_API_KEY environment variable');
+              if (!effectiveVars['OPENROUTER_API_KEY']) errors.push('OpenRouter provider requires OPENROUTER_API_KEY environment variable');
+              break;
+            case 'zhipuai':
+              if (!effectiveVars['ZHIPUAI_API_KEY']) errors.push('ZhipuAI provider requires ZHIPUAI_API_KEY environment variable');
               break;
             case 'ollama':
-              if (!vars['OLLAMA_MODEL']) errors.push('Ollama provider requires OLLAMA_MODEL environment variable');
+              if (!effectiveVars['OLLAMA_MODEL']) errors.push('Ollama provider requires OLLAMA_MODEL environment variable');
               break;
           }
         } else {
@@ -1265,6 +1573,33 @@ export function registerSettingsHandlers(
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to validate provider config'
+        };
+      }
+    }
+  );
+
+  /**
+   * Run a real text-only provider smoke check through backend runtime code
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_CONFIG_TEST,
+    async (): Promise<IPCResult<ProviderConnectionTestResult>> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath || !envPath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        return await runProviderConnectionTest(sourcePath, envPath);
+      } catch (error) {
+        console.error('[PROVIDER_CONFIG_TEST] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to test provider config'
         };
       }
     }

@@ -461,13 +461,43 @@ def build_windows_command(cli_path: str, args: list[str]) -> list[str]:
         Command array suitable for subprocess.run
     """
     if is_windows() and cli_path.lower().endswith((".cmd", ".bat")):
-        # Use cmd.exe to execute .cmd/.bat files
+        # Use cmd.exe with CALL so quoted batch paths and arguments are preserved.
         cmd_exe = get_comspec_path()
-        # Properly escape arguments for Windows command line
-        escaped_args = subprocess.list2cmdline(args)
-        return [cmd_exe, "/d", "/s", "/c", f'"{cli_path}" {escaped_args}']
+        return [cmd_exe, "/d", "/c", "call", cli_path, *args]
 
     return [cli_path] + args
+
+
+def run_process(
+    args: list[str],
+    *,
+    cwd: Path | str | None = None,
+    input: str | bytes | None = None,
+    text: bool | None = None,
+    capture_output: bool = False,
+    timeout: int | float | None = None,
+    check: bool = False,
+) -> subprocess.CompletedProcess:
+    """
+    Run a subprocess through the shared platform command builder.
+
+    This keeps Windows .cmd/.bat handling centralized while preserving normal
+    subprocess.run semantics for callers that need stdout/stderr/return codes.
+    """
+    if not args:
+        raise ValueError("args must include an executable")
+
+    executable = find_executable(args[0]) or args[0]
+    command = build_windows_command(executable, args[1:])
+    return subprocess.run(
+        command,
+        cwd=str(cwd) if cwd is not None else None,
+        input=input,
+        text=text,
+        capture_output=capture_output,
+        timeout=timeout,
+        check=check,
+    )
 
 
 # ============================================================================

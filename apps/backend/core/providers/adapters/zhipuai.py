@@ -22,12 +22,24 @@ Provider Capabilities:
 """
 
 import asyncio
+import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
-from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
+from core.providers.adapters.openai_compat import (
+    assistant_message_from_tool_calls,
+    format_openai_tool_schema,
+    parse_openai_tool_calls,
+    provider_message_content,
+)
+from core.providers.base import (
+    AgentSession,
+    AIEngineProvider,
+    ProviderToolCallResponse,
+    SessionConfig,
+)
 from core.providers.exceptions import (
     ProviderConfigError,
     ProviderError,
@@ -89,7 +101,7 @@ class ZhipuAISession(AgentSession):
         self._temperature = temperature
         self._max_tokens = max_tokens
         self._timeout = timeout if timeout is not None else self.DEFAULT_TIMEOUT
-        self._messages: list[dict[str, str]] = []
+        self._messages: list[dict[str, Any]] = []
         self._client: Any = None
 
         # Add system prompt if provided
@@ -102,9 +114,24 @@ class ZhipuAISession(AgentSession):
         return self._model
 
     @property
-    def messages(self) -> list[dict[str, str]]:
+    def messages(self) -> list[dict[str, Any]]:
         """Get the conversation history."""
         return self._messages.copy()
+
+    def _get_client(self) -> Any:
+        """Return a lazily initialized ZhipuAI SDK client."""
+        try:
+            from zai import ZhipuAiClient
+        except ImportError as e:
+            raise ProviderNotInstalled(
+                "ZhipuAI provider requires the zai-sdk package. "
+                "Install with: pip install zai-sdk>=0.2.2\n"
+                f"Error: {e}"
+            )
+
+        if self._client is None:
+            self._client = ZhipuAiClient(api_key=self._api_key)
+        return self._client
 
     def add_user_message(self, content: str) -> None:
         """Add a user message to the conversation.
@@ -121,6 +148,33 @@ class ZhipuAISession(AgentSession):
             content: The assistant message content
         """
         self._messages.append({"role": "assistant", "content": content})
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        """Append a provider-native tool result to the session history."""
+        content = result if isinstance(result, str) else json.dumps(result)
+        self._messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": content,
+            }
+        )
+
+    def _completion_kwargs(
+        self, *, messages: list[dict[str, Any]], stream: bool
+    ) -> dict[str, Any]:
+        completion_kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "stream": stream,
+        }
+
+        if self._temperature is not None:
+            completion_kwargs["temperature"] = self._temperature
+        if self._max_tokens is not None:
+            completion_kwargs["max_tokens"] = self._max_tokens
+
+        return completion_kwargs
 
     async def complete(self, message: str, stream: bool = True) -> AsyncIterator[str]:
         """Send a message and get streaming response.
@@ -139,37 +193,21 @@ class ZhipuAISession(AgentSession):
         if not self._is_active:
             raise ProviderError("Session is closed")
 
-        try:
-            from zai import ZhipuAiClient
-        except ImportError as e:
-            raise ProviderNotInstalled(
-                "ZhipuAI provider requires the zai-sdk package. "
-                "Install with: pip install zai-sdk>=0.2.2\n"
-                f"Error: {e}"
-            )
-
-        # Initialize client if needed
-        if self._client is None:
-            self._client = ZhipuAiClient(api_key=self._api_key)
+        client = self._get_client()
 
         # Build completion kwargs (add user message only after successful completion
         # to avoid corrupting history on failure)
-        completion_kwargs: dict[str, Any] = {
-            "model": self._model,
-            "messages": self._messages + [{"role": "user", "content": message}],
-            "stream": stream,
-        }
-
-        if self._temperature is not None:
-            completion_kwargs["temperature"] = self._temperature
-        if self._max_tokens is not None:
-            completion_kwargs["max_tokens"] = self._max_tokens
+        request_messages = self._messages + [{"role": "user", "content": message}]
+        completion_kwargs = self._completion_kwargs(
+            messages=request_messages,
+            stream=stream,
+        )
 
         try:
             if stream:
                 # Streaming completion
                 response = await asyncio.wait_for(
-                    self._client.chat.completions.create(**completion_kwargs),
+                    client.chat.completions.create(**completion_kwargs),
                     timeout=self._timeout,
                 )
                 full_response = ""
@@ -188,7 +226,7 @@ class ZhipuAISession(AgentSession):
             else:
                 # Non-streaming completion
                 response = await asyncio.wait_for(
-                    self._client.chat.completions.create(**completion_kwargs),
+                    client.chat.completions.create(**completion_kwargs),
                     timeout=self._timeout,
                 )
                 if hasattr(response, "choices") and response.choices:
@@ -204,6 +242,63 @@ class ZhipuAISession(AgentSession):
         except Exception as e:
             logger.error(f"ZhipuAI completion error: {e}")
             raise ProviderError(f"ZhipuAI completion failed: {e}") from e
+
+    async def complete_with_tool_calls(
+        self,
+        message: str | None,
+        tools: list[dict[str, Any]],
+    ) -> ProviderToolCallResponse:
+        """Send a non-streaming ZhipuAI request with function tools."""
+        if not self._is_active:
+            raise ProviderError("Session is closed")
+
+        client = self._get_client()
+        request_messages = self._messages.copy()
+        if message:
+            request_messages.append({"role": "user", "content": message})
+
+        completion_kwargs = self._completion_kwargs(
+            messages=request_messages,
+            stream=False,
+        )
+        completion_kwargs["tools"] = [format_openai_tool_schema(tool) for tool in tools]
+        completion_kwargs["tool_choice"] = "auto"
+
+        try:
+            response = await asyncio.wait_for(
+                client.chat.completions.create(**completion_kwargs),
+                timeout=self._timeout,
+            )
+            if not hasattr(response, "choices") or not response.choices:
+                return ProviderToolCallResponse(content="")
+
+            message_obj = response.choices[0].message
+            content = provider_message_content(message_obj)
+            tool_calls = parse_openai_tool_calls(message_obj)
+            if message:
+                self.add_user_message(message)
+            if content or tool_calls:
+                self._messages.append(
+                    assistant_message_from_tool_calls(
+                        content=content,
+                        tool_calls=tool_calls,
+                    )
+                )
+            return ProviderToolCallResponse(
+                content=content,
+                tool_calls=tuple(tool_calls),
+            )
+        except TimeoutError:
+            logger.error(
+                "ZhipuAI tool-call API request timed out after %.1f seconds",
+                self._timeout,
+            )
+            raise ProviderError(
+                f"ZhipuAI tool-call API request timed out after {self._timeout}s"
+            )
+        except Exception as e:
+            logger.error(f"ZhipuAI tool-call completion error: {e}")
+            raise ProviderError(f"ZhipuAI tool-call completion failed: {e}") from e
 
     def clear_history(self, keep_system: bool = True) -> None:
         """Clear conversation history.

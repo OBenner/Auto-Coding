@@ -132,11 +132,12 @@ class TestProviderConfigValidation:
         assert config.is_valid() is True
 
     def test_is_valid_claude_without_key(self):
-        """Tests is_valid() returns False for claude without API key."""
+        """Tests is_valid() returns False for claude without API key or OAuth."""
         from core.providers.config import ProviderConfig
 
-        config = ProviderConfig(provider="claude", anthropic_api_key="")
-        assert config.is_valid() is False
+        with patch.dict(os.environ, {}, clear=True):
+            config = ProviderConfig(provider="claude", anthropic_api_key="")
+            assert config.is_valid() is False
 
     def test_is_valid_litellm_with_model(self):
         """Tests is_valid() returns True for litellm with model."""
@@ -174,13 +175,14 @@ class TestProviderConfigValidation:
         assert config.is_valid() is False
 
     def test_get_validation_errors_claude_missing_key(self):
-        """Tests get_validation_errors() for claude without key."""
+        """Tests get_validation_errors() for claude without key or OAuth."""
         from core.providers.config import ProviderConfig
 
-        config = ProviderConfig(provider="claude", anthropic_api_key="")
-        errors = config.get_validation_errors()
+        with patch.dict(os.environ, {}, clear=True):
+            config = ProviderConfig(provider="claude", anthropic_api_key="")
+            errors = config.get_validation_errors()
         assert len(errors) == 1
-        assert "ANTHROPIC_API_KEY" in errors[0]
+        assert "Claude OAuth credentials" in errors[0]
 
     def test_get_validation_errors_litellm_missing_model(self):
         """Tests get_validation_errors() for litellm without model."""
@@ -460,10 +462,11 @@ class TestFactoryFunctions:
         assert "litellm" in names
         assert "openrouter" in names
         assert "zhipuai" in names
+        assert "codex" in names
         assert "openai" in names
         assert "ollama" in names
         assert "google" in names
-        assert len(names) == 7
+        assert len(names) == 8
 
     def test_create_engine_provider_unknown_raises_error(self):
         """Tests create_engine_provider() raises error for unknown provider."""
@@ -625,6 +628,7 @@ class TestAIEngineProviderEnum:
         from core.providers.config import AIEngineProvider
 
         assert isinstance(AIEngineProvider.CLAUDE.value, str)
+        assert isinstance(AIEngineProvider.CODEX.value, str)
         assert isinstance(AIEngineProvider.OPENAI.value, str)
         assert isinstance(AIEngineProvider.GOOGLE.value, str)
         assert isinstance(AIEngineProvider.LITELLM.value, str)
@@ -636,7 +640,7 @@ class TestAIEngineProviderEnum:
         """Tests AIEngineProvider has expected number of values."""
         from core.providers.config import AIEngineProvider
 
-        assert len(AIEngineProvider) == 7
+        assert len(AIEngineProvider) == 8
 
 
 # =============================================================================

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from core.providers.config import ProviderConfig
 from core.providers.cost_calculator import estimate_session_cost
 from core.providers.task_router_config import load_model_routing_config
 from prediction.patterns import detect_work_type
@@ -52,13 +53,24 @@ class TaskComplexityRouter:
         self.config = load_model_routing_config(config_path)
         self.risk_analyzer = RiskAnalyzer()
 
-    def route(self, subtask: dict | None, agent_type: str | None = None) -> TaskRoute:
+    def route(
+        self,
+        subtask: dict | None,
+        agent_type: str | None = None,
+        provider_config: ProviderConfig | None = None,
+        allowed_providers: set[str] | None = None,
+    ) -> TaskRoute:
         """
         Analyze a subtask and return the selected provider/model route.
 
         Args:
             subtask: Subtask dictionary with description/files metadata.
             agent_type: Optional agent type for logging context.
+            provider_config: Current provider configuration. When provided, the
+                router avoids selecting providers that are not authenticated or
+                otherwise unavailable in the current environment.
+            allowed_providers: Optional provider allowlist imposed by runtime
+                capability requirements.
 
         Returns:
             TaskRoute containing the selected model and routing rationale.
@@ -82,7 +94,14 @@ class TaskComplexityRouter:
             subtask=safe_subtask,
         )
         complexity = self._complexity_level(complexity_score)
-        route_config = self.config["routing"][complexity]
+        provider_config = provider_config or ProviderConfig.from_env(
+            agent_type=agent_type
+        )
+        route_config = self._resolve_available_route_config(
+            complexity,
+            provider_config,
+            allowed_providers,
+        )
         estimated_tokens = self.config.get("estimated_tokens", {})
         cost_estimate = estimate_session_cost(
             route_config["model"],
@@ -97,6 +116,8 @@ class TaskComplexityRouter:
             risk_count=risk_count,
             file_count=self._file_count(safe_subtask),
         )
+        if route_config.get("fallback_reason"):
+            reasoning = f"{reasoning}; {route_config['fallback_reason']}"
 
         route = TaskRoute(
             provider=route_config["provider"],
@@ -124,6 +145,89 @@ class TaskComplexityRouter:
             route.reasoning,
         )
         return route
+
+    def _resolve_available_route_config(
+        self,
+        complexity: str,
+        provider_config: ProviderConfig,
+        allowed_providers: set[str] | None,
+    ) -> dict[str, Any]:
+        """Return a route config that points at an available provider."""
+        configured_route = dict(self.config["routing"][complexity])
+        configured_provider = str(configured_route["provider"]).lower()
+        allowed = {provider.lower() for provider in allowed_providers or set()}
+        provider_allowed = not allowed or configured_provider in allowed
+
+        if provider_allowed and provider_config.is_provider_available(
+            configured_provider
+        ):
+            return configured_route
+
+        fallback_provider = self._choose_fallback_provider(provider_config, allowed)
+        unavailable_reason = self._unavailable_reason(
+            configured_provider,
+            provider_allowed,
+        )
+        if not fallback_provider:
+            configured_route["fallback_reason"] = (
+                f"configured provider {configured_provider} is {unavailable_reason} and "
+                "no authenticated fallback provider was found"
+            )
+            return configured_route
+
+        fallback_model = provider_config.get_model_for(fallback_provider)
+        if not fallback_model:
+            configured_route["fallback_reason"] = (
+                f"configured provider {configured_provider} is {unavailable_reason}; "
+                f"fallback provider {fallback_provider} has no configured model"
+            )
+            return configured_route
+
+        return {
+            **configured_route,
+            "provider": fallback_provider,
+            "model": fallback_model,
+            "fallback_reason": (
+                f"configured provider {configured_provider} is {unavailable_reason}; "
+                f"using available provider {fallback_provider}"
+            ),
+        }
+
+    def _choose_fallback_provider(
+        self,
+        provider_config: ProviderConfig,
+        allowed_providers: set[str],
+    ) -> str | None:
+        """Choose the least surprising fallback provider for the current env."""
+        preferred = provider_config.provider.lower()
+        if self._is_allowed(
+            preferred,
+            allowed_providers,
+        ) and provider_config.is_provider_available(preferred):
+            return preferred
+
+        if self._is_allowed(
+            "claude",
+            allowed_providers,
+        ) and provider_config.is_provider_available("claude"):
+            return "claude"
+
+        available = [
+            provider
+            for provider in provider_config.available_provider_names()
+            if self._is_allowed(provider, allowed_providers)
+        ]
+        return available[0] if available else None
+
+    def _is_allowed(self, provider: str, allowed_providers: set[str]) -> bool:
+        """Return true when no runtime allowlist is set or provider is included."""
+        return not allowed_providers or provider.lower() in allowed_providers
+
+    def _unavailable_reason(self, provider: str, provider_allowed: bool) -> str:
+        """Explain why a configured provider was skipped."""
+        if provider_allowed:
+            return "unavailable"
+        return "not compatible with the selected runtime"
 
     def _calculate_complexity_score(
         self,

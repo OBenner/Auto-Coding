@@ -32,6 +32,19 @@ from ui import (
     print_status,
 )
 
+from .runtime import (
+    RuntimeCapabilityError,
+    create_runtime_session,
+    get_runtime_mode,
+    requirements_for_runtime_mode,
+    resolve_runtime_mode_with_fallback,
+    resolve_runtime_runner_route,
+    run_runtime_session,
+)
+from .runtime.artifacts import (
+    save_runtime_fallback_artifact,
+    save_runtime_runner_route_artifact,
+)
 from .session import run_agent_session, save_token_stats
 
 # Import plugin system for agent lifecycle hooks
@@ -65,13 +78,35 @@ def create_planner_session(
         max_thinking_tokens: Token budget for extended thinking
 
     Returns:
-        AgentSession with a .client property containing the SDK client
+        AgentSession for the configured provider
 
     Raises:
         ProviderError: If provider creation or session creation fails
     """
     # Create provider from environment configuration (with per-agent overrides)
     config = ProviderConfig.from_env(agent_type="planner")
+    runner_route = resolve_runtime_runner_route(
+        provider_config=config,
+        provider_name=config.provider,
+        requested_mode=get_runtime_mode("planner"),
+        phase="planning",
+    )
+    if runner_route.route_applied:
+        routed_model = config.get_model_for(runner_route.selected_provider)
+        if routed_model:
+            config = config.with_provider_model(
+                runner_route.selected_provider,
+                routed_model,
+            )
+            model = routed_model
+        logger.info("Runtime runner route selected: %s", runner_route.to_dict())
+        save_runtime_runner_route_artifact(
+            spec_dir=spec_dir,
+            route=runner_route,
+            phase="planning",
+            session_num=1,
+        )
+
     provider = create_engine_provider(config)
 
     # For Claude provider, pass provider-specific kwargs
@@ -166,8 +201,42 @@ async def run_followup_planner(
         max_thinking_tokens=planning_thinking_budget,
     )
 
-    # Get the underlying SDK client from the session
-    client = session.client
+    provider_name = getattr(session, "provider_name", None)
+    if not isinstance(provider_name, str) or not provider_name.strip():
+        raise ValueError(
+            "Planner session missing provider_name; provider-backed sessions must "
+            "declare their runtime provider"
+        )
+    requested_runtime_mode = get_runtime_mode("planner")
+    runtime_decision = resolve_runtime_mode_with_fallback(
+        provider_name=provider_name,
+        requested_mode=requested_runtime_mode,
+        phase="planning",
+    )
+    runtime_mode = runtime_decision.selected_mode
+    if runtime_decision.fallback_applied:
+        logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
+        fallback_artifact = save_runtime_fallback_artifact(
+            spec_dir=spec_dir,
+            decision=runtime_decision,
+            phase="planning",
+            session_num=1,
+        )
+        print_status(
+            f"Runtime fallback: {runtime_decision.requested_mode} -> "
+            f"{runtime_mode} ({provider_name}); details: {fallback_artifact}",
+            "warning",
+        )
+
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=session,
+        claude_session_runner=run_agent_session,
+        runtime_mode=runtime_mode,
+        project_dir=project_dir,
+        agent_type="planner",
+    )
+    client = runtime_session.context_client
 
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
@@ -214,15 +283,19 @@ async def run_followup_planner(
 
     try:
         # Run single planning session
-        async with client:
-            (
-                status,
-                response,
-                usage_metadata,
-                _,
-            ) = await run_agent_session(
-                client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
-            )
+        result = await run_runtime_session(
+            runtime_session,
+            prompt,
+            spec_dir,
+            verbose,
+            phase=LogPhase.PLANNING,
+            requirements=requirements_for_runtime_mode(
+                runtime_mode,
+                phase="planning",
+            ),
+        )
+        status = result.status
+        usage_metadata = result.usage_metadata
 
         # Call after_session hook for enabled agent plugins
         if PLUGINS_AVAILABLE:
@@ -341,6 +414,14 @@ async def run_followup_planner(
             )
             status_manager.update(state=BuildState.ERROR)
             return False
+
+    except RuntimeCapabilityError as e:
+        print()
+        print_status(str(e), "error")
+        if task_logger:
+            task_logger.log_error(str(e), LogPhase.PLANNING)
+        status_manager.update(state=BuildState.ERROR)
+        return False
 
     except Exception as e:
         print()

@@ -92,7 +92,16 @@ def test_route_maps_score_to_configured_low_medium_high_models():
     router.risk_analyzer = MagicMock()
 
     router.risk_analyzer.analyze_subtask_risks.return_value = []
-    low_route = router.route({"description": "Fix typo", "files_to_modify": []})
+    provider_config = ProviderConfig(
+        provider="openai",
+        anthropic_api_key="test-anthropic-key",
+        openai_api_key="test-openai-key",
+    )
+
+    low_route = router.route(
+        {"description": "Fix typo", "files_to_modify": []},
+        provider_config=provider_config,
+    )
 
     router.risk_analyzer.analyze_subtask_risks.return_value = [_issue("medium")] * 2
     medium_route = router.route(
@@ -101,6 +110,7 @@ def test_route_maps_score_to_configured_low_medium_high_models():
             "files_to_modify": ["api/users.py", "tests/test_users.py"],
         },
         agent_type="coder",
+        provider_config=provider_config,
     )
 
     router.risk_analyzer.analyze_subtask_risks.return_value = [_issue("high")] * 3
@@ -115,7 +125,8 @@ def test_route_maps_score_to_configured_low_medium_high_models():
                 "tests/test_auth.py",
             ],
             "files_to_create": ["auth/oauth2.py"],
-        }
+        },
+        provider_config=provider_config,
     )
 
     assert low_route.complexity == "low"
@@ -132,6 +143,50 @@ def test_route_maps_score_to_configured_low_medium_high_models():
         > medium_route.estimated_cost
         > low_route.estimated_cost
     )
+
+
+def test_route_falls_back_to_available_provider_when_route_provider_unavailable():
+    """Routing should not select OpenAI when only Claude auth is configured."""
+    router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
+    router.risk_analyzer = MagicMock()
+    router.risk_analyzer.analyze_subtask_risks.return_value = []
+
+    route = router.route(
+        {"description": "Fix typo", "files_to_modify": []},
+        provider_config=ProviderConfig(
+            provider="claude",
+            anthropic_api_key="test-anthropic-key",
+            claude_model="claude-sonnet-4-5-20250929",
+        ),
+    )
+
+    assert route.complexity == "low"
+    assert route.provider == "claude"
+    assert route.model == "claude-sonnet-4-5-20250929"
+    assert "configured provider openai is unavailable" in route.reasoning
+
+
+def test_route_respects_runtime_provider_allowlist():
+    """Runtime compatibility should override an otherwise available provider."""
+    router = TaskComplexityRouter(config_path=Path("/missing/model_routing.yaml"))
+    router.risk_analyzer = MagicMock()
+    router.risk_analyzer.analyze_subtask_risks.return_value = []
+
+    route = router.route(
+        {"description": "Fix typo", "files_to_modify": []},
+        provider_config=ProviderConfig(
+            provider="openai",
+            anthropic_api_key="test-anthropic-key",
+            openai_api_key="test-openai-key",
+            claude_model="claude-sonnet-4-5-20250929",
+        ),
+        allowed_providers={"claude"},
+    )
+
+    assert route.complexity == "low"
+    assert route.provider == "claude"
+    assert route.model == "claude-sonnet-4-5-20250929"
+    assert "not compatible with the selected runtime" in route.reasoning
 
 
 def test_yaml_loading_and_env_overrides(tmp_path, monkeypatch):

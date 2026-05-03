@@ -199,6 +199,48 @@ export interface ClaudeProfileSettings {
   autoSwitch?: ClaudeAutoSwitchSettings;
 }
 
+// ============================================
+// Codex/OpenAI Account Profile Types
+// ============================================
+
+/**
+ * A Codex/OpenAI account profile.
+ *
+ * Codex CLI stores ChatGPT/OpenAI account credentials under CODEX_HOME.
+ * These profiles keep each account isolated from the user's global ~/.codex
+ * directory and let Auto-Coding inject the selected profile into terminals
+ * and backend subprocesses.
+ */
+export interface CodexProfile {
+  id: string;
+  name: string;
+  /** Path used as CODEX_HOME for this account profile. */
+  configDir: string;
+  /** Whether this is the first/default profile in Auto-Coding. */
+  isDefault: boolean;
+  /** Optional display email discovered from Codex auth metadata, when available. */
+  email?: string;
+  /** Optional notes for the profile. */
+  description?: string;
+  /** When the profile was created. */
+  createdAt: Date;
+  /** Last time this profile was selected or used. */
+  lastUsedAt?: Date;
+  /**
+   * Whether this profile has Codex auth material on disk.
+   * Computed in the main process and not relied on as persisted truth.
+   */
+  isAuthenticated?: boolean;
+}
+
+/**
+ * Settings for Codex/OpenAI account profile management.
+ */
+export interface CodexProfileSettings {
+  profiles: CodexProfile[];
+  activeProfileId: string | null;
+}
+
 /**
  * Settings for automatic profile switching
  */

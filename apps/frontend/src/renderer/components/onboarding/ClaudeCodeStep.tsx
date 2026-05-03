@@ -9,6 +9,7 @@ interface ClaudeCodeStepProps {
   onNext: () => void;
   onBack: () => void;
   onSkip: () => void;
+  runtime?: 'claude' | 'codex';
 }
 
 type DetectionStatus = 'loading' | 'installed' | 'outdated' | 'not-found' | 'error';
@@ -19,8 +20,9 @@ type DetectionStatus = 'loading' | 'installed' | 'outdated' | 'not-found' | 'err
  * Checks if Claude Code CLI is installed, shows version information,
  * and provides one-click installation/update functionality.
  */
-export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) {
+export function ClaudeCodeStep({ onNext, onBack, onSkip, runtime = 'claude' }: ClaudeCodeStepProps) {
   const { t } = useTranslation('onboarding');
+  const cliKeys = runtime === 'codex' ? 'codexCli' : 'claudeCode';
   const [status, setStatus] = useState<DetectionStatus>('loading');
   const [versionInfo, setVersionInfo] = useState<ClaudeCodeVersionInfo | null>(null);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -34,14 +36,18 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
     setInstallSuccess(false);
 
     try {
-      if (!window.electronAPI?.checkClaudeCodeVersion) {
+      const checkVersionApi = runtime === 'codex'
+        ? window.electronAPI?.checkCodexCodeVersion
+        : window.electronAPI?.checkClaudeCodeVersion;
+
+      if (!checkVersionApi) {
         console.warn('[ClaudeCodeStep] Version check API not available');
         setStatus('error');
-        setError('Version check API not available');
+        setError(t(`${cliKeys}.errors.versionCheckApiMissing`));
         return;
       }
 
-      const result = await window.electronAPI.checkClaudeCodeVersion();
+      const result = await checkVersionApi();
 
       if (result.success && result.data) {
         setVersionInfo(result.data);
@@ -55,14 +61,14 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
         }
       } else {
         setStatus('error');
-        setError(result.error || 'Failed to check version');
+        setError(result.error || t(`${cliKeys}.errors.versionCheckFailed`));
       }
     } catch (err) {
       console.error('Failed to check Claude Code version:', err);
       setStatus('error');
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t(`${cliKeys}.errors.unknownError`));
     }
-  }, []);
+  }, [cliKeys, runtime, t]);
 
   useEffect(() => {
     checkVersion();
@@ -75,7 +81,7 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
 
     try {
       if (!window.electronAPI?.installClaudeCode) {
-        setError('Install API not available');
+        setError(t('claudeCode.errors.installApiMissing'));
         return;
       }
 
@@ -88,10 +94,10 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
           checkVersion();
         }, 5000);
       } else {
-        setError(result.error || 'Failed to start installation');
+        setError(result.error || t('claudeCode.errors.installFailed'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('claudeCode.errors.unknownError'));
     } finally {
       setIsInstalling(false);
     }
@@ -117,15 +123,15 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
   const getStatusText = () => {
     switch (status) {
       case 'loading':
-        return t('claudeCode.detecting', 'Checking Claude Code installation...');
+        return t(`${cliKeys}.detecting`);
       case 'installed':
-        return t('claudeCode.status.installed', 'Installed');
+        return t(`${cliKeys}.status.installed`);
       case 'outdated':
-        return t('claudeCode.status.outdated', 'Update Available');
+        return t(`${cliKeys}.status.outdated`);
       case 'not-found':
-        return t('claudeCode.status.notFound', 'Not Installed');
+        return t(`${cliKeys}.status.notFound`);
       case 'error':
-        return error || 'Error checking status';
+        return error || t(`${cliKeys}.errors.statusCheckFailed`);
     }
   };
 
@@ -155,10 +161,10 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
             </div>
           </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            {t('claudeCode.title', 'Claude Code CLI')}
+            {t(`${cliKeys}.title`)}
           </h1>
           <p className="mt-2 text-muted-foreground">
-            {t('claudeCode.description', 'Install or update the Claude Code CLI to enable AI-powered features')}
+            {t(`${cliKeys}.description`)}
           </p>
         </div>
 
@@ -171,10 +177,10 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
                 <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
                 <div className="flex-1 space-y-3">
                   <p className="text-sm font-medium text-foreground">
-                    {t('claudeCode.info.title', 'What is Claude Code?')}
+                    {t(`${cliKeys}.info.title`)}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {t('claudeCode.info.description', "Claude Code is Anthropic's official CLI that powers Auto Code's AI features. It provides secure authentication and direct access to Claude models.")}
+                    {t(`${cliKeys}.info.description`)}
                   </p>
                 </div>
               </div>
@@ -195,17 +201,17 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
                       <div className="mt-1 text-xs text-muted-foreground space-y-0.5">
                         {versionInfo.installed && (
                           <p>
-                            {t('claudeCode.version.current', 'Current Version')}: <span className="font-mono">{versionInfo.installed}</span>
+                            {t(`${cliKeys}.version.current`)}: <span className="font-mono">{versionInfo.installed}</span>
                           </p>
                         )}
                         {versionInfo.latest && versionInfo.latest !== 'unknown' && (
                           <p>
-                            {t('claudeCode.version.latest', 'Latest Version')}: <span className="font-mono">{versionInfo.latest}</span>
+                            {t(`${cliKeys}.version.latest`)}: <span className="font-mono">{versionInfo.latest}</span>
                           </p>
                         )}
                         {versionInfo.path && (
                           <p className="truncate max-w-md" title={versionInfo.path}>
-                            Path: <span className="font-mono">{versionInfo.path}</span>
+                            {t(`${cliKeys}.version.path`)}: <span className="font-mono">{versionInfo.path}</span>
                           </p>
                         )}
                       </div>
@@ -250,7 +256,7 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
           )}
 
           {/* Install/Update button */}
-          {(status === 'not-found' || status === 'outdated') && !installSuccess && (
+          {runtime === 'claude' && (status === 'not-found' || status === 'outdated') && !installSuccess && (
             <div className="flex justify-center">
               <Button
                 onClick={handleInstall}
@@ -261,14 +267,14 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
                 {isInstalling ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('claudeCode.install.inProgress', 'Installing...')}
+                    {t('claudeCode.install.inProgress')}
                   </>
                 ) : (
                   <>
                     <Download className="h-4 w-4" />
                     {status === 'outdated'
-                      ? t('claudeCode.install.updating', 'Update Claude Code')
-                      : t('claudeCode.install.button', 'Install Claude Code')
+                      ? t('claudeCode.install.updating')
+                      : t('claudeCode.install.button')
                     }
                   </>
                 )}
@@ -282,9 +288,11 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
               variant="link"
               size="sm"
               className="text-muted-foreground gap-1"
-              onClick={() => window.electronAPI?.openExternal?.('https://claude.ai/code')}
+              onClick={() => window.electronAPI?.openExternal?.(
+                runtime === 'codex' ? 'https://developers.openai.com/codex' : 'https://claude.ai/code'
+              )}
             >
-              {t('claudeCode.learnMore', 'Learn more about Claude Code')}
+              {t(`${cliKeys}.learnMore`)}
               <ExternalLink className="h-3 w-3" />
             </Button>
           </div>
@@ -293,20 +301,20 @@ export function ClaudeCodeStep({ onNext, onBack, onSkip }: ClaudeCodeStepProps) 
         {/* Navigation buttons */}
         <div className="flex justify-between mt-8 pt-6 border-t border-border">
           <Button variant="outline" onClick={onBack}>
-            {t('common:back', 'Back')}
+            {t('common:buttons.back')}
           </Button>
 
           <div className="flex gap-3">
             <Button variant="ghost" onClick={onSkip}>
-              {t('common:skip', 'Skip')}
+              {t('common:buttons.skip')}
             </Button>
             <Button
               onClick={onNext}
               disabled={status === 'loading'}
             >
               {status === 'installed'
-                ? t('common:continue', 'Continue')
-                : t('common:continueAnyway', 'Continue Anyway')
+                ? t('common:buttons.continue')
+                : t('common:buttons.continueAnyway')
               }
             </Button>
           </div>

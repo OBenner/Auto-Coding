@@ -24,6 +24,23 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class ProviderToolCall:
+    """Provider-native tool/function call normalized for runtime adapters."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass
+class ProviderToolCallResponse:
+    """Provider response containing optional text and tool/function calls."""
+
+    content: str
+    tool_calls: tuple[ProviderToolCall, ...] = ()
+
+
+@dataclass
 class SessionConfig:
     """Configuration for creating an agent session.
 

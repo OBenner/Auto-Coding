@@ -115,6 +115,7 @@
     "add": "Ajouter",
     "gotIt": "Compris",
     "continue": "Continuer",
+    "continueAnyway": "Continuer quand même",
     "saving": "Enregistrement..."
   },
   "actions": {
@@ -632,6 +633,12 @@
     "step1": "Appuyez sur Entrée pour démarrer l'authentification",
     "step2": "Complétez l'authentification dans votre navigateur",
     "step3": "Revenez ici - l'authentification sera détectée automatiquement",
+    "codex": {
+      "instructionTitle": "Authentification Codex",
+      "step1": "Appuyez sur Entrée pour lancer codex login",
+      "step2": "Terminez la connexion OpenAI/Codex dans votre navigateur",
+      "step3": "Revenez ici et fermez ce terminal après la connexion"
+    },
     "authFailed": "Échec de l'authentification",
     "connecting": "Connexion...",
     "authenticate": "Authentifier : {{profileName}}",

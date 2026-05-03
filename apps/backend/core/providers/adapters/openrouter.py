@@ -23,12 +23,24 @@ Note:
     Python package with a custom base_url pointing to OpenRouter's endpoint.
 """
 
+import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
-from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
+from core.providers.adapters.openai_compat import (
+    assistant_message_from_tool_calls,
+    format_openai_tool_schema,
+    parse_openai_tool_calls,
+    provider_message_content,
+)
+from core.providers.base import (
+    AgentSession,
+    AIEngineProvider,
+    ProviderToolCallResponse,
+    SessionConfig,
+)
 from core.providers.exceptions import (
     ProviderConfigError,
     ProviderError,
@@ -111,7 +123,7 @@ class OpenRouterSession(AgentSession):
         self._base_url = base_url
         self._temperature = temperature
         self._max_tokens = max_tokens
-        self._messages: list[dict[str, str]] = []
+        self._messages: list[dict[str, Any]] = []
         self._client: Any = None
 
         # Add system prompt if provided
@@ -124,7 +136,7 @@ class OpenRouterSession(AgentSession):
         return self._model
 
     @property
-    def messages(self) -> list[dict[str, str]]:
+    def messages(self) -> list[dict[str, Any]]:
         """Get the conversation history."""
         return self._messages.copy()
 
@@ -174,6 +186,31 @@ class OpenRouterSession(AgentSession):
         """
         self._messages.append({"role": "assistant", "content": content})
 
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        """Append a provider-native tool result to the session history."""
+        content = result if isinstance(result, str) else json.dumps(result)
+        self._messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": content,
+            }
+        )
+
+    def _completion_kwargs(self, *, stream: bool) -> dict[str, Any]:
+        completion_kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": self._messages,
+            "stream": stream,
+        }
+
+        if self._temperature is not None:
+            completion_kwargs["temperature"] = self._temperature
+        if self._max_tokens is not None:
+            completion_kwargs["max_tokens"] = self._max_tokens
+
+        return completion_kwargs
+
     async def complete(self, message: str, stream: bool = True) -> AsyncIterator[str]:
         """Send a message and get streaming response.
 
@@ -196,17 +233,7 @@ class OpenRouterSession(AgentSession):
         # Add user message to history
         self.add_user_message(message)
 
-        # Build completion kwargs
-        completion_kwargs: dict[str, Any] = {
-            "model": self._model,
-            "messages": self._messages,
-            "stream": stream,
-        }
-
-        if self._temperature is not None:
-            completion_kwargs["temperature"] = self._temperature
-        if self._max_tokens is not None:
-            completion_kwargs["max_tokens"] = self._max_tokens
+        completion_kwargs = self._completion_kwargs(stream=stream)
 
         try:
             if stream:
@@ -236,6 +263,46 @@ class OpenRouterSession(AgentSession):
         except Exception as e:
             logger.error(f"OpenRouter completion error: {e}")
             raise ProviderError(f"OpenRouter completion failed: {e}") from e
+
+    async def complete_with_tool_calls(
+        self,
+        message: str | None,
+        tools: list[dict[str, Any]],
+    ) -> ProviderToolCallResponse:
+        """Send a non-streaming request with OpenRouter function tools."""
+        if not self._is_active:
+            raise ProviderError("Session is closed")
+
+        client = self._get_client()
+        if message:
+            self.add_user_message(message)
+
+        completion_kwargs = self._completion_kwargs(stream=False)
+        completion_kwargs["tools"] = [format_openai_tool_schema(tool) for tool in tools]
+        completion_kwargs["tool_choice"] = "auto"
+
+        try:
+            response = await client.chat.completions.create(**completion_kwargs)
+            if not hasattr(response, "choices") or not response.choices:
+                return ProviderToolCallResponse(content="")
+
+            message_obj = response.choices[0].message
+            content = provider_message_content(message_obj)
+            tool_calls = parse_openai_tool_calls(message_obj)
+            if content or tool_calls:
+                self._messages.append(
+                    assistant_message_from_tool_calls(
+                        content=content,
+                        tool_calls=tool_calls,
+                    )
+                )
+            return ProviderToolCallResponse(
+                content=content,
+                tool_calls=tuple(tool_calls),
+            )
+        except Exception as e:
+            logger.error(f"OpenRouter tool-call completion error: {e}")
+            raise ProviderError(f"OpenRouter tool-call completion failed: {e}") from e
 
     def clear_history(self, keep_system: bool = True) -> None:
         """Clear conversation history.

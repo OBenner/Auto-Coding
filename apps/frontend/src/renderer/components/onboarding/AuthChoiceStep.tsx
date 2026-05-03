@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { LogIn, Key, Shield } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { LogIn, Key, Shield, Sparkles } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { ProfileEditDialog } from '../settings/ProfileEditDialog';
@@ -10,6 +11,7 @@ interface AuthChoiceStepProps {
   onBack: () => void;
   onSkip: () => void;
   onAPIKeyPathComplete?: () => void; // Called when profile is created (skips oauth)
+  onCodexOAuthPath?: () => void;
 }
 
 interface AuthOptionCardProps {
@@ -61,7 +63,8 @@ function AuthOptionCard({ icon, title, description, onClick, variant = 'default'
  * AC Coverage:
  * - AC1: Displays first-run screen with two clear options
  */
-export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathComplete }: AuthChoiceStepProps) {
+export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathComplete, onCodexOAuthPath }: AuthChoiceStepProps) {
+  const { t } = useTranslation('onboarding');
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
   const profiles = useSettingsStore((state) => state.profiles);
 
@@ -82,8 +85,21 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
     onNext();
   };
 
+  const handleCodexOAuthChoice = () => {
+    if (onCodexOAuthPath) {
+      onCodexOAuthPath();
+      return;
+    }
+    onNext();
+  };
+
   // API Key button handler - opens profile dialog
   const handleAPIKeyChoice = () => {
+    if (profiles.length > 0 && onAPIKeyPathComplete) {
+      onAPIKeyPathComplete();
+      return;
+    }
+
     setIsProfileDialogOpen(true);
   };
 
@@ -101,6 +117,15 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
     }
   };
 
+  // Profile dialog save handler - ProfileEditDialog only calls this after a
+  // successful create/update, so it is more reliable than inferring creation
+  // from store state during dialog close.
+  const handleProfileSaved = () => {
+    if (onAPIKeyPathComplete) {
+      onAPIKeyPathComplete();
+    }
+  };
+
   return (
     <>
       <div className="flex h-full flex-col items-center justify-center px-8 py-6">
@@ -113,27 +138,35 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
               </div>
             </div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight">
-              Choose Your Authentication Method
+              {t('authChoice.title')}
             </h1>
             <p className="mt-3 text-muted-foreground text-lg">
-              Select how you want to authenticate with Claude. You can change this later in Settings.
+              {t('authChoice.subtitle')}
             </p>
           </div>
 
           {/* Authentication Options - Equal Visual Weight */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
             <AuthOptionCard
               icon={<LogIn className="h-6 w-6" />}
-              title="Sign in with Anthropic"
-              description="Use your Anthropic account to authenticate. Simple and secure OAuth flow."
+              title={t('authChoice.oauthTitle')}
+              description={t('authChoice.oauthDesc')}
               onClick={handleOAuthChoice}
               variant="oauth"
               data-testid="auth-option-oauth"
             />
             <AuthOptionCard
+              icon={<Sparkles className="h-6 w-6" />}
+              title={t('authChoice.codexTitle')}
+              description={t('authChoice.codexDesc')}
+              onClick={handleCodexOAuthChoice}
+              variant="oauth"
+              data-testid="auth-option-codex"
+            />
+            <AuthOptionCard
               icon={<Key className="h-6 w-6" />}
-              title="Use Custom API Key"
-              description="Bring your own API key from Anthropic or a compatible API provider. ⚠️ Highly experimental — may incur significant costs."
+              title={t('authChoice.apiKeyTitle')}
+              description={t('authChoice.apiKeyDesc')}
               onClick={handleAPIKeyChoice}
               data-testid="auth-option-apikey"
             />
@@ -142,7 +175,7 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
           {/* Info text */}
           <div className="text-center mb-8">
             <p className="text-muted-foreground text-sm">
-              Both options provide full access to Claude Code features. Choose based on your preference.
+              {t('authChoice.storageNote')}
             </p>
           </div>
 
@@ -154,7 +187,7 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
               onClick={onSkip}
               className="text-muted-foreground hover:text-foreground"
             >
-              Skip for now
+              {t('authChoice.skip')}
             </Button>
           </div>
         </div>
@@ -164,6 +197,7 @@ export function AuthChoiceStep({ onNext, onBack: _onBack, onSkip, onAPIKeyPathCo
       <ProfileEditDialog
         open={isProfileDialogOpen}
         onOpenChange={handleProfileDialogClose}
+        onSaved={handleProfileSaved}
         // No profile prop = create mode
       />
     </>

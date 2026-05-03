@@ -7,7 +7,8 @@ import type {
   SourceEnvCheckResult,
   ToolDetectionResult,
   AIProviderConfig,
-  ProviderConfigValidation
+  ProviderConfigValidation,
+  ProviderConnectionTestResult
 } from '../../shared/types';
 
 export interface SettingsAPI {
@@ -40,6 +41,7 @@ export interface SettingsAPI {
   getProviderConfig: () => Promise<IPCResult<AIProviderConfig>>;
   updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
   validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
+  testProviderConfig: () => Promise<IPCResult<ProviderConnectionTestResult>>;
 }
 
 export const createSettingsAPI = (): SettingsAPI => ({
@@ -93,5 +95,8 @@ export const createSettingsAPI = (): SettingsAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_UPDATE, config),
 
   validateProviderConfig: (): Promise<IPCResult<ProviderConfigValidation>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_VALIDATE)
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_VALIDATE),
+
+  testProviderConfig: (): Promise<IPCResult<ProviderConnectionTestResult>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_TEST)
 });

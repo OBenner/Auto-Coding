@@ -141,6 +141,14 @@ class GraphitiClient:
             return True
 
         try:
+            if not self.config.has_llm_provider_credentials():
+                logger.info(
+                    "Graphiti LLM provider %s is not configured; "
+                    "skipping memory context",
+                    self.config.llm_provider,
+                )
+                return False
+
             # Import Graphiti core
             from graphiti_core import Graphiti
 

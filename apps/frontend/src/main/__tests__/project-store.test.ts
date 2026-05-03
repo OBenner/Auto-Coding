@@ -101,8 +101,13 @@ function setupTestDirs(): void {
 
 // Cleanup test directories
 function cleanupTestDirs(): void {
-  if (existsSync(TEST_DIR)) {
-    rmSync(TEST_DIR, { recursive: true, force: true });
+  if (TEST_DIR && existsSync(TEST_DIR)) {
+    rmSync(TEST_DIR, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 50
+    });
   }
 }
 
