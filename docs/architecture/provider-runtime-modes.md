@@ -284,7 +284,8 @@ Auto Code validates and executes these actions locally:
   `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and
   `generic_edit_summary.md`;
 - transaction summaries include tool sequences, affected/mutated paths,
-  partial-failure ids, whether recovery was resolved by a later non-finish
+  partial-failure ids, the last partial-failure path set, whether recovery was
+  resolved by a later covered inspection/repair or workspace verification
   transaction, and any unresolved partial failures.
 
 This mode is intentionally not full autonomous parity. It exposes the local

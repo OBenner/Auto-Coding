@@ -147,6 +147,7 @@ MUTATING_LOCAL_ACTIONS = frozenset(
         "run_command",
     }
 )
+WORKSPACE_RECOVERY_TOOLS = frozenset({"git_status", "git_diff", "run_command"})
 
 
 class GenericEditRuntimeSession:
@@ -2003,6 +2004,11 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
     last_partial_failure_index = (
         max(partial_failure_indexes) if partial_failure_indexes else None
     )
+    last_partial_failure = (
+        transactions[last_partial_failure_index]
+        if last_partial_failure_index is not None
+        else None
+    )
     recovery_resolved = True
     if last_partial_failure_index is not None:
         recovery_transaction_ids = [
@@ -2011,25 +2017,115 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
                 transactions[last_partial_failure_index + 1 :],
                 start=last_partial_failure_index + 1,
             )
-            if bool(transaction.get("can_resolve_partial_failure"))
+            if transaction_resolves_partial_failure(
+                transaction=transaction,
+                partial_failure=last_partial_failure,
+            )
         ]
         recovery_resolved = bool(recovery_transaction_ids)
     partial_failure_count = status_counts.get("partial_failure", 0)
     unresolved_partial_failure_ids = (
         [] if recovery_resolved else partial_failure_transaction_ids
     )
+    last_partial_failure_id = (
+        str(last_partial_failure.get("id"))
+        if isinstance(last_partial_failure, dict) and last_partial_failure.get("id")
+        else None
+    )
+    last_partial_failure_affected_paths: list[str] = []
+    last_partial_failure_mutated_paths: list[str] = []
+    if isinstance(last_partial_failure, dict):
+        last_partial_failure_affected_paths = list(
+            last_partial_failure.get("affected_paths") or []
+        )
+        last_partial_failure_mutated_paths = list(
+            last_partial_failure.get("mutated_paths") or []
+        )
     return {
         "transactions": transactions,
         "transaction_count": len(transactions),
         "transaction_status_counts": status_counts,
         "partial_failure_count": partial_failure_count,
         "partial_failure_transaction_ids": partial_failure_transaction_ids,
+        "last_partial_failure_id": last_partial_failure_id,
+        "last_partial_failure_affected_paths": last_partial_failure_affected_paths,
+        "last_partial_failure_mutated_paths": last_partial_failure_mutated_paths,
         "recovery_transaction_ids": recovery_transaction_ids,
         "recovery_required": partial_failure_count > 0,
         "recovery_resolved": recovery_resolved,
         "unresolved_partial_failure_count": len(unresolved_partial_failure_ids),
         "unresolved_partial_failure_ids": unresolved_partial_failure_ids,
     }
+
+
+def transaction_resolves_partial_failure(
+    *,
+    transaction: dict[str, Any],
+    partial_failure: dict[str, Any] | None,
+) -> bool:
+    """Return true when a later transaction covers a partial mutation failure."""
+    if partial_failure is None:
+        return False
+    if not bool(transaction.get("can_resolve_partial_failure")):
+        return False
+
+    tool_sequence = {str(tool) for tool in transaction.get("tool_sequence") or ()}
+    if tool_sequence & WORKSPACE_RECOVERY_TOOLS:
+        return True
+
+    partial_paths = transaction_path_set(partial_failure, prefer_mutated=True)
+    if not partial_paths:
+        return True
+
+    recovery_paths = transaction_path_set(transaction, prefer_mutated=False)
+    return path_sets_overlap(partial_paths, recovery_paths)
+
+
+def transaction_path_set(
+    transaction: dict[str, Any],
+    *,
+    prefer_mutated: bool,
+) -> set[str]:
+    """Return normalized transaction paths used for recovery coverage checks."""
+    fields = (
+        ("mutated_paths", "affected_paths")
+        if prefer_mutated
+        else ("affected_paths", "mutated_paths")
+    )
+    paths: set[str] = set()
+    for field_name in fields:
+        value = transaction.get(field_name)
+        if isinstance(value, list):
+            paths.update(str(path) for path in value if path)
+        if paths and prefer_mutated:
+            break
+    return paths
+
+
+def path_sets_overlap(left: set[str], right: set[str]) -> bool:
+    """Return true when two workspace path sets overlap or one covers the other."""
+    for left_path in left:
+        for right_path in right:
+            if workspace_paths_overlap(left_path, right_path):
+                return True
+    return False
+
+
+def workspace_paths_overlap(left: str, right: str) -> bool:
+    """Return true when two workspace-relative paths refer to overlapping scopes."""
+    left = normalize_transaction_path(left)
+    right = normalize_transaction_path(right)
+    if not left or not right:
+        return False
+    if left == "." or right == "." or left == right:
+        return True
+    return left.startswith(f"{right}/") or right.startswith(f"{left}/")
+
+
+def normalize_transaction_path(path: str) -> str:
+    """Normalize a transaction path for stable prefix comparisons."""
+    normalized = path.replace("\\", "/").strip().strip("/")
+    return normalized or "."
 
 
 def build_timeline_entry(

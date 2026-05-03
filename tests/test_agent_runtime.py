@@ -2476,6 +2476,12 @@ async def test_generic_edit_runtime_records_partial_transactions_for_recovery(
         "complete": 1,
     }
     assert result_artifact["partial_failure_transaction_ids"] == ["json_actions-1"]
+    assert result_artifact["last_partial_failure_id"] == "json_actions-1"
+    assert result_artifact["last_partial_failure_affected_paths"] == [
+        "missing.txt",
+        "partial.txt",
+    ]
+    assert result_artifact["last_partial_failure_mutated_paths"] == ["partial.txt"]
     assert result_artifact["recovery_transaction_ids"] == ["json_actions-2"]
     assert result_artifact["recovery_resolved"] is True
     assert result_artifact["unresolved_partial_failure_count"] == 0
@@ -2554,6 +2560,68 @@ def test_generic_edit_transaction_summary_does_not_treat_finish_as_recovery():
     assert summary["recovery_transaction_ids"] == []
     assert summary["recovery_resolved"] is False
     assert summary["unresolved_partial_failure_ids"] == ["json_actions-1"]
+
+
+def test_generic_edit_transaction_summary_requires_recovery_path_coverage():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["broken.txt", "missing.txt"],
+                    "mutated_paths": ["broken.txt"],
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-2",
+                    "status": "complete",
+                    "tool_sequence": ["read_file"],
+                    "affected_paths": ["unrelated.txt"],
+                    "mutated_paths": [],
+                    "can_resolve_partial_failure": True,
+                }
+            },
+        ]
+    )
+
+    assert summary["partial_failure_count"] == 1
+    assert summary["last_partial_failure_id"] == "json_actions-1"
+    assert summary["recovery_transaction_ids"] == []
+    assert summary["recovery_resolved"] is False
+    assert summary["unresolved_partial_failure_ids"] == ["json_actions-1"]
+
+
+def test_generic_edit_transaction_summary_allows_workspace_recovery_verification():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["src/broken.py"],
+                    "mutated_paths": ["src/broken.py"],
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-2",
+                    "status": "complete",
+                    "tool_sequence": ["git_status"],
+                    "affected_paths": ["."],
+                    "mutated_paths": [],
+                    "can_resolve_partial_failure": True,
+                }
+            },
+        ]
+    )
+
+    assert summary["recovery_transaction_ids"] == ["json_actions-2"]
+    assert summary["recovery_resolved"] is True
+    assert summary["unresolved_partial_failure_ids"] == []
 
 
 @pytest.mark.asyncio
