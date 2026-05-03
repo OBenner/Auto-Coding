@@ -69,6 +69,7 @@ GOOGLE_MODELS = [
 
 # Default model
 DEFAULT_GOOGLE_MODEL = "gemini-2.0-flash"
+SESSION_CLOSED_MESSAGE = "Session is closed"
 
 
 class GoogleAgentSession(AgentSession):
@@ -141,7 +142,7 @@ class GoogleAgentSession(AgentSession):
             ProviderError: If session is closed or query fails
         """
         if not self._is_active:
-            raise ProviderError("Session is closed")
+            raise ProviderError(SESSION_CLOSED_MESSAGE)
 
         # Add to message history
         self._message_history.append({"role": "user", "content": message})
@@ -160,7 +161,7 @@ class GoogleAgentSession(AgentSession):
             ProviderError: If session is closed or no query was sent
         """
         if not self._is_active:
-            raise ProviderError("Session is closed")
+            raise ProviderError(SESSION_CLOSED_MESSAGE)
 
         if self._chat is None:
             raise ProviderError("No query sent. Call query() first.")
@@ -194,7 +195,7 @@ class GoogleAgentSession(AgentSession):
     ) -> ProviderToolCallResponse:
         """Send a Gemini request with provider-native function declarations."""
         if not self._is_active:
-            raise ProviderError("Session is closed")
+            raise ProviderError(SESSION_CLOSED_MESSAGE)
 
         if message:
             self._message_history.append(

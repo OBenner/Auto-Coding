@@ -443,12 +443,12 @@ def cli_runner_rejection_reasons(
     return tuple(reasons)
 
 
-def cli_runner_installation_rejection(profile: CliRunnerProfile) -> tuple[str, ...]:
+def cli_runner_installation_rejection(profile: CliRunnerProfile) -> list[str]:
     """Return installation-related rejection reasons for one runner profile."""
     availability = detect_cli_runner_availability(profile)
     if availability.executable_present:
-        return ()
-    return (availability.status,)
+        return []
+    return [availability.status]
 
 
 def cli_runner_profiles_as_dicts(

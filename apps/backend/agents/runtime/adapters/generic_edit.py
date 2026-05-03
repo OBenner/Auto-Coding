@@ -118,6 +118,23 @@ class NativeToolExecutionResult:
         )
 
 
+@dataclass
+class JsonActionParseResult:
+    """Parsed JSON action payload or a terminal parse/validation error."""
+
+    actions: list[dict[str, Any]]
+    terminal_result: AgentRunResult | None = None
+
+
+@dataclass
+class JsonActionExecutionResult:
+    """Local action execution state for one JSON action iteration."""
+
+    action_results: list[ToolActionResult]
+    terminal_result: AgentRunResult | None = None
+    cancelled: bool = False
+
+
 MUTATING_LOCAL_ACTIONS = frozenset(
     {
         "write_file",
@@ -226,201 +243,69 @@ class GenericEditRuntimeSession:
 
         for iteration in range(1, self.max_iterations + 1):
             if self._cancel_requested:
-                return AgentRunResult(
-                    status="cancelled",
-                    response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
-                )
+                return generic_edit_cancelled_result()
             response_text = await self._complete(prompt)
             if self._cancel_requested:
-                return AgentRunResult(
-                    status="cancelled",
-                    response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
-                )
-            iteration_entry: dict[str, Any] = {
-                "iteration": iteration,
-                "response_excerpt": response_text[:1000],
-                "response_bytes": len(response_text.encode("utf-8")),
-                "actions": [],
-            }
+                return generic_edit_cancelled_result()
+            iteration_entry = json_action_iteration_entry(iteration, response_text)
+            parsed = self._parse_json_actions(
+                response_text=response_text,
+                iteration_entry=iteration_entry,
+                trace=trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
+            if parsed.terminal_result is not None:
+                return parsed.terminal_result
 
-            try:
-                response = parse_generic_edit_response(response_text)
-                actions = normalize_actions(response)
-            except GenericEditRuntimeError as e:
-                iteration_entry["error"] = str(e)
-                trace.append(iteration_entry)
-                artifacts = save_generic_edit_artifacts(
-                    spec_dir=spec_dir,
-                    provider_name=self.provider_name,
-                    subtask_id=subtask_id,
-                    status="error",
-                    stop_reason="parse_error",
-                    message=str(e),
-                    trace=trace,
-                    summary="Generic edit runtime failed to parse provider actions.",
-                    observation_path=observation_path,
-                    mcp_support=self._mcp_support_payload(),
-                )
-                return AgentRunResult(
-                    status="error",
-                    response_text=(
-                        f"Generic edit runtime failed to parse provider actions: {e}\n"
-                        f"Artifacts: {artifacts['generic_edit_trace']}"
-                    ),
-                )
-            try:
-                validate_terminal_finish(actions)
-            except GenericEditRuntimeError as e:
-                iteration_entry["error"] = str(e)
-                trace.append(iteration_entry)
-                artifacts = save_generic_edit_artifacts(
-                    spec_dir=spec_dir,
-                    provider_name=self.provider_name,
-                    subtask_id=subtask_id,
-                    status="error",
-                    stop_reason="non_terminal_finish",
-                    message=str(e),
-                    trace=trace,
-                    summary="Generic edit runtime rejected a non-terminal finish.",
-                    observation_path=observation_path,
-                    mcp_support=self._mcp_support_payload(),
-                )
-                return AgentRunResult(
-                    status="error",
-                    response_text=(
-                        f"Generic edit runtime rejected provider actions: {e}\n"
-                        f"Artifacts: {artifacts['generic_edit_trace']}"
-                    ),
-                )
-
-            if not actions:
-                result = ToolActionResult(
-                    tool="runtime",
-                    ok=False,
-                    message="No actions returned; return at least one action.",
-                )
-                iteration_entry["actions"].append(safe_result_for_trace(result))
-                append_generic_edit_observation(
-                    observation_path=observation_path,
-                    provider_name=self.provider_name,
-                    subtask_id=subtask_id,
-                    loop="json_actions",
-                    iteration=iteration,
-                    action_index=1,
-                    request={},
-                    result=result,
-                )
-                trace.append(iteration_entry)
-                prompt = build_observation_prompt(
+            if not parsed.actions:
+                prompt = record_json_empty_actions(
                     base_prompt=base_prompt,
-                    results=[result],
+                    iteration_entry=iteration_entry,
+                    observation_path=observation_path,
+                    provider_name=self.provider_name,
+                    subtask_id=subtask_id,
+                    iteration=iteration,
                 )
+                trace.append(iteration_entry)
                 continue
 
-            action_results: list[ToolActionResult] = []
-            for action_index, action in enumerate(actions, start=1):
-                if self._cancel_requested:
-                    return AgentRunResult(
-                        status="cancelled",
-                        response_text=GENERIC_EDIT_CANCELLED_MESSAGE,
-                    )
-                result = await self._execute_action(
-                    action,
-                    spec_dir=spec_dir,
-                    verbose=verbose,
-                    phase=phase,
-                    subtask_id=subtask_id,
-                )
-                action_results.append(result)
-                safe_request = safe_action_for_trace(action)
-                safe_result = safe_result_for_trace(result)
-                iteration_entry["actions"].append(
-                    {
-                        "request": safe_request,
-                        "result": safe_result,
-                    }
-                )
-                append_generic_edit_observation(
-                    observation_path=observation_path,
-                    provider_name=self.provider_name,
-                    subtask_id=subtask_id,
-                    loop="json_actions",
-                    iteration=iteration,
-                    action_index=action_index,
-                    request=safe_request,
-                    result=result,
-                )
-
-                if action_tool(action) == "finish":
-                    if any(not action_result.ok for action_result in action_results):
-                        continue
-                    summary = str(action.get("summary") or result.message)
-                    tests = normalize_string_list(action.get("tests"))
-                    risks = normalize_string_list(action.get("risks"))
-                    iteration_entry["transaction"] = build_generic_edit_transaction(
-                        loop="json_actions",
-                        iteration=iteration,
-                        actions=actions,
-                        results=action_results,
-                    )
-                    trace.append(iteration_entry)
-                    artifacts = save_generic_edit_artifacts(
-                        spec_dir=spec_dir,
-                        provider_name=self.provider_name,
-                        subtask_id=subtask_id,
-                        status="complete",
-                        stop_reason="finish",
-                        message=summary,
-                        trace=trace,
-                        summary=summary,
-                        tests=tests,
-                        risks=risks,
-                        observation_path=observation_path,
-                        mcp_support=self._mcp_support_payload(),
-                    )
-                    response_lines = build_generic_edit_response(
-                        summary=summary,
-                        artifacts=artifacts,
-                        tests=tests,
-                        risks=risks,
-                    )
-                    return AgentRunResult(
-                        status="continue",
-                        response_text="\n".join(response_lines),
-                    )
+            execution = await self._execute_json_action_batch(
+                actions=parsed.actions,
+                iteration_entry=iteration_entry,
+                observation_path=observation_path,
+                iteration=iteration,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=phase,
+                subtask_id=subtask_id,
+                trace=trace,
+            )
+            if execution.cancelled:
+                return generic_edit_cancelled_result()
+            if execution.terminal_result is not None:
+                return execution.terminal_result
 
             iteration_entry["transaction"] = build_generic_edit_transaction(
                 loop="json_actions",
                 iteration=iteration,
-                actions=actions,
-                results=action_results,
+                actions=parsed.actions,
+                results=execution.action_results,
             )
             trace.append(iteration_entry)
             prompt = build_observation_prompt(
                 base_prompt=base_prompt,
-                results=action_results,
+                results=execution.action_results,
                 transaction=iteration_entry["transaction"],
             )
 
-        message = (
-            f"Generic edit runtime reached max iterations ({self.max_iterations}) "
-            "before finish."
-        )
-        artifacts = save_generic_edit_artifacts(
-            spec_dir=spec_dir,
-            provider_name=self.provider_name,
-            subtask_id=subtask_id,
-            status="error",
-            stop_reason="max_iterations",
-            message=message,
+        return self._max_iterations_result(
+            loop_label="Generic edit runtime",
             trace=trace,
-            summary=message,
+            spec_dir=spec_dir,
             observation_path=observation_path,
-            mcp_support=self._mcp_support_payload(),
-        )
-        return AgentRunResult(
-            status="error",
-            response_text=f"{message}\nArtifacts: {artifacts['generic_edit_trace']}",
+            subtask_id=subtask_id,
         )
 
     async def _run_native_tool_loop(
@@ -439,15 +324,12 @@ class GenericEditRuntimeSession:
         for iteration in range(1, self.max_iterations + 1):
             if self._cancel_requested:
                 return generic_edit_cancelled_result()
-            iteration_entry = native_tool_iteration_entry(iteration)
-
-            response, terminal_result = await self._complete_native_tool_iteration(
-                prompt=prompt,
+            prompt, terminal_result = await self._run_native_tool_iteration(
                 iteration=iteration,
-                iteration_entry=iteration_entry,
                 trace=trace,
                 spec_dir=spec_dir,
                 observation_path=observation_path,
+                prompt=prompt,
                 message=message,
                 verbose=verbose,
                 phase=phase,
@@ -456,52 +338,145 @@ class GenericEditRuntimeSession:
             if terminal_result is not None:
                 return terminal_result
 
-            response_content = str(getattr(response, "content", "") or "")
-            tool_calls = tuple(getattr(response, "tool_calls", ()) or ())
-            iteration_entry["response_excerpt"] = response_content[:1000]
-            iteration_entry["response_bytes"] = len(response_content.encode("utf-8"))
+        return self._max_iterations_result(
+            loop_label="Generic edit native tool-call loop",
+            trace=trace,
+            spec_dir=spec_dir,
+            observation_path=observation_path,
+            subtask_id=subtask_id,
+        )
 
-            if not tool_calls:
-                prompt = record_native_empty_tool_response(
+    def _parse_json_actions(
+        self,
+        *,
+        response_text: str,
+        iteration_entry: dict[str, Any],
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+    ) -> JsonActionParseResult:
+        """Parse and validate a JSON action response."""
+        try:
+            response = parse_generic_edit_response(response_text)
+            actions = normalize_actions(response)
+        except GenericEditRuntimeError as e:
+            return JsonActionParseResult(
+                actions=[],
+                terminal_result=self._json_error_result(
+                    error=e,
                     iteration_entry=iteration_entry,
+                    trace=trace,
+                    spec_dir=spec_dir,
                     observation_path=observation_path,
-                    provider_name=self.provider_name,
                     subtask_id=subtask_id,
-                    iteration=iteration,
-                )
-                trace.append(iteration_entry)
-                continue
-
-            tool_actions = build_native_tool_actions(tool_calls)
-            terminal_result = self._reject_invalid_native_tool_batch(
-                tool_actions=tool_actions,
-                iteration_entry=iteration_entry,
-                trace=trace,
-                spec_dir=spec_dir,
-                observation_path=observation_path,
-                subtask_id=subtask_id,
+                    stop_reason="parse_error",
+                    summary="Generic edit runtime failed to parse provider actions.",
+                    response_prefix=(
+                        "Generic edit runtime failed to parse provider actions"
+                    ),
+                ),
             )
-            if terminal_result is not None:
-                return terminal_result
 
-            execution = await self._execute_native_tool_actions(
-                tool_actions=tool_actions,
-                iteration_entry=iteration_entry,
-                observation_path=observation_path,
-                iteration=iteration,
+        try:
+            validate_terminal_finish(actions)
+        except GenericEditRuntimeError as e:
+            return JsonActionParseResult(
+                actions=[],
+                terminal_result=self._json_error_result(
+                    error=e,
+                    iteration_entry=iteration_entry,
+                    trace=trace,
+                    spec_dir=spec_dir,
+                    observation_path=observation_path,
+                    subtask_id=subtask_id,
+                    stop_reason="non_terminal_finish",
+                    summary="Generic edit runtime rejected a non-terminal finish.",
+                    response_prefix="Generic edit runtime rejected provider actions",
+                ),
+            )
+        return JsonActionParseResult(actions=actions)
+
+    def _json_error_result(
+        self,
+        *,
+        error: GenericEditRuntimeError,
+        iteration_entry: dict[str, Any],
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+        stop_reason: str,
+        summary: str,
+        response_prefix: str,
+    ) -> AgentRunResult:
+        """Persist and return a JSON action loop parse/validation error."""
+        iteration_entry["error"] = str(error)
+        trace.append(iteration_entry)
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="error",
+            stop_reason=stop_reason,
+            message=str(error),
+            trace=trace,
+            summary=summary,
+            observation_path=observation_path,
+            mcp_support=self._mcp_support_payload(),
+        )
+        return AgentRunResult(
+            status="error",
+            response_text=(
+                f"{response_prefix}: {error}\n"
+                f"Artifacts: {artifacts['generic_edit_trace']}"
+            ),
+        )
+
+    async def _execute_json_action_batch(
+        self,
+        *,
+        actions: list[dict[str, Any]],
+        iteration_entry: dict[str, Any],
+        observation_path: Path,
+        iteration: int,
+        spec_dir: Path,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None,
+        trace: list[dict[str, Any]],
+    ) -> JsonActionExecutionResult:
+        """Execute one JSON action batch through local action handlers."""
+        execution = JsonActionExecutionResult(action_results=[])
+        for action_index, action in enumerate(actions, start=1):
+            if self._cancel_requested:
+                execution.cancelled = True
+                return execution
+            result = await self._execute_action(
+                action,
                 spec_dir=spec_dir,
                 verbose=verbose,
                 phase=phase,
                 subtask_id=subtask_id,
             )
-            if execution.cancelled:
-                return generic_edit_cancelled_result()
-
-            if execution.finish_ready:
-                return self._finish_native_tool_loop(
-                    finish_action=execution.finish_action or {},
-                    finish_result=execution.finish_result,
-                    tool_actions=tool_actions,
+            execution.action_results.append(result)
+            record_json_action_result(
+                iteration_entry=iteration_entry,
+                observation_path=observation_path,
+                provider_name=self.provider_name,
+                subtask_id=subtask_id,
+                iteration=iteration,
+                action_index=action_index,
+                action=action,
+                result=result,
+            )
+            if action_tool(action) == "finish" and all(
+                action_result.ok for action_result in execution.action_results
+            ):
+                execution.terminal_result = self._finish_json_action_loop(
+                    finish_action=action,
+                    finish_result=result,
+                    actions=actions,
                     action_results=execution.action_results,
                     iteration_entry=iteration_entry,
                     trace=trace,
@@ -510,19 +485,192 @@ class GenericEditRuntimeSession:
                     iteration=iteration,
                     subtask_id=subtask_id,
                 )
+                return execution
+        return execution
 
-            iteration_entry["transaction"] = build_generic_edit_transaction(
-                loop="native_tool_calls",
+    def _finish_json_action_loop(
+        self,
+        *,
+        finish_action: dict[str, Any],
+        finish_result: ToolActionResult,
+        actions: list[dict[str, Any]],
+        action_results: list[ToolActionResult],
+        iteration_entry: dict[str, Any],
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        iteration: int,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        """Persist and return a successful JSON action finish."""
+        summary = str(finish_action.get("summary") or finish_result.message)
+        tests = normalize_string_list(finish_action.get("tests"))
+        risks = normalize_string_list(finish_action.get("risks"))
+        iteration_entry["transaction"] = build_generic_edit_transaction(
+            loop="json_actions",
+            iteration=iteration,
+            actions=actions,
+            results=action_results,
+        )
+        trace.append(iteration_entry)
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="complete",
+            stop_reason="finish",
+            message=summary,
+            trace=trace,
+            summary=summary,
+            tests=tests,
+            risks=risks,
+            observation_path=observation_path,
+            mcp_support=self._mcp_support_payload(),
+        )
+        response_lines = build_generic_edit_response(
+            summary=summary,
+            artifacts=artifacts,
+            tests=tests,
+            risks=risks,
+        )
+        return AgentRunResult(
+            status="continue",
+            response_text="\n".join(response_lines),
+        )
+
+    async def _run_native_tool_iteration(
+        self,
+        *,
+        iteration: int,
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        prompt: str | None,
+        message: str,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None,
+    ) -> tuple[str | None, AgentRunResult | None]:
+        """Run one provider-native tool-call iteration."""
+        iteration_entry = native_tool_iteration_entry(iteration)
+        response, terminal_result = await self._complete_native_tool_iteration(
+            prompt=prompt,
+            iteration=iteration,
+            iteration_entry=iteration_entry,
+            trace=trace,
+            spec_dir=spec_dir,
+            observation_path=observation_path,
+            message=message,
+            verbose=verbose,
+            phase=phase,
+            subtask_id=subtask_id,
+        )
+        if terminal_result is not None:
+            return prompt, terminal_result
+
+        response_content = str(getattr(response, "content", "") or "")
+        tool_calls = tuple(getattr(response, "tool_calls", ()) or ())
+        iteration_entry["response_excerpt"] = response_content[:1000]
+        iteration_entry["response_bytes"] = len(response_content.encode("utf-8"))
+
+        if not tool_calls:
+            next_prompt = record_native_empty_tool_response(
+                iteration_entry=iteration_entry,
+                observation_path=observation_path,
+                provider_name=self.provider_name,
+                subtask_id=subtask_id,
                 iteration=iteration,
-                actions=[action for _, action in tool_actions],
-                results=execution.action_results,
             )
             trace.append(iteration_entry)
-            prompt = build_native_recovery_prompt(iteration_entry["transaction"])
+            return next_prompt, None
 
+        return await self._run_native_tool_actions(
+            tool_calls=tool_calls,
+            iteration_entry=iteration_entry,
+            trace=trace,
+            spec_dir=spec_dir,
+            observation_path=observation_path,
+            iteration=iteration,
+            verbose=verbose,
+            phase=phase,
+            subtask_id=subtask_id,
+        )
+
+    async def _run_native_tool_actions(
+        self,
+        *,
+        tool_calls: tuple[Any, ...],
+        iteration_entry: dict[str, Any],
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        iteration: int,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None,
+    ) -> tuple[str | None, AgentRunResult | None]:
+        """Validate and execute one native tool-call batch."""
+        tool_actions = build_native_tool_actions(tool_calls)
+        terminal_result = self._reject_invalid_native_tool_batch(
+            tool_actions=tool_actions,
+            iteration_entry=iteration_entry,
+            trace=trace,
+            spec_dir=spec_dir,
+            observation_path=observation_path,
+            subtask_id=subtask_id,
+        )
+        if terminal_result is not None:
+            return None, terminal_result
+
+        execution = await self._execute_native_tool_actions(
+            tool_actions=tool_actions,
+            iteration_entry=iteration_entry,
+            observation_path=observation_path,
+            iteration=iteration,
+            spec_dir=spec_dir,
+            verbose=verbose,
+            phase=phase,
+            subtask_id=subtask_id,
+        )
+        if execution.cancelled:
+            return None, generic_edit_cancelled_result()
+        if execution.finish_ready:
+            terminal_result = self._finish_native_tool_loop(
+                finish_action=execution.finish_action or {},
+                finish_result=execution.finish_result,
+                tool_actions=tool_actions,
+                action_results=execution.action_results,
+                iteration_entry=iteration_entry,
+                trace=trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                iteration=iteration,
+                subtask_id=subtask_id,
+            )
+            return None, terminal_result
+
+        iteration_entry["transaction"] = build_generic_edit_transaction(
+            loop="native_tool_calls",
+            iteration=iteration,
+            actions=[action for _, action in tool_actions],
+            results=execution.action_results,
+        )
+        trace.append(iteration_entry)
+        return build_native_recovery_prompt(iteration_entry["transaction"]), None
+
+    def _max_iterations_result(
+        self,
+        *,
+        loop_label: str,
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        """Persist and return a max-iterations failure."""
         message = (
-            f"Generic edit native tool-call loop reached max iterations "
-            f"({self.max_iterations}) before finish."
+            f"{loop_label} reached max iterations ({self.max_iterations}) "
+            "before finish."
         )
         artifacts = save_generic_edit_artifacts(
             spec_dir=spec_dir,
@@ -932,6 +1080,79 @@ def native_tool_iteration_entry(iteration: int) -> dict[str, Any]:
         "response_bytes": 0,
         "actions": [],
     }
+
+
+def json_action_iteration_entry(iteration: int, response_text: str) -> dict[str, Any]:
+    """Return the trace scaffold for one JSON action iteration."""
+    return {
+        "iteration": iteration,
+        "response_excerpt": response_text[:1000],
+        "response_bytes": len(response_text.encode("utf-8")),
+        "actions": [],
+    }
+
+
+def record_json_empty_actions(
+    *,
+    base_prompt: str,
+    iteration_entry: dict[str, Any],
+    observation_path: Path,
+    provider_name: str,
+    subtask_id: str | None,
+    iteration: int,
+) -> str:
+    """Record and prompt for a JSON action response that had no actions."""
+    result = ToolActionResult(
+        tool="runtime",
+        ok=False,
+        message="No actions returned; return at least one action.",
+    )
+    iteration_entry["actions"].append(safe_result_for_trace(result))
+    append_generic_edit_observation(
+        observation_path=observation_path,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        loop="json_actions",
+        iteration=iteration,
+        action_index=1,
+        request={},
+        result=result,
+    )
+    return build_observation_prompt(
+        base_prompt=base_prompt,
+        results=[result],
+    )
+
+
+def record_json_action_result(
+    *,
+    iteration_entry: dict[str, Any],
+    observation_path: Path,
+    provider_name: str,
+    subtask_id: str | None,
+    iteration: int,
+    action_index: int,
+    action: dict[str, Any],
+    result: ToolActionResult,
+) -> None:
+    """Record one JSON local action result in trace and observation artifacts."""
+    safe_request = safe_action_for_trace(action)
+    iteration_entry["actions"].append(
+        {
+            "request": safe_request,
+            "result": safe_result_for_trace(result),
+        }
+    )
+    append_generic_edit_observation(
+        observation_path=observation_path,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        loop="json_actions",
+        iteration=iteration,
+        action_index=action_index,
+        request=safe_request,
+        result=result,
+    )
 
 
 def record_native_empty_tool_response(

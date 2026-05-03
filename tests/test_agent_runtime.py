@@ -40,6 +40,7 @@ from agents.runtime.adapters.codex_cli import (
     build_codex_command_args,
     build_codex_usage_metadata,
     codex_resume_metadata,
+    extract_codex_final_message,
     parse_codex_json_events,
     summarize_codex_account,
     summarize_codex_events,
@@ -230,6 +231,86 @@ async def test_codex_cli_runtime_uses_output_last_message(tmp_path: Path):
         }
 
 
+@pytest.mark.asyncio
+async def test_codex_cli_runtime_uses_event_final_message_without_output_file(
+    tmp_path: Path,
+):
+    fake_codex_script = tmp_path / "codex_events.py"
+    fake_codex_script.write_text(
+        textwrap.dedent(
+            """\
+            #!/usr/bin/env python3
+            import json
+            import sys
+
+            message = sys.stdin.read().strip()
+            print(json.dumps({
+                "type": "session.started",
+                "session_id": "codex-event-session",
+            }))
+            print(json.dumps({
+                "type": "token_usage",
+                "usage": {"input_tokens": 5, "output_tokens": 3},
+                "text": "ignore token event text",
+            }))
+            print(json.dumps({
+                "type": "response.completed",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "reasoning", "text": "ignore private notes"},
+                        {"type": "output_text", "text": f"event final: {message}"},
+                    ],
+                },
+            }))
+            """
+        ),
+        encoding="utf-8",
+    )
+    if sys.platform == "win32":
+        fake_codex = tmp_path / "codex.cmd"
+        fake_codex.write_text(
+            f'@echo off\r\n"{sys.executable}" "{fake_codex_script}" %*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        fake_codex = tmp_path / "codex"
+        fake_codex.write_text(
+            fake_codex_script.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        fake_codex.chmod(0o755)
+
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    session = SimpleNamespace(
+        codex_command=str(fake_codex),
+        codex_home=codex_home,
+        model="codex-default",
+    )
+    runtime_session = create_runtime_session(
+        provider_name="codex",
+        agent_session=session,
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "do event work",
+        tmp_path,
+        requirements=RuntimeRequirements.full_coder(),
+    )
+
+    assert result.status == "complete"
+    assert result.response_text == "event final: do event work"
+    result_payload = json.loads(
+        (tmp_path / "artifacts" / "codex_cli_result.json").read_text(encoding="utf-8")
+    )
+    assert result_payload["session_id"] == "codex-event-session"
+    assert result_payload["event_final_message_excerpt"] == (
+        "event final: do event work"
+    )
+
+
 def test_codex_cli_event_parser_extracts_usage_and_session():
     stdout = "\n".join(
         [
@@ -278,6 +359,36 @@ def test_codex_cli_event_parser_extracts_usage_and_session():
         "total_tokens": 53,
     }
     assert usage_metadata["cost_usd"] == pytest.approx(0.0042)
+
+
+def test_codex_cli_event_parser_extracts_final_message_from_events():
+    stdout = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "token_usage",
+                    "text": "not a final answer",
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "response.completed",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "reasoning", "text": "private"},
+                            {"type": "output_text", "text": "final from events"},
+                        ],
+                    },
+                }
+            ),
+        ]
+    )
+
+    assert extract_codex_final_message(parse_codex_json_events(stdout)) == (
+        "final from events"
+    )
 
 
 def test_codex_cli_resume_command_uses_resume_subcommand(tmp_path: Path):

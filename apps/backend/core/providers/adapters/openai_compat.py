@@ -314,13 +314,31 @@ def content_part_text(part: Any) -> str:
 
 def iter_provider_tool_calls(message_obj: Any) -> list[Any]:
     """Return tool calls from OpenAI, LiteLLM, OpenRouter, and Gemini-like shapes."""
+    call_groups = (
+        nested_provider_tool_calls(message_obj),
+        choice_provider_tool_calls(message_obj),
+        direct_provider_tool_calls(message_obj),
+        part_provider_tool_calls(message_obj),
+    )
+    for calls in call_groups:
+        if calls:
+            return calls
+    return []
+
+
+def nested_provider_tool_calls(message_obj: Any) -> list[Any]:
+    """Return tool calls from nested message/delta envelopes."""
     for nested_name in ("message", "delta"):
         nested_message = _get_attr_or_key(message_obj, nested_name, None)
         if nested_message and nested_message is not message_obj:
             nested_calls = iter_provider_tool_calls(nested_message)
             if nested_calls:
                 return nested_calls
+    return []
 
+
+def choice_provider_tool_calls(message_obj: Any) -> list[Any]:
+    """Return tool calls from chat-completion choice envelopes."""
     calls_from_choices: list[Any] = []
     for choice in as_sequence(_get_attr_or_key(message_obj, "choices", None)):
         choice_message = _get_attr_or_key(choice, "message", None) or _get_attr_or_key(
@@ -331,7 +349,11 @@ def iter_provider_tool_calls(message_obj: Any) -> list[Any]:
         calls_from_choices.extend(iter_provider_tool_calls(choice_message))
     if calls_from_choices:
         return calls_from_choices
+    return []
 
+
+def direct_provider_tool_calls(message_obj: Any) -> list[Any]:
+    """Return direct tool_calls/function_call fields from a message object."""
     tool_calls = as_sequence(_get_attr_or_key(message_obj, "tool_calls", None))
     if tool_calls:
         return tool_calls
@@ -341,7 +363,11 @@ def iter_provider_tool_calls(message_obj: Any) -> list[Any]:
     ) or _get_attr_or_key(message_obj, "functionCall", None)
     if direct_call:
         return [direct_call]
+    return []
 
+
+def part_provider_tool_calls(message_obj: Any) -> list[Any]:
+    """Return tool calls embedded in output/content/parts arrays."""
     calls_from_parts: list[Any] = []
     for container_name in ("output", "content", "parts"):
         for part in as_sequence(_get_attr_or_key(message_obj, container_name, None)):

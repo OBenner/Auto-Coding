@@ -85,6 +85,8 @@ class CodexCliRuntimeSession:
         status = "complete" if process_result.returncode == 0 else "error"
         if process_result.cancelled:
             status = "cancelled"
+        event_final_message = extract_codex_final_message(events)
+        response_text = final_message or event_final_message
         artifacts = save_codex_cli_artifacts(
             spec_dir=spec_dir,
             subtask_id=subtask_id,
@@ -96,11 +98,12 @@ class CodexCliRuntimeSession:
             stdout_text=stdout_text,
             stderr_text=stderr_text,
             final_message=final_message,
+            event_final_message=event_final_message if not final_message else "",
         )
 
         response_parts = []
-        if final_message.strip():
-            response_parts.append(final_message)
+        if response_text.strip():
+            response_parts.append(response_text)
         else:
             fallback_stdout = "\n".join(
                 line
@@ -266,6 +269,124 @@ def build_codex_usage_metadata(
     return metadata
 
 
+def extract_codex_final_message(events: list[dict[str, Any]]) -> str:
+    """Extract the last assistant/final text from common Codex JSONL event shapes."""
+    preferred: list[str] = []
+    fallback: list[str] = []
+    for event in events:
+        text = codex_message_text(event)
+        if not text.strip():
+            continue
+        if codex_event_is_assistant_message(event):
+            preferred.append(text)
+        elif codex_event_allows_text_fallback(event):
+            fallback.append(text)
+    return (preferred or fallback or [""])[-1]
+
+
+def codex_message_text(event: dict[str, Any]) -> str:
+    """Return assistant/final message text from one provider-specific event."""
+    for path in CODEX_MESSAGE_TEXT_PATHS:
+        value = value_at_path(event, path)
+        text = normalize_codex_text_value(value)
+        if text:
+            return text
+    return ""
+
+
+CODEX_MESSAGE_TEXT_PATHS: tuple[tuple[str, ...], ...] = (
+    ("message", "content"),
+    ("message", "text"),
+    ("message", "delta"),
+    ("item", "content"),
+    ("item", "text"),
+    ("output", "content"),
+    ("output", "text"),
+    ("response", "content"),
+    ("response", "output_text"),
+    ("data", "message"),
+    ("data", "content"),
+    ("data", "text"),
+    ("content",),
+    ("text",),
+    ("delta",),
+)
+
+CODEX_MESSAGE_ROLE_PATHS: tuple[tuple[str, ...], ...] = (
+    ("role",),
+    ("message", "role"),
+    ("item", "role"),
+    ("data", "role"),
+    ("response", "role"),
+)
+
+CODEX_MESSAGE_EVENT_MARKERS = (
+    "assistant",
+    "agent_message",
+    "final",
+    "message",
+    "response.completed",
+    "response.done",
+    "turn.completed",
+)
+
+CODEX_NON_MESSAGE_EVENT_MARKERS = (
+    "command",
+    "error",
+    "reasoning",
+    "session",
+    "tool",
+    "usage",
+    "token",
+)
+
+
+def normalize_codex_text_value(value: Any) -> str:
+    """Normalize string or content-part text values from Codex-style events."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return normalize_codex_text_part(value)
+    if isinstance(value, list):
+        return "".join(normalize_codex_text_part(part) for part in value)
+    return ""
+
+
+def normalize_codex_text_part(part: Any) -> str:
+    """Extract text from one Codex/OpenAI-style content part."""
+    if isinstance(part, str):
+        return part
+    if not isinstance(part, dict):
+        return ""
+    part_type = str(part.get("type") or "").lower()
+    if part_type in {"reasoning", "thinking", "tool_call", "function_call"}:
+        return ""
+    for key in ("text", "content", "output_text"):
+        text = normalize_codex_text_value(part.get(key))
+        if text:
+            return text
+    return ""
+
+
+def codex_event_is_assistant_message(event: dict[str, Any]) -> bool:
+    """Return true when an event is explicitly an assistant/final message."""
+    role = first_string_at_paths(event, CODEX_MESSAGE_ROLE_PATHS)
+    if role and role.lower() in {"assistant", "model"}:
+        return True
+    event_type = str(codex_event_type(event) or "").lower()
+    return any(marker in event_type for marker in CODEX_MESSAGE_EVENT_MARKERS)
+
+
+def codex_event_allows_text_fallback(event: dict[str, Any]) -> bool:
+    """Allow unknown textual output events while avoiding logs and usage records."""
+    event_type = str(codex_event_type(event) or "").lower()
+    if not event_type:
+        return True
+    if any(marker in event_type for marker in CODEX_NON_MESSAGE_EVENT_MARKERS):
+        return False
+    return any(marker in event_type for marker in CODEX_MESSAGE_EVENT_MARKERS)
+
+
 def save_codex_cli_artifacts(
     *,
     spec_dir: Path,
@@ -278,6 +399,7 @@ def save_codex_cli_artifacts(
     stdout_text: str,
     stderr_text: str,
     final_message: str,
+    event_final_message: str = "",
 ) -> dict[str, str]:
     """Persist Codex CLI event and result artifacts for UI/debug consumers."""
     artifact_dir = spec_dir / "artifacts"
@@ -311,6 +433,7 @@ def save_codex_cli_artifacts(
         "non_json_stdout_line_count": len(non_json_stdout_lines),
         "stderr_excerpt": stderr_text[:2000],
         "final_message_excerpt": final_message[:2000],
+        "event_final_message_excerpt": event_final_message[:2000],
     }
     result_path.write_text(
         json.dumps(result_payload, indent=2, ensure_ascii=False),
@@ -482,15 +605,20 @@ def first_value_at_paths(
     paths: tuple[tuple[str, ...], ...],
 ) -> Any:
     for path in paths:
-        value: Any = event
-        for key in path:
-            if not isinstance(value, dict) or key not in value:
-                value = None
-                break
-            value = value[key]
+        value = value_at_path(event, path)
         if value:
             return value
     return None
+
+
+def value_at_path(value: Any, path: tuple[str, ...]) -> Any:
+    """Return a nested dictionary value or None when the path is absent."""
+    current = value
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return None
+        current = current[key]
+    return current
 
 
 def looks_like_json_object(line: str) -> bool:
