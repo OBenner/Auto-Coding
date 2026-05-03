@@ -15,7 +15,9 @@ Other providers can still be useful, but they run through limited runtime modes:
 
 - `analysis_only` for phases that only need text reasoning.
 - `generic_edit` for an experimental provider-neutral JSON action loop that can
-  read files, write files, apply patches, and run validated single commands.
+  read files, write files, apply patches, run validated single commands, inspect
+  git state, and run bounded read-only runtime subagents when the caller wires a
+  subagent session factory.
 - `patch_proposal` for providers that return a structured unified diff proposal
   that Auto Code validates and applies locally.
 
@@ -156,10 +158,10 @@ AUTO_CODE_RUNTIME_FALLBACK=true
 OPENAI_API_KEY=sk-...
 ```
 
-This does not make OpenAI a full autonomous runtime. Auto Code resolves the
-provider/runtime capability set and degrades to the first compatible limited
-mode, usually `generic_edit`, instead of falling back into an impossible
-OpenAI-full-autonomous session.
+This does not make a direct provider a full autonomous runtime. Auto Code
+resolves the provider/runtime capability set and degrades to the first
+compatible limited mode, usually `generic_edit`, instead of falling back into an
+impossible direct-provider full-autonomous session.
 
 Runtime fallback artifacts also include `runner_candidates`. This is a
 capability snapshot for CLI-runner routing: it records runner candidates for the
@@ -197,8 +199,8 @@ and repeats until the model returns `finish` or the runtime reaches its
 iteration limit.
 
 When the provider session exposes native tool calls, `generic_edit` uses those
-tool calls by default and falls back to the JSON action loop only when native
-tool calls are unavailable.
+tool calls by default and falls back to the JSON action loop only when the first
+native tool-call request is rejected before any local action runs.
 
 Supported actions:
 
@@ -264,6 +266,9 @@ Auto Code validates and executes these actions locally:
 - runtime subagents run as bounded read-only child sessions for analysis,
   exploration, review, or comparison work; they do not receive Claude SDK Task
   tool parity or independent mutating runtime privileges;
+- JSON and native tool-call batches stop after the first failed local action, so
+  later actions in the same batch do not run against a partially failed
+  transaction;
 - traces, summaries, safe action timelines, and per-action observations are saved
   as `generic_edit_trace.json`, `generic_edit_result.json`,
   `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and
@@ -271,13 +276,14 @@ Auto Code validates and executes these actions locally:
 - transaction summaries include partial-failure ids, whether recovery was
   resolved by a later complete transaction, and any unresolved partial failures.
 
-This mode is intentionally not full autonomous parity. It exposes only the
-local action loop, provider-native tool calls when available, and Auto Code's
-local MCP bridge for built-in tools. It does not expose external MCP servers,
-in-session subagent spawning, or Claude SDK session lifecycle behavior. MCP
-support artifacts include per-server statuses such as `local_bridge`,
-`native_required`, and `unsupported`, so non-Claude runs can explain exactly
-which requested MCP servers are available and which remain native-runtime-only.
+This mode is intentionally not full autonomous parity. It exposes the local
+action loop, provider-native tool calls when available, bounded runtime
+subagents when wired by the caller, and Auto Code's local MCP bridge for
+built-in tools. It does not expose external MCP servers or Claude SDK session
+lifecycle behavior. MCP support artifacts include per-server statuses such as
+`local_bridge`, `native_required`, and `unsupported`, so non-Claude runs can
+explain exactly which requested MCP servers are available and which remain
+native-runtime-only.
 OpenAI-compatible tool-call parsing normalizes direct message objects, gateway
 `choices[].message` envelopes, streaming `delta` envelopes, and content/part
 blocks used by OpenAI, LiteLLM, OpenRouter, Gemini-like, and Anthropic-like
@@ -333,22 +339,32 @@ Examples:
 - A non-Claude provider in `patch_proposal` mode can modify files only through
   a validated unified diff.
 - A non-Claude provider in `generic_edit` mode can modify files through Auto
-Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
-sessions use provider-native tool calls when available; other sessions can use
-the JSON action loop. The mode can use the local Auto Code MCP bridge, while
-parallel read-only work can use `run_subagents` when the caller wires a
-`RuntimeSubagentOrchestrator` session factory.
+  Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
+  sessions use provider-native tool calls when available; other sessions can use
+  the JSON action loop. The mode can use the local Auto Code MCP bridge, while
+  parallel read-only work can use `run_subagents` when the caller wires a
+  `RuntimeSubagentOrchestrator` session factory. Local action batches halt after
+  the first failed action and persist transaction/recovery metadata before the
+  next provider iteration.
 
-## Current Boundaries
+## Explicit Boundaries In This PR
 
 This runtime engine is an integration boundary, not a generic replacement for
-the Claude Agent SDK. The generic edit runtime is the first local tool-loop
-slice; remaining work includes MCP translation, richer command/session
-streaming, broader CLI runner execution, and security parity with the Claude SDK
-path. Non-Claude subagents are represented as orchestrated read-only child
-runtime sessions, not Claude SDK Task tool parity. Their artifacts include
-aggregate child-session summaries so status dashboards can show
-complete/error/cancelled counts without re-parsing every child result.
+the Claude Agent SDK. Claude keeps the full native SDK surface. Codex CLI is the
+first wired non-Claude full-autonomous CLI runtime. Direct providers use
+`analysis_only`, `patch_proposal`, or `generic_edit`; they do not receive
+external MCP parity or mutable subagent parity through the direct chat adapter.
+
+CLI runner profiles for Claude Code, Z.AI via Claude Code, Gemini CLI, Aider,
+Cursor, CodeRabbit CLI, GitHub Copilot CLI, OpenCode, Goose, Amp, Qwen Code,
+DeepV Code, and a generic CLI pool are exposed for diagnostics and routing
+planning. Runtime routing only applies to wired runners, so profile visibility
+does not imply that every listed CLI already has a production execution adapter.
+
+Non-Claude subagents are represented as orchestrated read-only child runtime
+sessions, not Claude SDK Task tool parity. Their artifacts include aggregate
+child-session summaries so status dashboards can show complete/error/cancelled
+counts without re-parsing every child result.
 
 ## Related Code
 
@@ -356,6 +372,10 @@ complete/error/cancelled counts without re-parsing every child result.
   engine, and adapters.
 - `apps/backend/agents/runtime/local_actions.py` - reusable local action
   executor used by generic edit's JSON and provider-native tool-call loops.
+- `apps/backend/agents/runtime/cli_profiles.py` - CLI runner profile registry,
+  executable detection, and selection diagnostics.
+- `apps/backend/agents/runtime/runner_router.py` - opt-in routing from impossible
+  direct-provider full-autonomous requests to wired CLI runners.
 - `apps/backend/agents/runtime/artifacts.py` - shared analysis-only artifact
   persistence.
 - `apps/backend/agents/runtime/compatibility.py` - user-facing provider/runtime
