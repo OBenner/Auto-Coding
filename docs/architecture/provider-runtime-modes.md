@@ -176,6 +176,13 @@ The `--runtime-modes` command also exposes a `runtime_fallback_matrix` payload.
 It shows the fail-fast selected mode, opt-in fallback selected mode, compatible
 degraded modes, and runner candidates for each provider/runtime pair.
 
+The Electron provider settings screen consumes the same JSON payload through
+the `provider:runtime:diagnostics` IPC channel. Its runtime control plane panel
+shows the selected provider/runtime pair's MCP bridge status, required MCP
+action, bridged servers, native-required servers, fallback-selected runtime, and
+runner candidates. Treat this UI as a live view of the backend compatibility
+contract rather than a separate frontend-only matrix.
+
 ### CLI Runner Router
 
 CLI runner routing is also opt-in:

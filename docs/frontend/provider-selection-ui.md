@@ -28,6 +28,24 @@ The provider selection UI follows established patterns in the Auto Code frontend
 6. **Runner awareness** - Users should see which local coding CLIs are installed,
    authenticated, policy-allowed, and available as fallbacks
 
+## Runtime Control Plane
+
+The provider settings page should not duplicate backend compatibility logic.
+It loads live diagnostics from the main process via
+`provider:runtime:diagnostics`, which runs `python run.py --runtime-modes
+--json` against the configured backend source path.
+
+The runtime control plane panel shows, for the selected provider and runtime:
+
+- MCP bridge status and required action.
+- MCP servers already bridged through the local bridge.
+- MCP servers that still require a native MCP runtime.
+- Fallback-selected runtime for the selected provider/runtime pair.
+- CLI runner candidates that could satisfy the selected mode.
+
+This keeps the frontend aligned with the backend runtime contract while still
+making incompatibilities visible before a user launches a spec.
+
 ## Component Architecture
 
 ### Location in App
