@@ -116,9 +116,7 @@ def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
                 mode.mode,
             )
             bridge_available = mode.mode == "generic_edit"
-            available_servers = (
-                (LOCAL_BRIDGE_SERVER,) if bridge_available else ()
-            )
+            available_servers = (LOCAL_BRIDGE_SERVER,) if bridge_available else ()
             support = resolve_runtime_mcp_support(
                 provider_name=provider_row.provider,
                 runtime_name=mode.mode,

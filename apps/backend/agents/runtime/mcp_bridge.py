@@ -768,12 +768,8 @@ def policy_for_auto_claude_tool(tool_name: str) -> RuntimeMcpToolPolicy:
         "record_discovery": RuntimeMcpToolPolicy(
             "write_memory", "write", mutating=True
         ),
-        "record_gotcha": RuntimeMcpToolPolicy(
-            "write_memory", "write", mutating=True
-        ),
-        "record_feedback": RuntimeMcpToolPolicy(
-            "write_memory", "write", mutating=True
-        ),
+        "record_gotcha": RuntimeMcpToolPolicy("write_memory", "write", mutating=True),
+        "record_feedback": RuntimeMcpToolPolicy("write_memory", "write", mutating=True),
         "start_background_command": RuntimeMcpToolPolicy(
             "run_background_command", "command", mutating=True
         ),
