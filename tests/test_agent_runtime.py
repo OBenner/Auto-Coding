@@ -2774,6 +2774,7 @@ async def test_generic_edit_runtime_rejects_unsafe_write_path(tmp_path: Path):
     trace = json.loads(
         (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
     )
+    assert len(trace["trace"][0]["actions"]) == 1
     first_result = trace["trace"][0]["actions"][0]["result"]
     assert first_result["ok"] is False
     assert "unsafe segments" in first_result["message"]

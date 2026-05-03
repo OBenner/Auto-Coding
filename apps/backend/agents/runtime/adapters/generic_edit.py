@@ -104,6 +104,7 @@ class NativeToolExecutionResult:
     """Actions executed during one native provider tool-call iteration."""
 
     action_results: list[ToolActionResult]
+    executed_actions: list[dict[str, Any]]
     finish_action: dict[str, Any] | None = None
     finish_result: ToolActionResult | None = None
     cancelled: bool = False
@@ -131,6 +132,7 @@ class JsonActionExecutionResult:
     """Local action execution state for one JSON action iteration."""
 
     action_results: list[ToolActionResult]
+    executed_actions: list[dict[str, Any]]
     terminal_result: AgentRunResult | None = None
     cancelled: bool = False
 
@@ -290,7 +292,7 @@ class GenericEditRuntimeSession:
             iteration_entry["transaction"] = build_generic_edit_transaction(
                 loop="json_actions",
                 iteration=iteration,
-                actions=parsed.actions,
+                actions=execution.executed_actions,
                 results=execution.action_results,
             )
             trace.append(iteration_entry)
@@ -447,7 +449,7 @@ class GenericEditRuntimeSession:
         trace: list[dict[str, Any]],
     ) -> JsonActionExecutionResult:
         """Execute one JSON action batch through local action handlers."""
-        execution = JsonActionExecutionResult(action_results=[])
+        execution = JsonActionExecutionResult(action_results=[], executed_actions=[])
         for action_index, action in enumerate(actions, start=1):
             if self._cancel_requested:
                 execution.cancelled = True
@@ -459,6 +461,7 @@ class GenericEditRuntimeSession:
                 phase=phase,
                 subtask_id=subtask_id,
             )
+            execution.executed_actions.append(action)
             execution.action_results.append(result)
             record_json_action_result(
                 iteration_entry=iteration_entry,
@@ -485,6 +488,8 @@ class GenericEditRuntimeSession:
                     iteration=iteration,
                     subtask_id=subtask_id,
                 )
+                return execution
+            if not result.ok:
                 return execution
         return execution
 
@@ -652,7 +657,7 @@ class GenericEditRuntimeSession:
         iteration_entry["transaction"] = build_generic_edit_transaction(
             loop="native_tool_calls",
             iteration=iteration,
-            actions=[action for _, action in tool_actions],
+            actions=execution.executed_actions,
             results=execution.action_results,
         )
         trace.append(iteration_entry)
@@ -817,7 +822,10 @@ class GenericEditRuntimeSession:
         subtask_id: str | None,
     ) -> NativeToolExecutionResult:
         """Execute provider-native tool calls through local action handlers."""
-        execution = NativeToolExecutionResult(action_results=[])
+        execution = NativeToolExecutionResult(
+            action_results=[],
+            executed_actions=[],
+        )
         for action_index, (tool_call, action) in enumerate(tool_actions, start=1):
             if self._cancel_requested:
                 execution.cancelled = True
@@ -829,6 +837,7 @@ class GenericEditRuntimeSession:
                 phase=phase,
                 subtask_id=subtask_id,
             )
+            execution.executed_actions.append(action)
             execution.action_results.append(result)
             safe_request = {
                 "tool_call_id": str(getattr(tool_call, "id", "") or ""),
@@ -858,6 +867,8 @@ class GenericEditRuntimeSession:
             if action_tool(action) == "finish":
                 execution.finish_action = action
                 execution.finish_result = result
+            if not result.ok:
+                return execution
         return execution
 
     def _finish_native_tool_loop(
