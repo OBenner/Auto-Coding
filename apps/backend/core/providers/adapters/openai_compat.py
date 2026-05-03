@@ -375,9 +375,7 @@ def part_provider_tool_calls(message_obj: Any) -> list[Any]:
     calls_from_parts: list[Any] = []
     for container_name in ("output", "content", "parts"):
         for part in as_sequence(_get_attr_or_key(message_obj, container_name, None)):
-            function_call = tool_call_from_part(part)
-            if function_call:
-                calls_from_parts.append(function_call)
+            calls_from_parts.extend(tool_calls_from_part(part))
     return calls_from_parts
 
 
@@ -586,6 +584,19 @@ def tool_call_from_part(part: Any) -> Any | None:
         return part
 
     return None
+
+
+def tool_calls_from_part(part: Any) -> list[Any]:
+    """Extract direct or nested tool calls from one provider content part."""
+    function_call = tool_call_from_part(part)
+    if function_call:
+        return [function_call]
+
+    calls: list[Any] = []
+    for container_name in ("tool_calls", "toolCalls", "content", "parts", "output"):
+        for nested_part in as_sequence(_get_attr_or_key(part, container_name, None)):
+            calls.extend(tool_calls_from_part(nested_part))
+    return calls
 
 
 def dump_mapping_like_arguments(name: str, raw_arguments: Any) -> dict[str, Any]:

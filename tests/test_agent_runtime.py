@@ -639,6 +639,32 @@ def test_provider_tool_call_parser_handles_bedrock_tool_use_blocks():
     assert tool_calls[0].arguments == {"path": "README.md"}
 
 
+def test_provider_tool_call_parser_recurses_nested_response_content_parts():
+    message_obj = {
+        "output": [
+            {
+                "type": "message",
+                "content": [
+                    {"type": "output_text", "text": "checking"},
+                    {
+                        "type": "function_call",
+                        "call_id": "nested_call",
+                        "name": "read_file",
+                        "arguments": json.dumps({"path": "nested.txt"}),
+                    },
+                ],
+            }
+        ]
+    }
+
+    tool_calls = parse_openai_tool_calls(message_obj)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "nested_call"
+    assert tool_calls[0].name == "read_file"
+    assert tool_calls[0].arguments == {"path": "nested.txt"}
+
+
 def test_provider_message_content_handles_gateway_shapes():
     assert provider_message_content({"content": "plain text"}) == "plain text"
     assert (
