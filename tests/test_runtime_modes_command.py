@@ -52,8 +52,11 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert payload["providers"][0]["provider"] == "claude"
 
 
-def test_runtime_modes_command_outputs_json(capsys):
+def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
     from cli.runtime_commands import handle_runtime_modes_command
+
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
 
     handle_runtime_modes_command(output_json=True)
     output = capsys.readouterr().out
@@ -163,6 +166,25 @@ def test_runtime_modes_command_outputs_json(capsys):
     openai_generic_subagents = subagent_rows[("openai", "generic_edit")]
     assert openai_generic_subagents["strategy"] == "orchestrated"
     assert openai_generic_subagents["available"] is True
+
+
+def test_runtime_modes_command_marks_context7_available_when_external_client_enabled(
+    monkeypatch,
+):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
+    from cli.runtime_commands import build_runtime_modes_payload
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+
+    payload = build_runtime_modes_payload()
+    mcp_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["mcp_bridge_plan_matrix"]
+    }
+    openai_generic_mcp = mcp_rows[("openai", "generic_edit")]
+
+    assert "context7" in openai_generic_mcp["available_servers"]
+    assert "context7" not in openai_generic_mcp["external_bridge_required_servers"]
 
 
 def test_cli_runner_selection_filters_runtime_mode():

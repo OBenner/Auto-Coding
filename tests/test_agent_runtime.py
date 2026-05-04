@@ -2460,6 +2460,7 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
         return {"content": [{"type": "text", "text": "Build Progress: 0/1 subtasks"}]}
 
     monkeypatch.setattr("agents.runtime.mcp_bridge.is_tools_available", lambda: True)
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     monkeypatch.setattr(
         "agents.runtime.mcp_bridge.create_all_tools",
         lambda spec_dir, project_dir: [
@@ -2639,9 +2640,13 @@ def test_runtime_mcp_bridge_filters_agent_allowed_tools(
     assert support.tool_count == 2
 
 
-def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
+def test_runtime_mcp_bridge_reports_external_server_gaps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     from agents.runtime.adapters.generic_edit import render_mcp_bridge_prompt
 
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     session = SimpleNamespace(agent_type="spec_researcher")
 
     bridge = RuntimeMcpBridge.from_agent_session(
@@ -2685,9 +2690,112 @@ def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict,
+        project_dir: Path,
+    ):
+        assert health.server == "context7"
+        assert tool_name == "resolve-library-id"
+        assert arguments == {"libraryName": "pytest"}
+        assert project_dir == tmp_path
+        return {"content": [{"type": "text", "text": "/pytest-dev/pytest"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "resolve docs",
+                "actions": [
+                    {
+                        "tool": "mcp__context7__resolve-library-id",
+                        "libraryName": "pytest",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Resolved Context7 docs",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        agent_type="spec_researcher",
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "resolve docs",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    assert "Resolved Context7 docs" in result.response_text
+    assert "mcp__context7__resolve-library-id" in session.messages[0]
+    assert "/pytest-dev/pytest" in session.messages[1]
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    result_payload = observation_lines[0]["result"]
+    assert result_payload["ok"] is True
+    assert result_payload["tool"] == "mcp__context7__resolve-library-id"
+    assert result_payload["data"]["server"] == "context7"
+    assert result_payload["data"]["permission"] == "read_external_docs"
+    audit_path = Path(result_payload["data"]["audit_artifact"])
+    assert audit_path == mcp_bridge_audit_path(tmp_path)
+    audit_lines = [
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert audit_lines[0]["status"] == "ok"
+    assert audit_lines[0]["server"] == "context7"
+    assert audit_lines[0]["tool"] == "resolve-library-id"
+    artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact["mcp_support"]["strategy"] == "local_bridge"
+    assert artifact["mcp_support"]["available_servers"] == ["context7"]
+    assert artifact["mcp_support"]["unavailable_servers"] == []
+    assert artifact["mcp_support"]["bridge_plan"]["status"] == "ready"
+    assert artifact["mcp_support"]["bridge_plan"]["action_required"] == "none"
+    assert artifact["mcp_support"]["bridge"]["tools"] == [
+        "mcp__context7__resolve-library-id",
+        "mcp__context7__get-library-docs",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     session = FakeGenericEditSession(
         [
             {
@@ -2757,7 +2865,10 @@ async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
     assert artifact["mcp_support"]["unavailable_servers"] == ["context7"]
 
 
-def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
+def test_runtime_mcp_support_distinguishes_native_and_local_bridge(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     native = resolve_runtime_mcp_support(
         provider_name="claude",
         runtime_name="claude_agent_sdk",
@@ -2831,7 +2942,10 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     )
 
 
-def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
+def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     statuses = describe_mcp_server_statuses(
         requested_servers=("auto-claude", "context7", "browser", "custom-mcp"),
         available_servers=("auto-claude",),

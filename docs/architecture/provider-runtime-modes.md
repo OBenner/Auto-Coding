@@ -319,8 +319,11 @@ Auto Code validates and executes these actions locally:
 This mode is intentionally not full autonomous parity. It exposes the local
 action loop, provider-native tool calls when available, bounded runtime
 subagents when wired by the caller, and Auto Code's local MCP bridge for
-built-in tools. It does not yet execute external MCP server tools or Claude SDK
-session lifecycle behavior. MCP support artifacts include per-server statuses
+built-in tools. It can also execute the known Context7 stdio MCP tools through
+the provider-neutral external MCP client when `AUTO_CODE_EXTERNAL_MCP_CLIENT` is
+enabled; Graphiti, Linear, Electron, Puppeteer, and custom external MCP servers
+remain readiness-only in this layer. It does not expose Claude SDK session
+lifecycle behavior. MCP support artifacts include per-server statuses
 such as `local_bridge`, `external_bridge_required`, `native_required`, and
 `unsupported`, so non-Claude runs can explain exactly which requested MCP
 servers are available, which are ready for the provider-neutral external MCP
@@ -330,7 +333,9 @@ servers, external-bridge-required servers, bridged servers, unsupported servers,
 and the next runtime action needed. External MCP server statuses carry a
 redacted `external_client` health object with transport, command/url hints,
 enablement flags, missing configuration, and whether the server is
-`ready_to_connect`; this is a readiness contract, not tool-execution parity.
+`ready_to_connect`. Context7 uses that health contract to expose
+`mcp__context7__resolve-library-id` and `mcp__context7__get-library-docs`;
+other external servers still require tool-execution wiring before parity.
 Bridged local MCP tools also carry explicit permission/audit metadata in
 `tool_policies`, and each bridged call appends a redacted
 `mcp_bridge_audit.jsonl` event with the tool, permission, mutation flag, action,
@@ -396,7 +401,8 @@ Examples:
   Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
   sessions use provider-native tool calls when available; other sessions can use
   the JSON action loop. The mode can use the local Auto Code MCP bridge and now
-  reports provider-neutral external MCP client readiness through
+  executes Context7 through the provider-neutral external MCP client when
+  explicitly enabled. Remaining external servers report readiness through
   `external_client` health metadata, while parallel read-only work can use
   `run_subagents` when the caller wires a `RuntimeSubagentOrchestrator` session
   factory. Local action batches halt after the first failed action and persist
@@ -410,8 +416,9 @@ This runtime engine is an integration boundary, not a generic replacement for
 the Claude Agent SDK. Claude keeps the full native SDK surface. Codex CLI is the
 first wired non-Claude full-autonomous CLI runtime. Direct providers use
 `analysis_only`, `patch_proposal`, or `generic_edit`; they do not receive
-external MCP tool-execution parity or mutable subagent parity through the direct
-chat adapter.
+general external MCP tool-execution parity or mutable subagent parity through
+the direct chat adapter. The only external MCP execution path in this layer is
+the explicitly enabled Context7 stdio bridge.
 
 CLI runner profiles for Claude Code, Z.AI via Claude Code, Gemini CLI, Aider,
 Cursor, CodeRabbit CLI, GitHub Copilot CLI, OpenCode, Goose, Amp, Qwen Code,

@@ -27,6 +27,7 @@ from agents.runtime.mcp_bridge import (
     LOCAL_BRIDGE_SERVER,
     MCP_SERVER_CATALOG,
     build_external_mcp_health_matrix,
+    executable_external_mcp_servers,
     resolve_runtime_mcp_support,
 )
 from agents.runtime.subagents import (
@@ -124,6 +125,13 @@ def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
             )
             bridge_available = mode.mode == "generic_edit"
             available_servers = (LOCAL_BRIDGE_SERVER,) if bridge_available else ()
+            if bridge_available:
+                available_servers = (
+                    *available_servers,
+                    *executable_external_mcp_servers(
+                        requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+                    ),
+                )
             support = resolve_runtime_mcp_support(
                 provider_name=provider_row.provider,
                 runtime_name=mode.mode,

@@ -1369,7 +1369,7 @@ def render_mcp_bridge_prompt(mcp_bridge: RuntimeMcpBridge | None) -> str:
         )
 
     lines = [
-        "Bridged Auto Code MCP actions available through the local runtime:",
+        "Bridged MCP actions available through the generic edit runtime:",
         *mcp_bridge.prompt_lines(),
     ]
     if mcp_bridge.unavailable_servers:
