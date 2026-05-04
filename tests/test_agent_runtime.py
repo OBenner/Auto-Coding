@@ -976,8 +976,12 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "error_result_ids": [],
         "cancelled_result_ids": [],
         "artifact_result_ids": [],
+        "retried_result_ids": [],
+        "max_attempts_exhausted_result_ids": [],
         "has_errors": False,
         "has_cancelled": False,
+        "has_retries": False,
+        "has_exhausted_retries": False,
     }
     assert artifact["results"][0]["usage_metadata"] == {
         "input_tokens": 1,
@@ -1033,6 +1037,7 @@ async def test_runtime_subagent_orchestrator_times_out_child_sessions(
     assert run.artifact_path == str(artifact_path)
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["summary"]["error_result_ids"] == ["slow-review"]
+    assert artifact["summary"]["max_attempts_exhausted_result_ids"] == ["slow-review"]
 
 
 @pytest.mark.asyncio
@@ -1147,10 +1152,13 @@ async def test_runtime_subagent_orchestrator_retries_isolated_child_attempts(
     result_payload = artifact["results"][0]
     assert result_payload["context"] == {"focus": "runtime retries"}
     assert result_payload["attempt_count"] == 2
+    assert result_payload["max_attempts"] == 2
     assert [attempt["status"] for attempt in result_payload["attempts"]] == [
         "error",
         "complete",
     ]
+    assert artifact["summary"]["retried_result_ids"] == ["inspect-retry"]
+    assert artifact["summary"]["max_attempts_exhausted_result_ids"] == []
     child_artifact_path = (
         tmp_path / "artifacts" / "runtime_subagents__inspect-retry.json"
     )
@@ -1180,6 +1188,8 @@ def test_runtime_subagent_result_summary_counts_mixed_statuses():
                 status="error",
                 response_text="",
                 error="pytest failed",
+                max_attempts=2,
+                attempt_count=2,
             ),
             RuntimeSubagentResult(
                 id="docs",
@@ -1203,8 +1213,12 @@ def test_runtime_subagent_result_summary_counts_mixed_statuses():
         "error_result_ids": ["test"],
         "cancelled_result_ids": ["docs"],
         "artifact_result_ids": ["code"],
+        "retried_result_ids": ["test"],
+        "max_attempts_exhausted_result_ids": ["test"],
         "has_errors": True,
         "has_cancelled": True,
+        "has_retries": True,
+        "has_exhausted_retries": True,
     }
 
 
@@ -2420,6 +2434,7 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
     ]
     subagent_observation = observation_lines[0]["result"]["data"]
     assert subagent_observation["results"][0]["attempt_count"] == 1
+    assert subagent_observation["results"][0]["max_attempts"] == 2
     assert subagent_observation["results"][0]["merge_policy"] == "read_only"
     assert Path(subagent_observation["results"][0]["artifact_path"]).exists()
 

@@ -1110,6 +1110,7 @@ class GenericEditRuntimeSession:
                         "role": result.role,
                         "status": result.status,
                         "attempt_count": result.attempt_count,
+                        "max_attempts": result.max_attempts,
                         "merge_policy": result.merge_policy,
                         "artifact_path": result.artifact_path,
                         "response_text": result.response_text[

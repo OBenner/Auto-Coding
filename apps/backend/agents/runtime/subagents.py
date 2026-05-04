@@ -93,6 +93,7 @@ class RuntimeSubagentResult:
     error: str | None = None
     attempt: int = 1
     attempt_count: int = 1
+    max_attempts: int = DEFAULT_SUBAGENT_MAX_ATTEMPTS
     attempts: list[RuntimeSubagentAttempt] = field(default_factory=list)
     context: dict[str, Any] = field(default_factory=dict)
     merge_policy: str = DEFAULT_SUBAGENT_MERGE_POLICY
@@ -386,6 +387,7 @@ def runtime_result_to_subagent_result(
         response_text=result.response_text,
         usage_metadata=result.usage_metadata,
         artifacts=result.artifacts,
+        max_attempts=bounded_subagent_attempts(task.max_attempts),
     )
 
 
@@ -399,6 +401,7 @@ def attach_task_contract_to_result(
     """Attach isolation, merge, and retry metadata to a child result."""
     result.attempt = attempt
     result.attempt_count = len(attempts)
+    result.max_attempts = bounded_subagent_attempts(task.max_attempts)
     result.attempts = list(attempts)
     result.context = dict(task.context)
     result.merge_policy = task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY
@@ -439,6 +442,7 @@ def cancelled_subagent_result(
         role=task.role,
         status="cancelled",
         response_text=message,
+        max_attempts=bounded_subagent_attempts(task.max_attempts),
         context=dict(task.context),
         merge_policy=task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY,
         write_scope=tuple(task.write_scope),
@@ -456,6 +460,7 @@ def timeout_subagent_result(
         status="error",
         response_text="",
         error=f"Subagent task timed out after {timeout_seconds:g} seconds.",
+        max_attempts=bounded_subagent_attempts(task.max_attempts),
         context=dict(task.context),
         merge_policy=task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY,
         write_scope=tuple(task.write_scope),
@@ -473,6 +478,7 @@ def error_subagent_result(
         status="error",
         response_text="",
         error=error,
+        max_attempts=bounded_subagent_attempts(task.max_attempts),
         context=dict(task.context),
         merge_policy=task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY,
         write_scope=tuple(task.write_scope),
@@ -608,6 +614,8 @@ def summarize_subagent_results(results: list[RuntimeSubagentResult]) -> dict[str
     error_result_ids: list[str] = []
     cancelled_result_ids: list[str] = []
     artifact_result_ids: list[str] = []
+    retried_result_ids: list[str] = []
+    max_attempts_exhausted_result_ids: list[str] = []
 
     for result in results:
         status_counts[result.status] = status_counts.get(result.status, 0) + 1
@@ -621,6 +629,10 @@ def summarize_subagent_results(results: list[RuntimeSubagentResult]) -> dict[str
             cancelled_result_ids.append(result.id)
         if result.artifacts:
             artifact_result_ids.append(result.id)
+        if result.attempt_count > 1:
+            retried_result_ids.append(result.id)
+        if result.status == "error" and result.attempt_count >= result.max_attempts:
+            max_attempts_exhausted_result_ids.append(result.id)
 
     return {
         "result_count": len(results),
@@ -630,8 +642,12 @@ def summarize_subagent_results(results: list[RuntimeSubagentResult]) -> dict[str
         "error_result_ids": error_result_ids,
         "cancelled_result_ids": cancelled_result_ids,
         "artifact_result_ids": artifact_result_ids,
+        "retried_result_ids": retried_result_ids,
+        "max_attempts_exhausted_result_ids": max_attempts_exhausted_result_ids,
         "has_errors": bool(error_result_ids),
         "has_cancelled": bool(cancelled_result_ids),
+        "has_retries": bool(retried_result_ids),
+        "has_exhausted_retries": bool(max_attempts_exhausted_result_ids),
     }
 
 
@@ -648,6 +664,7 @@ def normalize_subagent_result(
             role=task.role,
             status="cancelled",
             response_text="Subagent task was cancelled.",
+            max_attempts=bounded_subagent_attempts(task.max_attempts),
             context=dict(task.context),
             merge_policy=task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY,
             write_scope=tuple(task.write_scope),
@@ -658,6 +675,7 @@ def normalize_subagent_result(
         status="error",
         response_text="",
         error=str(raw_result),
+        max_attempts=bounded_subagent_attempts(task.max_attempts),
         context=dict(task.context),
         merge_policy=task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY,
         write_scope=tuple(task.write_scope),
