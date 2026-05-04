@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auto Code Product Docs</title>
+    <meta name="description" content="Auto Code product documentation, runtime map, architecture, and roadmap." />
+    <link rel="stylesheet" href="./assets/css/styles.css?v=20260503-language-pill-align" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">AC</div>
+          <div class="brand-copy">
+            <p class="brand-overline" id="brand-overline"></p>
+            <h1 id="brand-title"></h1>
+          </div>
+        </div>
+
+        <div class="language-control language-menu" id="language-menu">
+          <label class="visually-hidden" for="language-switcher" id="language-label"></label>
+          <button class="language-trigger" id="language-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+            <span id="language-current-flag" aria-hidden="true"></span>
+          </button>
+          <div class="language-options" id="language-options" role="menu"></div>
+          <select class="language-native" id="language-switcher" aria-label="Language selector">
+            <option value="en">English</option>
+            <option value="ru">Русский</option>
+            <option value="fr">Français</option>
+          </select>
+        </div>
+
+        <div class="control-group search-control">
+          <label for="search-input" id="search-label"></label>
+          <input id="search-input" type="search" />
+        </div>
+
+        <nav id="doc-nav" aria-label="Documentation sections"></nav>
+      </aside>
+
+      <main class="content">
+        <header class="hero">
+          <div class="hero-text">
+            <p class="eyebrow" id="hero-eyebrow"></p>
+            <h2 id="hero-title"></h2>
+            <p class="hero-lead" id="hero-lead"></p>
+            <div class="hero-actions" id="hero-actions"></div>
+          </div>
+          <div class="product-signal" id="product-signal"></div>
+        </header>
+
+        <section class="doc-content" id="doc-content"></section>
+        <section class="app-map" id="app-map"></section>
+      </main>
+    </div>
+
+    <script src="./assets/js/content.js?v=20260503-language-pill-align"></script>
+    <script src="./assets/data/docs-data.js?v=20260503-language-pill-align"></script>
+    <script src="./assets/js/app.js?v=20260503-language-pill-align"></script>
+  </body>
+</html>

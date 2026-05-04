@@ -1,10 +1,16 @@
 # CI/CD Pipeline Integration
 
-This guide covers using Auto-Claude in CI/CD pipelines for autonomous AI-powered builds. Learn how to run headless builds with exit codes, JSON output, and artifact generation.
+This guide covers using Auto Code in CI/CD pipelines for autonomous AI-powered builds. It explains how to run headless builds with exit codes, JSON output, artifact generation, and explicit runtime configuration.
+
+> **Documentation status:** This guide has been updated for the current
+> multi-runtime model. Older `AUTO_CLAUDE_*` environment variables are
+> still shown where the CLI currently supports legacy names, but new examples
+> should prefer the `AUTO_CODE_*` runtime controls documented in
+> [Provider Runtime Modes](../docs/architecture/provider-runtime-modes.md).
 
 ## Overview
 
-Auto-Claude's CI/CD mode enables fully automated builds without interactive prompts. This is ideal for:
+Auto Code's CI/CD mode enables fully automated builds without interactive prompts. This is ideal for:
 
 - **Automated PR Reviews** - Run AI agents to validate changes before merge
 - **Continuous Integration** - Trigger builds on push/PR with automated testing
@@ -45,7 +51,7 @@ python run.py --spec 001
 
 ### Exit Codes
 
-Auto-Claude uses standard exit codes to indicate build results:
+Auto Code uses standard exit codes to indicate build results:
 
 | Exit Code | Status | Description |
 |-----------|--------|-------------|
@@ -57,7 +63,7 @@ Auto-Claude uses standard exit codes to indicate build results:
 
 **GitHub Actions Integration:**
 ```yaml
-- name: Run Auto-Claude
+- name: Run Auto Code
   working-directory: apps/backend
   run: python run.py --spec 001 --ci
   # Exit codes are automatically handled by GitHub Actions
@@ -106,7 +112,7 @@ on:
 
 ### Environment Configuration
 
-Configure Auto-Claude in CI via environment variables:
+Configure Auto Code in CI via environment variables:
 
 ```yaml
 env:
@@ -114,9 +120,12 @@ env:
   AUTO_CLAUDE_CI: 'true'
   AUTO_CLAUDE_JSON_OUTPUT: 'true'
 
-  # Required: Authentication — Claude OAuth token (NOT ANTHROPIC_API_KEY)
+  # Full SDK runtime authentication: Claude OAuth token (NOT ANTHROPIC_API_KEY)
   # Generate with: claude setup-token --print
   CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # Codex CLI runner authentication: preconfigured Codex profile path
+  # CODEX_HOME: ${{ github.workspace }}/.codex-ci
 
   # Optional: Model selection
   # CLAUDE_MODEL: 'claude-sonnet-4-5-20250929'
@@ -130,17 +139,22 @@ env:
 **Setup Secrets:**
 1. Go to repository **Settings** → **Secrets and variables** → **Actions**
 2. Run `claude setup-token --print` locally to obtain your Claude OAuth token
-3. Add `CLAUDE_CODE_OAUTH_TOKEN` with that token value
-   > **Note:** `ANTHROPIC_API_KEY` is intentionally **not supported** — Auto Code requires
-   > Claude Code OAuth tokens to avoid silent billing to raw API credits.
-4. Add optional keys (`OPENAI_API_KEY`, `LINEAR_API_KEY`, etc.)
+3. Add `CLAUDE_CODE_OAUTH_TOKEN` when using the Claude full SDK runtime.
+4. Add `CODEX_HOME` setup when using the Codex CLI runner path.
+5. Add optional API keys (`OPENAI_API_KEY`, `LINEAR_API_KEY`, etc.) only for
+   integrations, memory, or compatible limited runtime modes.
+
+> **Important:** `ANTHROPIC_API_KEY` is not the main Auto Code runtime auth
+> path. Use Claude Code OAuth for the Claude full runtime, Codex CLI account
+> auth for the Codex CLI runner, and provider API keys only where the selected
+> runtime mode supports them.
 
 ### Spec-Based Build
 
 Run builds from an existing spec:
 
 ```yaml
-- name: Run Auto-Claude build
+- name: Run Auto Code build
   working-directory: apps/backend
   run: |
     source .venv/bin/activate
@@ -152,7 +166,7 @@ Run builds from an existing spec:
 Run builds from a task description (creates spec first):
 
 ```yaml
-- name: Run Auto-Claude with task
+- name: Run Auto Code with task
   working-directory: apps/backend
   run: |
     source .venv/bin/activate
@@ -192,7 +206,7 @@ Post build results as PR comments:
       const buildLog = JSON.parse(fs.readFileSync('.auto-claude/specs/001/artifacts/build-log.json', 'utf8'));
 
       // Build comment
-      let comment = '## 🤖 Auto-Claude Build Results\n\n';
+      let comment = '## 🤖 Auto Code Build Results\n\n';
       comment += `**Status:** ${buildLog.status}\n`;
       comment += `**Exit Code:** ${buildLog.exit_code}\n`;
       comment += `**Duration:** ${buildLog.duration}\n`;
@@ -210,7 +224,7 @@ Post build results as PR comments:
 
 ## JSON Output Format
 
-When using `--json` flag or `AUTO_CLAUDE_JSON_OUTPUT=true`, Auto-Claude outputs machine-readable JSON:
+When using `--json` flag or `AUTO_CLAUDE_JSON_OUTPUT=true`, Auto Code outputs machine-readable JSON:
 
 ### Build Result Structure
 
@@ -262,7 +276,7 @@ fi
 import json
 import subprocess
 
-# Run Auto-Claude
+# Run Auto Code
 result = subprocess.run(
     ['python', 'run.py', '--spec', '001', '--ci', '--json'],
     capture_output=True,
@@ -313,7 +327,7 @@ python run.py --qa  # Skips QA approval prompt
 
 **GitHub Actions Example:**
 ```yaml
-- name: Run Auto-Claude
+- name: Run Auto Code
   env:
     AUTO_CLAUDE_CI: 'true'
     AUTO_CLAUDE_JSON_OUTPUT: 'true'
@@ -324,7 +338,7 @@ python run.py --qa  # Skips QA approval prompt
 
 ## Artifact Generation
 
-Auto-Claude generates artifacts in CI mode for debugging and reporting.
+Auto Code generates artifacts in CI mode for debugging and reporting.
 
 ### Artifact Types
 
@@ -428,12 +442,12 @@ on:
     branches: [main]
 
 jobs:
-  auto-claude-review:
+  auto-code-review:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Auto-Claude
+      - name: Setup Auto Code
         run: |
           cd apps/backend
           uv venv
@@ -443,7 +457,7 @@ jobs:
       - name: Run AI review
         env:
           AUTO_CLAUDE_CI: 'true'
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           cd apps/backend
           source .venv/bin/activate
@@ -506,7 +520,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Auto-Claude
+      - name: Run Auto Code
         env:
           AUTO_CLAUDE_CI: 'true'
           AUTO_CLAUDE_JSON_OUTPUT: 'true'
@@ -541,7 +555,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Auto-Claude
+      - name: Run Auto Code
         env:
           AUTO_CLAUDE_CI: 'true'
         run: |
@@ -589,23 +603,23 @@ jobs:
 **Symptoms:** Exit code 3, build log shows system error
 
 **Common Causes:**
-1. **Missing authentication** - `ANTHROPIC_API_KEY` not set
-2. **Network issues** - Can't reach Anthropic API
+1. **Missing runtime authentication** - no Claude OAuth token, Codex profile, or compatible provider key
+2. **Network issues** - the selected provider or CLI runner cannot connect
 3. **Configuration errors** - Invalid settings in `.env`
 4. **Python errors** - Missing dependencies or version conflicts
 
 **Solutions:**
 ```bash
-# Check authentication
-echo $ANTHROPIC_API_KEY
+# Check full-runtime authentication
+test -n "$CLAUDE_CODE_OAUTH_TOKEN" && echo "Claude OAuth token configured"
+test -n "$CODEX_HOME" && test -d "$CODEX_HOME" && echo "Codex profile directory exists"
 
-# Test API access
-curl https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_API_KEY"
+# Check configured provider/runtime matrix
+python run.py --runtime-modes
 
 # Verify dependencies
 cd apps/backend
-pip list | grep anthropic
+pip list
 
 # Check configuration
 cat apps/backend/.env
@@ -660,7 +674,7 @@ ls -la .auto-claude/specs/001/
 
 **Common Causes:**
 1. **Missing permissions** - Workflow lacks `pull-requests: write`
-2. **Secret not configured** - `ANTHROPIC_API_KEY` missing
+2. **Secret not configured** - runtime auth secret is missing
 3. **Token expired** - OAuth token needs refresh
 
 **Solutions:**
@@ -677,7 +691,7 @@ permissions:
 claude setup-token
 
 # Update GitHub secret
-# Go to: Settings → Secrets → Actions → ANTHROPIC_API_KEY
+# Go to: Settings -> Secrets -> Actions -> CLAUDE_CODE_OAUTH_TOKEN
 ```
 
 ---
@@ -724,7 +738,7 @@ concurrency:
 Prevent runaway builds:
 
 ```yaml
-- name: Run Auto-Claude
+- name: Run Auto Code
   timeout-minutes: 60  # 1 hour max
   run: python run.py --spec 001 --ci
 ```
@@ -799,7 +813,7 @@ exit $EXIT_CODE
 Run steps based on build result:
 
 ```yaml
-- name: Run Auto-Claude
+- name: Run Auto Code
   id: build
   run: python run.py --spec 001 --ci
   continue-on-error: true
@@ -831,7 +845,7 @@ jobs:
       - run: python run.py --spec 001 --ci
 
   integration-tests:
-    needs: auto-claude-build  # Run after Auto-Claude
+    needs: auto-claude-build  # Run after Auto Code
     runs-on: ubuntu-latest
     steps:
       - run: npm run integration-test
@@ -849,7 +863,7 @@ jobs:
 
 ## Summary
 
-Auto-Claude's CI/CD integration provides:
+Auto Code's CI/CD integration provides:
 
 1. **Non-interactive mode** - Fully automated builds with `--ci` flag
 2. **Standard exit codes** - Build status via exit codes (0, 1, 2, 3)

@@ -21,6 +21,7 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 | **Project structure** | [CLAUDE.md](../../CLAUDE.md) | architecture, structure, organization, file-layout |
 | **Contributing** | [CONTRIBUTING.md](../../CONTRIBUTING.md) | development, setup, pr, pull-request, contribution |
 | **Style guide** | [STYLE_GUIDE.md](../STYLE_GUIDE.md) | writing, documentation, formatting, markdown |
+| **Docs freshness** | [DOCS-FRESHNESS-AUDIT.md](../audit/DOCS-FRESHNESS-AUDIT.md) | audit, stale-docs, runtime-docs, roadmap |
 
 ---
 
@@ -28,10 +29,11 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 
 | Document | Location | Keywords |
 |----------|----------|----------|
-| **[Quick Start Guide](../../guides/QUICK-START.md)** | `guides/` | beginner, tutorial, first-time, installation, setup, 15-minutes |
+| **[Quick Start Guide](../../guides/QUICK-START.md)** | `guides/` | beginner, tutorial, first-time, installation, setup, runtime |
 | **[Main README](../../README.md)** | Root | overview, features, download, install, introduction |
 | **[CLI Usage](../../guides/CLI-USAGE.md)** | `guides/` | terminal, command-line, cli, headless, server, power-user |
 | **[Advanced Usage](../../guides/ADVANCED-USAGE.md)** | `guides/` | advanced, expert, optimization, customization, patterns |
+| **[GitHub Pages Docs Portal](../../site/README.md)** | `site/` | public-docs, github-pages, multilingual, roadmap |
 
 ---
 
@@ -45,6 +47,7 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 | **[Web Backend Architecture](../modules/web-backend-architecture.md)** | `docs/modules/` | web, api, fastapi, backend, server |
 | **[Web Frontend Architecture](../modules/web-frontend-architecture.md)** | `docs/modules/` | web, react, typescript, vite, frontend |
 | **[Provider Runtime Modes](../architecture/provider-runtime-modes.md)** | `docs/architecture/` | provider, runtime, openai, claude, patch-proposal, analysis-only |
+| **[Documentation Freshness Audit](../audit/DOCS-FRESHNESS-AUDIT.md)** | `docs/audit/` | docs-audit, stale-docs, codex-cli, runtime-router, generic-edit |
 | **[System Overview](../templates/architecture/system-overview.md)** | `docs/templates/architecture/` | template, system-design, high-level, overview |
 
 ---

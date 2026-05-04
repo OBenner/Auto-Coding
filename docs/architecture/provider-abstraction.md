@@ -1,10 +1,10 @@
 # Provider Abstraction Layer
 
-The **Provider Abstraction Layer** enables Auto Code to support multiple AI backends (Claude Agent SDK, LiteLLM, OpenRouter) through a unified interface. This architecture allows agent code to work with different AI providers without modification, while preserving each provider's unique capabilities.
+The **Provider Abstraction Layer** enables Auto Code to support multiple AI backends (Claude Agent SDK, Codex CLI, OpenAI-compatible providers, Google/Gemini, ZhipuAI, Ollama, LiteLLM, and OpenRouter) through a unified interface. This architecture allows agent code to work with different AI providers without modification, while preserving each provider's unique capabilities.
 
 ## Overview
 
-The provider abstraction layer solves the problem of vendor lock-in by defining a common interface for AI engine providers. Agents interact with `AIEngineProvider` instances rather than directly with specific SDKs, making it possible to swap between Claude, LiteLLM, and OpenRouter without changing agent code.
+The provider abstraction layer solves the problem of vendor lock-in by defining a common interface for AI engine providers. Agents interact with `AIEngineProvider` instances rather than directly with specific SDKs, making it possible to route work across Claude, Codex CLI, direct API providers, and gateway providers without changing agent code.
 
 Provider selection is not the same thing as runtime capability. A provider
 adapter can create a text session while still lacking the full autonomous coding
@@ -32,6 +32,7 @@ core/providers/
 ├── exceptions.py            # Provider exception hierarchy
 └── adapters/                # Provider implementations
     ├── claude.py            # Claude Agent SDK adapter
+    ├── codex.py             # Codex CLI account-runtime adapter
     ├── google.py            # Google Gemini adapter
     ├── litellm.py           # LiteLLM adapter
     ├── ollama.py            # Ollama adapter
@@ -49,9 +50,10 @@ core/providers/
 
 The runtime engine sits above this provider layer. It wraps provider sessions in
 runtime adapters and checks whether the selected runtime can satisfy the current
-agent phase. Claude sessions use the full SDK runtime; non-Claude sessions are
-limited to text-only or patch proposal modes until a generic tool/edit runtime
-exists.
+agent phase. Claude sessions use the full SDK runtime; Codex sessions use the
+CLI-backed full autonomous runtime; direct API providers are limited to
+`analysis_only`, `patch_proposal`, or the experimental `generic_edit` local
+action loop unless a future runtime supplies equivalent capabilities.
 
 ## Core Interfaces
 
@@ -402,11 +404,21 @@ class ProviderConfig:
     """Configuration for AI engine provider selection."""
 
     # Core settings
-    provider: str = DEFAULT_PROVIDER  # "claude", "litellm", or "openrouter"
+    provider: str = DEFAULT_PROVIDER  # "claude", "codex", "openai", "litellm", etc.
 
     # Claude Agent SDK settings
     anthropic_api_key: str = ""
     claude_model: str = "claude-sonnet-4-5-20250929"
+
+    # OpenAI direct API settings
+    openai_api_key: str = ""
+    openai_model: str = DEFAULT_OPENAI_MODEL
+    openai_base_url: str = ""
+
+    # Codex CLI settings
+    codex_home: str = ""
+    codex_model: str = DEFAULT_CODEX_MODEL
+    codex_cli_path: str = ""
 
     # LiteLLM settings
     litellm_model: str = ""
@@ -424,13 +436,26 @@ class ProviderConfig:
         provider = os.environ.get("AI_ENGINE_PROVIDER", DEFAULT_PROVIDER).lower()
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         claude_model = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
+        codex_home = os.environ.get("CODEX_HOME", "")
+        codex_model = os.environ.get("CODEX_MODEL", DEFAULT_CODEX_MODEL)
+        codex_cli_path = os.environ.get("CODEX_CLI_PATH", "")
         # ... (load all settings from environment)
-        return cls(provider=provider, anthropic_api_key=anthropic_api_key, ...)
+        return cls(
+            provider=provider,
+            anthropic_api_key=anthropic_api_key,
+            claude_model=claude_model,
+            codex_home=codex_home,
+            codex_model=codex_model,
+            codex_cli_path=codex_cli_path,
+            ...
+        )
 
     def is_valid(self) -> bool:
         """Check if config has minimum required values for selected provider."""
         if self.provider == "claude":
-            return bool(self.anthropic_api_key)
+            return bool(self.anthropic_api_key) or _has_claude_oauth_credentials()
+        elif self.provider == "codex":
+            return bool(_codex_executable(self.codex_cli_path)) and _has_codex_auth_material(self.codex_home)
         elif self.provider == "litellm":
             return bool(self.litellm_model)
         elif self.provider == "openrouter":
@@ -442,11 +467,16 @@ class ProviderConfig:
 
 ```bash
 # Provider selection
-AI_ENGINE_PROVIDER=claude  # or "litellm", "openrouter"
+AI_ENGINE_PROVIDER=claude  # or "codex", "openai", "litellm", "openrouter"
 
-# Claude Agent SDK
-ANTHROPIC_API_KEY=sk-ant-...
+# Claude full SDK runtime
+CLAUDE_CODE_OAUTH_TOKEN=your-oauth-token  # primary full-runtime token
+# ANTHROPIC_AUTH_TOKEN=your-enterprise-token  # enterprise/proxy fallback
+# ANTHROPIC_API_KEY=your-api-key  # ProviderConfig/API fallback, not the main full-runtime path
 CLAUDE_MODEL=claude-sonnet-4-5-20250929
+
+# Codex CLI runtime
+CODEX_HOME=/path/to/codex-profile
 
 # LiteLLM
 LITELLM_MODEL=gpt-4
@@ -692,7 +722,9 @@ mock_provider.send_message = mock_send_message
 ```bash
 # .env
 AI_ENGINE_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_CODE_OAUTH_TOKEN=your-oauth-token
+# ANTHROPIC_AUTH_TOKEN=your-enterprise-token
+# ANTHROPIC_API_KEY=your-api-key
 CLAUDE_MODEL=claude-sonnet-4-5-20250929
 ```
 
@@ -757,11 +789,16 @@ pip install openai   # for OpenRouter provider
 
 ### Issue: ProviderConfigError validation fails
 
-**Symptom:** `ProviderConfigError: Claude provider requires ANTHROPIC_API_KEY`
+**Symptom:** `ProviderConfigError: Claude provider requires Claude OAuth credentials or ANTHROPIC_API_KEY`
 
 **Solution:** Set required environment variables in `.env`:
+
 ```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> apps/backend/.env
+echo "CLAUDE_CODE_OAUTH_TOKEN=your-oauth-token" >> apps/backend/.env
+# or, for enterprise/proxy deployments accepted by the runtime validator:
+echo "ANTHROPIC_AUTH_TOKEN=your-enterprise-token" >> apps/backend/.env
+# or, for ProviderConfig/API compatibility paths:
+echo "ANTHROPIC_API_KEY=your-api-key" >> apps/backend/.env
 ```
 
 ### Issue: Session creation fails

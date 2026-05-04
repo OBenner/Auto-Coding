@@ -1,0 +1,89 @@
+name: Deploy Docs Portal to GitHub Pages
+
+on:
+  push:
+    branches: ["develop"]
+    paths:
+      - "site/**"
+      - "*.md"
+      - "**/*.md"
+      - ".github/workflows/docs-site-pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: "docs-portal-pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build docs portal (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Markdown document index
+        run: node site/scripts/build-docs-data.mjs
+
+      - name: Validate docs portal structure
+        run: >
+          node -e "const fs = require('fs');
+          for (const file of [
+            'site/index.html',
+            'site/assets/css/styles.css',
+            'site/assets/js/content.js',
+            'site/assets/js/app.js',
+            'site/assets/data/docs-data.js'
+          ]) {
+            if (!fs.existsSync(file)) throw new Error(file + ' is missing');
+          }"
+
+      - name: Upload validated site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site-${{ matrix.os }}
+          path: site/
+          if-no-files-found: error
+          retention-days: 1
+
+  upload-pages-artifact:
+    name: Upload Pages artifact
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - name: Download Linux build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site-ubuntu-latest
+          path: site
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: upload-pages-artifact
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

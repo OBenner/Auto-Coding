@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get Auto Code running and building your first feature in under 15 minutes.
+Get Auto Code running and build your first feature in an isolated workspace.
 
 This guide focuses on the fastest path to success: using the desktop app. For CLI usage, see [CLI Usage Guide](./CLI-USAGE.md).
 
@@ -8,11 +8,14 @@ This guide focuses on the fastest path to success: using the desktop app. For CL
 
 - **A computer** running Windows, macOS, or Linux
 - **A git repository** you want to work on (can be empty or existing)
-- **Claude Pro or Max subscription** ($20/month or more) for API access
+- **At least one configured runtime**
+  - Claude Code OAuth for the current full SDK runtime
+  - Codex CLI account profile for the Codex CLI runner path
+  - Optional API keys for limited provider modes such as `analysis_only`, `patch_proposal`, or `generic_edit`
 
 ---
 
-## Step 1: Download and Install (2 minutes)
+## Step 1: Download and Install
 
 Download the latest release for your platform:
 
@@ -26,21 +29,20 @@ Install the application like any other desktop app:
 
 ---
 
-## Step 2: Launch and Connect Claude (3 minutes)
+## Step 2: Choose Your Runtime
 
-When you first open Auto Code, you'll see a welcome screen asking you to connect Claude.
+When you first open Auto Code, the onboarding flow asks how you want agents to run.
 
-1. Click the **"Connect Claude"** button
-2. Your browser opens to Claude's OAuth page
-3. Sign in with your Claude account (Pro or Max required)
-4. Authorize Auto Code to access Claude
-5. Return to the app -- you're connected!
+1. Choose **Codex account login** when you want to use the Codex CLI runner path.
+2. Choose **Claude Code OAuth** when you need the existing full SDK runtime.
+3. Choose an **API-key provider** only for compatible limited runtime modes.
+4. Run the built-in smoke test before starting a real task.
 
-**Why OAuth?** Auto Code uses the official Claude Agent SDK with your account. Your API token is stored securely in your system keychain.
+Account-login runtimes and API-key providers are intentionally separate. A direct API key does not automatically provide the same tool, MCP, shell, filesystem, and subagent capabilities as a full autonomous runner.
 
 ---
 
-## Step 3: Open Your Project (1 minute)
+## Step 3: Open Your Project
 
 1. Click **"Open Project"** or **"Select Repository"**
 2. Navigate to any folder on your computer that contains a git repository
@@ -50,7 +52,7 @@ Auto Code detects your project stack (Python, Node.js, etc.) and configures secu
 
 ---
 
-## Step 4: Create Your First Task (2 minutes)
+## Step 4: Create Your First Task
 
 You're now at the Kanban board. Click **"Create New Spec"** (or the `+` button).
 
@@ -70,14 +72,14 @@ Click **"Create Spec"** and watch the agents work.
 
 ---
 
-## Step 5: Watch the Agents Build (5 minutes)
+## Step 5: Watch the Agents Build
 
 The Kanban board shows your task moving through stages:
 
-### Spec Creation (2-3 minutes)
+### Spec Creation
 The spec agent asks clarifying questions, creates a structured spec, and defines acceptance criteria. You can interact in the terminal if needed.
 
-### Planning (1 minute)
+### Planning
 The planner breaks your spec into implementation subtasks -- each with files to modify, verification steps, and completion criteria.
 
 ### Implementation (varies)
@@ -86,14 +88,14 @@ The coder agent works through subtasks sequentially. You can:
 - Click any terminal to see full context
 - Review changes in real-time
 
-### QA Validation (1-2 minutes)
+### QA Validation
 The QA reviewer validates against acceptance criteria and runs tests. Issues go back to the QA fixer in a loop until all pass.
 
 **What you do:** Nothing! Agents work autonomously. Monitor progress, but don't intervene unless something goes wrong.
 
 ---
 
-## Step 6: Review and Merge (2 minutes)
+## Step 6: Review and Merge
 
 When QA passes, your task moves to **"Ready for Review"**.
 
@@ -112,10 +114,10 @@ The changes merge cleanly to your branch. Your main branch is never touched unti
 
 ## What Just Happened?
 
-In about 15 minutes, you:
+In this first run, you:
 
 1. ✅ Installed Auto Code
-2. ✅ Connected Claude via OAuth
+2. ✅ Configured a runtime
 3. ✅ Opened your git repository
 4. ✅ Created a task from plain English
 5. ✅ Watched autonomous agents:

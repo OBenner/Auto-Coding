@@ -15,14 +15,14 @@ jobs:
     steps:
       - uses: actions/first-interaction@v3
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-message: |
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          issue_message: |
             👋 Thanks for opening your first issue!
 
             A maintainer will triage this soon. In the meantime:
             - Make sure you've provided all the requested info
             - Join our [Discord](https://discord.gg/QhRnz9m5HE) for faster help
-          pr-message: |
+          pr_message: |
             🎉 Thanks for your first PR!
 
             A maintainer will review it soon. Please make sure:
