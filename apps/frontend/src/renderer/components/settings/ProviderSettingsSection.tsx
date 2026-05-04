@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -771,6 +772,128 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       ? formatControlPlaneValue(subagentRow.merge_policy)
       : noneLabel;
 
+    let controlPlaneContent: ReactNode;
+    if (runtimeControlPlaneLoading && !runtimeControlPlaneDiagnostics) {
+      controlPlaneContent = (
+        <p className="max-w-xl rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
+          {t('settings:aiProvider.controlPlane.loading')}
+        </p>
+      );
+    } else if (runtimeControlPlaneError) {
+      controlPlaneContent = (
+        <div className="flex max-w-xl items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            {t('settings:aiProvider.controlPlane.error', {
+              error: runtimeControlPlaneError
+            })}
+          </p>
+        </div>
+      );
+    } else if (runtimeControlPlaneDiagnostics) {
+      controlPlaneContent = (
+        <div className="grid gap-3 xl:grid-cols-3">
+          <div className="rounded-md border border-border bg-background p-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              {t('settings:aiProvider.controlPlane.mcpBridgeTitle')}
+            </h4>
+            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.mcpStatus')}</dt>
+                <dd className="font-medium text-foreground">{mcpStatus}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.mcpAction')}</dt>
+                <dd className="font-medium text-foreground">{mcpAction}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.bridgedServers')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(mcpPlan?.bridged_servers)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.nativeRequiredServers')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(mcpPlan?.native_required_servers)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="rounded-md border border-border bg-background p-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              {t('settings:aiProvider.controlPlane.fallbackTitle')}
+            </h4>
+            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.selectedRuntime')}</dt>
+                <dd className="font-medium text-foreground">{fallbackSelected}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.runnerCandidates')}</dt>
+                <dd className="font-medium text-foreground">{runnerCandidates}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.missingCapabilities')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(fallbackRow?.missing_capabilities)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.compatibleFallbacks')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(fallbackRow?.compatible_fallbacks)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="rounded-md border border-border bg-background p-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              {t('settings:aiProvider.controlPlane.subagentsTitle')}
+            </h4>
+            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.subagentStrategy')}</dt>
+                <dd className="font-medium text-foreground">{subagentStrategy}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.subagentAvailability')}</dt>
+                <dd className="font-medium text-foreground">{subagentAvailability}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.mergePolicy')}</dt>
+                <dd className="font-medium text-foreground">{subagentMergePolicy}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.maxAttempts')}</dt>
+                <dd className="font-medium text-foreground">{subagentMaxAttempts}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.missingCapabilities')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(subagentRow?.missing_capabilities)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.requiredCapabilities')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(subagentRow?.required_capabilities)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      );
+    } else {
+      controlPlaneContent = (
+        <p className="max-w-xl rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
+          {t('settings:aiProvider.controlPlane.unavailable')}
+        </p>
+      );
+    }
+
     return (
       <div className="space-y-3 border-t border-border pt-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -799,118 +922,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           </Button>
         </div>
 
-        {runtimeControlPlaneLoading && !runtimeControlPlaneDiagnostics ? (
-          <p className="max-w-xl rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
-            {t('settings:aiProvider.controlPlane.loading')}
-          </p>
-        ) : runtimeControlPlaneError ? (
-          <div className="flex max-w-xl items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <p>
-              {t('settings:aiProvider.controlPlane.error', {
-                error: runtimeControlPlaneError
-              })}
-            </p>
-          </div>
-        ) : runtimeControlPlaneDiagnostics ? (
-          <div className="grid gap-3 xl:grid-cols-3">
-            <div className="rounded-md border border-border bg-background p-3">
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground">
-                {t('settings:aiProvider.controlPlane.mcpBridgeTitle')}
-              </h4>
-              <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.mcpStatus')}</dt>
-                  <dd className="font-medium text-foreground">{mcpStatus}</dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.mcpAction')}</dt>
-                  <dd className="font-medium text-foreground">{mcpAction}</dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.bridgedServers')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {formatControlPlaneList(mcpPlan?.bridged_servers)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.nativeRequiredServers')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {formatControlPlaneList(mcpPlan?.native_required_servers)}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="rounded-md border border-border bg-background p-3">
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground">
-                {t('settings:aiProvider.controlPlane.fallbackTitle')}
-              </h4>
-              <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.selectedRuntime')}</dt>
-                  <dd className="font-medium text-foreground">{fallbackSelected}</dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.runnerCandidates')}</dt>
-                  <dd className="font-medium text-foreground">{runnerCandidates}</dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.missingCapabilities')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {formatControlPlaneList(fallbackRow?.missing_capabilities)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.compatibleFallbacks')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {formatControlPlaneList(fallbackRow?.compatible_fallbacks)}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="rounded-md border border-border bg-background p-3">
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground">
-                {t('settings:aiProvider.controlPlane.subagentsTitle')}
-              </h4>
-              <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.subagentStrategy')}</dt>
-                  <dd className="font-medium text-foreground">{subagentStrategy}</dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.subagentAvailability')}</dt>
-                  <dd className="font-medium text-foreground">{subagentAvailability}</dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.mergePolicy')}</dt>
-                  <dd className="font-medium text-foreground">{subagentMergePolicy}</dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.maxAttempts')}</dt>
-                  <dd className="font-medium text-foreground">{subagentMaxAttempts}</dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.missingCapabilities')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {formatControlPlaneList(subagentRow?.missing_capabilities)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('settings:aiProvider.controlPlane.requiredCapabilities')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {formatControlPlaneList(subagentRow?.required_capabilities)}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </div>
-        ) : (
-          <p className="max-w-xl rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
-            {t('settings:aiProvider.controlPlane.unavailable')}
-          </p>
-        )}
+        {controlPlaneContent}
       </div>
     );
   };

@@ -311,7 +311,7 @@ class RuntimeSubagentOrchestrator:
         except asyncio.CancelledError:
             if runtime_session is not None:
                 await cancel_runtime_session(runtime_session)
-            result = cancelled_subagent_result(task, before_start=False)
+            raise
         except TimeoutError:
             if runtime_session is not None:
                 await cancel_runtime_session(runtime_session)

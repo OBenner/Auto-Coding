@@ -1089,7 +1089,7 @@ async def test_runtime_subagent_orchestrator_cancels_child_sessions_with_artifac
     assert created_sessions[0].cancelled is True
     assert [result.status for result in run.results] == ["cancelled", "cancelled"]
     assert run.results[0].attempt_count == 1
-    assert [attempt.status for attempt in run.results[0].attempts] == ["cancelled"]
+    assert run.results[0].attempts == []
     assert run.results[1].attempts == []
 
     artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
@@ -1101,7 +1101,7 @@ async def test_runtime_subagent_orchestrator_cancels_child_sessions_with_artifac
         "cancel-running",
         "cancel-queued",
     ]
-    assert artifact["results"][0]["attempts"][0]["status"] == "cancelled"
+    assert artifact["results"][0]["attempts"] == []
     assert Path(artifact["results"][0]["artifact_path"]).exists()
 
 
