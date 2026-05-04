@@ -528,8 +528,23 @@ export interface RuntimeFallbackMatrixRow {
   selected_mode_runner_candidates: string[];
 }
 
+export interface RuntimeSubagentMatrixRow {
+  provider: string;
+  runtime_mode: string;
+  strategy: string;
+  available: boolean;
+  reason: string;
+  required_capabilities: string[];
+  missing_capabilities: string[];
+  available_capabilities: string[];
+  max_attempts: number;
+  merge_policy: string;
+  artifact_support: boolean;
+}
+
 export interface RuntimeControlPlaneDiagnostics {
   runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
   mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
+  runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
   recommendations?: Record<string, string>;
 }

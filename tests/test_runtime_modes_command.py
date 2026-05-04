@@ -43,6 +43,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "CLI Runner Selection" in output
     assert "Runtime Fallback Matrix" in output
     assert "MCP Bridge Plan Matrix" in output
+    assert "Subagent Orchestrator Matrix" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
     assert "opencode" in output
@@ -136,6 +137,24 @@ def test_runtime_modes_command_outputs_json(capsys):
         "qwen_code",
     ]
     assert fallback_rows[("claude", "full_autonomous")]["fallback_applied"] is False
+    subagent_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["runtime_subagent_matrix"]
+    }
+    claude_subagents = subagent_rows[("claude", "full_autonomous")]
+    assert claude_subagents["strategy"] == "native"
+    assert claude_subagents["available"] is True
+    assert claude_subagents["merge_policy"] == "read_only"
+    assert claude_subagents["max_attempts"] == 1
+    codex_subagents = subagent_rows[("codex", "full_autonomous")]
+    assert codex_subagents["strategy"] == "orchestrated"
+    assert codex_subagents["available"] is True
+    openai_full_subagents = subagent_rows[("openai", "full_autonomous")]
+    assert openai_full_subagents["strategy"] == "unavailable"
+    assert openai_full_subagents["available"] is False
+    openai_generic_subagents = subagent_rows[("openai", "generic_edit")]
+    assert openai_generic_subagents["strategy"] == "orchestrated"
+    assert openai_generic_subagents["available"] is True
 
 
 def test_cli_runner_selection_filters_runtime_mode():

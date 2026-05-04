@@ -179,9 +179,10 @@ degraded modes, and runner candidates for each provider/runtime pair.
 The Electron provider settings screen consumes the same JSON payload through
 the `provider:runtime:diagnostics` IPC channel. Its runtime control plane panel
 shows the selected provider/runtime pair's MCP bridge status, required MCP
-action, bridged servers, native-required servers, fallback-selected runtime, and
-runner candidates. Treat this UI as a live view of the backend compatibility
-contract rather than a separate frontend-only matrix.
+action, bridged servers, native-required servers, fallback-selected runtime,
+runner candidates, and subagent support strategy. Treat this UI as a live view
+of the backend compatibility contract rather than a separate frontend-only
+matrix.
 
 ### CLI Runner Router
 
@@ -204,6 +205,16 @@ Codex CLI runs capture JSONL events and a normalized
 `codex_cli_timeline.json` artifact with bounded stdout/stderr budgets; if a CLI
 exceeds the capture limit, Auto Code terminates it and records
 `output_truncated` in the Codex CLI result artifact.
+
+### Subagent Support Matrix
+
+The `--runtime-modes --json` payload also includes
+`runtime_subagent_matrix`. It reports whether each provider/runtime pair has
+native subagents, can use Auto Code's orchestrated child-session fallback, or is
+blocked for subagent work. Orchestrated subagents currently use isolated child
+contexts with a read-only merge policy, bounded attempts, and per-child
+artifacts; this is useful for parallel exploration but is not Claude SDK Task
+tool parity.
 
 ## Generic Edit Contract
 

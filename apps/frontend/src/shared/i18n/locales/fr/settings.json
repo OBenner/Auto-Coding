@@ -1014,6 +1014,7 @@
       "none": "Aucun",
       "mcpBridgeTitle": "Bridge MCP",
       "fallbackTitle": "Fallback et runners",
+      "subagentsTitle": "Subagents",
       "mcpStatus": "Statut MCP",
       "mcpAction": "Action requise",
       "bridgedServers": "Serveurs bridgés",
@@ -1021,7 +1022,14 @@
       "selectedRuntime": "Runtime sélectionné",
       "runnerCandidates": "Runners candidats",
       "missingCapabilities": "Capacités manquantes",
-      "compatibleFallbacks": "Fallbacks compatibles"
+      "compatibleFallbacks": "Fallbacks compatibles",
+      "subagentStrategy": "Stratégie subagent",
+      "subagentAvailability": "Disponibilité",
+      "available": "Disponible",
+      "unavailableShort": "Indisponible",
+      "mergePolicy": "Politique de merge",
+      "maxAttempts": "Tentatives max",
+      "requiredCapabilities": "Capacités requises"
     },
     "cost": {
       "title": "Aperçu du coût",

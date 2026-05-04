@@ -42,6 +42,7 @@ The runtime control plane panel shows, for the selected provider and runtime:
 - MCP servers that still require a native MCP runtime.
 - Fallback-selected runtime for the selected provider/runtime pair.
 - CLI runner candidates that could satisfy the selected mode.
+- Subagent strategy, availability, merge policy, and bounded retry budget.
 
 This keeps the frontend aligned with the backend runtime contract while still
 making incompatibilities visible before a user launches a spec.

@@ -27,7 +27,8 @@ import type {
   ProviderRuntimeDiagnostics,
   RuntimeControlPlaneDiagnostics,
   RuntimeFallbackMatrixRow,
-  RuntimeMcpBridgePlanRow
+  RuntimeMcpBridgePlanRow,
+  RuntimeSubagentMatrixRow
 } from '../../../shared/types/settings';
 
 type ProviderSettingsSectionProps = Record<string, never>;
@@ -380,6 +381,16 @@ function findFallbackMatrixRow(
   ) ?? null;
 }
 
+function findSubagentMatrixRow(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  provider: AIEngineProvider,
+  runtimeMode: AgentRuntimeMode
+): RuntimeSubagentMatrixRow | null {
+  return diagnostics?.runtime_subagent_matrix?.find(
+    (row) => row.provider === provider && row.runtime_mode === runtimeMode
+  ) ?? null;
+}
+
 function getElectronAPI() {
   return (globalThis as unknown as Partial<Window>).electronAPI;
 }
@@ -727,6 +738,11 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       config.provider,
       activeRuntimeMode
     );
+    const subagentRow = findSubagentMatrixRow(
+      runtimeControlPlaneDiagnostics,
+      config.provider,
+      activeRuntimeMode
+    );
     const noneLabel = t('settings:aiProvider.controlPlane.none');
     const formatControlPlaneValue = (value?: string | null) => {
       const formatted = formatRuntimeDiagnosticValue(value);
@@ -742,6 +758,18 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     const runnerCandidates = formatControlPlaneList(
       fallbackRow?.selected_mode_runner_candidates
     );
+    const subagentStrategy = subagentRow
+      ? formatControlPlaneValue(subagentRow.strategy)
+      : noneLabel;
+    const subagentAvailability = subagentRow?.available
+      ? t('settings:aiProvider.controlPlane.available')
+      : t('settings:aiProvider.controlPlane.unavailableShort');
+    const subagentMaxAttempts = subagentRow
+      ? String(subagentRow.max_attempts)
+      : noneLabel;
+    const subagentMergePolicy = subagentRow
+      ? formatControlPlaneValue(subagentRow.merge_policy)
+      : noneLabel;
 
     return (
       <div className="space-y-3 border-t border-border pt-4">
@@ -785,7 +813,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
             </p>
           </div>
         ) : runtimeControlPlaneDiagnostics ? (
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="grid gap-3 xl:grid-cols-3">
             <div className="rounded-md border border-border bg-background p-3">
               <h4 className="text-xs font-semibold uppercase text-muted-foreground">
                 {t('settings:aiProvider.controlPlane.mcpBridgeTitle')}
@@ -837,6 +865,42 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   <dt>{t('settings:aiProvider.controlPlane.compatibleFallbacks')}</dt>
                   <dd className="font-medium text-foreground">
                     {formatControlPlaneList(fallbackRow?.compatible_fallbacks)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div className="rounded-md border border-border bg-background p-3">
+              <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                {t('settings:aiProvider.controlPlane.subagentsTitle')}
+              </h4>
+              <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.subagentStrategy')}</dt>
+                  <dd className="font-medium text-foreground">{subagentStrategy}</dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.subagentAvailability')}</dt>
+                  <dd className="font-medium text-foreground">{subagentAvailability}</dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.mergePolicy')}</dt>
+                  <dd className="font-medium text-foreground">{subagentMergePolicy}</dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.maxAttempts')}</dt>
+                  <dd className="font-medium text-foreground">{subagentMaxAttempts}</dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.missingCapabilities')}</dt>
+                  <dd className="font-medium text-foreground">
+                    {formatControlPlaneList(subagentRow?.missing_capabilities)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('settings:aiProvider.controlPlane.requiredCapabilities')}</dt>
+                  <dd className="font-medium text-foreground">
+                    {formatControlPlaneList(subagentRow?.required_capabilities)}
                   </dd>
                 </div>
               </dl>

@@ -27,6 +27,11 @@ from agents.runtime.mcp_bridge import (
     MCP_SERVER_CATALOG,
     resolve_runtime_mcp_support,
 )
+from agents.runtime.subagents import (
+    DEFAULT_SUBAGENT_MAX_ATTEMPTS,
+    DEFAULT_SUBAGENT_MERGE_POLICY,
+    resolve_runtime_subagent_support,
+)
 
 DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
 
@@ -149,6 +154,40 @@ def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
     return matrix
 
 
+def _subagent_orchestrator_available(provider: str, runtime_mode: str) -> bool:
+    """Return true when the runtime can use Auto Code's child-session orchestrator."""
+    if provider == "codex":
+        return runtime_mode == "full_autonomous"
+    return runtime_mode in {"analysis_only", "generic_edit", "patch_proposal"}
+
+
+def build_runtime_subagent_matrix() -> list[dict[str, Any]]:
+    """Build provider/runtime subagent support diagnostics."""
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        for mode in RUNTIME_MODE_INFO:
+            capabilities = capabilities_for_runtime_mode(
+                provider_row.provider,
+                mode.mode,
+            )
+            support = resolve_runtime_subagent_support(
+                provider_name=provider_row.provider,
+                runtime_name=mode.mode,
+                capabilities=capabilities,
+                orchestrator_available=_subagent_orchestrator_available(
+                    provider_row.provider,
+                    mode.mode,
+                ),
+            )
+            row = support.to_dict()
+            row["runtime_mode"] = row.pop("runtime")
+            row["max_attempts"] = DEFAULT_SUBAGENT_MAX_ATTEMPTS
+            row["merge_policy"] = DEFAULT_SUBAGENT_MERGE_POLICY
+            row["artifact_support"] = True
+            matrix.append(row)
+    return matrix
+
+
 def build_runtime_modes_payload() -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
     cli_runner_selection = {
@@ -166,6 +205,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         "cli_runner_selection": cli_runner_selection,
         "runtime_fallback_matrix": build_runtime_fallback_matrix(),
         "mcp_bridge_plan_matrix": build_mcp_bridge_plan_matrix(),
+        "runtime_subagent_matrix": build_runtime_subagent_matrix(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -259,6 +299,19 @@ def format_runtime_modes_text() -> str:
         for row in build_mcp_bridge_plan_matrix()
         if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
     ]
+    subagent_rows = [
+        [
+            row["provider"],
+            row["runtime_mode"],
+            row["strategy"],
+            "yes" if row["available"] else "no",
+            ", ".join(row["missing_capabilities"]) or "none",
+            row["merge_policy"],
+            str(row["max_attempts"]),
+        ]
+        for row in build_runtime_subagent_matrix()
+        if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
+    ]
 
     return "\n\n".join(
         [
@@ -323,6 +376,19 @@ def format_runtime_modes_text() -> str:
                     "Native required",
                 ],
                 mcp_bridge_rows,
+            ),
+            "Subagent Orchestrator Matrix",
+            _format_table(
+                [
+                    "Provider",
+                    "Runtime",
+                    "Strategy",
+                    "Available",
+                    "Missing capabilities",
+                    "Merge policy",
+                    "Max attempts",
+                ],
+                subagent_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",

@@ -116,6 +116,21 @@ export const settingsMock = {
           bridged_servers: []
         }
       ],
+      runtime_subagent_matrix: [
+        {
+          provider: 'claude',
+          runtime_mode: 'full_autonomous',
+          strategy: 'native',
+          available: true,
+          reason: 'claude/full_autonomous exposes native runtime subagents.',
+          required_capabilities: ['text_completion'],
+          missing_capabilities: [],
+          available_capabilities: ['text_completion', 'subagents'],
+          max_attempts: 1,
+          merge_policy: 'read_only',
+          artifact_support: true
+        }
+      ],
       recommendations: {}
     }
   }),

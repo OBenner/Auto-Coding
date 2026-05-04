@@ -1066,6 +1066,7 @@
       "none": "None",
       "mcpBridgeTitle": "MCP bridge",
       "fallbackTitle": "Fallback and runners",
+      "subagentsTitle": "Subagents",
       "mcpStatus": "MCP status",
       "mcpAction": "Action required",
       "bridgedServers": "Bridged servers",
@@ -1073,7 +1074,14 @@
       "selectedRuntime": "Selected runtime",
       "runnerCandidates": "Runner candidates",
       "missingCapabilities": "Missing capabilities",
-      "compatibleFallbacks": "Compatible fallbacks"
+      "compatibleFallbacks": "Compatible fallbacks",
+      "subagentStrategy": "Subagent strategy",
+      "subagentAvailability": "Availability",
+      "available": "Available",
+      "unavailableShort": "Unavailable",
+      "mergePolicy": "Merge policy",
+      "maxAttempts": "Max attempts",
+      "requiredCapabilities": "Required capabilities"
     },
     "cost": {
       "title": "Cost Preview",
