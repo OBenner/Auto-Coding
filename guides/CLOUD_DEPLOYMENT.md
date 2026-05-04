@@ -1842,7 +1842,7 @@ This guide covered:
 
 - **Documentation**: [guides/README.md](README.md)
 - **GitHub Issues**: https://github.com/OBenner/Auto-Coding/issues
-- **Community**: Discord/Slack (coming soon)
+- **Community**: https://github.com/OBenner/Auto-Coding/discussions
 
 ---
 

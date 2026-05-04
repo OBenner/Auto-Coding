@@ -644,7 +644,7 @@ If you encounter issues, see:
 
 - Documentation: [guides/README.md](README.md)
 - GitHub Issues: https://github.com/OBenner/Auto-Coding/issues
-- Community Support: Join our Discord
+- Community Support: https://github.com/OBenner/Auto-Coding/discussions
 
 ---
 

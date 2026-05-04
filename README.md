@@ -186,7 +186,6 @@ All releases include SHA256 checksums. macOS builds are code-signed.
 
 ## Community
 
-- [Discord](https://discord.gg/KCXaPBr4Dj) -- chat, get help, share what you're building
 - [Issues](https://github.com/OBenner/Auto-Coding/issues) -- report bugs or request features
 - [Discussions](https://github.com/OBenner/Auto-Coding/discussions) -- ask questions and share ideas
 

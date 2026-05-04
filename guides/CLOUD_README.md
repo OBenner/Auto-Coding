@@ -531,7 +531,7 @@ Your Git repositories are the source of truth, so switching deployment models is
 ### Getting Help
 
 - **Documentation Issues** - [Open an issue](https://github.com/OBenner/Auto-Coding/issues) if you find errors or gaps
-- **Deployment Questions** - [Join Discord](https://discord.gg/KCXaPBr4Dj) for community support
+- **Deployment Questions** - [Open a GitHub discussion](https://github.com/OBenner/Auto-Coding/discussions) for community support
 - **Enterprise Support** - Contact the maintainers for commercial support options
 
 ### Contributing
@@ -568,4 +568,4 @@ Ready to deploy? Choose your path:
 - **Development/Testing** → [E2E Test Guide](../apps/web-backend/tests/E2E_TEST_GUIDE.md)
 - **Understand the Code** → [Backend README](../apps/web-backend/README.md)
 
-Have questions? [Join the Discord community](https://discord.gg/KCXaPBr4Dj) or [open a GitHub discussion](https://github.com/OBenner/Auto-Coding/discussions).
+Have questions? [Open a GitHub discussion](https://github.com/OBenner/Auto-Coding/discussions).

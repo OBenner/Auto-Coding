@@ -187,7 +187,6 @@ Auto Code is free (AGPL-3.0). You pay Claude for API usage based on your Pro/Max
 
 ## Getting Help
 
-- **[Discord Community](https://discord.gg/KCXaPBr4Dj)** -- Chat with other users, get help
 - **[GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)** -- Report bugs or request features
 - **[GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)** -- Ask questions, share ideas
 

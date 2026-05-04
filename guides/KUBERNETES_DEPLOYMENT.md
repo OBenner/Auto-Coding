@@ -1609,4 +1609,4 @@ For issues or questions:
 3. **Describe resources:** `kubectl describe pod <pod-name> -n auto-claude`
 4. **Consult troubleshooting:** See [Troubleshooting](#troubleshooting) section above
 5. **File an issue:** https://github.com/your-org/Auto-Coding/issues
-6. **Discord/Slack:** Join our community for real-time help
+6. **Discussions:** Ask for help in GitHub Discussions

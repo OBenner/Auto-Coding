@@ -920,6 +920,5 @@ See the following for real-world examples:
 
 ## Getting Help
 
-- **[Discord Community](https://discord.gg/KCXaPBr4Dj)** - Chat with other users
 - **[GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)** - Report bugs
 - **[GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)** - Ask questions

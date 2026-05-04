@@ -392,4 +392,4 @@ To contribute improvements to pattern recognition:
 
 ---
 
-**Questions or issues?** Open a GitHub issue or ask in Discord.
+**Questions or issues?** Open a GitHub issue or start a GitHub discussion.
