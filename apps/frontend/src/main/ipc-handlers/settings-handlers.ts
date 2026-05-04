@@ -365,6 +365,7 @@ type ProviderSmokeCliResult = {
 type RuntimeModesCliPayload = {
   runtime_fallback_matrix?: RuntimeControlPlaneDiagnostics['runtime_fallback_matrix'];
   mcp_bridge_plan_matrix?: RuntimeControlPlaneDiagnostics['mcp_bridge_plan_matrix'];
+  external_mcp_server_health?: RuntimeControlPlaneDiagnostics['external_mcp_server_health'];
   runtime_subagent_matrix?: RuntimeControlPlaneDiagnostics['runtime_subagent_matrix'];
   recommendations?: Record<string, string>;
 };
@@ -456,6 +457,9 @@ function mapRuntimeControlPlaneDiagnostics(
       : [],
     mcp_bridge_plan_matrix: Array.isArray(payload.mcp_bridge_plan_matrix)
       ? payload.mcp_bridge_plan_matrix
+      : [],
+    external_mcp_server_health: Array.isArray(payload.external_mcp_server_health)
+      ? payload.external_mcp_server_health
       : [],
     runtime_subagent_matrix: Array.isArray(payload.runtime_subagent_matrix)
       ? payload.runtime_subagent_matrix

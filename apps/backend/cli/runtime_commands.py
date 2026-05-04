@@ -23,8 +23,10 @@ from agents.runtime.fallback import (
     resolve_runtime_mode_with_fallback,
 )
 from agents.runtime.mcp_bridge import (
+    EXTERNAL_MCP_CLIENT_ENV,
     LOCAL_BRIDGE_SERVER,
     MCP_SERVER_CATALOG,
+    build_external_mcp_health_matrix,
     resolve_runtime_mcp_support,
 )
 from agents.runtime.subagents import (
@@ -147,6 +149,12 @@ def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
                     "local_bridge_required_servers": plan[
                         "local_bridge_required_servers"
                     ],
+                    "external_bridge_required_servers": plan[
+                        "external_bridge_required_servers"
+                    ],
+                    "external_bridge_ready_servers": plan[
+                        "external_bridge_ready_servers"
+                    ],
                     "unsupported_servers": plan["unsupported_servers"],
                     "bridged_servers": plan["bridged_servers"],
                 }
@@ -205,6 +213,9 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         "cli_runner_selection": cli_runner_selection,
         "runtime_fallback_matrix": build_runtime_fallback_matrix(),
         "mcp_bridge_plan_matrix": build_mcp_bridge_plan_matrix(),
+        "external_mcp_server_health": build_external_mcp_health_matrix(
+            requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+        ),
         "runtime_subagent_matrix": build_runtime_subagent_matrix(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
@@ -227,6 +238,10 @@ def build_runtime_modes_payload() -> dict[str, Any]:
                 "Set AUTO_CODE_CLI_RUNNER_ROUTER=true only when you want "
                 "incompatible direct full_autonomous requests to route to a "
                 "wired CLI runner such as Codex CLI."
+            ),
+            "external_mcp_client": (
+                f"Set {EXTERNAL_MCP_CLIENT_ENV}=true only when you are ready "
+                "to enable the provider-neutral external MCP client bridge."
             ),
         },
     }
@@ -294,10 +309,23 @@ def format_runtime_modes_text() -> str:
             row["status"],
             row["action_required"],
             ", ".join(row["bridged_servers"]) or "none",
-            ", ".join(row["native_required_servers"]) or "none",
+            ", ".join(row["external_bridge_required_servers"]) or "none",
         ]
         for row in build_mcp_bridge_plan_matrix()
         if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
+    ]
+    external_mcp_health_rows = [
+        [
+            row["server"],
+            row["status"],
+            "yes" if row["configured"] else "no",
+            row["transport"] or "n/a",
+            ", ".join(row["missing_env"]) or "none",
+        ]
+        for row in build_external_mcp_health_matrix(
+            requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+        )
+        if row["bridgeable"]
     ]
     subagent_rows = [
         [
@@ -373,9 +401,20 @@ def format_runtime_modes_text() -> str:
                     "Status",
                     "Action",
                     "Bridged",
-                    "Native required",
+                    "External required",
                 ],
                 mcp_bridge_rows,
+            ),
+            "External MCP Client Health",
+            _format_table(
+                [
+                    "Server",
+                    "Status",
+                    "Configured",
+                    "Transport",
+                    "Missing config",
+                ],
+                external_mcp_health_rows,
             ),
             "Subagent Orchestrator Matrix",
             _format_table(

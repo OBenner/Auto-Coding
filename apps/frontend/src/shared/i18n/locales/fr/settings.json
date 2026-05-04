@@ -1018,6 +1018,7 @@
       "mcpStatus": "Statut MCP",
       "mcpAction": "Action requise",
       "bridgedServers": "Serveurs bridgés",
+      "externalRequiredServers": "Bridge externe requis",
       "nativeRequiredServers": "Serveurs nécessitant le natif",
       "selectedRuntime": "Runtime sélectionné",
       "runnerCandidates": "Runners candidats",

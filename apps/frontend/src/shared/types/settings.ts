@@ -510,8 +510,29 @@ export interface RuntimeMcpBridgePlanRow {
   unavailable_servers: string[];
   native_required_servers: string[];
   local_bridge_required_servers: string[];
+  external_bridge_required_servers: string[];
+  external_bridge_ready_servers: string[];
   unsupported_servers: string[];
   bridged_servers: string[];
+}
+
+export interface RuntimeExternalMcpHealthRow {
+  server: string;
+  display_name: string;
+  bridgeable: boolean;
+  client_enabled: boolean;
+  server_enabled: boolean;
+  configured: boolean;
+  status: string;
+  reason: string;
+  transport?: string | null;
+  command?: string | null;
+  args: string[];
+  url?: string | null;
+  enabled_env?: string | null;
+  required_env: string[];
+  missing_env: string[];
+  concrete_servers: string[];
 }
 
 export interface RuntimeFallbackMatrixRow {
@@ -545,6 +566,7 @@ export interface RuntimeSubagentMatrixRow {
 export interface RuntimeControlPlaneDiagnostics {
   runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
   mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
+  external_mcp_server_health?: RuntimeExternalMcpHealthRow[];
   runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
   recommendations?: Record<string, string>;
 }

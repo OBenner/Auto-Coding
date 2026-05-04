@@ -319,17 +319,22 @@ Auto Code validates and executes these actions locally:
 This mode is intentionally not full autonomous parity. It exposes the local
 action loop, provider-native tool calls when available, bounded runtime
 subagents when wired by the caller, and Auto Code's local MCP bridge for
-built-in tools. It does not expose external MCP servers or Claude SDK session
-lifecycle behavior. MCP support artifacts include per-server statuses such as
-`local_bridge`, `native_required`, and `unsupported`, so non-Claude runs can
-explain exactly which requested MCP servers are available and which remain
-native-runtime-only. MCP support artifacts also include a `bridge_plan` with
-`ready`, `partial`, or `blocked` status, native-required servers, bridged
-servers, unsupported servers, and the next runtime action needed. Bridged local
-MCP tools also carry explicit permission/audit metadata in `tool_policies`, and
-each bridged call appends a redacted `mcp_bridge_audit.jsonl` event with the
-tool, permission, mutation flag, action, status, and result summary. If a provider
-emits an unavailable MCP tool call such as
+built-in tools. It does not yet execute external MCP server tools or Claude SDK
+session lifecycle behavior. MCP support artifacts include per-server statuses
+such as `local_bridge`, `external_bridge_required`, `native_required`, and
+`unsupported`, so non-Claude runs can explain exactly which requested MCP
+servers are available, which are ready for the provider-neutral external MCP
+client, and which remain native-runtime-only. MCP support artifacts also include
+a `bridge_plan` with `ready`, `partial`, or `blocked` status, native-required
+servers, external-bridge-required servers, bridged servers, unsupported servers,
+and the next runtime action needed. External MCP server statuses carry a
+redacted `external_client` health object with transport, command/url hints,
+enablement flags, missing configuration, and whether the server is
+`ready_to_connect`; this is a readiness contract, not tool-execution parity.
+Bridged local MCP tools also carry explicit permission/audit metadata in
+`tool_policies`, and each bridged call appends a redacted
+`mcp_bridge_audit.jsonl` event with the tool, permission, mutation flag, action,
+status, and result summary. If a provider emits an unavailable MCP tool call such as
 `mcp__context7__resolve-library-id`, `generic_edit` records a structured
 observation with the server name, support strategy, runtime path, and server
 status instead of collapsing the failure into a generic unknown-tool error.
@@ -390,12 +395,14 @@ Examples:
 - A non-Claude provider in `generic_edit` mode can modify files through Auto
   Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
   sessions use provider-native tool calls when available; other sessions can use
-  the JSON action loop. The mode can use the local Auto Code MCP bridge, while
-  parallel read-only work can use `run_subagents` when the caller wires a
-  `RuntimeSubagentOrchestrator` session factory. Local action batches halt after
-  the first failed action and persist transaction/recovery metadata before the
-  next provider iteration. Recovery is only marked resolved after a subsequent
-  successful inspection or repair action, not by `finish` alone.
+  the JSON action loop. The mode can use the local Auto Code MCP bridge and now
+  reports provider-neutral external MCP client readiness through
+  `external_client` health metadata, while parallel read-only work can use
+  `run_subagents` when the caller wires a `RuntimeSubagentOrchestrator` session
+  factory. Local action batches halt after the first failed action and persist
+  transaction/recovery metadata before the next provider iteration. Recovery is
+  only marked resolved after a subsequent successful inspection or repair action,
+  not by `finish` alone.
 
 ## Explicit Boundaries In This PR
 
@@ -403,7 +410,8 @@ This runtime engine is an integration boundary, not a generic replacement for
 the Claude Agent SDK. Claude keeps the full native SDK surface. Codex CLI is the
 first wired non-Claude full-autonomous CLI runtime. Direct providers use
 `analysis_only`, `patch_proposal`, or `generic_edit`; they do not receive
-external MCP parity or mutable subagent parity through the direct chat adapter.
+external MCP tool-execution parity or mutable subagent parity through the direct
+chat adapter.
 
 CLI runner profiles for Claude Code, Z.AI via Claude Code, Gemini CLI, Aider,
 Cursor, CodeRabbit CLI, GitHub Copilot CLI, OpenCode, Goose, Amp, Qwen Code,
@@ -424,7 +432,8 @@ counts without re-parsing every child result.
 - `apps/backend/agents/runtime/local_actions.py` - reusable local action
   executor used by generic edit's JSON and provider-native tool-call loops.
 - `apps/backend/agents/runtime/mcp_bridge.py` - local MCP bridge status,
-  permission policy, and audit artifacts for direct-provider runtimes.
+  external MCP client readiness, permission policy, and audit artifacts for
+  direct-provider runtimes.
 - `apps/backend/agents/runtime/cli_profiles.py` - CLI runner profile registry,
   executable detection, and selection diagnostics.
 - `apps/backend/agents/runtime/runner_router.py` - opt-in routing from impossible

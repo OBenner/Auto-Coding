@@ -813,6 +813,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 </dd>
               </div>
               <div>
+                <dt>{t('settings:aiProvider.controlPlane.externalRequiredServers')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(mcpPlan?.external_bridge_required_servers)}
+                </dd>
+              </div>
+              <div>
                 <dt>{t('settings:aiProvider.controlPlane.nativeRequiredServers')}</dt>
                 <dd className="font-medium text-foreground">
                   {formatControlPlaneList(mcpPlan?.native_required_servers)}

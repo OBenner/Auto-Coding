@@ -43,6 +43,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "CLI Runner Selection" in output
     assert "Runtime Fallback Matrix" in output
     assert "MCP Bridge Plan Matrix" in output
+    assert "External MCP Client Health" in output
     assert "Subagent Orchestrator Matrix" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
@@ -98,6 +99,13 @@ def test_runtime_modes_command_outputs_json(capsys):
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
+    assert "external_mcp_client" in payload["recommendations"]
+    external_health = {
+        row["server"]: row for row in payload["external_mcp_server_health"]
+    }
+    assert external_health["context7"]["status"] == "client_disabled"
+    assert external_health["context7"]["command"] == "npx"
+    assert external_health["graphiti"]["status"] == "missing_configuration"
     mcp_rows = {
         (row["provider"], row["runtime_mode"]): row
         for row in payload["mcp_bridge_plan_matrix"]
@@ -108,8 +116,8 @@ def test_runtime_modes_command_outputs_json(capsys):
     openai_generic_mcp = mcp_rows[("openai", "generic_edit")]
     assert openai_generic_mcp["status"] == "partial"
     assert openai_generic_mcp["bridged_servers"] == ["auto-claude"]
-    assert "context7" in openai_generic_mcp["native_required_servers"]
-    assert openai_generic_mcp["action_required"] == "use_native_mcp_runtime"
+    assert "context7" in openai_generic_mcp["external_bridge_required_servers"]
+    assert openai_generic_mcp["action_required"] == "configure_external_mcp_client"
     fallback_rows = {
         (row["provider"], row["requested_mode"]): row
         for row in payload["runtime_fallback_matrix"]

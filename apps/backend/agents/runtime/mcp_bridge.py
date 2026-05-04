@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,43 +25,86 @@ from .local_actions import ToolActionResult, action_tool, safe_action_for_trace
 MCP_AUTO_CLAUDE_PREFIX = "mcp__auto-claude__"
 LOCAL_BRIDGE_SERVER = "auto-claude"
 MCP_BRIDGE_AUDIT_FILENAME = "mcp_bridge_audit.jsonl"
+EXTERNAL_MCP_CLIENT_ENV = "AUTO_CODE_EXTERNAL_MCP_CLIENT"
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
 McpAuditLevel = Literal["read", "write", "command", "analysis"]
+ExternalMcpHealthStatus = Literal[
+    "not_bridgeable",
+    "client_disabled",
+    "server_disabled",
+    "missing_configuration",
+    "choose_concrete_server",
+    "ready_to_connect",
+]
 MCP_SERVER_CATALOG: dict[str, dict[str, Any]] = {
     LOCAL_BRIDGE_SERVER: {
         "display_name": "Auto Code local tools",
         "bridgeable": True,
+        "external_bridgeable": False,
         "notes": "In-process Auto Code tools can be exposed through local actions.",
     },
     "context7": {
         "display_name": "Context7",
         "bridgeable": False,
-        "notes": "External documentation MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "enabled_env": "CONTEXT7_ENABLED",
+        "enabled_default": True,
+        "transport": "stdio",
+        "command": "npx",
+        "args": ("-y", "@upstash/context7-mcp"),
+        "notes": "External documentation MCP server.",
     },
     "graphiti": {
         "display_name": "Graphiti",
         "bridgeable": False,
-        "notes": "External memory MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "transport": "http",
+        "url_env": "GRAPHITI_MCP_URL",
+        "required_env": ("GRAPHITI_MCP_URL",),
+        "notes": "External memory MCP server.",
     },
     "linear": {
         "display_name": "Linear",
         "bridgeable": False,
-        "notes": "External Linear MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "enabled_env": "LINEAR_MCP_ENABLED",
+        "enabled_default": True,
+        "transport": "http",
+        "url": "https://mcp.linear.app/mcp",
+        "required_env": ("LINEAR_API_KEY",),
+        "notes": "External Linear MCP server.",
     },
     "browser": {
         "display_name": "Browser automation",
         "bridgeable": False,
-        "notes": "External browser automation MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "concrete_servers": ("electron", "puppeteer"),
+        "notes": (
+            "Logical browser MCP requirement; resolve to electron or puppeteer "
+            "for an external client."
+        ),
     },
     "electron": {
         "display_name": "Electron",
         "bridgeable": False,
-        "notes": "External Electron automation MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "enabled_env": "ELECTRON_MCP_ENABLED",
+        "enabled_default": False,
+        "transport": "stdio",
+        "command": "npm",
+        "args": ("exec", "electron-mcp-server"),
+        "notes": "External Electron automation MCP server.",
     },
     "puppeteer": {
         "display_name": "Puppeteer",
         "bridgeable": False,
-        "notes": "External browser automation MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "enabled_env": "PUPPETEER_MCP_ENABLED",
+        "enabled_default": False,
+        "transport": "stdio",
+        "command": "npx",
+        "args": ("puppeteer-mcp-server",),
+        "notes": "External browser automation MCP server.",
     },
 }
 
@@ -80,6 +125,54 @@ class RuntimeMcpToolPolicy:
             "audit_level": self.audit_level,
             "mutating": self.mutating,
             "audit_required": self.audit_required,
+        }
+
+
+@dataclass(frozen=True)
+class RuntimeExternalMcpServerHealth:
+    """Readiness contract for one external MCP server bridge target."""
+
+    server: str
+    display_name: str
+    bridgeable: bool
+    client_enabled: bool
+    server_enabled: bool
+    configured: bool
+    status: ExternalMcpHealthStatus
+    reason: str
+    transport: str | None = None
+    command: str | None = None
+    args: tuple[str, ...] = ()
+    url: str | None = None
+    enabled_env: str | None = None
+    required_env: tuple[str, ...] = ()
+    missing_env: tuple[str, ...] = ()
+    concrete_servers: tuple[str, ...] = ()
+
+    @property
+    def ready_to_connect(self) -> bool:
+        """Return true when configuration is ready for a future external client."""
+        return self.status == "ready_to_connect"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize external MCP client readiness for diagnostics and artifacts."""
+        return {
+            "server": self.server,
+            "display_name": self.display_name,
+            "bridgeable": self.bridgeable,
+            "client_enabled": self.client_enabled,
+            "server_enabled": self.server_enabled,
+            "configured": self.configured,
+            "status": self.status,
+            "reason": self.reason,
+            "transport": self.transport,
+            "command": self.command,
+            "args": list(self.args),
+            "url": self.url,
+            "enabled_env": self.enabled_env,
+            "required_env": list(self.required_env),
+            "missing_env": list(self.missing_env),
+            "concrete_servers": list(self.concrete_servers),
         }
 
 
@@ -150,6 +243,8 @@ class RuntimeMcpBridgePlan:
     unavailable_servers: tuple[str, ...] = ()
     native_required_servers: tuple[str, ...] = ()
     local_bridge_required_servers: tuple[str, ...] = ()
+    external_bridge_required_servers: tuple[str, ...] = ()
+    external_bridge_ready_servers: tuple[str, ...] = ()
     unsupported_servers: tuple[str, ...] = ()
     bridged_servers: tuple[str, ...] = ()
     tool_count: int = 0
@@ -168,6 +263,10 @@ class RuntimeMcpBridgePlan:
             "unavailable_servers": list(self.unavailable_servers),
             "native_required_servers": list(self.native_required_servers),
             "local_bridge_required_servers": list(self.local_bridge_required_servers),
+            "external_bridge_required_servers": list(
+                self.external_bridge_required_servers
+            ),
+            "external_bridge_ready_servers": list(self.external_bridge_ready_servers),
             "unsupported_servers": list(self.unsupported_servers),
             "bridged_servers": list(self.bridged_servers),
             "tool_count": self.tool_count,
@@ -446,6 +545,9 @@ def resolve_runtime_mcp_support(
     tool_count: int = 0,
     requested_servers: tuple[str, ...] = (),
     available_servers: tuple[str, ...] = (),
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> RuntimeMcpSupport:
     """Return native or local-bridge MCP support without claiming full parity."""
     provider = provider_name.lower()
@@ -469,6 +571,9 @@ def resolve_runtime_mcp_support(
                 requested_servers=requested_servers,
                 available_servers=requested_servers,
                 native_available=True,
+                external_client_enabled=external_client_enabled,
+                project_mcp_config=project_mcp_config,
+                environment=environment,
             ),
         )
 
@@ -498,6 +603,9 @@ def resolve_runtime_mcp_support(
                 requested_servers=requested_servers,
                 available_servers=available_servers,
                 native_available=False,
+                external_client_enabled=external_client_enabled,
+                project_mcp_config=project_mcp_config,
+                environment=environment,
             ),
         )
 
@@ -528,8 +636,179 @@ def resolve_runtime_mcp_support(
             requested_servers=requested_servers,
             available_servers=(),
             native_available=False,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
         ),
     )
+
+
+def external_mcp_client_enabled(
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> bool:
+    """Return whether the provider-neutral external MCP client is enabled."""
+    value = mcp_config_or_env_value(
+        EXTERNAL_MCP_CLIENT_ENV,
+        project_mcp_config=project_mcp_config,
+        environment=environment,
+    )
+    return bool_from_mcp_value(value, default=False)
+
+
+def describe_external_mcp_server_health(
+    server: str,
+    *,
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> RuntimeExternalMcpServerHealth:
+    """Return external MCP client readiness for one catalog server."""
+    server = normalize_mcp_server_name(server)
+    catalog_entry = MCP_SERVER_CATALOG.get(server, {})
+    display_name = str(catalog_entry.get("display_name", server))
+    bridgeable = bool(catalog_entry.get("external_bridgeable", False))
+    client_enabled = (
+        external_mcp_client_enabled(
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        if external_client_enabled is None
+        else external_client_enabled
+    )
+    enabled_env = catalog_entry.get("enabled_env")
+    enabled_default = bool(catalog_entry.get("enabled_default", True))
+    server_enabled = bool(
+        bool_from_mcp_value(
+            mcp_config_or_env_value(
+                str(enabled_env),
+                project_mcp_config=project_mcp_config,
+                environment=environment,
+            )
+            if enabled_env
+            else None,
+            default=enabled_default,
+        )
+    )
+    required_env = tuple(str(name) for name in catalog_entry.get("required_env", ()))
+    missing_env = tuple(
+        name
+        for name in required_env
+        if not mcp_config_or_env_value(
+            name,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+    )
+    concrete_servers = tuple(
+        str(name) for name in catalog_entry.get("concrete_servers", ())
+    )
+    configured = bool(
+        bridgeable and server_enabled and not missing_env and not concrete_servers
+    )
+    url_env = catalog_entry.get("url_env")
+    url = (
+        mcp_config_or_env_value(
+            str(url_env),
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        if url_env
+        else catalog_entry.get("url")
+    )
+
+    if not bridgeable:
+        status: ExternalMcpHealthStatus = "not_bridgeable"
+        reason = "No external MCP client bridge policy is registered for this server."
+    elif not server_enabled:
+        status = "server_disabled"
+        reason = (
+            f"{enabled_env} disables this MCP server."
+            if enabled_env
+            else "This MCP server is disabled by configuration."
+        )
+    elif missing_env:
+        status = "missing_configuration"
+        reason = "Missing required external MCP configuration: " + ", ".join(
+            missing_env
+        )
+    elif concrete_servers:
+        status = "choose_concrete_server"
+        reason = "Select a concrete external MCP server: " + ", ".join(concrete_servers)
+    elif not client_enabled:
+        status = "client_disabled"
+        reason = (
+            f"Set {EXTERNAL_MCP_CLIENT_ENV}=true to let non-native runtimes "
+            "prepare external MCP connections."
+        )
+    else:
+        status = "ready_to_connect"
+        reason = (
+            "External MCP server configuration is ready for the provider-neutral "
+            "client; tool execution wiring is still required."
+        )
+
+    return RuntimeExternalMcpServerHealth(
+        server=server,
+        display_name=display_name,
+        bridgeable=bridgeable,
+        client_enabled=client_enabled,
+        server_enabled=server_enabled,
+        configured=configured,
+        status=status,
+        reason=reason,
+        transport=str(catalog_entry.get("transport") or "") or None,
+        command=str(catalog_entry.get("command") or "") or None,
+        args=tuple(str(arg) for arg in catalog_entry.get("args", ())),
+        url=str(url or "") or None,
+        enabled_env=str(enabled_env or "") or None,
+        required_env=required_env,
+        missing_env=missing_env,
+        concrete_servers=concrete_servers,
+    )
+
+
+def build_external_mcp_health_matrix(
+    *,
+    requested_servers: tuple[str, ...] | None = None,
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Build external MCP client readiness diagnostics."""
+    servers = normalize_mcp_server_names(requested_servers or tuple(MCP_SERVER_CATALOG))
+    return [
+        describe_external_mcp_server_health(
+            server,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        ).to_dict()
+        for server in servers
+    ]
+
+
+def mcp_config_or_env_value(
+    key: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> Any:
+    """Return an MCP config value from project config, then environment."""
+    if project_mcp_config and key in project_mcp_config:
+        return project_mcp_config[key]
+    source = os.environ if environment is None else environment
+    return source.get(key)
+
+
+def bool_from_mcp_value(value: Any, *, default: bool) -> bool:
+    """Parse common env/config booleans with a provided default."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def describe_mcp_server_statuses(
@@ -537,6 +816,9 @@ def describe_mcp_server_statuses(
     requested_servers: tuple[str, ...],
     available_servers: tuple[str, ...],
     native_available: bool,
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Return per-server MCP bridge status for diagnostics and settings UI."""
     requested_servers = normalize_mcp_server_names(requested_servers)
@@ -546,6 +828,12 @@ def describe_mcp_server_statuses(
     for server in requested_servers:
         catalog_entry = MCP_SERVER_CATALOG.get(server, {})
         bridgeable = bool(catalog_entry.get("bridgeable", False))
+        external_health = describe_external_mcp_server_health(
+            server,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
         if native_available:
             availability = "available"
             runtime_path = "native"
@@ -554,6 +842,10 @@ def describe_mcp_server_statuses(
             availability = "available"
             runtime_path = "local_bridge"
             reason = "Available through Auto Code's local MCP bridge."
+        elif external_health.bridgeable:
+            availability = "unavailable"
+            runtime_path = "external_bridge_required"
+            reason = external_health.reason
         elif bridgeable:
             availability = "unavailable"
             runtime_path = "local_bridge_required"
@@ -576,6 +868,7 @@ def describe_mcp_server_statuses(
                 "bridgeable": bridgeable,
                 "reason": reason,
                 "notes": str(catalog_entry.get("notes", "")),
+                "external_client": external_health.to_dict(),
             }
         )
 
@@ -607,6 +900,17 @@ def build_mcp_bridge_plan(
         for status in server_statuses
         if status.get("runtime_path") == "local_bridge_required"
     )
+    external_bridge_required_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge_required"
+    )
+    external_bridge_ready_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if isinstance(status.get("external_client"), dict)
+        and status["external_client"].get("status") == "ready_to_connect"
+    )
     unsupported_servers = tuple(
         str(status["server"])
         for status in server_statuses
@@ -627,6 +931,8 @@ def build_mcp_bridge_plan(
         status=status,
         native_required_servers=native_required_servers,
         local_bridge_required_servers=local_bridge_required_servers,
+        external_bridge_required_servers=external_bridge_required_servers,
+        external_bridge_ready_servers=external_bridge_ready_servers,
         unsupported_servers=unsupported_servers,
     )
     recommended_runtime_path = mcp_plan_recommended_runtime_path(
@@ -645,6 +951,8 @@ def build_mcp_bridge_plan(
         unavailable_servers=unavailable_servers,
         native_required_servers=native_required_servers,
         local_bridge_required_servers=local_bridge_required_servers,
+        external_bridge_required_servers=external_bridge_required_servers,
+        external_bridge_ready_servers=external_bridge_ready_servers,
         unsupported_servers=unsupported_servers,
         bridged_servers=bridged_servers,
         tool_count=tool_count,
@@ -672,6 +980,8 @@ def mcp_plan_action_required(
     status: str,
     native_required_servers: tuple[str, ...],
     local_bridge_required_servers: tuple[str, ...],
+    external_bridge_required_servers: tuple[str, ...],
+    external_bridge_ready_servers: tuple[str, ...],
     unsupported_servers: tuple[str, ...],
 ) -> str:
     """Return the next action required to satisfy the MCP plan."""
@@ -679,6 +989,10 @@ def mcp_plan_action_required(
         return "none"
     if unsupported_servers:
         return "register_or_remove_unsupported_servers"
+    if external_bridge_ready_servers:
+        return "wire_external_mcp_tool_execution"
+    if external_bridge_required_servers:
+        return "configure_external_mcp_client"
     if native_required_servers:
         return "use_native_mcp_runtime"
     if local_bridge_required_servers:
@@ -696,6 +1010,11 @@ def mcp_plan_recommended_runtime_path(
         return "native_mcp_runtime"
     if action_required == "configure_local_bridge_tools":
         return "local_bridge"
+    if action_required in {
+        "configure_external_mcp_client",
+        "wire_external_mcp_tool_execution",
+    }:
+        return "external_mcp_client"
     if action_required == "register_or_remove_unsupported_servers":
         return "unsupported"
     if strategy == "native":

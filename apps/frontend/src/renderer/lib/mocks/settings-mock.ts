@@ -105,15 +105,37 @@ export const settingsMock = {
           runtime_mode: 'full_autonomous' as const,
           strategy: 'native',
           available: true,
-          status: 'available',
+          status: 'ready',
           action_required: 'none',
           recommended_runtime_path: 'native',
           available_servers: ['context7', 'graphiti'],
           unavailable_servers: [],
-          native_required_servers: ['context7', 'graphiti'],
+          native_required_servers: [],
           local_bridge_required_servers: [],
+          external_bridge_required_servers: [],
+          external_bridge_ready_servers: [],
           unsupported_servers: [],
           bridged_servers: []
+        }
+      ],
+      external_mcp_server_health: [
+        {
+          server: 'context7',
+          display_name: 'Context7',
+          bridgeable: true,
+          client_enabled: false,
+          server_enabled: true,
+          configured: true,
+          status: 'client_disabled',
+          reason: 'Set AUTO_CODE_EXTERNAL_MCP_CLIENT=true to prepare external MCP connections.',
+          transport: 'stdio',
+          command: 'npx',
+          args: ['-y', '@upstash/context7-mcp'],
+          url: null,
+          enabled_env: 'CONTEXT7_ENABLED',
+          required_env: [],
+          missing_env: [],
+          concrete_servers: []
         }
       ],
       runtime_subagent_matrix: [

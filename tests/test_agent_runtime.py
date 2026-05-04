@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from agents.runtime import (
+    EXTERNAL_MCP_CLIENT_ENV,
     LocalActionExecutor,
     RuntimeCapabilities,
     RuntimeCapabilityError,
@@ -18,6 +19,7 @@ from agents.runtime import (
     RuntimeSubagentResult,
     RuntimeSubagentTask,
     create_runtime_session,
+    describe_external_mcp_server_health,
     describe_mcp_server_statuses,
     get_runtime_mode,
     local_action_response_schema,
@@ -2558,13 +2560,22 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
         for status in result_artifact["mcp_support"]["bridge"]["server_statuses"]
     }
     assert bridge_statuses["auto-claude"]["runtime_path"] == "local_bridge"
-    assert bridge_statuses["context7"]["runtime_path"] == "native_required"
-    assert bridge_statuses["graphiti"]["runtime_path"] == "native_required"
+    assert bridge_statuses["context7"]["runtime_path"] == "external_bridge_required"
+    assert bridge_statuses["graphiti"]["runtime_path"] == "external_bridge_required"
+    assert bridge_statuses["context7"]["external_client"]["status"] == (
+        "client_disabled"
+    )
+    assert bridge_statuses["graphiti"]["external_client"]["status"] == (
+        "missing_configuration"
+    )
     bridge_plan = result_artifact["mcp_support"]["bridge_plan"]
     assert bridge_plan["status"] == "partial"
     assert bridge_plan["bridged_servers"] == ["auto-claude"]
-    assert bridge_plan["native_required_servers"] == ["context7", "graphiti"]
-    assert bridge_plan["action_required"] == "use_native_mcp_runtime"
+    assert bridge_plan["external_bridge_required_servers"] == [
+        "context7",
+        "graphiti",
+    ]
+    assert bridge_plan["action_required"] == "configure_external_mcp_client"
 
 
 def test_runtime_mcp_bridge_filters_agent_allowed_tools(
@@ -2657,12 +2668,19 @@ def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
     assert support_payload["available_servers"] == []
     assert support_payload["unavailable_servers"] == ["context7"]
     assert support_payload["server_statuses"][0]["server"] == "context7"
-    assert support_payload["server_statuses"][0]["runtime_path"] == "native_required"
+    assert support_payload["server_statuses"][0]["runtime_path"] == (
+        "external_bridge_required"
+    )
     assert support_payload["server_statuses"][0]["bridgeable"] is False
+    assert support_payload["server_statuses"][0]["external_client"]["status"] == (
+        "client_disabled"
+    )
     assert support_payload["bridge_plan"]["status"] == "blocked"
-    assert support_payload["bridge_plan"]["native_required_servers"] == ["context7"]
+    assert support_payload["bridge_plan"]["external_bridge_required_servers"] == [
+        "context7"
+    ]
     assert support_payload["bridge_plan"]["action_required"] == (
-        "use_native_mcp_runtime"
+        "configure_external_mcp_client"
     )
 
 
@@ -2711,7 +2729,7 @@ async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
 
     assert result.status == "continue"
     assert "Recorded MCP gap" in result.response_text
-    assert "native MCP runtime support" in session.messages[1]
+    assert EXTERNAL_MCP_CLIENT_ENV in session.messages[1]
     observation_lines = [
         json.loads(line)
         for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
@@ -2722,11 +2740,14 @@ async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
     assert result_payload["ok"] is False
     assert result_payload["tool"] == "mcp__context7__resolve-library-id"
     assert result_payload["data"]["server"] == "context7"
-    assert result_payload["data"]["runtime_path"] == "native_required"
+    assert result_payload["data"]["runtime_path"] == "external_bridge_required"
     assert result_payload["data"]["support_strategy"] == "unavailable"
     assert result_payload["data"]["server_status"]["bridgeable"] is False
+    assert result_payload["data"]["server_status"]["external_client"]["status"] == (
+        "client_disabled"
+    )
     assert result_payload["data"]["bridge_plan"]["recommended_runtime_path"] == (
-        "native_mcp_runtime"
+        "external_mcp_client"
     )
     artifact = json.loads(
         (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
@@ -2763,10 +2784,13 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     assert unavailable.available is False
     assert unavailable.strategy == "unavailable"
     assert unavailable.unavailable_servers == ("context7",)
-    assert unavailable.server_statuses[0]["runtime_path"] == "native_required"
+    assert unavailable.server_statuses[0]["runtime_path"] == "external_bridge_required"
+    assert unavailable.server_statuses[0]["external_client"]["status"] == (
+        "client_disabled"
+    )
     unavailable_plan = unavailable.to_dict()["bridge_plan"]
     assert unavailable_plan["status"] == "blocked"
-    assert unavailable_plan["recommended_runtime_path"] == "native_mcp_runtime"
+    assert unavailable_plan["recommended_runtime_path"] == "external_mcp_client"
 
     local_bridge = resolve_runtime_mcp_support(
         provider_name="openai",
@@ -2783,15 +2807,15 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     assert local_bridge.available_servers == ("auto-claude",)
     assert local_bridge.unavailable_servers == ("context7",)
     assert [status["runtime_path"] for status in local_bridge.server_statuses] == [
-        "native_required",
+        "external_bridge_required",
         "local_bridge",
     ]
     assert "external MCP servers" in local_bridge.reason
     local_bridge_plan = local_bridge.to_dict()["bridge_plan"]
     assert local_bridge_plan["status"] == "partial"
     assert local_bridge_plan["bridged_servers"] == ["auto-claude"]
-    assert local_bridge_plan["native_required_servers"] == ["context7"]
-    assert local_bridge_plan["recommended_runtime_path"] == "native_mcp_runtime"
+    assert local_bridge_plan["external_bridge_required_servers"] == ["context7"]
+    assert local_bridge_plan["recommended_runtime_path"] == "external_mcp_client"
 
     unsupported_bridge_runtime = resolve_runtime_mcp_support(
         provider_name="custom",
@@ -2817,10 +2841,42 @@ def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
     status_by_server = {status["server"]: status for status in statuses}
     assert status_by_server["auto-claude"]["runtime_path"] == "local_bridge"
     assert status_by_server["auto-claude"]["bridgeable"] is True
-    assert status_by_server["context7"]["runtime_path"] == "native_required"
-    assert status_by_server["browser"]["runtime_path"] == "native_required"
+    assert status_by_server["context7"]["runtime_path"] == ("external_bridge_required")
+    assert status_by_server["context7"]["external_client"]["status"] == (
+        "client_disabled"
+    )
+    assert status_by_server["browser"]["runtime_path"] == "external_bridge_required"
+    assert status_by_server["browser"]["external_client"]["status"] == (
+        "choose_concrete_server"
+    )
     assert status_by_server["browser"]["display_name"] == "Browser automation"
     assert status_by_server["custom-mcp"]["runtime_path"] == "unsupported"
+
+
+def test_external_mcp_health_reports_ready_context7_when_client_enabled():
+    health = describe_external_mcp_server_health(
+        "context7",
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    )
+
+    assert health.bridgeable is True
+    assert health.client_enabled is True
+    assert health.configured is True
+    assert health.status == "ready_to_connect"
+    assert health.command == "npx"
+    assert health.args == ("-y", "@upstash/context7-mcp")
+
+    support = resolve_runtime_mcp_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        requested_servers=("context7",),
+        external_client_enabled=True,
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    )
+    plan = support.to_dict()["bridge_plan"]
+    assert plan["external_bridge_ready_servers"] == ["context7"]
+    assert plan["action_required"] == "wire_external_mcp_tool_execution"
 
 
 @pytest.mark.asyncio
