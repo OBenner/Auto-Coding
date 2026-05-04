@@ -115,7 +115,10 @@ export const settingsMock = {
           external_bridge_required_servers: [],
           external_bridge_ready_servers: [],
           unsupported_servers: [],
-          bridged_servers: []
+          bridged_servers: [],
+          local_bridged_servers: [],
+          external_bridged_servers: [],
+          executable_external_tools: []
         }
       ],
       external_mcp_server_health: [
@@ -135,7 +138,10 @@ export const settingsMock = {
           enabled_env: 'CONTEXT7_ENABLED',
           required_env: [],
           missing_env: [],
-          concrete_servers: []
+          concrete_servers: [],
+          execution_supported: true,
+          executable_tools: [],
+          executable_tool_count: 0
         }
       ],
       runtime_subagent_matrix: [

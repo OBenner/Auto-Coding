@@ -329,13 +329,15 @@ such as `local_bridge`, `external_bridge_required`, `native_required`, and
 servers are available, which are ready for the provider-neutral external MCP
 client, and which remain native-runtime-only. MCP support artifacts also include
 a `bridge_plan` with `ready`, `partial`, or `blocked` status, native-required
-servers, external-bridge-required servers, bridged servers, unsupported servers,
-and the next runtime action needed. External MCP server statuses carry a
-redacted `external_client` health object with transport, command/url hints,
-enablement flags, missing configuration, and whether the server is
-`ready_to_connect`. Context7 uses that health contract to expose
-`mcp__context7__resolve-library-id` and `mcp__context7__get-library-docs`;
-other external servers still require tool-execution wiring before parity.
+servers, external-bridge-required servers, local bridged servers, external
+bridged servers, unsupported servers, and the next runtime action needed.
+External MCP server statuses carry a redacted `external_client` health object
+with transport, command/url hints, enablement flags, missing configuration,
+whether the server is `ready_to_connect`, whether this layer supports execution,
+and the executable tool names when enabled. Context7 uses that health contract
+to expose `mcp__context7__resolve-library-id` and
+`mcp__context7__get-library-docs`; other external servers still require
+tool-execution wiring before parity.
 Bridged local MCP tools also carry explicit permission/audit metadata in
 `tool_policies`, and each bridged call appends a redacted
 `mcp_bridge_audit.jsonl` event with the tool, permission, mutation flag, action,
@@ -401,9 +403,10 @@ Examples:
   Code's local action loop. Direct OpenAI, Ollama, OpenRouter, and LiteLLM
   sessions use provider-native tool calls when available; other sessions can use
   the JSON action loop. The mode can use the local Auto Code MCP bridge and now
-  executes Context7 through the provider-neutral external MCP client when
-  explicitly enabled. Remaining external servers report readiness through
-  `external_client` health metadata, while parallel read-only work can use
+  reports Context7 as an external bridged server with executable tool names when
+  the provider-neutral external MCP client is explicitly enabled. Remaining
+  external servers report readiness through `external_client` health metadata,
+  while parallel read-only work can use
   `run_subagents` when the caller wires a `RuntimeSubagentOrchestrator` session
   factory. Local action batches halt after the first failed action and persist
   transaction/recovery metadata before the next provider iteration. Recovery is

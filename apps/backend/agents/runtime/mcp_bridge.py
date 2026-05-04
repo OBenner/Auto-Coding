@@ -158,6 +158,8 @@ class RuntimeExternalMcpServerHealth:
     required_env: tuple[str, ...] = ()
     missing_env: tuple[str, ...] = ()
     concrete_servers: tuple[str, ...] = ()
+    execution_supported: bool = False
+    executable_tools: tuple[str, ...] = ()
 
     @property
     def ready_to_connect(self) -> bool:
@@ -183,6 +185,9 @@ class RuntimeExternalMcpServerHealth:
             "required_env": list(self.required_env),
             "missing_env": list(self.missing_env),
             "concrete_servers": list(self.concrete_servers),
+            "execution_supported": self.execution_supported,
+            "executable_tools": list(self.executable_tools),
+            "executable_tool_count": len(self.executable_tools),
         }
 
 
@@ -257,6 +262,8 @@ class RuntimeMcpBridgePlan:
     external_bridge_ready_servers: tuple[str, ...] = ()
     unsupported_servers: tuple[str, ...] = ()
     bridged_servers: tuple[str, ...] = ()
+    local_bridged_servers: tuple[str, ...] = ()
+    external_bridged_servers: tuple[str, ...] = ()
     tool_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
@@ -279,6 +286,8 @@ class RuntimeMcpBridgePlan:
             "external_bridge_ready_servers": list(self.external_bridge_ready_servers),
             "unsupported_servers": list(self.unsupported_servers),
             "bridged_servers": list(self.bridged_servers),
+            "local_bridged_servers": list(self.local_bridged_servers),
+            "external_bridged_servers": list(self.external_bridged_servers),
             "tool_count": self.tool_count,
         }
 
@@ -907,6 +916,8 @@ def describe_external_mcp_server_health(
     concrete_servers = tuple(
         str(name) for name in catalog_entry.get("concrete_servers", ())
     )
+    execution_supported = server in EXTERNAL_MCP_EXECUTION_SERVERS
+    known_tools = tuple(str(name) for name in catalog_entry.get("tools", ()))
     configured = bool(
         bridgeable and server_enabled and not missing_env and not concrete_servers
     )
@@ -947,10 +958,20 @@ def describe_external_mcp_server_health(
         )
     else:
         status = "ready_to_connect"
-        reason = (
-            "External MCP server configuration is ready for the provider-neutral "
-            "client; tool execution wiring is still required."
-        )
+        if execution_supported:
+            reason = (
+                "External MCP server can execute registered tools through the "
+                "provider-neutral client."
+            )
+        else:
+            reason = (
+                "External MCP server configuration is ready for the "
+                "provider-neutral client; tool execution wiring is still required."
+            )
+
+    executable_tools = (
+        known_tools if status == "ready_to_connect" and execution_supported else ()
+    )
 
     return RuntimeExternalMcpServerHealth(
         server=server,
@@ -969,6 +990,8 @@ def describe_external_mcp_server_health(
         required_env=required_env,
         missing_env=missing_env,
         concrete_servers=concrete_servers,
+        execution_supported=execution_supported,
+        executable_tools=executable_tools,
     )
 
 
@@ -1010,9 +1033,31 @@ def executable_external_mcp_servers(
             project_mcp_config=project_mcp_config,
             environment=environment,
         )
-        if health.ready_to_connect:
+        if health.ready_to_connect and health.execution_supported:
             servers.append(server)
     return tuple(servers)
+
+
+def executable_external_mcp_tools(
+    *,
+    requested_servers: tuple[str, ...],
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    """Return exposed external MCP tool names that this layer can execute."""
+    tools: list[str] = []
+    for server in normalize_mcp_server_names(requested_servers):
+        health = describe_external_mcp_server_health(
+            server,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        if not health.ready_to_connect or not health.execution_supported:
+            continue
+        tools.extend(f"mcp__{server}__{tool}" for tool in health.executable_tools)
+    return tuple(tools)
 
 
 def mcp_config_or_env_value(
@@ -1147,12 +1192,19 @@ def build_mcp_bridge_plan(
         for status in server_statuses
         if status.get("runtime_path") == "unsupported"
     )
-    bridged_servers = tuple(
+    local_bridged_servers = tuple(
         str(status["server"])
         for status in server_statuses
         if status.get("runtime_path") == "local_bridge"
         and status.get("availability") == "available"
     )
+    external_bridged_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge"
+        and status.get("availability") == "available"
+    )
+    bridged_servers = (*local_bridged_servers, *external_bridged_servers)
     status = mcp_plan_status(
         requested_servers=requested_servers,
         available_servers=available_servers,
@@ -1186,6 +1238,8 @@ def build_mcp_bridge_plan(
         external_bridge_ready_servers=external_bridge_ready_servers,
         unsupported_servers=unsupported_servers,
         bridged_servers=bridged_servers,
+        local_bridged_servers=local_bridged_servers,
+        external_bridged_servers=external_bridged_servers,
         tool_count=tool_count,
     )
 
@@ -1293,9 +1347,9 @@ def load_external_mcp_bridge_tools(
 ) -> list[RuntimeMcpToolSpec]:
     """Load provider-neutral external MCP tool specs that are ready to connect."""
     specs: list[RuntimeMcpToolSpec] = []
-    for server in requested_servers:
+    for server in normalize_mcp_server_names(requested_servers):
         health = describe_external_mcp_server_health(server)
-        if not health.ready_to_connect or server not in EXTERNAL_MCP_EXECUTION_SERVERS:
+        if not health.ready_to_connect or not health.execution_supported:
             continue
         if server == "context7":
             specs.extend(load_context7_external_mcp_tools(health, project_dir))

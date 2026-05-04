@@ -28,6 +28,7 @@ from agents.runtime.mcp_bridge import (
     MCP_SERVER_CATALOG,
     build_external_mcp_health_matrix,
     executable_external_mcp_servers,
+    executable_external_mcp_tools,
     resolve_runtime_mcp_support,
 )
 from agents.runtime.subagents import (
@@ -165,6 +166,15 @@ def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
                     ],
                     "unsupported_servers": plan["unsupported_servers"],
                     "bridged_servers": plan["bridged_servers"],
+                    "local_bridged_servers": plan["local_bridged_servers"],
+                    "external_bridged_servers": plan["external_bridged_servers"],
+                    "executable_external_tools": list(
+                        executable_external_mcp_tools(
+                            requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+                        )
+                    )
+                    if bridge_available
+                    else [],
                 }
             )
     return matrix
@@ -317,6 +327,7 @@ def format_runtime_modes_text() -> str:
             row["status"],
             row["action_required"],
             ", ".join(row["bridged_servers"]) or "none",
+            ", ".join(row["external_bridged_servers"]) or "none",
             ", ".join(row["external_bridge_required_servers"]) or "none",
         ]
         for row in build_mcp_bridge_plan_matrix()
@@ -329,6 +340,7 @@ def format_runtime_modes_text() -> str:
             "yes" if row["configured"] else "no",
             row["transport"] or "n/a",
             ", ".join(row["missing_env"]) or "none",
+            ", ".join(row["executable_tools"]) or "none",
         ]
         for row in build_external_mcp_health_matrix(
             requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
@@ -409,6 +421,7 @@ def format_runtime_modes_text() -> str:
                     "Status",
                     "Action",
                     "Bridged",
+                    "External bridged",
                     "External required",
                 ],
                 mcp_bridge_rows,
@@ -421,6 +434,7 @@ def format_runtime_modes_text() -> str:
                     "Configured",
                     "Transport",
                     "Missing config",
+                    "Executable tools",
                 ],
                 external_mcp_health_rows,
             ),

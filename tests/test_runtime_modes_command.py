@@ -108,6 +108,9 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     }
     assert external_health["context7"]["status"] == "client_disabled"
     assert external_health["context7"]["command"] == "npx"
+    assert external_health["context7"]["execution_supported"] is True
+    assert external_health["context7"]["executable_tools"] == []
+    assert external_health["context7"]["executable_tool_count"] == 0
     assert external_health["graphiti"]["status"] == "missing_configuration"
     mcp_rows = {
         (row["provider"], row["runtime_mode"]): row
@@ -185,6 +188,12 @@ def test_runtime_modes_command_marks_context7_available_when_external_client_ena
 
     assert "context7" in openai_generic_mcp["available_servers"]
     assert "context7" not in openai_generic_mcp["external_bridge_required_servers"]
+    assert openai_generic_mcp["external_bridged_servers"] == ["context7"]
+    assert openai_generic_mcp["bridged_servers"] == ["auto-claude", "context7"]
+    assert openai_generic_mcp["executable_external_tools"] == [
+        "mcp__context7__resolve-library-id",
+        "mcp__context7__get-library-docs",
+    ]
 
 
 def test_cli_runner_selection_filters_runtime_mode():

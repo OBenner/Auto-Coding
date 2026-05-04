@@ -514,6 +514,9 @@ export interface RuntimeMcpBridgePlanRow {
   external_bridge_ready_servers: string[];
   unsupported_servers: string[];
   bridged_servers: string[];
+  local_bridged_servers: string[];
+  external_bridged_servers: string[];
+  executable_external_tools: string[];
 }
 
 export interface RuntimeExternalMcpHealthRow {
@@ -533,6 +536,9 @@ export interface RuntimeExternalMcpHealthRow {
   required_env: string[];
   missing_env: string[];
   concrete_servers: string[];
+  execution_supported: boolean;
+  executable_tools: string[];
+  executable_tool_count: number;
 }
 
 export interface RuntimeFallbackMatrixRow {

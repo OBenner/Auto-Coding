@@ -27,6 +27,7 @@ import type {
   ProviderConnectionTestResult,
   ProviderRuntimeDiagnostics,
   RuntimeControlPlaneDiagnostics,
+  RuntimeExternalMcpHealthRow,
   RuntimeFallbackMatrixRow,
   RuntimeMcpBridgePlanRow,
   RuntimeSubagentMatrixRow
@@ -392,6 +393,40 @@ function findSubagentMatrixRow(
   ) ?? null;
 }
 
+function findRelevantExternalMcpHealthRows(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  mcpPlan: RuntimeMcpBridgePlanRow | null
+): RuntimeExternalMcpHealthRow[] {
+  const externalServers = new Set([
+    ...(mcpPlan?.available_servers ?? []),
+    ...(mcpPlan?.external_bridge_required_servers ?? []),
+    ...(mcpPlan?.external_bridge_ready_servers ?? [])
+  ]);
+  return diagnostics?.external_mcp_server_health?.filter(
+    (row) =>
+      row.bridgeable && (externalServers.has(row.server) || row.execution_supported)
+  ) ?? [];
+}
+
+function formatExternalMcpHealthRows(rows: RuntimeExternalMcpHealthRow[]): string {
+  return rows
+    .map((row) => {
+      const label = row.display_name || row.server;
+      const status = formatRuntimeDiagnosticValue(row.status);
+      return status ? `${label}: ${status}` : label;
+    })
+    .filter(Boolean)
+    .join(', ');
+}
+
+function formatExecutableExternalMcpTools(rows: RuntimeExternalMcpHealthRow[]): string {
+  return rows
+    .flatMap((row) =>
+      (row.executable_tools ?? []).map((tool) => `mcp__${row.server}__${tool}`)
+    )
+    .join(', ');
+}
+
 function getElectronAPI() {
   return (globalThis as unknown as Partial<Window>).electronAPI;
 }
@@ -744,6 +779,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       config.provider,
       activeRuntimeMode
     );
+    const externalMcpHealthRows = findRelevantExternalMcpHealthRows(
+      runtimeControlPlaneDiagnostics,
+      mcpPlan
+    );
     const noneLabel = t('settings:aiProvider.controlPlane.none');
     const formatControlPlaneValue = (value?: string | null) => {
       const formatted = formatRuntimeDiagnosticValue(value);
@@ -753,6 +792,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       formatRuntimeDiagnosticList(values) || noneLabel;
     const mcpStatus = mcpPlan ? formatControlPlaneValue(mcpPlan.status) : noneLabel;
     const mcpAction = mcpPlan ? formatControlPlaneValue(mcpPlan.action_required) : noneLabel;
+    const externalMcpHealth = externalMcpHealthRows.length
+      ? formatExternalMcpHealthRows(externalMcpHealthRows)
+      : noneLabel;
+    const executableExternalMcpTools =
+      mcpPlan?.executable_external_tools?.join(', ') ||
+      formatExecutableExternalMcpTools(externalMcpHealthRows) ||
+      noneLabel;
     const fallbackSelected = fallbackRow
       ? formatControlPlaneValue(fallbackRow.fallback_selected_mode)
       : noneLabel;
@@ -813,6 +859,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 </dd>
               </div>
               <div>
+                <dt>{t('settings:aiProvider.controlPlane.externalBridgedServers')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(mcpPlan?.external_bridged_servers)}
+                </dd>
+              </div>
+              <div>
                 <dt>{t('settings:aiProvider.controlPlane.externalRequiredServers')}</dt>
                 <dd className="font-medium text-foreground">
                   {formatControlPlaneList(mcpPlan?.external_bridge_required_servers)}
@@ -822,6 +874,16 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 <dt>{t('settings:aiProvider.controlPlane.nativeRequiredServers')}</dt>
                 <dd className="font-medium text-foreground">
                   {formatControlPlaneList(mcpPlan?.native_required_servers)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.externalHealth')}</dt>
+                <dd className="font-medium text-foreground">{externalMcpHealth}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt>{t('settings:aiProvider.controlPlane.executableTools')}</dt>
+                <dd className="break-words font-medium text-foreground">
+                  {executableExternalMcpTools}
                 </dd>
               </div>
             </dl>

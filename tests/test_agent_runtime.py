@@ -21,6 +21,7 @@ from agents.runtime import (
     create_runtime_session,
     describe_external_mcp_server_health,
     describe_mcp_server_statuses,
+    executable_external_mcp_tools,
     get_runtime_mode,
     local_action_response_schema,
     local_action_tool_schemas,
@@ -2784,6 +2785,10 @@ async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
     assert artifact["mcp_support"]["unavailable_servers"] == []
     assert artifact["mcp_support"]["bridge_plan"]["status"] == "ready"
     assert artifact["mcp_support"]["bridge_plan"]["action_required"] == "none"
+    assert artifact["mcp_support"]["bridge_plan"]["external_bridged_servers"] == [
+        "context7"
+    ]
+    assert artifact["mcp_support"]["bridge_plan"]["bridged_servers"] == ["context7"]
     assert artifact["mcp_support"]["bridge"]["tools"] == [
         "mcp__context7__resolve-library-id",
         "mcp__context7__get-library-docs",
@@ -2979,6 +2984,15 @@ def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     assert health.status == "ready_to_connect"
     assert health.command == "npx"
     assert health.args == ("-y", "@upstash/context7-mcp")
+    assert health.execution_supported is True
+    assert health.executable_tools == ("resolve-library-id", "get-library-docs")
+    assert executable_external_mcp_tools(
+        requested_servers=("context7",),
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    ) == (
+        "mcp__context7__resolve-library-id",
+        "mcp__context7__get-library-docs",
+    )
 
     support = resolve_runtime_mcp_support(
         provider_name="openai",
