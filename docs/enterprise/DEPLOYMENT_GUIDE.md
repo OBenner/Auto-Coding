@@ -1196,7 +1196,6 @@ tail -f .auto-claude/enterprise/audit/audit_*.jsonl | \
 - [Audit Logging Guide](AUDIT_LOGGING.md)
 
 **Community:**
-- [Discord](https://discord.gg/KCXaPBr4Dj)
 - [GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)
 - [GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)
 
@@ -1293,7 +1292,7 @@ tail -f .auto-claude/enterprise/audit/audit_*.jsonl | \
 For enterprise deployment assistance:
 - **Documentation:** https://github.com/OBenner/Auto-Coding
 - **Issues:** https://github.com/OBenner/Auto-Coding/issues
-- **Discord:** https://discord.gg/KCXaPBr4Dj
+- **Discussions:** https://github.com/OBenner/Auto-Coding/discussions
 - **Email:** enterprise@autoclaude.example.com (replace with actual contact)
 
 ---

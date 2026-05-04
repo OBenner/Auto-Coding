@@ -638,7 +638,7 @@ INSTRUCTIONS: Provide support channels and additional resources.
 - **Documentation:** [Provider docs URL]
 - **Support Portal:** [Support URL]
 - **Status Page:** [Status page URL]
-- **Community:** [Forum/Discord/Slack URL]
+- **Community:** [Forum/support URL]
 
 ### Auto Code Support
 

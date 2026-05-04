@@ -896,4 +896,4 @@ For issues or questions:
 2. **Review health checks:** `docker-compose ps`
 3. **Consult troubleshooting:** See [Troubleshooting](#troubleshooting) section above
 4. **File an issue:** https://github.com/your-org/Auto-Coding/issues
-5. **Discord/Slack:** Join our community for real-time help
+5. **Discussions:** Ask for help in GitHub Discussions

@@ -885,7 +885,7 @@ python run.py --spec 001
 ### Where can I get help?
 
 - **GitHub Issues:** https://github.com/OBenner/Auto-Coding/issues
-- **Discord:** [Auto Code Community](https://discord.gg/auto-claude) *(check README for current invite)*
+- **GitHub Discussions:** https://github.com/OBenner/Auto-Coding/discussions
 - **Documentation:** https://github.com/OBenner/Auto-Coding/tree/main/guides
 
 ---

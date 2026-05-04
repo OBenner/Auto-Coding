@@ -504,5 +504,4 @@ None at this time. See [GitHub Issues](https://github.com/your-org/auto-code/iss
 For questions or issues related to this feature:
 
 - [GitHub Issues](https://github.com/your-org/auto-code/issues/new?template=feature-request.md)
-- [Discord Community](https://discord.gg/auto-code)
 - [Documentation](https://docs.auto-code.dev)

@@ -1720,8 +1720,8 @@ if not is_trusted_acs_url(callback_url):
 - [SAML DevTools](https://www.samltool.com/)
 
 **Community Support:**
-- [Discord](https://discord.gg/KCXaPBr4Dj)
 - [GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)
+- [GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)
 
 ---
 

@@ -1120,8 +1120,8 @@ manager.save()
 For issues or questions:
 
 1. Check this documentation
-2. Review [GitHub Issues](https://github.com/AndyMik90/Auto-Claude/issues)
-3. Join [Discord Community](https://discord.gg/KCXaPBr4Dj)
+2. Review [GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)
+3. Ask in [GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)
 4. Create a new issue with:
    - Workspace configuration
    - Error messages

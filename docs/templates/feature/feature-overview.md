@@ -219,6 +219,5 @@
 
 For questions or issues related to this feature:
 
-- [Link to Discord/support channel]
 - [Link to issue tracker]
 - [Link to discussion forum]
