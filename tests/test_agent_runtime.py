@@ -845,6 +845,32 @@ class SlowSubagentRuntimeSession(FakeSubagentRuntimeSession):
         )
 
 
+class CancellableSubagentRuntimeSession(FakeSubagentRuntimeSession):
+    def __init__(self, response: str):
+        super().__init__(response)
+        self.started = asyncio.Event()
+
+    async def run(
+        self,
+        *,
+        message: str,
+        spec_dir: Path,
+        verbose: bool,
+        phase,
+        subtask_id: str | None = None,
+    ):
+        del spec_dir, verbose, phase, subtask_id
+        self.prompts.append(message)
+        self.started.set()
+        await asyncio.sleep(10)
+        return SimpleNamespace(
+            status="complete",
+            response_text="too late",
+            usage_metadata=None,
+            artifacts=None,
+        )
+
+
 @pytest.mark.asyncio
 async def test_completion_runtime_supports_text_only(tmp_path: Path):
     runtime_session = create_runtime_session(
@@ -1007,6 +1033,71 @@ async def test_runtime_subagent_orchestrator_times_out_child_sessions(
     assert run.artifact_path == str(artifact_path)
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["summary"]["error_result_ids"] == ["slow-review"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_subagent_orchestrator_cancels_child_sessions_with_artifact(
+    tmp_path: Path,
+):
+    created_sessions: list[CancellableSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = CancellableSubagentRuntimeSession(f"done {task.id}")
+        created_sessions.append(session)
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_concurrency=1,
+    )
+    run_task = asyncio.create_task(
+        orchestrator.run(
+            [
+                RuntimeSubagentTask(
+                    id="cancel-running",
+                    role="reviewer",
+                    prompt="Start and wait",
+                ),
+                RuntimeSubagentTask(
+                    id="cancel-queued",
+                    role="reviewer",
+                    prompt="Should be cancelled before session creation",
+                ),
+            ]
+        )
+    )
+
+    for _ in range(100):
+        if created_sessions:
+            break
+        await asyncio.sleep(0)
+    assert created_sessions
+    await asyncio.wait_for(created_sessions[0].started.wait(), timeout=1)
+
+    await orchestrator.cancel()
+    run = await run_task
+
+    assert run.status == "cancelled"
+    assert run.cancelled is True
+    assert run.cancelled_at is not None
+    assert created_sessions[0].cancelled is True
+    assert [result.status for result in run.results] == ["cancelled", "cancelled"]
+    assert run.results[0].attempt_count == 1
+    assert [attempt.status for attempt in run.results[0].attempts] == ["cancelled"]
+    assert run.results[1].attempts == []
+
+    artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact["status"] == "cancelled"
+    assert artifact["cancelled"] is True
+    assert artifact["cancelled_at"] == run.cancelled_at
+    assert artifact["summary"]["cancelled_result_ids"] == [
+        "cancel-running",
+        "cancel-queued",
+    ]
+    assert artifact["results"][0]["attempts"][0]["status"] == "cancelled"
+    assert Path(artifact["results"][0]["artifact_path"]).exists()
 
 
 @pytest.mark.asyncio

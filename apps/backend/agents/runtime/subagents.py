@@ -112,6 +112,7 @@ class RuntimeSubagentRun:
     results: list[RuntimeSubagentResult]
     artifact_path: str | None = None
     cancelled: bool = False
+    cancelled_at: str | None = None
     support: RuntimeSubagentSupport | None = None
     merge_plan: dict[str, Any] | None = None
 
@@ -120,6 +121,7 @@ class RuntimeSubagentRun:
         return {
             "status": self.status,
             "cancelled": self.cancelled,
+            "cancelled_at": self.cancelled_at,
             "artifact_path": self.artifact_path,
             "support": self.support.to_dict() if self.support else None,
             "summary": summarize_subagent_results(self.results),
@@ -149,9 +151,11 @@ class RuntimeSubagentOrchestrator:
         )
         self._cancel_event = asyncio.Event()
         self._running_tasks: set[asyncio.Task] = set()
+        self._cancel_requested_at: str | None = None
 
     async def cancel(self) -> None:
         """Request cancellation and forward it to running child tasks."""
+        self._cancel_requested_at = datetime.now(UTC).isoformat()
         self._cancel_event.set()
         for task in tuple(self._running_tasks):
             task.cancel()
@@ -229,6 +233,9 @@ class RuntimeSubagentOrchestrator:
             status=run_status,
             results=results,
             cancelled=any(result.status == "cancelled" for result in results),
+            cancelled_at=self._cancel_requested_at
+            if any(result.status == "cancelled" for result in results)
+            else None,
             support=support,
         )
         return self._save_run(run, artifact_name=artifact_name)
@@ -303,7 +310,7 @@ class RuntimeSubagentOrchestrator:
         except asyncio.CancelledError:
             if runtime_session is not None:
                 await cancel_runtime_session(runtime_session)
-            raise
+            result = cancelled_subagent_result(task, before_start=False)
         except TimeoutError:
             if runtime_session is not None:
                 await cancel_runtime_session(runtime_session)
