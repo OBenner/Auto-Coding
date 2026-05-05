@@ -115,6 +115,12 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert external_health["context7"]["executable_tool_count"] == 0
     assert external_health["graphiti"]["status"] == "missing_configuration"
     assert external_health["graphiti"]["adapter_registered"] is False
+    assert external_health["electron"]["status"] == "server_disabled"
+    assert external_health["electron"]["adapter_registered"] is True
+    assert external_health["electron"]["execution_supported"] is True
+    assert external_health["puppeteer"]["status"] == "server_disabled"
+    assert external_health["puppeteer"]["adapter_registered"] is True
+    assert external_health["puppeteer"]["execution_supported"] is True
     mcp_rows = {
         (row["provider"], row["runtime_mode"]): row
         for row in payload["mcp_bridge_plan_matrix"]
@@ -197,6 +203,35 @@ def test_runtime_modes_command_marks_context7_available_when_external_client_ena
         "mcp__context7__resolve-library-id",
         "mcp__context7__get-library-docs",
     ]
+
+
+def test_runtime_modes_command_marks_browser_mcp_available_when_enabled(
+    monkeypatch,
+):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
+    from cli.runtime_commands import build_runtime_modes_payload
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv("PUPPETEER_MCP_ENABLED", "true")
+
+    payload = build_runtime_modes_payload()
+    external_health = {
+        row["server"]: row for row in payload["external_mcp_server_health"]
+    }
+    mcp_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["mcp_bridge_plan_matrix"]
+    }
+    openai_generic_mcp = mcp_rows[("openai", "generic_edit")]
+
+    assert external_health["puppeteer"]["status"] == "ready_to_connect"
+    assert "puppeteer_navigate" in external_health["puppeteer"]["executable_tools"]
+    assert "puppeteer" in openai_generic_mcp["available_servers"]
+    assert "puppeteer" in openai_generic_mcp["external_bridged_servers"]
+    assert (
+        "mcp__puppeteer__puppeteer_navigate"
+        in openai_generic_mcp["executable_external_tools"]
+    )
 
 
 def test_cli_runner_selection_filters_runtime_mode():

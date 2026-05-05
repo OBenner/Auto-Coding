@@ -398,35 +398,71 @@ class RuntimeExternalMcpAdapter:
         ]
 
 
+def external_mcp_tool_definition(
+    *,
+    name: str,
+    description: str,
+    parameters: dict[str, Any],
+    permission: str,
+    audit_level: McpAuditLevel,
+    mutating: bool = False,
+) -> RuntimeExternalMcpToolDefinition:
+    """Build one external MCP tool definition with a conservative policy."""
+    return RuntimeExternalMcpToolDefinition(
+        name=name,
+        description=description,
+        parameters=parameters,
+        policy=RuntimeMcpToolPolicy(
+            permission,
+            audit_level,
+            mutating=mutating,
+        ),
+    )
+
+
+def object_schema(
+    properties: dict[str, Any] | None = None,
+    *,
+    required: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Return a strict object schema for external MCP tool arguments."""
+    schema: dict[str, Any] = {
+        "type": "object",
+        "properties": properties or {},
+        "additionalProperties": False,
+    }
+    if required:
+        schema["required"] = list(required)
+    return schema
+
+
 def context7_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
     """Build the Context7 external MCP execution adapter."""
     tool_definitions: tuple[RuntimeExternalMcpToolDefinition, ...] = (
-        RuntimeExternalMcpToolDefinition(
+        external_mcp_tool_definition(
             name="resolve-library-id",
             description=(
                 "Resolve a package or library name to a Context7-compatible library ID."
             ),
-            parameters={
-                "type": "object",
-                "properties": {
+            parameters=object_schema(
+                {
                     "libraryName": {
                         "type": "string",
                         "description": "Package or library name to resolve.",
                     }
                 },
-                "required": ["libraryName"],
-                "additionalProperties": False,
-            },
-            policy=RuntimeMcpToolPolicy("read_external_docs", "read"),
+                required=("libraryName",),
+            ),
+            permission="read_external_docs",
+            audit_level="read",
         ),
-        RuntimeExternalMcpToolDefinition(
+        external_mcp_tool_definition(
             name="get-library-docs",
             description=(
                 "Fetch current documentation for a Context7-compatible library ID."
             ),
-            parameters={
-                "type": "object",
-                "properties": {
+            parameters=object_schema(
+                {
                     "context7CompatibleLibraryID": {
                         "type": "string",
                         "description": "Library ID returned by resolve-library-id.",
@@ -440,10 +476,10 @@ def context7_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
                         "description": "Optional maximum documentation token budget.",
                     },
                 },
-                "required": ["context7CompatibleLibraryID"],
-                "additionalProperties": False,
-            },
-            policy=RuntimeMcpToolPolicy("read_external_docs", "read"),
+                required=("context7CompatibleLibraryID",),
+            ),
+            permission="read_external_docs",
+            audit_level="read",
         ),
     )
     return RuntimeExternalMcpAdapter(
@@ -453,8 +489,205 @@ def context7_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
     )
 
 
+def electron_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
+    """Build the Electron browser automation MCP execution adapter."""
+    return RuntimeExternalMcpAdapter(
+        server="electron",
+        display_name="Electron",
+        tool_definitions=(
+            external_mcp_tool_definition(
+                name="get_electron_window_info",
+                description="Get information about running Electron windows.",
+                parameters=object_schema(),
+                permission="read_browser_state",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="take_screenshot",
+                description="Capture a compressed screenshot of the Electron app.",
+                parameters=object_schema(),
+                permission="read_browser_state",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="send_command_to_electron",
+                description="Send a UI automation command to the Electron app.",
+                parameters=object_schema(
+                    {
+                        "command": {
+                            "type": "string",
+                            "description": "Electron automation command to run.",
+                        },
+                        "args": {
+                            "type": "object",
+                            "description": "Command-specific arguments.",
+                        },
+                    },
+                    required=("command",),
+                ),
+                permission="run_browser_automation",
+                audit_level="command",
+                mutating=True,
+            ),
+            external_mcp_tool_definition(
+                name="read_electron_logs",
+                description="Read console logs from the Electron app.",
+                parameters=object_schema(
+                    {
+                        "limit": {
+                            "type": "integer",
+                            "description": "Optional maximum log entries to return.",
+                        }
+                    }
+                ),
+                permission="read_browser_logs",
+                audit_level="read",
+            ),
+        ),
+    )
+
+
+def puppeteer_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
+    """Build the Puppeteer browser automation MCP execution adapter."""
+    browser_command_policy = {
+        "permission": "run_browser_automation",
+        "audit_level": "command",
+        "mutating": True,
+    }
+    return RuntimeExternalMcpAdapter(
+        server="puppeteer",
+        display_name="Puppeteer",
+        tool_definitions=(
+            external_mcp_tool_definition(
+                name="puppeteer_connect_active_tab",
+                description="Connect to the active browser tab.",
+                parameters=object_schema(),
+                permission="read_browser_state",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_navigate",
+                description="Navigate the browser to a URL.",
+                parameters=object_schema(
+                    {
+                        "url": {
+                            "type": "string",
+                            "description": "URL to navigate to.",
+                        }
+                    },
+                    required=("url",),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_screenshot",
+                description="Capture a browser screenshot.",
+                parameters=object_schema(
+                    {
+                        "name": {
+                            "type": "string",
+                            "description": "Optional screenshot label.",
+                        },
+                        "selector": {
+                            "type": "string",
+                            "description": "Optional CSS selector to capture.",
+                        },
+                    }
+                ),
+                permission="read_browser_state",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_click",
+                description="Click an element by CSS selector.",
+                parameters=object_schema(
+                    {
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector to click.",
+                        }
+                    },
+                    required=("selector",),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_fill",
+                description="Fill an input field by CSS selector.",
+                parameters=object_schema(
+                    {
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector for the input field.",
+                        },
+                        "value": {
+                            "type": "string",
+                            "description": "Value to enter.",
+                        },
+                    },
+                    required=("selector", "value"),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_select",
+                description="Select an option in a dropdown.",
+                parameters=object_schema(
+                    {
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector for the select element.",
+                        },
+                        "value": {
+                            "type": "string",
+                            "description": "Option value to select.",
+                        },
+                    },
+                    required=("selector", "value"),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_hover",
+                description="Hover over an element by CSS selector.",
+                parameters=object_schema(
+                    {
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector to hover.",
+                        }
+                    },
+                    required=("selector",),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_evaluate",
+                description="Execute JavaScript in the browser page.",
+                parameters=object_schema(
+                    {
+                        "script": {
+                            "type": "string",
+                            "description": "JavaScript expression or script to evaluate.",
+                        }
+                    },
+                    required=("script",),
+                ),
+                permission="run_browser_script",
+                audit_level="command",
+                mutating=True,
+            ),
+        ),
+    )
+
+
 EXTERNAL_MCP_ADAPTERS: dict[str, RuntimeExternalMcpAdapter] = {
-    adapter.server: adapter for adapter in (context7_external_mcp_adapter(),)
+    adapter.server: adapter
+    for adapter in (
+        context7_external_mcp_adapter(),
+        electron_external_mcp_adapter(),
+        puppeteer_external_mcp_adapter(),
+    )
 }
 
 

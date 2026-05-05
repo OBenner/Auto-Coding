@@ -2889,6 +2889,102 @@ async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_executes_puppeteer_external_mcp_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict,
+        project_dir: Path,
+    ):
+        assert health.server == "puppeteer"
+        assert tool_name == "puppeteer_navigate"
+        assert arguments == {"url": "http://localhost:3000"}
+        assert project_dir == tmp_path
+        return {"content": [{"type": "text", "text": "Navigated"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv("PUPPETEER_MCP_ENABLED", "true")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "open app",
+                "actions": [
+                    {
+                        "tool": "mcp__puppeteer__puppeteer_navigate",
+                        "url": "http://localhost:3000",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Opened browser app",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    session.mcp_servers = ("puppeteer",)
+    session.auto_claude_tools = ()
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        agent_type="qa_reviewer",
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "open browser app",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    assert "Opened browser app" in result.response_text
+    assert "mcp__puppeteer__puppeteer_navigate" in session.messages[0]
+    assert "Navigated" in session.messages[1]
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    result_payload = observation_lines[0]["result"]
+    assert result_payload["ok"] is True
+    assert result_payload["data"]["server"] == "puppeteer"
+    assert result_payload["data"]["permission"] == "run_browser_automation"
+    assert result_payload["data"]["audit_level"] == "command"
+    assert result_payload["data"]["mutating"] is True
+    artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact["mcp_support"]["available_servers"] == ["puppeteer"]
+    assert artifact["mcp_support"]["bridge_plan"]["external_bridged_servers"] == [
+        "puppeteer"
+    ]
+    assert (
+        "mcp__puppeteer__puppeteer_navigate"
+        in artifact["mcp_support"]["bridge"]["tools"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3069,7 +3165,7 @@ def test_external_mcp_adapter_registry_exposes_context7_contract():
     adapter = external_mcp_adapter_for("mcp__context7__resolve-library-id")
 
     assert adapter is not None
-    assert registered_external_mcp_servers() == ("context7",)
+    assert registered_external_mcp_servers() == ("context7", "electron", "puppeteer")
     assert adapter.server == "context7"
     assert adapter.tool_names == ("resolve-library-id", "get-library-docs")
     assert adapter.execution_supported(transport="stdio", command="npx") is True
@@ -3080,6 +3176,42 @@ def test_external_mcp_adapter_registry_exposes_context7_contract():
     assert {
         definition.policy.permission for definition in adapter.tool_definitions
     } == {"read_external_docs"}
+
+
+def test_external_mcp_adapter_registry_exposes_browser_contracts():
+    electron = external_mcp_adapter_for("mcp__electron__take_screenshot")
+    puppeteer = external_mcp_adapter_for("mcp__puppeteer__puppeteer_navigate")
+
+    assert electron is not None
+    assert puppeteer is not None
+    assert electron.tool_names == (
+        "get_electron_window_info",
+        "take_screenshot",
+        "send_command_to_electron",
+        "read_electron_logs",
+    )
+    assert puppeteer.tool_names == (
+        "puppeteer_connect_active_tab",
+        "puppeteer_navigate",
+        "puppeteer_screenshot",
+        "puppeteer_click",
+        "puppeteer_fill",
+        "puppeteer_select",
+        "puppeteer_hover",
+        "puppeteer_evaluate",
+    )
+    electron_policy_by_tool = {
+        definition.name: definition.policy for definition in electron.tool_definitions
+    }
+    puppeteer_policy_by_tool = {
+        definition.name: definition.policy for definition in puppeteer.tool_definitions
+    }
+    assert electron_policy_by_tool["take_screenshot"].permission == (
+        "read_browser_state"
+    )
+    assert electron_policy_by_tool["send_command_to_electron"].mutating is True
+    assert puppeteer_policy_by_tool["puppeteer_screenshot"].audit_level == "read"
+    assert puppeteer_policy_by_tool["puppeteer_evaluate"].mutating is True
 
 
 def test_external_mcp_health_reports_ready_context7_when_client_enabled():
@@ -3117,6 +3249,53 @@ def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     plan = support.to_dict()["bridge_plan"]
     assert plan["external_bridge_ready_servers"] == ["context7"]
     assert plan["action_required"] == "wire_external_mcp_tool_execution"
+
+
+def test_external_mcp_health_reports_ready_browser_adapters_when_enabled():
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "ELECTRON_MCP_ENABLED": "true",
+        "PUPPETEER_MCP_ENABLED": "true",
+    }
+    electron = describe_external_mcp_server_health(
+        "electron",
+        environment=environment,
+    )
+    puppeteer = describe_external_mcp_server_health(
+        "puppeteer",
+        environment=environment,
+    )
+
+    assert electron.status == "ready_to_connect"
+    assert electron.execution_supported is True
+    assert electron.adapter_registered is True
+    assert electron.executable_tools == (
+        "get_electron_window_info",
+        "take_screenshot",
+        "send_command_to_electron",
+        "read_electron_logs",
+    )
+    assert puppeteer.status == "ready_to_connect"
+    assert puppeteer.execution_supported is True
+    assert puppeteer.adapter_registered is True
+    assert "puppeteer_navigate" in puppeteer.executable_tools
+    assert executable_external_mcp_tools(
+        requested_servers=("electron", "puppeteer"),
+        environment=environment,
+    ) == (
+        "mcp__electron__get_electron_window_info",
+        "mcp__electron__take_screenshot",
+        "mcp__electron__send_command_to_electron",
+        "mcp__electron__read_electron_logs",
+        "mcp__puppeteer__puppeteer_connect_active_tab",
+        "mcp__puppeteer__puppeteer_navigate",
+        "mcp__puppeteer__puppeteer_screenshot",
+        "mcp__puppeteer__puppeteer_click",
+        "mcp__puppeteer__puppeteer_fill",
+        "mcp__puppeteer__puppeteer_select",
+        "mcp__puppeteer__puppeteer_hover",
+        "mcp__puppeteer__puppeteer_evaluate",
+    )
 
 
 def test_external_mcp_health_keeps_readiness_only_servers_non_executable():
