@@ -13,7 +13,10 @@ from agents.runtime import (
     LocalActionExecutor,
     RuntimeCapabilities,
     RuntimeCapabilityError,
+    RuntimeExternalMcpAdapter,
+    RuntimeExternalMcpToolDefinition,
     RuntimeMcpBridge,
+    RuntimeMcpToolPolicy,
     RuntimeRequirements,
     RuntimeSubagentOrchestrator,
     RuntimeSubagentResult,
@@ -3169,6 +3172,8 @@ def test_external_mcp_adapter_registry_exposes_context7_contract():
     assert adapter.server == "context7"
     assert adapter.tool_names == ("resolve-library-id", "get-library-docs")
     assert adapter.execution_supported(transport="stdio", command="npx") is True
+    assert adapter.transport_supported(transport="stdio") is True
+    assert adapter.transport_supported(transport="http") is False
     assert adapter.execution_supported(transport="http", command=None) is False
     schemas = [definition.parameters for definition in adapter.tool_definitions]
     assert schemas[0]["required"] == ["libraryName"]
@@ -3229,6 +3234,9 @@ def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     assert health.execution_supported is True
     assert health.adapter_registered is True
     assert health.adapter_name == "Context7"
+    assert health.adapter_transport == "stdio"
+    assert health.transport_supported is True
+    assert health.supported_transports == ("stdio",)
     assert health.executable_tools == ("resolve-library-id", "get-library-docs")
     assert executable_external_mcp_tools(
         requested_servers=("context7",),
@@ -3307,11 +3315,89 @@ def test_external_mcp_health_keeps_readiness_only_servers_non_executable():
         },
     )
 
-    assert health.status == "ready_to_connect"
+    assert health.status == "adapter_missing"
     assert health.configured is True
     assert health.execution_supported is False
     assert health.adapter_registered is False
     assert health.executable_tools == ()
+
+    support = resolve_runtime_mcp_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        bridge_available=True,
+        tool_count=1,
+        requested_servers=("graphiti",),
+        external_client_enabled=True,
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    )
+    plan = support.to_dict()["bridge_plan"]
+    assert plan["external_bridge_adapter_missing_servers"] == ["graphiti"]
+    assert plan["action_required"] == "register_external_mcp_adapter"
+
+
+def test_external_mcp_health_reports_unsupported_transport_for_registered_http_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    monkeypatch.setitem(
+        mcp_bridge_module.EXTERNAL_MCP_ADAPTERS,
+        "graphiti",
+        RuntimeExternalMcpAdapter(
+            server="graphiti",
+            display_name="Graphiti",
+            transport="http",
+            tool_definitions=(
+                RuntimeExternalMcpToolDefinition(
+                    name="search_nodes",
+                    description="Search Graphiti nodes.",
+                    parameters={
+                        "type": "object",
+                        "properties": {"query": {"type": "string"}},
+                        "required": ["query"],
+                        "additionalProperties": False,
+                    },
+                    policy=RuntimeMcpToolPolicy("read_memory", "read"),
+                ),
+            ),
+        ),
+    )
+
+    health = describe_external_mcp_server_health(
+        "graphiti",
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    )
+
+    assert health.status == "unsupported_transport"
+    assert health.adapter_registered is True
+    assert health.adapter_transport == "http"
+    assert health.transport_supported is False
+    assert health.execution_supported is False
+    assert health.supported_transports == ("stdio",)
+
+    support = resolve_runtime_mcp_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        bridge_available=True,
+        tool_count=1,
+        requested_servers=("graphiti",),
+        external_client_enabled=True,
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    )
+    plan = support.to_dict()["bridge_plan"]
+    assert plan["external_bridge_unsupported_transport_servers"] == ["graphiti"]
+    assert plan["action_required"] == "implement_external_mcp_transport"
 
 
 @pytest.mark.asyncio

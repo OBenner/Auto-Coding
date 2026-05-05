@@ -31,6 +31,7 @@ EXTERNAL_MCP_CLIENT_ENV = "AUTO_CODE_EXTERNAL_MCP_CLIENT"
 EXTERNAL_MCP_PROTOCOL_VERSION_ENV = "AUTO_CODE_MCP_PROTOCOL_VERSION"
 DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION = "2024-11-05"
 DEFAULT_EXTERNAL_MCP_TIMEOUT_SECONDS = 30.0
+SUPPORTED_EXTERNAL_MCP_TRANSPORTS = ("stdio",)
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
 McpAuditLevel = Literal["read", "write", "command", "analysis"]
 ExternalMcpHealthStatus = Literal[
@@ -39,6 +40,8 @@ ExternalMcpHealthStatus = Literal[
     "server_disabled",
     "missing_configuration",
     "choose_concrete_server",
+    "adapter_missing",
+    "unsupported_transport",
     "ready_to_connect",
 ]
 MCP_SERVER_CATALOG: dict[str, dict[str, Any]] = {
@@ -161,6 +164,9 @@ class RuntimeExternalMcpServerHealth:
     executable_tools: tuple[str, ...] = ()
     adapter_registered: bool = False
     adapter_name: str | None = None
+    adapter_transport: str | None = None
+    transport_supported: bool = False
+    supported_transports: tuple[str, ...] = SUPPORTED_EXTERNAL_MCP_TRANSPORTS
 
     @property
     def ready_to_connect(self) -> bool:
@@ -191,6 +197,9 @@ class RuntimeExternalMcpServerHealth:
             "executable_tool_count": len(self.executable_tools),
             "adapter_registered": self.adapter_registered,
             "adapter_name": self.adapter_name,
+            "adapter_transport": self.adapter_transport,
+            "transport_supported": self.transport_supported,
+            "supported_transports": list(self.supported_transports),
         }
 
 
@@ -263,6 +272,8 @@ class RuntimeMcpBridgePlan:
     local_bridge_required_servers: tuple[str, ...] = ()
     external_bridge_required_servers: tuple[str, ...] = ()
     external_bridge_ready_servers: tuple[str, ...] = ()
+    external_bridge_adapter_missing_servers: tuple[str, ...] = ()
+    external_bridge_unsupported_transport_servers: tuple[str, ...] = ()
     unsupported_servers: tuple[str, ...] = ()
     bridged_servers: tuple[str, ...] = ()
     local_bridged_servers: tuple[str, ...] = ()
@@ -287,6 +298,12 @@ class RuntimeMcpBridgePlan:
                 self.external_bridge_required_servers
             ),
             "external_bridge_ready_servers": list(self.external_bridge_ready_servers),
+            "external_bridge_adapter_missing_servers": list(
+                self.external_bridge_adapter_missing_servers
+            ),
+            "external_bridge_unsupported_transport_servers": list(
+                self.external_bridge_unsupported_transport_servers
+            ),
             "unsupported_servers": list(self.unsupported_servers),
             "bridged_servers": list(self.bridged_servers),
             "local_bridged_servers": list(self.local_bridged_servers),
@@ -367,8 +384,15 @@ class RuntimeExternalMcpAdapter:
         """Return whether this adapter can execute the catalog transport."""
         return (
             bool(self.tool_definitions)
-            and transport == self.transport
+            and self.transport_supported(transport=transport)
             and bool(command)
+        )
+
+    def transport_supported(self, *, transport: str | None) -> bool:
+        """Return whether the provider-neutral client can execute this transport."""
+        return (
+            transport == self.transport
+            and self.transport in SUPPORTED_EXTERNAL_MCP_TRANSPORTS
         )
 
     def load_tool_specs(
@@ -1289,6 +1313,9 @@ def describe_external_mcp_server_health(
     )
     transport = str(catalog_entry.get("transport") or "") or None
     command = str(catalog_entry.get("command") or "") or None
+    transport_supported = bool(
+        adapter and adapter.transport_supported(transport=transport)
+    )
     execution_supported = bool(
         adapter
         and adapter.execution_supported(
@@ -1339,18 +1366,24 @@ def describe_external_mcp_server_health(
             f"Set {EXTERNAL_MCP_CLIENT_ENV}=true to let non-native runtimes "
             "prepare external MCP connections."
         )
+    elif adapter is None:
+        status = "adapter_missing"
+        reason = (
+            "External MCP server configuration is ready, but no executable "
+            "adapter is registered for this server."
+        )
+    elif not transport_supported:
+        status = "unsupported_transport"
+        reason = (
+            "External MCP adapter is registered, but the provider-neutral "
+            f"client supports only: {', '.join(SUPPORTED_EXTERNAL_MCP_TRANSPORTS)}."
+        )
     else:
         status = "ready_to_connect"
-        if execution_supported:
-            reason = (
-                "External MCP server can execute registered tools through the "
-                "provider-neutral client."
-            )
-        else:
-            reason = (
-                "External MCP server configuration is ready for the "
-                "provider-neutral client; tool execution wiring is still required."
-            )
+        reason = (
+            "External MCP server can execute registered tools through the "
+            "provider-neutral client."
+        )
 
     executable_tools = (
         known_tools if status == "ready_to_connect" and execution_supported else ()
@@ -1377,6 +1410,9 @@ def describe_external_mcp_server_health(
         executable_tools=executable_tools,
         adapter_registered=adapter is not None,
         adapter_name=adapter.display_name if adapter else None,
+        adapter_transport=adapter.transport if adapter else None,
+        transport_supported=transport_supported,
+        supported_transports=SUPPORTED_EXTERNAL_MCP_TRANSPORTS,
     )
 
 
@@ -1570,6 +1606,20 @@ def build_mcp_bridge_plan(
         and isinstance(status.get("external_client"), dict)
         and status["external_client"].get("status") == "ready_to_connect"
     )
+    external_bridge_adapter_missing_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge_required"
+        and isinstance(status.get("external_client"), dict)
+        and status["external_client"].get("status") == "adapter_missing"
+    )
+    external_bridge_unsupported_transport_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge_required"
+        and isinstance(status.get("external_client"), dict)
+        and status["external_client"].get("status") == "unsupported_transport"
+    )
     unsupported_servers = tuple(
         str(status["server"])
         for status in server_statuses
@@ -1599,6 +1649,12 @@ def build_mcp_bridge_plan(
         local_bridge_required_servers=local_bridge_required_servers,
         external_bridge_required_servers=external_bridge_required_servers,
         external_bridge_ready_servers=external_bridge_ready_servers,
+        external_bridge_adapter_missing_servers=(
+            external_bridge_adapter_missing_servers
+        ),
+        external_bridge_unsupported_transport_servers=(
+            external_bridge_unsupported_transport_servers
+        ),
         unsupported_servers=unsupported_servers,
     )
     recommended_runtime_path = mcp_plan_recommended_runtime_path(
@@ -1619,6 +1675,10 @@ def build_mcp_bridge_plan(
         local_bridge_required_servers=local_bridge_required_servers,
         external_bridge_required_servers=external_bridge_required_servers,
         external_bridge_ready_servers=external_bridge_ready_servers,
+        external_bridge_adapter_missing_servers=external_bridge_adapter_missing_servers,
+        external_bridge_unsupported_transport_servers=(
+            external_bridge_unsupported_transport_servers
+        ),
         unsupported_servers=unsupported_servers,
         bridged_servers=bridged_servers,
         local_bridged_servers=local_bridged_servers,
@@ -1650,6 +1710,8 @@ def mcp_plan_action_required(
     local_bridge_required_servers: tuple[str, ...],
     external_bridge_required_servers: tuple[str, ...],
     external_bridge_ready_servers: tuple[str, ...],
+    external_bridge_adapter_missing_servers: tuple[str, ...],
+    external_bridge_unsupported_transport_servers: tuple[str, ...],
     unsupported_servers: tuple[str, ...],
 ) -> str:
     """Return the next action required to satisfy the MCP plan."""
@@ -1657,6 +1719,10 @@ def mcp_plan_action_required(
         return "none"
     if unsupported_servers:
         return "register_or_remove_unsupported_servers"
+    if external_bridge_unsupported_transport_servers:
+        return "implement_external_mcp_transport"
+    if external_bridge_adapter_missing_servers:
+        return "register_external_mcp_adapter"
     if external_bridge_ready_servers:
         return "wire_external_mcp_tool_execution"
     if external_bridge_required_servers:
@@ -1681,6 +1747,8 @@ def mcp_plan_recommended_runtime_path(
     if action_required in {
         "configure_external_mcp_client",
         "wire_external_mcp_tool_execution",
+        "register_external_mcp_adapter",
+        "implement_external_mcp_transport",
     }:
         return "external_mcp_client"
     if action_required == "register_or_remove_unsupported_servers":

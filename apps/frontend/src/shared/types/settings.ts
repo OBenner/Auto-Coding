@@ -512,6 +512,8 @@ export interface RuntimeMcpBridgePlanRow {
   local_bridge_required_servers: string[];
   external_bridge_required_servers: string[];
   external_bridge_ready_servers: string[];
+  external_bridge_adapter_missing_servers?: string[];
+  external_bridge_unsupported_transport_servers?: string[];
   unsupported_servers: string[];
   bridged_servers: string[];
   local_bridged_servers: string[];
@@ -541,6 +543,9 @@ export interface RuntimeExternalMcpHealthRow {
   executable_tool_count: number;
   adapter_registered?: boolean;
   adapter_name?: string | null;
+  adapter_transport?: string | null;
+  transport_supported?: boolean;
+  supported_transports?: string[];
 }
 
 export interface RuntimeFallbackMatrixRow {

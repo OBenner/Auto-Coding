@@ -191,6 +191,7 @@ const RUNTIME_MODE_OPTIONS: Array<{
 
 const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   amp: 'settings:aiProvider.runtimeDiagnosticValues.amp',
+  adapter_missing: 'settings:aiProvider.runtimeDiagnosticValues.adapterMissing',
   analysis_only: 'settings:aiProvider.runtimeDiagnosticValues.analysisOnly',
   apply_patch: 'settings:aiProvider.runtimeDiagnosticValues.applyPatch',
   blocked: 'settings:aiProvider.runtimeDiagnosticValues.blocked',
@@ -211,6 +212,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
   goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
+  implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
   native: 'settings:aiProvider.runtimeDiagnosticValues.native',
@@ -228,6 +230,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
   ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
   ready_to_connect: 'settings:aiProvider.runtimeDiagnosticValues.readyToConnect',
+  register_external_mcp_adapter: 'settings:aiProvider.runtimeDiagnosticValues.registerExternalMcpAdapter',
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
   sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
@@ -241,6 +244,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
   unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
+  unsupported_transport: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTransport',
   use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
   wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution'
 };

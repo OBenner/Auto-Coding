@@ -111,6 +111,9 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert external_health["context7"]["execution_supported"] is True
     assert external_health["context7"]["adapter_registered"] is True
     assert external_health["context7"]["adapter_name"] == "Context7"
+    assert external_health["context7"]["adapter_transport"] == "stdio"
+    assert external_health["context7"]["transport_supported"] is True
+    assert external_health["context7"]["supported_transports"] == ["stdio"]
     assert external_health["context7"]["executable_tools"] == []
     assert external_health["context7"]["executable_tool_count"] == 0
     assert external_health["graphiti"]["status"] == "missing_configuration"
@@ -132,6 +135,8 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert openai_generic_mcp["status"] == "partial"
     assert openai_generic_mcp["bridged_servers"] == ["auto-claude"]
     assert "context7" in openai_generic_mcp["external_bridge_required_servers"]
+    assert openai_generic_mcp["external_bridge_adapter_missing_servers"] == []
+    assert openai_generic_mcp["external_bridge_unsupported_transport_servers"] == []
     assert openai_generic_mcp["action_required"] == "configure_external_mcp_client"
     fallback_rows = {
         (row["provider"], row["requested_mode"]): row
@@ -232,6 +237,32 @@ def test_runtime_modes_command_marks_browser_mcp_available_when_enabled(
         "mcp__puppeteer__puppeteer_navigate"
         in openai_generic_mcp["executable_external_tools"]
     )
+
+
+def test_runtime_modes_command_marks_configured_graphiti_as_adapter_missing(
+    monkeypatch,
+):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
+    from cli.runtime_commands import build_runtime_modes_payload
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv("GRAPHITI_MCP_URL", "http://localhost:8000/mcp/")
+
+    payload = build_runtime_modes_payload()
+    external_health = {
+        row["server"]: row for row in payload["external_mcp_server_health"]
+    }
+    mcp_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["mcp_bridge_plan_matrix"]
+    }
+    openai_generic_mcp = mcp_rows[("openai", "generic_edit")]
+
+    assert external_health["graphiti"]["status"] == "adapter_missing"
+    assert external_health["graphiti"]["configured"] is True
+    assert external_health["graphiti"]["adapter_registered"] is False
+    assert "graphiti" in openai_generic_mcp["external_bridge_adapter_missing_servers"]
+    assert openai_generic_mcp["action_required"] == "register_external_mcp_adapter"
 
 
 def test_cli_runner_selection_filters_runtime_mode():

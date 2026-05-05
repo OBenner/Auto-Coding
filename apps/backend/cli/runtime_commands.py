@@ -164,6 +164,12 @@ def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
                     "external_bridge_ready_servers": plan[
                         "external_bridge_ready_servers"
                     ],
+                    "external_bridge_adapter_missing_servers": plan[
+                        "external_bridge_adapter_missing_servers"
+                    ],
+                    "external_bridge_unsupported_transport_servers": plan[
+                        "external_bridge_unsupported_transport_servers"
+                    ],
                     "unsupported_servers": plan["unsupported_servers"],
                     "bridged_servers": plan["bridged_servers"],
                     "local_bridged_servers": plan["local_bridged_servers"],

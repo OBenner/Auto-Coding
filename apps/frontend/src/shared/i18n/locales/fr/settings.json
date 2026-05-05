@@ -918,6 +918,7 @@
     },
     "runtimeDiagnosticValues": {
       "amp": "Amp",
+      "adapterMissing": "Adaptateur manquant",
       "analysisOnly": "Analyse seule",
       "applyPatch": "Appliquer un patch",
       "blocked": "Bloqué",
@@ -938,6 +939,7 @@
       "genericEdit": "Édition générique",
       "goose": "Goose",
       "inspectRuntimeMcpSupport": "Inspecter le support MCP runtime",
+      "implementExternalMcpTransport": "Implémenter le transport MCP externe",
       "localBridge": "Bridge local",
       "missingConfiguration": "Configuration manquante",
       "native": "Natif",
@@ -955,6 +957,7 @@
       "readOnly": "Lecture seule",
       "ready": "Prêt",
       "readyToConnect": "Prêt à connecter",
+      "registerExternalMcpAdapter": "Enregistrer l'adaptateur MCP externe",
       "registerOrRemoveUnsupportedServers": "Enregistrer ou retirer les serveurs non supportés",
       "reviewOnly": "Review seule",
       "sandbox": "Sandbox",
@@ -968,6 +971,7 @@
       "textCompletionOnly": "Complétion texte uniquement",
       "unavailable": "Indisponible",
       "unsupported": "Non supporté",
+      "unsupportedTransport": "Transport non supporté",
       "useNativeMcpRuntime": "Utiliser le runtime MCP natif",
       "wireExternalMcpToolExecution": "Câbler l'exécution MCP externe"
     },
