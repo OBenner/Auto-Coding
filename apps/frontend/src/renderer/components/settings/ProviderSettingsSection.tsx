@@ -189,6 +189,62 @@ const RUNTIME_MODE_OPTIONS: Array<{
   { value: 'analysis_only', labelKey: 'settings:aiProvider.runtimeModes.analysisOnly.name', descriptionKey: 'settings:aiProvider.runtimeModes.analysisOnly.description' },
 ];
 
+const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
+  amp: 'settings:aiProvider.runtimeDiagnosticValues.amp',
+  analysis_only: 'settings:aiProvider.runtimeDiagnosticValues.analysisOnly',
+  apply_patch: 'settings:aiProvider.runtimeDiagnosticValues.applyPatch',
+  blocked: 'settings:aiProvider.runtimeDiagnosticValues.blocked',
+  choose_concrete_server: 'settings:aiProvider.runtimeDiagnosticValues.chooseConcreteServer',
+  claude_code: 'settings:aiProvider.runtimeDiagnosticValues.claudeCode',
+  client_disabled: 'settings:aiProvider.runtimeDiagnosticValues.clientDisabled',
+  codex_cli: 'settings:aiProvider.runtimeDiagnosticValues.codexCli',
+  configure_external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.configureExternalMcpClient',
+  configure_local_bridge_tools: 'settings:aiProvider.runtimeDiagnosticValues.configureLocalBridgeTools',
+  cursor_cli: 'settings:aiProvider.runtimeDiagnosticValues.cursorCli',
+  deepv_code: 'settings:aiProvider.runtimeDiagnosticValues.deepvCode',
+  external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
+  filesystem_edit: 'settings:aiProvider.runtimeDiagnosticValues.filesystemEdit',
+  filesystem_read: 'settings:aiProvider.runtimeDiagnosticValues.filesystemRead',
+  full_autonomous: 'settings:aiProvider.runtimeDiagnosticValues.fullAutonomous',
+  function_tools: 'settings:aiProvider.runtimeDiagnosticValues.functionTools',
+  generic_cli_pool: 'settings:aiProvider.runtimeDiagnosticValues.genericCliPool',
+  generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
+  goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
+  inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
+  local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
+  missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
+  native: 'settings:aiProvider.runtimeDiagnosticValues.native',
+  native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.nativeMcpRuntime',
+  native_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolLoop',
+  no: 'settings:aiProvider.runtimeDiagnosticValues.no',
+  none: 'settings:aiProvider.runtimeDiagnosticValues.none',
+  not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
+  not_requested: 'settings:aiProvider.runtimeDiagnosticValues.notRequested',
+  opencode: 'settings:aiProvider.runtimeDiagnosticValues.opencode',
+  orchestrated: 'settings:aiProvider.runtimeDiagnosticValues.orchestrated',
+  partial: 'settings:aiProvider.runtimeDiagnosticValues.partial',
+  patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
+  qwen_code: 'settings:aiProvider.runtimeDiagnosticValues.qwenCode',
+  read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
+  ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
+  ready_to_connect: 'settings:aiProvider.runtimeDiagnosticValues.readyToConnect',
+  register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
+  review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
+  sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
+  server_disabled: 'settings:aiProvider.runtimeDiagnosticValues.serverDisabled',
+  shell: 'settings:aiProvider.runtimeDiagnosticValues.shell',
+  streaming_text: 'settings:aiProvider.runtimeDiagnosticValues.streamingText',
+  structured_output: 'settings:aiProvider.runtimeDiagnosticValues.structuredOutput',
+  subagent: 'settings:aiProvider.runtimeDiagnosticValues.subagent',
+  subagents: 'settings:aiProvider.runtimeDiagnosticValues.subagents',
+  text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
+  text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
+  unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
+  unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
+  use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
+  wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution'
+};
+
 function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderConfig {
   if (config.provider === 'claude' || config.provider === 'codex') {
     return config;
@@ -339,20 +395,30 @@ function getCostInfo(config: AIProviderConfig, primaryModel: string) {
   };
 }
 
-function formatRuntimeDiagnosticValue(value?: string | null): string {
+function formatRuntimeDiagnosticValue(
+  translate: (key: string) => string,
+  value?: string | null
+): string {
   const trimmed = value?.trim();
   if (!trimmed) {
     return '';
   }
+  const translationKey = RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS[trimmed];
+  if (translationKey) {
+    return translate(translationKey);
+  }
   return trimmed.replaceAll('_', ' ');
 }
 
-function formatRuntimeDiagnosticList(values?: string[] | null): string {
+function formatRuntimeDiagnosticList(
+  translate: (key: string) => string,
+  values?: string[] | null
+): string {
   if (!values?.length) {
     return '';
   }
   return values
-    .map((value) => formatRuntimeDiagnosticValue(value))
+    .map((value) => formatRuntimeDiagnosticValue(translate, value))
     .filter(Boolean)
     .join(', ');
 }
@@ -408,11 +474,14 @@ function findRelevantExternalMcpHealthRows(
   ) ?? [];
 }
 
-function formatExternalMcpHealthRows(rows: RuntimeExternalMcpHealthRow[]): string {
+function formatExternalMcpHealthRows(
+  rows: RuntimeExternalMcpHealthRow[],
+  translate: (key: string) => string
+): string {
   return rows
     .map((row) => {
       const label = row.display_name || row.server;
-      const status = formatRuntimeDiagnosticValue(row.status);
+      const status = formatRuntimeDiagnosticValue(translate, row.status);
       return status ? `${label}: ${status}` : label;
     })
     .filter(Boolean)
@@ -785,15 +854,15 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     );
     const noneLabel = t('settings:aiProvider.controlPlane.none');
     const formatControlPlaneValue = (value?: string | null) => {
-      const formatted = formatRuntimeDiagnosticValue(value);
+      const formatted = formatRuntimeDiagnosticValue(t, value);
       return formatted && formatted !== 'none' ? formatted : noneLabel;
     };
     const formatControlPlaneList = (values?: string[] | null) =>
-      formatRuntimeDiagnosticList(values) || noneLabel;
+      formatRuntimeDiagnosticList(t, values) || noneLabel;
     const mcpStatus = mcpPlan ? formatControlPlaneValue(mcpPlan.status) : noneLabel;
     const mcpAction = mcpPlan ? formatControlPlaneValue(mcpPlan.action_required) : noneLabel;
     const externalMcpHealth = externalMcpHealthRows.length
-      ? formatExternalMcpHealthRows(externalMcpHealthRows)
+      ? formatExternalMcpHealthRows(externalMcpHealthRows, t)
       : noneLabel;
     const executableExternalMcpTools =
       mcpPlan?.executable_external_tools?.join(', ') ||
@@ -1095,12 +1164,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       : null;
     const smokeScope = runtimeDiagnostics?.smokeScope === 'text_completion_only'
       ? t('settings:aiProvider.connectionTest.textCompletionOnly')
-      : formatRuntimeDiagnosticValue(runtimeDiagnostics?.smokeScope);
-    const requestedRuntime = formatRuntimeDiagnosticValue(runtimeDiagnostics?.requestedRuntimeMode);
-    const validatedRuntime = formatRuntimeDiagnosticValue(runtimeDiagnostics?.validatedRuntimeMode);
-    const validatedScope = formatRuntimeDiagnosticList(runtimeDiagnostics?.validatedRequirements);
-    const requestedCapabilities = formatRuntimeDiagnosticList(runtimeDiagnostics?.requestedRuntimeCapabilities);
+      : formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.smokeScope);
+    const requestedRuntime = formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.requestedRuntimeMode);
+    const validatedRuntime = formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.validatedRuntimeMode);
+    const validatedScope = formatRuntimeDiagnosticList(t, runtimeDiagnostics?.validatedRequirements);
+    const requestedCapabilities = formatRuntimeDiagnosticList(t, runtimeDiagnostics?.requestedRuntimeCapabilities);
     const missingFullAutonomous = formatRuntimeDiagnosticList(
+      t,
       runtimeDiagnostics?.fullAutonomousMissingCapabilities
     );
     return (

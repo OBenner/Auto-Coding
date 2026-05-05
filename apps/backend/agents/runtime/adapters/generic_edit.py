@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.providers.exceptions import ProviderConfigError, ProviderNotInstalled
+
 from ..capabilities import RuntimeCapabilities, RuntimeRequirements
 from ..local_actions import (
     MAX_SUBAGENT_ID_CHARS,
@@ -734,8 +736,10 @@ class GenericEditRuntimeSession:
                 self._provider_tool_schemas(),
             )
         except Exception as e:
-            if iteration == 1 and callable(
-                getattr(self.agent_session, "complete", None)
+            if (
+                iteration == 1
+                and callable(getattr(self.agent_session, "complete", None))
+                and should_fallback_from_native_tools(e)
             ):
                 fallback = await self._run_json_action_loop(
                     message=message,
@@ -1195,6 +1199,61 @@ def native_tool_fallback_trace_entry(
     }
 
 
+NATIVE_TOOL_FATAL_ERROR_MARKERS = (
+    "api key",
+    "authentication",
+    "auth",
+    "billing",
+    "connection",
+    "dns",
+    "forbidden",
+    "insufficient_quota",
+    "invalid key",
+    "model not found",
+    "permission denied",
+    "proxy",
+    "quota",
+    "rate limit",
+    "timed out",
+    "timeout",
+    "unauthorized",
+)
+NATIVE_TOOL_FALLBACK_ERROR_MARKERS = (
+    "does not support tools",
+    "function",
+    "invalid tool",
+    "json schema",
+    "parameters",
+    "schema",
+    "tool",
+    "tool_choice",
+    "unsupported tool",
+)
+
+
+def should_fallback_from_native_tools(error: Exception) -> bool:
+    """Return true when native tools failed because the model rejected tools."""
+    if isinstance(error, (ProviderConfigError, ProviderNotInstalled)):
+        return False
+
+    error_text = native_tool_error_text(error)
+    if any(marker in error_text for marker in NATIVE_TOOL_FATAL_ERROR_MARKERS):
+        return False
+    return any(marker in error_text for marker in NATIVE_TOOL_FALLBACK_ERROR_MARKERS)
+
+
+def native_tool_error_text(error: Exception) -> str:
+    """Return a lower-case error chain string for native-tool classification."""
+    parts: list[str] = []
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        parts.append(str(current))
+        current = current.__cause__ or current.__context__
+    return " ".join(parts).lower()
+
+
 def json_action_iteration_entry(iteration: int, response_text: str) -> dict[str, Any]:
     """Return the trace scaffold for one JSON action iteration."""
     return {
@@ -1523,7 +1582,7 @@ def bounded_subagent_string(value: Any, *, field_name: str, maximum: int) -> str
 
 def bounded_subagent_attempts(value: Any, *, field_name: str) -> int:
     """Read a bounded run_subagents retry count."""
-    if not isinstance(value, int):
+    if type(value) is not int:
         raise GenericEditRuntimeError(
             f"run_subagents field '{field_name}' must be an integer"
         )

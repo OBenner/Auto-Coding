@@ -317,6 +317,8 @@ class RuntimeSubagentOrchestrator:
                 await cancel_runtime_session(runtime_session)
             result = timeout_subagent_result(task, self.max_task_seconds)
         except Exception as e:
+            if runtime_session is not None:
+                await cancel_runtime_session(runtime_session)
             result = error_subagent_result(task, str(e))
 
         finished_at = datetime.now(UTC)

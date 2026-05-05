@@ -52,7 +52,11 @@ from agents.runtime.adapters.codex_cli import (
     summarize_codex_account,
     summarize_codex_events,
 )
-from agents.runtime.adapters.generic_edit import summarize_generic_edit_transactions
+from agents.runtime.adapters.generic_edit import (
+    GenericEditRuntimeError,
+    bounded_subagent_attempts,
+    summarize_generic_edit_transactions,
+)
 from agents.runtime.adapters.patch_proposal import (
     PatchProposalError,
     parse_patch_proposal,
@@ -874,6 +878,32 @@ class CancellableSubagentRuntimeSession(FakeSubagentRuntimeSession):
         )
 
 
+class FailingSubagentRuntimeSession(FakeSubagentRuntimeSession):
+    async def run(
+        self,
+        *,
+        message: str,
+        spec_dir: Path,
+        verbose: bool,
+        phase,
+        subtask_id: str | None = None,
+    ):
+        del spec_dir, verbose, phase, subtask_id
+        self.prompts.append(message)
+        raise RuntimeError("child session failed")
+
+
+def assert_artifact_path_inside(
+    artifact_path_value: str,
+    artifact_dir: Path,
+) -> Path:
+    artifact_dir_resolved = artifact_dir.resolve()
+    artifact_path = Path(artifact_path_value).resolve()
+    assert artifact_path.is_relative_to(artifact_dir_resolved)
+    assert artifact_path.exists()
+    return artifact_path
+
+
 @pytest.mark.asyncio
 async def test_completion_runtime_supports_text_only(tmp_path: Path):
     runtime_session = create_runtime_session(
@@ -990,9 +1020,15 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "input_tokens": 1,
         "output_tokens": 2,
     }
-    child_artifact_path = tmp_path / "artifacts" / "runtime_subagents__explore-api.json"
-    assert artifact["results"][0]["artifact_path"] == str(child_artifact_path)
-    assert child_artifact_path.exists()
+    artifact_dir = tmp_path / "artifacts"
+    child_artifact_path = assert_artifact_path_inside(
+        artifact["results"][0]["artifact_path"],
+        artifact_dir,
+    )
+    assert (
+        child_artifact_path
+        == (artifact_dir / "runtime_subagents__explore-api.json").resolve()
+    )
     child_artifact = json.loads(child_artifact_path.read_text(encoding="utf-8"))
     assert child_artifact["parent_artifact"] == "runtime_subagents.json"
     assert child_artifact["merge_contract"] == {
@@ -1041,6 +1077,39 @@ async def test_runtime_subagent_orchestrator_times_out_child_sessions(
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["summary"]["error_result_ids"] == ["slow-review"]
     assert artifact["summary"]["max_attempts_exhausted_result_ids"] == ["slow-review"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_subagent_orchestrator_cancels_child_session_on_error(
+    tmp_path: Path,
+):
+    created_sessions: list[FailingSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = FailingSubagentRuntimeSession(f"failed {task.id}")
+        created_sessions.append(session)
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_concurrency=1,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="error-review",
+                role="reviewer",
+                prompt="Raise during child run",
+            ),
+        ]
+    )
+
+    assert run.status == "error"
+    assert run.results[0].status == "error"
+    assert run.results[0].attempt_count == 1
+    assert str(run.results[0].error) == "child session failed"
+    assert created_sessions[0].cancelled is True
 
 
 @pytest.mark.asyncio
@@ -1105,7 +1174,10 @@ async def test_runtime_subagent_orchestrator_cancels_child_sessions_with_artifac
         "cancel-queued",
     ]
     assert artifact["results"][0]["attempts"] == []
-    assert Path(artifact["results"][0]["artifact_path"]).exists()
+    assert_artifact_path_inside(
+        artifact["results"][0]["artifact_path"],
+        tmp_path / "artifacts",
+    )
 
 
 @pytest.mark.asyncio
@@ -1162,11 +1234,15 @@ async def test_runtime_subagent_orchestrator_retries_isolated_child_attempts(
     ]
     assert artifact["summary"]["retried_result_ids"] == ["inspect-retry"]
     assert artifact["summary"]["max_attempts_exhausted_result_ids"] == []
-    child_artifact_path = (
-        tmp_path / "artifacts" / "runtime_subagents__inspect-retry.json"
+    artifact_dir = tmp_path / "artifacts"
+    child_artifact_path = assert_artifact_path_inside(
+        result_payload["artifact_path"],
+        artifact_dir,
     )
-    assert result_payload["artifact_path"] == str(child_artifact_path)
-    assert child_artifact_path.exists()
+    assert (
+        child_artifact_path
+        == (artifact_dir / "runtime_subagents__inspect-retry.json").resolve()
+    )
 
 
 def test_runtime_subagent_result_summary_counts_mixed_statuses():
@@ -1436,6 +1512,15 @@ class FakeNativeToolFailureSession(FakeGenericEditSession):
 
     def add_tool_result(self, tool_call_id: str, name: str, result: dict):
         raise AssertionError("tool results should not be added after fallback")
+
+
+class FakeNativeToolFatalFailureSession(FakeGenericEditSession):
+    async def complete_with_tool_calls(self, message: str | None, tools: list[dict]):
+        await asyncio.sleep(0)
+        raise RuntimeError("401 Unauthorized: invalid API key")
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: dict):
+        raise AssertionError("tool results should not be added after failure")
 
 
 def _init_git_repo(path: Path) -> None:
@@ -2428,7 +2513,10 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
     assert subagent_artifact["summary"]["result_count"] == 2
     assert subagent_artifact["merge_plan"]["strategy"] == "read_only"
     assert subagent_artifact["results"][0]["context"] == {"focus": "backend"}
-    assert Path(subagent_artifact["results"][0]["artifact_path"]).exists()
+    assert_artifact_path_inside(
+        subagent_artifact["results"][0]["artifact_path"],
+        tmp_path / "artifacts",
+    )
     observation_lines = [
         json.loads(line)
         for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
@@ -2439,7 +2527,10 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
     assert subagent_observation["results"][0]["attempt_count"] == 1
     assert subagent_observation["results"][0]["max_attempts"] == 2
     assert subagent_observation["results"][0]["merge_policy"] == "read_only"
-    assert Path(subagent_observation["results"][0]["artifact_path"]).exists()
+    assert_artifact_path_inside(
+        subagent_observation["results"][0]["artifact_path"],
+        tmp_path / "artifacts",
+    )
 
     trace = json.loads(
         (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
@@ -3584,6 +3675,61 @@ async def test_generic_edit_runtime_falls_back_when_native_tools_rejected(
         encoding="utf-8"
     )
     assert "## Native Tool Fallback" in summary_markdown
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_does_not_fallback_on_native_auth_failure(
+    tmp_path: Path,
+):
+    target = tmp_path / "auth-failure.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeNativeToolFatalFailureSession(
+        [
+            {
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "auth-failure.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Should not run JSON fallback",
+                        "tests": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "change auth-failure.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "error"
+    assert "401 Unauthorized" in result.response_text
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert session.messages == []
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    assert len(trace["trace"]) == 1
+    assert trace["trace"][0]["loop"] == "native_tool_calls"
+    assert "native_tool_fallback" not in trace["trace"][0]
+
+
+def test_bounded_subagent_attempts_rejects_bool():
+    with pytest.raises(GenericEditRuntimeError, match="must be an integer"):
+        bounded_subagent_attempts(True, field_name="tasks[1].max_attempts")
 
 
 @pytest.mark.asyncio
