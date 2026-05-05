@@ -300,6 +300,15 @@ class WorktreeManager:
         """
         return run_git(args, cwd=cwd or self.project_dir, timeout=timeout)
 
+    @staticmethod
+    def _git_error_output(result: subprocess.CompletedProcess) -> str:
+        """Return a readable git failure message from stderr and stdout."""
+        stderr = str(result.stderr or "").strip()
+        stdout = str(result.stdout or "").strip()
+        if stderr and stdout:
+            return f"{stderr}\n{stdout}"
+        return stderr or stdout or f"git exited with code {result.returncode}"
+
     def _unstage_gitignored_files(self) -> None:
         """
         Unstage any staged files that are gitignored in the current branch,
@@ -681,14 +690,21 @@ class WorktreeManager:
                     f"Remote ref {remote_ref} not found, using local branch: {self.base_branch}"
                 )
 
-            # Create worktree with new branch from the start point
-            result = self._run_git(
-                ["worktree", "add", "-b", branch_name, str(worktree_path), start_point]
-            )
+            # Create the branch first, then attach the worktree to it. Splitting
+            # these commands is more reliable across Git versions/platforms than
+            # combining branch creation with `git worktree add -b`.
+            branch_result = self._run_git(["branch", branch_name, start_point])
+            if branch_result.returncode != 0 and not self._branch_exists(branch_name):
+                raise WorktreeError(
+                    f"Failed to create branch {branch_name} from {start_point}: "
+                    f"{self._git_error_output(branch_result)}"
+                )
+            result = self._run_git(["worktree", "add", str(worktree_path), branch_name])
 
         if result.returncode != 0:
             raise WorktreeError(
-                f"Failed to create worktree for {spec_name}: {result.stderr}"
+                f"Failed to create worktree for {spec_name}: "
+                f"{self._git_error_output(result)}"
             )
 
         print(f"Created worktree: {worktree_path.name} on branch {branch_name}")
