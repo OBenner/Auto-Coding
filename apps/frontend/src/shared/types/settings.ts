@@ -544,6 +544,7 @@ export interface RuntimeExternalMcpHealthRow {
   adapter_registered?: boolean;
   adapter_name?: string | null;
   adapter_transport?: string | null;
+  adapter_exposed_server?: string | null;
   transport_supported?: boolean;
   supported_transports?: string[];
 }

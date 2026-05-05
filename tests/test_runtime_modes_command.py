@@ -113,11 +113,15 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert external_health["context7"]["adapter_name"] == "Context7"
     assert external_health["context7"]["adapter_transport"] == "stdio"
     assert external_health["context7"]["transport_supported"] is True
-    assert external_health["context7"]["supported_transports"] == ["stdio"]
+    assert external_health["context7"]["supported_transports"] == ["stdio", "http"]
     assert external_health["context7"]["executable_tools"] == []
     assert external_health["context7"]["executable_tool_count"] == 0
     assert external_health["graphiti"]["status"] == "missing_configuration"
-    assert external_health["graphiti"]["adapter_registered"] is False
+    assert external_health["graphiti"]["adapter_registered"] is True
+    assert external_health["graphiti"]["adapter_name"] == "Graphiti"
+    assert external_health["graphiti"]["adapter_transport"] == "http"
+    assert external_health["graphiti"]["adapter_exposed_server"] == "graphiti-memory"
+    assert external_health["graphiti"]["transport_supported"] is True
     assert external_health["electron"]["status"] == "server_disabled"
     assert external_health["electron"]["adapter_registered"] is True
     assert external_health["electron"]["execution_supported"] is True
@@ -239,7 +243,7 @@ def test_runtime_modes_command_marks_browser_mcp_available_when_enabled(
     )
 
 
-def test_runtime_modes_command_marks_configured_graphiti_as_adapter_missing(
+def test_runtime_modes_command_marks_configured_graphiti_as_external_bridged(
     monkeypatch,
 ):
     from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
@@ -258,11 +262,18 @@ def test_runtime_modes_command_marks_configured_graphiti_as_adapter_missing(
     }
     openai_generic_mcp = mcp_rows[("openai", "generic_edit")]
 
-    assert external_health["graphiti"]["status"] == "adapter_missing"
+    assert external_health["graphiti"]["status"] == "ready_to_connect"
     assert external_health["graphiti"]["configured"] is True
-    assert external_health["graphiti"]["adapter_registered"] is False
-    assert "graphiti" in openai_generic_mcp["external_bridge_adapter_missing_servers"]
-    assert openai_generic_mcp["action_required"] == "register_external_mcp_adapter"
+    assert external_health["graphiti"]["adapter_registered"] is True
+    assert external_health["graphiti"]["adapter_transport"] == "http"
+    assert "graphiti" in openai_generic_mcp["external_bridged_servers"]
+    assert (
+        "graphiti" not in openai_generic_mcp["external_bridge_adapter_missing_servers"]
+    )
+    assert (
+        "mcp__graphiti-memory__search_nodes"
+        in openai_generic_mcp["executable_external_tools"]
+    )
 
 
 def test_cli_runner_selection_filters_runtime_mode():
