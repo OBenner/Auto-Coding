@@ -101,7 +101,8 @@ import type {
   SourceEnvCheckResult,
   AIProviderConfig,
   ProviderConfigValidation,
-  ProviderConnectionTestResult
+  ProviderConnectionTestResult,
+  RuntimeControlPlaneDiagnostics
 } from './settings';
 import type { AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent } from './app-update';
 import type {
@@ -414,6 +415,7 @@ export interface ElectronAPI {
   updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
   validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
   testProviderConfig: () => Promise<IPCResult<ProviderConnectionTestResult>>;
+  getProviderRuntimeDiagnostics: () => Promise<IPCResult<RuntimeControlPlaneDiagnostics>>;
 
   // Sentry error reporting
   notifySentryStateChanged: (enabled: boolean) => void;

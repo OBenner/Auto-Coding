@@ -2,13 +2,19 @@
 
 This is intentionally narrower than full MCP parity. It exposes Auto Code's
 in-process ``auto-claude`` tools to limited/direct runtimes without starting a
-Claude SDK agent loop. External MCP servers still require a native runtime.
+Claude SDK agent loop, and it can execute explicitly enabled stdio external MCP
+tools such as Context7 through a provider-neutral bridge.
 """
 
 from __future__ import annotations
 
+import asyncio
 import inspect
+import json
+import os
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -20,44 +26,169 @@ from .local_actions import ToolActionResult, action_tool, safe_action_for_trace
 
 MCP_AUTO_CLAUDE_PREFIX = "mcp__auto-claude__"
 LOCAL_BRIDGE_SERVER = "auto-claude"
+MCP_BRIDGE_AUDIT_FILENAME = "mcp_bridge_audit.jsonl"
+EXTERNAL_MCP_CLIENT_ENV = "AUTO_CODE_EXTERNAL_MCP_CLIENT"
+EXTERNAL_MCP_PROTOCOL_VERSION_ENV = "AUTO_CODE_MCP_PROTOCOL_VERSION"
+DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION = "2024-11-05"
+DEFAULT_EXTERNAL_MCP_TIMEOUT_SECONDS = 30.0
+EXTERNAL_MCP_EXECUTION_SERVERS = ("context7",)
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
+McpAuditLevel = Literal["read", "write", "command", "analysis"]
+ExternalMcpHealthStatus = Literal[
+    "not_bridgeable",
+    "client_disabled",
+    "server_disabled",
+    "missing_configuration",
+    "choose_concrete_server",
+    "ready_to_connect",
+]
 MCP_SERVER_CATALOG: dict[str, dict[str, Any]] = {
     LOCAL_BRIDGE_SERVER: {
         "display_name": "Auto Code local tools",
         "bridgeable": True,
+        "external_bridgeable": False,
         "notes": "In-process Auto Code tools can be exposed through local actions.",
     },
     "context7": {
         "display_name": "Context7",
         "bridgeable": False,
-        "notes": "External documentation MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "enabled_env": "CONTEXT7_ENABLED",
+        "enabled_default": True,
+        "transport": "stdio",
+        "command": "npx",
+        "args": ("-y", "@upstash/context7-mcp"),
+        "tools": (
+            "resolve-library-id",
+            "get-library-docs",
+        ),
+        "notes": "External documentation MCP server.",
     },
     "graphiti": {
         "display_name": "Graphiti",
         "bridgeable": False,
-        "notes": "External memory MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "transport": "http",
+        "url_env": "GRAPHITI_MCP_URL",
+        "required_env": ("GRAPHITI_MCP_URL",),
+        "notes": "External memory MCP server.",
     },
     "linear": {
         "display_name": "Linear",
         "bridgeable": False,
-        "notes": "External Linear MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "enabled_env": "LINEAR_MCP_ENABLED",
+        "enabled_default": True,
+        "transport": "http",
+        "url": "https://mcp.linear.app/mcp",
+        "required_env": ("LINEAR_API_KEY",),
+        "notes": "External Linear MCP server.",
     },
     "browser": {
         "display_name": "Browser automation",
         "bridgeable": False,
-        "notes": "External browser automation MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "concrete_servers": ("electron", "puppeteer"),
+        "notes": (
+            "Logical browser MCP requirement; resolve to electron or puppeteer "
+            "for an external client."
+        ),
     },
     "electron": {
         "display_name": "Electron",
         "bridgeable": False,
-        "notes": "External Electron automation MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "enabled_env": "ELECTRON_MCP_ENABLED",
+        "enabled_default": False,
+        "transport": "stdio",
+        "command": "npm",
+        "args": ("exec", "electron-mcp-server"),
+        "notes": "External Electron automation MCP server.",
     },
     "puppeteer": {
         "display_name": "Puppeteer",
         "bridgeable": False,
-        "notes": "External browser automation MCP server; requires native MCP runtime.",
+        "external_bridgeable": True,
+        "enabled_env": "PUPPETEER_MCP_ENABLED",
+        "enabled_default": False,
+        "transport": "stdio",
+        "command": "npx",
+        "args": ("puppeteer-mcp-server",),
+        "notes": "External browser automation MCP server.",
     },
 }
+
+
+@dataclass(frozen=True)
+class RuntimeMcpToolPolicy:
+    """Permission and audit policy for one bridged MCP tool."""
+
+    permission: str
+    audit_level: McpAuditLevel
+    mutating: bool = False
+    audit_required: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize tool policy metadata for reports and artifacts."""
+        return {
+            "permission": self.permission,
+            "audit_level": self.audit_level,
+            "mutating": self.mutating,
+            "audit_required": self.audit_required,
+        }
+
+
+@dataclass(frozen=True)
+class RuntimeExternalMcpServerHealth:
+    """Readiness contract for one external MCP server bridge target."""
+
+    server: str
+    display_name: str
+    bridgeable: bool
+    client_enabled: bool
+    server_enabled: bool
+    configured: bool
+    status: ExternalMcpHealthStatus
+    reason: str
+    transport: str | None = None
+    command: str | None = None
+    args: tuple[str, ...] = ()
+    url: str | None = None
+    enabled_env: str | None = None
+    required_env: tuple[str, ...] = ()
+    missing_env: tuple[str, ...] = ()
+    concrete_servers: tuple[str, ...] = ()
+    execution_supported: bool = False
+    executable_tools: tuple[str, ...] = ()
+
+    @property
+    def ready_to_connect(self) -> bool:
+        """Return true when configuration is ready for a future external client."""
+        return self.status == "ready_to_connect"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize external MCP client readiness for diagnostics and artifacts."""
+        return {
+            "server": self.server,
+            "display_name": self.display_name,
+            "bridgeable": self.bridgeable,
+            "client_enabled": self.client_enabled,
+            "server_enabled": self.server_enabled,
+            "configured": self.configured,
+            "status": self.status,
+            "reason": self.reason,
+            "transport": self.transport,
+            "command": self.command,
+            "args": list(self.args),
+            "url": self.url,
+            "enabled_env": self.enabled_env,
+            "required_env": list(self.required_env),
+            "missing_env": list(self.missing_env),
+            "concrete_servers": list(self.concrete_servers),
+            "execution_supported": self.execution_supported,
+            "executable_tools": list(self.executable_tools),
+            "executable_tool_count": len(self.executable_tools),
+        }
 
 
 @dataclass(frozen=True)
@@ -77,6 +208,20 @@ class RuntimeMcpSupport:
     unavailable_servers: tuple[str, ...] = ()
     server_statuses: tuple[dict[str, Any], ...] = ()
 
+    @property
+    def bridge_plan(self) -> RuntimeMcpBridgePlan:
+        """Return a normalized plan for UI, policy, and artifact consumers."""
+        return build_mcp_bridge_plan(
+            provider_name=self.provider_name,
+            runtime_name=self.runtime_name,
+            strategy=self.strategy,
+            requested_servers=self.requested_servers,
+            available_servers=self.available_servers,
+            unavailable_servers=self.unavailable_servers,
+            server_statuses=self.server_statuses,
+            tool_count=self.tool_count,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize MCP support metadata for UI, CLI, and artifacts."""
         return {
@@ -94,6 +239,56 @@ class RuntimeMcpSupport:
             "server_statuses": [
                 dict(server_status) for server_status in self.server_statuses
             ],
+            "bridge_plan": self.bridge_plan.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
+class RuntimeMcpBridgePlan:
+    """Machine-readable MCP bridge plan for direct/runtime-limited providers."""
+
+    provider_name: str
+    runtime_name: str
+    strategy: McpSupportStrategy
+    status: str
+    action_required: str
+    recommended_runtime_path: str
+    requested_servers: tuple[str, ...] = ()
+    available_servers: tuple[str, ...] = ()
+    unavailable_servers: tuple[str, ...] = ()
+    native_required_servers: tuple[str, ...] = ()
+    local_bridge_required_servers: tuple[str, ...] = ()
+    external_bridge_required_servers: tuple[str, ...] = ()
+    external_bridge_ready_servers: tuple[str, ...] = ()
+    unsupported_servers: tuple[str, ...] = ()
+    bridged_servers: tuple[str, ...] = ()
+    local_bridged_servers: tuple[str, ...] = ()
+    external_bridged_servers: tuple[str, ...] = ()
+    tool_count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the bridge plan for artifacts, diagnostics, and UI."""
+        return {
+            "provider": self.provider_name,
+            "runtime": self.runtime_name,
+            "strategy": self.strategy,
+            "status": self.status,
+            "action_required": self.action_required,
+            "recommended_runtime_path": self.recommended_runtime_path,
+            "requested_servers": list(self.requested_servers),
+            "available_servers": list(self.available_servers),
+            "unavailable_servers": list(self.unavailable_servers),
+            "native_required_servers": list(self.native_required_servers),
+            "local_bridge_required_servers": list(self.local_bridge_required_servers),
+            "external_bridge_required_servers": list(
+                self.external_bridge_required_servers
+            ),
+            "external_bridge_ready_servers": list(self.external_bridge_ready_servers),
+            "unsupported_servers": list(self.unsupported_servers),
+            "bridged_servers": list(self.bridged_servers),
+            "local_bridged_servers": list(self.local_bridged_servers),
+            "external_bridged_servers": list(self.external_bridged_servers),
+            "tool_count": self.tool_count,
         }
 
 
@@ -106,6 +301,7 @@ class RuntimeMcpToolSpec:
     exposed_name: str
     description: str
     parameters: dict[str, Any]
+    policy: RuntimeMcpToolPolicy
     handler: Any
 
     def provider_tool_schema(self) -> dict[str, Any]:
@@ -125,6 +321,198 @@ class RuntimeMcpToolSpec:
         }
         return f"- {self.exposed_name}: {example}"
 
+    def policy_metadata(self) -> dict[str, Any]:
+        """Return audit/permission metadata for this bridged tool."""
+        return {
+            "server": self.server,
+            "name": self.name,
+            "exposed_name": self.exposed_name,
+            **self.policy.to_dict(),
+        }
+
+
+class RuntimeExternalMcpClientError(RuntimeError):
+    """Raised when a provider-neutral external MCP call fails."""
+
+
+class RuntimeExternalMcpClient:
+    """Minimal stdio MCP client for provider-neutral external tool calls."""
+
+    def __init__(
+        self,
+        *,
+        server: str,
+        command: str,
+        args: tuple[str, ...] = (),
+        cwd: Path | None = None,
+        timeout_seconds: float = DEFAULT_EXTERNAL_MCP_TIMEOUT_SECONDS,
+        protocol_version: str | None = None,
+    ):
+        self.server = server
+        self.command = command
+        self.args = args
+        self.cwd = cwd
+        self.timeout_seconds = timeout_seconds
+        self.protocol_version = (
+            protocol_version
+            or os.environ.get(EXTERNAL_MCP_PROTOCOL_VERSION_ENV)
+            or DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION
+        )
+        self._request_id = 0
+
+    async def call_tool(
+        self, *, name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Start a stdio MCP server, call one tool, and shut it down."""
+        process = await self._start_process()
+        try:
+            await self._initialize(process)
+            return await self._request(
+                process,
+                "tools/call",
+                {"name": name, "arguments": arguments},
+            )
+        finally:
+            await self._close_process(process)
+
+    async def _start_process(self) -> asyncio.subprocess.Process:
+        try:
+            return await asyncio.create_subprocess_exec(
+                self.command,
+                *self.args,
+                cwd=str(self.cwd) if self.cwd else None,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except OSError as e:
+            raise RuntimeExternalMcpClientError(
+                f"Failed to start MCP server {self.server}: {e}"
+            ) from e
+
+    async def _initialize(self, process: asyncio.subprocess.Process) -> None:
+        await self._request(
+            process,
+            "initialize",
+            {
+                "protocolVersion": self.protocol_version,
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "auto-code-runtime-mcp-bridge",
+                    "version": "0",
+                },
+            },
+        )
+        await self._notification(process, "notifications/initialized", {})
+
+    async def _request(
+        self,
+        process: asyncio.subprocess.Process,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        self._request_id += 1
+        request_id = self._request_id
+        await self._write_message(
+            process,
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": method,
+                "params": params,
+            },
+        )
+        return await self._read_response(process, request_id)
+
+    async def _notification(
+        self,
+        process: asyncio.subprocess.Process,
+        method: str,
+        params: dict[str, Any],
+    ) -> None:
+        await self._write_message(
+            process,
+            {
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params,
+            },
+        )
+
+    async def _write_message(
+        self,
+        process: asyncio.subprocess.Process,
+        payload: dict[str, Any],
+    ) -> None:
+        if process.stdin is None:
+            raise RuntimeExternalMcpClientError(
+                f"MCP server {self.server} stdin is unavailable."
+            )
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n"
+        process.stdin.write(data)
+        await asyncio.wait_for(process.stdin.drain(), timeout=self.timeout_seconds)
+
+    async def _read_response(
+        self,
+        process: asyncio.subprocess.Process,
+        request_id: int,
+    ) -> dict[str, Any]:
+        if process.stdout is None:
+            raise RuntimeExternalMcpClientError(
+                f"MCP server {self.server} stdout is unavailable."
+            )
+        while True:
+            line = await asyncio.wait_for(
+                process.stdout.readline(),
+                timeout=self.timeout_seconds,
+            )
+            if not line:
+                stderr = await self._read_stderr(process)
+                suffix = f": {stderr}" if stderr else ""
+                raise RuntimeExternalMcpClientError(
+                    f"MCP server {self.server} closed stdout before response{suffix}."
+                )
+            try:
+                message = json.loads(line.decode("utf-8"))
+            except json.JSONDecodeError:
+                continue
+            if message.get("id") != request_id:
+                continue
+            if "error" in message:
+                error = message["error"]
+                if isinstance(error, dict):
+                    error_message = str(error.get("message") or error)
+                else:
+                    error_message = str(error)
+                raise RuntimeExternalMcpClientError(
+                    f"MCP server {self.server} returned error: {error_message}"
+                )
+            result = message.get("result", {})
+            if isinstance(result, dict):
+                return result
+            return {"content": [{"type": "text", "text": str(result)}]}
+
+    async def _read_stderr(self, process: asyncio.subprocess.Process) -> str:
+        if process.stderr is None:
+            return ""
+        try:
+            data = await asyncio.wait_for(process.stderr.read(), timeout=1.0)
+        except TimeoutError:
+            return ""
+        return data.decode("utf-8", errors="replace").strip()[:1000]
+
+    async def _close_process(self, process: asyncio.subprocess.Process) -> None:
+        if process.stdin is not None and not process.stdin.is_closing():
+            process.stdin.close()
+        if process.returncode is not None:
+            return
+        process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=2.0)
+        except TimeoutError:
+            process.kill()
+            await process.wait()
+
 
 class RuntimeMcpBridge:
     """Bridge local Auto Code MCP tools into generic runtimes."""
@@ -141,11 +529,16 @@ class RuntimeMcpBridge:
         self.project_dir = project_dir
         self.allowed_tools = allowed_tools
         self.requested_servers = requested_servers
-        self._tools = load_auto_claude_bridge_tools(
+        local_tools = load_auto_claude_bridge_tools(
             spec_dir=spec_dir,
             project_dir=project_dir,
             allowed_tools=allowed_tools,
         )
+        external_tools = load_external_mcp_bridge_tools(
+            requested_servers=requested_servers,
+            project_dir=project_dir,
+        )
+        self._tools = [*local_tools, *external_tools]
         self._tools_by_name = {tool.exposed_name: tool for tool in self._tools} | {
             tool.name: tool for tool in self._tools
         }
@@ -191,8 +584,12 @@ class RuntimeMcpBridge:
 
     @property
     def available_servers(self) -> tuple[str, ...]:
-        """Return MCP servers available through this local bridge."""
-        return (LOCAL_BRIDGE_SERVER,) if self.has_tools else ()
+        """Return MCP servers available through this bridge."""
+        servers: list[str] = []
+        for tool in self._tools:
+            if tool.server not in servers:
+                servers.append(tool.server)
+        return tuple(servers)
 
     @property
     def unavailable_servers(self) -> tuple[str, ...]:
@@ -219,10 +616,23 @@ class RuntimeMcpBridge:
         tool_name = action_tool(action)
         spec = self._tools_by_name.get(tool_name)
         if spec is None:
+            audit_artifact = write_mcp_bridge_audit_event(
+                self.spec_dir,
+                {
+                    "event": "mcp_tool_call",
+                    "status": "denied",
+                    "server": "unknown",
+                    "tool": tool_name or "unknown",
+                    "exposed_name": tool_name or "unknown",
+                    "reason": "unknown_bridged_mcp_tool",
+                    "action": safe_mcp_action_for_trace(action),
+                },
+            )
             return ToolActionResult(
                 tool=tool_name or "unknown",
                 ok=False,
                 message=f"Unknown bridged MCP tool: {tool_name or '<missing>'}",
+                data={"audit_artifact": audit_artifact},
             )
 
         args = {
@@ -230,20 +640,49 @@ class RuntimeMcpBridge:
             for key, value in action.items()
             if key not in {"tool", "name", "type"}
         }
+        audit_base = {
+            "event": "mcp_tool_call",
+            "server": spec.server,
+            "tool": spec.name,
+            "exposed_name": spec.exposed_name,
+            **spec.policy.to_dict(),
+            "action": safe_mcp_action_for_trace(action),
+        }
         try:
             result = spec.handler(args)
             if inspect.isawaitable(result):
                 result = await result
         except Exception as e:
+            audit_artifact = write_mcp_bridge_audit_event(
+                self.spec_dir,
+                {
+                    **audit_base,
+                    "status": "error",
+                    "message": str(e),
+                },
+            )
             return ToolActionResult(
                 tool=spec.exposed_name,
                 ok=False,
                 message=f"Bridged MCP tool failed: {e}",
-                data={"server": spec.server, "name": spec.name},
+                data={
+                    "server": spec.server,
+                    "name": spec.name,
+                    **spec.policy.to_dict(),
+                    "audit_artifact": audit_artifact,
+                },
             )
 
         text = extract_mcp_text(result)
         ok = not text.startswith("Error:")
+        audit_artifact = write_mcp_bridge_audit_event(
+            self.spec_dir,
+            {
+                **audit_base,
+                "status": "ok" if ok else "error",
+                "message": text[:1000],
+            },
+        )
         return ToolActionResult(
             tool=spec.exposed_name,
             ok=ok,
@@ -251,28 +690,42 @@ class RuntimeMcpBridge:
             data={
                 "server": spec.server,
                 "name": spec.name,
+                **spec.policy.to_dict(),
+                "audit_artifact": audit_artifact,
                 "result": result,
             },
         )
 
     def report(self) -> dict[str, Any]:
         """Return compact bridge metadata for artifacts/debug output."""
+        server_statuses = describe_mcp_server_statuses(
+            requested_servers=self.requested_servers,
+            available_servers=self.available_servers,
+            native_available=False,
+        )
+        bridge_plan = build_mcp_bridge_plan(
+            provider_name="generic",
+            runtime_name="local_bridge",
+            strategy="local_bridge" if self.has_tools else "unavailable",
+            requested_servers=self.requested_servers,
+            available_servers=self.available_servers,
+            unavailable_servers=self.unavailable_servers,
+            server_statuses=server_statuses,
+            tool_count=len(self._tools),
+        )
         return {
             "server": LOCAL_BRIDGE_SERVER,
             "available": self.has_tools,
             "tool_count": len(self._tools),
             "tools": [tool.exposed_name for tool in self._tools],
+            "tool_policies": [tool.policy_metadata() for tool in self._tools],
             "requested_servers": list(self.requested_servers),
             "available_servers": list(self.available_servers),
             "unavailable_servers": list(self.unavailable_servers),
             "server_statuses": [
-                dict(server_status)
-                for server_status in describe_mcp_server_statuses(
-                    requested_servers=self.requested_servers,
-                    available_servers=self.available_servers,
-                    native_available=False,
-                )
+                dict(server_status) for server_status in server_statuses
             ],
+            "bridge_plan": bridge_plan.to_dict(),
         }
 
     def support_for(
@@ -303,6 +756,9 @@ def resolve_runtime_mcp_support(
     tool_count: int = 0,
     requested_servers: tuple[str, ...] = (),
     available_servers: tuple[str, ...] = (),
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> RuntimeMcpSupport:
     """Return native or local-bridge MCP support without claiming full parity."""
     provider = provider_name.lower()
@@ -326,6 +782,9 @@ def resolve_runtime_mcp_support(
                 requested_servers=requested_servers,
                 available_servers=requested_servers,
                 native_available=True,
+                external_client_enabled=external_client_enabled,
+                project_mcp_config=project_mcp_config,
+                environment=environment,
             ),
         )
 
@@ -342,8 +801,9 @@ def resolve_runtime_mcp_support(
             strategy="local_bridge",
             available=True,
             reason=(
-                "Auto Code can bridge local auto-claude tools into this runtime; "
-                "external MCP servers still require native runtime support."
+                "Auto Code can bridge configured MCP tools into this runtime; "
+                "external MCP servers execute only when the provider-neutral "
+                "external MCP client is enabled and configured."
             ),
             server=LOCAL_BRIDGE_SERVER,
             tool_count=tool_count,
@@ -355,6 +815,9 @@ def resolve_runtime_mcp_support(
                 requested_servers=requested_servers,
                 available_servers=available_servers,
                 native_available=False,
+                external_client_enabled=external_client_enabled,
+                project_mcp_config=project_mcp_config,
+                environment=environment,
             ),
         )
 
@@ -385,8 +848,238 @@ def resolve_runtime_mcp_support(
             requested_servers=requested_servers,
             available_servers=(),
             native_available=False,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
         ),
     )
+
+
+def external_mcp_client_enabled(
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> bool:
+    """Return whether the provider-neutral external MCP client is enabled."""
+    value = mcp_config_or_env_value(
+        EXTERNAL_MCP_CLIENT_ENV,
+        project_mcp_config=project_mcp_config,
+        environment=environment,
+    )
+    return bool_from_mcp_value(value, default=False)
+
+
+def describe_external_mcp_server_health(
+    server: str,
+    *,
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> RuntimeExternalMcpServerHealth:
+    """Return external MCP client readiness for one catalog server."""
+    server = normalize_mcp_server_name(server)
+    catalog_entry = MCP_SERVER_CATALOG.get(server, {})
+    display_name = str(catalog_entry.get("display_name", server))
+    bridgeable = bool(catalog_entry.get("external_bridgeable", False))
+    client_enabled = (
+        external_mcp_client_enabled(
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        if external_client_enabled is None
+        else external_client_enabled
+    )
+    enabled_env = catalog_entry.get("enabled_env")
+    enabled_default = bool(catalog_entry.get("enabled_default", True))
+    server_enabled = bool(
+        bool_from_mcp_value(
+            mcp_config_or_env_value(
+                str(enabled_env),
+                project_mcp_config=project_mcp_config,
+                environment=environment,
+            )
+            if enabled_env
+            else None,
+            default=enabled_default,
+        )
+    )
+    required_env = tuple(str(name) for name in catalog_entry.get("required_env", ()))
+    missing_env = tuple(
+        name
+        for name in required_env
+        if not mcp_config_or_env_value(
+            name,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+    )
+    concrete_servers = tuple(
+        str(name) for name in catalog_entry.get("concrete_servers", ())
+    )
+    execution_supported = server in EXTERNAL_MCP_EXECUTION_SERVERS
+    known_tools = tuple(str(name) for name in catalog_entry.get("tools", ()))
+    configured = bool(
+        bridgeable and server_enabled and not missing_env and not concrete_servers
+    )
+    url_env = catalog_entry.get("url_env")
+    url = (
+        mcp_config_or_env_value(
+            str(url_env),
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        if url_env
+        else catalog_entry.get("url")
+    )
+
+    if not bridgeable:
+        status: ExternalMcpHealthStatus = "not_bridgeable"
+        reason = "No external MCP client bridge policy is registered for this server."
+    elif not server_enabled:
+        status = "server_disabled"
+        reason = (
+            f"{enabled_env} disables this MCP server."
+            if enabled_env
+            else "This MCP server is disabled by configuration."
+        )
+    elif missing_env:
+        status = "missing_configuration"
+        reason = "Missing required external MCP configuration: " + ", ".join(
+            missing_env
+        )
+    elif concrete_servers:
+        status = "choose_concrete_server"
+        reason = "Select a concrete external MCP server: " + ", ".join(concrete_servers)
+    elif not client_enabled:
+        status = "client_disabled"
+        reason = (
+            f"Set {EXTERNAL_MCP_CLIENT_ENV}=true to let non-native runtimes "
+            "prepare external MCP connections."
+        )
+    else:
+        status = "ready_to_connect"
+        if execution_supported:
+            reason = (
+                "External MCP server can execute registered tools through the "
+                "provider-neutral client."
+            )
+        else:
+            reason = (
+                "External MCP server configuration is ready for the "
+                "provider-neutral client; tool execution wiring is still required."
+            )
+
+    executable_tools = (
+        known_tools if status == "ready_to_connect" and execution_supported else ()
+    )
+
+    return RuntimeExternalMcpServerHealth(
+        server=server,
+        display_name=display_name,
+        bridgeable=bridgeable,
+        client_enabled=client_enabled,
+        server_enabled=server_enabled,
+        configured=configured,
+        status=status,
+        reason=reason,
+        transport=str(catalog_entry.get("transport") or "") or None,
+        command=str(catalog_entry.get("command") or "") or None,
+        args=tuple(str(arg) for arg in catalog_entry.get("args", ())),
+        url=str(url or "") or None,
+        enabled_env=str(enabled_env or "") or None,
+        required_env=required_env,
+        missing_env=missing_env,
+        concrete_servers=concrete_servers,
+        execution_supported=execution_supported,
+        executable_tools=executable_tools,
+    )
+
+
+def build_external_mcp_health_matrix(
+    *,
+    requested_servers: tuple[str, ...] | None = None,
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Build external MCP client readiness diagnostics."""
+    servers = normalize_mcp_server_names(requested_servers or tuple(MCP_SERVER_CATALOG))
+    return [
+        describe_external_mcp_server_health(
+            server,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        ).to_dict()
+        for server in servers
+    ]
+
+
+def executable_external_mcp_servers(
+    *,
+    requested_servers: tuple[str, ...],
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    """Return external MCP servers that this layer can actually execute."""
+    servers: list[str] = []
+    for server in normalize_mcp_server_names(requested_servers):
+        if server not in EXTERNAL_MCP_EXECUTION_SERVERS:
+            continue
+        health = describe_external_mcp_server_health(
+            server,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        if health.ready_to_connect and health.execution_supported:
+            servers.append(server)
+    return tuple(servers)
+
+
+def executable_external_mcp_tools(
+    *,
+    requested_servers: tuple[str, ...],
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    """Return exposed external MCP tool names that this layer can execute."""
+    tools: list[str] = []
+    for server in normalize_mcp_server_names(requested_servers):
+        health = describe_external_mcp_server_health(
+            server,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        if not health.ready_to_connect or not health.execution_supported:
+            continue
+        tools.extend(f"mcp__{server}__{tool}" for tool in health.executable_tools)
+    return tuple(tools)
+
+
+def mcp_config_or_env_value(
+    key: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> Any:
+    """Return an MCP config value from project config, then environment."""
+    if project_mcp_config and key in project_mcp_config:
+        return project_mcp_config[key]
+    source = os.environ if environment is None else environment
+    return source.get(key)
+
+
+def bool_from_mcp_value(value: Any, *, default: bool) -> bool:
+    """Parse common env/config booleans with a provided default."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def describe_mcp_server_statuses(
@@ -394,6 +1087,9 @@ def describe_mcp_server_statuses(
     requested_servers: tuple[str, ...],
     available_servers: tuple[str, ...],
     native_available: bool,
+    external_client_enabled: bool | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Return per-server MCP bridge status for diagnostics and settings UI."""
     requested_servers = normalize_mcp_server_names(requested_servers)
@@ -403,14 +1099,28 @@ def describe_mcp_server_statuses(
     for server in requested_servers:
         catalog_entry = MCP_SERVER_CATALOG.get(server, {})
         bridgeable = bool(catalog_entry.get("bridgeable", False))
+        external_health = describe_external_mcp_server_health(
+            server,
+            external_client_enabled=external_client_enabled,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
         if native_available:
             availability = "available"
             runtime_path = "native"
             reason = "Available through the selected runtime's native MCP support."
-        elif server in available:
+        elif server in available and bridgeable:
             availability = "available"
             runtime_path = "local_bridge"
             reason = "Available through Auto Code's local MCP bridge."
+        elif server in available and external_health.bridgeable:
+            availability = "available"
+            runtime_path = "external_bridge"
+            reason = "Available through Auto Code's external MCP client bridge."
+        elif external_health.bridgeable:
+            availability = "unavailable"
+            runtime_path = "external_bridge_required"
+            reason = external_health.reason
         elif bridgeable:
             availability = "unavailable"
             runtime_path = "local_bridge_required"
@@ -433,10 +1143,170 @@ def describe_mcp_server_statuses(
                 "bridgeable": bridgeable,
                 "reason": reason,
                 "notes": str(catalog_entry.get("notes", "")),
+                "external_client": external_health.to_dict(),
             }
         )
 
     return tuple(statuses)
+
+
+def build_mcp_bridge_plan(
+    *,
+    provider_name: str,
+    runtime_name: str,
+    strategy: McpSupportStrategy,
+    requested_servers: tuple[str, ...],
+    available_servers: tuple[str, ...],
+    unavailable_servers: tuple[str, ...],
+    server_statuses: tuple[dict[str, Any], ...],
+    tool_count: int = 0,
+) -> RuntimeMcpBridgePlan:
+    """Build a normalized MCP bridge plan from per-server support statuses."""
+    requested_servers = normalize_mcp_server_names(requested_servers)
+    available_servers = normalize_mcp_server_names(available_servers)
+    unavailable_servers = normalize_mcp_server_names(unavailable_servers)
+    native_required_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "native_required"
+    )
+    local_bridge_required_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "local_bridge_required"
+    )
+    external_bridge_required_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge_required"
+    )
+    external_bridge_ready_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge_required"
+        and isinstance(status.get("external_client"), dict)
+        and status["external_client"].get("status") == "ready_to_connect"
+    )
+    unsupported_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "unsupported"
+    )
+    local_bridged_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "local_bridge"
+        and status.get("availability") == "available"
+    )
+    external_bridged_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge"
+        and status.get("availability") == "available"
+    )
+    bridged_servers = (*local_bridged_servers, *external_bridged_servers)
+    status = mcp_plan_status(
+        requested_servers=requested_servers,
+        available_servers=available_servers,
+        unavailable_servers=unavailable_servers,
+    )
+    action_required = mcp_plan_action_required(
+        status=status,
+        native_required_servers=native_required_servers,
+        local_bridge_required_servers=local_bridge_required_servers,
+        external_bridge_required_servers=external_bridge_required_servers,
+        external_bridge_ready_servers=external_bridge_ready_servers,
+        unsupported_servers=unsupported_servers,
+    )
+    recommended_runtime_path = mcp_plan_recommended_runtime_path(
+        action_required=action_required,
+        strategy=strategy,
+    )
+    return RuntimeMcpBridgePlan(
+        provider_name=provider_name,
+        runtime_name=runtime_name,
+        strategy=strategy,
+        status=status,
+        action_required=action_required,
+        recommended_runtime_path=recommended_runtime_path,
+        requested_servers=requested_servers,
+        available_servers=available_servers,
+        unavailable_servers=unavailable_servers,
+        native_required_servers=native_required_servers,
+        local_bridge_required_servers=local_bridge_required_servers,
+        external_bridge_required_servers=external_bridge_required_servers,
+        external_bridge_ready_servers=external_bridge_ready_servers,
+        unsupported_servers=unsupported_servers,
+        bridged_servers=bridged_servers,
+        local_bridged_servers=local_bridged_servers,
+        external_bridged_servers=external_bridged_servers,
+        tool_count=tool_count,
+    )
+
+
+def mcp_plan_status(
+    *,
+    requested_servers: tuple[str, ...],
+    available_servers: tuple[str, ...],
+    unavailable_servers: tuple[str, ...],
+) -> str:
+    """Return high-level MCP plan status."""
+    if not requested_servers:
+        return "not_requested"
+    if not unavailable_servers:
+        return "ready"
+    if available_servers:
+        return "partial"
+    return "blocked"
+
+
+def mcp_plan_action_required(
+    *,
+    status: str,
+    native_required_servers: tuple[str, ...],
+    local_bridge_required_servers: tuple[str, ...],
+    external_bridge_required_servers: tuple[str, ...],
+    external_bridge_ready_servers: tuple[str, ...],
+    unsupported_servers: tuple[str, ...],
+) -> str:
+    """Return the next action required to satisfy the MCP plan."""
+    if status in {"not_requested", "ready"}:
+        return "none"
+    if unsupported_servers:
+        return "register_or_remove_unsupported_servers"
+    if external_bridge_ready_servers:
+        return "wire_external_mcp_tool_execution"
+    if external_bridge_required_servers:
+        return "configure_external_mcp_client"
+    if native_required_servers:
+        return "use_native_mcp_runtime"
+    if local_bridge_required_servers:
+        return "configure_local_bridge_tools"
+    return "inspect_runtime_mcp_support"
+
+
+def mcp_plan_recommended_runtime_path(
+    *,
+    action_required: str,
+    strategy: McpSupportStrategy,
+) -> str:
+    """Return the recommended runtime path for the MCP plan."""
+    if action_required == "use_native_mcp_runtime":
+        return "native_mcp_runtime"
+    if action_required == "configure_local_bridge_tools":
+        return "local_bridge"
+    if action_required in {
+        "configure_external_mcp_client",
+        "wire_external_mcp_tool_execution",
+    }:
+        return "external_mcp_client"
+    if action_required == "register_or_remove_unsupported_servers":
+        return "unsupported"
+    if strategy == "native":
+        return "native"
+    if strategy == "local_bridge":
+        return "local_bridge"
+    return "none"
 
 
 def load_auto_claude_bridge_tools(
@@ -463,10 +1333,186 @@ def load_auto_claude_bridge_tools(
                 parameters=input_schema_to_json_schema(
                     getattr(sdk_tool, "input_schema", {}) or {}
                 ),
+                policy=policy_for_auto_claude_tool(name),
                 handler=sdk_tool.handler,
             )
         )
     return specs
+
+
+def load_external_mcp_bridge_tools(
+    *,
+    requested_servers: tuple[str, ...],
+    project_dir: Path,
+) -> list[RuntimeMcpToolSpec]:
+    """Load provider-neutral external MCP tool specs that are ready to connect."""
+    specs: list[RuntimeMcpToolSpec] = []
+    for server in normalize_mcp_server_names(requested_servers):
+        health = describe_external_mcp_server_health(server)
+        if not health.ready_to_connect or not health.execution_supported:
+            continue
+        if server == "context7":
+            specs.extend(load_context7_external_mcp_tools(health, project_dir))
+    return specs
+
+
+def load_context7_external_mcp_tools(
+    health: RuntimeExternalMcpServerHealth,
+    project_dir: Path,
+) -> list[RuntimeMcpToolSpec]:
+    """Return known Context7 tool schemas backed by the external MCP client."""
+    tool_definitions: tuple[tuple[str, str, dict[str, Any]], ...] = (
+        (
+            "resolve-library-id",
+            "Resolve a package or library name to a Context7-compatible library ID.",
+            {
+                "type": "object",
+                "properties": {
+                    "libraryName": {
+                        "type": "string",
+                        "description": "Package or library name to resolve.",
+                    }
+                },
+                "required": ["libraryName"],
+                "additionalProperties": False,
+            },
+        ),
+        (
+            "get-library-docs",
+            "Fetch current documentation for a Context7-compatible library ID.",
+            {
+                "type": "object",
+                "properties": {
+                    "context7CompatibleLibraryID": {
+                        "type": "string",
+                        "description": "Library ID returned by resolve-library-id.",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Optional topic to focus the documentation query.",
+                    },
+                    "tokens": {
+                        "type": "integer",
+                        "description": "Optional maximum documentation token budget.",
+                    },
+                },
+                "required": ["context7CompatibleLibraryID"],
+                "additionalProperties": False,
+            },
+        ),
+    )
+    return [
+        RuntimeMcpToolSpec(
+            server="context7",
+            name=tool_name,
+            exposed_name=f"mcp__context7__{tool_name}",
+            description=description,
+            parameters=parameters,
+            policy=RuntimeMcpToolPolicy("read_external_docs", "read"),
+            handler=external_mcp_tool_handler(
+                health=health,
+                tool_name=tool_name,
+                project_dir=project_dir,
+            ),
+        )
+        for tool_name, description, parameters in tool_definitions
+    ]
+
+
+def external_mcp_tool_handler(
+    *,
+    health: RuntimeExternalMcpServerHealth,
+    tool_name: str,
+    project_dir: Path,
+) -> Any:
+    """Build an async handler for one external MCP tool."""
+
+    async def handler(args: dict[str, Any]) -> dict[str, Any]:
+        return await call_external_mcp_tool(
+            health=health,
+            tool_name=tool_name,
+            arguments=args,
+            project_dir=project_dir,
+        )
+
+    return handler
+
+
+async def call_external_mcp_tool(
+    *,
+    health: RuntimeExternalMcpServerHealth,
+    tool_name: str,
+    arguments: dict[str, Any],
+    project_dir: Path,
+) -> dict[str, Any]:
+    """Call one external MCP tool through the provider-neutral stdio client."""
+    if health.transport != "stdio" or not health.command:
+        raise RuntimeExternalMcpClientError(
+            f"External MCP server {health.server} is not a stdio command target."
+        )
+    client = RuntimeExternalMcpClient(
+        server=health.server,
+        command=health.command,
+        args=health.args,
+        cwd=project_dir,
+    )
+    return await client.call_tool(name=tool_name, arguments=arguments)
+
+
+def policy_for_auto_claude_tool(tool_name: str) -> RuntimeMcpToolPolicy:
+    """Return conservative permission/audit metadata for one local MCP tool."""
+    explicit: dict[str, RuntimeMcpToolPolicy] = {
+        "get_build_progress": RuntimeMcpToolPolicy("read_build_state", "read"),
+        "get_qa_status": RuntimeMcpToolPolicy("read_qa_state", "read"),
+        "get_spec_statistics": RuntimeMcpToolPolicy("read_metrics", "read"),
+        "get_quality_metrics": RuntimeMcpToolPolicy("read_metrics", "read"),
+        "get_session_context": RuntimeMcpToolPolicy("read_memory", "read"),
+        "list_discoveries": RuntimeMcpToolPolicy("read_memory", "read"),
+        "search_team_docs": RuntimeMcpToolPolicy("read_docs", "read"),
+        "get_team_docs": RuntimeMcpToolPolicy("read_docs", "read"),
+        "get_task_status": RuntimeMcpToolPolicy("read_background_task", "read"),
+        "get_task_output": RuntimeMcpToolPolicy("read_background_task", "read"),
+        "has_critical_issues": RuntimeMcpToolPolicy("read_predictive_scan", "read"),
+        "get_predictive_scan_history": RuntimeMcpToolPolicy(
+            "read_predictive_scan", "read"
+        ),
+        "debug_error": RuntimeMcpToolPolicy("runtime_analysis", "analysis"),
+        "explain_error": RuntimeMcpToolPolicy("runtime_analysis", "analysis"),
+        "suggest_breakpoints": RuntimeMcpToolPolicy("runtime_analysis", "analysis"),
+        "run_predictive_scan": RuntimeMcpToolPolicy(
+            "run_predictive_scan", "analysis", mutating=False
+        ),
+        "update_subtask_status": RuntimeMcpToolPolicy(
+            "write_build_state", "write", mutating=True
+        ),
+        "update_qa_status": RuntimeMcpToolPolicy(
+            "write_qa_state", "write", mutating=True
+        ),
+        "record_discovery": RuntimeMcpToolPolicy(
+            "write_memory", "write", mutating=True
+        ),
+        "record_gotcha": RuntimeMcpToolPolicy("write_memory", "write", mutating=True),
+        "record_feedback": RuntimeMcpToolPolicy("write_memory", "write", mutating=True),
+        "start_background_command": RuntimeMcpToolPolicy(
+            "run_background_command", "command", mutating=True
+        ),
+        "cancel_task": RuntimeMcpToolPolicy(
+            "cancel_background_task", "command", mutating=True
+        ),
+    }
+    if tool_name in explicit:
+        return explicit[tool_name]
+
+    looks_read_only = tool_name.startswith(
+        ("get_", "list_", "search_", "explain_", "suggest_", "has_")
+    )
+    if looks_read_only:
+        return RuntimeMcpToolPolicy("read_auto_claude_tool", "read")
+    return RuntimeMcpToolPolicy(
+        "write_auto_claude_tool",
+        "write",
+        mutating=True,
+    )
 
 
 def normalize_mcp_server_names(server_names: Any) -> tuple[str, ...]:
@@ -552,6 +1598,7 @@ def unavailable_mcp_action_result(
             "available_servers": list(available_servers),
             "unavailable_servers": list(support_payload.get("unavailable_servers", ())),
             "server_status": status,
+            "bridge_plan": support_payload.get("bridge_plan"),
         },
     )
 
@@ -648,6 +1695,24 @@ def extract_mcp_text(result: Any) -> str:
         if isinstance(result.get("text"), str):
             return str(result["text"])
     return str(result)
+
+
+def mcp_bridge_audit_path(spec_dir: Path) -> Path:
+    """Return the audit artifact path for bridged MCP tool calls."""
+    return spec_dir / "artifacts" / MCP_BRIDGE_AUDIT_FILENAME
+
+
+def write_mcp_bridge_audit_event(spec_dir: Path, event: dict[str, Any]) -> str:
+    """Append one bridged MCP audit event and return the artifact path."""
+    path = mcp_bridge_audit_path(spec_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        **event,
+    }
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+    return str(path)
 
 
 def safe_mcp_action_for_trace(action: dict[str, Any]) -> dict[str, Any]:

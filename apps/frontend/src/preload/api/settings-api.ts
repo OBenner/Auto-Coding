@@ -8,7 +8,8 @@ import type {
   ToolDetectionResult,
   AIProviderConfig,
   ProviderConfigValidation,
-  ProviderConnectionTestResult
+  ProviderConnectionTestResult,
+  RuntimeControlPlaneDiagnostics
 } from '../../shared/types';
 
 export interface SettingsAPI {
@@ -42,6 +43,7 @@ export interface SettingsAPI {
   updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
   validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
   testProviderConfig: () => Promise<IPCResult<ProviderConnectionTestResult>>;
+  getProviderRuntimeDiagnostics: () => Promise<IPCResult<RuntimeControlPlaneDiagnostics>>;
 }
 
 export const createSettingsAPI = (): SettingsAPI => ({
@@ -98,5 +100,8 @@ export const createSettingsAPI = (): SettingsAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_VALIDATE),
 
   testProviderConfig: (): Promise<IPCResult<ProviderConnectionTestResult>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_TEST)
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_TEST),
+
+  getProviderRuntimeDiagnostics: (): Promise<IPCResult<RuntimeControlPlaneDiagnostics>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_RUNTIME_DIAGNOSTICS)
 });

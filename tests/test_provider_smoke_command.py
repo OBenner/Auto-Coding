@@ -84,6 +84,13 @@ async def test_run_provider_smoke_check_success(
     assert result.provider == "openai"
     assert result.model == "gpt-4o"
     assert result.response_excerpt == "ok from provider"
+    assert result.runtime_diagnostics["smoke_scope"] == "text_completion_only"
+    assert result.runtime_diagnostics["validated_requirements"] == [
+        "text_completion"
+    ]
+    assert "native_tool_loop" in result.runtime_diagnostics[
+        "full_autonomous_missing_capabilities"
+    ]
 
 
 @pytest.mark.asyncio
@@ -125,6 +132,7 @@ async def test_run_provider_smoke_check_reports_validation_errors(
     assert result.provider == "openai"
     assert "incomplete" in result.message
     assert "OPENAI_API_KEY" in result.error_details
+    assert result.runtime_diagnostics["validated_runtime_mode"] == "analysis_only"
 
 
 def test_handle_provider_smoke_command_outputs_json(
@@ -167,3 +175,4 @@ def test_handle_provider_smoke_command_outputs_json(
     assert payload["success"] is True
     assert payload["provider"] == "openai"
     assert payload["response_excerpt"] == "ok"
+    assert payload["runtime_diagnostics"] == {}

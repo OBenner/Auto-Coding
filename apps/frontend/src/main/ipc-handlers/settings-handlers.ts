@@ -18,7 +18,9 @@ import type {
   ProviderSettings,
   AIEngineProvider,
   AgentRuntimeMode,
-  ProviderConnectionTestResult
+  ProviderConnectionTestResult,
+  ProviderRuntimeDiagnostics,
+  RuntimeControlPlaneDiagnostics
 } from '../../shared/types';
 import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
@@ -36,6 +38,7 @@ const settingsPath = getSettingsPath();
 const execFileAsync = promisify(execFile);
 const PROVIDER_SMOKE_TIMEOUT_SECONDS = 30;
 const PROVIDER_SMOKE_PROCESS_TIMEOUT_MS = 45_000;
+const RUNTIME_DIAGNOSTICS_PROCESS_TIMEOUT_MS = 45_000;
 
 function hasClaudeProviderAuth(vars: Record<string, string>): boolean {
   return Boolean(
@@ -348,6 +351,23 @@ type ProviderSmokeCliResult = {
   message?: string;
   response_excerpt?: string | null;
   error_details?: string | null;
+  runtime_diagnostics?: {
+    smoke_scope?: string;
+    requested_runtime_mode?: string;
+    validated_runtime_mode?: string;
+    validated_requirements?: string[];
+    requested_runtime_capabilities?: string[];
+    full_autonomous_missing_capabilities?: string[];
+    note?: string;
+  } | null;
+};
+
+type RuntimeModesCliPayload = {
+  runtime_fallback_matrix?: RuntimeControlPlaneDiagnostics['runtime_fallback_matrix'];
+  mcp_bridge_plan_matrix?: RuntimeControlPlaneDiagnostics['mcp_bridge_plan_matrix'];
+  external_mcp_server_health?: RuntimeControlPlaneDiagnostics['external_mcp_server_health'];
+  runtime_subagent_matrix?: RuntimeControlPlaneDiagnostics['runtime_subagent_matrix'];
+  recommendations?: Record<string, string>;
 };
 
 function textFromExecOutput(output: unknown): string {
@@ -357,7 +377,7 @@ function textFromExecOutput(output: unknown): string {
   return typeof output === 'string' ? output : '';
 }
 
-function extractProviderSmokeJson(output: string): ProviderSmokeCliResult | null {
+function extractJsonFromOutput<T>(output: string): T | null {
   const start = output.indexOf('{');
   const end = output.lastIndexOf('}');
   if (start === -1 || end === -1 || end <= start) {
@@ -367,12 +387,40 @@ function extractProviderSmokeJson(output: string): ProviderSmokeCliResult | null
   try {
     const parsed = JSON.parse(output.slice(start, end + 1)) as unknown;
     if (parsed && typeof parsed === 'object') {
-      return parsed as ProviderSmokeCliResult;
+      return parsed as T;
     }
   } catch (_error) {
     return null;
   }
   return null;
+}
+
+function extractProviderSmokeJson(output: string): ProviderSmokeCliResult | null {
+  return extractJsonFromOutput<ProviderSmokeCliResult>(output);
+}
+
+function arrayFromUnknown(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
+function mapProviderRuntimeDiagnostics(
+  diagnostics: ProviderSmokeCliResult['runtime_diagnostics']
+): ProviderRuntimeDiagnostics | null {
+  if (!diagnostics || typeof diagnostics !== 'object') {
+    return null;
+  }
+
+  return {
+    smokeScope: diagnostics.smoke_scope,
+    requestedRuntimeMode: diagnostics.requested_runtime_mode,
+    validatedRuntimeMode: diagnostics.validated_runtime_mode,
+    validatedRequirements: arrayFromUnknown(diagnostics.validated_requirements),
+    requestedRuntimeCapabilities: arrayFromUnknown(diagnostics.requested_runtime_capabilities),
+    fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
+    note: diagnostics.note
+  };
 }
 
 function mapProviderSmokeResult(
@@ -386,6 +434,7 @@ function mapProviderSmokeResult(
     message: result.message ?? 'Provider smoke check completed',
     responseExcerpt: result.response_excerpt ?? null,
     errorDetails: result.error_details ?? null,
+    runtimeDiagnostics: mapProviderRuntimeDiagnostics(result.runtime_diagnostics),
   };
 }
 
@@ -397,6 +446,39 @@ function readProviderSmokeResult(
   const stderrText = textFromExecOutput(stderr);
   const parsed = extractProviderSmokeJson(stdoutText) ?? extractProviderSmokeJson(stderrText);
   return parsed ? mapProviderSmokeResult(parsed) : null;
+}
+
+function mapRuntimeControlPlaneDiagnostics(
+  payload: RuntimeModesCliPayload
+): RuntimeControlPlaneDiagnostics {
+  return {
+    runtime_fallback_matrix: Array.isArray(payload.runtime_fallback_matrix)
+      ? payload.runtime_fallback_matrix
+      : [],
+    mcp_bridge_plan_matrix: Array.isArray(payload.mcp_bridge_plan_matrix)
+      ? payload.mcp_bridge_plan_matrix
+      : [],
+    external_mcp_server_health: Array.isArray(payload.external_mcp_server_health)
+      ? payload.external_mcp_server_health
+      : [],
+    runtime_subagent_matrix: Array.isArray(payload.runtime_subagent_matrix)
+      ? payload.runtime_subagent_matrix
+      : [],
+    recommendations: payload.recommendations && typeof payload.recommendations === 'object'
+      ? payload.recommendations
+      : {},
+  };
+}
+
+function readRuntimeControlPlaneDiagnosticsResult(
+  stdout: unknown,
+  stderr: unknown
+): RuntimeControlPlaneDiagnostics | null {
+  const stdoutText = textFromExecOutput(stdout);
+  const stderrText = textFromExecOutput(stderr);
+  const parsed = extractJsonFromOutput<RuntimeModesCliPayload>(stdoutText)
+    ?? extractJsonFromOutput<RuntimeModesCliPayload>(stderrText);
+  return parsed ? mapRuntimeControlPlaneDiagnostics(parsed) : null;
 }
 
 async function runProviderConnectionTest(
@@ -478,6 +560,88 @@ async function runProviderConnectionTest(
       success: false,
       error: err.killed || err.signal === 'SIGTERM'
         ? 'Provider smoke check timed out.'
+        : details
+    };
+  }
+}
+
+async function runProviderRuntimeDiagnostics(
+  sourcePath: string,
+  envPath: string | null
+): Promise<IPCResult<RuntimeControlPlaneDiagnostics>> {
+  const pythonPath = getToolPath('python');
+  if (!pythonPath) {
+    return {
+      success: false,
+      error: 'Python not found. Please install Python 3.12 or higher.'
+    };
+  }
+
+  const runPyPath = path.join(sourcePath, 'run.py');
+  if (!existsSync(runPyPath)) {
+    return {
+      success: false,
+      error: 'Backend run.py not found. Cannot load runtime diagnostics.'
+    };
+  }
+
+  const envVars = envPath && existsSync(envPath)
+    ? parseEnvFile(readEnvFileSafe(envPath))
+    : {};
+  const profileEnv = getBestAvailableProfileEnv().env;
+  const apiProfileEnv = await getAPIProfileEnv();
+  const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      pythonPath,
+      [
+        runPyPath,
+        '--runtime-modes',
+        '--json'
+      ],
+      {
+        cwd: sourcePath,
+        encoding: 'utf-8',
+        env: {
+          ...process.env,
+          ...envVars,
+          ...profileEnv,
+          ...apiProfileEnv,
+          ...codexProfileEnv,
+          PYTHONIOENCODING: 'utf-8'
+        },
+        maxBuffer: 1024 * 1024,
+        timeout: RUNTIME_DIAGNOSTICS_PROCESS_TIMEOUT_MS,
+      }
+    );
+
+    const result = readRuntimeControlPlaneDiagnosticsResult(stdout, stderr);
+    if (result) {
+      return { success: true, data: result };
+    }
+
+    return {
+      success: false,
+      error: 'Runtime diagnostics command did not return JSON output.'
+    };
+  } catch (error) {
+    const err = error as Error & {
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+      killed?: boolean;
+      signal?: string | null;
+    };
+    const result = readRuntimeControlPlaneDiagnosticsResult(err.stdout, err.stderr);
+    if (result) {
+      return { success: true, data: result };
+    }
+
+    const details = textFromExecOutput(err.stderr) || err.message;
+    return {
+      success: false,
+      error: err.killed || err.signal === 'SIGTERM'
+        ? 'Runtime diagnostics command timed out.'
         : details
     };
   }
@@ -1600,6 +1764,35 @@ export function registerSettingsHandlers(
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to test provider config'
+        };
+      }
+    }
+  );
+
+  /**
+   * Load runtime/MCP/fallback diagnostics from the backend compatibility command
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_RUNTIME_DIAGNOSTICS,
+    async (): Promise<IPCResult<RuntimeControlPlaneDiagnostics>> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        return await runProviderRuntimeDiagnostics(sourcePath, envPath);
+      } catch (error) {
+        console.error('[PROVIDER_RUNTIME_DIAGNOSTICS] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error
+            ? error.message
+            : 'Failed to load runtime diagnostics'
         };
       }
     }

@@ -17,7 +17,27 @@ from agents.runtime.compatibility import (
     provider_runtime_compatibility_as_dicts,
     runtime_mode_info_as_dicts,
 )
-from agents.runtime.fallback import RuntimePhase, resolve_runtime_mode_with_fallback
+from agents.runtime.fallback import (
+    RuntimePhase,
+    capabilities_for_runtime_mode,
+    resolve_runtime_mode_with_fallback,
+)
+from agents.runtime.mcp_bridge import (
+    EXTERNAL_MCP_CLIENT_ENV,
+    LOCAL_BRIDGE_SERVER,
+    MCP_SERVER_CATALOG,
+    build_external_mcp_health_matrix,
+    executable_external_mcp_servers,
+    executable_external_mcp_tools,
+    resolve_runtime_mcp_support,
+)
+from agents.runtime.subagents import (
+    DEFAULT_SUBAGENT_MAX_ATTEMPTS,
+    DEFAULT_SUBAGENT_MERGE_POLICY,
+    resolve_runtime_subagent_support,
+)
+
+DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
 
 
 def _format_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -95,6 +115,105 @@ def build_runtime_fallback_matrix(
     return matrix
 
 
+def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
+    """Build provider/runtime MCP bridge plan diagnostics."""
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        for mode in RUNTIME_MODE_INFO:
+            capabilities = capabilities_for_runtime_mode(
+                provider_row.provider,
+                mode.mode,
+            )
+            bridge_available = mode.mode == "generic_edit"
+            available_servers = (LOCAL_BRIDGE_SERVER,) if bridge_available else ()
+            if bridge_available:
+                available_servers = (
+                    *available_servers,
+                    *executable_external_mcp_servers(
+                        requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+                    ),
+                )
+            support = resolve_runtime_mcp_support(
+                provider_name=provider_row.provider,
+                runtime_name=mode.mode,
+                capabilities=capabilities,
+                bridge_available=bridge_available,
+                tool_count=1 if bridge_available else 0,
+                requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+                available_servers=available_servers,
+            )
+            plan = support.bridge_plan.to_dict()
+            matrix.append(
+                {
+                    "provider": provider_row.provider,
+                    "runtime_mode": mode.mode,
+                    "strategy": support.strategy,
+                    "available": support.available,
+                    "status": plan["status"],
+                    "action_required": plan["action_required"],
+                    "recommended_runtime_path": plan["recommended_runtime_path"],
+                    "available_servers": plan["available_servers"],
+                    "unavailable_servers": plan["unavailable_servers"],
+                    "native_required_servers": plan["native_required_servers"],
+                    "local_bridge_required_servers": plan[
+                        "local_bridge_required_servers"
+                    ],
+                    "external_bridge_required_servers": plan[
+                        "external_bridge_required_servers"
+                    ],
+                    "external_bridge_ready_servers": plan[
+                        "external_bridge_ready_servers"
+                    ],
+                    "unsupported_servers": plan["unsupported_servers"],
+                    "bridged_servers": plan["bridged_servers"],
+                    "local_bridged_servers": plan["local_bridged_servers"],
+                    "external_bridged_servers": plan["external_bridged_servers"],
+                    "executable_external_tools": list(
+                        executable_external_mcp_tools(
+                            requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+                        )
+                    )
+                    if bridge_available
+                    else [],
+                }
+            )
+    return matrix
+
+
+def _subagent_orchestrator_available(provider: str, runtime_mode: str) -> bool:
+    """Return true when the runtime can use Auto Code's child-session orchestrator."""
+    if provider == "codex":
+        return runtime_mode == "full_autonomous"
+    return runtime_mode in {"analysis_only", "generic_edit", "patch_proposal"}
+
+
+def build_runtime_subagent_matrix() -> list[dict[str, Any]]:
+    """Build provider/runtime subagent support diagnostics."""
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        for mode in RUNTIME_MODE_INFO:
+            capabilities = capabilities_for_runtime_mode(
+                provider_row.provider,
+                mode.mode,
+            )
+            support = resolve_runtime_subagent_support(
+                provider_name=provider_row.provider,
+                runtime_name=mode.mode,
+                capabilities=capabilities,
+                orchestrator_available=_subagent_orchestrator_available(
+                    provider_row.provider,
+                    mode.mode,
+                ),
+            )
+            row = support.to_dict()
+            row["runtime_mode"] = row.pop("runtime")
+            row["max_attempts"] = DEFAULT_SUBAGENT_MAX_ATTEMPTS
+            row["merge_policy"] = DEFAULT_SUBAGENT_MERGE_POLICY
+            row["artifact_support"] = True
+            matrix.append(row)
+    return matrix
+
+
 def build_runtime_modes_payload() -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
     cli_runner_selection = {
@@ -111,6 +230,11 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         ),
         "cli_runner_selection": cli_runner_selection,
         "runtime_fallback_matrix": build_runtime_fallback_matrix(),
+        "mcp_bridge_plan_matrix": build_mcp_bridge_plan_matrix(),
+        "external_mcp_server_health": build_external_mcp_health_matrix(
+            requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+        ),
+        "runtime_subagent_matrix": build_runtime_subagent_matrix(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -132,6 +256,10 @@ def build_runtime_modes_payload() -> dict[str, Any]:
                 "Set AUTO_CODE_CLI_RUNNER_ROUTER=true only when you want "
                 "incompatible direct full_autonomous requests to route to a "
                 "wired CLI runner such as Codex CLI."
+            ),
+            "external_mcp_client": (
+                f"Set {EXTERNAL_MCP_CLIENT_ENV}=true only when you are ready "
+                "to enable the provider-neutral external MCP client bridge."
             ),
         },
     }
@@ -191,6 +319,47 @@ def format_runtime_modes_text() -> str:
         for row in build_runtime_fallback_matrix()
         if row["requested_mode"] == "full_autonomous" or row["missing_capabilities"]
     ]
+    mcp_bridge_rows = [
+        [
+            row["provider"],
+            row["runtime_mode"],
+            row["strategy"],
+            row["status"],
+            row["action_required"],
+            ", ".join(row["bridged_servers"]) or "none",
+            ", ".join(row["external_bridged_servers"]) or "none",
+            ", ".join(row["external_bridge_required_servers"]) or "none",
+        ]
+        for row in build_mcp_bridge_plan_matrix()
+        if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
+    ]
+    external_mcp_health_rows = [
+        [
+            row["server"],
+            row["status"],
+            "yes" if row["configured"] else "no",
+            row["transport"] or "n/a",
+            ", ".join(row["missing_env"]) or "none",
+            ", ".join(row["executable_tools"]) or "none",
+        ]
+        for row in build_external_mcp_health_matrix(
+            requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
+        )
+        if row["bridgeable"]
+    ]
+    subagent_rows = [
+        [
+            row["provider"],
+            row["runtime_mode"],
+            row["strategy"],
+            "yes" if row["available"] else "no",
+            ", ".join(row["missing_capabilities"]) or "none",
+            row["merge_policy"],
+            str(row["max_attempts"]),
+        ]
+        for row in build_runtime_subagent_matrix()
+        if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
+    ]
 
     return "\n\n".join(
         [
@@ -242,6 +411,45 @@ def format_runtime_modes_text() -> str:
                     "Runner candidates",
                 ],
                 runtime_fallback_rows,
+            ),
+            "MCP Bridge Plan Matrix",
+            _format_table(
+                [
+                    "Provider",
+                    "Runtime",
+                    "Strategy",
+                    "Status",
+                    "Action",
+                    "Bridged",
+                    "External bridged",
+                    "External required",
+                ],
+                mcp_bridge_rows,
+            ),
+            "External MCP Client Health",
+            _format_table(
+                [
+                    "Server",
+                    "Status",
+                    "Configured",
+                    "Transport",
+                    "Missing config",
+                    "Executable tools",
+                ],
+                external_mcp_health_rows,
+            ),
+            "Subagent Orchestrator Matrix",
+            _format_table(
+                [
+                    "Provider",
+                    "Runtime",
+                    "Strategy",
+                    "Available",
+                    "Missing capabilities",
+                    "Merge policy",
+                    "Max attempts",
+                ],
+                subagent_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",

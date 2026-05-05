@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -7,6 +8,7 @@ import {
   CircleSlash,
   DollarSign,
   Info,
+  RefreshCw,
   ShieldCheck,
   XCircle
 } from 'lucide-react';
@@ -22,7 +24,13 @@ import type {
   AIEngineProvider,
   AIProviderConfig,
   ProviderConfigValidation,
-  ProviderConnectionTestResult
+  ProviderConnectionTestResult,
+  ProviderRuntimeDiagnostics,
+  RuntimeControlPlaneDiagnostics,
+  RuntimeExternalMcpHealthRow,
+  RuntimeFallbackMatrixRow,
+  RuntimeMcpBridgePlanRow,
+  RuntimeSubagentMatrixRow
 } from '../../../shared/types/settings';
 
 type ProviderSettingsSectionProps = Record<string, never>;
@@ -181,6 +189,62 @@ const RUNTIME_MODE_OPTIONS: Array<{
   { value: 'analysis_only', labelKey: 'settings:aiProvider.runtimeModes.analysisOnly.name', descriptionKey: 'settings:aiProvider.runtimeModes.analysisOnly.description' },
 ];
 
+const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
+  amp: 'settings:aiProvider.runtimeDiagnosticValues.amp',
+  analysis_only: 'settings:aiProvider.runtimeDiagnosticValues.analysisOnly',
+  apply_patch: 'settings:aiProvider.runtimeDiagnosticValues.applyPatch',
+  blocked: 'settings:aiProvider.runtimeDiagnosticValues.blocked',
+  choose_concrete_server: 'settings:aiProvider.runtimeDiagnosticValues.chooseConcreteServer',
+  claude_code: 'settings:aiProvider.runtimeDiagnosticValues.claudeCode',
+  client_disabled: 'settings:aiProvider.runtimeDiagnosticValues.clientDisabled',
+  codex_cli: 'settings:aiProvider.runtimeDiagnosticValues.codexCli',
+  configure_external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.configureExternalMcpClient',
+  configure_local_bridge_tools: 'settings:aiProvider.runtimeDiagnosticValues.configureLocalBridgeTools',
+  cursor_cli: 'settings:aiProvider.runtimeDiagnosticValues.cursorCli',
+  deepv_code: 'settings:aiProvider.runtimeDiagnosticValues.deepvCode',
+  external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
+  filesystem_edit: 'settings:aiProvider.runtimeDiagnosticValues.filesystemEdit',
+  filesystem_read: 'settings:aiProvider.runtimeDiagnosticValues.filesystemRead',
+  full_autonomous: 'settings:aiProvider.runtimeDiagnosticValues.fullAutonomous',
+  function_tools: 'settings:aiProvider.runtimeDiagnosticValues.functionTools',
+  generic_cli_pool: 'settings:aiProvider.runtimeDiagnosticValues.genericCliPool',
+  generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
+  goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
+  inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
+  local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
+  missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
+  native: 'settings:aiProvider.runtimeDiagnosticValues.native',
+  native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.nativeMcpRuntime',
+  native_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolLoop',
+  no: 'settings:aiProvider.runtimeDiagnosticValues.no',
+  none: 'settings:aiProvider.runtimeDiagnosticValues.none',
+  not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
+  not_requested: 'settings:aiProvider.runtimeDiagnosticValues.notRequested',
+  opencode: 'settings:aiProvider.runtimeDiagnosticValues.opencode',
+  orchestrated: 'settings:aiProvider.runtimeDiagnosticValues.orchestrated',
+  partial: 'settings:aiProvider.runtimeDiagnosticValues.partial',
+  patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
+  qwen_code: 'settings:aiProvider.runtimeDiagnosticValues.qwenCode',
+  read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
+  ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
+  ready_to_connect: 'settings:aiProvider.runtimeDiagnosticValues.readyToConnect',
+  register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
+  review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
+  sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
+  server_disabled: 'settings:aiProvider.runtimeDiagnosticValues.serverDisabled',
+  shell: 'settings:aiProvider.runtimeDiagnosticValues.shell',
+  streaming_text: 'settings:aiProvider.runtimeDiagnosticValues.streamingText',
+  structured_output: 'settings:aiProvider.runtimeDiagnosticValues.structuredOutput',
+  subagent: 'settings:aiProvider.runtimeDiagnosticValues.subagent',
+  subagents: 'settings:aiProvider.runtimeDiagnosticValues.subagents',
+  text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
+  text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
+  unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
+  unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
+  use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
+  wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution'
+};
+
 function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderConfig {
   if (config.provider === 'claude' || config.provider === 'codex') {
     return config;
@@ -331,6 +395,107 @@ function getCostInfo(config: AIProviderConfig, primaryModel: string) {
   };
 }
 
+function formatRuntimeDiagnosticValue(
+  translate: (key: string) => string,
+  value?: string | null
+): string {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return '';
+  }
+  const translationKey = RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS[trimmed];
+  if (translationKey) {
+    return translate(translationKey);
+  }
+  return trimmed.replaceAll('_', ' ');
+}
+
+function formatRuntimeDiagnosticList(
+  translate: (key: string) => string,
+  values?: string[] | null
+): string {
+  if (!values?.length) {
+    return '';
+  }
+  return values
+    .map((value) => formatRuntimeDiagnosticValue(translate, value))
+    .filter(Boolean)
+    .join(', ');
+}
+
+function hasRuntimeDiagnostics(
+  diagnostics?: ProviderRuntimeDiagnostics | null
+): diagnostics is ProviderRuntimeDiagnostics {
+  return Boolean(diagnostics);
+}
+
+function findMcpBridgePlanRow(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  provider: AIEngineProvider,
+  runtimeMode: AgentRuntimeMode
+): RuntimeMcpBridgePlanRow | null {
+  return diagnostics?.mcp_bridge_plan_matrix?.find(
+    (row) => row.provider === provider && row.runtime_mode === runtimeMode
+  ) ?? null;
+}
+
+function findFallbackMatrixRow(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  provider: AIEngineProvider,
+  runtimeMode: AgentRuntimeMode
+): RuntimeFallbackMatrixRow | null {
+  return diagnostics?.runtime_fallback_matrix?.find(
+    (row) => row.provider === provider && row.requested_mode === runtimeMode
+  ) ?? null;
+}
+
+function findSubagentMatrixRow(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  provider: AIEngineProvider,
+  runtimeMode: AgentRuntimeMode
+): RuntimeSubagentMatrixRow | null {
+  return diagnostics?.runtime_subagent_matrix?.find(
+    (row) => row.provider === provider && row.runtime_mode === runtimeMode
+  ) ?? null;
+}
+
+function findRelevantExternalMcpHealthRows(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  mcpPlan: RuntimeMcpBridgePlanRow | null
+): RuntimeExternalMcpHealthRow[] {
+  const externalServers = new Set([
+    ...(mcpPlan?.available_servers ?? []),
+    ...(mcpPlan?.external_bridge_required_servers ?? []),
+    ...(mcpPlan?.external_bridge_ready_servers ?? [])
+  ]);
+  return diagnostics?.external_mcp_server_health?.filter(
+    (row) =>
+      row.bridgeable && (externalServers.has(row.server) || row.execution_supported)
+  ) ?? [];
+}
+
+function formatExternalMcpHealthRows(
+  rows: RuntimeExternalMcpHealthRow[],
+  translate: (key: string) => string
+): string {
+  return rows
+    .map((row) => {
+      const label = row.display_name || row.server;
+      const status = formatRuntimeDiagnosticValue(translate, row.status);
+      return status ? `${label}: ${status}` : label;
+    })
+    .filter(Boolean)
+    .join(', ');
+}
+
+function formatExecutableExternalMcpTools(rows: RuntimeExternalMcpHealthRow[]): string {
+  return rows
+    .flatMap((row) =>
+      (row.executable_tools ?? []).map((tool) => `mcp__${row.server}__${tool}`)
+    )
+    .join(', ');
+}
+
 function getElectronAPI() {
   return (globalThis as unknown as Partial<Window>).electronAPI;
 }
@@ -386,6 +551,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [validationStatus, setValidationStatus] = useState<ProviderConfigValidation | null>(null);
   const [connectionTestStatus, setConnectionTestStatus] = useState<ProviderConnectionTestResult | null>(null);
+  const [runtimeControlPlaneDiagnostics, setRuntimeControlPlaneDiagnostics] =
+    useState<RuntimeControlPlaneDiagnostics | null>(null);
+  const [runtimeControlPlaneLoading, setRuntimeControlPlaneLoading] = useState(false);
+  const [runtimeControlPlaneError, setRuntimeControlPlaneError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -415,6 +584,34 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       cancelled = true;
     };
   }, []);
+
+  const loadRuntimeControlPlaneDiagnostics = useCallback(async () => {
+    setRuntimeControlPlaneLoading(true);
+    setRuntimeControlPlaneError(null);
+    try {
+      const result = await getElectronAPI()?.getProviderRuntimeDiagnostics?.();
+      if (result?.success && result.data) {
+        setRuntimeControlPlaneDiagnostics(result.data);
+      } else {
+        setRuntimeControlPlaneDiagnostics(null);
+        setRuntimeControlPlaneError(
+          result?.error ?? t('settings:aiProvider.controlPlane.unavailable')
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : t('settings:aiProvider.controlPlane.unavailable');
+      setRuntimeControlPlaneDiagnostics(null);
+      setRuntimeControlPlaneError(message);
+    } finally {
+      setRuntimeControlPlaneLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    loadRuntimeControlPlaneDiagnostics();
+  }, [loadRuntimeControlPlaneDiagnostics]);
 
   const selectedProvider = useMemo(
     () => PROVIDER_OPTIONS.find((provider) => provider.value === config.provider) ?? PROVIDER_OPTIONS[0],
@@ -635,6 +832,238 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     </div>
   );
 
+  const renderRuntimeControlPlane = () => {
+    const mcpPlan = findMcpBridgePlanRow(
+      runtimeControlPlaneDiagnostics,
+      config.provider,
+      activeRuntimeMode
+    );
+    const fallbackRow = findFallbackMatrixRow(
+      runtimeControlPlaneDiagnostics,
+      config.provider,
+      activeRuntimeMode
+    );
+    const subagentRow = findSubagentMatrixRow(
+      runtimeControlPlaneDiagnostics,
+      config.provider,
+      activeRuntimeMode
+    );
+    const externalMcpHealthRows = findRelevantExternalMcpHealthRows(
+      runtimeControlPlaneDiagnostics,
+      mcpPlan
+    );
+    const noneLabel = t('settings:aiProvider.controlPlane.none');
+    const formatControlPlaneValue = (value?: string | null) => {
+      const formatted = formatRuntimeDiagnosticValue(t, value);
+      return formatted && formatted !== 'none' ? formatted : noneLabel;
+    };
+    const formatControlPlaneList = (values?: string[] | null) =>
+      formatRuntimeDiagnosticList(t, values) || noneLabel;
+    const mcpStatus = mcpPlan ? formatControlPlaneValue(mcpPlan.status) : noneLabel;
+    const mcpAction = mcpPlan ? formatControlPlaneValue(mcpPlan.action_required) : noneLabel;
+    const externalMcpHealth = externalMcpHealthRows.length
+      ? formatExternalMcpHealthRows(externalMcpHealthRows, t)
+      : noneLabel;
+    const executableExternalMcpTools =
+      mcpPlan?.executable_external_tools?.join(', ') ||
+      formatExecutableExternalMcpTools(externalMcpHealthRows) ||
+      noneLabel;
+    const fallbackSelected = fallbackRow
+      ? formatControlPlaneValue(fallbackRow.fallback_selected_mode)
+      : noneLabel;
+    const runnerCandidates = formatControlPlaneList(
+      fallbackRow?.selected_mode_runner_candidates
+    );
+    const subagentStrategy = subagentRow
+      ? formatControlPlaneValue(subagentRow.strategy)
+      : noneLabel;
+    const subagentAvailability = subagentRow?.available
+      ? t('settings:aiProvider.controlPlane.available')
+      : t('settings:aiProvider.controlPlane.unavailableShort');
+    const subagentMaxAttempts = subagentRow
+      ? String(subagentRow.max_attempts)
+      : noneLabel;
+    const subagentMergePolicy = subagentRow
+      ? formatControlPlaneValue(subagentRow.merge_policy)
+      : noneLabel;
+
+    let controlPlaneContent: ReactNode;
+    if (runtimeControlPlaneLoading && !runtimeControlPlaneDiagnostics) {
+      controlPlaneContent = (
+        <p className="max-w-xl rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
+          {t('settings:aiProvider.controlPlane.loading')}
+        </p>
+      );
+    } else if (runtimeControlPlaneError) {
+      controlPlaneContent = (
+        <div className="flex max-w-xl items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            {t('settings:aiProvider.controlPlane.error', {
+              error: runtimeControlPlaneError
+            })}
+          </p>
+        </div>
+      );
+    } else if (runtimeControlPlaneDiagnostics) {
+      controlPlaneContent = (
+        <div className="grid gap-3 xl:grid-cols-3">
+          <div className="rounded-md border border-border bg-background p-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              {t('settings:aiProvider.controlPlane.mcpBridgeTitle')}
+            </h4>
+            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.mcpStatus')}</dt>
+                <dd className="font-medium text-foreground">{mcpStatus}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.mcpAction')}</dt>
+                <dd className="font-medium text-foreground">{mcpAction}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.bridgedServers')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(mcpPlan?.bridged_servers)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.externalBridgedServers')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(mcpPlan?.external_bridged_servers)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.externalRequiredServers')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(mcpPlan?.external_bridge_required_servers)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.nativeRequiredServers')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(mcpPlan?.native_required_servers)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.externalHealth')}</dt>
+                <dd className="font-medium text-foreground">{externalMcpHealth}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt>{t('settings:aiProvider.controlPlane.executableTools')}</dt>
+                <dd className="break-words font-medium text-foreground">
+                  {executableExternalMcpTools}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="rounded-md border border-border bg-background p-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              {t('settings:aiProvider.controlPlane.fallbackTitle')}
+            </h4>
+            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.selectedRuntime')}</dt>
+                <dd className="font-medium text-foreground">{fallbackSelected}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.runnerCandidates')}</dt>
+                <dd className="font-medium text-foreground">{runnerCandidates}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.missingCapabilities')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(fallbackRow?.missing_capabilities)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.compatibleFallbacks')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(fallbackRow?.compatible_fallbacks)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="rounded-md border border-border bg-background p-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              {t('settings:aiProvider.controlPlane.subagentsTitle')}
+            </h4>
+            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.subagentStrategy')}</dt>
+                <dd className="font-medium text-foreground">{subagentStrategy}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.subagentAvailability')}</dt>
+                <dd className="font-medium text-foreground">{subagentAvailability}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.mergePolicy')}</dt>
+                <dd className="font-medium text-foreground">{subagentMergePolicy}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.maxAttempts')}</dt>
+                <dd className="font-medium text-foreground">{subagentMaxAttempts}</dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.missingCapabilities')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(subagentRow?.missing_capabilities)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.requiredCapabilities')}</dt>
+                <dd className="font-medium text-foreground">
+                  {formatControlPlaneList(subagentRow?.required_capabilities)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      );
+    } else {
+      controlPlaneContent = (
+        <p className="max-w-xl rounded-md border border-border bg-background p-3 text-xs text-muted-foreground">
+          {t('settings:aiProvider.controlPlane.unavailable')}
+        </p>
+      );
+    }
+
+    return (
+      <div className="space-y-3 border-t border-border pt-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-2">
+            <Activity className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <h3 className="text-sm font-medium text-foreground">
+                {t('settings:aiProvider.controlPlane.title')}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {t('settings:aiProvider.controlPlane.description')}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            className="h-8 gap-2 self-start text-xs"
+            onClick={loadRuntimeControlPlaneDiagnostics}
+            disabled={runtimeControlPlaneLoading}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${
+              runtimeControlPlaneLoading ? 'animate-spin' : ''
+            }`}
+            />
+            {t('settings:aiProvider.controlPlane.refresh')}
+          </Button>
+        </div>
+
+        {controlPlaneContent}
+      </div>
+    );
+  };
+
   const renderCostPanel = () => (
     <div className="space-y-3 border-t border-border pt-4">
       <div className="flex items-start gap-2">
@@ -730,6 +1159,20 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
 
     const isSuccess = connectionTestStatus.success;
     const Icon = isSuccess ? CheckCircle2 : AlertTriangle;
+    const runtimeDiagnostics = hasRuntimeDiagnostics(connectionTestStatus.runtimeDiagnostics)
+      ? connectionTestStatus.runtimeDiagnostics
+      : null;
+    const smokeScope = runtimeDiagnostics?.smokeScope === 'text_completion_only'
+      ? t('settings:aiProvider.connectionTest.textCompletionOnly')
+      : formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.smokeScope);
+    const requestedRuntime = formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.requestedRuntimeMode);
+    const validatedRuntime = formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.validatedRuntimeMode);
+    const validatedScope = formatRuntimeDiagnosticList(t, runtimeDiagnostics?.validatedRequirements);
+    const requestedCapabilities = formatRuntimeDiagnosticList(t, runtimeDiagnostics?.requestedRuntimeCapabilities);
+    const missingFullAutonomous = formatRuntimeDiagnosticList(
+      t,
+      runtimeDiagnostics?.fullAutonomousMissingCapabilities
+    );
     return (
       <div className={`max-w-xl rounded-md border p-3 text-sm ${
         isSuccess
@@ -764,6 +1207,57 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
             <dd className="font-medium text-foreground">{connectionTestStatus.runtimeMode}</dd>
           </div>
         </dl>
+        {runtimeDiagnostics && (
+          <div className="mt-3 border-t border-border/70 pt-3 text-xs text-muted-foreground">
+            <div className="flex items-start gap-2">
+              <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">
+                  {t('settings:aiProvider.connectionTest.runtimeDiagnostics')}
+                </p>
+                <p>{t('settings:aiProvider.connectionTest.diagnosticsNote')}</p>
+              </div>
+            </div>
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+              {smokeScope && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.smokeScope')}</dt>
+                  <dd className="font-medium text-foreground">{smokeScope}</dd>
+                </div>
+              )}
+              {requestedRuntime && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.requestedRuntime')}</dt>
+                  <dd className="font-medium text-foreground">{requestedRuntime}</dd>
+                </div>
+              )}
+              {validatedRuntime && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.validatedRuntime')}</dt>
+                  <dd className="font-medium text-foreground">{validatedRuntime}</dd>
+                </div>
+              )}
+              {validatedScope && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.validatedScope')}</dt>
+                  <dd className="font-medium text-foreground">{validatedScope}</dd>
+                </div>
+              )}
+              {requestedCapabilities && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.requestedCapabilities')}</dt>
+                  <dd className="font-medium text-foreground">{requestedCapabilities}</dd>
+                </div>
+              )}
+              <div>
+                <dt>{t('settings:aiProvider.connectionTest.missingFullAutonomous')}</dt>
+                <dd className="font-medium text-foreground">
+                  {missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        )}
         {connectionTestStatus.responseExcerpt && (
           <p className="mt-3 rounded-md bg-background/80 p-2 text-xs text-foreground">
             {connectionTestStatus.responseExcerpt}
@@ -1013,6 +1507,8 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
         </div>
 
         {renderCapabilityMatrix()}
+
+        {renderRuntimeControlPlane()}
 
         <div className="space-y-4 border-t border-border pt-4">
           <div>

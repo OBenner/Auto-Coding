@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from agents.runtime import (
+    EXTERNAL_MCP_CLIENT_ENV,
     LocalActionExecutor,
     RuntimeCapabilities,
     RuntimeCapabilityError,
@@ -18,11 +19,14 @@ from agents.runtime import (
     RuntimeSubagentResult,
     RuntimeSubagentTask,
     create_runtime_session,
+    describe_external_mcp_server_health,
     describe_mcp_server_statuses,
+    executable_external_mcp_tools,
     get_runtime_mode,
     local_action_response_schema,
     local_action_tool_schemas,
     local_action_tool_specs,
+    mcp_bridge_audit_path,
     normalize_runtime_mode,
     render_local_action_prompt,
     requirements_for_runtime_mode,
@@ -48,7 +52,11 @@ from agents.runtime.adapters.codex_cli import (
     summarize_codex_account,
     summarize_codex_events,
 )
-from agents.runtime.adapters.generic_edit import summarize_generic_edit_transactions
+from agents.runtime.adapters.generic_edit import (
+    GenericEditRuntimeError,
+    bounded_subagent_attempts,
+    summarize_generic_edit_transactions,
+)
 from agents.runtime.adapters.patch_proposal import (
     PatchProposalError,
     parse_patch_proposal,
@@ -844,6 +852,58 @@ class SlowSubagentRuntimeSession(FakeSubagentRuntimeSession):
         )
 
 
+class CancellableSubagentRuntimeSession(FakeSubagentRuntimeSession):
+    def __init__(self, response: str):
+        super().__init__(response)
+        self.started = asyncio.Event()
+
+    async def run(
+        self,
+        *,
+        message: str,
+        spec_dir: Path,
+        verbose: bool,
+        phase,
+        subtask_id: str | None = None,
+    ):
+        del spec_dir, verbose, phase, subtask_id
+        self.prompts.append(message)
+        self.started.set()
+        await asyncio.sleep(10)
+        return SimpleNamespace(
+            status="complete",
+            response_text="too late",
+            usage_metadata=None,
+            artifacts=None,
+        )
+
+
+class FailingSubagentRuntimeSession(FakeSubagentRuntimeSession):
+    async def run(
+        self,
+        *,
+        message: str,
+        spec_dir: Path,
+        verbose: bool,
+        phase,
+        subtask_id: str | None = None,
+    ):
+        del spec_dir, verbose, phase, subtask_id
+        self.prompts.append(message)
+        raise RuntimeError("child session failed")
+
+
+def assert_artifact_path_inside(
+    artifact_path_value: str,
+    artifact_dir: Path,
+) -> Path:
+    artifact_dir_resolved = artifact_dir.resolve()
+    artifact_path = Path(artifact_path_value).resolve()
+    assert artifact_path.is_relative_to(artifact_dir_resolved)
+    assert artifact_path.exists()
+    return artifact_path
+
+
 @pytest.mark.asyncio
 async def test_completion_runtime_supports_text_only(tmp_path: Path):
     runtime_session = create_runtime_session(
@@ -926,10 +986,21 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "done explore-ui",
     ]
     assert run.artifact_path
-    artifact = json.loads(Path(run.artifact_path).read_text(encoding="utf-8"))
+    artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
+    assert run.artifact_path == str(artifact_path)
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["status"] == "complete"
     assert artifact["support"]["strategy"] == "orchestrated"
     assert artifact["support"]["available"] is True
+    assert artifact["merge_plan"] == {
+        "strategy": "read_only",
+        "requires_parent_merge": False,
+        "read_only_result_ids": ["explore-api", "explore-ui"],
+        "mutating_result_ids": [],
+        "write_scopes": {},
+        "conflict_result_ids": [],
+        "has_conflicts": False,
+    }
     assert artifact["summary"] == {
         "result_count": 2,
         "status_counts": {"complete": 2},
@@ -938,14 +1009,36 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "error_result_ids": [],
         "cancelled_result_ids": [],
         "artifact_result_ids": [],
+        "retried_result_ids": [],
+        "max_attempts_exhausted_result_ids": [],
         "has_errors": False,
         "has_cancelled": False,
+        "has_retries": False,
+        "has_exhausted_retries": False,
     }
     assert artifact["results"][0]["usage_metadata"] == {
         "input_tokens": 1,
         "output_tokens": 2,
     }
+    artifact_dir = tmp_path / "artifacts"
+    child_artifact_path = assert_artifact_path_inside(
+        artifact["results"][0]["artifact_path"],
+        artifact_dir,
+    )
+    assert (
+        child_artifact_path
+        == (artifact_dir / "runtime_subagents__explore-api.json").resolve()
+    )
+    child_artifact = json.loads(child_artifact_path.read_text(encoding="utf-8"))
+    assert child_artifact["parent_artifact"] == "runtime_subagents.json"
+    assert child_artifact["merge_contract"] == {
+        "merge_policy": "read_only",
+        "write_scope": [],
+        "requires_parent_merge": False,
+    }
     assert "Auto Code subagent `explore-api`" in created_sessions[0].prompts[0]
+    assert "Isolation contract:" in created_sessions[0].prompts[0]
+    assert "Merge policy: read_only" in created_sessions[0].prompts[0]
     assert '"paths": [' in created_sessions[0].prompts[0]
 
 
@@ -979,8 +1072,177 @@ async def test_runtime_subagent_orchestrator_times_out_child_sessions(
     assert run.results[0].status == "error"
     assert "timed out" in str(run.results[0].error)
     assert created_sessions[0].cancelled is True
-    artifact = json.loads(Path(run.artifact_path or "").read_text(encoding="utf-8"))
+    artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
+    assert run.artifact_path == str(artifact_path)
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["summary"]["error_result_ids"] == ["slow-review"]
+    assert artifact["summary"]["max_attempts_exhausted_result_ids"] == ["slow-review"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_subagent_orchestrator_cancels_child_session_on_error(
+    tmp_path: Path,
+):
+    created_sessions: list[FailingSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = FailingSubagentRuntimeSession(f"failed {task.id}")
+        created_sessions.append(session)
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_concurrency=1,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="error-review",
+                role="reviewer",
+                prompt="Raise during child run",
+            ),
+        ]
+    )
+
+    assert run.status == "error"
+    assert run.results[0].status == "error"
+    assert run.results[0].attempt_count == 1
+    assert str(run.results[0].error) == "child session failed"
+    assert created_sessions[0].cancelled is True
+
+
+@pytest.mark.asyncio
+async def test_runtime_subagent_orchestrator_cancels_child_sessions_with_artifact(
+    tmp_path: Path,
+):
+    created_sessions: list[CancellableSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        session = CancellableSubagentRuntimeSession(f"done {task.id}")
+        created_sessions.append(session)
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+        max_concurrency=1,
+    )
+    run_task = asyncio.create_task(
+        orchestrator.run(
+            [
+                RuntimeSubagentTask(
+                    id="cancel-running",
+                    role="reviewer",
+                    prompt="Start and wait",
+                ),
+                RuntimeSubagentTask(
+                    id="cancel-queued",
+                    role="reviewer",
+                    prompt="Should be cancelled before session creation",
+                ),
+            ]
+        )
+    )
+
+    for _ in range(100):
+        if created_sessions:
+            break
+        await asyncio.sleep(0)
+    assert created_sessions
+    await asyncio.wait_for(created_sessions[0].started.wait(), timeout=1)
+
+    await orchestrator.cancel()
+    run = await run_task
+
+    assert run.status == "cancelled"
+    assert run.cancelled is True
+    assert run.cancelled_at is not None
+    assert created_sessions[0].cancelled is True
+    assert [result.status for result in run.results] == ["cancelled", "cancelled"]
+    assert run.results[0].attempt_count == 1
+    assert run.results[0].attempts == []
+    assert run.results[1].attempts == []
+
+    artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact["status"] == "cancelled"
+    assert artifact["cancelled"] is True
+    assert artifact["cancelled_at"] == run.cancelled_at
+    assert artifact["summary"]["cancelled_result_ids"] == [
+        "cancel-running",
+        "cancel-queued",
+    ]
+    assert artifact["results"][0]["attempts"] == []
+    assert_artifact_path_inside(
+        artifact["results"][0]["artifact_path"],
+        tmp_path / "artifacts",
+    )
+
+
+@pytest.mark.asyncio
+async def test_runtime_subagent_orchestrator_retries_isolated_child_attempts(
+    tmp_path: Path,
+):
+    created_sessions: list[FakeSubagentRuntimeSession] = []
+
+    def session_factory(task: RuntimeSubagentTask):
+        status = "error" if len(created_sessions) == 0 else "complete"
+        response = f"{status} {task.id}"
+        session = FakeSubagentRuntimeSession(response, status=status)
+        created_sessions.append(session)
+        return session
+
+    orchestrator = RuntimeSubagentOrchestrator(
+        session_factory=session_factory,
+        spec_dir=tmp_path,
+    )
+    run = await orchestrator.run(
+        [
+            RuntimeSubagentTask(
+                id="inspect-retry",
+                role="explorer",
+                prompt="Inspect flaky source",
+                context={"focus": "runtime retries"},
+                max_attempts=2,
+            ),
+        ]
+    )
+
+    assert run.status == "complete"
+    assert len(created_sessions) == 2
+    assert run.results[0].response_text == "complete inspect-retry"
+    assert run.results[0].attempt_count == 2
+    assert [attempt.status for attempt in run.results[0].attempts] == [
+        "error",
+        "complete",
+    ]
+    assert "Attempt: 1 of 2" in created_sessions[0].prompts[0]
+    assert "Attempt: 2 of 2" in created_sessions[1].prompts[0]
+    assert '"focus": "runtime retries"' in created_sessions[1].prompts[0]
+
+    artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
+    assert run.artifact_path == str(artifact_path)
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    result_payload = artifact["results"][0]
+    assert result_payload["context"] == {"focus": "runtime retries"}
+    assert result_payload["attempt_count"] == 2
+    assert result_payload["max_attempts"] == 2
+    assert [attempt["status"] for attempt in result_payload["attempts"]] == [
+        "error",
+        "complete",
+    ]
+    assert artifact["summary"]["retried_result_ids"] == ["inspect-retry"]
+    assert artifact["summary"]["max_attempts_exhausted_result_ids"] == []
+    artifact_dir = tmp_path / "artifacts"
+    child_artifact_path = assert_artifact_path_inside(
+        result_payload["artifact_path"],
+        artifact_dir,
+    )
+    assert (
+        child_artifact_path
+        == (artifact_dir / "runtime_subagents__inspect-retry.json").resolve()
+    )
 
 
 def test_runtime_subagent_result_summary_counts_mixed_statuses():
@@ -1005,6 +1267,8 @@ def test_runtime_subagent_result_summary_counts_mixed_statuses():
                 status="error",
                 response_text="",
                 error="pytest failed",
+                max_attempts=2,
+                attempt_count=2,
             ),
             RuntimeSubagentResult(
                 id="docs",
@@ -1028,8 +1292,12 @@ def test_runtime_subagent_result_summary_counts_mixed_statuses():
         "error_result_ids": ["test"],
         "cancelled_result_ids": ["docs"],
         "artifact_result_ids": ["code"],
+        "retried_result_ids": ["test"],
+        "max_attempts_exhausted_result_ids": ["test"],
         "has_errors": True,
         "has_cancelled": True,
+        "has_retries": True,
+        "has_exhausted_retries": True,
     }
 
 
@@ -1244,6 +1512,15 @@ class FakeNativeToolFailureSession(FakeGenericEditSession):
 
     def add_tool_result(self, tool_call_id: str, name: str, result: dict):
         raise AssertionError("tool results should not be added after fallback")
+
+
+class FakeNativeToolFatalFailureSession(FakeGenericEditSession):
+    async def complete_with_tool_calls(self, message: str | None, tools: list[dict]):
+        await asyncio.sleep(0)
+        raise RuntimeError("401 Unauthorized: invalid API key")
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: dict):
+        raise AssertionError("tool results should not be added after failure")
 
 
 def _init_git_repo(path: Path) -> None:
@@ -1566,6 +1843,11 @@ def test_local_action_manifest_describes_generic_edit_contract():
         run_subagents_schema["parameters"]["properties"]["tasks"]["maxItems"]
         == MAX_SUBAGENT_TASKS
     )
+    task_properties = run_subagents_schema["parameters"]["properties"]["tasks"][
+        "items"
+    ]["properties"]
+    assert task_properties["merge_policy"]["enum"] == ["read_only"]
+    assert task_properties["max_attempts"]["maximum"] >= 2
 
 
 @pytest.mark.asyncio
@@ -2177,6 +2459,8 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
                                 "role": "explorer",
                                 "prompt": "Inspect API files",
                                 "metadata": {"paths": ["apps/backend"]},
+                                "context": {"focus": "backend"},
+                                "max_attempts": 2,
                             },
                             {
                                 "id": "inspect-ui",
@@ -2219,6 +2503,7 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
     assert result.status == "continue"
     assert len(created_sessions) == 2
     assert "Auto Code subagent `inspect-api`" in created_sessions[0].prompts[0]
+    assert '"focus": "backend"' in created_sessions[0].prompts[0]
     assert "findings from inspect-api" in session.messages[1]
     artifact_path = tmp_path / "artifacts" / "generic_edit_subagents_1_1_1.json"
     assert artifact_path.exists()
@@ -2226,6 +2511,26 @@ async def test_generic_edit_runtime_runs_orchestrated_subagents(tmp_path: Path):
     assert subagent_artifact["status"] == "complete"
     assert subagent_artifact["support"]["strategy"] == "orchestrated"
     assert subagent_artifact["summary"]["result_count"] == 2
+    assert subagent_artifact["merge_plan"]["strategy"] == "read_only"
+    assert subagent_artifact["results"][0]["context"] == {"focus": "backend"}
+    assert_artifact_path_inside(
+        subagent_artifact["results"][0]["artifact_path"],
+        tmp_path / "artifacts",
+    )
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    subagent_observation = observation_lines[0]["result"]["data"]
+    assert subagent_observation["results"][0]["attempt_count"] == 1
+    assert subagent_observation["results"][0]["max_attempts"] == 2
+    assert subagent_observation["results"][0]["merge_policy"] == "read_only"
+    assert_artifact_path_inside(
+        subagent_observation["results"][0]["artifact_path"],
+        tmp_path / "artifacts",
+    )
 
     trace = json.loads(
         (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
@@ -2247,6 +2552,7 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
         return {"content": [{"type": "text", "text": "Build Progress: 0/1 subtasks"}]}
 
     monkeypatch.setattr("agents.runtime.mcp_bridge.is_tools_available", lambda: True)
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     monkeypatch.setattr(
         "agents.runtime.mcp_bridge.create_all_tools",
         lambda spec_dir, project_dir: [
@@ -2306,6 +2612,20 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
         "mcp__auto-claude__get_build_progress"
     )
     assert observation_lines[0]["result"]["data"]["server"] == "auto-claude"
+    assert observation_lines[0]["result"]["data"]["permission"] == "read_build_state"
+    assert observation_lines[0]["result"]["data"]["mutating"] is False
+    assert observation_lines[0]["result"]["data"]["audit_required"] is True
+    audit_path = Path(observation_lines[0]["result"]["data"]["audit_artifact"])
+    assert audit_path == mcp_bridge_audit_path(tmp_path)
+    assert audit_path.exists()
+    audit_lines = [
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert audit_lines[0]["status"] == "ok"
+    assert audit_lines[0]["server"] == "auto-claude"
+    assert audit_lines[0]["exposed_name"] == "mcp__auto-claude__get_build_progress"
+    assert audit_lines[0]["permission"] == "read_build_state"
+    assert audit_lines[0]["mutating"] is False
     result_artifact = json.loads(
         (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
             encoding="utf-8"
@@ -2317,13 +2637,38 @@ async def test_generic_edit_runtime_bridges_auto_claude_mcp_tools(
     assert result_artifact["mcp_support"]["bridge"]["tools"] == [
         "mcp__auto-claude__get_build_progress"
     ]
+    assert result_artifact["mcp_support"]["bridge"]["tool_policies"] == [
+        {
+            "server": "auto-claude",
+            "name": "get_build_progress",
+            "exposed_name": "mcp__auto-claude__get_build_progress",
+            "permission": "read_build_state",
+            "audit_level": "read",
+            "mutating": False,
+            "audit_required": True,
+        }
+    ]
     bridge_statuses = {
         status["server"]: status
         for status in result_artifact["mcp_support"]["bridge"]["server_statuses"]
     }
     assert bridge_statuses["auto-claude"]["runtime_path"] == "local_bridge"
-    assert bridge_statuses["context7"]["runtime_path"] == "native_required"
-    assert bridge_statuses["graphiti"]["runtime_path"] == "native_required"
+    assert bridge_statuses["context7"]["runtime_path"] == "external_bridge_required"
+    assert bridge_statuses["graphiti"]["runtime_path"] == "external_bridge_required"
+    assert bridge_statuses["context7"]["external_client"]["status"] == (
+        "client_disabled"
+    )
+    assert bridge_statuses["graphiti"]["external_client"]["status"] == (
+        "missing_configuration"
+    )
+    bridge_plan = result_artifact["mcp_support"]["bridge_plan"]
+    assert bridge_plan["status"] == "partial"
+    assert bridge_plan["bridged_servers"] == ["auto-claude"]
+    assert bridge_plan["external_bridge_required_servers"] == [
+        "context7",
+        "graphiti",
+    ]
+    assert bridge_plan["action_required"] == "configure_external_mcp_client"
 
 
 def test_runtime_mcp_bridge_filters_agent_allowed_tools(
@@ -2368,6 +2713,15 @@ def test_runtime_mcp_bridge_filters_agent_allowed_tools(
     assert "mcp__auto-claude__update_subtask_status" in schema_names
     assert "mcp__auto-claude__update_qa_status" in schema_names
     assert "mcp__auto-claude__search_team_docs" not in schema_names
+    policy_by_tool = {
+        policy["name"]: policy for policy in bridge.report()["tool_policies"]
+    }
+    assert policy_by_tool["update_subtask_status"]["permission"] == (
+        "write_build_state"
+    )
+    assert policy_by_tool["update_subtask_status"]["audit_level"] == "write"
+    assert policy_by_tool["update_subtask_status"]["mutating"] is True
+    assert policy_by_tool["update_qa_status"]["permission"] == "write_qa_state"
     support = bridge.support_for(
         provider_name="openai",
         runtime_name="generic_edit",
@@ -2378,9 +2732,13 @@ def test_runtime_mcp_bridge_filters_agent_allowed_tools(
     assert support.tool_count == 2
 
 
-def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
+def test_runtime_mcp_bridge_reports_external_server_gaps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     from agents.runtime.adapters.generic_edit import render_mcp_bridge_prompt
 
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     session = SimpleNamespace(agent_type="spec_researcher")
 
     bridge = RuntimeMcpBridge.from_agent_session(
@@ -2407,14 +2765,133 @@ def test_runtime_mcp_bridge_reports_external_server_gaps(tmp_path: Path):
     assert support_payload["available_servers"] == []
     assert support_payload["unavailable_servers"] == ["context7"]
     assert support_payload["server_statuses"][0]["server"] == "context7"
-    assert support_payload["server_statuses"][0]["runtime_path"] == "native_required"
+    assert support_payload["server_statuses"][0]["runtime_path"] == (
+        "external_bridge_required"
+    )
     assert support_payload["server_statuses"][0]["bridgeable"] is False
+    assert support_payload["server_statuses"][0]["external_client"]["status"] == (
+        "client_disabled"
+    )
+    assert support_payload["bridge_plan"]["status"] == "blocked"
+    assert support_payload["bridge_plan"]["external_bridge_required_servers"] == [
+        "context7"
+    ]
+    assert support_payload["bridge_plan"]["action_required"] == (
+        "configure_external_mcp_client"
+    )
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict,
+        project_dir: Path,
+    ):
+        assert health.server == "context7"
+        assert tool_name == "resolve-library-id"
+        assert arguments == {"libraryName": "pytest"}
+        assert project_dir == tmp_path
+        return {"content": [{"type": "text", "text": "/pytest-dev/pytest"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "resolve docs",
+                "actions": [
+                    {
+                        "tool": "mcp__context7__resolve-library-id",
+                        "libraryName": "pytest",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Resolved Context7 docs",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        agent_type="spec_researcher",
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "resolve docs",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    assert "Resolved Context7 docs" in result.response_text
+    assert "mcp__context7__resolve-library-id" in session.messages[0]
+    assert "/pytest-dev/pytest" in session.messages[1]
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    result_payload = observation_lines[0]["result"]
+    assert result_payload["ok"] is True
+    assert result_payload["tool"] == "mcp__context7__resolve-library-id"
+    assert result_payload["data"]["server"] == "context7"
+    assert result_payload["data"]["permission"] == "read_external_docs"
+    audit_path = Path(result_payload["data"]["audit_artifact"])
+    assert audit_path == mcp_bridge_audit_path(tmp_path)
+    audit_lines = [
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert audit_lines[0]["status"] == "ok"
+    assert audit_lines[0]["server"] == "context7"
+    assert audit_lines[0]["tool"] == "resolve-library-id"
+    artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact["mcp_support"]["strategy"] == "local_bridge"
+    assert artifact["mcp_support"]["available_servers"] == ["context7"]
+    assert artifact["mcp_support"]["unavailable_servers"] == []
+    assert artifact["mcp_support"]["bridge_plan"]["status"] == "ready"
+    assert artifact["mcp_support"]["bridge_plan"]["action_required"] == "none"
+    assert artifact["mcp_support"]["bridge_plan"]["external_bridged_servers"] == [
+        "context7"
+    ]
+    assert artifact["mcp_support"]["bridge_plan"]["bridged_servers"] == ["context7"]
+    assert artifact["mcp_support"]["bridge"]["tools"] == [
+        "mcp__context7__resolve-library-id",
+        "mcp__context7__get-library-docs",
+    ]
 
 
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     session = FakeGenericEditSession(
         [
             {
@@ -2456,7 +2933,7 @@ async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
 
     assert result.status == "continue"
     assert "Recorded MCP gap" in result.response_text
-    assert "native MCP runtime support" in session.messages[1]
+    assert EXTERNAL_MCP_CLIENT_ENV in session.messages[1]
     observation_lines = [
         json.loads(line)
         for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
@@ -2467,9 +2944,15 @@ async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
     assert result_payload["ok"] is False
     assert result_payload["tool"] == "mcp__context7__resolve-library-id"
     assert result_payload["data"]["server"] == "context7"
-    assert result_payload["data"]["runtime_path"] == "native_required"
+    assert result_payload["data"]["runtime_path"] == "external_bridge_required"
     assert result_payload["data"]["support_strategy"] == "unavailable"
     assert result_payload["data"]["server_status"]["bridgeable"] is False
+    assert result_payload["data"]["server_status"]["external_client"]["status"] == (
+        "client_disabled"
+    )
+    assert result_payload["data"]["bridge_plan"]["recommended_runtime_path"] == (
+        "external_mcp_client"
+    )
     artifact = json.loads(
         (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
             encoding="utf-8"
@@ -2478,7 +2961,10 @@ async def test_generic_edit_runtime_explains_unavailable_external_mcp_tool(
     assert artifact["mcp_support"]["unavailable_servers"] == ["context7"]
 
 
-def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
+def test_runtime_mcp_support_distinguishes_native_and_local_bridge(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     native = resolve_runtime_mcp_support(
         provider_name="claude",
         runtime_name="claude_agent_sdk",
@@ -2492,6 +2978,9 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
         "native",
         "native",
     ]
+    native_plan = native.to_dict()["bridge_plan"]
+    assert native_plan["status"] == "ready"
+    assert native_plan["action_required"] == "none"
 
     unavailable = resolve_runtime_mcp_support(
         provider_name="openai",
@@ -2502,7 +2991,13 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     assert unavailable.available is False
     assert unavailable.strategy == "unavailable"
     assert unavailable.unavailable_servers == ("context7",)
-    assert unavailable.server_statuses[0]["runtime_path"] == "native_required"
+    assert unavailable.server_statuses[0]["runtime_path"] == "external_bridge_required"
+    assert unavailable.server_statuses[0]["external_client"]["status"] == (
+        "client_disabled"
+    )
+    unavailable_plan = unavailable.to_dict()["bridge_plan"]
+    assert unavailable_plan["status"] == "blocked"
+    assert unavailable_plan["recommended_runtime_path"] == "external_mcp_client"
 
     local_bridge = resolve_runtime_mcp_support(
         provider_name="openai",
@@ -2519,10 +3014,15 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     assert local_bridge.available_servers == ("auto-claude",)
     assert local_bridge.unavailable_servers == ("context7",)
     assert [status["runtime_path"] for status in local_bridge.server_statuses] == [
-        "native_required",
+        "external_bridge_required",
         "local_bridge",
     ]
     assert "external MCP servers" in local_bridge.reason
+    local_bridge_plan = local_bridge.to_dict()["bridge_plan"]
+    assert local_bridge_plan["status"] == "partial"
+    assert local_bridge_plan["bridged_servers"] == ["auto-claude"]
+    assert local_bridge_plan["external_bridge_required_servers"] == ["context7"]
+    assert local_bridge_plan["recommended_runtime_path"] == "external_mcp_client"
 
     unsupported_bridge_runtime = resolve_runtime_mcp_support(
         provider_name="custom",
@@ -2533,9 +3033,15 @@ def test_runtime_mcp_support_distinguishes_native_and_local_bridge():
     )
     assert unsupported_bridge_runtime.available is False
     assert "cannot expose" in unsupported_bridge_runtime.reason
+    assert unsupported_bridge_runtime.to_dict()["bridge_plan"]["status"] == (
+        "not_requested"
+    )
 
 
-def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
+def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
     statuses = describe_mcp_server_statuses(
         requested_servers=("auto-claude", "context7", "browser", "custom-mcp"),
         available_servers=("auto-claude",),
@@ -2545,10 +3051,51 @@ def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps():
     status_by_server = {status["server"]: status for status in statuses}
     assert status_by_server["auto-claude"]["runtime_path"] == "local_bridge"
     assert status_by_server["auto-claude"]["bridgeable"] is True
-    assert status_by_server["context7"]["runtime_path"] == "native_required"
-    assert status_by_server["browser"]["runtime_path"] == "native_required"
+    assert status_by_server["context7"]["runtime_path"] == ("external_bridge_required")
+    assert status_by_server["context7"]["external_client"]["status"] == (
+        "client_disabled"
+    )
+    assert status_by_server["browser"]["runtime_path"] == "external_bridge_required"
+    assert status_by_server["browser"]["external_client"]["status"] == (
+        "choose_concrete_server"
+    )
     assert status_by_server["browser"]["display_name"] == "Browser automation"
     assert status_by_server["custom-mcp"]["runtime_path"] == "unsupported"
+
+
+def test_external_mcp_health_reports_ready_context7_when_client_enabled():
+    health = describe_external_mcp_server_health(
+        "context7",
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    )
+
+    assert health.bridgeable is True
+    assert health.client_enabled is True
+    assert health.configured is True
+    assert health.status == "ready_to_connect"
+    assert health.command == "npx"
+    assert health.args == ("-y", "@upstash/context7-mcp")
+    assert health.execution_supported is True
+    assert health.executable_tools == ("resolve-library-id", "get-library-docs")
+    assert executable_external_mcp_tools(
+        requested_servers=("context7",),
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    ) == (
+        "mcp__context7__resolve-library-id",
+        "mcp__context7__get-library-docs",
+    )
+
+    support = resolve_runtime_mcp_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        requested_servers=("context7",),
+        external_client_enabled=True,
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    )
+    plan = support.to_dict()["bridge_plan"]
+    assert plan["external_bridge_ready_servers"] == ["context7"]
+    assert plan["action_required"] == "wire_external_mcp_tool_execution"
 
 
 @pytest.mark.asyncio
@@ -3105,7 +3652,84 @@ async def test_generic_edit_runtime_falls_back_when_native_tools_rejected(
     trace = json.loads(
         (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
     )
-    assert "loop" not in trace["trace"][0]
+    assert trace["trace"][0]["loop"] == "native_tool_calls"
+    assert trace["trace"][0]["native_tool_fallback"] == {
+        "provider": "openai",
+        "from_loop": "native_tool_calls",
+        "to_loop": "json_actions",
+        "reason": "native_tool_request_failed",
+        "message": "provider rejected tool calls",
+        "tool_schema_count": len(local_action_tool_schemas()),
+    }
+    assert trace["trace"][1]["loop"] == "json_actions"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["native_tool_fallback_count"] == 1
+    assert result_artifact["native_tool_fallbacks"][0]["reason"] == (
+        "native_tool_request_failed"
+    )
+    summary_markdown = (tmp_path / "artifacts" / "generic_edit_summary.md").read_text(
+        encoding="utf-8"
+    )
+    assert "## Native Tool Fallback" in summary_markdown
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_does_not_fallback_on_native_auth_failure(
+    tmp_path: Path,
+):
+    target = tmp_path / "auth-failure.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeNativeToolFatalFailureSession(
+        [
+            {
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "auth-failure.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Should not run JSON fallback",
+                        "tests": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "change auth-failure.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "error"
+    assert "401 Unauthorized" in result.response_text
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert session.messages == []
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    assert len(trace["trace"]) == 1
+    assert trace["trace"][0]["loop"] == "native_tool_calls"
+    assert "native_tool_fallback" not in trace["trace"][0]
+
+
+def test_bounded_subagent_attempts_rejects_bool():
+    with pytest.raises(GenericEditRuntimeError, match="must be an integer"):
+        bounded_subagent_attempts(True, field_name="tasks[1].max_attempts")
 
 
 @pytest.mark.asyncio

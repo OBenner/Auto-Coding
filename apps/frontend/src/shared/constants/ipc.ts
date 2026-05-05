@@ -203,6 +203,7 @@ export const IPC_CHANNELS = {
   PROVIDER_CONFIG_UPDATE: 'provider:config:update',
   PROVIDER_CONFIG_VALIDATE: 'provider:config:validate',
   PROVIDER_CONFIG_TEST: 'provider:config:test',
+  PROVIDER_RUNTIME_DIAGNOSTICS: 'provider:runtime:diagnostics',
 
   // API Profile management (custom Anthropic-compatible endpoints)
   PROFILES_GET: 'profiles:get',

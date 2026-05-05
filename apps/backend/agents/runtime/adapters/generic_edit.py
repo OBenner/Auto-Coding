@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.providers.exceptions import ProviderConfigError, ProviderNotInstalled
+
 from ..capabilities import RuntimeCapabilities, RuntimeRequirements
 from ..local_actions import (
     MAX_SUBAGENT_ID_CHARS,
@@ -30,6 +32,8 @@ from ..mcp_bridge import (
 )
 from ..result import AgentRunResult
 from ..subagents import (
+    DEFAULT_SUBAGENT_MERGE_POLICY,
+    MAX_SUBAGENT_ATTEMPTS,
     RuntimeSessionFactory,
     RuntimeSubagentOrchestrator,
     RuntimeSubagentTask,
@@ -245,10 +249,11 @@ class GenericEditRuntimeSession:
         verbose: bool,
         phase: Any,
         subtask_id: str | None,
+        initial_trace: list[dict[str, Any]] | None = None,
     ) -> AgentRunResult:
         base_prompt = build_generic_edit_prompt(message, self._mcp_bridge)
         prompt = base_prompt
-        trace: list[dict[str, Any]] = []
+        trace: list[dict[str, Any]] = list(initial_trace or [])
         observation_path = initialize_generic_edit_observations(spec_dir)
 
         for iteration in range(1, self.max_iterations + 1):
@@ -731,8 +736,10 @@ class GenericEditRuntimeSession:
                 self._provider_tool_schemas(),
             )
         except Exception as e:
-            if iteration == 1 and callable(
-                getattr(self.agent_session, "complete", None)
+            if (
+                iteration == 1
+                and callable(getattr(self.agent_session, "complete", None))
+                and should_fallback_from_native_tools(e)
             ):
                 fallback = await self._run_json_action_loop(
                     message=message,
@@ -740,6 +747,14 @@ class GenericEditRuntimeSession:
                     verbose=verbose,
                     phase=phase,
                     subtask_id=subtask_id,
+                    initial_trace=[
+                        native_tool_fallback_trace_entry(
+                            provider_name=self.provider_name,
+                            iteration=iteration,
+                            error=e,
+                            tool_schema_count=len(self._provider_tool_schemas()),
+                        )
+                    ],
                 )
                 return None, fallback
             return None, self._native_tool_error_result(
@@ -1098,6 +1113,10 @@ class GenericEditRuntimeSession:
                         "id": result.id,
                         "role": result.role,
                         "status": result.status,
+                        "attempt_count": result.attempt_count,
+                        "max_attempts": result.max_attempts,
+                        "merge_policy": result.merge_policy,
+                        "artifact_path": result.artifact_path,
                         "response_text": result.response_text[
                             :MAX_SUBAGENT_RESULT_CHARS
                         ],
@@ -1155,10 +1174,91 @@ def native_tool_iteration_entry(iteration: int) -> dict[str, Any]:
     }
 
 
+def native_tool_fallback_trace_entry(
+    *,
+    provider_name: str,
+    iteration: int,
+    error: Exception,
+    tool_schema_count: int,
+) -> dict[str, Any]:
+    """Return trace metadata when provider-native tools fall back to JSON."""
+    error_message = str(error)
+    return {
+        "iteration": iteration,
+        "loop": "native_tool_calls",
+        "error": error_message,
+        "native_tool_fallback": {
+            "provider": provider_name,
+            "from_loop": "native_tool_calls",
+            "to_loop": "json_actions",
+            "reason": "native_tool_request_failed",
+            "message": error_message,
+            "tool_schema_count": tool_schema_count,
+        },
+        "actions": [],
+    }
+
+
+NATIVE_TOOL_FATAL_ERROR_MARKERS = (
+    "api key",
+    "authentication",
+    "auth",
+    "billing",
+    "connection",
+    "dns",
+    "forbidden",
+    "insufficient_quota",
+    "invalid key",
+    "model not found",
+    "permission denied",
+    "proxy",
+    "quota",
+    "rate limit",
+    "timed out",
+    "timeout",
+    "unauthorized",
+)
+NATIVE_TOOL_FALLBACK_ERROR_MARKERS = (
+    "does not support tools",
+    "function",
+    "invalid tool",
+    "json schema",
+    "parameters",
+    "schema",
+    "tool",
+    "tool_choice",
+    "unsupported tool",
+)
+
+
+def should_fallback_from_native_tools(error: Exception) -> bool:
+    """Return true when native tools failed because the model rejected tools."""
+    if isinstance(error, (ProviderConfigError, ProviderNotInstalled)):
+        return False
+
+    error_text = native_tool_error_text(error)
+    if any(marker in error_text for marker in NATIVE_TOOL_FATAL_ERROR_MARKERS):
+        return False
+    return any(marker in error_text for marker in NATIVE_TOOL_FALLBACK_ERROR_MARKERS)
+
+
+def native_tool_error_text(error: Exception) -> str:
+    """Return a lower-case error chain string for native-tool classification."""
+    parts: list[str] = []
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        parts.append(str(current))
+        current = current.__cause__ or current.__context__
+    return " ".join(parts).lower()
+
+
 def json_action_iteration_entry(iteration: int, response_text: str) -> dict[str, Any]:
     """Return the trace scaffold for one JSON action iteration."""
     return {
         "iteration": iteration,
+        "loop": "json_actions",
         "response_excerpt": response_text[:1000],
         "response_bytes": len(response_text.encode("utf-8")),
         "actions": [],
@@ -1328,7 +1428,7 @@ def render_mcp_bridge_prompt(mcp_bridge: RuntimeMcpBridge | None) -> str:
         )
 
     lines = [
-        "Bridged Auto Code MCP actions available through the local runtime:",
+        "Bridged MCP actions available through the generic edit runtime:",
         *mcp_bridge.prompt_lines(),
     ]
     if mcp_bridge.unavailable_servers:
@@ -1435,6 +1535,24 @@ def parse_runtime_subagent_action_task(
         raise GenericEditRuntimeError(
             f"run_subagents task #{index} field 'metadata' must be an object"
         )
+    context = raw_task.get("context") or {}
+    if not isinstance(context, dict):
+        raise GenericEditRuntimeError(
+            f"run_subagents task #{index} field 'context' must be an object"
+        )
+    merge_policy = bounded_subagent_string(
+        raw_task.get("merge_policy") or DEFAULT_SUBAGENT_MERGE_POLICY,
+        field_name=f"tasks[{index}].merge_policy",
+        maximum=40,
+    )
+    if merge_policy != DEFAULT_SUBAGENT_MERGE_POLICY:
+        raise GenericEditRuntimeError(
+            "run_subagents currently supports only read_only child merge policy"
+        )
+    max_attempts = bounded_subagent_attempts(
+        raw_task.get("max_attempts", 1),
+        field_name=f"tasks[{index}].max_attempts",
+    )
     return RuntimeSubagentTask(
         id=task_id,
         role=role,
@@ -1442,6 +1560,9 @@ def parse_runtime_subagent_action_task(
         requirements=RuntimeRequirements.text_only(mode="subagent"),
         subtask_id=subtask_id,
         metadata=metadata,
+        context=context,
+        merge_policy=merge_policy,
+        max_attempts=max_attempts,
     )
 
 
@@ -1457,6 +1578,20 @@ def bounded_subagent_string(value: Any, *, field_name: str, maximum: int) -> str
             f"run_subagents field '{field_name}' must be at most {maximum} characters"
         )
     return stripped
+
+
+def bounded_subagent_attempts(value: Any, *, field_name: str) -> int:
+    """Read a bounded run_subagents retry count."""
+    if type(value) is not int:
+        raise GenericEditRuntimeError(
+            f"run_subagents field '{field_name}' must be an integer"
+        )
+    if value < 1 or value > MAX_SUBAGENT_ATTEMPTS:
+        raise GenericEditRuntimeError(
+            "run_subagents field "
+            f"'{field_name}' must be between 1 and {MAX_SUBAGENT_ATTEMPTS}"
+        )
+    return value
 
 
 def generic_edit_subagent_artifact_name(
@@ -1856,6 +1991,7 @@ def build_generic_edit_summary_markdown(
         f"Stop reason: {stop_reason}",
         *generic_edit_subtask_lines(subtask_id),
         *generic_edit_mcp_lines(mcp_support),
+        *generic_edit_native_fallback_lines(trace_summary),
         "",
         "## Summary",
         "",
@@ -1875,13 +2011,47 @@ def generic_edit_subtask_lines(subtask_id: str | None) -> list[str]:
 def generic_edit_mcp_lines(mcp_support: dict[str, Any] | None) -> list[str]:
     if not mcp_support:
         return []
-    return [
+    lines = [
         "",
         "## Runtime Support",
         "",
         f"- MCP: `{mcp_support.get('strategy', 'unknown')}` - "
         f"{mcp_support.get('reason', '')}",
     ]
+    bridge_plan = mcp_support.get("bridge_plan")
+    if isinstance(bridge_plan, dict):
+        lines.append(
+            "- MCP bridge plan: "
+            f"`{bridge_plan.get('status', 'unknown')}`; "
+            f"action `{bridge_plan.get('action_required', 'unknown')}`."
+        )
+        native_required = bridge_plan.get("native_required_servers") or []
+        if native_required:
+            lines.append(
+                "- MCP native-required servers: "
+                + ", ".join(str(server) for server in native_required)
+            )
+    return lines
+
+
+def generic_edit_native_fallback_lines(trace_summary: dict[str, Any]) -> list[str]:
+    fallbacks = trace_summary.get("native_tool_fallbacks")
+    if not isinstance(fallbacks, list) or not fallbacks:
+        return []
+    lines = ["", "## Native Tool Fallback", ""]
+    for fallback in fallbacks:
+        if not isinstance(fallback, dict):
+            continue
+        lines.append(
+            "- "
+            f"{fallback.get('provider', 'unknown')} "
+            f"{fallback.get('from_loop', 'native_tool_calls')} -> "
+            f"{fallback.get('to_loop', 'json_actions')}: "
+            f"{fallback.get('reason', 'native_tool_request_failed')}"
+        )
+        if fallback.get("message"):
+            lines.append(f"  Message: {fallback['message']}")
+    return lines
 
 
 def generic_edit_timeline_lines(action_timeline: list[dict[str, Any]]) -> list[str]:
@@ -1950,11 +2120,15 @@ def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
     tool_counts: dict[str, int] = {}
     failed_tools: dict[str, int] = {}
     action_timeline: list[dict[str, Any]] = []
+    native_tool_fallbacks: list[dict[str, Any]] = []
 
     for iteration in trace:
         iteration_number = iteration.get("iteration")
         if iteration.get("loop"):
             loop_kind = str(iteration["loop"])
+        fallback = iteration.get("native_tool_fallback")
+        if isinstance(fallback, dict):
+            native_tool_fallbacks.append(dict(fallback))
         for action_entry in iteration.get("actions", []):
             summarize_trace_action_entry(
                 action_entry=action_entry,
@@ -1972,6 +2146,8 @@ def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
         "tool_counts": tool_counts,
         "failed_tools": failed_tools,
         "action_timeline": action_timeline,
+        "native_tool_fallback_count": len(native_tool_fallbacks),
+        "native_tool_fallbacks": native_tool_fallbacks,
     }
 
 

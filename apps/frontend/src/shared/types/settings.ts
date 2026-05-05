@@ -477,6 +477,16 @@ export interface ProviderConfigValidation {
   availableProviders: AIEngineProvider[];
 }
 
+export interface ProviderRuntimeDiagnostics {
+  smokeScope?: string;
+  requestedRuntimeMode?: string;
+  validatedRuntimeMode?: string;
+  validatedRequirements?: string[];
+  requestedRuntimeCapabilities?: string[];
+  fullAutonomousMissingCapabilities?: string[];
+  note?: string;
+}
+
 export interface ProviderConnectionTestResult {
   success: boolean;
   provider: AIEngineProvider | string;
@@ -485,4 +495,84 @@ export interface ProviderConnectionTestResult {
   message: string;
   responseExcerpt?: string | null;
   errorDetails?: string | null;
+  runtimeDiagnostics?: ProviderRuntimeDiagnostics | null;
+}
+
+export interface RuntimeMcpBridgePlanRow {
+  provider: string;
+  runtime_mode: string;
+  strategy: string;
+  available: boolean;
+  status: string;
+  action_required: string;
+  recommended_runtime_path: string;
+  available_servers: string[];
+  unavailable_servers: string[];
+  native_required_servers: string[];
+  local_bridge_required_servers: string[];
+  external_bridge_required_servers: string[];
+  external_bridge_ready_servers: string[];
+  unsupported_servers: string[];
+  bridged_servers: string[];
+  local_bridged_servers: string[];
+  external_bridged_servers: string[];
+  executable_external_tools: string[];
+}
+
+export interface RuntimeExternalMcpHealthRow {
+  server: string;
+  display_name: string;
+  bridgeable: boolean;
+  client_enabled: boolean;
+  server_enabled: boolean;
+  configured: boolean;
+  status: string;
+  reason: string;
+  transport?: string | null;
+  command?: string | null;
+  args: string[];
+  url?: string | null;
+  enabled_env?: string | null;
+  required_env: string[];
+  missing_env: string[];
+  concrete_servers: string[];
+  execution_supported: boolean;
+  executable_tools: string[];
+  executable_tool_count: number;
+}
+
+export interface RuntimeFallbackMatrixRow {
+  provider: string;
+  phase: string;
+  requested_mode: string;
+  fail_fast_selected_mode: string;
+  fallback_selected_mode: string;
+  fallback_applied: boolean;
+  fallback_reason: string;
+  missing_capabilities: string[];
+  compatible_fallbacks: string[];
+  runner_candidate_ids_by_mode: Record<string, string[]>;
+  selected_mode_runner_candidates: string[];
+}
+
+export interface RuntimeSubagentMatrixRow {
+  provider: string;
+  runtime_mode: string;
+  strategy: string;
+  available: boolean;
+  reason: string;
+  required_capabilities: string[];
+  missing_capabilities: string[];
+  available_capabilities: string[];
+  max_attempts: number;
+  merge_policy: string;
+  artifact_support: boolean;
+}
+
+export interface RuntimeControlPlaneDiagnostics {
+  runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
+  mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
+  external_mcp_server_health?: RuntimeExternalMcpHealthRow[];
+  runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
+  recommendations?: Record<string, string>;
 }
