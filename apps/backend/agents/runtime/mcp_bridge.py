@@ -33,6 +33,8 @@ DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION = "2024-11-05"
 DEFAULT_EXTERNAL_MCP_HTTP_PROTOCOL_VERSION = "2025-06-18"
 DEFAULT_EXTERNAL_MCP_TIMEOUT_SECONDS = 30.0
 SUPPORTED_EXTERNAL_MCP_TRANSPORTS = ("stdio", "http")
+DESCRIPTION_OPTIONAL_MAX_RESULTS = "Optional maximum number of results."
+DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY = "Optional team ID or key."
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
 McpAuditLevel = Literal["read", "write", "command", "analysis"]
 ExternalMcpHealthStatus = Literal[
@@ -548,7 +550,7 @@ def graphiti_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Optional maximum number of results.",
+                            "description": DESCRIPTION_OPTIONAL_MAX_RESULTS,
                         },
                     },
                     required=("query",),
@@ -567,7 +569,7 @@ def graphiti_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Optional maximum number of results.",
+                            "description": DESCRIPTION_OPTIONAL_MAX_RESULTS,
                         },
                     },
                     required=("query",),
@@ -664,7 +666,7 @@ def linear_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
     pagination_properties = {
         "limit": {
             "type": "integer",
-            "description": "Optional maximum number of results.",
+            "description": DESCRIPTION_OPTIONAL_MAX_RESULTS,
         }
     }
     return RuntimeExternalMcpAdapter(
@@ -692,7 +694,7 @@ def linear_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
                     {
                         "team": {
                             "type": "string",
-                            "description": "Optional team ID or key.",
+                            "description": DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY,
                         },
                         **pagination_properties,
                     }
@@ -757,7 +759,7 @@ def linear_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
                     {
                         "team": {
                             "type": "string",
-                            "description": "Optional team ID or key.",
+                            "description": DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY,
                         },
                         "project": {
                             "type": "string",
@@ -884,7 +886,7 @@ def linear_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
                     {
                         "team": {
                             "type": "string",
-                            "description": "Optional team ID or key.",
+                            "description": DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY,
                         }
                     }
                 ),
@@ -897,7 +899,7 @@ def linear_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
                     {
                         "team": {
                             "type": "string",
-                            "description": "Optional team ID or key.",
+                            "description": DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY,
                         },
                         **pagination_properties,
                     }

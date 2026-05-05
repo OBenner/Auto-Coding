@@ -2800,6 +2800,7 @@ async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
         arguments: dict,
         project_dir: Path,
     ):
+        await asyncio.sleep(0)
         assert health.server == "context7"
         assert tool_name == "resolve-library-id"
         assert arguments == {"libraryName": "pytest"}
@@ -2905,6 +2906,7 @@ async def test_generic_edit_runtime_executes_puppeteer_external_mcp_tool(
         arguments: dict,
         project_dir: Path,
     ):
+        await asyncio.sleep(0)
         assert health.server == "puppeteer"
         assert tool_name == "puppeteer_navigate"
         assert arguments == {"url": "http://localhost:3000"}
@@ -3545,7 +3547,7 @@ async def test_external_mcp_http_client_posts_jsonrpc_with_session_and_sse(
 
     client = RuntimeExternalMcpHttpClient(
         server="graphiti",
-        url="http://graphiti.local/mcp/",
+        url="https://graphiti.local/mcp/",
         headers={"Authorization": "Bearer test-token"},
         protocol_version="2025-06-18",
     )
@@ -3578,6 +3580,7 @@ async def test_call_external_mcp_tool_dispatches_http_with_linear_auth(
             calls.append({"server": server, "url": url, "headers": headers})
 
         async def call_tool(self, *, name: str, arguments: dict[str, Any]):
+            await asyncio.sleep(0)
             calls.append({"name": name, "arguments": arguments})
             return {"content": [{"type": "text", "text": "created"}]}
 
