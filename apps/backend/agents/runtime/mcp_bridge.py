@@ -31,7 +31,6 @@ EXTERNAL_MCP_CLIENT_ENV = "AUTO_CODE_EXTERNAL_MCP_CLIENT"
 EXTERNAL_MCP_PROTOCOL_VERSION_ENV = "AUTO_CODE_MCP_PROTOCOL_VERSION"
 DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION = "2024-11-05"
 DEFAULT_EXTERNAL_MCP_TIMEOUT_SECONDS = 30.0
-EXTERNAL_MCP_EXECUTION_SERVERS = ("context7",)
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
 McpAuditLevel = Literal["read", "write", "command", "analysis"]
 ExternalMcpHealthStatus = Literal[
@@ -160,6 +159,8 @@ class RuntimeExternalMcpServerHealth:
     concrete_servers: tuple[str, ...] = ()
     execution_supported: bool = False
     executable_tools: tuple[str, ...] = ()
+    adapter_registered: bool = False
+    adapter_name: str | None = None
 
     @property
     def ready_to_connect(self) -> bool:
@@ -188,6 +189,8 @@ class RuntimeExternalMcpServerHealth:
             "execution_supported": self.execution_supported,
             "executable_tools": list(self.executable_tools),
             "executable_tool_count": len(self.executable_tools),
+            "adapter_registered": self.adapter_registered,
+            "adapter_name": self.adapter_name,
         }
 
 
@@ -329,6 +332,140 @@ class RuntimeMcpToolSpec:
             "exposed_name": self.exposed_name,
             **self.policy.to_dict(),
         }
+
+
+@dataclass(frozen=True)
+class RuntimeExternalMcpToolDefinition:
+    """Static provider-neutral schema for one externally bridged MCP tool."""
+
+    name: str
+    description: str
+    parameters: dict[str, Any]
+    policy: RuntimeMcpToolPolicy
+
+
+@dataclass(frozen=True)
+class RuntimeExternalMcpAdapter:
+    """Executable adapter contract for one external MCP server."""
+
+    server: str
+    display_name: str
+    tool_definitions: tuple[RuntimeExternalMcpToolDefinition, ...]
+    transport: str = "stdio"
+
+    @property
+    def tool_names(self) -> tuple[str, ...]:
+        """Return registered MCP tool names for this adapter."""
+        return tuple(definition.name for definition in self.tool_definitions)
+
+    def execution_supported(
+        self,
+        *,
+        transport: str | None,
+        command: str | None,
+    ) -> bool:
+        """Return whether this adapter can execute the catalog transport."""
+        return (
+            bool(self.tool_definitions)
+            and transport == self.transport
+            and bool(command)
+        )
+
+    def load_tool_specs(
+        self,
+        *,
+        health: RuntimeExternalMcpServerHealth,
+        project_dir: Path,
+    ) -> list[RuntimeMcpToolSpec]:
+        """Return provider tool schemas backed by this adapter."""
+        if not health.ready_to_connect or not health.execution_supported:
+            return []
+        return [
+            RuntimeMcpToolSpec(
+                server=self.server,
+                name=definition.name,
+                exposed_name=f"mcp__{self.server}__{definition.name}",
+                description=definition.description,
+                parameters=definition.parameters,
+                policy=definition.policy,
+                handler=external_mcp_tool_handler(
+                    health=health,
+                    tool_name=definition.name,
+                    project_dir=project_dir,
+                ),
+            )
+            for definition in self.tool_definitions
+        ]
+
+
+def context7_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
+    """Build the Context7 external MCP execution adapter."""
+    tool_definitions: tuple[RuntimeExternalMcpToolDefinition, ...] = (
+        RuntimeExternalMcpToolDefinition(
+            name="resolve-library-id",
+            description=(
+                "Resolve a package or library name to a Context7-compatible library ID."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "libraryName": {
+                        "type": "string",
+                        "description": "Package or library name to resolve.",
+                    }
+                },
+                "required": ["libraryName"],
+                "additionalProperties": False,
+            },
+            policy=RuntimeMcpToolPolicy("read_external_docs", "read"),
+        ),
+        RuntimeExternalMcpToolDefinition(
+            name="get-library-docs",
+            description=(
+                "Fetch current documentation for a Context7-compatible library ID."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "context7CompatibleLibraryID": {
+                        "type": "string",
+                        "description": "Library ID returned by resolve-library-id.",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Optional topic to focus the documentation query.",
+                    },
+                    "tokens": {
+                        "type": "integer",
+                        "description": "Optional maximum documentation token budget.",
+                    },
+                },
+                "required": ["context7CompatibleLibraryID"],
+                "additionalProperties": False,
+            },
+            policy=RuntimeMcpToolPolicy("read_external_docs", "read"),
+        ),
+    )
+    return RuntimeExternalMcpAdapter(
+        server="context7",
+        display_name="Context7",
+        tool_definitions=tool_definitions,
+    )
+
+
+EXTERNAL_MCP_ADAPTERS: dict[str, RuntimeExternalMcpAdapter] = {
+    adapter.server: adapter for adapter in (context7_external_mcp_adapter(),)
+}
+
+
+def external_mcp_adapter_for(server: str) -> RuntimeExternalMcpAdapter | None:
+    """Return the registered external MCP execution adapter for a server."""
+    return EXTERNAL_MCP_ADAPTERS.get(normalize_mcp_server_name(server))
+
+
+def registered_external_mcp_servers() -> tuple[str, ...]:
+    """Return external MCP servers with executable bridge adapters."""
+    return tuple(EXTERNAL_MCP_ADAPTERS)
 
 
 class RuntimeExternalMcpClientError(RuntimeError):
@@ -879,6 +1016,7 @@ def describe_external_mcp_server_health(
     """Return external MCP client readiness for one catalog server."""
     server = normalize_mcp_server_name(server)
     catalog_entry = MCP_SERVER_CATALOG.get(server, {})
+    adapter = external_mcp_adapter_for(server)
     display_name = str(catalog_entry.get("display_name", server))
     bridgeable = bool(catalog_entry.get("external_bridgeable", False))
     client_enabled = (
@@ -916,8 +1054,20 @@ def describe_external_mcp_server_health(
     concrete_servers = tuple(
         str(name) for name in catalog_entry.get("concrete_servers", ())
     )
-    execution_supported = server in EXTERNAL_MCP_EXECUTION_SERVERS
-    known_tools = tuple(str(name) for name in catalog_entry.get("tools", ()))
+    transport = str(catalog_entry.get("transport") or "") or None
+    command = str(catalog_entry.get("command") or "") or None
+    execution_supported = bool(
+        adapter
+        and adapter.execution_supported(
+            transport=transport,
+            command=command,
+        )
+    )
+    known_tools = (
+        adapter.tool_names
+        if adapter
+        else tuple(str(name) for name in catalog_entry.get("tools", ()))
+    )
     configured = bool(
         bridgeable and server_enabled and not missing_env and not concrete_servers
     )
@@ -982,8 +1132,8 @@ def describe_external_mcp_server_health(
         configured=configured,
         status=status,
         reason=reason,
-        transport=str(catalog_entry.get("transport") or "") or None,
-        command=str(catalog_entry.get("command") or "") or None,
+        transport=transport,
+        command=command,
         args=tuple(str(arg) for arg in catalog_entry.get("args", ())),
         url=str(url or "") or None,
         enabled_env=str(enabled_env or "") or None,
@@ -992,6 +1142,8 @@ def describe_external_mcp_server_health(
         concrete_servers=concrete_servers,
         execution_supported=execution_supported,
         executable_tools=executable_tools,
+        adapter_registered=adapter is not None,
+        adapter_name=adapter.display_name if adapter else None,
     )
 
 
@@ -1025,8 +1177,6 @@ def executable_external_mcp_servers(
     """Return external MCP servers that this layer can actually execute."""
     servers: list[str] = []
     for server in normalize_mcp_server_names(requested_servers):
-        if server not in EXTERNAL_MCP_EXECUTION_SERVERS:
-            continue
         health = describe_external_mcp_server_health(
             server,
             external_client_enabled=external_client_enabled,
@@ -1351,8 +1501,14 @@ def load_external_mcp_bridge_tools(
         health = describe_external_mcp_server_health(server)
         if not health.ready_to_connect or not health.execution_supported:
             continue
-        if server == "context7":
-            specs.extend(load_context7_external_mcp_tools(health, project_dir))
+        adapter = external_mcp_adapter_for(server)
+        if adapter is not None:
+            specs.extend(
+                adapter.load_tool_specs(
+                    health=health,
+                    project_dir=project_dir,
+                )
+            )
     return specs
 
 
@@ -1361,62 +1517,10 @@ def load_context7_external_mcp_tools(
     project_dir: Path,
 ) -> list[RuntimeMcpToolSpec]:
     """Return known Context7 tool schemas backed by the external MCP client."""
-    tool_definitions: tuple[tuple[str, str, dict[str, Any]], ...] = (
-        (
-            "resolve-library-id",
-            "Resolve a package or library name to a Context7-compatible library ID.",
-            {
-                "type": "object",
-                "properties": {
-                    "libraryName": {
-                        "type": "string",
-                        "description": "Package or library name to resolve.",
-                    }
-                },
-                "required": ["libraryName"],
-                "additionalProperties": False,
-            },
-        ),
-        (
-            "get-library-docs",
-            "Fetch current documentation for a Context7-compatible library ID.",
-            {
-                "type": "object",
-                "properties": {
-                    "context7CompatibleLibraryID": {
-                        "type": "string",
-                        "description": "Library ID returned by resolve-library-id.",
-                    },
-                    "topic": {
-                        "type": "string",
-                        "description": "Optional topic to focus the documentation query.",
-                    },
-                    "tokens": {
-                        "type": "integer",
-                        "description": "Optional maximum documentation token budget.",
-                    },
-                },
-                "required": ["context7CompatibleLibraryID"],
-                "additionalProperties": False,
-            },
-        ),
-    )
-    return [
-        RuntimeMcpToolSpec(
-            server="context7",
-            name=tool_name,
-            exposed_name=f"mcp__context7__{tool_name}",
-            description=description,
-            parameters=parameters,
-            policy=RuntimeMcpToolPolicy("read_external_docs", "read"),
-            handler=external_mcp_tool_handler(
-                health=health,
-                tool_name=tool_name,
-                project_dir=project_dir,
-            ),
-        )
-        for tool_name, description, parameters in tool_definitions
-    ]
+    adapter = external_mcp_adapter_for("context7")
+    if adapter is None:
+        return []
+    return adapter.load_tool_specs(health=health, project_dir=project_dir)
 
 
 def external_mcp_tool_handler(

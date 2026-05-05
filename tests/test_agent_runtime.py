@@ -22,12 +22,14 @@ from agents.runtime import (
     describe_external_mcp_server_health,
     describe_mcp_server_statuses,
     executable_external_mcp_tools,
+    external_mcp_adapter_for,
     get_runtime_mode,
     local_action_response_schema,
     local_action_tool_schemas,
     local_action_tool_specs,
     mcp_bridge_audit_path,
     normalize_runtime_mode,
+    registered_external_mcp_servers,
     render_local_action_prompt,
     requirements_for_runtime_mode,
     resolve_runtime_mcp_support,
@@ -3063,6 +3065,23 @@ def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps(
     assert status_by_server["custom-mcp"]["runtime_path"] == "unsupported"
 
 
+def test_external_mcp_adapter_registry_exposes_context7_contract():
+    adapter = external_mcp_adapter_for("mcp__context7__resolve-library-id")
+
+    assert adapter is not None
+    assert registered_external_mcp_servers() == ("context7",)
+    assert adapter.server == "context7"
+    assert adapter.tool_names == ("resolve-library-id", "get-library-docs")
+    assert adapter.execution_supported(transport="stdio", command="npx") is True
+    assert adapter.execution_supported(transport="http", command=None) is False
+    schemas = [definition.parameters for definition in adapter.tool_definitions]
+    assert schemas[0]["required"] == ["libraryName"]
+    assert schemas[1]["required"] == ["context7CompatibleLibraryID"]
+    assert {
+        definition.policy.permission for definition in adapter.tool_definitions
+    } == {"read_external_docs"}
+
+
 def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     health = describe_external_mcp_server_health(
         "context7",
@@ -3076,6 +3095,8 @@ def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     assert health.command == "npx"
     assert health.args == ("-y", "@upstash/context7-mcp")
     assert health.execution_supported is True
+    assert health.adapter_registered is True
+    assert health.adapter_name == "Context7"
     assert health.executable_tools == ("resolve-library-id", "get-library-docs")
     assert executable_external_mcp_tools(
         requested_servers=("context7",),
@@ -3096,6 +3117,22 @@ def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     plan = support.to_dict()["bridge_plan"]
     assert plan["external_bridge_ready_servers"] == ["context7"]
     assert plan["action_required"] == "wire_external_mcp_tool_execution"
+
+
+def test_external_mcp_health_keeps_readiness_only_servers_non_executable():
+    health = describe_external_mcp_server_health(
+        "graphiti",
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    )
+
+    assert health.status == "ready_to_connect"
+    assert health.configured is True
+    assert health.execution_supported is False
+    assert health.adapter_registered is False
+    assert health.executable_tools == ()
 
 
 @pytest.mark.asyncio

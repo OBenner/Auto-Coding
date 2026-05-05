@@ -109,9 +109,12 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert external_health["context7"]["status"] == "client_disabled"
     assert external_health["context7"]["command"] == "npx"
     assert external_health["context7"]["execution_supported"] is True
+    assert external_health["context7"]["adapter_registered"] is True
+    assert external_health["context7"]["adapter_name"] == "Context7"
     assert external_health["context7"]["executable_tools"] == []
     assert external_health["context7"]["executable_tool_count"] == 0
     assert external_health["graphiti"]["status"] == "missing_configuration"
+    assert external_health["graphiti"]["adapter_registered"] is False
     mcp_rows = {
         (row["provider"], row["runtime_mode"]): row
         for row in payload["mcp_bridge_plan_matrix"]

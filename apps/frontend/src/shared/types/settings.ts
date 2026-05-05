@@ -539,6 +539,8 @@ export interface RuntimeExternalMcpHealthRow {
   execution_supported: boolean;
   executable_tools: string[];
   executable_tool_count: number;
+  adapter_registered?: boolean;
+  adapter_name?: string | null;
 }
 
 export interface RuntimeFallbackMatrixRow {
