@@ -467,6 +467,24 @@ export interface CustomMcpServer {
   headers?: Record<string, string>;
   /** Optional description shown in UI */
   description?: string;
+  /** Optional cached MCP tools/list tool schemas */
+  tools?: CustomMcpToolSchema[];
+}
+
+/**
+ * Cached MCP tools/list entry for custom MCP servers.
+ */
+export interface CustomMcpToolSchema {
+  /** MCP tool name */
+  name: string;
+  /** Optional MCP tool description */
+  description?: string;
+  /** MCP input schema */
+  inputSchema?: Record<string, unknown>;
+  /** Alternate input schema key used by some MCP servers */
+  input_schema?: Record<string, unknown>;
+  /** Provider-style parameter schema fallback */
+  parameters?: Record<string, unknown>;
 }
 
 /**

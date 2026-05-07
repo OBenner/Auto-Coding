@@ -3106,6 +3106,123 @@ async def test_runtime_mcp_bridge_executes_custom_mcp_generic_call_tool(
 
 
 @pytest.mark.asyncio
+async def test_runtime_mcp_bridge_exposes_discovered_custom_mcp_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    calls: list[dict[str, Any]] = []
+
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict[str, Any],
+        project_dir: Path,
+        **_kwargs,
+    ):
+        await asyncio.sleep(0)
+        calls.append(
+            {
+                "server": health.server,
+                "tool_name": tool_name,
+                "arguments": arguments,
+                "project_dir": project_dir,
+            }
+        )
+        return {"content": [{"type": "text", "text": "search result"}]}
+
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "https://docs.example.test/mcp/",
+                "headers": {"Authorization": "Bearer test-token"},
+                "tools": [
+                    {
+                        "name": "search_docs",
+                        "description": "Search private documentation.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "Search query.",
+                                },
+                                "limit": {"type": "integer"},
+                            },
+                            "required": ["query"],
+                        },
+                    },
+                    {
+                        "name": "raw_status",
+                        "description": "Schema-less status probe.",
+                    },
+                ],
+            }
+        ]
+    }
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(
+        auto_claude_tools=[],
+        mcp_servers=("my-docs",),
+        mcp_config=project_mcp_config,
+        mcp_allowed_permissions=("call_custom_mcp",),
+    )
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    schemas = {schema["name"]: schema for schema in bridge.provider_tool_schemas()}
+    assert "mcp__my-docs__search_docs" in schemas
+    assert "mcp__my-docs__raw_status" in schemas
+    assert "mcp__my-docs__call_tool" in schemas
+    assert schemas["mcp__my-docs__search_docs"]["parameters"]["required"] == ["query"]
+    assert (
+        schemas["mcp__my-docs__search_docs"]["parameters"]["properties"]["query"][
+            "description"
+        ]
+        == "Search query."
+    )
+    assert schemas["mcp__my-docs__raw_status"]["parameters"]["type"] == "object"
+
+    result = await bridge.execute(
+        {
+            "tool": "mcp__my-docs__search_docs",
+            "query": "runtime bridge",
+            "limit": 3,
+        }
+    )
+
+    assert result.ok is True
+    assert result.message == "search result"
+    assert calls == [
+        {
+            "server": "my-docs",
+            "tool_name": "search_docs",
+            "arguments": {"query": "runtime bridge", "limit": 3},
+            "project_dir": tmp_path,
+        }
+    ]
+    audit_path = Path(result.data["audit_artifact"])
+    audit_event = json.loads(audit_path.read_text(encoding="utf-8").splitlines()[0])
+    assert audit_event["server"] == "my-docs"
+    assert audit_event["tool"] == "search_docs"
+    assert audit_event["permission"] == "call_custom_mcp"
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_executes_puppeteer_external_mcp_tool(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3510,6 +3627,17 @@ def test_external_mcp_adapter_registry_exposes_custom_server_contract():
                 "command": "uvx",
                 "args": ["my-docs-mcp"],
                 "description": "Private documentation server.",
+                "tools": [
+                    {
+                        "name": "search_docs",
+                        "description": "Search private documentation.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                            "required": ["query"],
+                        },
+                    }
+                ],
             }
         ]
     }
@@ -3528,21 +3656,26 @@ def test_external_mcp_adapter_registry_exposes_custom_server_contract():
     assert adapter.server == "my-docs"
     assert adapter.display_name == "My Docs"
     assert adapter.transport == "stdio"
-    assert adapter.tool_names == ("call_tool",)
+    assert adapter.tool_names == ("search_docs", "call_tool")
     assert adapter.exposed_server_name == "my-docs"
-    assert adapter.tool_definitions[0].policy.permission == "call_custom_mcp"
-    assert adapter.tool_definitions[0].policy.mutating is True
-    assert adapter.tool_definitions[0].parameters["required"] == ["tool_name"]
+    assert {
+        definition.policy.permission for definition in adapter.tool_definitions
+    } == {"call_custom_mcp"}
+    assert {definition.policy.mutating for definition in adapter.tool_definitions} == {
+        True
+    }
+    assert adapter.tool_definitions[0].parameters["required"] == ["query"]
+    assert adapter.tool_definitions[1].parameters["required"] == ["tool_name"]
     assert health.status == "ready_to_connect"
     assert health.command == "uvx"
     assert health.args == ("my-docs-mcp",)
     assert health.adapter_registered is True
-    assert health.executable_tools == ("call_tool",)
+    assert health.executable_tools == ("search_docs", "call_tool")
     assert executable_external_mcp_tools(
         requested_servers=("my-docs",),
         project_mcp_config=project_mcp_config,
         environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
-    ) == ("mcp__my-docs__call_tool",)
+    ) == ("mcp__my-docs__search_docs", "mcp__my-docs__call_tool")
 
 
 def test_runtime_mcp_bridge_loads_custom_mcp_config_from_project_env(
@@ -3558,6 +3691,17 @@ def test_runtime_mcp_bridge_loads_custom_mcp_config_from_project_env(
             "type": "command",
             "command": "uvx",
             "args": ["my-docs-mcp"],
+            "tools": [
+                {
+                    "name": "search_docs",
+                    "description": "Search private documentation.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"query": {"type": "string"}},
+                        "required": ["query"],
+                    },
+                }
+            ],
         }
     ]
     (mcp_config_dir / ".env").write_text(
@@ -3579,7 +3723,10 @@ def test_runtime_mcp_bridge_loads_custom_mcp_config_from_project_env(
 
     assert bridge is not None
     assert bridge.available_servers == ("my-docs",)
-    assert bridge.provider_tool_schemas()[0]["name"] == "mcp__my-docs__call_tool"
+    assert [schema["name"] for schema in bridge.provider_tool_schemas()] == [
+        "mcp__my-docs__search_docs",
+        "mcp__my-docs__call_tool",
+    ]
     report = bridge.report()
     assert report["server_statuses"][0]["runtime_path"] == "external_bridge"
     assert report["bridge_plan"]["external_bridged_servers"] == ["my-docs"]

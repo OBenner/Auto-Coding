@@ -1237,6 +1237,94 @@ def mcp_server_catalog_entry(
     )
 
 
+def custom_external_mcp_tool_definitions(
+    custom_server: Mapping[str, Any],
+) -> tuple[RuntimeExternalMcpToolDefinition, ...]:
+    """Return provider tool definitions from a cached MCP tools/list payload."""
+    raw_tools = custom_server.get("tools", ())
+    if not isinstance(raw_tools, (list, tuple)):
+        return ()
+
+    definitions: list[RuntimeExternalMcpToolDefinition] = []
+    seen_tool_names: set[str] = set()
+    for raw_tool in raw_tools:
+        if not isinstance(raw_tool, Mapping):
+            continue
+        name = str(raw_tool.get("name") or "").strip()
+        if not name or name in seen_tool_names:
+            continue
+        seen_tool_names.add(name)
+        definitions.append(
+            external_mcp_tool_definition(
+                name=name,
+                description=str(
+                    raw_tool.get("description") or f"Call custom MCP tool {name}."
+                ),
+                parameters=normalize_mcp_input_schema(raw_tool),
+                permission="call_custom_mcp",
+                audit_level="command",
+                mutating=True,
+            )
+        )
+    return tuple(definitions)
+
+
+def custom_external_mcp_generic_tool_definition() -> RuntimeExternalMcpToolDefinition:
+    """Return the fallback generic custom MCP call tool definition."""
+    return external_mcp_tool_definition(
+        name="call_tool",
+        description=(
+            "Call a named tool on the configured custom MCP server. "
+            "Use tools/list smoke diagnostics to discover live tool names."
+        ),
+        parameters=object_schema(
+            {
+                "tool_name": {
+                    "type": "string",
+                    "description": "Name of the MCP tool to call.",
+                },
+                "arguments": {
+                    "type": "object",
+                    "description": "Arguments to pass to the MCP tool.",
+                },
+            },
+            required=("tool_name",),
+        ),
+        permission="call_custom_mcp",
+        audit_level="command",
+        mutating=True,
+        target_name_argument="tool_name",
+    )
+
+
+def normalize_mcp_input_schema(raw_tool: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize one MCP tools/list input schema for direct-provider tools."""
+    raw_schema = (
+        raw_tool.get("inputSchema")
+        or raw_tool.get("input_schema")
+        or raw_tool.get("parameters")
+    )
+    if not isinstance(raw_schema, Mapping):
+        return object_schema()
+
+    schema = dict(raw_schema)
+    if schema.get("type") != "object":
+        return object_schema()
+
+    properties = schema.get("properties")
+    if isinstance(properties, Mapping):
+        schema["properties"] = dict(properties)
+    else:
+        schema["properties"] = {}
+
+    required = schema.get("required")
+    if isinstance(required, (list, tuple)):
+        schema["required"] = [str(name) for name in required if str(name)]
+    else:
+        schema.pop("required", None)
+    return schema
+
+
 def custom_external_mcp_adapter(
     server: str,
     *,
@@ -1253,37 +1341,23 @@ def custom_external_mcp_adapter(
     server_id = normalize_mcp_server_name(str(custom_server.get("id") or server))
     server_name = str(custom_server.get("name") or server_id)
     server_type = str(custom_server.get("type") or "command")
+    tool_definitions = [
+        *custom_external_mcp_tool_definitions(custom_server),
+        custom_external_mcp_generic_tool_definition(),
+    ]
+    deduped_tool_definitions: list[RuntimeExternalMcpToolDefinition] = []
+    seen_tool_names: set[str] = set()
+    for definition in tool_definitions:
+        if definition.name in seen_tool_names:
+            continue
+        seen_tool_names.add(definition.name)
+        deduped_tool_definitions.append(definition)
     return RuntimeExternalMcpAdapter(
         server=server_id,
         display_name=server_name,
         transport="http" if server_type == "http" else "stdio",
         exposed_server=server_id,
-        tool_definitions=(
-            external_mcp_tool_definition(
-                name="call_tool",
-                description=(
-                    "Call a named tool on the configured custom MCP server. "
-                    "Use tools/list smoke diagnostics to discover live tool names."
-                ),
-                parameters=object_schema(
-                    {
-                        "tool_name": {
-                            "type": "string",
-                            "description": "Name of the MCP tool to call.",
-                        },
-                        "arguments": {
-                            "type": "object",
-                            "description": "Arguments to pass to the MCP tool.",
-                        },
-                    },
-                    required=("tool_name",),
-                ),
-                permission="call_custom_mcp",
-                audit_level="command",
-                mutating=True,
-                target_name_argument="tool_name",
-            ),
-        ),
+        tool_definitions=tuple(deduped_tool_definitions),
     )
 
 
