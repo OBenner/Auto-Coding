@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from pathlib import Path
 from typing import Any
 
 from agents.runtime.cli_profiles import (
@@ -27,8 +29,10 @@ from agents.runtime.mcp_bridge import (
     LOCAL_BRIDGE_SERVER,
     MCP_SERVER_CATALOG,
     build_external_mcp_health_matrix,
+    check_external_mcp_contracts,
     executable_external_mcp_servers,
     executable_external_mcp_tools,
+    registered_external_mcp_servers,
     resolve_runtime_mcp_support,
 )
 from agents.runtime.subagents import (
@@ -38,6 +42,7 @@ from agents.runtime.subagents import (
 )
 
 DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
+DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS = registered_external_mcp_servers()
 
 
 def _format_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -269,6 +274,77 @@ def build_runtime_modes_payload() -> dict[str, Any]:
             ),
         },
     }
+
+
+def build_external_mcp_smoke_payload(*, project_dir: Path) -> dict[str, Any]:
+    """Run opt-in external MCP tools/list contract checks."""
+    checks = asyncio.run(
+        check_external_mcp_contracts(
+            requested_servers=DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS,
+            project_dir=project_dir,
+        )
+    )
+    skipped = sum(1 for check in checks if check["status"] == "skipped")
+    return {
+        "external_mcp_contract_checks": checks,
+        "summary": {
+            "total": len(checks),
+            "ok": sum(1 for check in checks if check["ok"]),
+            "skipped": skipped,
+            "failed": sum(
+                1
+                for check in checks
+                if not check["ok"] and check["status"] != "skipped"
+            ),
+        },
+    }
+
+
+def format_external_mcp_smoke_text(payload: dict[str, Any]) -> str:
+    """Format external MCP smoke results for humans."""
+    rows = [
+        [
+            row["server"],
+            "yes" if row["ok"] else "no",
+            row["status"],
+            row["transport"] or "n/a",
+            ", ".join(row["adapter_tools"]) or "none",
+            ", ".join(row["server_tools"]) or "none",
+            row["error"] or row["reason"],
+        ]
+        for row in payload["external_mcp_contract_checks"]
+    ]
+    return "\n\n".join(
+        [
+            "External MCP Contract Smoke",
+            _format_table(
+                [
+                    "Server",
+                    "OK",
+                    "Status",
+                    "Transport",
+                    "Adapter tools",
+                    "Server tools",
+                    "Reason",
+                ],
+                rows,
+            ),
+        ]
+    )
+
+
+def handle_external_mcp_smoke_command(
+    *,
+    project_dir: Path,
+    output_json: bool = False,
+) -> dict[str, Any]:
+    """Run opt-in external MCP tools/list contract checks."""
+    payload = build_external_mcp_smoke_payload(project_dir=project_dir)
+    if output_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(format_external_mcp_smoke_text(payload))
+    return payload
 
 
 def format_runtime_modes_text() -> str:

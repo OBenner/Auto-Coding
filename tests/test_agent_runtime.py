@@ -23,6 +23,7 @@ from agents.runtime import (
     RuntimeSubagentOrchestrator,
     RuntimeSubagentResult,
     RuntimeSubagentTask,
+    check_external_mcp_contract,
     create_runtime_session,
     describe_external_mcp_server_health,
     describe_mcp_server_statuses,
@@ -3563,6 +3564,145 @@ async def test_external_mcp_http_client_posts_jsonrpc_with_session_and_sse(
         "POST",
         "POST",
         "DELETE",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_http_client_lists_tools_with_session_and_sse(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        assert request.headers.get("Accept") == "application/json, text/event-stream"
+        assert request.headers.get("Content-Type") == "application/json"
+        assert request.headers.get("MCP-Protocol-Version") == "2025-06-18"
+
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+        if payload["method"] == "tools/list":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            assert payload["params"] == {}
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                text=(
+                    "event: message\n"
+                    'data: {"jsonrpc":"2.0","id":2,'
+                    '"result":{"tools":[{"name":"search_nodes"}]}}\n\n'
+                ),
+            )
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    client = RuntimeExternalMcpHttpClient(
+        server="graphiti",
+        url="https://graphiti.local/mcp/",
+        protocol_version="2025-06-18",
+    )
+
+    result = await client.list_tools()
+
+    assert result == {"tools": [{"name": "search_nodes"}]}
+    assert [request.method for request in requests] == [
+        "POST",
+        "POST",
+        "POST",
+        "DELETE",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_check_external_mcp_contract_reports_extra_and_missing_live_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    adapter = external_mcp_adapter_for("graphiti")
+    assert adapter is not None
+    live_tool_sets = [
+        [*adapter.tool_names, "new_live_tool"],
+        ["search_nodes"],
+    ]
+    calls: list[dict[str, str]] = []
+
+    class FakeHttpClient:
+        def __init__(self, *, server: str, url: str, headers: dict[str, str]):
+            calls.append({"server": server, "url": url, "headers": str(headers)})
+
+        async def list_tools(self):
+            await asyncio.sleep(0)
+            tool_names = live_tool_sets.pop(0)
+            return {"tools": [{"name": name} for name in tool_names]}
+
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "RuntimeExternalMcpHttpClient",
+        FakeHttpClient,
+    )
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "GRAPHITI_MCP_URL": "https://graphiti.local/mcp/",
+    }
+
+    extra = await check_external_mcp_contract(
+        server="graphiti",
+        project_dir=tmp_path,
+        environment=environment,
+    )
+    missing = await check_external_mcp_contract(
+        server="graphiti",
+        project_dir=tmp_path,
+        environment=environment,
+    )
+
+    assert extra.ok is True
+    assert extra.status == "server_has_extra_tools"
+    assert extra.server_tools_missing_in_adapter == ("new_live_tool",)
+    assert missing.ok is False
+    assert missing.status == "adapter_tool_missing_on_server"
+    assert "search_facts" in missing.adapter_tools_missing_on_server
+    assert calls == [
+        {
+            "server": "graphiti",
+            "url": "https://graphiti.local/mcp/",
+            "headers": "{}",
+        },
+        {
+            "server": "graphiti",
+            "url": "https://graphiti.local/mcp/",
+            "headers": "{}",
+        },
     ]
 
 

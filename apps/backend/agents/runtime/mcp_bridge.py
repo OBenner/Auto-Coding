@@ -1140,6 +1140,41 @@ class RuntimeExternalMcpClientError(RuntimeError):
     """Raised when a provider-neutral external MCP call fails."""
 
 
+@dataclass(frozen=True)
+class RuntimeExternalMcpContractCheck:
+    """Result of checking adapter schemas against a live MCP server."""
+
+    server: str
+    ok: bool
+    status: str
+    reason: str
+    transport: str | None = None
+    adapter_tools: tuple[str, ...] = ()
+    server_tools: tuple[str, ...] = ()
+    adapter_tools_missing_on_server: tuple[str, ...] = ()
+    server_tools_missing_in_adapter: tuple[str, ...] = ()
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the contract check for CLI/UI diagnostics."""
+        return {
+            "server": self.server,
+            "ok": self.ok,
+            "status": self.status,
+            "reason": self.reason,
+            "transport": self.transport,
+            "adapter_tools": list(self.adapter_tools),
+            "server_tools": list(self.server_tools),
+            "adapter_tools_missing_on_server": list(
+                self.adapter_tools_missing_on_server
+            ),
+            "server_tools_missing_in_adapter": list(
+                self.server_tools_missing_in_adapter
+            ),
+            "error": self.error,
+        }
+
+
 class RuntimeExternalMcpClient:
     """Minimal stdio MCP client for provider-neutral external tool calls."""
 
@@ -1169,14 +1204,26 @@ class RuntimeExternalMcpClient:
         self, *, name: str, arguments: dict[str, Any]
     ) -> dict[str, Any]:
         """Start a stdio MCP server, call one tool, and shut it down."""
+        return await self._with_process(
+            method="tools/call",
+            params={"name": name, "arguments": arguments},
+        )
+
+    async def list_tools(self) -> dict[str, Any]:
+        """Start a stdio MCP server, list tools, and shut it down."""
+        return await self._with_process(method="tools/list", params={})
+
+    async def _with_process(
+        self,
+        *,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run one initialized stdio MCP request against a short-lived process."""
         process = await self._start_process()
         try:
             await self._initialize(process)
-            return await self._request(
-                process,
-                "tools/call",
-                {"name": name, "arguments": arguments},
-            )
+            return await self._request(process, method, params)
         finally:
             await self._close_process(process)
 
@@ -1347,6 +1394,22 @@ class RuntimeExternalMcpHttpClient:
         self, *, name: str, arguments: dict[str, Any]
     ) -> dict[str, Any]:
         """Initialize an HTTP MCP session, call one tool, and close it."""
+        return await self._with_http_session(
+            method="tools/call",
+            params={"name": name, "arguments": arguments},
+        )
+
+    async def list_tools(self) -> dict[str, Any]:
+        """Initialize an HTTP MCP session, list tools, and close it."""
+        return await self._with_http_session(method="tools/list", params={})
+
+    async def _with_http_session(
+        self,
+        *,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run one initialized Streamable HTTP MCP request."""
         try:
             import httpx
         except ImportError as e:
@@ -1357,11 +1420,7 @@ class RuntimeExternalMcpHttpClient:
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
             await self._initialize(client)
             try:
-                return await self._request(
-                    client,
-                    "tools/call",
-                    {"name": name, "arguments": arguments},
-                )
+                return await self._request(client, method, params)
             finally:
                 await self._close_session(client)
 
@@ -2533,6 +2592,147 @@ async def call_external_mcp_tool(
     raise RuntimeExternalMcpClientError(
         f"External MCP server {health.server} is missing a {target}."
     )
+
+
+async def discover_external_mcp_tools(
+    *,
+    health: RuntimeExternalMcpServerHealth,
+    project_dir: Path,
+) -> dict[str, Any]:
+    """Return the live tools/list payload for one ready external MCP server."""
+    if health.transport == "stdio" and health.command:
+        client = RuntimeExternalMcpClient(
+            server=health.server,
+            command=health.command,
+            args=health.args,
+            cwd=project_dir,
+        )
+        return await client.list_tools()
+
+    if health.transport == "http" and health.url:
+        client = RuntimeExternalMcpHttpClient(
+            server=health.server,
+            url=health.url,
+            headers=external_mcp_headers_for_server(health.server),
+        )
+        return await client.list_tools()
+
+    target = "HTTP URL" if health.transport == "http" else "stdio command"
+    raise RuntimeExternalMcpClientError(
+        f"External MCP server {health.server} is missing a {target}."
+    )
+
+
+async def check_external_mcp_contract(
+    *,
+    server: str,
+    project_dir: Path,
+    environment: Mapping[str, str] | None = None,
+) -> RuntimeExternalMcpContractCheck:
+    """Compare registered adapter tools with a live external MCP tools/list."""
+    server = normalize_mcp_server_name(server)
+    health = describe_external_mcp_server_health(server, environment=environment)
+    adapter = external_mcp_adapter_for(server)
+    adapter_tools = adapter.tool_names if adapter else ()
+
+    if not health.ready_to_connect or not health.execution_supported:
+        return RuntimeExternalMcpContractCheck(
+            server=server,
+            ok=False,
+            status="skipped",
+            reason=health.reason,
+            transport=health.transport,
+            adapter_tools=adapter_tools,
+        )
+
+    try:
+        result = await discover_external_mcp_tools(
+            health=health,
+            project_dir=project_dir,
+        )
+    except Exception as e:
+        return RuntimeExternalMcpContractCheck(
+            server=server,
+            ok=False,
+            status="error",
+            reason="External MCP tools/list failed.",
+            transport=health.transport,
+            adapter_tools=adapter_tools,
+            error=str(e),
+        )
+
+    server_tools = extract_mcp_tool_names(result)
+    adapter_missing_on_server = tuple(
+        tool for tool in adapter_tools if tool not in server_tools
+    )
+    server_missing_in_adapter = tuple(
+        tool for tool in server_tools if tool not in adapter_tools
+    )
+    if adapter_missing_on_server:
+        return RuntimeExternalMcpContractCheck(
+            server=server,
+            ok=False,
+            status="adapter_tool_missing_on_server",
+            reason="Adapter declares tools that the live MCP server did not return.",
+            transport=health.transport,
+            adapter_tools=adapter_tools,
+            server_tools=server_tools,
+            adapter_tools_missing_on_server=adapter_missing_on_server,
+            server_tools_missing_in_adapter=server_missing_in_adapter,
+        )
+    if server_missing_in_adapter:
+        return RuntimeExternalMcpContractCheck(
+            server=server,
+            ok=True,
+            status="server_has_extra_tools",
+            reason="Live MCP server returned extra tools not yet exposed by the adapter.",
+            transport=health.transport,
+            adapter_tools=adapter_tools,
+            server_tools=server_tools,
+            server_tools_missing_in_adapter=server_missing_in_adapter,
+        )
+    return RuntimeExternalMcpContractCheck(
+        server=server,
+        ok=True,
+        status="ok",
+        reason="Adapter tools match the live MCP server tools/list response.",
+        transport=health.transport,
+        adapter_tools=adapter_tools,
+        server_tools=server_tools,
+    )
+
+
+async def check_external_mcp_contracts(
+    *,
+    requested_servers: tuple[str, ...],
+    project_dir: Path,
+    environment: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Run external MCP adapter contract checks for requested servers."""
+    checks: list[dict[str, Any]] = []
+    for server in normalize_mcp_server_names(requested_servers):
+        check = await check_external_mcp_contract(
+            server=server,
+            project_dir=project_dir,
+            environment=environment,
+        )
+        checks.append(check.to_dict())
+    return checks
+
+
+def extract_mcp_tool_names(result: Mapping[str, Any]) -> tuple[str, ...]:
+    """Extract ordered tool names from an MCP tools/list result."""
+    tools = result.get("tools", ())
+    if not isinstance(tools, (list, tuple)):
+        return ()
+    names: list[str] = []
+    for tool in tools:
+        if not isinstance(tool, Mapping):
+            continue
+        name = str(tool.get("name") or "")
+        if name and name not in names:
+            names.append(name)
+    return tuple(names)
 
 
 def external_mcp_headers_for_server(server: str) -> dict[str, str]:
