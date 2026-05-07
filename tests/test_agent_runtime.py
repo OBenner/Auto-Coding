@@ -4575,10 +4575,73 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
             encoding="utf-8"
         )
     )
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+
     assert artifact["status"] == "error"
     assert artifact["stop_reason"] == "unresolved_partial_failure"
     assert artifact["unresolved_partial_failure_ids"] == ["json_actions-1"]
     assert artifact["recovery_resolved"] is False
+    assert artifact["recovery_checkpoint_artifact"] == str(checkpoint_path)
+    assert checkpoint["resume"]["strategy"] == "recover_partial_failure"
+    assert checkpoint["unresolved_partial_failure_ids"] == ["json_actions-1"]
+    assert checkpoint["last_partial_failure_mutated_paths"] == ["partial.txt"]
+    assert "json_actions-1" in checkpoint["resume"]["prompt"]
+    assert "partial.txt" in checkpoint["resume"]["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_writes_recovery_checkpoint_on_max_iterations(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "todo.txt"
+    target.write_text("keep going\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "inspect but do not finish yet",
+                "actions": [{"tool": "read_file", "path": "todo.txt"}],
+            }
+        ]
+    )
+    runtime_session = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=session,
+        project_dir=tmp_path,
+        max_iterations=1,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "inspect todo.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    checkpoint_path = artifact_dir / "generic_edit_recovery_checkpoint.json"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    summary_markdown = (artifact_dir / "generic_edit_summary.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert result.status == "error"
+    assert result_artifact["recoverable"] is True
+    assert result_artifact["recovery_checkpoint_artifact"] == str(checkpoint_path)
+    assert checkpoint["status"] == "error"
+    assert checkpoint["stop_reason"] == "max_iterations"
+    assert checkpoint["next_iteration"] == 2
+    assert checkpoint["resume"]["strategy"] == "continue_from_trace"
+    assert "generic_edit_trace.json" in checkpoint["resume"]["prompt"]
+    assert checkpoint["recent_actions"][-1]["tool"] == "read_file"
+    assert checkpoint["transaction_summary"]["transaction_count"] == 1
+    assert "## Resume" in summary_markdown
+    assert str(checkpoint_path) in summary_markdown
 
 
 @pytest.mark.asyncio
