@@ -1,0 +1,12 @@
+{
+  "name": "testing-example",
+  "version": "1.0.0",
+  "author": "Auto-Coding Team",
+  "description": "Example plugin demonstrating comprehensive testing patterns for Auto Code plugins",
+  "plugin_type": "agent",
+  "auto_claude_version": ">=1.0.0",
+  "required_permissions": ["read_files"],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/main/examples/plugins/testing-example",
+  "license": "MIT"
+}
