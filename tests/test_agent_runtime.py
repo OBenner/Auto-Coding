@@ -3021,6 +3021,91 @@ async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
 
 
 @pytest.mark.asyncio
+async def test_runtime_mcp_bridge_executes_custom_mcp_generic_call_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    calls: list[dict[str, Any]] = []
+
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict[str, Any],
+        project_dir: Path,
+        **_kwargs,
+    ):
+        await asyncio.sleep(0)
+        calls.append(
+            {
+                "server": health.server,
+                "tool_name": tool_name,
+                "arguments": arguments,
+                "project_dir": project_dir,
+            }
+        )
+        return {"content": [{"type": "text", "text": "custom result"}]}
+
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "https://docs.example.test/mcp/",
+                "headers": {"Authorization": "Bearer test-token"},
+            }
+        ]
+    }
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(
+        auto_claude_tools=[],
+        mcp_servers=("my-docs",),
+        mcp_config=project_mcp_config,
+        mcp_allowed_permissions=("call_custom_mcp",),
+    )
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    assert bridge.provider_tool_schemas()[0]["name"] == "mcp__my-docs__call_tool"
+
+    result = await bridge.execute(
+        {
+            "tool": "mcp__my-docs__call_tool",
+            "tool_name": "search",
+            "arguments": {"query": "runtime bridge"},
+        }
+    )
+
+    assert result.ok is True
+    assert result.message == "custom result"
+    assert calls == [
+        {
+            "server": "my-docs",
+            "tool_name": "search",
+            "arguments": {"query": "runtime bridge"},
+            "project_dir": tmp_path,
+        }
+    ]
+    audit_path = Path(result.data["audit_artifact"])
+    audit_event = json.loads(audit_path.read_text(encoding="utf-8").splitlines()[0])
+    assert audit_event["server"] == "my-docs"
+    assert audit_event["tool"] == "call_tool"
+    assert audit_event["permission"] == "call_custom_mcp"
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_executes_puppeteer_external_mcp_tool(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3409,6 +3494,91 @@ def test_external_mcp_adapter_registry_exposes_http_contracts():
     assert graphiti_policy_by_tool["add_episode"].mutating is True
     assert linear_policy_by_tool["list_teams"].audit_level == "read"
     assert linear_policy_by_tool["create_issue"].mutating is True
+
+
+def test_external_mcp_adapter_registry_exposes_custom_server_contract():
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "command",
+                "command": "uvx",
+                "args": ["my-docs-mcp"],
+                "description": "Private documentation server.",
+            }
+        ]
+    }
+
+    adapter = external_mcp_adapter_for(
+        "mcp__my-docs__call_tool",
+        project_mcp_config=project_mcp_config,
+    )
+    health = describe_external_mcp_server_health(
+        "my-docs",
+        project_mcp_config=project_mcp_config,
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    )
+
+    assert adapter is not None
+    assert adapter.server == "my-docs"
+    assert adapter.display_name == "My Docs"
+    assert adapter.transport == "stdio"
+    assert adapter.tool_names == ("call_tool",)
+    assert adapter.exposed_server_name == "my-docs"
+    assert adapter.tool_definitions[0].policy.permission == "call_custom_mcp"
+    assert adapter.tool_definitions[0].policy.mutating is True
+    assert adapter.tool_definitions[0].parameters["required"] == ["tool_name"]
+    assert health.status == "ready_to_connect"
+    assert health.command == "uvx"
+    assert health.args == ("my-docs-mcp",)
+    assert health.adapter_registered is True
+    assert health.executable_tools == ("call_tool",)
+    assert executable_external_mcp_tools(
+        requested_servers=("my-docs",),
+        project_mcp_config=project_mcp_config,
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    ) == ("mcp__my-docs__call_tool",)
+
+
+def test_runtime_mcp_bridge_loads_custom_mcp_config_from_project_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    mcp_config_dir = tmp_path / ".auto-claude"
+    mcp_config_dir.mkdir()
+    custom_servers = [
+        {
+            "id": "my-docs",
+            "name": "My Docs",
+            "type": "command",
+            "command": "uvx",
+            "args": ["my-docs-mcp"],
+        }
+    ]
+    (mcp_config_dir / ".env").write_text(
+        f"CUSTOM_MCP_SERVERS={json.dumps(custom_servers)}\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    session = SimpleNamespace(
+        auto_claude_tools=[],
+        mcp_servers=("my-docs",),
+        mcp_allowed_permissions=("call_custom_mcp",),
+    )
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    assert bridge.available_servers == ("my-docs",)
+    assert bridge.provider_tool_schemas()[0]["name"] == "mcp__my-docs__call_tool"
+    report = bridge.report()
+    assert report["server_statuses"][0]["runtime_path"] == "external_bridge"
+    assert report["bridge_plan"]["external_bridged_servers"] == ["my-docs"]
 
 
 def test_external_mcp_health_reports_ready_context7_when_client_enabled():
