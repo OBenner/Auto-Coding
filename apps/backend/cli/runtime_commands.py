@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -25,11 +26,14 @@ from agents.runtime.fallback import (
     resolve_runtime_mode_with_fallback,
 )
 from agents.runtime.mcp_bridge import (
+    CUSTOM_MCP_SERVERS_CONFIG_KEY,
     EXTERNAL_MCP_CLIENT_ENV,
     LOCAL_BRIDGE_SERVER,
     MCP_SERVER_CATALOG,
     build_external_mcp_health_matrix,
     check_external_mcp_contracts,
+    describe_external_mcp_server_health,
+    discover_external_mcp_tools,
     executable_external_mcp_servers,
     executable_external_mcp_tools,
     registered_external_mcp_servers,
@@ -43,6 +47,7 @@ from agents.runtime.subagents import (
 
 DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
 DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS = registered_external_mcp_servers()
+logger = logging.getLogger(__name__)
 
 
 def _format_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -280,16 +285,25 @@ def build_runtime_modes_payload() -> dict[str, Any]:
     }
 
 
-def build_external_mcp_smoke_payload(*, project_dir: Path) -> dict[str, Any]:
+def build_external_mcp_smoke_payload(
+    *,
+    project_dir: Path,
+    sync_custom_tools: bool = False,
+) -> dict[str, Any]:
     """Run opt-in external MCP tools/list contract checks."""
+    project_mcp_config = load_project_mcp_config_for_runtime_commands(project_dir)
+    requested_servers = registered_external_mcp_servers(
+        project_mcp_config=project_mcp_config or None,
+    )
     checks = asyncio.run(
         check_external_mcp_contracts(
-            requested_servers=DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS,
+            requested_servers=requested_servers,
             project_dir=project_dir,
+            project_mcp_config=project_mcp_config or None,
         )
     )
     skipped = sum(1 for check in checks if check["status"] == "skipped")
-    return {
+    payload = {
         "external_mcp_contract_checks": checks,
         "summary": {
             "total": len(checks),
@@ -302,6 +316,154 @@ def build_external_mcp_smoke_payload(*, project_dir: Path) -> dict[str, Any]:
             ),
         },
     }
+    if sync_custom_tools:
+        payload["custom_mcp_tool_schema_sync"] = asyncio.run(
+            sync_custom_mcp_tool_schemas(
+                project_dir=project_dir,
+                project_mcp_config=project_mcp_config,
+            )
+        )
+    return payload
+
+
+def load_project_mcp_config_for_runtime_commands(project_dir: Path) -> dict[str, Any]:
+    """Load project MCP config for runtime diagnostics without SDK coupling."""
+    try:
+        from core.client import load_project_mcp_config
+    except Exception as exc:
+        logger.warning(
+            "load_project_mcp_config_for_runtime_commands could not import "
+            "load_project_mcp_config: %s",
+            exc,
+        )
+        return {}
+    try:
+        config = load_project_mcp_config(project_dir)
+    except Exception as exc:
+        logger.warning(
+            "load_project_mcp_config_for_runtime_commands could not load "
+            "project MCP config with load_project_mcp_config: %s",
+            exc,
+        )
+        return {}
+    if not isinstance(config, dict):
+        logger.warning(
+            "load_project_mcp_config_for_runtime_commands ignored non-dict "
+            "load_project_mcp_config result: %s",
+            type(config).__name__,
+        )
+        return {}
+    return config
+
+
+async def sync_custom_mcp_tool_schemas(
+    *,
+    project_dir: Path,
+    project_mcp_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Discover and persist live tools/list schemas for custom MCP servers."""
+    custom_servers = [
+        dict(server)
+        for server in project_mcp_config.get(CUSTOM_MCP_SERVERS_CONFIG_KEY, ())
+        if isinstance(server, dict)
+    ]
+    updated_servers: list[str] = []
+    skipped_servers: list[str] = []
+    failed_servers: list[str] = []
+
+    for index, server_config in enumerate(custom_servers):
+        server_id = str(server_config.get("id") or "").strip()
+        if not server_id:
+            continue
+        health = describe_external_mcp_server_health(
+            server_id,
+            project_mcp_config={
+                **project_mcp_config,
+                CUSTOM_MCP_SERVERS_CONFIG_KEY: custom_servers,
+            },
+        )
+        if not health.ready_to_connect or not health.execution_supported:
+            skipped_servers.append(server_id)
+            continue
+        try:
+            result = await discover_external_mcp_tools(
+                health=health,
+                project_dir=project_dir,
+                project_mcp_config={
+                    **project_mcp_config,
+                    CUSTOM_MCP_SERVERS_CONFIG_KEY: custom_servers,
+                },
+            )
+        except Exception:
+            failed_servers.append(server_id)
+            continue
+        tools = normalize_mcp_tools_for_persistence(result)
+        if not tools:
+            skipped_servers.append(server_id)
+            continue
+        custom_servers[index] = {**server_config, "tools": tools}
+        updated_servers.append(server_id)
+
+    if updated_servers:
+        write_project_custom_mcp_servers(project_dir, custom_servers)
+
+    return {
+        "updated_servers": updated_servers,
+        "skipped_servers": skipped_servers,
+        "failed_servers": failed_servers,
+    }
+
+
+def normalize_mcp_tools_for_persistence(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normalize live MCP tools/list output for CUSTOM_MCP_SERVERS storage."""
+    raw_tools = result.get("tools", ())
+    if not isinstance(raw_tools, (list, tuple)):
+        return []
+    tools: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    for raw_tool in raw_tools:
+        if not isinstance(raw_tool, dict):
+            continue
+        name = str(raw_tool.get("name") or "").strip()
+        if not name or name in seen_names:
+            continue
+        seen_names.add(name)
+        tool: dict[str, Any] = {"name": name}
+        description = str(raw_tool.get("description") or "").strip()
+        if description:
+            tool["description"] = description
+        schema = (
+            raw_tool.get("inputSchema")
+            or raw_tool.get("input_schema")
+            or raw_tool.get("parameters")
+        )
+        if isinstance(schema, dict):
+            tool["inputSchema"] = schema
+        tools.append(tool)
+    return tools
+
+
+def write_project_custom_mcp_servers(
+    project_dir: Path,
+    custom_servers: list[dict[str, Any]],
+) -> None:
+    """Persist CUSTOM_MCP_SERVERS into the project env file."""
+    env_dir = project_dir / ".auto-claude"
+    env_dir.mkdir(parents=True, exist_ok=True)
+    env_path = env_dir / ".env"
+    value = json.dumps(custom_servers, ensure_ascii=False)
+    replacement = f"{CUSTOM_MCP_SERVERS_CONFIG_KEY}={value}"
+
+    lines = (
+        env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    )
+    for index, line in enumerate(lines):
+        if line.startswith(f"{CUSTOM_MCP_SERVERS_CONFIG_KEY}="):
+            lines[index] = replacement
+            break
+    else:
+        lines.append(replacement)
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def external_mcp_smoke_has_failures(payload: dict[str, Any]) -> bool:
@@ -349,9 +511,13 @@ def handle_external_mcp_smoke_command(
     *,
     project_dir: Path,
     output_json: bool = False,
+    sync_custom_tools: bool = False,
 ) -> dict[str, Any]:
     """Run opt-in external MCP tools/list contract checks."""
-    payload = build_external_mcp_smoke_payload(project_dir=project_dir)
+    payload = build_external_mcp_smoke_payload(
+        project_dir=project_dir,
+        sync_custom_tools=sync_custom_tools,
+    )
     if output_json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
