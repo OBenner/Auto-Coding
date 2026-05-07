@@ -18,7 +18,8 @@ import {
   changelogMock,
   insightsMock,
   infrastructureMock,
-  settingsMock
+  settingsMock,
+  searchMock
 } from './mocks';
 
 const MOCK_CODEX_CONFIG_DIR = '/mock/codex-home';
@@ -905,7 +906,8 @@ const browserMockAPI: ElectronAPI = {
         generated_at: new Date().toISOString(),
       }
     }),
-  }
+  },
+  search: searchMock,
 };
 
 /**

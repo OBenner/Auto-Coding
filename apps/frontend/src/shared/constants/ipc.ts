@@ -805,6 +805,17 @@ export const IPC_CHANNELS = {
   SECURITY_RESET_TO_DEFAULT: 'security:resetToDefault',
   SECURITY_VALIDATE_COMMAND: 'security:validateCommand',
 
+  // Code Search operations
+  SEARCH_CODE: 'search:code',
+  SEARCH_GET_STATUS: 'search:getStatus',
+  SEARCH_SAVED_LIST: 'search:savedList',
+  SEARCH_SAVED_GET: 'search:savedGet',
+  SEARCH_SAVED_SAVE: 'search:savedSave',
+  SEARCH_SAVED_UPDATE: 'search:savedUpdate',
+  SEARCH_SAVED_DELETE: 'search:savedDelete',
+  SEARCH_SAVED_EXPORT: 'search:savedExport',
+  SEARCH_SAVED_IMPORT: 'search:savedImport',
+
   // Collaboration operations
   COLLABORATION_PERMISSIONS_GET: 'collaboration:permissionsGet',
   COLLABORATION_PERMISSIONS_ADD: 'collaboration:permissionsAdd',

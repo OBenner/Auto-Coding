@@ -166,7 +166,7 @@ async function cleanupTestDirs(): Promise<void> {
 }
 
 // Increase timeout for all tests in this file due to dynamic imports and setup overhead
-describe("IPC Handlers", { timeout: 15000 }, () => {
+describe("IPC Handlers", { timeout: 30_000 }, () => {
   let ipcMain: EventEmitter & {
     handlers: Map<string, Function>;
     invokeHandler: (channel: string, event: unknown, ...args: unknown[]) => Promise<unknown>;

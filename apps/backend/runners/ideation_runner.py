@@ -26,6 +26,9 @@ from pathlib import Path
 # Add auto-claude to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Platform-specific dependency validation is deferred to main() to avoid
+# blocking pytest collection (ACS-253).
+# Load .env file with centralized error handling
 from cli.utils import import_dotenv
 from core.dependency_validator import validate_platform_dependencies
 

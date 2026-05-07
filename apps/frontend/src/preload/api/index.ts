@@ -29,6 +29,8 @@ import { ContextViewerAPI, createContextViewerAPI } from './modules/context-view
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
 import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
 import { SecurityAPI, createSecurityAPI } from './security-api';
+import type { SearchAPI } from './modules/search-api';
+import { createSearchAPI } from './modules/search-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -51,9 +53,11 @@ export interface ElectronAPI extends
   PluginAPI,
   ContextViewerAPI,
   FeedbackAPI,
-  SecurityAPI {
+  SecurityAPI,
+  SearchAPI {
   /** Security API (nested access for security store) */
   security: SecurityAPI;
+  search: SearchAPI;
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
@@ -69,6 +73,7 @@ export interface ElectronAPI extends
 
 export const createElectronAPI = (): ElectronAPI => {
   const securityAPI = createSecurityAPI();
+  const searchAPI = createSearchAPI();
   return {
     ...createProjectAPI(),
     ...createTerminalAPI(),
@@ -87,6 +92,7 @@ export const createElectronAPI = (): ElectronAPI => {
     ...createPluginAPI(),
     ...createContextViewerAPI(),
     ...createFeedbackAPI(),
+    ...searchAPI,
     ...securityAPI,
     security: securityAPI,
     github: createGitHubAPI(),
@@ -94,7 +100,8 @@ export const createElectronAPI = (): ElectronAPI => {
     pattern: createPatternAPI(),
     sessionReplay: createSessionReplayAPI(),
     agentInspector: createAgentInspectorAPI(),
-    scheduler: createSchedulerAPI()
+    scheduler: createSchedulerAPI(),
+    search: searchAPI
   };
 };
 
@@ -124,7 +131,8 @@ export {
   createContextViewerAPI,
   createSchedulerAPI,
   createFeedbackAPI,
-  createSecurityAPI
+  createSecurityAPI,
+  createSearchAPI
 };
 
 export type {
@@ -154,5 +162,6 @@ export type {
   ContextViewerAPI,
   SchedulerAPI,
   FeedbackAPI,
-  SecurityAPI
+  SecurityAPI,
+  SearchAPI
 };

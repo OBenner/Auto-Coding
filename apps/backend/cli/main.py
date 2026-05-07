@@ -62,6 +62,7 @@ from .scheduler_commands import (
     handle_schedule_status_command,
     handle_schedule_stop_command,
 )
+from .search_commands import handle_search_command
 from .security_commands import handle_security_audit_command
 from .setup_commands import handle_setup_command
 from .spec_commands import print_specs_list
@@ -111,6 +112,12 @@ Examples:
   # Status checks
   python auto-claude/run.py --spec 001 --review-status  # Check human review status
   python auto-claude/run.py --spec 001 --qa-status      # Check QA validation status
+
+  # Code search
+  python auto-claude/run.py --search 'authentication functions'
+  python auto-claude/run.py --search 'error handling' --search-type patterns
+  python auto-claude/run.py --search-status              # Show search system status
+  python auto-claude/run.py --saved-searches list        # List saved searches
 
 Prerequisites:
   1. Authenticate: Run 'claude' and type '/login'
@@ -620,6 +627,110 @@ Environment Variables:
         help="Output format for security audit report (default: both)",
     )
 
+    # Search commands
+    parser.add_argument(
+        "--search",
+        type=str,
+        default=None,
+        metavar="QUERY",
+        help="Perform semantic code search with natural language query",
+    )
+    parser.add_argument(
+        "--search-status",
+        action="store_true",
+        help="Show search system status and capabilities",
+    )
+    parser.add_argument(
+        "--search-type",
+        type=str,
+        default="unified",
+        choices=["unified", "purpose", "patterns", "callers", "callees"],
+        help="Type of search to perform (default: unified)",
+    )
+    parser.add_argument(
+        "--search-limit",
+        type=int,
+        default=20,
+        help="Maximum number of search results (default: 20)",
+    )
+    parser.add_argument(
+        "--search-entity-type",
+        type=str,
+        default=None,
+        metavar="TYPE",
+        help="Filter by entity type for purpose search (e.g., function, class)",
+    )
+    parser.add_argument(
+        "--saved-searches",
+        type=str,
+        default=None,
+        metavar="ACTION",
+        help="Manage saved searches: list, save, load, delete, export, import",
+    )
+    parser.add_argument(
+        "--saved-name",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help="Saved search name (for save/load/delete)",
+    )
+    parser.add_argument(
+        "--saved-query",
+        type=str,
+        default=None,
+        metavar="QUERY",
+        help="Search query to save (for save action)",
+    )
+    parser.add_argument(
+        "--saved-type",
+        type=str,
+        default="semantic",
+        metavar="TYPE",
+        help="Search type to save (default: semantic)",
+    )
+    parser.add_argument(
+        "--saved-description",
+        type=str,
+        default=None,
+        metavar="DESC",
+        help="Description for saved search",
+    )
+    parser.add_argument(
+        "--saved-tags",
+        nargs="+",
+        default=None,
+        metavar="TAG",
+        help="Tags for saved search (space-separated)",
+    )
+    parser.add_argument(
+        "--search-export",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Export search results to file (with --search or --saved-searches export)",
+    )
+    parser.add_argument(
+        "--search-export-format",
+        type=str,
+        default="json",
+        choices=["json", "csv"],
+        help="Export format for search results (default: json)",
+    )
+    parser.add_argument(
+        "--search-import",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Import saved searches from file (with --saved-searches import)",
+    )
+    parser.add_argument(
+        "--search-merge-strategy",
+        type=str,
+        default="error",
+        choices=["error", "skip", "overwrite"],
+        help="Merge strategy for importing searches (default: error)",
+    )
+
     # Failure pattern analysis commands
     parser.add_argument(
         "--failure-pattern-analyze",
@@ -973,6 +1084,35 @@ def _run_cli() -> None:
             spec_dir=spec_dir,
             output_format=args.security_output_format,
             verbose=args.verbose,
+        )
+        return
+
+    # Handle search commands
+    if args.search or args.search_status or args.saved_searches:
+        import asyncio
+
+        export_path = Path(args.search_export) if args.search_export else None
+        import_path = Path(args.search_import) if args.search_import else None
+
+        asyncio.run(
+            handle_search_command(
+                project_dir=project_dir,
+                query=args.search,
+                search_type=args.search_type,
+                limit=args.search_limit,
+                entity_type=args.search_entity_type,
+                status=args.search_status,
+                saved_action=args.saved_searches,
+                saved_name=args.saved_name,
+                saved_query=args.saved_query,
+                saved_type=args.saved_type,
+                saved_description=args.saved_description,
+                saved_tags=args.saved_tags,
+                export_path=export_path,
+                export_format=args.search_export_format,
+                import_path=import_path,
+                merge_strategy=args.search_merge_strategy,
+            )
         )
         return
 
