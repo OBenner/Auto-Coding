@@ -250,6 +250,42 @@ class GenericEditRuntimeSession:
             subtask_id=subtask_id,
         )
 
+    async def resume(
+        self,
+        *,
+        checkpoint_path: Path,
+        spec_dir: Path,
+        verbose: bool,
+        phase: Any,
+        subtask_id: str | None = None,
+    ) -> AgentRunResult:
+        """Resume generic_edit execution from a recovery checkpoint artifact."""
+        self._cancel_requested = False
+        self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
+            agent_session=self.agent_session,
+            spec_dir=spec_dir,
+            project_dir=self._executor.project_dir,
+            agent_type=self.agent_type,
+        )
+        checkpoint = load_generic_edit_recovery_checkpoint(checkpoint_path)
+        trace_path = generic_edit_trace_path_for_checkpoint(checkpoint_path)
+        trace = load_generic_edit_checkpoint_trace(trace_path)
+        message = build_generic_edit_checkpoint_resume_message(
+            checkpoint=checkpoint,
+            trace_path=trace_path,
+        )
+        next_iteration = checkpoint_next_iteration(checkpoint, trace)
+
+        return await self._run_json_action_loop(
+            message=message,
+            spec_dir=spec_dir,
+            verbose=verbose,
+            phase=phase,
+            subtask_id=subtask_id or checkpoint.get("subtask_id"),
+            initial_trace=trace,
+            start_iteration=next_iteration,
+        )
+
     async def _run_json_action_loop(
         self,
         *,
@@ -259,13 +295,14 @@ class GenericEditRuntimeSession:
         phase: Any,
         subtask_id: str | None,
         initial_trace: list[dict[str, Any]] | None = None,
+        start_iteration: int = 1,
     ) -> AgentRunResult:
         base_prompt = build_generic_edit_prompt(message, self._mcp_bridge)
         prompt = base_prompt
         trace: list[dict[str, Any]] = list(initial_trace or [])
         observation_path = initialize_generic_edit_observations(spec_dir)
 
-        for iteration in range(1, self.max_iterations + 1):
+        for iteration in range(start_iteration, start_iteration + self.max_iterations):
             if self._cancel_requested:
                 return generic_edit_cancelled_result()
             response_text = await self._complete(prompt)
@@ -1910,6 +1947,8 @@ def save_generic_edit_artifacts(
         result_payload["observation_artifact"] = str(observation_path)
     if recovery_checkpoint is not None:
         write_json_artifact(paths["recovery_checkpoint"], recovery_checkpoint)
+    else:
+        clear_generic_edit_recovery_checkpoint(paths["recovery_checkpoint"])
     write_json_artifact(paths["result"], result_payload)
     write_generic_edit_transactions(paths["transactions"], transaction_summary)
     paths["summary"].write_text(
@@ -1955,6 +1994,14 @@ def write_json_artifact(path: Path, payload: dict[str, Any]) -> None:
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def clear_generic_edit_recovery_checkpoint(path: Path) -> None:
+    """Remove stale recovery checkpoint artifacts after a non-recoverable finish."""
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
 
 
 def build_generic_edit_result_payload(
@@ -2114,6 +2161,99 @@ def build_generic_edit_recovery_checkpoint(
         ],
         "mcp_support": mcp_support,
     }
+
+
+def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, Any]:
+    """Load and validate a persisted generic_edit recovery checkpoint."""
+    try:
+        payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise GenericEditRuntimeError(
+            f"Generic edit recovery checkpoint not found: {checkpoint_path}"
+        ) from e
+    except json.JSONDecodeError as e:
+        raise GenericEditRuntimeError(
+            f"Generic edit recovery checkpoint is not valid JSON: {e}"
+        ) from e
+
+    if not isinstance(payload, dict):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint must be a JSON object."
+        )
+    if payload.get("recoverable") is not True:
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint is not marked recoverable."
+        )
+    if not isinstance(payload.get("resume"), dict):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint is missing resume metadata."
+        )
+    return payload
+
+
+def generic_edit_trace_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted trace path colocated with a recovery checkpoint."""
+    return checkpoint_path.parent / "generic_edit_trace.json"
+
+
+def load_generic_edit_checkpoint_trace(
+    trace_path: Path,
+) -> list[dict[str, Any]]:
+    """Load the trace referenced by a recovery checkpoint."""
+    try:
+        payload = json.loads(trace_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise GenericEditRuntimeError(
+            f"Generic edit recovery trace not found: {trace_path}"
+        ) from e
+    except json.JSONDecodeError as e:
+        raise GenericEditRuntimeError(
+            f"Generic edit recovery trace is not valid JSON: {e}"
+        ) from e
+
+    trace = payload.get("trace") if isinstance(payload, dict) else None
+    if not isinstance(trace, list) or not all(isinstance(item, dict) for item in trace):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery trace must contain a trace object list."
+        )
+    return trace
+
+
+def checkpoint_next_iteration(
+    checkpoint: dict[str, Any],
+    trace: list[dict[str, Any]],
+) -> int:
+    """Return the next iteration number for a resumed generic_edit loop."""
+    next_iteration = checkpoint.get("next_iteration")
+    if isinstance(next_iteration, int) and next_iteration > 0:
+        return max(next_iteration, len(trace) + 1)
+    return len(trace) + 1
+
+
+def build_generic_edit_checkpoint_resume_message(
+    *,
+    checkpoint: dict[str, Any],
+    trace_path: Path,
+) -> str:
+    """Build the task prompt for a resumed generic_edit run."""
+    resume = checkpoint["resume"]
+    prompt = str(resume.get("prompt") or "").strip()
+    if not prompt:
+        prompt = "Resume this generic_edit run from the persisted checkpoint."
+
+    return "\n".join(
+        [
+            prompt,
+            "",
+            f"Recovery checkpoint artifact: {checkpoint.get('artifact_path')}",
+            f"Previous trace artifact: {trace_path}",
+            f"Resume strategy: {resume.get('strategy', 'unknown')}",
+            (
+                "Use the previous trace as already completed context; inspect "
+                "current workspace state before any new mutation."
+            ),
+        ]
+    )
 
 
 def should_write_generic_edit_recovery_checkpoint(

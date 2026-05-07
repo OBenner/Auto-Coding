@@ -4645,6 +4645,99 @@ async def test_generic_edit_runtime_writes_recovery_checkpoint_on_max_iterations
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_resumes_from_recovery_checkpoint(tmp_path: Path):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "todo.txt"
+    target.write_text("keep going\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "inspect but do not finish yet",
+                "actions": [{"tool": "read_file", "path": "todo.txt"}],
+            }
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+        max_iterations=1,
+    )
+
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "inspect todo.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    assert first_result.status == "error"
+    assert checkpoint_path.exists()
+    checkpoint_payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint_payload["trace_artifact"] = str(tmp_path / "untrusted-trace.json")
+    checkpoint_path.write_text(
+        json.dumps(checkpoint_payload, indent=2),
+        encoding="utf-8",
+    )
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "finish from checkpoint",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Resumed from checkpoint",
+                        "tests": ["pytest tests/test_agent_runtime.py"],
+                        "risks": [],
+                    }
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+        max_iterations=2,
+    )
+
+    resumed = await resume_runtime_session(
+        resume_runtime,
+        checkpoint_path,
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    trace_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    summary_markdown = (tmp_path / "artifacts" / "generic_edit_summary.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert resumed.status == "continue"
+    assert "Resume this generic_edit run" in resume_session.messages[0]
+    assert "generic_edit_recovery_checkpoint.json" in resume_session.messages[0]
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["stop_reason"] == "finish"
+    assert result_artifact["recoverable"] is False
+    assert result_artifact["transaction_count"] == 2
+    assert [entry["iteration"] for entry in trace_artifact["trace"]] == [1, 2]
+    assert trace_artifact["trace"][1]["transaction"]["id"] == "json_actions-2"
+    assert not checkpoint_path.exists()
+    assert "## Resume" not in summary_markdown
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_native_tools_reject_finish_with_unresolved_partial_failure(
     tmp_path: Path,
 ):

@@ -85,7 +85,7 @@ from .runner_router import (
     resolve_runtime_runner_route,
     runtime_runner_router_enabled,
 )
-from .session_engine import run_runtime_session
+from .session_engine import resume_runtime_session, run_runtime_session
 from .subagents import (
     MAX_SUBAGENT_ATTEMPTS,
     RuntimeSubagentAttempt,
@@ -170,6 +170,7 @@ __all__ = [
     "resolve_runtime_subagent_support",
     "resolve_runtime_mode_with_fallback",
     "resolve_runtime_runner_route",
+    "resume_runtime_session",
     "run_runtime_session",
     "runner_candidates_for_modes",
     "runtime_fallback_enabled",
