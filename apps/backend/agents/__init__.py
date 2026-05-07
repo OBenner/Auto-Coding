@@ -29,6 +29,9 @@ from .memory_manager import save_session_memory as save_session_memory
 from .memory_manager import save_session_to_graphiti as save_session_to_graphiti
 from .migration_assistant import run_migration_assistant as run_migration_assistant
 from .performance_profiler import run_performance_profiler as run_performance_profiler
+from .refactoring_generator import (
+    run_refactoring_generator_session as run_refactoring_generator_session,
+)
 from .planner import run_followup_planner as run_followup_planner
 from .session import post_session_processing as post_session_processing
 from .session import run_agent_session as run_agent_session
@@ -49,6 +52,7 @@ __all__ = [
     "run_performance_profiler",
     "run_code_review_session",
     "run_documentation_generator_session",
+    "run_refactoring_generator_session",
     # Memory
     "debug_memory_system_status",
     "get_graphiti_context",

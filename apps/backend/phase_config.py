@@ -124,6 +124,10 @@ AGENT_DEFAULT_MODELS: dict[str, str] = {
     "roadmap_discovery": "sonnet",
     "competitor_analysis": "sonnet",
     "ideation": "sonnet",
+    # ═══════════════════════════════════════════════════════════════════════
+    # REFACTORING AGENTS (Use sonnet for code refactoring)
+    # ═══════════════════════════════════════════════════════════════════════
+    "refactoring_generator": "sonnet",
 }
 
 # Agent-level default provider mapping
