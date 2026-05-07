@@ -28,6 +28,7 @@ MCP_AUTO_CLAUDE_PREFIX = "mcp__auto-claude__"
 LOCAL_BRIDGE_SERVER = "auto-claude"
 MCP_BRIDGE_AUDIT_FILENAME = "mcp_bridge_audit.jsonl"
 EXTERNAL_MCP_CLIENT_ENV = "AUTO_CODE_EXTERNAL_MCP_CLIENT"
+MCP_ALLOWED_PERMISSIONS_ENV = "AUTO_CODE_MCP_ALLOWED_PERMISSIONS"
 EXTERNAL_MCP_PROTOCOL_VERSION_ENV = "AUTO_CODE_MCP_PROTOCOL_VERSION"
 DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION = "2024-11-05"
 DEFAULT_EXTERNAL_MCP_HTTP_PROTOCOL_VERSION = "2025-06-18"
@@ -143,6 +144,25 @@ class RuntimeMcpToolPolicy:
             "mutating": self.mutating,
             "audit_required": self.audit_required,
         }
+
+
+@dataclass(frozen=True)
+class RuntimeMcpPermissionDecision:
+    """Result of checking a bridged MCP tool policy against an allowlist."""
+
+    allowed: bool
+    reason: str
+    allowed_permissions: tuple[str, ...] | None = None
+
+    def to_audit_dict(self) -> dict[str, Any]:
+        """Serialize the permission decision for audit events and observations."""
+        payload: dict[str, Any] = {
+            "permission_allowed": self.allowed,
+            "permission_decision_reason": self.reason,
+        }
+        if self.allowed_permissions is not None:
+            payload["allowed_permissions"] = list(self.allowed_permissions)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -1632,11 +1652,15 @@ class RuntimeMcpBridge:
         spec_dir: Path,
         project_dir: Path,
         allowed_tools: set[str],
+        allowed_mcp_permissions: set[str] | None = None,
         requested_servers: tuple[str, ...] = (),
     ):
         self.spec_dir = spec_dir
         self.project_dir = project_dir
         self.allowed_tools = allowed_tools
+        self.allowed_mcp_permissions = normalize_mcp_allowed_permissions(
+            allowed_mcp_permissions
+        )
         self.requested_servers = requested_servers
         local_tools = load_auto_claude_bridge_tools(
             spec_dir=spec_dir,
@@ -1667,10 +1691,13 @@ class RuntimeMcpBridge:
         )
         configured_tools = getattr(agent_session, "auto_claude_tools", None)
         configured_servers = getattr(agent_session, "mcp_servers", None)
+        configured_permissions = configured_mcp_allowed_permissions(agent_session)
         if configured_tools is None and resolved_agent_type:
             config = get_agent_config(resolved_agent_type)
             configured_tools = config.get("auto_claude_tools", [])
             configured_servers = config.get("mcp_servers", [])
+            if configured_permissions is None:
+                configured_permissions = configured_mcp_allowed_permissions(config)
         requested_servers = normalize_mcp_server_names(configured_servers or ())
         if not configured_tools and not requested_servers:
             return None
@@ -1683,6 +1710,7 @@ class RuntimeMcpBridge:
             spec_dir=spec_dir,
             project_dir=project_dir,
             allowed_tools=allowed_tools,
+            allowed_mcp_permissions=configured_permissions,
             requested_servers=requested_servers,
         )
         return bridge if bridge.has_tools or bridge.requested_servers else None
@@ -1757,6 +1785,41 @@ class RuntimeMcpBridge:
             **spec.policy.to_dict(),
             "action": safe_mcp_action_for_trace(action),
         }
+        permission_decision = check_mcp_tool_permission(
+            spec.policy,
+            allowed_permissions=self.allowed_mcp_permissions,
+        )
+        audit_base.update(permission_decision.to_audit_dict())
+        if not permission_decision.allowed:
+            audit_artifact = write_mcp_bridge_audit_event(
+                self.spec_dir,
+                {
+                    **audit_base,
+                    "status": "denied",
+                    "reason": permission_decision.reason,
+                },
+            )
+            return ToolActionResult(
+                tool=spec.exposed_name,
+                ok=False,
+                message=(
+                    "Bridged MCP tool permission denied: "
+                    f"{spec.policy.permission} is not allowed for {spec.exposed_name}."
+                ),
+                data={
+                    "server": spec.server,
+                    "name": spec.name,
+                    **spec.policy.to_dict(),
+                    "permission_allowed": False,
+                    "permission_denial_reason": permission_decision.reason,
+                    "allowed_permissions": (
+                        list(permission_decision.allowed_permissions)
+                        if permission_decision.allowed_permissions is not None
+                        else None
+                    ),
+                    "audit_artifact": audit_artifact,
+                },
+            )
         try:
             result = spec.handler(args)
             if inspect.isawaitable(result):
@@ -1778,6 +1841,7 @@ class RuntimeMcpBridge:
                     "server": spec.server,
                     "name": spec.name,
                     **spec.policy.to_dict(),
+                    **permission_decision.to_audit_dict(),
                     "audit_artifact": audit_artifact,
                 },
             )
@@ -1800,6 +1864,7 @@ class RuntimeMcpBridge:
                 "server": spec.server,
                 "name": spec.name,
                 **spec.policy.to_dict(),
+                **permission_decision.to_audit_dict(),
                 "audit_artifact": audit_artifact,
                 "result": result,
             },
@@ -1828,6 +1893,16 @@ class RuntimeMcpBridge:
             "tool_count": len(self._tools),
             "tools": [tool.exposed_name for tool in self._tools],
             "tool_policies": [tool.policy_metadata() for tool in self._tools],
+            "permission_policy": {
+                "mode": "allow_all"
+                if self.allowed_mcp_permissions is None
+                else "allowlist",
+                "allowed_permissions": (
+                    None
+                    if self.allowed_mcp_permissions is None
+                    else sorted(self.allowed_mcp_permissions)
+                ),
+            },
             "requested_servers": list(self.requested_servers),
             "available_servers": list(self.available_servers),
             "unavailable_servers": list(self.unavailable_servers),
@@ -2866,6 +2941,77 @@ def normalize_mcp_server_name(server_name: str) -> str:
     if server == "linear-server":
         return "linear"
     return server
+
+
+def configured_mcp_allowed_permissions(source: Any) -> set[str] | None:
+    """Return an MCP permission allowlist from a session/config object if present."""
+    if isinstance(source, Mapping):
+        for key in (
+            "mcp_allowed_permissions",
+            "allowed_mcp_permissions",
+            "mcp_permissions",
+        ):
+            if key in source:
+                return normalize_mcp_allowed_permissions(source.get(key))
+        return None
+
+    for key in (
+        "mcp_allowed_permissions",
+        "allowed_mcp_permissions",
+        "mcp_permissions",
+    ):
+        if hasattr(source, key):
+            return normalize_mcp_allowed_permissions(getattr(source, key))
+    return None
+
+
+def normalize_mcp_allowed_permissions(permissions: Any) -> set[str] | None:
+    """Normalize a bridged MCP permission allowlist.
+
+    ``None`` keeps backward-compatible allow-all behavior. An explicit empty
+    collection denies every bridged MCP tool.
+    """
+    if permissions is None:
+        permissions = os.environ.get(MCP_ALLOWED_PERMISSIONS_ENV)
+    if permissions is None:
+        return None
+    if isinstance(permissions, str):
+        permission_iterable = permissions.split(",")
+    else:
+        permission_iterable = permissions
+    normalized = {
+        str(permission).strip()
+        for permission in permission_iterable or ()
+        if str(permission).strip()
+    }
+    return normalized
+
+
+def check_mcp_tool_permission(
+    policy: RuntimeMcpToolPolicy,
+    *,
+    allowed_permissions: set[str] | None,
+) -> RuntimeMcpPermissionDecision:
+    """Check whether one MCP tool policy is allowed for the current bridge."""
+    if allowed_permissions is None or "*" in allowed_permissions:
+        return RuntimeMcpPermissionDecision(
+            allowed=True,
+            reason="allow_all",
+            allowed_permissions=None
+            if allowed_permissions is None
+            else tuple(sorted(allowed_permissions)),
+        )
+    if policy.permission in allowed_permissions:
+        return RuntimeMcpPermissionDecision(
+            allowed=True,
+            reason="permission_allowed",
+            allowed_permissions=tuple(sorted(allowed_permissions)),
+        )
+    return RuntimeMcpPermissionDecision(
+        allowed=False,
+        reason="permission_not_allowed",
+        allowed_permissions=tuple(sorted(allowed_permissions)),
+    )
 
 
 def is_mcp_action_name(tool_name: str) -> bool:

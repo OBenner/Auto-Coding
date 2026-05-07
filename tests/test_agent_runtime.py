@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 from agents.runtime import (
     EXTERNAL_MCP_CLIENT_ENV,
+    MCP_ALLOWED_PERMISSIONS_ENV,
     LocalActionExecutor,
     RuntimeCapabilities,
     RuntimeCapabilityError,
@@ -2788,6 +2789,129 @@ def test_runtime_mcp_bridge_reports_external_server_gaps(
     assert support_payload["bridge_plan"]["action_required"] == (
         "configure_external_mcp_client"
     )
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_denies_external_tool_without_permission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    called = False
+
+    async def fake_call_external_mcp_tool(**_kwargs):
+        nonlocal called
+        called = True
+        return {"content": [{"type": "text", "text": "should not run"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(
+        agent_type="spec_researcher",
+        mcp_allowed_permissions=("read_memory",),
+    )
+
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    result = await bridge.execute(
+        {
+            "tool": "mcp__context7__resolve-library-id",
+            "libraryName": "pytest",
+        }
+    )
+
+    assert called is False
+    assert result.ok is False
+    assert result.tool == "mcp__context7__resolve-library-id"
+    assert "permission" in result.message.lower()
+    assert result.data["server"] == "context7"
+    assert result.data["permission"] == "read_external_docs"
+    assert result.data["permission_allowed"] is False
+    assert result.data["permission_denial_reason"] == "permission_not_allowed"
+    assert result.data["allowed_permissions"] == ["read_memory"]
+    audit_path = Path(result.data["audit_artifact"])
+    assert audit_path == mcp_bridge_audit_path(tmp_path)
+    audit_lines = [
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert audit_lines[0]["status"] == "denied"
+    assert audit_lines[0]["server"] == "context7"
+    assert audit_lines[0]["tool"] == "resolve-library-id"
+    assert audit_lines[0]["permission"] == "read_external_docs"
+    assert audit_lines[0]["permission_allowed"] is False
+    assert audit_lines[0]["reason"] == "permission_not_allowed"
+    assert audit_lines[0]["allowed_permissions"] == ["read_memory"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_allows_external_tool_from_permission_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict,
+        project_dir: Path,
+    ):
+        await asyncio.sleep(0)
+        assert health.server == "context7"
+        assert tool_name == "resolve-library-id"
+        assert arguments == {"libraryName": "pytest"}
+        assert project_dir == tmp_path
+        return {"content": [{"type": "text", "text": "/pytest-dev/pytest"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv(MCP_ALLOWED_PERMISSIONS_ENV, "read_external_docs")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(agent_type="spec_researcher")
+
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    result = await bridge.execute(
+        {
+            "tool": "mcp__context7__resolve-library-id",
+            "libraryName": "pytest",
+        }
+    )
+
+    assert result.ok is True
+    assert result.message == "/pytest-dev/pytest"
+    assert result.data["permission"] == "read_external_docs"
+    assert result.data["permission_allowed"] is True
+    assert result.data["permission_decision_reason"] == "permission_allowed"
+    assert result.data["allowed_permissions"] == ["read_external_docs"]
+    report = bridge.report()
+    assert report["permission_policy"] == {
+        "mode": "allowlist",
+        "allowed_permissions": ["read_external_docs"],
+    }
+    audit_lines = [
+        json.loads(line)
+        for line in Path(result.data["audit_artifact"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert audit_lines[0]["status"] == "ok"
+    assert audit_lines[0]["permission_allowed"] is True
+    assert audit_lines[0]["permission_decision_reason"] == "permission_allowed"
+    assert audit_lines[0]["allowed_permissions"] == ["read_external_docs"]
 
 
 @pytest.mark.asyncio
