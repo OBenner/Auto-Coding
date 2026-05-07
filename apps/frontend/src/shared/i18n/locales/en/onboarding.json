@@ -200,6 +200,35 @@
       "title": "Explore Documentation",
       "description": "Learn more about advanced features, best practices, and troubleshooting."
     },
+    "readiness": {
+      "title": "Environment readiness",
+      "claudeAuth": {
+        "checking": "Checking Claude authentication...",
+        "ready": "Claude/API authentication configured",
+        "issue": "Configure Claude OAuth or an API profile"
+      },
+      "claudeCli": {
+        "checking": "Checking Claude Code CLI...",
+        "ready": "Claude Code CLI ready",
+        "issue": "Install or update Claude Code CLI"
+      },
+      "codexAuth": {
+        "checking": "Checking Codex account...",
+        "ready": "Codex account connected",
+        "issue": "Connect a Codex account"
+      },
+      "codexCli": {
+        "checking": "Checking Codex CLI...",
+        "ready": "Codex CLI ready",
+        "issue": "Install or update Codex CLI"
+      },
+      "memory": {
+        "checking": "Checking memory database...",
+        "ready": "Memory database ready",
+        "issue": "Memory needs attention",
+        "skipped": "Memory disabled"
+      }
+    },
     "finish": "Finish & Start Building",
     "rerunHint": "You can always re-run this wizard from Settings → Application"
   },

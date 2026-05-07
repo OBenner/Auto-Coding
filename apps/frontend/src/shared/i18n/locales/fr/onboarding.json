@@ -190,6 +190,35 @@
       "title": "Explorer la documentation",
       "description": "En savoir plus sur les fonctionnalités avancées, les bonnes pratiques et le dépannage."
     },
+    "readiness": {
+      "title": "Préparation de l'environnement",
+      "claudeAuth": {
+        "checking": "Vérification de l'authentification Claude...",
+        "ready": "Authentification Claude/API configurée",
+        "issue": "Configurez OAuth Claude ou un profil API"
+      },
+      "claudeCli": {
+        "checking": "Vérification du CLI Claude Code...",
+        "ready": "CLI Claude Code prêt",
+        "issue": "Installez ou mettez à jour le CLI Claude Code"
+      },
+      "codexAuth": {
+        "checking": "Vérification du compte Codex...",
+        "ready": "Compte Codex connecté",
+        "issue": "Connectez un compte Codex"
+      },
+      "codexCli": {
+        "checking": "Vérification du CLI Codex...",
+        "ready": "CLI Codex prêt",
+        "issue": "Installez ou mettez à jour le CLI Codex"
+      },
+      "memory": {
+        "checking": "Vérification de la base mémoire...",
+        "ready": "Base mémoire prête",
+        "issue": "La mémoire nécessite une attention",
+        "skipped": "Mémoire désactivée"
+      }
+    },
     "finish": "Terminer et commencer à construire",
     "rerunHint": "Vous pouvez toujours relancer cet assistant depuis Paramètres → Application"
   },

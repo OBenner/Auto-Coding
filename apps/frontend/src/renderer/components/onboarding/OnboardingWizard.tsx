@@ -239,6 +239,7 @@ export function OnboardingWizard({
       case 'completion':
         return (
           <CompletionStep
+            authRuntime={authRuntime}
             onFinish={completeWizard}
             onOpenTaskCreator={handleOpenTaskCreator}
             onOpenSettings={handleOpenSettings}

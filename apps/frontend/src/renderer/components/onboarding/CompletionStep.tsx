@@ -4,13 +4,19 @@ import {
   FileText,
   Settings,
   BookOpen,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
+import { useSettingsStore } from '../../stores/settings-store';
+import { useClaudeProfileStore } from '../../stores/claude-profile-store';
 
 interface CompletionStepProps {
+  authRuntime?: 'anthropic' | 'codex';
   onFinish: () => void;
   onOpenTaskCreator?: () => void;
   onOpenSettings?: () => void;
@@ -53,12 +59,225 @@ function NextStepCard({ icon, title, description, action, actionLabel }: NextSte
   );
 }
 
+type ReadinessState = 'checking' | 'ready' | 'warning' | 'skipped';
+
+interface ReadinessItem {
+  id: string;
+  state: ReadinessState;
+  label: string;
+}
+
+function ReadinessRow({ item }: { item: ReadinessItem }) {
+  const icon =
+    item.state === 'checking' ? (
+      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+    ) : item.state === 'ready' || item.state === 'skipped' ? (
+      <CheckCircle2 className="h-4 w-4 text-success" />
+    ) : (
+      <AlertTriangle className="h-4 w-4 text-warning" />
+    );
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2">
+      {icon}
+      <span className="text-sm text-foreground">{item.label}</span>
+    </div>
+  );
+}
+
+function isCodexProfileAuthenticated(profile: unknown): boolean {
+  if (!profile || typeof profile !== 'object') return false;
+  const candidate = profile as {
+    authenticated?: boolean;
+    isAuthenticated?: boolean;
+    configDir?: string;
+  };
+  return Boolean(candidate.authenticated || candidate.isAuthenticated || candidate.configDir);
+}
+
+function CompletionReadiness({ authRuntime }: { authRuntime: 'anthropic' | 'codex' }) {
+  const { t } = useTranslation('onboarding');
+  const { settings, profiles: apiProfiles } = useSettingsStore();
+  const { profiles: claudeProfiles } = useClaudeProfileStore();
+  const [items, setItems] = useState<ReadinessItem[]>([
+    {
+      id: 'auth',
+      state: 'checking',
+      label: t(
+        authRuntime === 'codex'
+          ? 'completion.readiness.codexAuth.checking'
+          : 'completion.readiness.claudeAuth.checking'
+      )
+    },
+    {
+      id: 'cli',
+      state: 'checking',
+      label: t(
+        authRuntime === 'codex'
+          ? 'completion.readiness.codexCli.checking'
+          : 'completion.readiness.claudeCli.checking'
+      )
+    },
+    {
+      id: 'memory',
+      state: settings.memoryEnabled === false ? 'skipped' : 'checking',
+      label: t(
+        settings.memoryEnabled === false
+          ? 'completion.readiness.memory.skipped'
+          : 'completion.readiness.memory.checking'
+      )
+    }
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const runChecks = async () => {
+      const nextItems: ReadinessItem[] = [];
+
+      if (authRuntime === 'codex') {
+        try {
+          const result = await window.electronAPI.getCodexProfiles();
+          const profiles = result.success && result.data ? result.data.profiles : [];
+          const hasCodexAuth = profiles.some(isCodexProfileAuthenticated);
+          nextItems.push({
+            id: 'auth',
+            state: hasCodexAuth ? 'ready' : 'warning',
+            label: t(
+              hasCodexAuth
+                ? 'completion.readiness.codexAuth.ready'
+                : 'completion.readiness.codexAuth.issue'
+            )
+          });
+        } catch {
+          nextItems.push({
+            id: 'auth',
+            state: 'warning',
+            label: t('completion.readiness.codexAuth.issue')
+          });
+        }
+
+        try {
+          const result = await window.electronAPI.checkCodexCodeVersion();
+          const installed = Boolean(result.success && result.data?.installed);
+          nextItems.push({
+            id: 'cli',
+            state: installed ? 'ready' : 'warning',
+            label: t(
+              installed
+                ? 'completion.readiness.codexCli.ready'
+                : 'completion.readiness.codexCli.issue'
+            )
+          });
+        } catch {
+          nextItems.push({
+            id: 'cli',
+            state: 'warning',
+            label: t('completion.readiness.codexCli.issue')
+          });
+        }
+      } else {
+        const hasApiProfile = apiProfiles.length > 0;
+        const hasClaudeProfile = claudeProfiles.some((profile) =>
+          Boolean(profile.oauthToken || profile.configDir)
+        );
+        const hasClaudeAuth = hasApiProfile || hasClaudeProfile;
+
+        nextItems.push({
+          id: 'auth',
+          state: hasClaudeAuth ? 'ready' : 'warning',
+          label: t(
+            hasClaudeAuth
+              ? 'completion.readiness.claudeAuth.ready'
+              : 'completion.readiness.claudeAuth.issue'
+          )
+        });
+
+        try {
+          const result = await window.electronAPI.checkClaudeCodeVersion();
+          const installed = Boolean(result.success && result.data?.installed);
+          nextItems.push({
+            id: 'cli',
+            state: installed ? 'ready' : 'warning',
+            label: t(
+              installed
+                ? 'completion.readiness.claudeCli.ready'
+                : 'completion.readiness.claudeCli.issue'
+            )
+          });
+        } catch {
+          nextItems.push({
+            id: 'cli',
+            state: 'warning',
+            label: t('completion.readiness.claudeCli.issue')
+          });
+        }
+      }
+
+      if (settings.memoryEnabled === false) {
+        nextItems.push({
+          id: 'memory',
+          state: 'skipped',
+          label: t('completion.readiness.memory.skipped')
+        });
+      } else {
+        try {
+          const result = await window.electronAPI.getMemoryInfrastructureStatus();
+          const ready = Boolean(result.success && result.data?.ready);
+          nextItems.push({
+            id: 'memory',
+            state: ready ? 'ready' : 'warning',
+            label: t(
+              ready
+                ? 'completion.readiness.memory.ready'
+                : 'completion.readiness.memory.issue'
+            )
+          });
+        } catch {
+          nextItems.push({
+            id: 'memory',
+            state: 'warning',
+            label: t('completion.readiness.memory.issue')
+          });
+        }
+      }
+
+      if (!cancelled) {
+        setItems(nextItems);
+      }
+    };
+
+    runChecks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiProfiles, authRuntime, claudeProfiles, settings.memoryEnabled, t]);
+
+  return (
+    <Card className="border border-border bg-card/50 mb-8">
+      <CardContent className="p-5">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <CheckCircle2 className="h-4 w-4" />
+          {t('completion.readiness.title')}
+        </div>
+        <div className="grid grid-cols-1 gap-2">
+          {items.map((item) => (
+            <ReadinessRow key={item.id} item={item} />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /**
  * Completion step component for the onboarding wizard.
  * Displays a success message with suggestions for next steps
  * and a prominent "Finish" button to complete the wizard.
  */
 export function CompletionStep({
+  authRuntime = 'anthropic',
   onFinish,
   onOpenTaskCreator,
   onOpenSettings
@@ -126,6 +345,8 @@ export function CompletionStep({
             </div>
           </CardContent>
         </Card>
+
+        <CompletionReadiness authRuntime={authRuntime} />
 
         {/* Next Steps Section */}
         <div className="space-y-4 mb-10">
