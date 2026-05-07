@@ -464,6 +464,32 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
     ),
     LocalActionToolSpec(
+        name="rollback_transaction",
+        description=(
+            "Roll back one generic_edit transaction using runtime-managed "
+            "mutation snapshots."
+        ),
+        parameters={
+            "transaction_id": {
+                "type": "string",
+                "description": "Transaction id to roll back, such as json_actions-1.",
+            },
+            "snapshot_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional mutation snapshot ids. Defaults to all snapshots "
+                    "captured for transaction_id."
+                ),
+            },
+        },
+        required=("transaction_id",),
+        example={
+            "tool": "rollback_transaction",
+            "transaction_id": "json_actions-1",
+        },
+    ),
+    LocalActionToolSpec(
         name="git_status",
         description="Inspect git worktree status without invoking a shell.",
         parameters={
@@ -714,6 +740,15 @@ class LocalActionExecutor:
                 message=(
                     "run_subagents requires a runtime subagent orchestrator and "
                     "cannot be executed by the standalone local action executor."
+                ),
+            )
+        if tool == "rollback_transaction":
+            return ToolActionResult(
+                tool=tool,
+                ok=False,
+                message=(
+                    "rollback_transaction requires generic_edit runtime-managed "
+                    "mutation snapshots."
                 ),
             )
         if tool == "finish":

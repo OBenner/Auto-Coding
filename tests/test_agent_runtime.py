@@ -63,8 +63,12 @@ from agents.runtime.adapters.codex_cli import (
     summarize_codex_events,
 )
 from agents.runtime.adapters.generic_edit import (
+    MAX_MUTATION_PREIMAGE_BYTES,
     GenericEditRuntimeError,
     bounded_subagent_attempts,
+    build_generic_edit_file_preimage,
+    build_generic_edit_rollback_operation,
+    execute_generic_edit_transaction_rollback,
     summarize_generic_edit_transactions,
 )
 from agents.runtime.adapters.patch_proposal import (
@@ -1768,6 +1772,7 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "move_file",
         "apply_patch",
         "run_command",
+        "rollback_transaction",
         "git_status",
         "git_diff",
         "run_subagents",
@@ -1835,6 +1840,13 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert run_command_schema["parameters"]["required"] == ["command"]
     assert "timeout" in run_command_schema["parameters"]["properties"]
+    rollback_schema = next(
+        schema
+        for schema in provider_schemas
+        if schema["name"] == "rollback_transaction"
+    )
+    assert rollback_schema["parameters"]["required"] == ["transaction_id"]
+    assert "snapshot_ids" in rollback_schema["parameters"]["properties"]
     git_status_schema = next(
         schema for schema in provider_schemas if schema["name"] == "git_status"
     )
@@ -2445,6 +2457,90 @@ async def test_generic_edit_runtime_cancel_stops_action_loop(tmp_path: Path):
     assert session.cancelled is True
     assert result.status == "cancelled"
     assert not (tmp_path / "artifacts" / "generic_edit_trace.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_cancel_after_mutation_writes_resume_state(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "cancelled.txt"
+    target.write_text("original\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then get cancelled",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "cancelled.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "cancelled.txt"},
+                ],
+            }
+        ]
+    )
+    runtime_session = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=session,
+        project_dir=tmp_path,
+    )
+    original_execute_action = runtime_session._execute_action
+
+    async def execute_and_cancel_after_first_action(action, **kwargs):
+        result = await original_execute_action(action, **kwargs)
+        if kwargs["action_index"] == 1:
+            runtime_session._cancel_requested = True
+        return result
+
+    runtime_session._execute_action = execute_and_cancel_after_first_action
+
+    result = await run_runtime_session(
+        runtime_session,
+        "cancel after mutation",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    session_state = json.loads(
+        (artifact_dir / "generic_edit_session_state.json").read_text(encoding="utf-8")
+    )
+    checkpoint = json.loads(
+        (artifact_dir / "generic_edit_recovery_checkpoint.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    mutation_snapshots = json.loads(
+        (artifact_dir / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "cancelled"
+    assert target.read_text(encoding="utf-8") == "changed\n"
+    assert result_artifact["status"] == "cancelled"
+    assert result_artifact["stop_reason"] == "cancelled"
+    assert result_artifact["recoverable"] is True
+    assert result_artifact["transaction_count"] == 1
+    assert result_artifact["mutation_snapshot_count"] == 1
+    assert checkpoint["stop_reason"] == "cancelled"
+    assert checkpoint["resume"]["strategy"] == "continue_from_trace"
+    assert checkpoint["next_iteration"] == 2
+    assert session_state["status"] == "cancelled"
+    assert session_state["resumable"] is True
+    assert session_state["resume_action"] == {
+        "runtime": "generic_edit",
+        "checkpoint_path": str(artifact_dir / "generic_edit_recovery_checkpoint.json"),
+        "strategy": "continue_from_trace",
+        "next_iteration": 2,
+    }
+    assert mutation_snapshots["snapshots"][0]["preimages"][0]["content"] == "original\n"
 
 
 @pytest.mark.asyncio
@@ -4527,6 +4623,7 @@ async def test_generic_edit_runtime_records_partial_transactions_for_recovery(
 async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failure(
     tmp_path: Path,
 ):
+    (tmp_path / "partial.txt").write_text("original\n", encoding="utf-8")
     session = FakeGenericEditSession(
         [
             {
@@ -4575,24 +4672,123 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
             encoding="utf-8"
         )
     )
+    session_state_path = tmp_path / "artifacts" / "generic_edit_session_state.json"
     checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
     recovery_plan_path = tmp_path / "artifacts" / "generic_edit_recovery_plan.json"
+    group_artifact_path = (
+        tmp_path / "artifacts" / "generic_edit_transaction_groups.json"
+    )
+    mutation_snapshot_path = (
+        tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json"
+    )
+    trace_path = tmp_path / "artifacts" / "generic_edit_trace.json"
+    event_path = tmp_path / "artifacts" / "generic_edit_events.jsonl"
+    session_state = json.loads(session_state_path.read_text(encoding="utf-8"))
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     recovery_plan = json.loads(recovery_plan_path.read_text(encoding="utf-8"))
+    group_artifact = json.loads(group_artifact_path.read_text(encoding="utf-8"))
+    mutation_snapshots = json.loads(mutation_snapshot_path.read_text(encoding="utf-8"))
+    expected_next_actions = [
+        {
+            "id": "inspect-json_actions-1-1",
+            "kind": "inspect_diff",
+            "tool": "git_diff",
+            "action": {"tool": "git_diff", "path": "partial.txt", "max_chars": 8000},
+            "transaction_id": "json_actions-1",
+            "transaction_group_id": "transaction-group-1",
+            "paths": ["partial.txt"],
+            "required_before_finish": True,
+        },
+        {
+            "id": "rollback-json_actions-1",
+            "kind": "rollback_transaction",
+            "tool": "rollback_transaction",
+            "action": {
+                "tool": "rollback_transaction",
+                "transaction_id": "json_actions-1",
+            },
+            "transaction_id": "json_actions-1",
+            "transaction_group_id": "transaction-group-1",
+            "rollback_operation_id": "rollback-json_actions-1",
+            "mutation_snapshot_ids": ["mutation-1"],
+            "required_before_finish": True,
+        },
+    ]
+    expected_group_policy = {
+        "version": 1,
+        "status": "requires_resolution",
+        "finish_blocked": True,
+        "transaction_id": "json_actions-1",
+        "transaction_group_id": "transaction-group-1",
+        "path_scope": ["partial.txt"],
+        "resolution_strategies": ["rollback_transaction", "repair_mutation"],
+        "preferred_strategy": "rollback_transaction",
+        "rollback_restorable": True,
+        "required_next_action_kinds": ["inspect_diff", "rollback_transaction"],
+        "recommended_verification_tools": ["git_diff", "run_command"],
+    }
+    expected_plan_policy = {
+        "version": 1,
+        "status": "requires_resolution",
+        "finish_blocked": True,
+        "unresolved_transaction_count": 1,
+        "unresolved_transaction_group_count": 1,
+        "resolution_strategies": ["rollback_transaction", "repair_mutation"],
+        "recommended_verification_tools": ["git_diff", "run_command"],
+    }
 
     assert artifact["status"] == "error"
     assert artifact["stop_reason"] == "unresolved_partial_failure"
     assert artifact["unresolved_partial_failure_ids"] == ["json_actions-1"]
     assert artifact["recovery_resolved"] is False
+    assert artifact["session_state_artifact"] == str(session_state_path)
     assert artifact["recovery_checkpoint_artifact"] == str(checkpoint_path)
     assert artifact["recovery_plan_artifact"] == str(recovery_plan_path)
+    assert artifact["mutation_snapshot_artifact"] == str(mutation_snapshot_path)
+    assert artifact["mutation_snapshot_count"] == 1
+    assert artifact["transaction_group_count"] == 1
+    assert artifact["unresolved_transaction_group_ids"] == ["transaction-group-1"]
     assert artifact["recovery_plan"]["strategy"] == "repair_or_rollback"
     assert artifact["recovery_plan"]["unresolved_transaction_ids"] == ["json_actions-1"]
+    assert artifact["recovery_plan"]["unresolved_transaction_group_ids"] == [
+        "transaction-group-1"
+    ]
+    assert artifact["recovery_plan"]["recovery_policy"] == expected_plan_policy
+    assert artifact["recovery_plan"]["mutation_snapshot_artifact"] == str(
+        mutation_snapshot_path
+    )
+    assert artifact["recovery_plan"]["next_actions"] == expected_next_actions
+    rollback_operation = recovery_plan["rollback_operations"][0]
+    assert rollback_operation["tool"] == "rollback_transaction"
+    assert rollback_operation["transaction_id"] == "json_actions-1"
+    assert rollback_operation["mutation_snapshot_ids"] == ["mutation-1"]
+    assert rollback_operation["restorable"] is True
+    assert rollback_operation["action"] == {
+        "tool": "rollback_transaction",
+        "transaction_id": "json_actions-1",
+    }
+    assert rollback_operation["steps"] == [
+        {"operation": "restore_file", "path": "partial.txt"}
+    ]
     first_transaction = artifact["transactions"][0]
+    assert first_transaction["mutation_snapshot_ids"] == ["mutation-1"]
     assert first_transaction["recovery_plan"]["rollback"]["recommended_tools"] == [
+        "rollback_transaction",
         "git_diff",
         "apply_patch",
     ]
+    assert first_transaction["recovery_plan"]["rollback"]["preferred_action"] == {
+        "tool": "rollback_transaction",
+        "transaction_id": "json_actions-1",
+    }
+    assert first_transaction["recovery_plan"]["rollback"]["mutation_snapshot_ids"] == [
+        "mutation-1"
+    ]
+    assert first_transaction["recovery_plan"]["policy"] == {
+        key: value
+        for key, value in expected_group_policy.items()
+        if key != "transaction_group_id"
+    }
     assert first_transaction["recovery_plan"]["repair"]["recommended_tools"] == [
         "read_file",
         "git_diff",
@@ -4604,16 +4800,602 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     assert recovery_plan["unresolved_transactions"][0]["mutated_paths"] == [
         "partial.txt"
     ]
+    assert recovery_plan["unresolved_transactions"][0]["mutation_snapshot_ids"] == [
+        "mutation-1"
+    ]
+    assert recovery_plan["recovery_policy"] == expected_plan_policy
+    assert recovery_plan["next_actions"] == expected_next_actions
+    group = group_artifact["transaction_groups"][0]
+    assert group["status"] == "unresolved"
+    assert group["next_actions"] == expected_next_actions
+    assert group["recovery_policy"] == expected_group_policy
+    assert mutation_snapshots["artifact_type"] == "generic_edit_mutation_snapshots"
+    assert mutation_snapshots["snapshot_count"] == 1
+    assert mutation_snapshots["snapshots"][0]["id"] == "mutation-1"
+    assert mutation_snapshots["snapshots"][0]["transaction_id"] == "json_actions-1"
+    assert mutation_snapshots["snapshots"][0]["tool"] == "write_file"
+    assert mutation_snapshots["snapshots"][0]["preimages"][0]["path"] == "partial.txt"
+    assert mutation_snapshots["snapshots"][0]["preimages"][0]["exists"] is True
+    assert mutation_snapshots["snapshots"][0]["preimages"][0]["content"] == "original\n"
+    assert session_state["artifact_type"] == "generic_edit_session_state"
+    assert session_state["status"] == "error"
+    assert session_state["stop_reason"] == "unresolved_partial_failure"
+    assert session_state["resumable"] is True
+    assert session_state["iteration_count"] == 2
+    assert session_state["action_count"] == 3
+    assert session_state["failed_action_count"] == 1
+    assert session_state["resume_action"] == {
+        "runtime": "generic_edit",
+        "checkpoint_path": str(checkpoint_path),
+        "strategy": "recover_partial_failure",
+        "next_iteration": 3,
+    }
+    assert session_state["resume_inputs"] == {
+        "trace_artifact": str(trace_path),
+        "event_artifact": str(event_path),
+        "recovery_plan_artifact": str(recovery_plan_path),
+        "mutation_snapshot_artifact": str(mutation_snapshot_path),
+    }
+    assert session_state["unresolved_partial_failure_ids"] == ["json_actions-1"]
+    assert session_state["unresolved_transaction_group_ids"] == ["transaction-group-1"]
     assert checkpoint["resume"]["strategy"] == "recover_partial_failure"
     assert checkpoint["recovery_plan_artifact"] == str(recovery_plan_path)
+    assert checkpoint["mutation_snapshot_artifact"] == str(mutation_snapshot_path)
     assert checkpoint["recovery_plan"]["unresolved_transaction_ids"] == [
         "json_actions-1"
     ]
+    assert checkpoint["unresolved_transaction_group_ids"] == ["transaction-group-1"]
     assert checkpoint["unresolved_partial_failure_ids"] == ["json_actions-1"]
     assert checkpoint["last_partial_failure_mutated_paths"] == ["partial.txt"]
     assert "repair or rollback" in checkpoint["resume"]["prompt"]
     assert "json_actions-1" in checkpoint["resume"]["prompt"]
     assert "partial.txt" in checkpoint["resume"]["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rolls_back_transaction_from_snapshots(
+    tmp_path: Path,
+):
+    target = tmp_path / "partial.txt"
+    target.write_text("original\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then fail",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "rollback the partial transaction and finish",
+                "actions": [
+                    {
+                        "tool": "rollback_transaction",
+                        "transaction_id": "json_actions-1",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Rolled back partial transaction",
+                        "tests": ["not run"],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "rollback partial edit",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    trace_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "original\n"
+    assert artifact["status"] == "complete"
+    assert artifact["recovery_resolved"] is True
+    assert artifact["recovery_transaction_ids"] == ["json_actions-2"]
+    assert artifact["transaction_status_counts"] == {
+        "partial_failure": 1,
+        "complete": 1,
+    }
+    assert artifact["transactions"][1]["mutating_tools"] == ["rollback_transaction"]
+    assert artifact["transactions"][1]["mutated_paths"] == ["partial.txt"]
+    rollback_result = trace_artifact["trace"][1]["actions"][0]["result"]
+    assert rollback_result["ok"] is True
+    assert rollback_result["data"]["transaction_id"] == "json_actions-1"
+    assert rollback_result["data"]["mutation_snapshot_ids"] == ["mutation-1"]
+    assert rollback_result["data"]["restored_paths"] == ["partial.txt"]
+
+
+def generic_edit_text_snapshot(
+    snapshot_id: str,
+    path: str,
+    content: str,
+    *,
+    transaction_id: str = "json_actions-1",
+) -> dict[str, Any]:
+    return {
+        "id": snapshot_id,
+        "transaction_id": transaction_id,
+        "rollback": {"restorable": True},
+        "preimages": [
+            {
+                "path": path,
+                "restorable": True,
+                "exists": True,
+                "type": "file",
+                "content_encoding": "utf-8",
+                "content": content,
+            }
+        ],
+    }
+
+
+def block_path_write_text(monkeypatch: pytest.MonkeyPatch, blocked_name: str) -> None:
+    original_write_text = Path.write_text
+
+    def write_text_with_blocked_path(self, data, *args, **kwargs):
+        if self.name == blocked_name:
+            raise OSError("disk full")
+        return original_write_text(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", write_text_with_blocked_path)
+
+
+def test_generic_edit_rollback_blocks_unknown_requested_snapshot_ids():
+    rollback_operation = build_generic_edit_rollback_operation(
+        transaction_id="json_actions-1",
+        mutation_snapshots=[
+            generic_edit_text_snapshot("mutation-1", "partial.txt", "original\n")
+        ],
+        snapshot_ids=["mutation-1", "mutation-missing"],
+    )
+
+    assert rollback_operation["restorable"] is False
+    assert rollback_operation["mutation_snapshot_ids"] == ["mutation-1"]
+    assert (
+        "Requested snapshot ids not found: mutation-missing"
+        in rollback_operation["blocked_reasons"]
+    )
+
+
+def test_generic_edit_rollback_failure_reports_partial_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    mutation_snapshots = [
+        generic_edit_text_snapshot("mutation-1", "blocked.txt", "blocked\n"),
+        generic_edit_text_snapshot("mutation-2", "restored.txt", "restored\n"),
+    ]
+    block_path_write_text(monkeypatch, "blocked.txt")
+
+    with pytest.raises(GenericEditRuntimeError) as exc_info:
+        execute_generic_edit_transaction_rollback(
+            action={
+                "tool": "rollback_transaction",
+                "transaction_id": "json_actions-1",
+            },
+            project_dir=tmp_path,
+            mutation_snapshots=mutation_snapshots,
+        )
+
+    assert (tmp_path / "restored.txt").read_text(encoding="utf-8") == "restored\n"
+    assert exc_info.value.restored_paths == ["restored.txt"]
+    assert exc_info.value.deleted_paths == []
+    assert "restored_paths=['restored.txt']" in str(exc_info.value)
+
+
+def test_generic_edit_runtime_rollback_failure_result_reports_partial_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=FakeGenericEditSession([]),
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+    runtime_session._mutation_snapshots = [
+        generic_edit_text_snapshot("mutation-1", "blocked.txt", "blocked\n"),
+        generic_edit_text_snapshot("mutation-2", "restored.txt", "restored\n"),
+    ]
+    block_path_write_text(monkeypatch, "blocked.txt")
+
+    result = runtime_session._rollback_transaction_action(
+        {"tool": "rollback_transaction", "transaction_id": "json_actions-1"}
+    )
+
+    assert result.ok is False
+    assert result.data["restored_paths"] == ["restored.txt"]
+    assert result.data["deleted_paths"] == []
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_writes_transaction_recovery_groups(
+    tmp_path: Path,
+):
+    target = tmp_path / "partial.txt"
+    target.write_text("original\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then fail",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "rollback the partial transaction and finish",
+                "actions": [
+                    {
+                        "tool": "rollback_transaction",
+                        "transaction_id": "json_actions-1",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Rolled back partial transaction",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "rollback partial edit",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    group_artifact_path = artifact_dir / "generic_edit_transaction_groups.json"
+    event_artifact_path = artifact_dir / "generic_edit_events.jsonl"
+    group_artifact = json.loads(group_artifact_path.read_text(encoding="utf-8"))
+    events = [
+        json.loads(line)
+        for line in event_artifact_path.read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "original\n"
+    assert result_artifact["event_artifact"] == str(event_artifact_path)
+    assert result_artifact["event_count"] == 7
+    assert result_artifact["transaction_group_artifact"] == str(group_artifact_path)
+    assert result_artifact["transaction_group_count"] == 1
+    assert result_artifact["transaction_group_status_counts"] == {"resolved": 1}
+    assert result_artifact["unresolved_transaction_group_count"] == 0
+    assert result_artifact["unresolved_transaction_group_ids"] == []
+    assert result_artifact["recovery_outcome_count"] == 1
+    assert group_artifact["artifact_type"] == "generic_edit_transaction_groups"
+    assert group_artifact["group_count"] == 1
+    assert group_artifact["recovery_outcome_count"] == 1
+    group = group_artifact["transaction_groups"][0]
+    expected_outcome = {
+        "transaction_group_id": "transaction-group-1",
+        "partial_failure_transaction_id": "json_actions-1",
+        "resolution_transaction_id": "json_actions-2",
+        "strategy": "rollback_transaction",
+        "tool_sequence": ["rollback_transaction", "finish"],
+        "recovered_paths": ["partial.txt"],
+        "mutation_snapshot_ids": ["mutation-1"],
+        "recovery_attempt_count": 1,
+        "failed_recovery_attempt_count": 0,
+        "policy_status": {
+            "version": 1,
+            "status": "resolved",
+            "resolution_strategy": "rollback_transaction",
+            "post_recovery_verification_observed": False,
+            "recommended_verification_tools": ["git_diff", "run_command"],
+            "warning_count": 1,
+            "warnings": [
+                "Recovered transaction resolved without post-recovery verification."
+            ],
+        },
+    }
+    assert group["id"] == "transaction-group-1"
+    assert group["status"] == "resolved"
+    assert group["recovery_outcome"] == expected_outcome
+    assert result_artifact["recovery_outcomes"] == [expected_outcome]
+    assert group_artifact["recovery_outcomes"] == [expected_outcome]
+    assert group["partial_failure_transaction_id"] == "json_actions-1"
+    assert group["resolution_transaction_id"] == "json_actions-2"
+    assert group["transaction_ids"] == ["json_actions-1", "json_actions-2"]
+    assert group["recovery_transaction_ids"] == ["json_actions-2"]
+    assert group["mutated_paths"] == ["partial.txt"]
+    assert group["mutation_snapshot_ids"] == ["mutation-1"]
+    assert group["rollback_operation"]["tool"] == "rollback_transaction"
+    assert group["rollback_operation"]["action"] == {
+        "tool": "rollback_transaction",
+        "transaction_id": "json_actions-1",
+    }
+    assert "content" not in group["rollback_operation"]["steps"][0]
+    assert [event["event_type"] for event in events] == [
+        "action_result",
+        "action_result",
+        "transaction",
+        "action_result",
+        "action_result",
+        "transaction",
+        "transaction_group",
+    ]
+    assert events[0]["tool"] == "write_file"
+    assert events[0]["transaction_id"] == "json_actions-1"
+    assert events[0]["mutation_snapshot_id"] == "mutation-1"
+    assert events[1]["ok"] is False
+    assert events[1]["tool"] == "read_file"
+    assert events[2]["transaction_id"] == "json_actions-1"
+    assert events[2]["status"] == "partial_failure"
+    assert events[5]["transaction_id"] == "json_actions-2"
+    assert events[5]["status"] == "complete"
+    assert events[6]["group_id"] == "transaction-group-1"
+    assert events[6]["status"] == "resolved"
+    assert events[6]["partial_failure_transaction_id"] == "json_actions-1"
+    assert events[6]["resolution_transaction_id"] == "json_actions-2"
+    assert events[6]["recovery_outcome"] == expected_outcome
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_records_recovery_attempt_history(tmp_path: Path):
+    target = tmp_path / "partial.txt"
+    target.write_text("original\n", encoding="utf-8")
+    (tmp_path / "unrelated.txt").write_text("noise\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then fail",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "inspect the wrong file",
+                "actions": [{"tool": "read_file", "path": "unrelated.txt"}],
+            },
+            {
+                "thought": "inspect the mutated file and finish",
+                "actions": [
+                    {"tool": "read_file", "path": "partial.txt"},
+                    {
+                        "tool": "finish",
+                        "summary": "Recovered after inspecting partial.txt",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "recover partial edit",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    group_artifact = json.loads(
+        (artifact_dir / "generic_edit_transaction_groups.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    expected_attempts = [
+        {
+            "attempt_number": 1,
+            "transaction_id": "json_actions-2",
+            "resolved": False,
+            "strategy": "path_coverage",
+            "status": "complete",
+            "tool_sequence": ["read_file"],
+            "affected_paths": ["unrelated.txt"],
+            "mutated_paths": [],
+            "mutation_snapshot_ids": [],
+            "post_recovery_verification_observed": False,
+        },
+        {
+            "attempt_number": 2,
+            "transaction_id": "json_actions-3",
+            "resolved": True,
+            "strategy": "path_coverage",
+            "status": "complete",
+            "tool_sequence": ["read_file", "finish"],
+            "affected_paths": ["partial.txt"],
+            "mutated_paths": [],
+            "mutation_snapshot_ids": [],
+            "post_recovery_verification_observed": False,
+        },
+    ]
+
+    assert result.status == "continue"
+    assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["recovery_attempt_count"] == 2
+    assert result_artifact["failed_recovery_attempt_count"] == 1
+    assert group_artifact["recovery_attempt_count"] == 2
+    assert group_artifact["failed_recovery_attempt_count"] == 1
+    group = group_artifact["transaction_groups"][0]
+    assert group["status"] == "resolved"
+    assert group["resolution_transaction_id"] == "json_actions-3"
+    assert group["recovery_attempt_ids"] == ["json_actions-2", "json_actions-3"]
+    assert group["recovery_attempt_count"] == 2
+    assert group["failed_recovery_attempt_count"] == 1
+    assert group["recovery_attempts"] == expected_attempts
+    assert group["recovery_outcome"]["recovery_attempt_count"] == 2
+    assert group["recovery_outcome"]["failed_recovery_attempt_count"] == 1
+    assert events[-1]["recovery_attempt_count"] == 2
+    assert events[-1]["failed_recovery_attempt_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_bounds_large_mutation_preimages(tmp_path: Path):
+    large_content = "x" * (MAX_MUTATION_PREIMAGE_BYTES + 1)
+    target = tmp_path / "large.txt"
+    target.write_text(large_content, encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate large file and then hit a recoverable failure",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "large.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "finish before recovery",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "done",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "mutate large file",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "error"
+    mutation_snapshot_path = (
+        tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json"
+    )
+    mutation_snapshots = json.loads(mutation_snapshot_path.read_text(encoding="utf-8"))
+    preimage = mutation_snapshots["snapshots"][0]["preimages"][0]
+
+    assert preimage["path"] == "large.txt"
+    assert preimage["exists"] is True
+    assert preimage["type"] == "file"
+    assert preimage["bytes"] == len(large_content)
+    assert preimage["content_truncated"] is True
+    assert preimage["content_bytes_limit"] == MAX_MUTATION_PREIMAGE_BYTES
+    assert preimage["restorable"] is False
+    assert "content" not in preimage
+
+
+def test_generic_edit_file_preimage_records_inspection_oserror(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    target = tmp_path / "locked.txt"
+    target.write_text("before\n", encoding="utf-8")
+
+    def raise_exists_oserror(self: Path) -> bool:
+        if self == target:
+            raise OSError("transient stat failure")
+        return False
+
+    monkeypatch.setattr(Path, "exists", raise_exists_oserror)
+
+    preimage = build_generic_edit_file_preimage(
+        project_dir=tmp_path,
+        path="locked.txt",
+    )
+
+    assert preimage["path"] == "locked.txt"
+    assert preimage["exists"] is False
+    assert preimage["type"] == "unreadable"
+    assert preimage["restorable"] is False
+    assert "transient stat failure" in preimage["error"]
+
+
+def test_generic_edit_file_preimage_records_read_oserror(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    target = tmp_path / "locked.txt"
+    target.write_text("before\n", encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def raise_read_oserror(self: Path, *args: Any, **kwargs: Any) -> str:
+        if self == target:
+            raise PermissionError("permission denied")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", raise_read_oserror)
+
+    preimage = build_generic_edit_file_preimage(
+        project_dir=tmp_path,
+        path="locked.txt",
+    )
+
+    assert preimage["path"] == "locked.txt"
+    assert preimage["exists"] is True
+    assert preimage["type"] == "file"
+    assert preimage["restorable"] is False
+    assert "permission denied" in preimage["error"]
 
 
 @pytest.mark.asyncio
@@ -4668,6 +5450,70 @@ async def test_generic_edit_runtime_writes_recovery_checkpoint_on_max_iterations
     assert checkpoint["transaction_summary"]["transaction_count"] == 1
     assert "## Resume" in summary_markdown
     assert str(checkpoint_path) in summary_markdown
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_writes_artifact_manifest(tmp_path: Path):
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "todo.txt"
+    target.write_text("keep going\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "inspect but do not finish yet",
+                "actions": [{"tool": "read_file", "path": "todo.txt"}],
+            }
+        ]
+    )
+    runtime_session = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=session,
+        project_dir=tmp_path,
+        max_iterations=1,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "inspect todo.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    manifest_path = artifact_dir / "generic_edit_artifact_manifest.json"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    summary_markdown = (artifact_dir / "generic_edit_summary.md").read_text(
+        encoding="utf-8"
+    )
+    artifacts_by_name = {
+        artifact["name"]: artifact for artifact in manifest["artifacts"]
+    }
+
+    assert result.status == "error"
+    assert result_artifact["artifact_manifest_artifact"] == str(manifest_path)
+    assert manifest["artifact_type"] == "generic_edit_artifact_manifest"
+    assert manifest["schema_version"] == 1
+    assert manifest["status"] == "error"
+    assert manifest["stop_reason"] == "max_iterations"
+    assert manifest["flags"]["recoverable"] is True
+    assert manifest["flags"]["resumable"] is True
+    assert manifest["flags"]["recovery_required"] is False
+    assert manifest["entrypoints"]["result"] == str(
+        artifact_dir / "generic_edit_result.json"
+    )
+    assert manifest["entrypoints"]["session_state"] == str(
+        artifact_dir / "generic_edit_session_state.json"
+    )
+    assert artifacts_by_name["generic_edit_artifact_manifest"]["present"] is True
+    assert artifacts_by_name["generic_edit_recovery_checkpoint"]["present"] is True
+    assert artifacts_by_name["generic_edit_recovery_checkpoint"]["active"] is True
+    assert artifacts_by_name["generic_edit_mutation_snapshots"]["active"] is False
+    assert "## Artifact Manifest" in summary_markdown
+    assert str(manifest_path) in summary_markdown
 
 
 @pytest.mark.asyncio
@@ -4743,6 +5589,11 @@ async def test_generic_edit_runtime_resumes_from_recovery_checkpoint(tmp_path: P
             encoding="utf-8"
         )
     )
+    session_state = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_session_state.json").read_text(
+            encoding="utf-8"
+        )
+    )
     trace_artifact = json.loads(
         (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
     )
@@ -4756,11 +5607,276 @@ async def test_generic_edit_runtime_resumes_from_recovery_checkpoint(tmp_path: P
     assert result_artifact["status"] == "complete"
     assert result_artifact["stop_reason"] == "finish"
     assert result_artifact["recoverable"] is False
+    assert session_state["status"] == "complete"
+    assert session_state["resumable"] is False
+    assert session_state["resume_action"] is None
+    assert session_state["resume_inputs"] == {}
     assert result_artifact["transaction_count"] == 2
     assert [entry["iteration"] for entry in trace_artifact["trace"]] == [1, 2]
     assert trace_artifact["trace"][1]["transaction"]["id"] == "json_actions-2"
     assert not checkpoint_path.exists()
     assert "## Resume" not in summary_markdown
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_records_resume_provenance(tmp_path: Path):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "todo.txt"
+    target.write_text("keep going\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "inspect but do not finish yet",
+                "actions": [{"tool": "read_file", "path": "todo.txt"}],
+            }
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+        max_iterations=1,
+    )
+
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "inspect todo.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    assert first_result.status == "error"
+    assert checkpoint_path.exists()
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "finish from checkpoint",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Resumed with provenance",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+        max_iterations=2,
+    )
+
+    resumed = await resume_runtime_session(
+        resume_runtime,
+        checkpoint_path,
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    session_state = json.loads(
+        (artifact_dir / "generic_edit_session_state.json").read_text(encoding="utf-8")
+    )
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert resumed.status == "continue"
+    assert result_artifact["resumed"] is True
+    assert result_artifact["resume"]["checkpoint_artifact"] == str(checkpoint_path)
+    assert result_artifact["resume"]["strategy"] == "continue_from_trace"
+    assert result_artifact["resume"]["start_iteration"] == 2
+    assert session_state["resumed"] is True
+    assert session_state["resume"] == result_artifact["resume"]
+    assert events[0]["event_type"] == "resume"
+    assert events[0]["checkpoint_artifact"] == str(checkpoint_path)
+    assert events[0]["strategy"] == "continue_from_trace"
+    assert events[0]["start_iteration"] == 2
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_resumes_from_session_state_manifest(
+    tmp_path: Path,
+):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "todo.txt"
+    target.write_text("keep going\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "inspect but do not finish yet",
+                "actions": [{"tool": "read_file", "path": "todo.txt"}],
+            }
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+        max_iterations=1,
+    )
+
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "inspect todo.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    session_state_path = tmp_path / "artifacts" / "generic_edit_session_state.json"
+    assert first_result.status == "error"
+    assert session_state_path.exists()
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "finish from session state",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Resumed from session state",
+                        "tests": ["pytest tests/test_agent_runtime.py"],
+                        "risks": [],
+                    }
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+        max_iterations=2,
+    )
+
+    resumed = await resume_runtime_session(
+        resume_runtime,
+        session_state_path,
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    session_state = json.loads(session_state_path.read_text(encoding="utf-8"))
+
+    assert resumed.status == "continue"
+    assert "generic_edit_recovery_checkpoint.json" in resume_session.messages[0]
+    assert result_artifact["status"] == "complete"
+    assert session_state["status"] == "complete"
+    assert session_state["resumable"] is False
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_resume_preserves_mutation_snapshots(
+    tmp_path: Path,
+):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "todo.txt"
+    target.write_text("original\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate before checkpoint",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "todo.txt",
+                        "content": "changed\n",
+                    }
+                ],
+            }
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+        max_iterations=1,
+    )
+
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "mutate once before checkpoint",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    assert first_result.status == "error"
+    assert checkpoint_path.exists()
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate after checkpoint and finish",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "todo.txt",
+                        "content": "resumed\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Resumed with mutation",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+        max_iterations=2,
+    )
+
+    resumed = await resume_runtime_session(
+        resume_runtime,
+        checkpoint_path,
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    mutation_snapshots = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert resumed.status == "continue"
+    assert target.read_text(encoding="utf-8") == "resumed\n"
+    assert mutation_snapshots["snapshot_count"] == 2
+    assert [snapshot["id"] for snapshot in mutation_snapshots["snapshots"]] == [
+        "mutation-1",
+        "mutation-2",
+    ]
+    assert mutation_snapshots["snapshots"][0]["transaction_id"] == "json_actions-1"
+    assert mutation_snapshots["snapshots"][0]["preimages"][0]["content"] == "original\n"
+    assert mutation_snapshots["snapshots"][1]["transaction_id"] == "json_actions-2"
+    assert mutation_snapshots["snapshots"][1]["preimages"][0]["content"] == "changed\n"
 
 
 @pytest.mark.asyncio
@@ -4803,6 +5919,11 @@ async def test_generic_edit_native_tools_reject_finish_with_unresolved_partial_f
     assert artifact["status"] == "error"
     assert artifact["stop_reason"] == "unresolved_partial_failure"
     assert artifact["unresolved_partial_failure_ids"] == ["native_tool_calls-1"]
+    mutation_snapshot_path = (
+        tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json"
+    )
+    assert artifact["mutation_snapshot_artifact"] == str(mutation_snapshot_path)
+    assert artifact["mutation_snapshot_count"] == 1
     assert session.tool_results[-1]["name"] == "finish"
 
 

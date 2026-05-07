@@ -16,7 +16,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from worktree import WorktreeManager
+from worktree import WorktreeInfo, WorktreeManager
 
 
 class TestWorktreeManagerInitialization:
@@ -935,48 +935,52 @@ class TestWorktreeCleanup:
         assert len(failed) == 0
         assert not info.path.exists()  # Worktree should be removed
 
-    def test_get_worktree_count_warning(self, temp_git_repo: Path):
+    def test_get_worktree_count_warning(self, temp_git_repo: Path, monkeypatch):
         """get_worktree_count_warning returns appropriate warnings based on count."""
         manager = WorktreeManager(temp_git_repo)
-        manager.setup()
 
         # No warning with few worktrees
         warning = manager.get_worktree_count_warning(warning_threshold=10)
         assert warning is None
 
-        # Create 11 worktrees to trigger warning
-        for i in range(11):
-            info = manager.create_worktree(f"test-spec-{i}")
-            test_file = info.path / "test.txt"
-            test_file.write_text("test")
-            subprocess.run(["git", "add", "."], cwd=info.path, capture_output=True)
-            subprocess.run(
-                ["git", "commit", "-m", "test commit"],
-                cwd=info.path,
-                capture_output=True,
+        worktrees = [
+            WorktreeInfo(
+                path=temp_git_repo / ".auto-claude" / "worktrees" / f"test-spec-{i}",
+                branch=f"auto-claude/test-spec-{i}",
+                spec_name=f"test-spec-{i}",
+                base_branch="main",
+                days_since_last_commit=31 if i < 3 else 0,
             )
+            for i in range(11)
+        ]
+        monkeypatch.setattr(manager, "list_all_worktrees", lambda: worktrees)
 
         warning = manager.get_worktree_count_warning(warning_threshold=10)
         assert warning is not None
         assert "WARNING" in warning
+        assert "11 worktrees" in warning
+        assert "3 are 30+ days old" in warning
 
-    def test_get_worktree_count_critical_warning(self, temp_git_repo: Path):
+    def test_get_worktree_count_critical_warning(
+        self, temp_git_repo: Path, monkeypatch
+    ):
         """get_worktree_count_warning returns critical warning for high counts."""
         manager = WorktreeManager(temp_git_repo)
-        manager.setup()
 
-        # Create 21 worktrees to trigger critical warning
-        for i in range(21):
-            info = manager.create_worktree(f"test-spec-{i}")
-            test_file = info.path / "test.txt"
-            test_file.write_text("test")
-            subprocess.run(["git", "add", "."], cwd=info.path, capture_output=True)
-            subprocess.run(
-                ["git", "commit", "-m", "test commit"],
-                cwd=info.path,
-                capture_output=True,
+        worktrees = [
+            WorktreeInfo(
+                path=temp_git_repo / ".auto-claude" / "worktrees" / f"test-spec-{i}",
+                branch=f"auto-claude/test-spec-{i}",
+                spec_name=f"test-spec-{i}",
+                base_branch="main",
+                days_since_last_commit=31 if i < 5 else 0,
             )
+            for i in range(21)
+        ]
+        monkeypatch.setattr(manager, "list_all_worktrees", lambda: worktrees)
 
         warning = manager.get_worktree_count_warning(critical_threshold=20)
         assert warning is not None
         assert "CRITICAL" in warning
+        assert "21 worktrees" in warning
+        assert "5 are 30+ days old" in warning

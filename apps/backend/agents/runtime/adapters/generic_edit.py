@@ -40,6 +40,11 @@ from ..subagents import (
 )
 from .completion import CompletionRuntimeSession
 from .json_helpers import extract_first_json_object
+from .patch_proposal import (
+    PatchProposalError,
+    extract_patch_paths,
+    validate_workspace_relative_path,
+)
 
 GENERIC_EDIT_CANCELLED_MESSAGE = "Generic edit runtime was cancelled."
 
@@ -64,6 +69,7 @@ Rules:
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
 - Use run_subagents only for read-only exploration, review, or comparison work.
 - Treat each actions array as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
+- Use rollback_transaction when you choose to restore a partial transaction from mutation snapshots.
 - Keep iterating until the task is done, then call finish.
 
 Return schema:
@@ -97,6 +103,7 @@ Rules:
 - run_command supports a single executable command, not shell pipes, redirection, or command chaining.
 - Use run_subagents only for read-only exploration, review, or comparison work.
 - Treat each tool-call batch as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
+- Use rollback_transaction when you choose to restore a partial transaction from mutation snapshots.
 - Call finish with a concise summary, verification commands, and risks when complete.
 
 Task:
@@ -106,6 +113,25 @@ __AUTO_CODE_TASK_PROMPT__
 
 class GenericEditRuntimeError(RuntimeError):
     """Raised when the generic edit runtime cannot continue safely."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        data: dict[str, Any] | None = None,
+        restored_paths: list[str] | None = None,
+        deleted_paths: list[str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.data = dict(data or {})
+        self.restored_paths = list(
+            restored_paths or self.data.get("restored_paths") or []
+        )
+        self.deleted_paths = list(deleted_paths or self.data.get("deleted_paths") or [])
+        if self.restored_paths:
+            self.data.setdefault("restored_paths", self.restored_paths)
+        if self.deleted_paths:
+            self.data.setdefault("deleted_paths", self.deleted_paths)
 
 
 @dataclass
@@ -146,6 +172,7 @@ class JsonActionExecutionResult:
     cancelled: bool = False
 
 
+ROLLBACK_TRANSACTION_TOOL = "rollback_transaction"
 MUTATING_LOCAL_ACTIONS = frozenset(
     {
         "write_file",
@@ -154,10 +181,13 @@ MUTATING_LOCAL_ACTIONS = frozenset(
         "move_file",
         "apply_patch",
         "run_command",
+        ROLLBACK_TRANSACTION_TOOL,
     }
 )
-WORKSPACE_RECOVERY_TOOLS = frozenset({"git_status", "git_diff", "run_command"})
-GENERIC_EDIT_ROLLBACK_TOOLS = ["git_diff", "apply_patch"]
+WORKSPACE_RECOVERY_TOOLS = frozenset(
+    {"git_status", "git_diff", "run_command", ROLLBACK_TRANSACTION_TOOL}
+)
+GENERIC_EDIT_ROLLBACK_TOOLS = [ROLLBACK_TRANSACTION_TOOL, "git_diff", "apply_patch"]
 GENERIC_EDIT_REPAIR_TOOLS = [
     "read_file",
     "git_diff",
@@ -165,8 +195,16 @@ GENERIC_EDIT_REPAIR_TOOLS = [
     "write_file",
     "run_command",
 ]
+GENERIC_EDIT_RECOVERY_POLICY_VERSION = 1
+GENERIC_EDIT_RECOVERY_VERIFICATION_TOOLS = ["git_diff", "run_command"]
+GENERIC_EDIT_RECOVERY_DIFF_MAX_CHARS = 8000
+MAX_MUTATION_PREIMAGE_BYTES = 20000
+SNAPSHOT_MUTATING_ACTIONS = frozenset(
+    {"write_file", "replace_text", "delete_file", "move_file", "apply_patch"}
+)
 RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
     {
+        "cancelled",
         "max_iterations",
         "native_tool_error",
         "non_terminal_finish",
@@ -174,6 +212,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
         "unresolved_partial_failure",
     }
 )
+GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
 
 
 class GenericEditRuntimeSession:
@@ -210,6 +249,8 @@ class GenericEditRuntimeSession:
         self._executor = LocalActionExecutor(project_dir)
         self._mcp_bridge: RuntimeMcpBridge | None = None
         self._cancel_requested = False
+        self._mutation_snapshots: list[dict[str, Any]] = []
+        self._resume_metadata: dict[str, Any] | None = None
 
     @property
     def context_client(self) -> Any:
@@ -234,6 +275,8 @@ class GenericEditRuntimeSession:
         subtask_id: str | None = None,
     ) -> AgentRunResult:
         self._cancel_requested = False
+        self._mutation_snapshots = []
+        self._resume_metadata = None
         self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
             agent_session=self.agent_session,
             spec_dir=spec_dir,
@@ -275,14 +318,27 @@ class GenericEditRuntimeSession:
             project_dir=self._executor.project_dir,
             agent_type=self.agent_type,
         )
+        checkpoint_path = resolve_generic_edit_resume_checkpoint_path(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+        )
         checkpoint = load_generic_edit_recovery_checkpoint(checkpoint_path)
         trace_path = generic_edit_trace_path_for_checkpoint(checkpoint_path)
         trace = load_generic_edit_checkpoint_trace(trace_path)
+        self._mutation_snapshots = load_generic_edit_mutation_snapshots(
+            generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path)
+        )
         message = build_generic_edit_checkpoint_resume_message(
             checkpoint=checkpoint,
             trace_path=trace_path,
         )
         next_iteration = checkpoint_next_iteration(checkpoint, trace)
+        self._resume_metadata = build_generic_edit_resume_metadata(
+            checkpoint=checkpoint,
+            checkpoint_path=checkpoint_path,
+            trace_path=trace_path,
+            start_iteration=next_iteration,
+        )
 
         return await self._run_json_action_loop(
             message=message,
@@ -312,10 +368,20 @@ class GenericEditRuntimeSession:
 
         for iteration in range(start_iteration, start_iteration + self.max_iterations):
             if self._cancel_requested:
-                return generic_edit_cancelled_result()
+                return self._cancelled_result(
+                    trace=trace,
+                    spec_dir=spec_dir,
+                    observation_path=observation_path,
+                    subtask_id=subtask_id,
+                )
             response_text = await self._complete(prompt)
             if self._cancel_requested:
-                return generic_edit_cancelled_result()
+                return self._cancelled_result(
+                    trace=trace,
+                    spec_dir=spec_dir,
+                    observation_path=observation_path,
+                    subtask_id=subtask_id,
+                )
             iteration_entry = json_action_iteration_entry(iteration, response_text)
             parsed = self._parse_json_actions(
                 response_text=response_text,
@@ -352,7 +418,20 @@ class GenericEditRuntimeSession:
                 trace=trace,
             )
             if execution.cancelled:
-                return generic_edit_cancelled_result()
+                if execution.executed_actions:
+                    iteration_entry["transaction"] = build_generic_edit_transaction(
+                        loop="json_actions",
+                        iteration=iteration,
+                        actions=execution.executed_actions,
+                        results=execution.action_results,
+                    )
+                    trace.append(iteration_entry)
+                return self._cancelled_result(
+                    trace=trace,
+                    spec_dir=spec_dir,
+                    observation_path=observation_path,
+                    subtask_id=subtask_id,
+                )
             if execution.terminal_result is not None:
                 return execution.terminal_result
 
@@ -492,7 +571,9 @@ class GenericEditRuntimeSession:
             trace=trace,
             summary=summary,
             observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
             mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
         )
         return AgentRunResult(
             status="error",
@@ -523,6 +604,9 @@ class GenericEditRuntimeSession:
                 return execution
             result = await self._execute_action(
                 action,
+                loop="json_actions",
+                iteration=iteration,
+                action_index=action_index,
                 spec_dir=spec_dir,
                 verbose=verbose,
                 phase=phase,
@@ -605,7 +689,9 @@ class GenericEditRuntimeSession:
             tests=tests,
             risks=risks,
             observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
             mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
         )
         response_lines = build_generic_edit_response(
             summary=summary,
@@ -762,11 +848,46 @@ class GenericEditRuntimeSession:
             trace=trace,
             summary=message,
             observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
             mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
         )
         return AgentRunResult(
             status="error",
             response_text=f"{message}\nArtifacts: {artifacts['generic_edit_trace']}",
+        )
+
+    def _cancelled_result(
+        self,
+        *,
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        """Persist resumable cancellation state when cancellation interrupted work."""
+        if not trace:
+            return generic_edit_cancelled_result()
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="cancelled",
+            stop_reason="cancelled",
+            message=GENERIC_EDIT_CANCELLED_MESSAGE,
+            trace=trace,
+            summary=GENERIC_EDIT_CANCELLED_MESSAGE,
+            observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
+            mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
+        )
+        return AgentRunResult(
+            status="cancelled",
+            response_text=(
+                f"{GENERIC_EDIT_CANCELLED_MESSAGE}\n"
+                f"Artifacts: {artifacts['generic_edit_trace']}"
+            ),
         )
 
     async def _complete_native_tool_iteration(
@@ -847,7 +968,9 @@ class GenericEditRuntimeSession:
             trace=trace,
             summary="Generic edit native tool-call loop failed.",
             observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
             mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
         )
         return AgentRunResult(
             status="error",
@@ -883,7 +1006,9 @@ class GenericEditRuntimeSession:
                 trace=trace,
                 summary="Generic edit runtime rejected a non-terminal finish.",
                 observation_path=observation_path,
+                mutation_snapshots=self._mutation_snapshots,
                 mcp_support=self._mcp_support_payload(),
+                resume_metadata=self._resume_metadata,
             )
             return AgentRunResult(
                 status="error",
@@ -917,6 +1042,9 @@ class GenericEditRuntimeSession:
                 return execution
             result = await self._execute_action(
                 action,
+                loop="native_tool_calls",
+                iteration=iteration,
+                action_index=action_index,
                 spec_dir=spec_dir,
                 verbose=verbose,
                 phase=phase,
@@ -1002,7 +1130,9 @@ class GenericEditRuntimeSession:
             tests=tests,
             risks=risks,
             observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
             mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
         )
         response_lines = build_generic_edit_response(
             summary=summary,
@@ -1040,7 +1170,9 @@ class GenericEditRuntimeSession:
             trace=trace,
             summary=message,
             observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
             mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
         )
         return AgentRunResult(
             status="error",
@@ -1062,27 +1194,95 @@ class GenericEditRuntimeSession:
         self,
         action: dict[str, Any],
         *,
+        loop: str,
+        iteration: int,
+        action_index: int,
         spec_dir: Path,
         verbose: bool,
         phase: Any,
         subtask_id: str | None,
     ) -> ToolActionResult:
+        mutation_snapshot = self._build_mutation_snapshot(
+            action,
+            loop=loop,
+            iteration=iteration,
+            action_index=action_index,
+        )
         if action_tool(action) == "run_subagents":
-            return await self._run_subagents_action(
+            result = await self._run_subagents_action(
                 action,
                 spec_dir=spec_dir,
                 verbose=verbose,
                 phase=phase,
                 subtask_id=subtask_id,
             )
-        if self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
-            return await self._mcp_bridge.execute(action)
-        if is_mcp_action_name(action_tool(action)):
-            return unavailable_mcp_action_result(
+        elif action_tool(action) == ROLLBACK_TRANSACTION_TOOL:
+            result = self._rollback_transaction_action(action)
+        elif self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
+            result = await self._mcp_bridge.execute(action)
+        elif is_mcp_action_name(action_tool(action)):
+            result = unavailable_mcp_action_result(
                 action,
                 support=self._mcp_support_payload(),
             )
-        return await self._executor.execute(action)
+        else:
+            result = await self._executor.execute(action)
+        self._record_mutation_snapshot_result(mutation_snapshot, result)
+        return result
+
+    def _rollback_transaction_action(self, action: dict[str, Any]) -> ToolActionResult:
+        """Restore workspace files from captured mutation snapshots."""
+        try:
+            return execute_generic_edit_transaction_rollback(
+                action=action,
+                project_dir=self._executor.project_dir,
+                mutation_snapshots=self._mutation_snapshots,
+            )
+        except GenericEditRuntimeError as e:
+            return ToolActionResult(
+                tool=ROLLBACK_TRANSACTION_TOOL,
+                ok=False,
+                message=str(e),
+                data=dict(e.data),
+            )
+
+    def _build_mutation_snapshot(
+        self,
+        action: dict[str, Any],
+        *,
+        loop: str,
+        iteration: int,
+        action_index: int,
+    ) -> dict[str, Any] | None:
+        """Capture workspace preimages before a supported file mutation."""
+        tool = action_tool(action)
+        if tool not in SNAPSHOT_MUTATING_ACTIONS:
+            return None
+        snapshot_id = f"mutation-{len(self._mutation_snapshots) + 1}"
+        return build_generic_edit_mutation_snapshot(
+            action=action,
+            project_dir=self._executor.project_dir,
+            snapshot_id=snapshot_id,
+            transaction_id=f"{loop}-{iteration}",
+            loop=loop,
+            iteration=iteration,
+            action_index=action_index,
+        )
+
+    def _record_mutation_snapshot_result(
+        self,
+        snapshot: dict[str, Any] | None,
+        result: ToolActionResult,
+    ) -> None:
+        """Attach a successful mutation snapshot to result metadata and artifacts."""
+        if snapshot is None or not result.ok:
+            return
+        self._mutation_snapshots.append(snapshot)
+        result.data = {
+            **result.data,
+            "mutation_snapshot_id": snapshot["id"],
+            "rollback_available": snapshot["rollback"]["restorable"],
+        }
 
     async def _run_subagents_action(
         self,
@@ -1720,16 +1920,35 @@ def build_generic_edit_transaction(
         if action_tool(action) in MUTATING_LOCAL_ACTIONS
     ]
     affected_paths = sorted(
-        dict.fromkeys(path for action in actions for path in action_path_values(action))
+        dict.fromkeys(
+            [
+                *(path for action in actions for path in action_path_values(action)),
+                *(path for result in results for path in result_path_values(result)),
+            ]
+        )
     )
     mutated_paths = sorted(
         dict.fromkeys(
-            path
-            for action in actions
-            if action_tool(action) in MUTATING_LOCAL_ACTIONS
-            for path in action_path_values(action)
+            [
+                *(
+                    path
+                    for action in actions
+                    if action_tool(action) in MUTATING_LOCAL_ACTIONS
+                    for path in action_path_values(action)
+                ),
+                *(
+                    path
+                    for result in results
+                    for path in result_path_values(result, prefer_mutated=True)
+                ),
+            ]
         )
     )
+    mutation_snapshot_ids = [
+        str(result.data["mutation_snapshot_id"])
+        for result in results
+        if result.ok and result.data.get("mutation_snapshot_id")
+    ]
     first_failure_index = next(
         (index for index, result in enumerate(results, start=1) if not result.ok),
         None,
@@ -1765,6 +1984,7 @@ def build_generic_edit_transaction(
         "mutating_tools": mutating_tools,
         "affected_paths": affected_paths,
         "mutated_paths": mutated_paths,
+        "mutation_snapshot_ids": mutation_snapshot_ids,
         "recovery_required": status == "partial_failure",
         "can_resolve_partial_failure": transaction_can_resolve_partial_failure(
             status=status,
@@ -1793,15 +2013,22 @@ def build_transaction_recovery_plan(transaction: dict[str, Any]) -> dict[str, An
     """Return machine-readable repair/rollback guidance for one transaction."""
     mutated_paths = list(transaction.get("mutated_paths") or [])
     affected_paths = list(transaction.get("affected_paths") or [])
+    mutation_snapshot_ids = list(transaction.get("mutation_snapshot_ids") or [])
     return {
         "strategy": "repair_or_rollback",
         "mutated_paths": mutated_paths,
         "affected_paths": affected_paths,
         "rollback": {
             "recommended_tools": GENERIC_EDIT_ROLLBACK_TOOLS,
+            "preferred_action": {
+                "tool": ROLLBACK_TRANSACTION_TOOL,
+                "transaction_id": str(transaction.get("id") or ""),
+            },
+            "mutation_snapshot_ids": mutation_snapshot_ids,
             "instructions": [
                 "Run git_diff scoped to mutated paths to inspect partial changes.",
-                "Use apply_patch with an explicit reverse or corrective patch when rollback is preferred.",
+                "Use rollback_transaction when restoring mutation snapshot preimages is safe.",
+                "Use apply_patch with an explicit reverse or corrective patch when a patch-based rollback is safer.",
             ],
         },
         "repair": {
@@ -1816,7 +2043,624 @@ def build_transaction_recovery_plan(transaction: dict[str, Any]) -> dict[str, An
             "Either repair the partial mutation or intentionally roll it back.",
             "Verify workspace consistency before finish.",
         ],
+        "policy": build_generic_edit_recovery_policy(
+            transaction_id=str(transaction.get("id") or ""),
+            transaction_group_id=None,
+            affected_paths=affected_paths,
+            mutated_paths=mutated_paths,
+            rollback_restorable=bool(mutation_snapshot_ids),
+        ),
     }
+
+
+def build_generic_edit_recovery_next_actions(
+    *,
+    transaction_id: str,
+    transaction_group_id: str | None,
+    affected_paths: list[str],
+    mutated_paths: list[str],
+    rollback_operation: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return executable next actions for partial-failure recovery UIs."""
+    next_actions: list[dict[str, Any]] = []
+    inspect_paths = list(dict.fromkeys(mutated_paths or affected_paths or []))
+    if not inspect_paths:
+        inspect_paths = ["."]
+    for index, path in enumerate(inspect_paths, start=1):
+        action: dict[str, Any] = {
+            "id": f"inspect-{transaction_id}-{index}",
+            "kind": "inspect_diff",
+            "tool": "git_diff",
+            "action": {
+                "tool": "git_diff",
+                "path": path,
+                "max_chars": GENERIC_EDIT_RECOVERY_DIFF_MAX_CHARS,
+            },
+            "transaction_id": transaction_id,
+            "paths": [path],
+            "required_before_finish": True,
+        }
+        if transaction_group_id is not None:
+            action["transaction_group_id"] = transaction_group_id
+        next_actions.append(action)
+
+    rollback_action = dict(rollback_operation.get("action") or {})
+    if bool(rollback_operation.get("restorable")) and rollback_action:
+        action = {
+            "id": f"rollback-{transaction_id}",
+            "kind": ROLLBACK_TRANSACTION_TOOL,
+            "tool": ROLLBACK_TRANSACTION_TOOL,
+            "action": rollback_action,
+            "transaction_id": transaction_id,
+            "rollback_operation_id": str(rollback_operation.get("id") or ""),
+            "mutation_snapshot_ids": list(
+                rollback_operation.get("mutation_snapshot_ids") or []
+            ),
+            "required_before_finish": True,
+        }
+        if transaction_group_id is not None:
+            action["transaction_group_id"] = transaction_group_id
+        next_actions.append(action)
+    return next_actions
+
+
+def build_generic_edit_recovery_policy(
+    *,
+    transaction_id: str,
+    transaction_group_id: str | None,
+    affected_paths: list[str],
+    mutated_paths: list[str],
+    rollback_restorable: bool,
+) -> dict[str, Any]:
+    """Return a compact recovery policy for UI/orchestrator decisioning."""
+    path_scope = list(dict.fromkeys(mutated_paths or affected_paths or []))
+    resolution_strategies = ["repair_mutation"]
+    if rollback_restorable:
+        resolution_strategies.insert(0, ROLLBACK_TRANSACTION_TOOL)
+    required_next_action_kinds = ["inspect_diff"]
+    required_next_action_kinds.append(
+        ROLLBACK_TRANSACTION_TOOL if rollback_restorable else "repair_mutation"
+    )
+    policy: dict[str, Any] = {
+        "version": GENERIC_EDIT_RECOVERY_POLICY_VERSION,
+        "status": "requires_resolution",
+        "finish_blocked": True,
+        "transaction_id": transaction_id,
+        "path_scope": path_scope,
+        "resolution_strategies": resolution_strategies,
+        "preferred_strategy": resolution_strategies[0],
+        "rollback_restorable": rollback_restorable,
+        "required_next_action_kinds": required_next_action_kinds,
+        "recommended_verification_tools": list(
+            GENERIC_EDIT_RECOVERY_VERIFICATION_TOOLS
+        ),
+    }
+    if transaction_group_id is not None:
+        policy["transaction_group_id"] = transaction_group_id
+    return policy
+
+
+def build_generic_edit_recovery_plan_policy(
+    *,
+    transaction_summary: dict[str, Any],
+    transaction_group_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Return aggregate recovery policy metadata for unresolved failures."""
+    resolution_strategies: list[str] = []
+    for group in transaction_group_summary["transaction_groups"]:
+        if group.get("status") != "unresolved":
+            continue
+        policy = group.get("recovery_policy")
+        if not isinstance(policy, dict):
+            continue
+        for strategy in policy.get("resolution_strategies") or []:
+            strategy_value = str(strategy)
+            if strategy_value not in resolution_strategies:
+                resolution_strategies.append(strategy_value)
+    if not resolution_strategies:
+        resolution_strategies = [ROLLBACK_TRANSACTION_TOOL, "repair_mutation"]
+    return {
+        "version": GENERIC_EDIT_RECOVERY_POLICY_VERSION,
+        "status": "requires_resolution",
+        "finish_blocked": True,
+        "unresolved_transaction_count": transaction_summary[
+            "unresolved_partial_failure_count"
+        ],
+        "unresolved_transaction_group_count": transaction_group_summary[
+            "unresolved_transaction_group_count"
+        ],
+        "resolution_strategies": resolution_strategies,
+        "recommended_verification_tools": list(
+            GENERIC_EDIT_RECOVERY_VERIFICATION_TOOLS
+        ),
+    }
+
+
+def build_generic_edit_recovery_policy_status(
+    *,
+    strategy: str,
+    tool_sequence: list[str],
+) -> dict[str, Any]:
+    """Return policy status for a resolved recovery group."""
+    verification_observed = generic_edit_recovery_verification_observed(tool_sequence)
+    warnings = []
+    if not verification_observed:
+        warnings.append(
+            "Recovered transaction resolved without post-recovery verification."
+        )
+    return {
+        "version": GENERIC_EDIT_RECOVERY_POLICY_VERSION,
+        "status": "resolved",
+        "resolution_strategy": strategy,
+        "post_recovery_verification_observed": verification_observed,
+        "recommended_verification_tools": list(
+            GENERIC_EDIT_RECOVERY_VERIFICATION_TOOLS
+        ),
+        "warning_count": len(warnings),
+        "warnings": warnings,
+    }
+
+
+def generic_edit_recovery_verification_observed(tool_sequence: list[str]) -> bool:
+    """Return true when a recovery transaction ran a verification tool."""
+    return any(
+        tool in GENERIC_EDIT_RECOVERY_VERIFICATION_TOOLS for tool in tool_sequence
+    )
+
+
+def generic_edit_recovery_strategy_for_tools(tool_sequence: list[str]) -> str:
+    """Return a normalized recovery strategy label for a tool sequence."""
+    if ROLLBACK_TRANSACTION_TOOL in tool_sequence:
+        return ROLLBACK_TRANSACTION_TOOL
+    if any(tool in MUTATING_LOCAL_ACTIONS for tool in tool_sequence):
+        return "repair_mutation"
+    if set(tool_sequence) & WORKSPACE_RECOVERY_TOOLS:
+        return "inspect_or_verify"
+    return "path_coverage"
+
+
+def build_generic_edit_recovery_outcome(
+    *,
+    group: dict[str, Any],
+    resolution_transaction: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a compact resolved recovery outcome for UI/session history."""
+    tool_sequence = [
+        str(tool) for tool in resolution_transaction.get("tool_sequence") or []
+    ]
+    strategy = generic_edit_recovery_strategy_for_tools(tool_sequence)
+    return {
+        "transaction_group_id": str(group.get("id") or ""),
+        "partial_failure_transaction_id": str(
+            group.get("partial_failure_transaction_id") or ""
+        ),
+        "resolution_transaction_id": str(group.get("resolution_transaction_id") or ""),
+        "strategy": strategy,
+        "tool_sequence": tool_sequence,
+        "recovered_paths": list(group.get("mutated_paths") or []),
+        "mutation_snapshot_ids": list(group.get("mutation_snapshot_ids") or []),
+        "recovery_attempt_count": int(group.get("recovery_attempt_count") or 0),
+        "failed_recovery_attempt_count": int(
+            group.get("failed_recovery_attempt_count") or 0
+        ),
+        "policy_status": build_generic_edit_recovery_policy_status(
+            strategy=strategy,
+            tool_sequence=tool_sequence,
+        ),
+    }
+
+
+def build_generic_edit_recovery_attempt(
+    *,
+    attempt_number: int,
+    transaction: dict[str, Any],
+    transaction_index: int,
+    partial_failure: dict[str, Any],
+) -> dict[str, Any]:
+    """Return one compact recovery-attempt entry for a partial-failure group."""
+    tool_sequence = [str(tool) for tool in transaction.get("tool_sequence") or []]
+    status = str(transaction.get("status") or "")
+    if status != "complete":
+        strategy = "failed_attempt"
+    else:
+        strategy = generic_edit_recovery_strategy_for_tools(tool_sequence)
+    return {
+        "attempt_number": attempt_number,
+        "transaction_id": transaction_id_value(transaction, transaction_index),
+        "resolved": transaction_resolves_partial_failure(
+            transaction=transaction,
+            partial_failure=partial_failure,
+        ),
+        "strategy": strategy,
+        "status": status,
+        "tool_sequence": tool_sequence,
+        "affected_paths": list(transaction.get("affected_paths") or []),
+        "mutated_paths": list(transaction.get("mutated_paths") or []),
+        "mutation_snapshot_ids": list(transaction.get("mutation_snapshot_ids") or []),
+        "post_recovery_verification_observed": (
+            generic_edit_recovery_verification_observed(tool_sequence)
+        ),
+    }
+
+
+def build_generic_edit_mutation_snapshot(
+    *,
+    action: dict[str, Any],
+    project_dir: Path,
+    snapshot_id: str,
+    transaction_id: str,
+    loop: str,
+    iteration: int,
+    action_index: int,
+) -> dict[str, Any]:
+    """Capture file preimages for a supported mutating local action."""
+    paths = action_path_values(action)
+    preimages = [
+        build_generic_edit_file_preimage(project_dir=project_dir, path=path)
+        for path in paths
+    ]
+    restorable = bool(preimages) and all(
+        bool(preimage.get("restorable")) for preimage in preimages
+    )
+    return {
+        "id": snapshot_id,
+        "transaction_id": transaction_id,
+        "loop": loop,
+        "iteration": iteration,
+        "action_index": action_index,
+        "tool": action_tool(action),
+        "paths": paths,
+        "preimages": preimages,
+        "rollback": {
+            "strategy": "restore_preimages",
+            "restorable": restorable,
+            "instructions": [
+                "For existing file preimages, restore the captured content.",
+                "For missing file preimages, delete the created file if rollback is selected.",
+                "If a preimage is not restorable, inspect git_diff and repair manually.",
+            ],
+        },
+    }
+
+
+def build_generic_edit_file_preimage(
+    *,
+    project_dir: Path,
+    path: str,
+) -> dict[str, Any]:
+    """Return bounded pre-mutation file state for one workspace path."""
+    payload: dict[str, Any] = {
+        "path": path,
+        "exists": False,
+        "type": "missing",
+        "restorable": True,
+    }
+    try:
+        target = resolve_snapshot_workspace_path(project_dir, path)
+    except GenericEditRuntimeError as e:
+        payload.update(
+            {
+                "type": "invalid",
+                "restorable": False,
+                "error": str(e),
+            }
+        )
+        return payload
+    except OSError as e:
+        payload.update(
+            {
+                "type": "unreadable",
+                "restorable": False,
+                "error": str(e),
+            }
+        )
+        return payload
+
+    try:
+        if not target.exists():
+            return payload
+        payload["exists"] = True
+        if target.is_dir():
+            payload.update({"type": "directory", "restorable": False})
+            return payload
+        if not target.is_file():
+            payload.update({"type": "other", "restorable": False})
+            return payload
+
+        size = target.stat().st_size
+    except OSError as e:
+        payload.update(
+            {
+                "type": "unreadable",
+                "restorable": False,
+                "error": str(e),
+            }
+        )
+        return payload
+
+    payload.update({"type": "file", "bytes": size})
+    if size > MAX_MUTATION_PREIMAGE_BYTES:
+        payload.update(
+            {
+                "content_truncated": True,
+                "content_bytes_limit": MAX_MUTATION_PREIMAGE_BYTES,
+                "restorable": False,
+            }
+        )
+        return payload
+
+    try:
+        content = target.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        payload.update(
+            {
+                "content_encoding": "unknown",
+                "restorable": False,
+                "error": "File is not valid UTF-8 text.",
+            }
+        )
+        return payload
+    except OSError as e:
+        payload.update(
+            {
+                "restorable": False,
+                "error": str(e),
+            }
+        )
+        return payload
+
+    payload.update(
+        {
+            "content": content,
+            "content_encoding": "utf-8",
+            "content_truncated": False,
+            "line_count": len(content.splitlines()),
+        }
+    )
+    return payload
+
+
+def execute_generic_edit_transaction_rollback(
+    *,
+    action: dict[str, Any],
+    project_dir: Path,
+    mutation_snapshots: list[dict[str, Any]],
+) -> ToolActionResult:
+    """Apply a snapshot-backed rollback for one generic_edit transaction."""
+    transaction_id = str(action.get("transaction_id") or "").strip()
+    if not transaction_id:
+        raise GenericEditRuntimeError("rollback_transaction requires transaction_id.")
+    operation = build_generic_edit_rollback_operation(
+        transaction_id=transaction_id,
+        mutation_snapshots=mutation_snapshots,
+        snapshot_ids=normalize_string_list(action.get("snapshot_ids")),
+    )
+    if not operation["restorable"]:
+        reasons = (
+            "; ".join(operation["blocked_reasons"]) or "rollback is not restorable"
+        )
+        raise GenericEditRuntimeError(
+            f"Cannot rollback transaction {transaction_id}: {reasons}"
+        )
+
+    steps = validate_generic_edit_rollback_steps(
+        project_dir=project_dir,
+        steps=operation["steps"],
+    )
+    restored_paths: list[str] = []
+    deleted_paths: list[str] = []
+    try:
+        for step, target in steps:
+            if step["operation"] == "restore_file":
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(str(step["content"]), encoding="utf-8")
+                restored_paths.append(str(step["path"]))
+                continue
+            if target.exists():
+                target.unlink()
+            deleted_paths.append(str(step["path"]))
+    except OSError as e:
+        affected_paths = sorted(dict.fromkeys([*restored_paths, *deleted_paths]))
+        raise GenericEditRuntimeError(
+            f"Failed to rollback transaction {transaction_id}: {e}; "
+            f"restored_paths={restored_paths}; deleted_paths={deleted_paths}",
+            data={
+                "transaction_id": transaction_id,
+                "restored_paths": restored_paths,
+                "deleted_paths": deleted_paths,
+                "affected_paths": affected_paths,
+                "mutated_paths": affected_paths,
+                "recovery_strategy": ROLLBACK_TRANSACTION_TOOL,
+            },
+            restored_paths=restored_paths,
+            deleted_paths=deleted_paths,
+        ) from e
+
+    affected_paths = sorted(dict.fromkeys([*restored_paths, *deleted_paths]))
+    return ToolActionResult(
+        tool=ROLLBACK_TRANSACTION_TOOL,
+        ok=True,
+        message=(
+            f"Rolled back transaction {transaction_id} from "
+            f"{len(operation['mutation_snapshot_ids'])} mutation snapshot(s)."
+        ),
+        data={
+            "transaction_id": transaction_id,
+            "rollback_operation_id": operation["id"],
+            "mutation_snapshot_ids": operation["mutation_snapshot_ids"],
+            "affected_paths": affected_paths,
+            "mutated_paths": affected_paths,
+            "restored_paths": restored_paths,
+            "deleted_paths": deleted_paths,
+            "recovery_strategy": ROLLBACK_TRANSACTION_TOOL,
+        },
+    )
+
+
+def validate_generic_edit_rollback_steps(
+    *,
+    project_dir: Path,
+    steps: list[dict[str, Any]],
+) -> list[tuple[dict[str, Any], Path]]:
+    """Validate rollback targets before mutating the workspace."""
+    validated: list[tuple[dict[str, Any], Path]] = []
+    for step in steps:
+        path = str(step.get("path") or "")
+        target = resolve_snapshot_workspace_path(project_dir, path)
+        try:
+            if step.get("operation") == "restore_file":
+                parent = target.parent
+                if parent.exists() and not parent.is_dir():
+                    raise GenericEditRuntimeError(
+                        f"Cannot restore {path}: parent path is not a directory."
+                    )
+            elif target.exists() and target.is_dir():
+                raise GenericEditRuntimeError(
+                    f"Cannot delete rollback-created path {path}: it is a directory."
+                )
+        except OSError as e:
+            raise GenericEditRuntimeError(
+                f"Cannot validate rollback path {path}: {e}"
+            ) from e
+        validated.append((step, target))
+    return validated
+
+
+def build_generic_edit_rollback_operation(
+    *,
+    transaction_id: str,
+    mutation_snapshots: list[dict[str, Any]],
+    snapshot_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build an executable rollback operation from mutation snapshots."""
+    selected = select_generic_edit_rollback_snapshots(
+        transaction_id=transaction_id,
+        mutation_snapshots=mutation_snapshots,
+        snapshot_ids=snapshot_ids or [],
+    )
+    blocked_reasons: list[str] = []
+    requested_snapshot_ids = list(
+        dict.fromkeys(
+            str(snapshot_id) for snapshot_id in (snapshot_ids or []) if snapshot_id
+        )
+    )
+    if requested_snapshot_ids:
+        selected_snapshot_ids = {str(snapshot.get("id")) for snapshot in selected}
+        missing_snapshot_ids = [
+            snapshot_id
+            for snapshot_id in requested_snapshot_ids
+            if snapshot_id not in selected_snapshot_ids
+        ]
+        if missing_snapshot_ids:
+            blocked_reasons.append(
+                "Requested snapshot ids not found: " + ", ".join(missing_snapshot_ids)
+            )
+    if not selected:
+        blocked_reasons.append("No mutation snapshots found for transaction.")
+
+    steps: list[dict[str, Any]] = []
+    for snapshot in reversed(selected):
+        if not bool(snapshot.get("rollback", {}).get("restorable")):
+            blocked_reasons.append(
+                f"Snapshot {snapshot.get('id', '<unknown>')} is not restorable."
+            )
+        for preimage in snapshot.get("preimages") or []:
+            step = build_generic_edit_rollback_step(preimage)
+            if step is None:
+                blocked_reasons.append(
+                    "Preimage for "
+                    f"{preimage.get('path', '<unknown>')} is not restorable."
+                )
+                continue
+            steps.append(step)
+
+    affected_paths = sorted(
+        dict.fromkeys(str(step["path"]) for step in steps if step.get("path"))
+    )
+    snapshot_id_values = [str(snapshot.get("id")) for snapshot in selected]
+    return {
+        "id": f"rollback-{transaction_id}",
+        "tool": ROLLBACK_TRANSACTION_TOOL,
+        "transaction_id": transaction_id,
+        "mutation_snapshot_ids": snapshot_id_values,
+        "restorable": bool(selected) and not blocked_reasons,
+        "blocked_reasons": blocked_reasons,
+        "affected_paths": affected_paths,
+        "application_order": "reverse_snapshot_order",
+        "action": {
+            "tool": ROLLBACK_TRANSACTION_TOOL,
+            "transaction_id": transaction_id,
+        },
+        "steps": steps,
+    }
+
+
+def select_generic_edit_rollback_snapshots(
+    *,
+    transaction_id: str,
+    mutation_snapshots: list[dict[str, Any]],
+    snapshot_ids: list[str],
+) -> list[dict[str, Any]]:
+    """Return snapshots selected for one rollback operation."""
+    requested_ids = {str(snapshot_id) for snapshot_id in snapshot_ids if snapshot_id}
+    return [
+        snapshot
+        for snapshot in mutation_snapshots
+        if str(snapshot.get("transaction_id")) == transaction_id
+        and (not requested_ids or str(snapshot.get("id")) in requested_ids)
+    ]
+
+
+def build_generic_edit_rollback_step(
+    preimage: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Return one rollback step without embedding content in recovery plans."""
+    path = str(preimage.get("path") or "")
+    if not path or not bool(preimage.get("restorable")):
+        return None
+    if not bool(preimage.get("exists")):
+        return {"operation": "delete_created_path", "path": path}
+    if preimage.get("type") != "file" or preimage.get("content_encoding") != "utf-8":
+        return None
+    if "content" not in preimage:
+        return None
+    return {
+        "operation": "restore_file",
+        "path": path,
+        "content": str(preimage.get("content")),
+    }
+
+
+def rollback_operation_for_plan(operation: dict[str, Any]) -> dict[str, Any]:
+    """Return a recovery-plan-safe rollback operation without file contents."""
+    return {key: value for key, value in operation.items() if key != "steps"} | {
+        "steps": [
+            {key: value for key, value in step.items() if key != "content"}
+            for step in operation["steps"]
+        ]
+    }
+
+
+def resolve_snapshot_workspace_path(project_dir: Path, path: str) -> Path:
+    """Resolve a workspace path for preimage capture without escaping root."""
+    try:
+        validate_workspace_relative_path(path)
+    except PatchProposalError as e:
+        raise GenericEditRuntimeError(
+            f"Mutation snapshot path is unsafe: {path}"
+        ) from e
+    candidate = Path(path)
+    if candidate.is_absolute() or any(
+        part in {"", ".", ".."} for part in candidate.parts
+    ):
+        raise GenericEditRuntimeError(f"Mutation snapshot path is unsafe: {path}")
+    root = project_dir.resolve()
+    target = (root / candidate).resolve()
+    if target != root and root not in target.parents:
+        raise GenericEditRuntimeError(
+            f"Mutation snapshot path escapes workspace: {path}"
+        )
+    return target
 
 
 def action_path_values(action: dict[str, Any]) -> list[str]:
@@ -1826,10 +2670,31 @@ def action_path_values(action: dict[str, Any]) -> list[str]:
         value = action.get(field_name)
         if isinstance(value, str) and value:
             paths.append(value)
+    if action_tool(action) == "apply_patch" and isinstance(action.get("patch"), str):
+        paths.extend(sorted(extract_patch_paths(action["patch"])))
     raw_paths = action.get("paths")
     if isinstance(raw_paths, list):
         paths.extend(path for path in raw_paths if isinstance(path, str) and path)
-    return paths
+    return list(dict.fromkeys(paths))
+
+
+def result_path_values(
+    result: ToolActionResult,
+    *,
+    prefer_mutated: bool = False,
+) -> list[str]:
+    """Return workspace paths reported by an action result."""
+    field_names = (
+        ("mutated_paths", "restored_paths", "deleted_paths", "affected_paths")
+        if prefer_mutated
+        else ("affected_paths", "mutated_paths", "restored_paths", "deleted_paths")
+    )
+    paths: list[str] = []
+    for field_name in field_names:
+        value = result.data.get(field_name)
+        if isinstance(value, list):
+            paths.extend(str(path) for path in value if path)
+    return list(dict.fromkeys(paths))
 
 
 def transaction_can_resolve_partial_failure(
@@ -1917,18 +2782,35 @@ def save_generic_edit_artifacts(
     tests: list[str] | None = None,
     risks: list[str] | None = None,
     observation_path: Path | None = None,
+    mutation_snapshots: list[dict[str, Any]] | None = None,
     mcp_support: dict[str, Any] | None = None,
+    resume_metadata: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """Persist trace/result artifacts for a generic edit run."""
     artifact_dir = spec_dir / "artifacts"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     paths = generic_edit_artifact_paths(artifact_dir)
     timestamp = datetime.now(UTC).isoformat()
+    mutation_snapshots = list(mutation_snapshots or [])
     trace_summary = summarize_generic_edit_trace(trace)
     transaction_summary = summarize_generic_edit_transactions(trace)
+    transaction_group_summary = summarize_generic_edit_transaction_groups(
+        transaction_summary=transaction_summary,
+        mutation_snapshots=mutation_snapshots,
+    )
+    events = build_generic_edit_events(
+        trace=trace,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        transaction_group_summary=transaction_group_summary,
+        resume_metadata=resume_metadata,
+    )
     recovery_plan = build_generic_edit_recovery_plan(
         transaction_summary=transaction_summary,
+        transaction_group_summary=transaction_group_summary,
         plan_path=paths["recovery_plan"],
+        mutation_snapshot_path=paths["mutation_snapshots"],
+        mutation_snapshots=mutation_snapshots,
     )
     recovery_checkpoint = build_generic_edit_recovery_checkpoint(
         timestamp=timestamp,
@@ -1940,11 +2822,41 @@ def save_generic_edit_artifacts(
         next_iteration=len(trace) + 1,
         trace_summary=trace_summary,
         transaction_summary=transaction_summary,
-        trace_path=paths["trace"],
-        observation_path=observation_path,
-        checkpoint_path=paths["recovery_checkpoint"],
+        artifact_refs={
+            "trace": paths["trace"],
+            "observation": observation_path,
+            "checkpoint": paths["recovery_checkpoint"],
+            "mutation_snapshots": paths["mutation_snapshots"],
+            "transaction_groups": paths["transaction_groups"],
+        },
         recovery_plan=recovery_plan,
+        mutation_snapshots=mutation_snapshots,
+        transaction_group_summary=transaction_group_summary,
         mcp_support=mcp_support,
+    )
+    session_state = build_generic_edit_session_state(
+        timestamp=timestamp,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        status=status,
+        stop_reason=stop_reason,
+        message=message,
+        trace_summary=trace_summary,
+        iteration_count=len(trace),
+        transaction_summary=transaction_summary,
+        transaction_group_summary=transaction_group_summary,
+        artifact_refs={
+            "trace": paths["trace"],
+            "events": paths["events"],
+            "checkpoint": paths["recovery_checkpoint"],
+            "recovery_plan": paths["recovery_plan"],
+            "mutation_snapshots": paths["mutation_snapshots"],
+            "transaction_groups": paths["transaction_groups"],
+        },
+        recovery_checkpoint=recovery_checkpoint,
+        recovery_plan=recovery_plan,
+        mutation_snapshots=mutation_snapshots,
+        resume_metadata=resume_metadata,
     )
 
     write_json_artifact(
@@ -1972,6 +2884,8 @@ def save_generic_edit_artifacts(
             "timeline": trace_summary["action_timeline"],
         },
     )
+    write_generic_edit_events(paths["events"], events)
+    write_json_artifact(paths["session_state"], session_state)
     result_payload = build_generic_edit_result_payload(
         timestamp=timestamp,
         provider_name=provider_name,
@@ -1982,11 +2896,20 @@ def save_generic_edit_artifacts(
         trace=trace,
         trace_summary=trace_summary,
         transaction_summary=transaction_summary,
+        transaction_group_summary=transaction_group_summary,
         tests=tests,
         risks=risks,
         mcp_support=mcp_support,
         recovery_checkpoint=recovery_checkpoint,
         recovery_plan=recovery_plan,
+        mutation_snapshot_path=paths["mutation_snapshots"],
+        mutation_snapshots=mutation_snapshots,
+        transaction_group_path=paths["transaction_groups"],
+        event_path=paths["events"],
+        events=events,
+        session_state_path=paths["session_state"],
+        artifact_manifest_path=paths["artifact_manifest"],
+        resume_metadata=resume_metadata,
     )
     if observation_path is not None:
         result_payload["observation_artifact"] = str(observation_path)
@@ -1998,6 +2921,26 @@ def save_generic_edit_artifacts(
         write_json_artifact(paths["recovery_plan"], recovery_plan)
     else:
         clear_generic_edit_recovery_checkpoint(paths["recovery_plan"])
+    if mutation_snapshots:
+        write_generic_edit_mutation_snapshots(
+            paths["mutation_snapshots"],
+            timestamp=timestamp,
+            provider_name=provider_name,
+            subtask_id=subtask_id,
+            mutation_snapshots=mutation_snapshots,
+        )
+    else:
+        clear_generic_edit_recovery_checkpoint(paths["mutation_snapshots"])
+    if transaction_group_summary["transaction_group_count"]:
+        write_generic_edit_transaction_groups(
+            paths["transaction_groups"],
+            timestamp=timestamp,
+            provider_name=provider_name,
+            subtask_id=subtask_id,
+            transaction_group_summary=transaction_group_summary,
+        )
+    else:
+        clear_generic_edit_recovery_checkpoint(paths["transaction_groups"])
     write_json_artifact(paths["result"], result_payload)
     write_generic_edit_transactions(paths["transactions"], transaction_summary)
     paths["summary"].write_text(
@@ -2009,16 +2952,46 @@ def save_generic_edit_artifacts(
             summary=summary,
             trace_summary=trace_summary,
             transaction_summary=transaction_summary,
+            transaction_group_summary=transaction_group_summary,
             tests=tests,
             risks=risks,
             mcp_support=mcp_support,
             recovery_checkpoint=recovery_checkpoint,
             recovery_plan=recovery_plan,
+            mutation_snapshot_path=paths["mutation_snapshots"],
+            mutation_snapshots=mutation_snapshots,
+            transaction_group_path=paths["transaction_groups"],
+            event_path=paths["events"],
+            events=events,
+            artifact_manifest_path=paths["artifact_manifest"],
         ),
         encoding="utf-8",
     )
+    artifact_manifest = build_generic_edit_artifact_manifest(
+        timestamp=timestamp,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        status=status,
+        stop_reason=stop_reason,
+        paths=paths,
+        observation_path=observation_path,
+        trace_summary=trace_summary,
+        iteration_count=len(trace),
+        transaction_summary=transaction_summary,
+        transaction_group_summary=transaction_group_summary,
+        recovery_checkpoint=recovery_checkpoint,
+        recovery_plan=recovery_plan,
+        mutation_snapshots=mutation_snapshots,
+        events=events,
+        resume_metadata=resume_metadata,
+        mcp_support=mcp_support,
+    )
+    write_json_artifact(paths["artifact_manifest"], artifact_manifest)
 
     artifacts = generic_edit_artifact_payload(paths)
+    artifacts["generic_edit_events"] = str(paths["events"])
+    artifacts["generic_edit_session_state"] = str(paths["session_state"])
+    artifacts["generic_edit_artifact_manifest"] = str(paths["artifact_manifest"])
     if observation_path is not None:
         artifacts["generic_edit_observations"] = str(observation_path)
     if recovery_checkpoint is not None:
@@ -2027,26 +3000,194 @@ def save_generic_edit_artifacts(
         )
     if recovery_plan is not None:
         artifacts["generic_edit_recovery_plan"] = str(paths["recovery_plan"])
+    if mutation_snapshots:
+        artifacts["generic_edit_mutation_snapshots"] = str(paths["mutation_snapshots"])
+    if transaction_group_summary["transaction_group_count"]:
+        artifacts["generic_edit_transaction_groups"] = str(paths["transaction_groups"])
     return artifacts
 
 
 def generic_edit_artifact_paths(artifact_dir: Path) -> dict[str, Path]:
     return {
         "trace": artifact_dir / "generic_edit_trace.json",
+        "events": artifact_dir / "generic_edit_events.jsonl",
+        "session_state": artifact_dir / "generic_edit_session_state.json",
         "timeline": artifact_dir / "generic_edit_timeline.json",
         "transactions": artifact_dir / "generic_edit_transactions.jsonl",
+        "transaction_groups": artifact_dir / "generic_edit_transaction_groups.json",
         "recovery_checkpoint": artifact_dir / "generic_edit_recovery_checkpoint.json",
         "recovery_plan": artifact_dir / "generic_edit_recovery_plan.json",
+        "mutation_snapshots": artifact_dir / "generic_edit_mutation_snapshots.json",
         "summary": artifact_dir / "generic_edit_summary.md",
         "result": artifact_dir / "generic_edit_result.json",
+        "artifact_manifest": artifact_dir / "generic_edit_artifact_manifest.json",
     }
 
 
 def write_json_artifact(path: Path, payload: dict[str, Any]) -> None:
-    path.write_text(
+    path.write_text(  # NOSONAR - artifact paths are constructed internally.
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def write_generic_edit_mutation_snapshots(
+    path: Path,
+    *,
+    timestamp: str,
+    provider_name: str,
+    subtask_id: str | None,
+    mutation_snapshots: list[dict[str, Any]],
+) -> None:
+    """Persist pre-mutation file snapshots for repair/rollback recovery."""
+    write_json_artifact(
+        path,
+        {
+            "artifact_type": "generic_edit_mutation_snapshots",
+            "timestamp": timestamp,
+            "provider": provider_name,
+            "subtask_id": subtask_id,
+            "snapshot_count": len(mutation_snapshots),
+            "snapshots": mutation_snapshots,
+        },
+    )
+
+
+def write_generic_edit_transaction_groups(
+    path: Path,
+    *,
+    timestamp: str,
+    provider_name: str,
+    subtask_id: str | None,
+    transaction_group_summary: dict[str, Any],
+) -> None:
+    """Persist partial-failure transaction groups for UI/recovery consumers."""
+    write_json_artifact(
+        path,
+        {
+            "artifact_type": "generic_edit_transaction_groups",
+            "timestamp": timestamp,
+            "provider": provider_name,
+            "subtask_id": subtask_id,
+            "group_count": transaction_group_summary["transaction_group_count"],
+            "status_counts": transaction_group_summary[
+                "transaction_group_status_counts"
+            ],
+            "unresolved_group_count": transaction_group_summary[
+                "unresolved_transaction_group_count"
+            ],
+            "unresolved_group_ids": transaction_group_summary[
+                "unresolved_transaction_group_ids"
+            ],
+            "recovery_attempt_count": transaction_group_summary[
+                "recovery_attempt_count"
+            ],
+            "failed_recovery_attempt_count": transaction_group_summary[
+                "failed_recovery_attempt_count"
+            ],
+            "recovery_outcome_count": transaction_group_summary[
+                "recovery_outcome_count"
+            ],
+            "recovery_outcomes": transaction_group_summary["recovery_outcomes"],
+            "transaction_groups": transaction_group_summary["transaction_groups"],
+        },
+    )
+
+
+def write_generic_edit_events(path: Path, events: list[dict[str, Any]]) -> None:
+    """Persist normalized generic_edit events for UI/control-plane consumers."""
+    path.write_text(
+        "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events),
+        encoding="utf-8",
+    )
+
+
+def build_generic_edit_session_state(
+    *,
+    timestamp: str,
+    provider_name: str,
+    subtask_id: str | None,
+    status: str,
+    stop_reason: str,
+    message: str,
+    trace_summary: dict[str, Any],
+    iteration_count: int,
+    transaction_summary: dict[str, Any],
+    transaction_group_summary: dict[str, Any],
+    artifact_refs: dict[str, Path],
+    recovery_checkpoint: dict[str, Any] | None,
+    recovery_plan: dict[str, Any] | None,
+    mutation_snapshots: list[dict[str, Any]],
+    resume_metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build the compact persisted state contract for resume/control-plane UI."""
+    resumable = recovery_checkpoint is not None
+    state: dict[str, Any] = {
+        "artifact_type": "generic_edit_session_state",
+        "timestamp": timestamp,
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "status": status,
+        "stop_reason": stop_reason,
+        "message": message,
+        "resumed": resume_metadata is not None,
+        "resumable": resumable,
+        "loop": trace_summary["loop"],
+        "iteration_count": iteration_count,
+        "action_count": trace_summary["action_count"],
+        "failed_action_count": trace_summary["failed_action_count"],
+        "transaction_count": transaction_summary["transaction_count"],
+        "transaction_group_count": transaction_group_summary["transaction_group_count"],
+        "recovery_required": transaction_summary["recovery_required"],
+        "recovery_resolved": transaction_summary["recovery_resolved"],
+        "unresolved_partial_failure_ids": transaction_summary[
+            "unresolved_partial_failure_ids"
+        ],
+        "unresolved_transaction_group_ids": transaction_group_summary[
+            "unresolved_transaction_group_ids"
+        ],
+        "artifacts": {
+            "trace": str(artifact_refs["trace"]),
+            "events": str(artifact_refs["events"]),
+        },
+    }
+    if resume_metadata is not None:
+        state["resume"] = dict(resume_metadata)
+    if recovery_plan is not None:
+        state["artifacts"]["recovery_plan"] = recovery_plan["artifact_path"]
+    if mutation_snapshots:
+        state["artifacts"]["mutation_snapshots"] = str(
+            artifact_refs["mutation_snapshots"]
+        )
+    if transaction_group_summary["transaction_group_count"]:
+        state["artifacts"]["transaction_groups"] = str(
+            artifact_refs["transaction_groups"]
+        )
+    if not resumable:
+        state["resume_action"] = None
+        state["resume_inputs"] = {}
+        return state
+
+    resume = recovery_checkpoint["resume"]
+    state["resume_action"] = {
+        "runtime": "generic_edit",
+        "checkpoint_path": recovery_checkpoint["artifact_path"],
+        "strategy": resume["strategy"],
+        "next_iteration": recovery_checkpoint["next_iteration"],
+    }
+    state["resume_inputs"] = {
+        "trace_artifact": str(artifact_refs["trace"]),
+        "event_artifact": str(artifact_refs["events"]),
+    }
+    if recovery_plan is not None:
+        state["resume_inputs"]["recovery_plan_artifact"] = recovery_plan[
+            "artifact_path"
+        ]
+    if mutation_snapshots:
+        state["resume_inputs"]["mutation_snapshot_artifact"] = str(
+            artifact_refs["mutation_snapshots"]
+        )
+    return state
 
 
 def clear_generic_edit_recovery_checkpoint(path: Path) -> None:
@@ -2068,11 +3209,20 @@ def build_generic_edit_result_payload(
     trace: list[dict[str, Any]],
     trace_summary: dict[str, Any],
     transaction_summary: dict[str, Any],
+    transaction_group_summary: dict[str, Any],
     tests: list[str] | None,
     risks: list[str] | None,
     mcp_support: dict[str, Any] | None,
     recovery_checkpoint: dict[str, Any] | None,
     recovery_plan: dict[str, Any] | None,
+    mutation_snapshot_path: Path,
+    mutation_snapshots: list[dict[str, Any]],
+    transaction_group_path: Path,
+    event_path: Path,
+    events: list[dict[str, Any]],
+    session_state_path: Path,
+    artifact_manifest_path: Path,
+    resume_metadata: dict[str, Any] | None,
 ) -> dict[str, Any]:
     payload = {
         "timestamp": timestamp,
@@ -2082,15 +3232,24 @@ def build_generic_edit_result_payload(
         "stop_reason": stop_reason,
         "message": message,
         "mcp_support": mcp_support,
+        "resumed": resume_metadata is not None,
         **trace_summary,
         **transaction_summary,
+        **transaction_group_summary,
         "iteration_count": len(trace),
         "tests": tests or [],
         "test_count": len(tests or []),
         "risks": risks or [],
         "risk_count": len(risks or []),
         "recoverable": recovery_checkpoint is not None,
+        "mutation_snapshot_count": len(mutation_snapshots),
+        "event_count": len(events),
+        "event_artifact": str(event_path),
+        "session_state_artifact": str(session_state_path),
+        "artifact_manifest_artifact": str(artifact_manifest_path),
     }
+    if resume_metadata is not None:
+        payload["resume"] = dict(resume_metadata)
     if recovery_checkpoint is not None:
         payload.update(
             {
@@ -2101,6 +3260,10 @@ def build_generic_edit_result_payload(
     if recovery_plan is not None:
         payload["recovery_plan_artifact"] = recovery_plan["artifact_path"]
         payload["recovery_plan"] = recovery_plan
+    if mutation_snapshots:
+        payload["mutation_snapshot_artifact"] = str(mutation_snapshot_path)
+    if transaction_group_summary["transaction_group_count"]:
+        payload["transaction_group_artifact"] = str(transaction_group_path)
     return payload
 
 
@@ -2117,6 +3280,223 @@ def write_generic_edit_transactions(
     )
 
 
+def build_generic_edit_artifact_manifest(
+    *,
+    timestamp: str,
+    provider_name: str,
+    subtask_id: str | None,
+    status: str,
+    stop_reason: str,
+    paths: dict[str, Path],
+    observation_path: Path | None,
+    trace_summary: dict[str, Any],
+    iteration_count: int,
+    transaction_summary: dict[str, Any],
+    transaction_group_summary: dict[str, Any],
+    recovery_checkpoint: dict[str, Any] | None,
+    recovery_plan: dict[str, Any] | None,
+    mutation_snapshots: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    resume_metadata: dict[str, Any] | None,
+    mcp_support: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build one stable manifest for generic_edit UI/control-plane artifacts."""
+    artifacts = generic_edit_manifest_artifact_entries(
+        paths=paths,
+        observation_path=observation_path,
+        has_recovery_checkpoint=recovery_checkpoint is not None,
+        has_recovery_plan=recovery_plan is not None,
+        has_mutation_snapshots=bool(mutation_snapshots),
+        has_transaction_groups=bool(
+            transaction_group_summary["transaction_group_count"]
+        ),
+    )
+    return {
+        "artifact_type": "generic_edit_artifact_manifest",
+        "schema_version": GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION,
+        "timestamp": timestamp,
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "status": status,
+        "stop_reason": stop_reason,
+        "entrypoints": {
+            "result": str(paths["result"]),
+            "summary": str(paths["summary"]),
+            "events": str(paths["events"]),
+            "session_state": str(paths["session_state"]),
+            "trace": str(paths["trace"]),
+        },
+        "flags": {
+            "recoverable": recovery_checkpoint is not None,
+            "resumable": recovery_checkpoint is not None,
+            "resumed": resume_metadata is not None,
+            "recovery_required": transaction_summary["recovery_required"],
+            "recovery_resolved": transaction_summary["recovery_resolved"],
+            "has_recovery_plan": recovery_plan is not None,
+            "has_mutation_snapshots": bool(mutation_snapshots),
+            "has_transaction_groups": bool(
+                transaction_group_summary["transaction_group_count"]
+            ),
+        },
+        "counts": {
+            "iteration_count": iteration_count,
+            "action_count": trace_summary["action_count"],
+            "failed_action_count": trace_summary["failed_action_count"],
+            "event_count": len(events),
+            "transaction_count": transaction_summary["transaction_count"],
+            "transaction_group_count": transaction_group_summary[
+                "transaction_group_count"
+            ],
+            "mutation_snapshot_count": len(mutation_snapshots),
+            "recovery_attempt_count": transaction_group_summary[
+                "recovery_attempt_count"
+            ],
+            "failed_recovery_attempt_count": transaction_group_summary[
+                "failed_recovery_attempt_count"
+            ],
+        },
+        "artifacts": artifacts,
+        "mcp_support": mcp_support,
+        "resume": dict(resume_metadata) if resume_metadata is not None else None,
+    }
+
+
+def generic_edit_manifest_artifact_entries(
+    *,
+    paths: dict[str, Path],
+    observation_path: Path | None,
+    has_recovery_checkpoint: bool,
+    has_recovery_plan: bool,
+    has_mutation_snapshots: bool,
+    has_transaction_groups: bool,
+) -> list[dict[str, Any]]:
+    """Return manifest entries in a stable UI-friendly order."""
+    entries = [
+        generic_edit_manifest_entry(
+            "generic_edit_artifact_manifest",
+            paths["artifact_manifest"],
+            kind="manifest",
+            active=True,
+            required=True,
+            present=True,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_result",
+            paths["result"],
+            kind="result",
+            active=True,
+            required=True,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_summary",
+            paths["summary"],
+            kind="summary",
+            active=True,
+            required=True,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_trace",
+            paths["trace"],
+            kind="trace",
+            active=True,
+            required=True,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_events",
+            paths["events"],
+            kind="events",
+            active=True,
+            required=True,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_session_state",
+            paths["session_state"],
+            kind="session_state",
+            active=True,
+            required=True,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_timeline",
+            paths["timeline"],
+            kind="timeline",
+            active=True,
+            required=True,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_transactions",
+            paths["transactions"],
+            kind="transactions",
+            active=True,
+            required=True,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_observations",
+            observation_path,
+            kind="observations",
+            active=observation_path is not None,
+            required=False,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_recovery_checkpoint",
+            paths["recovery_checkpoint"],
+            kind="checkpoint",
+            active=has_recovery_checkpoint,
+            required=False,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_recovery_plan",
+            paths["recovery_plan"],
+            kind="recovery_plan",
+            active=has_recovery_plan,
+            required=False,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_mutation_snapshots",
+            paths["mutation_snapshots"],
+            kind="mutation_snapshots",
+            active=has_mutation_snapshots,
+            required=False,
+        ),
+        generic_edit_manifest_entry(
+            "generic_edit_transaction_groups",
+            paths["transaction_groups"],
+            kind="transaction_groups",
+            active=has_transaction_groups,
+            required=False,
+        ),
+    ]
+    return [entry for entry in entries if entry["path"]]
+
+
+def generic_edit_manifest_entry(
+    name: str,
+    path: Path | None,
+    *,
+    kind: str,
+    active: bool,
+    required: bool,
+    present: bool | None = None,
+) -> dict[str, Any]:
+    """Return one artifact manifest entry."""
+    if path is None:
+        return {
+            "name": name,
+            "kind": kind,
+            "path": None,
+            "active": active,
+            "required": required,
+            "present": False,
+        }
+    return {
+        "name": name,
+        "kind": kind,
+        "path": str(path),
+        "active": active,
+        "required": required,
+        "present": path.exists() if present is None else present,
+    }
+
+
 def build_generic_edit_summary_markdown(
     *,
     provider_name: str,
@@ -2126,11 +3506,18 @@ def build_generic_edit_summary_markdown(
     summary: str,
     trace_summary: dict[str, Any],
     transaction_summary: dict[str, Any],
+    transaction_group_summary: dict[str, Any],
     tests: list[str] | None,
     risks: list[str] | None,
     mcp_support: dict[str, Any] | None,
     recovery_checkpoint: dict[str, Any] | None,
     recovery_plan: dict[str, Any] | None,
+    mutation_snapshot_path: Path,
+    mutation_snapshots: list[dict[str, Any]],
+    transaction_group_path: Path,
+    event_path: Path,
+    events: list[dict[str, Any]],
+    artifact_manifest_path: Path,
 ) -> str:
     lines = [
         "# Generic Edit Summary",
@@ -2147,7 +3534,17 @@ def build_generic_edit_summary_markdown(
         summary,
         *generic_edit_timeline_lines(trace_summary["action_timeline"]),
         *generic_edit_recovery_lines(transaction_summary),
+        *generic_edit_transaction_group_lines(
+            transaction_group_summary=transaction_group_summary,
+            transaction_group_path=transaction_group_path,
+        ),
+        *generic_edit_event_lines(event_path=event_path, events=events),
+        *generic_edit_artifact_manifest_lines(artifact_manifest_path),
         *generic_edit_recovery_plan_lines(recovery_plan),
+        *generic_edit_mutation_snapshot_lines(
+            mutation_snapshot_path=mutation_snapshot_path,
+            mutation_snapshots=mutation_snapshots,
+        ),
         *generic_edit_resume_lines(recovery_checkpoint),
         *generic_edit_test_lines(tests),
         *generic_edit_risk_lines(risks),
@@ -2166,10 +3563,10 @@ def build_generic_edit_recovery_checkpoint(
     next_iteration: int,
     trace_summary: dict[str, Any],
     transaction_summary: dict[str, Any],
-    trace_path: Path,
-    observation_path: Path | None,
-    checkpoint_path: Path,
+    artifact_refs: dict[str, Path | None],
     recovery_plan: dict[str, Any] | None,
+    mutation_snapshots: list[dict[str, Any]],
+    transaction_group_summary: dict[str, Any],
     mcp_support: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     """Build resumable generic_edit state for interrupted/error runs."""
@@ -2184,6 +3581,20 @@ def build_generic_edit_recovery_checkpoint(
         stop_reason=stop_reason,
         transaction_summary=transaction_summary,
     )
+    trace_path = artifact_refs["trace"]
+    checkpoint_path = artifact_refs["checkpoint"]
+    mutation_snapshot_path = artifact_refs["mutation_snapshots"]
+    transaction_group_path = artifact_refs["transaction_groups"]
+    observation_path = artifact_refs.get("observation")
+    if (
+        trace_path is None
+        or checkpoint_path is None
+        or mutation_snapshot_path is None
+        or transaction_group_path is None
+    ):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery artifact paths are incomplete."
+        )
     checkpoint = {
         "timestamp": timestamp,
         "provider": provider_name,
@@ -2193,7 +3604,9 @@ def build_generic_edit_recovery_checkpoint(
         "message": message,
         "artifact_path": str(checkpoint_path),
         "trace_artifact": str(trace_path),
-        "observation_artifact": str(observation_path) if observation_path else None,
+        "observation_artifact": (
+            str(observation_path) if observation_path is not None else None
+        ),
         "next_iteration": next_iteration,
         "recoverable": True,
         "resume": {
@@ -2210,8 +3623,12 @@ def build_generic_edit_recovery_checkpoint(
         },
         "recent_actions": list(trace_summary.get("action_timeline") or [])[-10:],
         "transaction_summary": transaction_summary,
+        "transaction_group_summary": transaction_group_summary,
         "unresolved_partial_failure_ids": transaction_summary[
             "unresolved_partial_failure_ids"
+        ],
+        "unresolved_transaction_group_ids": transaction_group_summary[
+            "unresolved_transaction_group_ids"
         ],
         "last_partial_failure_id": transaction_summary["last_partial_failure_id"],
         "last_partial_failure_affected_paths": transaction_summary[
@@ -2225,13 +3642,24 @@ def build_generic_edit_recovery_checkpoint(
     if recovery_plan is not None:
         checkpoint["recovery_plan_artifact"] = recovery_plan["artifact_path"]
         checkpoint["recovery_plan"] = recovery_plan
+    if mutation_snapshots:
+        checkpoint["mutation_snapshot_artifact"] = str(mutation_snapshot_path)
+        checkpoint["mutation_snapshot_count"] = len(mutation_snapshots)
+    if transaction_group_summary["transaction_group_count"]:
+        checkpoint["transaction_group_artifact"] = str(transaction_group_path)
+        checkpoint["transaction_group_count"] = transaction_group_summary[
+            "transaction_group_count"
+        ]
     return checkpoint
 
 
 def build_generic_edit_recovery_plan(
     *,
     transaction_summary: dict[str, Any],
+    transaction_group_summary: dict[str, Any],
     plan_path: Path,
+    mutation_snapshot_path: Path,
+    mutation_snapshots: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
     """Build a machine-readable recovery plan for unresolved partial failures."""
     unresolved_ids = transaction_summary["unresolved_partial_failure_ids"]
@@ -2243,18 +3671,52 @@ def build_generic_edit_recovery_plan(
         for transaction in transaction_summary["transactions"]
         if str(transaction.get("id")) in unresolved_ids
     ]
-    return {
+    rollback_operations = [
+        rollback_operation_for_plan(
+            build_generic_edit_rollback_operation(
+                transaction_id=str(transaction.get("id") or ""),
+                mutation_snapshots=mutation_snapshots,
+                snapshot_ids=list(transaction.get("mutation_snapshot_ids") or []),
+            )
+        )
+        for transaction in unresolved_transactions
+    ]
+    plan = {
         "strategy": "repair_or_rollback",
         "artifact_path": str(plan_path),
         "unresolved_transaction_ids": unresolved_ids,
         "unresolved_transactions": unresolved_transactions,
+        "rollback_operations": rollback_operations,
+        "unresolved_transaction_group_ids": transaction_group_summary[
+            "unresolved_transaction_group_ids"
+        ],
+        "recovery_policy": build_generic_edit_recovery_plan_policy(
+            transaction_summary=transaction_summary,
+            transaction_group_summary=transaction_group_summary,
+        ),
+        "unresolved_transaction_groups": [
+            group
+            for group in transaction_group_summary["transaction_groups"]
+            if group["status"] == "unresolved"
+        ],
+        "next_actions": [
+            action
+            for group in transaction_group_summary["transaction_groups"]
+            if group["status"] == "unresolved"
+            for action in group.get("next_actions", [])
+        ],
         "recommended_next_actions": [
             "Inspect current git status.",
             "Inspect diffs for mutated paths.",
             "Choose either repair or rollback for each unresolved transaction.",
+            "Use rollback_transaction when a rollback operation is restorable.",
             "Run focused verification before finish.",
         ],
     }
+    if mutation_snapshots:
+        plan["mutation_snapshot_artifact"] = str(mutation_snapshot_path)
+        plan["mutation_snapshot_count"] = len(mutation_snapshots)
+    return plan
 
 
 def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, Any]:
@@ -2285,9 +3747,115 @@ def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, An
     return payload
 
 
+def load_generic_edit_session_state(
+    session_state_path: Path,
+    *,
+    expected_checkpoint_path: Path,
+) -> dict[str, Any]:
+    """Load and validate the generic_edit session-state resume manifest."""
+    try:
+        payload = json.loads(session_state_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise GenericEditRuntimeError(
+            f"Generic edit session state not found: {session_state_path}"
+        ) from e
+    except json.JSONDecodeError as e:
+        raise GenericEditRuntimeError(
+            f"Generic edit session state is not valid JSON: {e}"
+        ) from e
+
+    if not isinstance(payload, dict):
+        raise GenericEditRuntimeError(
+            "Generic edit session state must be a JSON object."
+        )
+    if payload.get("artifact_type") != "generic_edit_session_state":
+        raise GenericEditRuntimeError(
+            "Generic edit session state has unexpected artifact type."
+        )
+    if payload.get("resumable") is not True:
+        raise GenericEditRuntimeError("Generic edit session state is not resumable.")
+    resume_action = payload.get("resume_action")
+    if not isinstance(resume_action, dict):
+        raise GenericEditRuntimeError(
+            "Generic edit session state is missing resume action metadata."
+        )
+    if resume_action.get("runtime") != "generic_edit":
+        raise GenericEditRuntimeError(
+            "Generic edit session state targets an unexpected runtime."
+        )
+    checkpoint_path_value = resume_action.get("checkpoint_path")
+    if not isinstance(checkpoint_path_value, str) or not checkpoint_path_value:
+        raise GenericEditRuntimeError(
+            "Generic edit session state is missing checkpoint path."
+        )
+    if Path(checkpoint_path_value).resolve() != expected_checkpoint_path.resolve():
+        raise GenericEditRuntimeError(
+            "Generic edit session state must reference the canonical recovery checkpoint."
+        )
+    return payload
+
+
+def load_generic_edit_mutation_snapshots(snapshot_path: Path) -> list[dict[str, Any]]:
+    """Load persisted mutation snapshots from the canonical artifact path."""
+    try:
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
+    except json.JSONDecodeError as e:
+        raise GenericEditRuntimeError(
+            f"Generic edit mutation snapshot artifact is not valid JSON: {e}"
+        ) from e
+    if not isinstance(payload, dict):
+        raise GenericEditRuntimeError(
+            "Generic edit mutation snapshot artifact must be a JSON object."
+        )
+    if payload.get("artifact_type") != "generic_edit_mutation_snapshots":
+        raise GenericEditRuntimeError(
+            "Generic edit mutation snapshot artifact has unexpected type."
+        )
+    snapshots = payload.get("snapshots")
+    if not isinstance(snapshots, list):
+        raise GenericEditRuntimeError(
+            "Generic edit mutation snapshot artifact is missing snapshots."
+        )
+    return [snapshot for snapshot in snapshots if isinstance(snapshot, dict)]
+
+
+def resolve_generic_edit_resume_checkpoint_path(
+    *,
+    checkpoint_path: Path,
+    spec_dir: Path,
+) -> Path:
+    """Return the canonical recovery checkpoint path for a generic_edit resume."""
+    expected_path = (
+        spec_dir / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    ).resolve()
+    expected_session_state_path = (
+        spec_dir / "artifacts" / "generic_edit_session_state.json"
+    ).resolve()
+    requested_path = checkpoint_path.resolve()
+    if requested_path == expected_path:
+        return expected_path
+    if requested_path == expected_session_state_path:
+        load_generic_edit_session_state(
+            expected_session_state_path,
+            expected_checkpoint_path=expected_path,
+        )
+        return expected_path
+    raise GenericEditRuntimeError(
+        "Generic edit resume checkpoint must be the canonical checkpoint or "
+        "session state artifact path."
+    )
+
+
 def generic_edit_trace_path_for_checkpoint(checkpoint_path: Path) -> Path:
     """Return the trusted trace path colocated with a recovery checkpoint."""
     return checkpoint_path.parent / "generic_edit_trace.json"
+
+
+def generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted mutation snapshot path colocated with a checkpoint."""
+    return checkpoint_path.parent / "generic_edit_mutation_snapshots.json"
 
 
 def load_generic_edit_checkpoint_trace(
@@ -2335,19 +3903,51 @@ def build_generic_edit_checkpoint_resume_message(
     if not prompt:
         prompt = "Resume this generic_edit run from the persisted checkpoint."
 
-    return "\n".join(
-        [
-            prompt,
-            "",
-            f"Recovery checkpoint artifact: {checkpoint.get('artifact_path')}",
-            f"Previous trace artifact: {trace_path}",
-            f"Resume strategy: {resume.get('strategy', 'unknown')}",
-            (
-                "Use the previous trace as already completed context; inspect "
-                "current workspace state before any new mutation."
-            ),
-        ]
+    lines = [
+        prompt,
+        "",
+        f"Recovery checkpoint artifact: {checkpoint.get('artifact_path')}",
+        f"Previous trace artifact: {trace_path}",
+        f"Resume strategy: {resume.get('strategy', 'unknown')}",
+    ]
+    mutation_snapshot_artifact = checkpoint.get("mutation_snapshot_artifact")
+    if isinstance(mutation_snapshot_artifact, str) and mutation_snapshot_artifact:
+        lines.append(f"Mutation snapshot artifact: {mutation_snapshot_artifact}")
+    lines.append(
+        "Use the previous trace as already completed context; inspect "
+        "current workspace state before any new mutation."
     )
+    return "\n".join(lines)
+
+
+def build_generic_edit_resume_metadata(
+    *,
+    checkpoint: dict[str, Any],
+    checkpoint_path: Path,
+    trace_path: Path,
+    start_iteration: int,
+) -> dict[str, Any]:
+    """Return compact provenance for a run resumed from a checkpoint."""
+    resume = (
+        checkpoint.get("resume") if isinstance(checkpoint.get("resume"), dict) else {}
+    )
+    metadata: dict[str, Any] = {
+        "checkpoint_artifact": str(checkpoint_path),
+        "trace_artifact": str(trace_path),
+        "strategy": str(resume.get("strategy") or "unknown"),
+        "start_iteration": start_iteration,
+        "previous_status": checkpoint.get("status"),
+        "previous_stop_reason": checkpoint.get("stop_reason"),
+    }
+    for key in (
+        "recovery_plan_artifact",
+        "mutation_snapshot_artifact",
+        "transaction_group_artifact",
+    ):
+        value = checkpoint.get(key)
+        if isinstance(value, str) and value:
+            metadata[key] = value
+    return metadata
 
 
 def should_write_generic_edit_recovery_checkpoint(
@@ -2372,7 +3972,7 @@ def generic_edit_resume_strategy(
     """Return the checkpoint resume strategy for UI/orchestrator consumers."""
     if transaction_summary["unresolved_partial_failure_count"] > 0:
         return "recover_partial_failure"
-    if stop_reason == "max_iterations":
+    if stop_reason in {"cancelled", "max_iterations"}:
         return "continue_from_trace"
     if stop_reason == "native_tool_error":
         return "retry_native_or_json"
@@ -2462,6 +4062,23 @@ def generic_edit_recovery_plan_lines(
     ]
 
 
+def generic_edit_mutation_snapshot_lines(
+    *,
+    mutation_snapshot_path: Path,
+    mutation_snapshots: list[dict[str, Any]],
+) -> list[str]:
+    """Render mutation preimage artifact metadata for recovery summaries."""
+    if not mutation_snapshots:
+        return []
+    return [
+        "",
+        "## Mutation Snapshots",
+        "",
+        f"- Snapshot count: {len(mutation_snapshots)}",
+        f"- Artifact: `{mutation_snapshot_path}`",
+    ]
+
+
 def generic_edit_subtask_lines(subtask_id: str | None) -> list[str]:
     return [f"Subtask: {subtask_id}"] if subtask_id else []
 
@@ -2544,6 +4161,52 @@ def generic_edit_recovery_lines(transaction_summary: dict[str, Any]) -> list[str
     ]
 
 
+def generic_edit_transaction_group_lines(
+    *,
+    transaction_group_summary: dict[str, Any],
+    transaction_group_path: Path,
+) -> list[str]:
+    """Render transaction group summary metadata for recovery/UI review."""
+    if not transaction_group_summary["transaction_group_count"]:
+        return []
+    unresolved_count = transaction_group_summary["unresolved_transaction_group_count"]
+    return [
+        "",
+        "## Transaction Groups",
+        "",
+        f"- Groups: {transaction_group_summary['transaction_group_count']}",
+        f"- Unresolved groups: {unresolved_count}",
+        f"- Artifact: `{transaction_group_path}`",
+    ]
+
+
+def generic_edit_event_lines(
+    *,
+    event_path: Path,
+    events: list[dict[str, Any]],
+) -> list[str]:
+    """Render normalized event stream metadata for UI/debug review."""
+    if not events:
+        return []
+    return [
+        "",
+        "## Runtime Events",
+        "",
+        f"- Events: {len(events)}",
+        f"- Artifact: `{event_path}`",
+    ]
+
+
+def generic_edit_artifact_manifest_lines(artifact_manifest_path: Path) -> list[str]:
+    """Render the stable artifact manifest entrypoint for control-plane UIs."""
+    return [
+        "",
+        "## Artifact Manifest",
+        "",
+        f"- Manifest: `{artifact_manifest_path}`",
+    ]
+
+
 def generic_edit_test_lines(tests: list[str] | None) -> list[str]:
     if not tests:
         return []
@@ -2564,6 +4227,9 @@ def generic_edit_risk_lines(risks: list[str] | None) -> list[str]:
 def generic_edit_artifact_payload(paths: dict[str, Path]) -> dict[str, str]:
     return {
         "generic_edit_trace": str(paths["trace"]),
+        "generic_edit_events": str(paths["events"]),
+        "generic_edit_session_state": str(paths["session_state"]),
+        "generic_edit_artifact_manifest": str(paths["artifact_manifest"]),
         "generic_edit_timeline": str(paths["timeline"]),
         "generic_edit_transactions": str(paths["transactions"]),
         "generic_edit_result": str(paths["result"]),
@@ -2607,6 +4273,192 @@ def summarize_generic_edit_trace(trace: list[dict[str, Any]]) -> dict[str, Any]:
         "native_tool_fallback_count": len(native_tool_fallbacks),
         "native_tool_fallbacks": native_tool_fallbacks,
     }
+
+
+def build_generic_edit_events(
+    *,
+    trace: list[dict[str, Any]],
+    provider_name: str,
+    subtask_id: str | None,
+    transaction_group_summary: dict[str, Any],
+    resume_metadata: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Build normalized runtime events for UI/control-plane consumers."""
+    events: list[dict[str, Any]] = []
+    if resume_metadata is not None:
+        events.append(
+            build_generic_edit_resume_event(
+                resume_metadata=resume_metadata,
+                provider_name=provider_name,
+                subtask_id=subtask_id,
+            )
+        )
+    for iteration in trace:
+        transaction = iteration.get("transaction")
+        transaction_id = (
+            str(transaction.get("id"))
+            if isinstance(transaction, dict) and transaction.get("id")
+            else None
+        )
+        for action_index, action_entry in enumerate(
+            iteration.get("actions", []),
+            start=1,
+        ):
+            event = build_generic_edit_action_event(
+                action_entry=action_entry,
+                provider_name=provider_name,
+                subtask_id=subtask_id,
+                loop=str(iteration.get("loop") or ""),
+                iteration=iteration.get("iteration"),
+                action_index=action_index,
+                transaction_id=transaction_id,
+            )
+            events.append(event)
+        if isinstance(transaction, dict):
+            events.append(
+                build_generic_edit_transaction_event(
+                    transaction=transaction,
+                    provider_name=provider_name,
+                    subtask_id=subtask_id,
+                )
+            )
+    events.extend(
+        build_generic_edit_transaction_group_event(
+            group=group,
+            provider_name=provider_name,
+            subtask_id=subtask_id,
+        )
+        for group in transaction_group_summary["transaction_groups"]
+    )
+    for sequence, event in enumerate(events, start=1):
+        event["sequence"] = sequence
+    return events
+
+
+def build_generic_edit_resume_event(
+    *,
+    resume_metadata: dict[str, Any],
+    provider_name: str,
+    subtask_id: str | None,
+) -> dict[str, Any]:
+    """Return a normalized event marking checkpoint resume provenance."""
+    event = {
+        "event_type": "resume",
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "checkpoint_artifact": resume_metadata["checkpoint_artifact"],
+        "trace_artifact": resume_metadata["trace_artifact"],
+        "strategy": resume_metadata["strategy"],
+        "start_iteration": resume_metadata["start_iteration"],
+        "previous_status": resume_metadata.get("previous_status"),
+        "previous_stop_reason": resume_metadata.get("previous_stop_reason"),
+    }
+    for key in (
+        "recovery_plan_artifact",
+        "mutation_snapshot_artifact",
+        "transaction_group_artifact",
+    ):
+        value = resume_metadata.get(key)
+        if isinstance(value, str) and value:
+            event[key] = value
+    return event
+
+
+def build_generic_edit_action_event(
+    *,
+    action_entry: dict[str, Any],
+    provider_name: str,
+    subtask_id: str | None,
+    loop: str,
+    iteration: Any,
+    action_index: int,
+    transaction_id: str | None,
+) -> dict[str, Any]:
+    """Return one normalized local action result event."""
+    request = action_entry.get("request")
+    result = action_entry.get("result", action_entry)
+    if not isinstance(request, dict):
+        request = {}
+    if not isinstance(result, dict):
+        result = {"tool": "runtime", "ok": True, "message": str(result)}
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    event = {
+        "event_type": "action_result",
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "loop": loop,
+        "iteration": iteration,
+        "action_index": action_index,
+        "transaction_id": transaction_id,
+        "tool": str(result.get("tool") or request.get("tool") or "runtime"),
+        "ok": result.get("ok") is not False,
+        "message": str(result.get("message") or "")[:300],
+    }
+    path = request.get("path") or data.get("path")
+    if path:
+        event["path"] = str(path)
+    if data.get("mutation_snapshot_id"):
+        event["mutation_snapshot_id"] = str(data["mutation_snapshot_id"])
+    if data.get("rollback_available") is not None:
+        event["rollback_available"] = bool(data["rollback_available"])
+    if data.get("exit_code") is not None:
+        event["exit_code"] = data["exit_code"]
+    return event
+
+
+def build_generic_edit_transaction_event(
+    *,
+    transaction: dict[str, Any],
+    provider_name: str,
+    subtask_id: str | None,
+) -> dict[str, Any]:
+    """Return one normalized transaction boundary event."""
+    return {
+        "event_type": "transaction",
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "transaction_id": str(transaction.get("id") or ""),
+        "loop": transaction.get("loop"),
+        "iteration": transaction.get("iteration"),
+        "status": transaction.get("status"),
+        "action_count": transaction.get("action_count", 0),
+        "failed_action_count": transaction.get("failed_action_count", 0),
+        "recovery_required": bool(transaction.get("recovery_required")),
+        "mutated_paths": list(transaction.get("mutated_paths") or []),
+        "mutation_snapshot_ids": list(transaction.get("mutation_snapshot_ids") or []),
+    }
+
+
+def build_generic_edit_transaction_group_event(
+    *,
+    group: dict[str, Any],
+    provider_name: str,
+    subtask_id: str | None,
+) -> dict[str, Any]:
+    """Return one normalized transaction recovery-group event."""
+    event = {
+        "event_type": "transaction_group",
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "group_id": group["id"],
+        "status": group["status"],
+        "partial_failure_transaction_id": group["partial_failure_transaction_id"],
+        "resolution_transaction_id": group["resolution_transaction_id"],
+        "transaction_ids": list(group.get("transaction_ids") or []),
+        "recovery_transaction_ids": list(group.get("recovery_transaction_ids") or []),
+        "recovery_attempt_ids": list(group.get("recovery_attempt_ids") or []),
+        "recovery_attempt_count": int(group.get("recovery_attempt_count") or 0),
+        "failed_recovery_attempt_count": int(
+            group.get("failed_recovery_attempt_count") or 0
+        ),
+        "mutated_paths": list(group.get("mutated_paths") or []),
+        "mutation_snapshot_ids": list(group.get("mutation_snapshot_ids") or []),
+    }
+    if isinstance(group.get("recovery_outcome"), dict):
+        event["recovery_outcome"] = group["recovery_outcome"]
+    if isinstance(group.get("recovery_policy"), dict):
+        event["recovery_policy"] = group["recovery_policy"]
+    return event
 
 
 def summarize_trace_action_entry(
@@ -2748,6 +4600,177 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
         "unresolved_partial_failure_count": len(unresolved_partial_failure_ids),
         "unresolved_partial_failure_ids": unresolved_partial_failure_ids,
     }
+
+
+def summarize_generic_edit_transaction_groups(
+    *,
+    transaction_summary: dict[str, Any],
+    mutation_snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Group partial-failure transactions with their repair/rollback follow-ups."""
+    transactions = list(transaction_summary.get("transactions") or [])
+    groups: list[dict[str, Any]] = []
+    partial_failure_indexes = [
+        index
+        for index, transaction in enumerate(transactions)
+        if str(transaction.get("status") or "") == "partial_failure"
+    ]
+
+    for group_number, partial_index in enumerate(partial_failure_indexes, start=1):
+        partial_failure = transactions[partial_index]
+        next_partial_index = next(
+            (index for index in partial_failure_indexes if index > partial_index),
+            len(transactions),
+        )
+        resolution_index: int | None = None
+        recovery_transaction_ids: list[str] = []
+        recovery_attempts: list[dict[str, Any]] = []
+        for index in range(partial_index + 1, next_partial_index):
+            transaction = transactions[index]
+            recovery_attempt = build_generic_edit_recovery_attempt(
+                attempt_number=len(recovery_attempts) + 1,
+                transaction=transaction,
+                transaction_index=index,
+                partial_failure=partial_failure,
+            )
+            recovery_attempts.append(recovery_attempt)
+            if recovery_attempt["resolved"]:
+                recovery_transaction_ids.append(
+                    transaction_id_value(transaction, index)
+                )
+                resolution_index = index
+                break
+
+        group_end_index = (
+            resolution_index + 1 if resolution_index is not None else next_partial_index
+        )
+        group_transactions = transactions[partial_index:group_end_index]
+        rollback_operation = rollback_operation_for_plan(
+            build_generic_edit_rollback_operation(
+                transaction_id=transaction_id_value(partial_failure, partial_index),
+                mutation_snapshots=mutation_snapshots,
+                snapshot_ids=list(partial_failure.get("mutation_snapshot_ids") or []),
+            )
+        )
+        group = {
+            "id": f"transaction-group-{group_number}",
+            "status": "resolved" if resolution_index is not None else "unresolved",
+            "partial_failure_transaction_id": transaction_id_value(
+                partial_failure,
+                partial_index,
+            ),
+            "resolution_transaction_id": (
+                transaction_id_value(
+                    transactions[resolution_index],
+                    resolution_index,
+                )
+                if resolution_index is not None
+                else None
+            ),
+            "transaction_ids": [
+                transaction_id_value(transaction, index)
+                for index, transaction in enumerate(
+                    group_transactions,
+                    start=partial_index,
+                )
+            ],
+            "recovery_transaction_ids": recovery_transaction_ids,
+            "recovery_attempt_ids": [
+                str(attempt["transaction_id"]) for attempt in recovery_attempts
+            ],
+            "recovery_attempt_count": len(recovery_attempts),
+            "failed_recovery_attempt_count": sum(
+                1 for attempt in recovery_attempts if not bool(attempt["resolved"])
+            ),
+            "recovery_attempts": recovery_attempts,
+            "affected_paths": transaction_group_field_values(
+                group_transactions,
+                "affected_paths",
+            ),
+            "mutated_paths": transaction_group_field_values(
+                group_transactions,
+                "mutated_paths",
+            ),
+            "mutation_snapshot_ids": transaction_group_field_values(
+                group_transactions,
+                "mutation_snapshot_ids",
+            ),
+            "rollback_operation": rollback_operation,
+        }
+        if group["status"] == "unresolved":
+            group["recommended_next_actions"] = [
+                "Inspect affected and mutated paths.",
+                "Repair the partial mutation or execute the rollback operation.",
+                "Run focused verification before finish.",
+            ]
+            group["next_actions"] = build_generic_edit_recovery_next_actions(
+                transaction_id=group["partial_failure_transaction_id"],
+                transaction_group_id=group["id"],
+                affected_paths=list(group.get("affected_paths") or []),
+                mutated_paths=list(group.get("mutated_paths") or []),
+                rollback_operation=rollback_operation,
+            )
+            group["recovery_policy"] = build_generic_edit_recovery_policy(
+                transaction_id=group["partial_failure_transaction_id"],
+                transaction_group_id=group["id"],
+                affected_paths=list(group.get("affected_paths") or []),
+                mutated_paths=list(group.get("mutated_paths") or []),
+                rollback_restorable=bool(rollback_operation.get("restorable")),
+            )
+        elif resolution_index is not None:
+            group["recovery_outcome"] = build_generic_edit_recovery_outcome(
+                group=group,
+                resolution_transaction=transactions[resolution_index],
+            )
+        groups.append(group)
+
+    status_counts: dict[str, int] = {}
+    for group in groups:
+        increment_count(status_counts, str(group["status"]))
+    unresolved_group_ids = [
+        str(group["id"]) for group in groups if group["status"] == "unresolved"
+    ]
+    recovery_outcomes = [
+        group["recovery_outcome"]
+        for group in groups
+        if isinstance(group.get("recovery_outcome"), dict)
+    ]
+    recovery_attempt_count = sum(
+        int(group.get("recovery_attempt_count") or 0) for group in groups
+    )
+    failed_recovery_attempt_count = sum(
+        int(group.get("failed_recovery_attempt_count") or 0) for group in groups
+    )
+    return {
+        "transaction_groups": groups,
+        "transaction_group_count": len(groups),
+        "transaction_group_status_counts": status_counts,
+        "unresolved_transaction_group_count": len(unresolved_group_ids),
+        "unresolved_transaction_group_ids": unresolved_group_ids,
+        "recovery_attempt_count": recovery_attempt_count,
+        "failed_recovery_attempt_count": failed_recovery_attempt_count,
+        "recovery_outcome_count": len(recovery_outcomes),
+        "recovery_outcomes": recovery_outcomes,
+    }
+
+
+def transaction_id_value(transaction: dict[str, Any], index: int) -> str:
+    """Return a stable transaction id with an index fallback for old traces."""
+    return str(transaction.get("id") or index)
+
+
+def transaction_group_field_values(
+    transactions: list[dict[str, Any]],
+    field_name: str,
+) -> list[str]:
+    """Return stable unique list values across a transaction group."""
+    values: list[str] = []
+    for transaction in transactions:
+        raw_values = transaction.get(field_name)
+        if not isinstance(raw_values, list):
+            continue
+        values.extend(str(value) for value in raw_values if value)
+    return list(dict.fromkeys(values))
 
 
 def has_unresolved_partial_failure(trace: list[dict[str, Any]]) -> bool:
