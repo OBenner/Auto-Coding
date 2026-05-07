@@ -202,31 +202,18 @@
     },
     "readiness": {
       "title": "Environment readiness",
-      "claudeAuth": {
-        "checking": "Checking Claude authentication...",
-        "ready": "Claude/API authentication configured",
-        "issue": "Configure Claude OAuth or an API profile"
+      "states": {
+        "checking": "Checking {{item}}...",
+        "ready": "{{item}} ready",
+        "warning": "{{item}} needs attention",
+        "skipped": "{{item}} disabled"
       },
-      "claudeCli": {
-        "checking": "Checking Claude Code CLI...",
-        "ready": "Claude Code CLI ready",
-        "issue": "Install or update Claude Code CLI"
-      },
-      "codexAuth": {
-        "checking": "Checking Codex account...",
-        "ready": "Codex account connected",
-        "issue": "Connect a Codex account"
-      },
-      "codexCli": {
-        "checking": "Checking Codex CLI...",
-        "ready": "Codex CLI ready",
-        "issue": "Install or update Codex CLI"
-      },
-      "memory": {
-        "checking": "Checking memory database...",
-        "ready": "Memory database ready",
-        "issue": "Memory needs attention",
-        "skipped": "Memory disabled"
+      "items": {
+        "claudeAuth": "Claude/API authentication",
+        "claudeCli": "Claude Code CLI",
+        "codexAuth": "Codex account",
+        "codexCli": "Codex CLI",
+        "memory": "Memory database"
       }
     },
     "finish": "Finish & Start Building",

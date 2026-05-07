@@ -8,7 +8,7 @@ import { CompletionStep } from './CompletionStep';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, options?: Record<string, string>) => {
       const translations: Record<string, string> = {
         'completion.title': "You're All Set!",
         'completion.subtitle': 'Auto-Coding is ready',
@@ -26,16 +26,16 @@ vi.mock('react-i18next', () => ({
         'completion.finish': 'Finish & Start Building',
         'completion.rerunHint': 'You can re-run this wizard from Settings',
         'completion.readiness.title': 'Environment readiness',
-        'completion.readiness.checking': 'Checking readiness...',
-        'completion.readiness.codexAuth.ready': 'Codex account connected',
-        'completion.readiness.codexAuth.issue': 'Connect a Codex account',
-        'completion.readiness.codexCli.ready': 'Codex CLI ready',
-        'completion.readiness.codexCli.issue': 'Install Codex CLI',
-        'completion.readiness.memory.ready': 'Memory database ready',
-        'completion.readiness.memory.issue': 'Memory needs attention',
-        'completion.readiness.memory.skipped': 'Memory disabled'
+        'completion.readiness.states.checking': 'Checking {{item}}...',
+        'completion.readiness.states.ready': '{{item}} ready',
+        'completion.readiness.states.warning': '{{item}} needs attention',
+        'completion.readiness.states.skipped': '{{item}} disabled',
+        'completion.readiness.items.codexAuth': 'Codex account',
+        'completion.readiness.items.codexCli': 'Codex CLI',
+        'completion.readiness.items.memory': 'Memory database'
       };
-      return translations[key] || key;
+      const template = translations[key] || key;
+      return template.replace('{{item}}', options?.item ?? '');
     }
   })
 }));
@@ -59,7 +59,7 @@ const mockElectronAPI = {
   getMemoryInfrastructureStatus: vi.fn()
 };
 
-Object.defineProperty(window, 'electronAPI', {
+Object.defineProperty(globalThis, 'electronAPI', {
   value: mockElectronAPI,
   writable: true
 });
@@ -89,7 +89,7 @@ describe('CompletionStep readiness checks', () => {
         ready: true,
         memory: {
           kuzuInstalled: true,
-          databasePath: '/tmp/memory',
+          databasePath: '/Users/test/.auto-coding/memory',
           databaseExists: true,
           databases: []
         }
@@ -112,7 +112,7 @@ describe('CompletionStep readiness checks', () => {
     });
 
     expect(screen.getByText('Environment readiness')).toBeInTheDocument();
-    expect(screen.getByText('Codex account connected')).toBeInTheDocument();
+    expect(screen.getByText('Codex account ready')).toBeInTheDocument();
     expect(screen.getByText('Codex CLI ready')).toBeInTheDocument();
     expect(screen.getByText('Memory database ready')).toBeInTheDocument();
   });

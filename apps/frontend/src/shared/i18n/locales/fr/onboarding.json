@@ -192,31 +192,18 @@
     },
     "readiness": {
       "title": "Préparation de l'environnement",
-      "claudeAuth": {
-        "checking": "Vérification de l'authentification Claude...",
-        "ready": "Authentification Claude/API configurée",
-        "issue": "Configurez OAuth Claude ou un profil API"
+      "states": {
+        "checking": "Vérification de {{item}}...",
+        "ready": "{{item}} prêt",
+        "warning": "{{item}} nécessite une attention",
+        "skipped": "{{item}} désactivé"
       },
-      "claudeCli": {
-        "checking": "Vérification du CLI Claude Code...",
-        "ready": "CLI Claude Code prêt",
-        "issue": "Installez ou mettez à jour le CLI Claude Code"
-      },
-      "codexAuth": {
-        "checking": "Vérification du compte Codex...",
-        "ready": "Compte Codex connecté",
-        "issue": "Connectez un compte Codex"
-      },
-      "codexCli": {
-        "checking": "Vérification du CLI Codex...",
-        "ready": "CLI Codex prêt",
-        "issue": "Installez ou mettez à jour le CLI Codex"
-      },
-      "memory": {
-        "checking": "Vérification de la base mémoire...",
-        "ready": "Base mémoire prête",
-        "issue": "La mémoire nécessite une attention",
-        "skipped": "Mémoire désactivée"
+      "items": {
+        "claudeAuth": "l'authentification Claude/API",
+        "claudeCli": "le CLI Claude Code",
+        "codexAuth": "le compte Codex",
+        "codexCli": "le CLI Codex",
+        "memory": "la base mémoire"
       }
     },
     "finish": "Terminer et commencer à construire",
