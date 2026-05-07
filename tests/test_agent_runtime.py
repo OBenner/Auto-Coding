@@ -3391,13 +3391,7 @@ def test_external_mcp_adapter_registry_exposes_context7_contract():
     adapter = external_mcp_adapter_for("mcp__context7__resolve-library-id")
 
     assert adapter is not None
-    assert registered_external_mcp_servers() == (
-        "context7",
-        "graphiti",
-        "linear",
-        "electron",
-        "puppeteer",
-    )
+    assert "context7" in registered_external_mcp_servers()
     assert adapter.server == "context7"
     assert adapter.tool_names == ("resolve-library-id", "get-library-docs")
     assert adapter.execution_supported(transport="stdio", command="npx") is True
@@ -3417,6 +3411,16 @@ def test_external_mcp_adapter_registry_exposes_context7_contract():
     assert {
         definition.policy.permission for definition in adapter.tool_definitions
     } == {"read_external_docs"}
+
+
+def test_external_mcp_adapter_registry_contains_expected_static_servers():
+    assert set(registered_external_mcp_servers()) == {
+        "context7",
+        "graphiti",
+        "linear",
+        "electron",
+        "puppeteer",
+    }
 
 
 def test_external_mcp_adapter_registry_exposes_browser_contracts():
@@ -3909,6 +3913,81 @@ async def test_external_mcp_http_client_posts_jsonrpc_with_session_and_sse(
         server="graphiti",
         url="https://graphiti.local/mcp/",
         headers={"Authorization": "Bearer test-token"},
+        protocol_version="2025-06-18",
+    )
+
+    result = await client.call_tool(
+        name="search_nodes",
+        arguments={"query": "runtime bridge"},
+    )
+
+    assert result == {"content": [{"type": "text", "text": "found"}]}
+    assert [request.method for request in requests] == [
+        "POST",
+        "POST",
+        "POST",
+        "DELETE",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_http_client_returns_after_matching_long_lived_sse_event(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    class LongLivedSseStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"event: message\n"
+            yield (
+                b'data: {"jsonrpc":"2.0","id":2,'
+                b'"result":{"content":[{"type":"text","text":"found"}]}}\n\n'
+            )
+            raise AssertionError("client kept reading after matching SSE response")
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            return httpx.Response(202)
+        if payload["method"] == "tools/call":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                stream=LongLivedSseStream(),
+            )
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    client = RuntimeExternalMcpHttpClient(
+        server="graphiti",
+        url="https://graphiti.local/mcp/",
         protocol_version="2025-06-18",
     )
 

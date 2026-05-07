@@ -305,10 +305,12 @@ def test_external_mcp_smoke_command_outputs_json(
         *,
         requested_servers,
         project_dir,
+        project_mcp_config=None,
         environment=None,
     ):
         assert "context7" in requested_servers
         assert project_dir == tmp_path
+        assert project_mcp_config is None
         assert environment is None
         return [
             {
@@ -389,8 +391,10 @@ def test_external_mcp_smoke_command_outputs_text(capsys, monkeypatch, tmp_path):
         *,
         requested_servers,
         project_dir,
+        project_mcp_config=None,
         environment=None,
     ):
+        assert project_mcp_config is None
         return [
             {
                 "server": "graphiti",

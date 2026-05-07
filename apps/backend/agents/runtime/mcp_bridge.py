@@ -1686,31 +1686,38 @@ class RuntimeExternalMcpHttpClient:
         expect_response: bool = True,
     ) -> dict[str, Any]:
         try:
-            response = await client.post(
+            async with client.stream(
+                "POST",
                 self.url,
                 json=payload,
                 headers=self._request_headers(include_session=include_session),
-            )
+            ) as response:
+                session_id = response.headers.get("Mcp-Session-Id")
+                if session_id:
+                    self._session_id = session_id
+
+                if response.status_code >= 400:
+                    body = (await response.aread()).decode("utf-8", errors="replace")
+                    body = body.strip()[:1000]
+                    suffix = f": {body}" if body else ""
+                    raise RuntimeExternalMcpClientError(
+                        f"HTTP MCP server {self.server} returned "
+                        f"{response.status_code}{suffix}"
+                    )
+
+                if not expect_response or response.status_code == 202:
+                    return {}
+
+                message = await self._parse_http_message(
+                    response=response,
+                    request_id=request_id,
+                )
+        except RuntimeExternalMcpClientError:
+            raise
         except Exception as e:
             raise RuntimeExternalMcpClientError(
                 f"Failed to call HTTP MCP server {self.server}: {e}"
             ) from e
-
-        session_id = response.headers.get("Mcp-Session-Id")
-        if session_id:
-            self._session_id = session_id
-
-        if response.status_code >= 400:
-            body = response.text.strip()[:1000]
-            suffix = f": {body}" if body else ""
-            raise RuntimeExternalMcpClientError(
-                f"HTTP MCP server {self.server} returned {response.status_code}{suffix}"
-            )
-
-        if not expect_response or response.status_code == 202:
-            return {}
-
-        message = self._parse_http_message(response=response, request_id=request_id)
         if not message:
             raise RuntimeExternalMcpClientError(
                 f"HTTP MCP server {self.server} returned no JSON-RPC response."
@@ -1728,7 +1735,7 @@ class RuntimeExternalMcpHttpClient:
             headers["Mcp-Session-Id"] = self._session_id
         return headers
 
-    def _parse_http_message(
+    async def _parse_http_message(
         self,
         *,
         response: Any,
@@ -1736,9 +1743,10 @@ class RuntimeExternalMcpHttpClient:
     ) -> dict[str, Any] | None:
         content_type = str(response.headers.get("content-type", "")).lower()
         if "text/event-stream" in content_type:
-            return self._parse_sse_message(response.text, request_id=request_id)
+            return await self._read_sse_message(response, request_id=request_id)
+        data = await response.aread()
         try:
-            message = response.json()
+            message = json.loads(data.decode("utf-8"))
         except Exception as e:
             raise RuntimeExternalMcpClientError(
                 f"HTTP MCP server {self.server} returned invalid JSON: {e}"
@@ -1751,6 +1759,25 @@ class RuntimeExternalMcpHttpClient:
                 )
             return message
         return {"result": message}
+
+    async def _read_sse_message(
+        self,
+        response: Any,
+        *,
+        request_id: int | None,
+    ) -> dict[str, Any] | None:
+        data_lines: list[str] = []
+        async for line in response.aiter_lines():
+            if line.startswith("data:"):
+                data_lines.append(line.removeprefix("data:").strip())
+                continue
+            if line.strip():
+                continue
+            message = self._decode_sse_data(data_lines, request_id=request_id)
+            if message is not None:
+                return message
+            data_lines = []
+        return self._decode_sse_data(data_lines, request_id=request_id)
 
     def _parse_sse_message(
         self,

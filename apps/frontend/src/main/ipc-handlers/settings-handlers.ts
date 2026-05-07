@@ -40,6 +40,7 @@ const execFileAsync = promisify(execFile);
 const PROVIDER_SMOKE_TIMEOUT_SECONDS = 30;
 const PROVIDER_SMOKE_PROCESS_TIMEOUT_MS = 45_000;
 const RUNTIME_DIAGNOSTICS_PROCESS_TIMEOUT_MS = 45_000;
+const EXTERNAL_MCP_SMOKE_PROCESS_TIMEOUT_MS = 90_000;
 
 function hasClaudeProviderAuth(vars: Record<string, string>): boolean {
   return Boolean(
@@ -372,6 +373,17 @@ type RuntimeModesCliPayload = {
 };
 
 type ExternalMcpSmokeCliPayload = RuntimeExternalMcpSmokeResult;
+type BackendCliCommandMessages = {
+  missingRunPy: string;
+  noJson: string;
+  timedOut: string;
+};
+type BackendCliCommandError = Error & {
+  stdout?: string | Buffer;
+  stderr?: string | Buffer;
+  killed?: boolean;
+  signal?: string | null;
+};
 
 function textFromExecOutput(output: unknown): string {
   if (Buffer.isBuffer(output)) {
@@ -490,9 +502,15 @@ function mapExternalMcpSmokeResult(
   const checks = Array.isArray(payload.external_mcp_contract_checks)
     ? payload.external_mcp_contract_checks
     : [];
+  const fallbackSummary = {
+    total: checks.length,
+    ok: checks.filter((check) => check.ok).length,
+    skipped: checks.filter((check) => !check.ok && check.status === 'skipped').length,
+    failed: checks.filter((check) => !check.ok && check.status !== 'skipped').length,
+  };
   const summary = payload.summary && typeof payload.summary === 'object'
     ? payload.summary
-    : { total: checks.length, ok: 0, skipped: 0, failed: 0 };
+    : fallbackSummary;
 
   return {
     external_mcp_contract_checks: checks,
@@ -604,6 +622,28 @@ async function runProviderRuntimeDiagnostics(
   sourcePath: string,
   envPath: string | null
 ): Promise<IPCResult<RuntimeControlPlaneDiagnostics>> {
+  return runBackendCliCommand(
+    sourcePath,
+    envPath,
+    ['--runtime-modes', '--json'],
+    RUNTIME_DIAGNOSTICS_PROCESS_TIMEOUT_MS,
+    readRuntimeControlPlaneDiagnosticsResult,
+    {
+      missingRunPy: 'Backend run.py not found. Cannot load runtime diagnostics.',
+      noJson: 'Runtime diagnostics command did not return JSON output.',
+      timedOut: 'Runtime diagnostics command timed out.'
+    }
+  );
+}
+
+async function runBackendCliCommand<T>(
+  sourcePath: string,
+  envPath: string | null,
+  args: string[],
+  timeout: number,
+  parseResult: (stdout: unknown, stderr: unknown) => T | null,
+  messages: BackendCliCommandMessages
+): Promise<IPCResult<T>> {
   const pythonPath = getToolPath('python');
   if (!pythonPath) {
     return {
@@ -616,7 +656,7 @@ async function runProviderRuntimeDiagnostics(
   if (!existsSync(runPyPath)) {
     return {
       success: false,
-      error: 'Backend run.py not found. Cannot load runtime diagnostics.'
+      error: messages.missingRunPy
     };
   }
 
@@ -630,11 +670,7 @@ async function runProviderRuntimeDiagnostics(
   try {
     const { stdout, stderr } = await execFileAsync(
       pythonPath,
-      [
-        runPyPath,
-        '--runtime-modes',
-        '--json'
-      ],
+      [runPyPath, ...args],
       {
         cwd: sourcePath,
         encoding: 'utf-8',
@@ -647,27 +683,22 @@ async function runProviderRuntimeDiagnostics(
           PYTHONIOENCODING: 'utf-8'
         },
         maxBuffer: 1024 * 1024,
-        timeout: RUNTIME_DIAGNOSTICS_PROCESS_TIMEOUT_MS,
+        timeout,
       }
     );
 
-    const result = readRuntimeControlPlaneDiagnosticsResult(stdout, stderr);
+    const result = parseResult(stdout, stderr);
     if (result) {
       return { success: true, data: result };
     }
 
     return {
       success: false,
-      error: 'Runtime diagnostics command did not return JSON output.'
+      error: messages.noJson
     };
   } catch (error) {
-    const err = error as Error & {
-      stdout?: string | Buffer;
-      stderr?: string | Buffer;
-      killed?: boolean;
-      signal?: string | null;
-    };
-    const result = readRuntimeControlPlaneDiagnosticsResult(err.stdout, err.stderr);
+    const err = error as BackendCliCommandError;
+    const result = parseResult(err.stdout, err.stderr);
     if (result) {
       return { success: true, data: result };
     }
@@ -676,7 +707,7 @@ async function runProviderRuntimeDiagnostics(
     return {
       success: false,
       error: err.killed || err.signal === 'SIGTERM'
-        ? 'Runtime diagnostics command timed out.'
+        ? messages.timedOut
         : details
     };
   }
@@ -686,82 +717,18 @@ async function runExternalMcpSmoke(
   sourcePath: string,
   envPath: string | null
 ): Promise<IPCResult<RuntimeExternalMcpSmokeResult>> {
-  const pythonPath = getToolPath('python');
-  if (!pythonPath) {
-    return {
-      success: false,
-      error: 'Python not found. Please install Python 3.12 or higher.'
-    };
-  }
-
-  const runPyPath = path.join(sourcePath, 'run.py');
-  if (!existsSync(runPyPath)) {
-    return {
-      success: false,
-      error: 'Backend run.py not found. Cannot run external MCP smoke check.'
-    };
-  }
-
-  const envVars = envPath && existsSync(envPath)
-    ? parseEnvFile(readEnvFileSafe(envPath))
-    : {};
-  const profileEnv = getBestAvailableProfileEnv().env;
-  const apiProfileEnv = await getAPIProfileEnv();
-  const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
-
-  try {
-    const { stdout, stderr } = await execFileAsync(
-      pythonPath,
-      [
-        runPyPath,
-        '--external-mcp-smoke',
-        '--json'
-      ],
-      {
-        cwd: sourcePath,
-        encoding: 'utf-8',
-        env: {
-          ...process.env,
-          ...envVars,
-          ...profileEnv,
-          ...apiProfileEnv,
-          ...codexProfileEnv,
-          PYTHONIOENCODING: 'utf-8'
-        },
-        maxBuffer: 1024 * 1024,
-        timeout: RUNTIME_DIAGNOSTICS_PROCESS_TIMEOUT_MS,
-      }
-    );
-
-    const result = readExternalMcpSmokeResult(stdout, stderr);
-    if (result) {
-      return { success: true, data: result };
+  return runBackendCliCommand(
+    sourcePath,
+    envPath,
+    ['--external-mcp-smoke', '--json'],
+    EXTERNAL_MCP_SMOKE_PROCESS_TIMEOUT_MS,
+    readExternalMcpSmokeResult,
+    {
+      missingRunPy: 'Backend run.py not found. Cannot run external MCP smoke check.',
+      noJson: 'External MCP smoke command did not return JSON output.',
+      timedOut: 'External MCP smoke command timed out.'
     }
-
-    return {
-      success: false,
-      error: 'External MCP smoke command did not return JSON output.'
-    };
-  } catch (error) {
-    const err = error as Error & {
-      stdout?: string | Buffer;
-      stderr?: string | Buffer;
-      killed?: boolean;
-      signal?: string | null;
-    };
-    const result = readExternalMcpSmokeResult(err.stdout, err.stderr);
-    if (result) {
-      return { success: true, data: result };
-    }
-
-    const details = textFromExecOutput(err.stderr) || err.message;
-    return {
-      success: false,
-      error: err.killed || err.signal === 'SIGTERM'
-        ? 'External MCP smoke command timed out.'
-        : details
-    };
-  }
+  );
 }
 
 /**
