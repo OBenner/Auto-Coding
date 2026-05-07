@@ -157,6 +157,15 @@ MUTATING_LOCAL_ACTIONS = frozenset(
     }
 )
 WORKSPACE_RECOVERY_TOOLS = frozenset({"git_status", "git_diff", "run_command"})
+RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
+    {
+        "max_iterations",
+        "native_tool_error",
+        "non_terminal_finish",
+        "parse_error",
+        "unresolved_partial_failure",
+    }
+)
 
 
 class GenericEditRuntimeSession:
@@ -1841,6 +1850,21 @@ def save_generic_edit_artifacts(
     timestamp = datetime.now(UTC).isoformat()
     trace_summary = summarize_generic_edit_trace(trace)
     transaction_summary = summarize_generic_edit_transactions(trace)
+    recovery_checkpoint = build_generic_edit_recovery_checkpoint(
+        timestamp=timestamp,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        status=status,
+        stop_reason=stop_reason,
+        message=message,
+        next_iteration=len(trace) + 1,
+        trace_summary=trace_summary,
+        transaction_summary=transaction_summary,
+        trace_path=paths["trace"],
+        observation_path=observation_path,
+        checkpoint_path=paths["recovery_checkpoint"],
+        mcp_support=mcp_support,
+    )
 
     write_json_artifact(
         paths["trace"],
@@ -1880,9 +1904,12 @@ def save_generic_edit_artifacts(
         tests=tests,
         risks=risks,
         mcp_support=mcp_support,
+        recovery_checkpoint=recovery_checkpoint,
     )
     if observation_path is not None:
         result_payload["observation_artifact"] = str(observation_path)
+    if recovery_checkpoint is not None:
+        write_json_artifact(paths["recovery_checkpoint"], recovery_checkpoint)
     write_json_artifact(paths["result"], result_payload)
     write_generic_edit_transactions(paths["transactions"], transaction_summary)
     paths["summary"].write_text(
@@ -1897,6 +1924,7 @@ def save_generic_edit_artifacts(
             tests=tests,
             risks=risks,
             mcp_support=mcp_support,
+            recovery_checkpoint=recovery_checkpoint,
         ),
         encoding="utf-8",
     )
@@ -1904,6 +1932,10 @@ def save_generic_edit_artifacts(
     artifacts = generic_edit_artifact_payload(paths)
     if observation_path is not None:
         artifacts["generic_edit_observations"] = str(observation_path)
+    if recovery_checkpoint is not None:
+        artifacts["generic_edit_recovery_checkpoint"] = str(
+            paths["recovery_checkpoint"]
+        )
     return artifacts
 
 
@@ -1912,6 +1944,7 @@ def generic_edit_artifact_paths(artifact_dir: Path) -> dict[str, Path]:
         "trace": artifact_dir / "generic_edit_trace.json",
         "timeline": artifact_dir / "generic_edit_timeline.json",
         "transactions": artifact_dir / "generic_edit_transactions.jsonl",
+        "recovery_checkpoint": artifact_dir / "generic_edit_recovery_checkpoint.json",
         "summary": artifact_dir / "generic_edit_summary.md",
         "result": artifact_dir / "generic_edit_result.json",
     }
@@ -1938,8 +1971,9 @@ def build_generic_edit_result_payload(
     tests: list[str] | None,
     risks: list[str] | None,
     mcp_support: dict[str, Any] | None,
+    recovery_checkpoint: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "timestamp": timestamp,
         "provider": provider_name,
         "subtask_id": subtask_id,
@@ -1954,7 +1988,16 @@ def build_generic_edit_result_payload(
         "test_count": len(tests or []),
         "risks": risks or [],
         "risk_count": len(risks or []),
+        "recoverable": recovery_checkpoint is not None,
     }
+    if recovery_checkpoint is not None:
+        payload.update(
+            {
+                "recovery_checkpoint_artifact": recovery_checkpoint["artifact_path"],
+                "recovery_strategy": recovery_checkpoint["resume"]["strategy"],
+            }
+        )
+    return payload
 
 
 def write_generic_edit_transactions(
@@ -1982,6 +2025,7 @@ def build_generic_edit_summary_markdown(
     tests: list[str] | None,
     risks: list[str] | None,
     mcp_support: dict[str, Any] | None,
+    recovery_checkpoint: dict[str, Any] | None,
 ) -> str:
     lines = [
         "# Generic Edit Summary",
@@ -1998,10 +2042,168 @@ def build_generic_edit_summary_markdown(
         summary,
         *generic_edit_timeline_lines(trace_summary["action_timeline"]),
         *generic_edit_recovery_lines(transaction_summary),
+        *generic_edit_resume_lines(recovery_checkpoint),
         *generic_edit_test_lines(tests),
         *generic_edit_risk_lines(risks),
     ]
     return "\n".join(lines) + "\n"
+
+
+def build_generic_edit_recovery_checkpoint(
+    *,
+    timestamp: str,
+    provider_name: str,
+    subtask_id: str | None,
+    status: str,
+    stop_reason: str,
+    message: str,
+    next_iteration: int,
+    trace_summary: dict[str, Any],
+    transaction_summary: dict[str, Any],
+    trace_path: Path,
+    observation_path: Path | None,
+    checkpoint_path: Path,
+    mcp_support: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Build resumable generic_edit state for interrupted/error runs."""
+    if not should_write_generic_edit_recovery_checkpoint(
+        status=status,
+        stop_reason=stop_reason,
+        transaction_summary=transaction_summary,
+    ):
+        return None
+
+    strategy = generic_edit_resume_strategy(
+        stop_reason=stop_reason,
+        transaction_summary=transaction_summary,
+    )
+    return {
+        "timestamp": timestamp,
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "status": status,
+        "stop_reason": stop_reason,
+        "message": message,
+        "artifact_path": str(checkpoint_path),
+        "trace_artifact": str(trace_path),
+        "observation_artifact": str(observation_path) if observation_path else None,
+        "next_iteration": next_iteration,
+        "recoverable": True,
+        "resume": {
+            "strategy": strategy,
+            "prompt": build_generic_edit_resume_prompt(
+                strategy=strategy,
+                stop_reason=stop_reason,
+                message=message,
+                trace_path=trace_path,
+                observation_path=observation_path,
+                transaction_summary=transaction_summary,
+            ),
+        },
+        "recent_actions": list(trace_summary.get("action_timeline") or [])[-10:],
+        "transaction_summary": transaction_summary,
+        "unresolved_partial_failure_ids": transaction_summary[
+            "unresolved_partial_failure_ids"
+        ],
+        "last_partial_failure_id": transaction_summary["last_partial_failure_id"],
+        "last_partial_failure_affected_paths": transaction_summary[
+            "last_partial_failure_affected_paths"
+        ],
+        "last_partial_failure_mutated_paths": transaction_summary[
+            "last_partial_failure_mutated_paths"
+        ],
+        "mcp_support": mcp_support,
+    }
+
+
+def should_write_generic_edit_recovery_checkpoint(
+    *,
+    status: str,
+    stop_reason: str,
+    transaction_summary: dict[str, Any],
+) -> bool:
+    """Return true when a generic_edit stop can be resumed or repaired."""
+    if status == "complete":
+        return False
+    if transaction_summary["unresolved_partial_failure_count"] > 0:
+        return True
+    return stop_reason in RECOVERABLE_GENERIC_EDIT_STOP_REASONS
+
+
+def generic_edit_resume_strategy(
+    *,
+    stop_reason: str,
+    transaction_summary: dict[str, Any],
+) -> str:
+    """Return the checkpoint resume strategy for UI/orchestrator consumers."""
+    if transaction_summary["unresolved_partial_failure_count"] > 0:
+        return "recover_partial_failure"
+    if stop_reason == "max_iterations":
+        return "continue_from_trace"
+    if stop_reason == "native_tool_error":
+        return "retry_native_or_json"
+    return "repair_provider_response"
+
+
+def build_generic_edit_resume_prompt(
+    *,
+    strategy: str,
+    stop_reason: str,
+    message: str,
+    trace_path: Path,
+    observation_path: Path | None,
+    transaction_summary: dict[str, Any],
+) -> str:
+    """Build a concise prompt that can restart a generic_edit recovery turn."""
+    prompt_lines = [
+        "Resume this generic_edit run from the persisted recovery checkpoint.",
+        f"Stop reason: {stop_reason}.",
+        f"Last message: {message}",
+        f"Trace artifact: {trace_path}",
+    ]
+    if observation_path is not None:
+        prompt_lines.append(f"Observation artifact: {observation_path}")
+
+    unresolved_ids = transaction_summary["unresolved_partial_failure_ids"]
+    if strategy == "recover_partial_failure":
+        prompt_lines.extend(
+            [
+                "Unresolved partial-failure transaction(s): "
+                + ", ".join(unresolved_ids),
+                "Inspect or repair mutated path(s): "
+                + ", ".join(
+                    transaction_summary["last_partial_failure_mutated_paths"]
+                    or transaction_summary["last_partial_failure_affected_paths"]
+                    or ["."]
+                ),
+                "Do not call finish until the workspace is consistent.",
+            ]
+        )
+    else:
+        prompt_lines.extend(
+            [
+                "Continue from the recorded trace without repeating successful actions.",
+                "Inspect current workspace state before mutating files.",
+                "Call finish only when the task is complete.",
+            ]
+        )
+    return "\n".join(prompt_lines)
+
+
+def generic_edit_resume_lines(
+    recovery_checkpoint: dict[str, Any] | None,
+) -> list[str]:
+    """Render resume checkpoint metadata for the markdown artifact."""
+    if recovery_checkpoint is None:
+        return []
+    return [
+        "",
+        "## Resume",
+        "",
+        f"- Recoverable: {str(recovery_checkpoint['recoverable']).lower()}",
+        f"- Strategy: `{recovery_checkpoint['resume']['strategy']}`",
+        f"- Checkpoint: `{recovery_checkpoint['artifact_path']}`",
+    ]
 
 
 def generic_edit_subtask_lines(subtask_id: str | None) -> list[str]:
