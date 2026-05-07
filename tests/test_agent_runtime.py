@@ -15,6 +15,7 @@ from agents.runtime import (
     RuntimeCapabilities,
     RuntimeCapabilityError,
     RuntimeExternalMcpAdapter,
+    RuntimeExternalMcpClientError,
     RuntimeExternalMcpHttpClient,
     RuntimeExternalMcpToolDefinition,
     RuntimeMcpBridge,
@@ -2977,6 +2978,14 @@ async def test_generic_edit_runtime_executes_puppeteer_external_mcp_tool(
     assert result_payload["data"]["permission"] == "run_browser_automation"
     assert result_payload["data"]["audit_level"] == "command"
     assert result_payload["data"]["mutating"] is True
+    audit_path = Path(result_payload["data"]["audit_artifact"])
+    assert audit_path == mcp_bridge_audit_path(tmp_path)
+    audit_lines = [
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert audit_lines[0]["status"] == "ok"
+    assert audit_lines[0]["server"] == "puppeteer"
+    assert audit_lines[0]["tool"] == "puppeteer_navigate"
     artifact = json.loads(
         (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
             encoding="utf-8"
@@ -3365,6 +3374,62 @@ def test_external_mcp_health_reports_ready_browser_adapters_when_enabled():
     )
 
 
+def test_external_mcp_health_keeps_puppeteer_disabled_when_only_electron_enabled():
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "ELECTRON_MCP_ENABLED": "true",
+    }
+
+    electron = describe_external_mcp_server_health(
+        "electron",
+        environment=environment,
+    )
+    puppeteer = describe_external_mcp_server_health(
+        "puppeteer",
+        environment=environment,
+    )
+    executable_tools = executable_external_mcp_tools(
+        requested_servers=("electron", "puppeteer"),
+        environment=environment,
+    )
+
+    assert electron.status == "ready_to_connect"
+    assert electron.ready_to_connect is True
+    assert puppeteer.status == "server_disabled"
+    assert puppeteer.ready_to_connect is False
+    assert puppeteer.adapter_registered is True
+    assert "mcp__electron__take_screenshot" in executable_tools
+    assert "mcp__puppeteer__puppeteer_navigate" not in executable_tools
+
+
+def test_external_mcp_health_keeps_electron_disabled_when_only_puppeteer_enabled():
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "PUPPETEER_MCP_ENABLED": "true",
+    }
+
+    electron = describe_external_mcp_server_health(
+        "electron",
+        environment=environment,
+    )
+    puppeteer = describe_external_mcp_server_health(
+        "puppeteer",
+        environment=environment,
+    )
+    executable_tools = executable_external_mcp_tools(
+        requested_servers=("electron", "puppeteer"),
+        environment=environment,
+    )
+
+    assert electron.status == "server_disabled"
+    assert electron.ready_to_connect is False
+    assert electron.adapter_registered is True
+    assert puppeteer.status == "ready_to_connect"
+    assert puppeteer.ready_to_connect is True
+    assert "mcp__electron__take_screenshot" not in executable_tools
+    assert "mcp__puppeteer__puppeteer_navigate" in executable_tools
+
+
 def test_external_mcp_health_reports_ready_graphiti_http_adapter():
     health = describe_external_mcp_server_health(
         "graphiti",
@@ -3642,6 +3707,59 @@ async def test_external_mcp_http_client_lists_tools_with_session_and_sse(
 
 
 @pytest.mark.asyncio
+async def test_external_mcp_http_client_closes_session_when_initialize_fails(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(500, text="notification failed")
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    client = RuntimeExternalMcpHttpClient(
+        server="graphiti",
+        url="https://graphiti.local/mcp/",
+        protocol_version="2025-06-18",
+    )
+
+    with pytest.raises(RuntimeExternalMcpClientError, match="returned 500"):
+        await client.list_tools()
+
+    assert [request.method for request in requests] == ["POST", "POST", "DELETE"]
+
+
+@pytest.mark.asyncio
 async def test_check_external_mcp_contract_reports_extra_and_missing_live_tools(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3724,18 +3842,19 @@ async def test_call_external_mcp_tool_dispatches_http_with_linear_auth(
             calls.append({"name": name, "arguments": arguments})
             return {"content": [{"type": "text", "text": "created"}]}
 
-    monkeypatch.setenv("LINEAR_API_KEY", "linear-secret")
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
     monkeypatch.setattr(
         mcp_bridge_module,
         "RuntimeExternalMcpHttpClient",
         FakeHttpClient,
     )
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "LINEAR_API_KEY": "linear-secret",
+    }
     health = describe_external_mcp_server_health(
         "linear",
-        environment={
-            EXTERNAL_MCP_CLIENT_ENV: "true",
-            "LINEAR_API_KEY": "linear-secret",
-        },
+        environment=environment,
     )
 
     result = await mcp_bridge_module.call_external_mcp_tool(
@@ -3743,6 +3862,7 @@ async def test_call_external_mcp_tool_dispatches_http_with_linear_auth(
         tool_name="create_issue",
         arguments={"team": "ENG", "title": "Wire HTTP MCP"},
         project_dir=tmp_path,
+        environment=environment,
     )
 
     assert result["content"][0]["text"] == "created"
@@ -3757,6 +3877,22 @@ async def test_call_external_mcp_tool_dispatches_http_with_linear_auth(
             "arguments": {"team": "ENG", "title": "Wire HTTP MCP"},
         },
     ]
+
+
+def test_external_mcp_headers_use_injected_project_config(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+
+    headers = mcp_bridge_module.external_mcp_headers_for_server(
+        "linear",
+        project_mcp_config={"LINEAR_API_KEY": "project-secret"},
+        environment={"LINEAR_API_KEY": "environment-secret"},
+    )
+
+    assert headers == {"Authorization": "Bearer project-secret"}
 
 
 @pytest.mark.asyncio

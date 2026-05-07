@@ -1418,8 +1418,8 @@ class RuntimeExternalMcpHttpClient:
             ) from e
 
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            await self._initialize(client)
             try:
+                await self._initialize(client)
                 return await self._request(client, method, params)
             finally:
                 await self._close_session(client)
@@ -2569,6 +2569,8 @@ async def call_external_mcp_tool(
     tool_name: str,
     arguments: dict[str, Any],
     project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Call one external MCP tool through the provider-neutral MCP client."""
     if health.transport == "stdio" and health.command:
@@ -2584,7 +2586,11 @@ async def call_external_mcp_tool(
         client = RuntimeExternalMcpHttpClient(
             server=health.server,
             url=health.url,
-            headers=external_mcp_headers_for_server(health.server),
+            headers=external_mcp_headers_for_server(
+                health.server,
+                project_mcp_config=project_mcp_config,
+                environment=environment,
+            ),
         )
         return await client.call_tool(name=tool_name, arguments=arguments)
 
@@ -2598,6 +2604,8 @@ async def discover_external_mcp_tools(
     *,
     health: RuntimeExternalMcpServerHealth,
     project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Return the live tools/list payload for one ready external MCP server."""
     if health.transport == "stdio" and health.command:
@@ -2613,7 +2621,11 @@ async def discover_external_mcp_tools(
         client = RuntimeExternalMcpHttpClient(
             server=health.server,
             url=health.url,
-            headers=external_mcp_headers_for_server(health.server),
+            headers=external_mcp_headers_for_server(
+                health.server,
+                project_mcp_config=project_mcp_config,
+                environment=environment,
+            ),
         )
         return await client.list_tools()
 
@@ -2627,11 +2639,16 @@ async def check_external_mcp_contract(
     *,
     server: str,
     project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
     environment: Mapping[str, str] | None = None,
 ) -> RuntimeExternalMcpContractCheck:
     """Compare registered adapter tools with a live external MCP tools/list."""
     server = normalize_mcp_server_name(server)
-    health = describe_external_mcp_server_health(server, environment=environment)
+    health = describe_external_mcp_server_health(
+        server,
+        project_mcp_config=project_mcp_config,
+        environment=environment,
+    )
     adapter = external_mcp_adapter_for(server)
     adapter_tools = adapter.tool_names if adapter else ()
 
@@ -2649,6 +2666,8 @@ async def check_external_mcp_contract(
         result = await discover_external_mcp_tools(
             health=health,
             project_dir=project_dir,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
         )
     except Exception as e:
         return RuntimeExternalMcpContractCheck(
@@ -2706,6 +2725,7 @@ async def check_external_mcp_contracts(
     *,
     requested_servers: tuple[str, ...],
     project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
     environment: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Run external MCP adapter contract checks for requested servers."""
@@ -2714,6 +2734,7 @@ async def check_external_mcp_contracts(
         check = await check_external_mcp_contract(
             server=server,
             project_dir=project_dir,
+            project_mcp_config=project_mcp_config,
             environment=environment,
         )
         checks.append(check.to_dict())
@@ -2735,14 +2756,26 @@ def extract_mcp_tool_names(result: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(names)
 
 
-def external_mcp_headers_for_server(server: str) -> dict[str, str]:
+def external_mcp_headers_for_server(
+    server: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> dict[str, str]:
     """Return HTTP headers for an external MCP server without exposing secrets."""
     server = normalize_mcp_server_name(server)
     catalog_entry = MCP_SERVER_CATALOG.get(server, {})
     authorization_env = str(catalog_entry.get("authorization_env") or "")
     if not authorization_env:
         return {}
-    token = os.environ.get(authorization_env, "")
+    token = str(
+        mcp_config_or_env_value(
+            authorization_env,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        or ""
+    ).strip()
     if not token:
         raise RuntimeExternalMcpClientError(
             f"External MCP server {server} requires {authorization_env}."
