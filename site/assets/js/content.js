@@ -9,10 +9,10 @@ window.AUTO_CODE_DOCS = {
         languageLabel: "Язык",
         searchLabel: "Поиск",
         searchPlaceholder: "runtime, Codex CLI, QA, настройки...",
-        heroEyebrow: "Open-source agentic engineering platform",
-        heroTitle: "Auto Code превращает идею в review-ready ветку",
+        heroEyebrow: "Open-source · Agentic engineering platform",
+        heroTitle: "Идею — в ветку.\u00A0Без чёрных ящиков.",
         heroLead:
-          "Манящий landing, настоящая документация и встроенный Markdown-reader: посмотрите, как desktop app, backend agents, runtime providers, worktrees и QA loop складываются в управляемую среду для автономной разработки.",
+          "Опишите задачу — Auto Code запускает Planner, Coder и QA в изолированном worktree и отдаёт вам diff, логи и артефакты для review.",
         navEmpty: "Разделы не найдены.",
         sourceLabel: "Источник",
         roadmapUpdated: "Снимок документации проекта: 2026-05-02"
@@ -595,10 +595,10 @@ window.AUTO_CODE_DOCS = {
         languageLabel: "Language",
         searchLabel: "Search",
         searchPlaceholder: "runtime, Codex CLI, QA, settings...",
-        heroEyebrow: "Open-source agentic engineering platform",
-        heroTitle: "Auto Code turns intent into a review-ready branch",
+        heroEyebrow: "Open-source · Agentic engineering platform",
+        heroTitle: "Intent in.\u00A0Review-ready branch out.",
         heroLead:
-          "A landing page, documentation portal, and inline Markdown reader for the real app: desktop flows, backend agents, runtime providers, worktree isolation, QA loops, and the project roadmap.",
+          "Describe what you need. Auto Code runs Planner, Coder, and QA agents in an isolated worktree — and hands you a diff, logs, and artifacts for review.",
         navEmpty: "No sections found.",
         sourceLabel: "Source",
         roadmapUpdated: "Project documentation snapshot: 2026-05-02"
@@ -1060,10 +1060,10 @@ window.AUTO_CODE_DOCS = {
         languageLabel: "Langue",
         searchLabel: "Recherche",
         searchPlaceholder: "runtime, Codex CLI, QA, settings...",
-        heroEyebrow: "Plateforme open-source d'ingenierie agentique",
-        heroTitle: "Auto Code transforme une intention en branche prete pour revue",
+        heroEyebrow: "Open-source · Plateforme d'ingenierie agentique",
+        heroTitle: "L'intention entre.\u00A0La branche sort prete.",
         heroLead:
-          "Une landing page, un portail de documentation et un lecteur Markdown integre pour la vraie application: flux desktop, agents backend, providers runtime, worktrees, QA loop et roadmap projet.",
+          "Decrivez votre besoin. Auto Code lance Planner, Coder et QA dans un worktree isole — et vous remet un diff, des logs et des artefacts pour revue.",
         navEmpty: "Aucune section trouvee.",
         sourceLabel: "Source",
         roadmapUpdated: "Snapshot documentation projet: 2026-05-02"

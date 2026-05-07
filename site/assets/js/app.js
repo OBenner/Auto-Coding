@@ -155,9 +155,21 @@
     elements.heroTitle.textContent = ui.heroTitle;
     elements.heroLead.textContent = ui.heroLead;
 
-    elements.heroActions.innerHTML = data.heroActions.map(renderHeroAction).join("");
+    const proofStats = [
+      { num: "4",   label: state.locale === "ru" ? "роли агентов" : state.locale === "fr" ? "rôles agents" : "agent roles" },
+      { num: "298", label: state.locale === "ru" ? "страниц docs" : state.locale === "fr" ? "pages de docs" : "pages of docs" },
+      { num: "3",   label: state.locale === "ru" ? "runtime"      : state.locale === "fr" ? "runtimes"      : "runtimes" },
+      { num: "MIT", label: state.locale === "ru" ? "лицензия"     : state.locale === "fr" ? "licence"       : "license" }
+    ];
+    elements.heroActions.innerHTML =
+      data.heroActions.map(renderHeroAction).join("") +
+      `<div class="hero-proof">${proofStats.map(s =>
+        `<div class="proof-stat"><strong>${escapeHtml(s.num)}</strong><small>${escapeHtml(s.label)}</small></div>`
+      ).join("<span class=\"proof-divider\"></span>")}</div>`;
     renderLanguageMenu();
 
+    const stepColors = ["spec", "plan", "build", "qa"];
+    const stepIcons  = ["S", "P", "B", "Q"];
     elements.productSignal.innerHTML = `
       <div class="signal-header">
         <span class="signal-dot"></span>
@@ -166,10 +178,13 @@
       <div class="signal-rows">
         ${data.productSignal.rows
           .map(
-            ([label, value]) => `
-            <div class="signal-row">
-              <span>${escapeHtml(label)}</span>
-              <p>${escapeHtml(value)}</p>
+            ([label, value], i) => `
+            <div class="signal-row signal-row--${stepColors[i] || "spec"}">
+              <div class="signal-step-icon signal-step-icon--${stepColors[i] || "spec"}">${stepIcons[i] || ""}</div>
+              <div class="signal-row-body">
+                <span>${escapeHtml(label)}</span>
+                <p>${escapeHtml(value)}</p>
+              </div>
             </div>
           `
           )
