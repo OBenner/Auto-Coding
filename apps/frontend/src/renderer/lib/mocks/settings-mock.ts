@@ -162,6 +162,31 @@ export const settingsMock = {
       recommendations: {}
     }
   }),
+  testExternalMcpContracts: async () => ({
+    success: true,
+    data: {
+      external_mcp_contract_checks: [
+        {
+          server: 'context7',
+          ok: false,
+          status: 'skipped',
+          reason: 'External MCP client bridge is disabled.',
+          transport: 'stdio',
+          adapter_tools: ['resolve-library-id', 'get-library-docs'],
+          server_tools: [],
+          adapter_tools_missing_on_server: [],
+          server_tools_missing_in_adapter: [],
+          error: null
+        }
+      ],
+      summary: {
+        total: 1,
+        ok: 0,
+        skipped: 1,
+        failed: 0
+      }
+    }
+  }),
 
   // App Info
   getAppVersion: async () => '0.1.0-browser',

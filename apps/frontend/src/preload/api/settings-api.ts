@@ -9,6 +9,7 @@ import type {
   AIProviderConfig,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
+  RuntimeExternalMcpSmokeResult,
   RuntimeControlPlaneDiagnostics
 } from '../../shared/types';
 
@@ -44,6 +45,7 @@ export interface SettingsAPI {
   validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
   testProviderConfig: () => Promise<IPCResult<ProviderConnectionTestResult>>;
   getProviderRuntimeDiagnostics: () => Promise<IPCResult<RuntimeControlPlaneDiagnostics>>;
+  testExternalMcpContracts: () => Promise<IPCResult<RuntimeExternalMcpSmokeResult>>;
 }
 
 export const createSettingsAPI = (): SettingsAPI => ({
@@ -103,5 +105,8 @@ export const createSettingsAPI = (): SettingsAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_TEST),
 
   getProviderRuntimeDiagnostics: (): Promise<IPCResult<RuntimeControlPlaneDiagnostics>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_RUNTIME_DIAGNOSTICS)
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_RUNTIME_DIAGNOSTICS),
+
+  testExternalMcpContracts: (): Promise<IPCResult<RuntimeExternalMcpSmokeResult>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_EXTERNAL_MCP_SMOKE)
 });

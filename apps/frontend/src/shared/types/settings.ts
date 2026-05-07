@@ -549,6 +549,31 @@ export interface RuntimeExternalMcpHealthRow {
   supported_transports?: string[];
 }
 
+export interface RuntimeExternalMcpContractCheckRow {
+  server: string;
+  ok: boolean;
+  status: string;
+  reason: string;
+  transport?: string | null;
+  adapter_tools: string[];
+  server_tools: string[];
+  adapter_tools_missing_on_server: string[];
+  server_tools_missing_in_adapter: string[];
+  error?: string | null;
+}
+
+export interface RuntimeExternalMcpSmokeSummary {
+  total: number;
+  ok: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface RuntimeExternalMcpSmokeResult {
+  external_mcp_contract_checks: RuntimeExternalMcpContractCheckRow[];
+  summary: RuntimeExternalMcpSmokeSummary;
+}
+
 export interface RuntimeFallbackMatrixRow {
   provider: string;
   phase: string;
