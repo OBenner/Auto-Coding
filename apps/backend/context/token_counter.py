@@ -26,12 +26,16 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 try:
     import tiktoken
 except ImportError:
     tiktoken = None
+
+logger = logging.getLogger(__name__)
+_UNAVAILABLE_ENCODINGS: set[str] = set()
 
 
 # Model to encoding mapping
@@ -93,13 +97,20 @@ class TokenCounter:
         else:
             self._encoding_name = MODEL_ENCODINGS["default"]
 
-        # Load encoding
-        try:
-            self._encoding = tiktoken.get_encoding(self._encoding_name)
-        except Exception as e:
-            raise ValueError(
-                f"Failed to load encoding '{self._encoding_name}': {e}"
-            ) from e
+        # Load encoding. Newer tiktoken versions may fetch encoding data on
+        # first use, so keep context building available in offline environments.
+        self._encoding = None
+        if self._encoding_name not in _UNAVAILABLE_ENCODINGS:
+            try:
+                self._encoding = tiktoken.get_encoding(self._encoding_name)
+            except Exception as e:
+                _UNAVAILABLE_ENCODINGS.add(self._encoding_name)
+                logger.warning(
+                    "Failed to load tiktoken encoding %s; falling back to rough token "
+                    "estimation: %s",
+                    self._encoding_name,
+                    e,
+                )
 
     @property
     def encoding_name(self) -> str:
@@ -124,12 +135,16 @@ class TokenCounter:
         if not text:
             return 0
 
-        try:
-            tokens = self._encoding.encode(text)
-            return len(tokens)
-        except Exception:
-            # Fallback: rough estimate (4 chars per token)
-            return len(text) // 4
+        if self._encoding is not None:
+            try:
+                tokens = self._encoding.encode(text)
+                return len(tokens)
+            except Exception:
+                logger.debug("tiktoken encoding failed; using rough estimate")
+
+        # Fallback: rough estimate (4 chars per token), rounded up so short
+        # non-empty strings are never counted as zero.
+        return max(1, (len(text) + 3) // 4)
 
     def count_tokens_batch(self, texts: list[str]) -> int:
         """
@@ -234,14 +249,17 @@ class TokenCounter:
             return text
 
         # Encode and truncate
-        try:
-            tokens = self._encoding.encode(text)
-            truncated_tokens = tokens[:max_tokens]
-            return self._encoding.decode(truncated_tokens)
-        except Exception:
-            # Fallback: character-based truncation (rough estimate)
-            estimated_chars = max_tokens * 4
-            return text[:estimated_chars]
+        if self._encoding is not None:
+            try:
+                tokens = self._encoding.encode(text)
+                truncated_tokens = tokens[:max_tokens]
+                return self._encoding.decode(truncated_tokens)
+            except Exception:
+                logger.debug("tiktoken truncation failed; using character estimate")
+
+        # Fallback: character-based truncation (rough estimate)
+        estimated_chars = max_tokens * 4
+        return text[:estimated_chars]
 
 
 def get_token_counter(

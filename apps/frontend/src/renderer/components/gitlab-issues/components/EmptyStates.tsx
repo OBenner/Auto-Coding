@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { GitlabIcon, Settings2 } from 'lucide-react';
+import { GitFork as GitlabIcon, Settings2 } from 'lucide-react';
 import { Button } from '../../ui/button';
 import type { EmptyStateProps, NotConnectedStateProps } from '../types';
 

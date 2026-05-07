@@ -1,6 +1,6 @@
 # Auto-Build Framework Dependencies
 claude-agent-sdk>=0.1.19
-python-dotenv>=1.0.0
+python-dotenv>=1.2.2
 
 # TOML parsing fallback for Python < 3.11
 tomli>=2.0.0; python_version < "3.11"
@@ -28,11 +28,11 @@ google-generativeai>=0.8.0
 
 # LiteLLM - Unified interface for 100+ LLM providers
 # Provides consistent API for OpenAI, Anthropic, Azure, Google, Ollama, etc.
-litellm==1.83.7
+litellm==1.84.0rc1
 
 # OpenAI SDK - Required by OpenAI-compatible providers and LiteLLM.
 # Keep this aligned with the pinned LiteLLM requirement.
-openai==2.30.0
+openai==2.33.0
 
 # zAI SDK - GLM model provider (智谱AI / zhipu AI)
 zai-sdk>=0.2.2
@@ -49,7 +49,7 @@ fastapi>=0.136.1
 
 # Uvicorn - ASGI server for running FastAPI applications
 # Required to serve FastAPI apps in production
-uvicorn[standard]>=0.24.0
+uvicorn[standard]>=0.46.0
 
 # HTTP clients for webhook delivery
 # httpx - Modern async HTTP client with HTTP/2 support
@@ -58,14 +58,14 @@ httpx>=0.25.0
 aiohttp>=3.9.0
 
 # tiktoken - Token counting for accurate context window estimation
-tiktoken>=0.5.0
+tiktoken>=0.12.0
 
 # Error tracking (optional - requires SENTRY_DSN environment variable)
 sentry-sdk>=2.0.0
 
 # Performance Profiling Tools
 # py-spy: Sampling profiler for Python programs (low overhead)
-py-spy>=0.4.1
+py-spy>=0.4.2
 # memory-profiler: Memory usage profiling for Python code
 memory-profiler>=0.61.0
 

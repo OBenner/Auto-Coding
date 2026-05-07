@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Github,
+  GitBranch as Github,
   GitBranch,
   Key,
   Loader2,
