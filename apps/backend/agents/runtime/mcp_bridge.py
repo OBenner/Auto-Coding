@@ -2,8 +2,8 @@
 
 This is intentionally narrower than full MCP parity. It exposes Auto Code's
 in-process ``auto-claude`` tools to limited/direct runtimes without starting a
-Claude SDK agent loop, and it can execute explicitly enabled stdio external MCP
-tools such as Context7 through a provider-neutral bridge.
+Claude SDK agent loop, and it can execute explicitly enabled external MCP tools
+through a provider-neutral stdio or Streamable HTTP bridge.
 """
 
 from __future__ import annotations
@@ -28,10 +28,15 @@ MCP_AUTO_CLAUDE_PREFIX = "mcp__auto-claude__"
 LOCAL_BRIDGE_SERVER = "auto-claude"
 MCP_BRIDGE_AUDIT_FILENAME = "mcp_bridge_audit.jsonl"
 EXTERNAL_MCP_CLIENT_ENV = "AUTO_CODE_EXTERNAL_MCP_CLIENT"
+MCP_ALLOWED_PERMISSIONS_ENV = "AUTO_CODE_MCP_ALLOWED_PERMISSIONS"
 EXTERNAL_MCP_PROTOCOL_VERSION_ENV = "AUTO_CODE_MCP_PROTOCOL_VERSION"
+CUSTOM_MCP_SERVERS_CONFIG_KEY = "CUSTOM_MCP_SERVERS"
 DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION = "2024-11-05"
+DEFAULT_EXTERNAL_MCP_HTTP_PROTOCOL_VERSION = "2025-06-18"
 DEFAULT_EXTERNAL_MCP_TIMEOUT_SECONDS = 30.0
-EXTERNAL_MCP_EXECUTION_SERVERS = ("context7",)
+SUPPORTED_EXTERNAL_MCP_TRANSPORTS = ("stdio", "http")
+DESCRIPTION_OPTIONAL_MAX_RESULTS = "Optional maximum number of results."
+DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY = "Optional team ID or key."
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
 McpAuditLevel = Literal["read", "write", "command", "analysis"]
 ExternalMcpHealthStatus = Literal[
@@ -40,6 +45,8 @@ ExternalMcpHealthStatus = Literal[
     "server_disabled",
     "missing_configuration",
     "choose_concrete_server",
+    "adapter_missing",
+    "unsupported_transport",
     "ready_to_connect",
 ]
 MCP_SERVER_CATALOG: dict[str, dict[str, Any]] = {
@@ -81,6 +88,8 @@ MCP_SERVER_CATALOG: dict[str, dict[str, Any]] = {
         "enabled_default": True,
         "transport": "http",
         "url": "https://mcp.linear.app/mcp",
+        "authorization_env": "LINEAR_API_KEY",
+        "authorization_scheme": "Bearer",
         "required_env": ("LINEAR_API_KEY",),
         "notes": "External Linear MCP server.",
     },
@@ -139,6 +148,25 @@ class RuntimeMcpToolPolicy:
 
 
 @dataclass(frozen=True)
+class RuntimeMcpPermissionDecision:
+    """Result of checking a bridged MCP tool policy against an allowlist."""
+
+    allowed: bool
+    reason: str
+    allowed_permissions: tuple[str, ...] | None = None
+
+    def to_audit_dict(self) -> dict[str, Any]:
+        """Serialize the permission decision for audit events and observations."""
+        payload: dict[str, Any] = {
+            "permission_allowed": self.allowed,
+            "permission_decision_reason": self.reason,
+        }
+        if self.allowed_permissions is not None:
+            payload["allowed_permissions"] = list(self.allowed_permissions)
+        return payload
+
+
+@dataclass(frozen=True)
 class RuntimeExternalMcpServerHealth:
     """Readiness contract for one external MCP server bridge target."""
 
@@ -160,6 +188,12 @@ class RuntimeExternalMcpServerHealth:
     concrete_servers: tuple[str, ...] = ()
     execution_supported: bool = False
     executable_tools: tuple[str, ...] = ()
+    adapter_registered: bool = False
+    adapter_name: str | None = None
+    adapter_transport: str | None = None
+    adapter_exposed_server: str | None = None
+    transport_supported: bool = False
+    supported_transports: tuple[str, ...] = SUPPORTED_EXTERNAL_MCP_TRANSPORTS
 
     @property
     def ready_to_connect(self) -> bool:
@@ -188,6 +222,12 @@ class RuntimeExternalMcpServerHealth:
             "execution_supported": self.execution_supported,
             "executable_tools": list(self.executable_tools),
             "executable_tool_count": len(self.executable_tools),
+            "adapter_registered": self.adapter_registered,
+            "adapter_name": self.adapter_name,
+            "adapter_transport": self.adapter_transport,
+            "adapter_exposed_server": self.adapter_exposed_server,
+            "transport_supported": self.transport_supported,
+            "supported_transports": list(self.supported_transports),
         }
 
 
@@ -260,6 +300,8 @@ class RuntimeMcpBridgePlan:
     local_bridge_required_servers: tuple[str, ...] = ()
     external_bridge_required_servers: tuple[str, ...] = ()
     external_bridge_ready_servers: tuple[str, ...] = ()
+    external_bridge_adapter_missing_servers: tuple[str, ...] = ()
+    external_bridge_unsupported_transport_servers: tuple[str, ...] = ()
     unsupported_servers: tuple[str, ...] = ()
     bridged_servers: tuple[str, ...] = ()
     local_bridged_servers: tuple[str, ...] = ()
@@ -284,6 +326,12 @@ class RuntimeMcpBridgePlan:
                 self.external_bridge_required_servers
             ),
             "external_bridge_ready_servers": list(self.external_bridge_ready_servers),
+            "external_bridge_adapter_missing_servers": list(
+                self.external_bridge_adapter_missing_servers
+            ),
+            "external_bridge_unsupported_transport_servers": list(
+                self.external_bridge_unsupported_transport_servers
+            ),
             "unsupported_servers": list(self.unsupported_servers),
             "bridged_servers": list(self.bridged_servers),
             "local_bridged_servers": list(self.local_bridged_servers),
@@ -331,8 +379,1054 @@ class RuntimeMcpToolSpec:
         }
 
 
+@dataclass(frozen=True)
+class RuntimeExternalMcpToolDefinition:
+    """Static provider-neutral schema for one externally bridged MCP tool."""
+
+    name: str
+    description: str
+    parameters: dict[str, Any]
+    policy: RuntimeMcpToolPolicy
+    target_name_argument: str | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeExternalMcpAdapter:
+    """Executable adapter contract for one external MCP server."""
+
+    server: str
+    display_name: str
+    tool_definitions: tuple[RuntimeExternalMcpToolDefinition, ...]
+    transport: str = "stdio"
+    exposed_server: str | None = None
+
+    @property
+    def tool_names(self) -> tuple[str, ...]:
+        """Return registered MCP tool names for this adapter."""
+        return tuple(definition.name for definition in self.tool_definitions)
+
+    @property
+    def exposed_server_name(self) -> str:
+        """Return the provider-facing MCP server segment for tool names."""
+        return self.exposed_server or self.server
+
+    def execution_supported(
+        self,
+        *,
+        transport: str | None,
+        command: str | None,
+        url: str | None = None,
+    ) -> bool:
+        """Return whether this adapter can execute the catalog transport."""
+        if not self.tool_definitions or not self.transport_supported(
+            transport=transport
+        ):
+            return False
+        if self.transport == "stdio":
+            return bool(command)
+        if self.transport == "http":
+            return bool(url)
+        return False
+
+    def transport_supported(self, *, transport: str | None) -> bool:
+        """Return whether the provider-neutral client can execute this transport."""
+        return (
+            transport == self.transport
+            and self.transport in SUPPORTED_EXTERNAL_MCP_TRANSPORTS
+        )
+
+    def load_tool_specs(
+        self,
+        *,
+        health: RuntimeExternalMcpServerHealth,
+        project_dir: Path,
+        project_mcp_config: Mapping[str, Any] | None = None,
+        environment: Mapping[str, str] | None = None,
+    ) -> list[RuntimeMcpToolSpec]:
+        """Return provider tool schemas backed by this adapter."""
+        if not health.ready_to_connect or not health.execution_supported:
+            return []
+        return [
+            RuntimeMcpToolSpec(
+                server=self.server,
+                name=definition.name,
+                exposed_name=(f"mcp__{self.exposed_server_name}__{definition.name}"),
+                description=definition.description,
+                parameters=definition.parameters,
+                policy=definition.policy,
+                handler=external_mcp_tool_handler(
+                    health=health,
+                    tool_name=definition.name,
+                    project_dir=project_dir,
+                    target_name_argument=definition.target_name_argument,
+                    project_mcp_config=project_mcp_config,
+                    environment=environment,
+                ),
+            )
+            for definition in self.tool_definitions
+        ]
+
+
+def external_mcp_tool_definition(
+    *,
+    name: str,
+    description: str,
+    parameters: dict[str, Any],
+    permission: str,
+    audit_level: McpAuditLevel,
+    mutating: bool = False,
+    target_name_argument: str | None = None,
+) -> RuntimeExternalMcpToolDefinition:
+    """Build one external MCP tool definition with a conservative policy."""
+    return RuntimeExternalMcpToolDefinition(
+        name=name,
+        description=description,
+        parameters=parameters,
+        policy=RuntimeMcpToolPolicy(
+            permission,
+            audit_level,
+            mutating=mutating,
+        ),
+        target_name_argument=target_name_argument,
+    )
+
+
+def object_schema(
+    properties: dict[str, Any] | None = None,
+    *,
+    required: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Return a strict object schema for external MCP tool arguments."""
+    schema: dict[str, Any] = {
+        "type": "object",
+        "properties": properties or {},
+        "additionalProperties": False,
+    }
+    if required:
+        schema["required"] = list(required)
+    return schema
+
+
+def context7_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
+    """Build the Context7 external MCP execution adapter."""
+    tool_definitions: tuple[RuntimeExternalMcpToolDefinition, ...] = (
+        external_mcp_tool_definition(
+            name="resolve-library-id",
+            description=(
+                "Resolve a package or library name to a Context7-compatible library ID."
+            ),
+            parameters=object_schema(
+                {
+                    "libraryName": {
+                        "type": "string",
+                        "description": "Package or library name to resolve.",
+                    }
+                },
+                required=("libraryName",),
+            ),
+            permission="read_external_docs",
+            audit_level="read",
+        ),
+        external_mcp_tool_definition(
+            name="get-library-docs",
+            description=(
+                "Fetch current documentation for a Context7-compatible library ID."
+            ),
+            parameters=object_schema(
+                {
+                    "context7CompatibleLibraryID": {
+                        "type": "string",
+                        "description": "Library ID returned by resolve-library-id.",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Optional topic to focus the documentation query.",
+                    },
+                    "tokens": {
+                        "type": "integer",
+                        "description": "Optional maximum documentation token budget.",
+                    },
+                },
+                required=("context7CompatibleLibraryID",),
+            ),
+            permission="read_external_docs",
+            audit_level="read",
+        ),
+    )
+    return RuntimeExternalMcpAdapter(
+        server="context7",
+        display_name="Context7",
+        tool_definitions=tool_definitions,
+    )
+
+
+def graphiti_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
+    """Build the Graphiti Streamable HTTP MCP execution adapter."""
+    return RuntimeExternalMcpAdapter(
+        server="graphiti",
+        display_name="Graphiti",
+        transport="http",
+        exposed_server="graphiti-memory",
+        tool_definitions=(
+            external_mcp_tool_definition(
+                name="search_nodes",
+                description="Search Graphiti entity summaries.",
+                parameters=object_schema(
+                    {
+                        "query": {
+                            "type": "string",
+                            "description": "Natural-language entity search query.",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": DESCRIPTION_OPTIONAL_MAX_RESULTS,
+                        },
+                    },
+                    required=("query",),
+                ),
+                permission="read_memory",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="search_facts",
+                description="Search Graphiti relationship facts.",
+                parameters=object_schema(
+                    {
+                        "query": {
+                            "type": "string",
+                            "description": "Natural-language fact search query.",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": DESCRIPTION_OPTIONAL_MAX_RESULTS,
+                        },
+                    },
+                    required=("query",),
+                ),
+                permission="read_memory",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="add_episode",
+                description="Add an episode to the Graphiti knowledge graph.",
+                parameters=object_schema(
+                    {
+                        "name": {
+                            "type": "string",
+                            "description": "Episode title.",
+                        },
+                        "episode_body": {
+                            "type": "string",
+                            "description": "Episode content to store.",
+                        },
+                        "source": {
+                            "type": "string",
+                            "description": "Optional source enum or source identifier.",
+                        },
+                        "source_description": {
+                            "type": "string",
+                            "description": "Optional human-readable source description.",
+                        },
+                        "group_id": {
+                            "type": "string",
+                            "description": "Optional Graphiti group identifier.",
+                        },
+                    },
+                    required=("name", "episode_body"),
+                ),
+                permission="write_memory",
+                audit_level="write",
+                mutating=True,
+            ),
+            external_mcp_tool_definition(
+                name="get_episodes",
+                description="Retrieve recent Graphiti episodes.",
+                parameters=object_schema(
+                    {
+                        "group_id": {
+                            "type": "string",
+                            "description": "Optional Graphiti group identifier.",
+                        },
+                        "last_n": {
+                            "type": "integer",
+                            "description": "Optional number of recent episodes.",
+                        },
+                    }
+                ),
+                permission="read_memory",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="get_entity_edge",
+                description="Fetch a specific Graphiti entity edge by UUID.",
+                parameters=object_schema(
+                    {
+                        "uuid": {
+                            "type": "string",
+                            "description": "Entity edge UUID.",
+                        }
+                    },
+                    required=("uuid",),
+                ),
+                permission="read_memory",
+                audit_level="read",
+            ),
+        ),
+    )
+
+
+def linear_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
+    """Build the Linear Streamable HTTP MCP execution adapter."""
+    read_policy = {
+        "permission": "read_linear",
+        "audit_level": "read",
+    }
+    write_policy = {
+        "permission": "write_linear",
+        "audit_level": "write",
+        "mutating": True,
+    }
+    id_property = {
+        "id": {
+            "type": "string",
+            "description": "Linear entity ID or key.",
+        }
+    }
+    pagination_properties = {
+        "limit": {
+            "type": "integer",
+            "description": DESCRIPTION_OPTIONAL_MAX_RESULTS,
+        }
+    }
+    return RuntimeExternalMcpAdapter(
+        server="linear",
+        display_name="Linear",
+        transport="http",
+        exposed_server="linear-server",
+        tool_definitions=(
+            external_mcp_tool_definition(
+                name="list_teams",
+                description="List Linear teams available to the authenticated user.",
+                parameters=object_schema(pagination_properties),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="get_team",
+                description="Get one Linear team by ID or key.",
+                parameters=object_schema(id_property, required=("id",)),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="list_projects",
+                description="List Linear projects.",
+                parameters=object_schema(
+                    {
+                        "team": {
+                            "type": "string",
+                            "description": DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY,
+                        },
+                        **pagination_properties,
+                    }
+                ),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="get_project",
+                description="Get one Linear project by ID.",
+                parameters=object_schema(id_property, required=("id",)),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="create_project",
+                description="Create a Linear project.",
+                parameters=object_schema(
+                    {
+                        "team": {
+                            "type": "string",
+                            "description": "Team ID or key.",
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Project name.",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional project description.",
+                        },
+                    },
+                    required=("team", "name"),
+                ),
+                **write_policy,
+            ),
+            external_mcp_tool_definition(
+                name="update_project",
+                description="Update a Linear project.",
+                parameters=object_schema(
+                    {
+                        **id_property,
+                        "name": {
+                            "type": "string",
+                            "description": "Optional project name.",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional project description.",
+                        },
+                        "state": {
+                            "type": "string",
+                            "description": "Optional project state.",
+                        },
+                    },
+                    required=("id",),
+                ),
+                **write_policy,
+            ),
+            external_mcp_tool_definition(
+                name="list_issues",
+                description="List Linear issues.",
+                parameters=object_schema(
+                    {
+                        "team": {
+                            "type": "string",
+                            "description": DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY,
+                        },
+                        "project": {
+                            "type": "string",
+                            "description": "Optional project ID.",
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "Optional text query.",
+                        },
+                        **pagination_properties,
+                    }
+                ),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="get_issue",
+                description="Get one Linear issue by ID or key.",
+                parameters=object_schema(id_property, required=("id",)),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="create_issue",
+                description="Create a Linear issue.",
+                parameters=object_schema(
+                    {
+                        "team": {
+                            "type": "string",
+                            "description": "Team ID or key.",
+                        },
+                        "project": {
+                            "type": "string",
+                            "description": "Optional project ID.",
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Issue title.",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional issue description.",
+                        },
+                        "priority": {
+                            "type": "integer",
+                            "description": "Optional Linear priority.",
+                        },
+                        "labels": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional labels.",
+                        },
+                    },
+                    required=("team", "title"),
+                ),
+                **write_policy,
+            ),
+            external_mcp_tool_definition(
+                name="update_issue",
+                description="Update a Linear issue.",
+                parameters=object_schema(
+                    {
+                        **id_property,
+                        "title": {
+                            "type": "string",
+                            "description": "Optional issue title.",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional issue description.",
+                        },
+                        "state": {
+                            "type": "string",
+                            "description": "Optional issue state or state ID.",
+                        },
+                        "priority": {
+                            "type": "integer",
+                            "description": "Optional Linear priority.",
+                        },
+                        "assignee": {
+                            "type": "string",
+                            "description": "Optional assignee ID.",
+                        },
+                    },
+                    required=("id",),
+                ),
+                **write_policy,
+            ),
+            external_mcp_tool_definition(
+                name="list_comments",
+                description="List comments on a Linear issue.",
+                parameters=object_schema(
+                    {
+                        "issueId": {
+                            "type": "string",
+                            "description": "Linear issue ID.",
+                        },
+                        **pagination_properties,
+                    },
+                    required=("issueId",),
+                ),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="create_comment",
+                description="Create a comment on a Linear issue.",
+                parameters=object_schema(
+                    {
+                        "issueId": {
+                            "type": "string",
+                            "description": "Linear issue ID.",
+                        },
+                        "body": {
+                            "type": "string",
+                            "description": "Comment body.",
+                        },
+                    },
+                    required=("issueId", "body"),
+                ),
+                **write_policy,
+            ),
+            external_mcp_tool_definition(
+                name="list_issue_statuses",
+                description="List Linear issue statuses for a team.",
+                parameters=object_schema(
+                    {
+                        "team": {
+                            "type": "string",
+                            "description": DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY,
+                        }
+                    }
+                ),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="list_issue_labels",
+                description="List Linear issue labels.",
+                parameters=object_schema(
+                    {
+                        "team": {
+                            "type": "string",
+                            "description": DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY,
+                        },
+                        **pagination_properties,
+                    }
+                ),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="list_users",
+                description="List Linear users.",
+                parameters=object_schema(pagination_properties),
+                **read_policy,
+            ),
+            external_mcp_tool_definition(
+                name="get_user",
+                description="Get one Linear user by ID.",
+                parameters=object_schema(id_property, required=("id",)),
+                **read_policy,
+            ),
+        ),
+    )
+
+
+def electron_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
+    """Build the Electron browser automation MCP execution adapter."""
+    return RuntimeExternalMcpAdapter(
+        server="electron",
+        display_name="Electron",
+        tool_definitions=(
+            external_mcp_tool_definition(
+                name="get_electron_window_info",
+                description="Get information about running Electron windows.",
+                parameters=object_schema(),
+                permission="read_browser_state",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="take_screenshot",
+                description="Capture a compressed screenshot of the Electron app.",
+                parameters=object_schema(),
+                permission="read_browser_state",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="send_command_to_electron",
+                description="Send a UI automation command to the Electron app.",
+                parameters=object_schema(
+                    {
+                        "command": {
+                            "type": "string",
+                            "description": "Electron automation command to run.",
+                        },
+                        "args": {
+                            "type": "object",
+                            "description": "Command-specific arguments.",
+                        },
+                    },
+                    required=("command",),
+                ),
+                permission="run_browser_automation",
+                audit_level="command",
+                mutating=True,
+            ),
+            external_mcp_tool_definition(
+                name="read_electron_logs",
+                description="Read console logs from the Electron app.",
+                parameters=object_schema(
+                    {
+                        "limit": {
+                            "type": "integer",
+                            "description": "Optional maximum log entries to return.",
+                        }
+                    }
+                ),
+                permission="read_browser_logs",
+                audit_level="read",
+            ),
+        ),
+    )
+
+
+def puppeteer_external_mcp_adapter() -> RuntimeExternalMcpAdapter:
+    """Build the Puppeteer browser automation MCP execution adapter."""
+    browser_command_policy = {
+        "permission": "run_browser_automation",
+        "audit_level": "command",
+        "mutating": True,
+    }
+    return RuntimeExternalMcpAdapter(
+        server="puppeteer",
+        display_name="Puppeteer",
+        tool_definitions=(
+            external_mcp_tool_definition(
+                name="puppeteer_connect_active_tab",
+                description="Connect to the active browser tab.",
+                parameters=object_schema(),
+                permission="read_browser_state",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_navigate",
+                description="Navigate the browser to a URL.",
+                parameters=object_schema(
+                    {
+                        "url": {
+                            "type": "string",
+                            "description": "URL to navigate to.",
+                        }
+                    },
+                    required=("url",),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_screenshot",
+                description="Capture a browser screenshot.",
+                parameters=object_schema(
+                    {
+                        "name": {
+                            "type": "string",
+                            "description": "Optional screenshot label.",
+                        },
+                        "selector": {
+                            "type": "string",
+                            "description": "Optional CSS selector to capture.",
+                        },
+                    }
+                ),
+                permission="read_browser_state",
+                audit_level="read",
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_click",
+                description="Click an element by CSS selector.",
+                parameters=object_schema(
+                    {
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector to click.",
+                        }
+                    },
+                    required=("selector",),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_fill",
+                description="Fill an input field by CSS selector.",
+                parameters=object_schema(
+                    {
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector for the input field.",
+                        },
+                        "value": {
+                            "type": "string",
+                            "description": "Value to enter.",
+                        },
+                    },
+                    required=("selector", "value"),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_select",
+                description="Select an option in a dropdown.",
+                parameters=object_schema(
+                    {
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector for the select element.",
+                        },
+                        "value": {
+                            "type": "string",
+                            "description": "Option value to select.",
+                        },
+                    },
+                    required=("selector", "value"),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_hover",
+                description="Hover over an element by CSS selector.",
+                parameters=object_schema(
+                    {
+                        "selector": {
+                            "type": "string",
+                            "description": "CSS selector to hover.",
+                        }
+                    },
+                    required=("selector",),
+                ),
+                **browser_command_policy,
+            ),
+            external_mcp_tool_definition(
+                name="puppeteer_evaluate",
+                description="Execute JavaScript in the browser page.",
+                parameters=object_schema(
+                    {
+                        "script": {
+                            "type": "string",
+                            "description": "JavaScript expression or script to evaluate.",
+                        }
+                    },
+                    required=("script",),
+                ),
+                permission="run_browser_script",
+                audit_level="command",
+                mutating=True,
+            ),
+        ),
+    )
+
+
+EXTERNAL_MCP_ADAPTERS: dict[str, RuntimeExternalMcpAdapter] = {
+    adapter.server: adapter
+    for adapter in (
+        context7_external_mcp_adapter(),
+        graphiti_external_mcp_adapter(),
+        linear_external_mcp_adapter(),
+        electron_external_mcp_adapter(),
+        puppeteer_external_mcp_adapter(),
+    )
+}
+
+
+def custom_external_mcp_server_configs(
+    project_mcp_config: Mapping[str, Any] | None,
+) -> tuple[Mapping[str, Any], ...]:
+    """Return custom MCP server configs from project-level MCP settings."""
+    if not project_mcp_config:
+        return ()
+    raw_servers = project_mcp_config.get(CUSTOM_MCP_SERVERS_CONFIG_KEY, ())
+    if isinstance(raw_servers, str):
+        try:
+            raw_servers = json.loads(raw_servers)
+        except json.JSONDecodeError:
+            return ()
+    if isinstance(raw_servers, Mapping):
+        raw_servers = tuple(raw_servers.values())
+    if not isinstance(raw_servers, (list, tuple)):
+        return ()
+    return tuple(server for server in raw_servers if isinstance(server, Mapping))
+
+
+def custom_external_mcp_server_config(
+    server: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None,
+) -> Mapping[str, Any] | None:
+    """Return one custom MCP server config by normalized server id."""
+    normalized = normalize_mcp_server_name(server)
+    for custom_server in custom_external_mcp_server_configs(project_mcp_config):
+        server_id = normalize_mcp_server_name(str(custom_server.get("id") or ""))
+        if server_id == normalized:
+            return custom_server
+    return None
+
+
+def custom_external_mcp_catalog_entry(
+    server: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Return a catalog-like entry for a configured custom MCP server."""
+    custom_server = custom_external_mcp_server_config(
+        server,
+        project_mcp_config=project_mcp_config,
+    )
+    if custom_server is None:
+        return {}
+
+    server_type = str(custom_server.get("type") or "command")
+    transport = "http" if server_type == "http" else "stdio"
+    entry: dict[str, Any] = {
+        "display_name": str(custom_server.get("name") or server),
+        "bridgeable": False,
+        "external_bridgeable": True,
+        "enabled_default": True,
+        "transport": transport,
+        "custom": True,
+        "notes": str(
+            custom_server.get("description") or "User-defined custom MCP server."
+        ),
+    }
+    if transport == "http":
+        entry["url"] = str(custom_server.get("url") or "")
+    else:
+        entry["command"] = str(custom_server.get("command") or "")
+        entry["args"] = tuple(str(arg) for arg in custom_server.get("args", ()) or ())
+    return entry
+
+
+def mcp_server_catalog_entry(
+    server: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return the static or custom MCP catalog entry for a server."""
+    normalized = normalize_mcp_server_name(server)
+    if normalized in MCP_SERVER_CATALOG:
+        return dict(MCP_SERVER_CATALOG[normalized])
+    return custom_external_mcp_catalog_entry(
+        normalized,
+        project_mcp_config=project_mcp_config,
+    )
+
+
+def custom_external_mcp_tool_definitions(
+    custom_server: Mapping[str, Any],
+) -> tuple[RuntimeExternalMcpToolDefinition, ...]:
+    """Return provider tool definitions from a cached MCP tools/list payload."""
+    raw_tools = custom_server.get("tools", ())
+    if not isinstance(raw_tools, (list, tuple)):
+        return ()
+
+    definitions: list[RuntimeExternalMcpToolDefinition] = []
+    seen_tool_names: set[str] = set()
+    for raw_tool in raw_tools:
+        if not isinstance(raw_tool, Mapping):
+            continue
+        name = str(raw_tool.get("name") or "").strip()
+        if not name or name in seen_tool_names:
+            continue
+        seen_tool_names.add(name)
+        definitions.append(
+            external_mcp_tool_definition(
+                name=name,
+                description=str(
+                    raw_tool.get("description") or f"Call custom MCP tool {name}."
+                ),
+                parameters=normalize_mcp_input_schema(raw_tool),
+                permission="call_custom_mcp",
+                audit_level="command",
+                mutating=True,
+            )
+        )
+    return tuple(definitions)
+
+
+def custom_external_mcp_generic_tool_definition() -> RuntimeExternalMcpToolDefinition:
+    """Return the fallback generic custom MCP call tool definition."""
+    return external_mcp_tool_definition(
+        name="call_tool",
+        description=(
+            "Call a named tool on the configured custom MCP server. "
+            "Use tools/list smoke diagnostics to discover live tool names."
+        ),
+        parameters=object_schema(
+            {
+                "tool_name": {
+                    "type": "string",
+                    "description": "Name of the MCP tool to call.",
+                },
+                "arguments": {
+                    "type": "object",
+                    "description": "Arguments to pass to the MCP tool.",
+                },
+            },
+            required=("tool_name",),
+        ),
+        permission="call_custom_mcp",
+        audit_level="command",
+        mutating=True,
+        target_name_argument="tool_name",
+    )
+
+
+def normalize_mcp_input_schema(raw_tool: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize one MCP tools/list input schema for direct-provider tools."""
+    raw_schema = (
+        raw_tool.get("inputSchema")
+        or raw_tool.get("input_schema")
+        or raw_tool.get("parameters")
+    )
+    if not isinstance(raw_schema, Mapping):
+        return object_schema()
+
+    schema = dict(raw_schema)
+    if schema.get("type") != "object":
+        return object_schema()
+
+    properties = schema.get("properties")
+    if isinstance(properties, Mapping):
+        schema["properties"] = dict(properties)
+    else:
+        schema["properties"] = {}
+
+    required = schema.get("required")
+    if isinstance(required, (list, tuple)):
+        schema["required"] = [str(name) for name in required if str(name)]
+    else:
+        schema.pop("required", None)
+    return schema
+
+
+def custom_external_mcp_adapter(
+    server: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None,
+) -> RuntimeExternalMcpAdapter | None:
+    """Build a conservative generic adapter for a custom MCP server."""
+    custom_server = custom_external_mcp_server_config(
+        server,
+        project_mcp_config=project_mcp_config,
+    )
+    if custom_server is None:
+        return None
+
+    server_id = normalize_mcp_server_name(str(custom_server.get("id") or server))
+    server_name = str(custom_server.get("name") or server_id)
+    server_type = str(custom_server.get("type") or "command")
+    tool_definitions = [
+        *custom_external_mcp_tool_definitions(custom_server),
+        custom_external_mcp_generic_tool_definition(),
+    ]
+    deduped_tool_definitions: list[RuntimeExternalMcpToolDefinition] = []
+    seen_tool_names: set[str] = set()
+    for definition in tool_definitions:
+        if definition.name in seen_tool_names:
+            continue
+        seen_tool_names.add(definition.name)
+        deduped_tool_definitions.append(definition)
+    return RuntimeExternalMcpAdapter(
+        server=server_id,
+        display_name=server_name,
+        transport="http" if server_type == "http" else "stdio",
+        exposed_server=server_id,
+        tool_definitions=tuple(deduped_tool_definitions),
+    )
+
+
+def external_mcp_adapter_for(
+    server: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+) -> RuntimeExternalMcpAdapter | None:
+    """Return the registered external MCP execution adapter for a server."""
+    normalized = normalize_mcp_server_name(server)
+    adapter = EXTERNAL_MCP_ADAPTERS.get(normalized)
+    if adapter is not None:
+        return adapter
+    return custom_external_mcp_adapter(
+        normalized,
+        project_mcp_config=project_mcp_config,
+    )
+
+
+def registered_external_mcp_servers(
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+) -> tuple[str, ...]:
+    """Return external MCP servers with executable bridge adapters."""
+    servers = list(EXTERNAL_MCP_ADAPTERS)
+    for custom_server in custom_external_mcp_server_configs(project_mcp_config):
+        server_id = normalize_mcp_server_name(str(custom_server.get("id") or ""))
+        if server_id and server_id not in servers:
+            servers.append(server_id)
+    return tuple(servers)
+
+
 class RuntimeExternalMcpClientError(RuntimeError):
     """Raised when a provider-neutral external MCP call fails."""
+
+
+@dataclass(frozen=True)
+class RuntimeExternalMcpContractCheck:
+    """Result of checking adapter schemas against a live MCP server."""
+
+    server: str
+    ok: bool
+    status: str
+    reason: str
+    transport: str | None = None
+    adapter_tools: tuple[str, ...] = ()
+    server_tools: tuple[str, ...] = ()
+    adapter_tools_missing_on_server: tuple[str, ...] = ()
+    server_tools_missing_in_adapter: tuple[str, ...] = ()
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the contract check for CLI/UI diagnostics."""
+        return {
+            "server": self.server,
+            "ok": self.ok,
+            "status": self.status,
+            "reason": self.reason,
+            "transport": self.transport,
+            "adapter_tools": list(self.adapter_tools),
+            "server_tools": list(self.server_tools),
+            "adapter_tools_missing_on_server": list(
+                self.adapter_tools_missing_on_server
+            ),
+            "server_tools_missing_in_adapter": list(
+                self.server_tools_missing_in_adapter
+            ),
+            "error": self.error,
+        }
 
 
 class RuntimeExternalMcpClient:
@@ -364,14 +1458,26 @@ class RuntimeExternalMcpClient:
         self, *, name: str, arguments: dict[str, Any]
     ) -> dict[str, Any]:
         """Start a stdio MCP server, call one tool, and shut it down."""
+        return await self._with_process(
+            method="tools/call",
+            params={"name": name, "arguments": arguments},
+        )
+
+    async def list_tools(self) -> dict[str, Any]:
+        """Start a stdio MCP server, list tools, and shut it down."""
+        return await self._with_process(method="tools/list", params={})
+
+    async def _with_process(
+        self,
+        *,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run one initialized stdio MCP request against a short-lived process."""
         process = await self._start_process()
         try:
             await self._initialize(process)
-            return await self._request(
-                process,
-                "tools/call",
-                {"name": name, "arguments": arguments},
-            )
+            return await self._request(process, method, params)
         finally:
             await self._close_process(process)
 
@@ -514,6 +1620,290 @@ class RuntimeExternalMcpClient:
             await process.wait()
 
 
+class RuntimeExternalMcpHttpClient:
+    """Minimal Streamable HTTP MCP client for provider-neutral tool calls."""
+
+    def __init__(
+        self,
+        *,
+        server: str,
+        url: str,
+        headers: Mapping[str, str] | None = None,
+        timeout_seconds: float = DEFAULT_EXTERNAL_MCP_TIMEOUT_SECONDS,
+        protocol_version: str | None = None,
+    ):
+        self.server = server
+        self.url = url
+        self.headers = dict(headers or {})
+        self.timeout_seconds = timeout_seconds
+        self.protocol_version = (
+            protocol_version
+            or os.environ.get(EXTERNAL_MCP_PROTOCOL_VERSION_ENV)
+            or DEFAULT_EXTERNAL_MCP_HTTP_PROTOCOL_VERSION
+        )
+        self._request_id = 0
+        self._session_id: str | None = None
+
+    async def call_tool(
+        self, *, name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Initialize an HTTP MCP session, call one tool, and close it."""
+        return await self._with_http_session(
+            method="tools/call",
+            params={"name": name, "arguments": arguments},
+        )
+
+    async def list_tools(self) -> dict[str, Any]:
+        """Initialize an HTTP MCP session, list tools, and close it."""
+        return await self._with_http_session(method="tools/list", params={})
+
+    async def _with_http_session(
+        self,
+        *,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run one initialized Streamable HTTP MCP request."""
+        try:
+            import httpx
+        except ImportError as e:
+            raise RuntimeExternalMcpClientError(
+                "httpx is required for HTTP MCP transport."
+            ) from e
+
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            try:
+                await self._initialize(client)
+                return await self._request(client, method, params)
+            finally:
+                await self._close_session(client)
+
+    async def _initialize(self, client: Any) -> None:
+        result = await self._request(
+            client,
+            "initialize",
+            {
+                "protocolVersion": self.protocol_version,
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "auto-code-runtime-mcp-bridge",
+                    "version": "0",
+                },
+            },
+            include_session=False,
+        )
+        negotiated = str(result.get("protocolVersion") or "")
+        if negotiated:
+            self.protocol_version = negotiated
+        await self._notification(client, "notifications/initialized", {})
+
+    async def _request(
+        self,
+        client: Any,
+        method: str,
+        params: dict[str, Any],
+        *,
+        include_session: bool = True,
+    ) -> dict[str, Any]:
+        self._request_id += 1
+        request_id = self._request_id
+        message = await self._post_jsonrpc(
+            client,
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": method,
+                "params": params,
+            },
+            request_id=request_id,
+            include_session=include_session,
+        )
+        if "error" in message:
+            error = message["error"]
+            if isinstance(error, dict):
+                error_message = str(error.get("message") or error)
+            else:
+                error_message = str(error)
+            raise RuntimeExternalMcpClientError(
+                f"MCP server {self.server} returned error: {error_message}"
+            )
+        result = message.get("result", {})
+        if isinstance(result, dict):
+            return result
+        return {"content": [{"type": "text", "text": str(result)}]}
+
+    async def _notification(
+        self,
+        client: Any,
+        method: str,
+        params: dict[str, Any],
+    ) -> None:
+        await self._post_jsonrpc(
+            client,
+            {
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params,
+            },
+            request_id=None,
+            include_session=True,
+            expect_response=False,
+        )
+
+    async def _post_jsonrpc(
+        self,
+        client: Any,
+        payload: dict[str, Any],
+        *,
+        request_id: int | None,
+        include_session: bool,
+        expect_response: bool = True,
+    ) -> dict[str, Any]:
+        try:
+            async with client.stream(
+                "POST",
+                self.url,
+                json=payload,
+                headers=self._request_headers(include_session=include_session),
+            ) as response:
+                session_id = response.headers.get("Mcp-Session-Id")
+                if session_id:
+                    self._session_id = session_id
+
+                if response.status_code >= 400:
+                    body = (await response.aread()).decode("utf-8", errors="replace")
+                    body = body.strip()[:1000]
+                    suffix = f": {body}" if body else ""
+                    raise RuntimeExternalMcpClientError(
+                        f"HTTP MCP server {self.server} returned "
+                        f"{response.status_code}{suffix}"
+                    )
+
+                if not expect_response or response.status_code == 202:
+                    return {}
+
+                message = await self._parse_http_message(
+                    response=response,
+                    request_id=request_id,
+                )
+        except RuntimeExternalMcpClientError:
+            raise
+        except Exception as e:
+            raise RuntimeExternalMcpClientError(
+                f"Failed to call HTTP MCP server {self.server}: {e}"
+            ) from e
+        if not message:
+            raise RuntimeExternalMcpClientError(
+                f"HTTP MCP server {self.server} returned no JSON-RPC response."
+            )
+        return message
+
+    def _request_headers(self, *, include_session: bool) -> dict[str, str]:
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "MCP-Protocol-Version": self.protocol_version,
+            **self.headers,
+        }
+        if include_session and self._session_id:
+            headers["Mcp-Session-Id"] = self._session_id
+        return headers
+
+    async def _parse_http_message(
+        self,
+        *,
+        response: Any,
+        request_id: int | None,
+    ) -> dict[str, Any] | None:
+        content_type = str(response.headers.get("content-type", "")).lower()
+        if "text/event-stream" in content_type:
+            return await self._read_sse_message(response, request_id=request_id)
+        data = await response.aread()
+        try:
+            message = json.loads(data.decode("utf-8"))
+        except Exception as e:
+            raise RuntimeExternalMcpClientError(
+                f"HTTP MCP server {self.server} returned invalid JSON: {e}"
+            ) from e
+        if isinstance(message, dict):
+            if request_id is not None and message.get("id") != request_id:
+                raise RuntimeExternalMcpClientError(
+                    f"HTTP MCP server {self.server} returned mismatched "
+                    "JSON-RPC response id."
+                )
+            return message
+        return {"result": message}
+
+    async def _read_sse_message(
+        self,
+        response: Any,
+        *,
+        request_id: int | None,
+    ) -> dict[str, Any] | None:
+        data_lines: list[str] = []
+        async for line in response.aiter_lines():
+            if line.startswith("data:"):
+                data_lines.append(line.removeprefix("data:").strip())
+                continue
+            if line.strip():
+                continue
+            message = self._decode_sse_data(data_lines, request_id=request_id)
+            if message is not None:
+                return message
+            data_lines = []
+        return self._decode_sse_data(data_lines, request_id=request_id)
+
+    def _parse_sse_message(
+        self,
+        text: str,
+        *,
+        request_id: int | None,
+    ) -> dict[str, Any] | None:
+        data_lines: list[str] = []
+        for line in text.splitlines():
+            if line.startswith("data:"):
+                data_lines.append(line.removeprefix("data:").strip())
+                continue
+            if line.strip():
+                continue
+            message = self._decode_sse_data(data_lines, request_id=request_id)
+            if message is not None:
+                return message
+            data_lines = []
+        return self._decode_sse_data(data_lines, request_id=request_id)
+
+    def _decode_sse_data(
+        self,
+        data_lines: list[str],
+        *,
+        request_id: int | None,
+    ) -> dict[str, Any] | None:
+        if not data_lines:
+            return None
+        try:
+            message = json.loads("\n".join(data_lines))
+        except json.JSONDecodeError as e:
+            raise RuntimeExternalMcpClientError(
+                f"HTTP MCP server {self.server} returned invalid SSE JSON: {e}"
+            ) from e
+        if not isinstance(message, dict):
+            return {"result": message}
+        if request_id is None or message.get("id") == request_id:
+            return message
+        return None
+
+    async def _close_session(self, client: Any) -> None:
+        if not self._session_id:
+            return
+        try:
+            await client.delete(
+                self.url,
+                headers=self._request_headers(include_session=True),
+            )
+        except Exception:
+            return
+
+
 class RuntimeMcpBridge:
     """Bridge local Auto Code MCP tools into generic runtimes."""
 
@@ -523,12 +1913,20 @@ class RuntimeMcpBridge:
         spec_dir: Path,
         project_dir: Path,
         allowed_tools: set[str],
+        allowed_mcp_permissions: set[str] | None = None,
         requested_servers: tuple[str, ...] = (),
+        project_mcp_config: Mapping[str, Any] | None = None,
+        environment: Mapping[str, str] | None = None,
     ):
         self.spec_dir = spec_dir
         self.project_dir = project_dir
         self.allowed_tools = allowed_tools
+        self.allowed_mcp_permissions = normalize_mcp_allowed_permissions(
+            allowed_mcp_permissions
+        )
         self.requested_servers = requested_servers
+        self.project_mcp_config = project_mcp_config
+        self.environment = environment
         local_tools = load_auto_claude_bridge_tools(
             spec_dir=spec_dir,
             project_dir=project_dir,
@@ -537,6 +1935,8 @@ class RuntimeMcpBridge:
         external_tools = load_external_mcp_bridge_tools(
             requested_servers=requested_servers,
             project_dir=project_dir,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
         )
         self._tools = [*local_tools, *external_tools]
         self._tools_by_name = {tool.exposed_name: tool for tool in self._tools} | {
@@ -558,10 +1958,18 @@ class RuntimeMcpBridge:
         )
         configured_tools = getattr(agent_session, "auto_claude_tools", None)
         configured_servers = getattr(agent_session, "mcp_servers", None)
+        configured_permissions = configured_mcp_allowed_permissions(agent_session)
+        project_mcp_config = configured_mcp_project_config(agent_session)
         if configured_tools is None and resolved_agent_type:
             config = get_agent_config(resolved_agent_type)
             configured_tools = config.get("auto_claude_tools", [])
             configured_servers = config.get("mcp_servers", [])
+            if configured_permissions is None:
+                configured_permissions = configured_mcp_allowed_permissions(config)
+            if project_mcp_config is None:
+                project_mcp_config = configured_mcp_project_config(config)
+        if project_mcp_config is None:
+            project_mcp_config = load_project_mcp_config_for_runtime(project_dir)
         requested_servers = normalize_mcp_server_names(configured_servers or ())
         if not configured_tools and not requested_servers:
             return None
@@ -574,7 +1982,9 @@ class RuntimeMcpBridge:
             spec_dir=spec_dir,
             project_dir=project_dir,
             allowed_tools=allowed_tools,
+            allowed_mcp_permissions=configured_permissions,
             requested_servers=requested_servers,
+            project_mcp_config=project_mcp_config,
         )
         return bridge if bridge.has_tools or bridge.requested_servers else None
 
@@ -648,6 +2058,41 @@ class RuntimeMcpBridge:
             **spec.policy.to_dict(),
             "action": safe_mcp_action_for_trace(action),
         }
+        permission_decision = check_mcp_tool_permission(
+            spec.policy,
+            allowed_permissions=self.allowed_mcp_permissions,
+        )
+        audit_base.update(permission_decision.to_audit_dict())
+        if not permission_decision.allowed:
+            audit_artifact = write_mcp_bridge_audit_event(
+                self.spec_dir,
+                {
+                    **audit_base,
+                    "status": "denied",
+                    "reason": permission_decision.reason,
+                },
+            )
+            return ToolActionResult(
+                tool=spec.exposed_name,
+                ok=False,
+                message=(
+                    "Bridged MCP tool permission denied: "
+                    f"{spec.policy.permission} is not allowed for {spec.exposed_name}."
+                ),
+                data={
+                    "server": spec.server,
+                    "name": spec.name,
+                    **spec.policy.to_dict(),
+                    "permission_allowed": False,
+                    "permission_denial_reason": permission_decision.reason,
+                    "allowed_permissions": (
+                        list(permission_decision.allowed_permissions)
+                        if permission_decision.allowed_permissions is not None
+                        else None
+                    ),
+                    "audit_artifact": audit_artifact,
+                },
+            )
         try:
             result = spec.handler(args)
             if inspect.isawaitable(result):
@@ -669,6 +2114,7 @@ class RuntimeMcpBridge:
                     "server": spec.server,
                     "name": spec.name,
                     **spec.policy.to_dict(),
+                    **permission_decision.to_audit_dict(),
                     "audit_artifact": audit_artifact,
                 },
             )
@@ -691,6 +2137,7 @@ class RuntimeMcpBridge:
                 "server": spec.server,
                 "name": spec.name,
                 **spec.policy.to_dict(),
+                **permission_decision.to_audit_dict(),
                 "audit_artifact": audit_artifact,
                 "result": result,
             },
@@ -702,6 +2149,8 @@ class RuntimeMcpBridge:
             requested_servers=self.requested_servers,
             available_servers=self.available_servers,
             native_available=False,
+            project_mcp_config=self.project_mcp_config,
+            environment=self.environment,
         )
         bridge_plan = build_mcp_bridge_plan(
             provider_name="generic",
@@ -719,6 +2168,16 @@ class RuntimeMcpBridge:
             "tool_count": len(self._tools),
             "tools": [tool.exposed_name for tool in self._tools],
             "tool_policies": [tool.policy_metadata() for tool in self._tools],
+            "permission_policy": {
+                "mode": "allow_all"
+                if self.allowed_mcp_permissions is None
+                else "allowlist",
+                "allowed_permissions": (
+                    None
+                    if self.allowed_mcp_permissions is None
+                    else sorted(self.allowed_mcp_permissions)
+                ),
+            },
             "requested_servers": list(self.requested_servers),
             "available_servers": list(self.available_servers),
             "unavailable_servers": list(self.unavailable_servers),
@@ -744,6 +2203,8 @@ class RuntimeMcpBridge:
             tool_count=len(self._tools),
             requested_servers=self.requested_servers,
             available_servers=self.available_servers,
+            project_mcp_config=self.project_mcp_config,
+            environment=self.environment,
         )
 
 
@@ -878,7 +2339,14 @@ def describe_external_mcp_server_health(
 ) -> RuntimeExternalMcpServerHealth:
     """Return external MCP client readiness for one catalog server."""
     server = normalize_mcp_server_name(server)
-    catalog_entry = MCP_SERVER_CATALOG.get(server, {})
+    catalog_entry = mcp_server_catalog_entry(
+        server,
+        project_mcp_config=project_mcp_config,
+    )
+    adapter = external_mcp_adapter_for(
+        server,
+        project_mcp_config=project_mcp_config,
+    )
     display_name = str(catalog_entry.get("display_name", server))
     bridgeable = bool(catalog_entry.get("external_bridgeable", False))
     client_enabled = (
@@ -916,11 +2384,8 @@ def describe_external_mcp_server_health(
     concrete_servers = tuple(
         str(name) for name in catalog_entry.get("concrete_servers", ())
     )
-    execution_supported = server in EXTERNAL_MCP_EXECUTION_SERVERS
-    known_tools = tuple(str(name) for name in catalog_entry.get("tools", ()))
-    configured = bool(
-        bridgeable and server_enabled and not missing_env and not concrete_servers
-    )
+    transport = str(catalog_entry.get("transport") or "") or None
+    command = str(catalog_entry.get("command") or "") or None
     url_env = catalog_entry.get("url_env")
     url = (
         mcp_config_or_env_value(
@@ -931,7 +2396,25 @@ def describe_external_mcp_server_health(
         if url_env
         else catalog_entry.get("url")
     )
-
+    transport_supported = bool(
+        adapter and adapter.transport_supported(transport=transport)
+    )
+    execution_supported = bool(
+        adapter
+        and adapter.execution_supported(
+            transport=transport,
+            command=command,
+            url=str(url or "") or None,
+        )
+    )
+    known_tools = (
+        adapter.tool_names
+        if adapter
+        else tuple(str(name) for name in catalog_entry.get("tools", ()))
+    )
+    configured = bool(
+        bridgeable and server_enabled and not missing_env and not concrete_servers
+    )
     if not bridgeable:
         status: ExternalMcpHealthStatus = "not_bridgeable"
         reason = "No external MCP client bridge policy is registered for this server."
@@ -956,18 +2439,24 @@ def describe_external_mcp_server_health(
             f"Set {EXTERNAL_MCP_CLIENT_ENV}=true to let non-native runtimes "
             "prepare external MCP connections."
         )
+    elif adapter is None:
+        status = "adapter_missing"
+        reason = (
+            "External MCP server configuration is ready, but no executable "
+            "adapter is registered for this server."
+        )
+    elif not transport_supported:
+        status = "unsupported_transport"
+        reason = (
+            "External MCP adapter is registered, but the provider-neutral "
+            f"client supports only: {', '.join(SUPPORTED_EXTERNAL_MCP_TRANSPORTS)}."
+        )
     else:
         status = "ready_to_connect"
-        if execution_supported:
-            reason = (
-                "External MCP server can execute registered tools through the "
-                "provider-neutral client."
-            )
-        else:
-            reason = (
-                "External MCP server configuration is ready for the "
-                "provider-neutral client; tool execution wiring is still required."
-            )
+        reason = (
+            "External MCP server can execute registered tools through the "
+            "provider-neutral client."
+        )
 
     executable_tools = (
         known_tools if status == "ready_to_connect" and execution_supported else ()
@@ -982,8 +2471,8 @@ def describe_external_mcp_server_health(
         configured=configured,
         status=status,
         reason=reason,
-        transport=str(catalog_entry.get("transport") or "") or None,
-        command=str(catalog_entry.get("command") or "") or None,
+        transport=transport,
+        command=command,
         args=tuple(str(arg) for arg in catalog_entry.get("args", ())),
         url=str(url or "") or None,
         enabled_env=str(enabled_env or "") or None,
@@ -992,6 +2481,12 @@ def describe_external_mcp_server_health(
         concrete_servers=concrete_servers,
         execution_supported=execution_supported,
         executable_tools=executable_tools,
+        adapter_registered=adapter is not None,
+        adapter_name=adapter.display_name if adapter else None,
+        adapter_transport=adapter.transport if adapter else None,
+        adapter_exposed_server=adapter.exposed_server_name if adapter else None,
+        transport_supported=transport_supported,
+        supported_transports=SUPPORTED_EXTERNAL_MCP_TRANSPORTS,
     )
 
 
@@ -1025,8 +2520,6 @@ def executable_external_mcp_servers(
     """Return external MCP servers that this layer can actually execute."""
     servers: list[str] = []
     for server in normalize_mcp_server_names(requested_servers):
-        if server not in EXTERNAL_MCP_EXECUTION_SERVERS:
-            continue
         health = describe_external_mcp_server_health(
             server,
             external_client_enabled=external_client_enabled,
@@ -1056,7 +2549,14 @@ def executable_external_mcp_tools(
         )
         if not health.ready_to_connect or not health.execution_supported:
             continue
-        tools.extend(f"mcp__{server}__{tool}" for tool in health.executable_tools)
+        adapter = external_mcp_adapter_for(
+            server,
+            project_mcp_config=project_mcp_config,
+        )
+        exposed_server = adapter.exposed_server_name if adapter else server
+        tools.extend(
+            f"mcp__{exposed_server}__{tool}" for tool in health.executable_tools
+        )
     return tuple(tools)
 
 
@@ -1097,7 +2597,10 @@ def describe_mcp_server_statuses(
     statuses: list[dict[str, Any]] = []
 
     for server in requested_servers:
-        catalog_entry = MCP_SERVER_CATALOG.get(server, {})
+        catalog_entry = mcp_server_catalog_entry(
+            server,
+            project_mcp_config=project_mcp_config,
+        )
         bridgeable = bool(catalog_entry.get("bridgeable", False))
         external_health = describe_external_mcp_server_health(
             server,
@@ -1187,6 +2690,20 @@ def build_mcp_bridge_plan(
         and isinstance(status.get("external_client"), dict)
         and status["external_client"].get("status") == "ready_to_connect"
     )
+    external_bridge_adapter_missing_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge_required"
+        and isinstance(status.get("external_client"), dict)
+        and status["external_client"].get("status") == "adapter_missing"
+    )
+    external_bridge_unsupported_transport_servers = tuple(
+        str(status["server"])
+        for status in server_statuses
+        if status.get("runtime_path") == "external_bridge_required"
+        and isinstance(status.get("external_client"), dict)
+        and status["external_client"].get("status") == "unsupported_transport"
+    )
     unsupported_servers = tuple(
         str(status["server"])
         for status in server_statuses
@@ -1216,6 +2733,12 @@ def build_mcp_bridge_plan(
         local_bridge_required_servers=local_bridge_required_servers,
         external_bridge_required_servers=external_bridge_required_servers,
         external_bridge_ready_servers=external_bridge_ready_servers,
+        external_bridge_adapter_missing_servers=(
+            external_bridge_adapter_missing_servers
+        ),
+        external_bridge_unsupported_transport_servers=(
+            external_bridge_unsupported_transport_servers
+        ),
         unsupported_servers=unsupported_servers,
     )
     recommended_runtime_path = mcp_plan_recommended_runtime_path(
@@ -1236,6 +2759,10 @@ def build_mcp_bridge_plan(
         local_bridge_required_servers=local_bridge_required_servers,
         external_bridge_required_servers=external_bridge_required_servers,
         external_bridge_ready_servers=external_bridge_ready_servers,
+        external_bridge_adapter_missing_servers=external_bridge_adapter_missing_servers,
+        external_bridge_unsupported_transport_servers=(
+            external_bridge_unsupported_transport_servers
+        ),
         unsupported_servers=unsupported_servers,
         bridged_servers=bridged_servers,
         local_bridged_servers=local_bridged_servers,
@@ -1267,6 +2794,8 @@ def mcp_plan_action_required(
     local_bridge_required_servers: tuple[str, ...],
     external_bridge_required_servers: tuple[str, ...],
     external_bridge_ready_servers: tuple[str, ...],
+    external_bridge_adapter_missing_servers: tuple[str, ...],
+    external_bridge_unsupported_transport_servers: tuple[str, ...],
     unsupported_servers: tuple[str, ...],
 ) -> str:
     """Return the next action required to satisfy the MCP plan."""
@@ -1274,6 +2803,10 @@ def mcp_plan_action_required(
         return "none"
     if unsupported_servers:
         return "register_or_remove_unsupported_servers"
+    if external_bridge_unsupported_transport_servers:
+        return "implement_external_mcp_transport"
+    if external_bridge_adapter_missing_servers:
+        return "register_external_mcp_adapter"
     if external_bridge_ready_servers:
         return "wire_external_mcp_tool_execution"
     if external_bridge_required_servers:
@@ -1298,6 +2831,8 @@ def mcp_plan_recommended_runtime_path(
     if action_required in {
         "configure_external_mcp_client",
         "wire_external_mcp_tool_execution",
+        "register_external_mcp_adapter",
+        "implement_external_mcp_transport",
     }:
         return "external_mcp_client"
     if action_required == "register_or_remove_unsupported_servers":
@@ -1344,15 +2879,32 @@ def load_external_mcp_bridge_tools(
     *,
     requested_servers: tuple[str, ...],
     project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> list[RuntimeMcpToolSpec]:
     """Load provider-neutral external MCP tool specs that are ready to connect."""
     specs: list[RuntimeMcpToolSpec] = []
     for server in normalize_mcp_server_names(requested_servers):
-        health = describe_external_mcp_server_health(server)
+        health = describe_external_mcp_server_health(
+            server,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
         if not health.ready_to_connect or not health.execution_supported:
             continue
-        if server == "context7":
-            specs.extend(load_context7_external_mcp_tools(health, project_dir))
+        adapter = external_mcp_adapter_for(
+            server,
+            project_mcp_config=project_mcp_config,
+        )
+        if adapter is not None:
+            specs.extend(
+                adapter.load_tool_specs(
+                    health=health,
+                    project_dir=project_dir,
+                    project_mcp_config=project_mcp_config,
+                    environment=environment,
+                )
+            )
     return specs
 
 
@@ -1361,62 +2913,10 @@ def load_context7_external_mcp_tools(
     project_dir: Path,
 ) -> list[RuntimeMcpToolSpec]:
     """Return known Context7 tool schemas backed by the external MCP client."""
-    tool_definitions: tuple[tuple[str, str, dict[str, Any]], ...] = (
-        (
-            "resolve-library-id",
-            "Resolve a package or library name to a Context7-compatible library ID.",
-            {
-                "type": "object",
-                "properties": {
-                    "libraryName": {
-                        "type": "string",
-                        "description": "Package or library name to resolve.",
-                    }
-                },
-                "required": ["libraryName"],
-                "additionalProperties": False,
-            },
-        ),
-        (
-            "get-library-docs",
-            "Fetch current documentation for a Context7-compatible library ID.",
-            {
-                "type": "object",
-                "properties": {
-                    "context7CompatibleLibraryID": {
-                        "type": "string",
-                        "description": "Library ID returned by resolve-library-id.",
-                    },
-                    "topic": {
-                        "type": "string",
-                        "description": "Optional topic to focus the documentation query.",
-                    },
-                    "tokens": {
-                        "type": "integer",
-                        "description": "Optional maximum documentation token budget.",
-                    },
-                },
-                "required": ["context7CompatibleLibraryID"],
-                "additionalProperties": False,
-            },
-        ),
-    )
-    return [
-        RuntimeMcpToolSpec(
-            server="context7",
-            name=tool_name,
-            exposed_name=f"mcp__context7__{tool_name}",
-            description=description,
-            parameters=parameters,
-            policy=RuntimeMcpToolPolicy("read_external_docs", "read"),
-            handler=external_mcp_tool_handler(
-                health=health,
-                tool_name=tool_name,
-                project_dir=project_dir,
-            ),
-        )
-        for tool_name, description, parameters in tool_definitions
-    ]
+    adapter = external_mcp_adapter_for("context7")
+    if adapter is None:
+        return []
+    return adapter.load_tool_specs(health=health, project_dir=project_dir)
 
 
 def external_mcp_tool_handler(
@@ -1424,16 +2924,43 @@ def external_mcp_tool_handler(
     health: RuntimeExternalMcpServerHealth,
     tool_name: str,
     project_dir: Path,
+    target_name_argument: str | None = None,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> Any:
     """Build an async handler for one external MCP tool."""
 
     async def handler(args: dict[str, Any]) -> dict[str, Any]:
-        return await call_external_mcp_tool(
-            health=health,
-            tool_name=tool_name,
-            arguments=args,
-            project_dir=project_dir,
-        )
+        target_tool_name = tool_name
+        target_arguments = args
+        if target_name_argument:
+            target_tool_name = str(args.get(target_name_argument) or "").strip()
+            if not target_tool_name:
+                raise RuntimeExternalMcpClientError(
+                    f"Missing MCP target tool name argument: {target_name_argument}."
+                )
+            nested_arguments = args.get("arguments")
+            target_arguments = (
+                nested_arguments
+                if isinstance(nested_arguments, dict)
+                else {
+                    key: value
+                    for key, value in args.items()
+                    if key != target_name_argument
+                }
+            )
+
+        call_kwargs: dict[str, Any] = {
+            "health": health,
+            "tool_name": target_tool_name,
+            "arguments": target_arguments,
+            "project_dir": project_dir,
+        }
+        if project_mcp_config is not None:
+            call_kwargs["project_mcp_config"] = project_mcp_config
+        if environment is not None:
+            call_kwargs["environment"] = environment
+        return await call_external_mcp_tool(**call_kwargs)
 
     return handler
 
@@ -1444,19 +2971,232 @@ async def call_external_mcp_tool(
     tool_name: str,
     arguments: dict[str, Any],
     project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Call one external MCP tool through the provider-neutral stdio client."""
-    if health.transport != "stdio" or not health.command:
-        raise RuntimeExternalMcpClientError(
-            f"External MCP server {health.server} is not a stdio command target."
+    """Call one external MCP tool through the provider-neutral MCP client."""
+    if health.transport == "stdio" and health.command:
+        client = RuntimeExternalMcpClient(
+            server=health.server,
+            command=health.command,
+            args=health.args,
+            cwd=project_dir,
         )
-    client = RuntimeExternalMcpClient(
-        server=health.server,
-        command=health.command,
-        args=health.args,
-        cwd=project_dir,
+        return await client.call_tool(name=tool_name, arguments=arguments)
+
+    if health.transport == "http" and health.url:
+        client = RuntimeExternalMcpHttpClient(
+            server=health.server,
+            url=health.url,
+            headers=external_mcp_headers_for_server(
+                health.server,
+                project_mcp_config=project_mcp_config,
+                environment=environment,
+            ),
+        )
+        return await client.call_tool(name=tool_name, arguments=arguments)
+
+    target = "HTTP URL" if health.transport == "http" else "stdio command"
+    raise RuntimeExternalMcpClientError(
+        f"External MCP server {health.server} is missing a {target}."
     )
-    return await client.call_tool(name=tool_name, arguments=arguments)
+
+
+async def discover_external_mcp_tools(
+    *,
+    health: RuntimeExternalMcpServerHealth,
+    project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return the live tools/list payload for one ready external MCP server."""
+    if health.transport == "stdio" and health.command:
+        client = RuntimeExternalMcpClient(
+            server=health.server,
+            command=health.command,
+            args=health.args,
+            cwd=project_dir,
+        )
+        return await client.list_tools()
+
+    if health.transport == "http" and health.url:
+        client = RuntimeExternalMcpHttpClient(
+            server=health.server,
+            url=health.url,
+            headers=external_mcp_headers_for_server(
+                health.server,
+                project_mcp_config=project_mcp_config,
+                environment=environment,
+            ),
+        )
+        return await client.list_tools()
+
+    target = "HTTP URL" if health.transport == "http" else "stdio command"
+    raise RuntimeExternalMcpClientError(
+        f"External MCP server {health.server} is missing a {target}."
+    )
+
+
+async def check_external_mcp_contract(
+    *,
+    server: str,
+    project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> RuntimeExternalMcpContractCheck:
+    """Compare registered adapter tools with a live external MCP tools/list."""
+    server = normalize_mcp_server_name(server)
+    health = describe_external_mcp_server_health(
+        server,
+        project_mcp_config=project_mcp_config,
+        environment=environment,
+    )
+    adapter = external_mcp_adapter_for(
+        server,
+        project_mcp_config=project_mcp_config,
+    )
+    adapter_tools = adapter.tool_names if adapter else ()
+
+    if not health.ready_to_connect or not health.execution_supported:
+        return RuntimeExternalMcpContractCheck(
+            server=server,
+            ok=False,
+            status="skipped",
+            reason=health.reason,
+            transport=health.transport,
+            adapter_tools=adapter_tools,
+        )
+
+    try:
+        result = await discover_external_mcp_tools(
+            health=health,
+            project_dir=project_dir,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+    except Exception as e:
+        return RuntimeExternalMcpContractCheck(
+            server=server,
+            ok=False,
+            status="error",
+            reason="External MCP tools/list failed.",
+            transport=health.transport,
+            adapter_tools=adapter_tools,
+            error=str(e),
+        )
+
+    server_tools = extract_mcp_tool_names(result)
+    adapter_missing_on_server = tuple(
+        tool for tool in adapter_tools if tool not in server_tools
+    )
+    server_missing_in_adapter = tuple(
+        tool for tool in server_tools if tool not in adapter_tools
+    )
+    if adapter_missing_on_server:
+        return RuntimeExternalMcpContractCheck(
+            server=server,
+            ok=False,
+            status="adapter_tool_missing_on_server",
+            reason="Adapter declares tools that the live MCP server did not return.",
+            transport=health.transport,
+            adapter_tools=adapter_tools,
+            server_tools=server_tools,
+            adapter_tools_missing_on_server=adapter_missing_on_server,
+            server_tools_missing_in_adapter=server_missing_in_adapter,
+        )
+    if server_missing_in_adapter:
+        return RuntimeExternalMcpContractCheck(
+            server=server,
+            ok=True,
+            status="server_has_extra_tools",
+            reason="Live MCP server returned extra tools not yet exposed by the adapter.",
+            transport=health.transport,
+            adapter_tools=adapter_tools,
+            server_tools=server_tools,
+            server_tools_missing_in_adapter=server_missing_in_adapter,
+        )
+    return RuntimeExternalMcpContractCheck(
+        server=server,
+        ok=True,
+        status="ok",
+        reason="Adapter tools match the live MCP server tools/list response.",
+        transport=health.transport,
+        adapter_tools=adapter_tools,
+        server_tools=server_tools,
+    )
+
+
+async def check_external_mcp_contracts(
+    *,
+    requested_servers: tuple[str, ...],
+    project_dir: Path,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Run external MCP adapter contract checks for requested servers."""
+    checks: list[dict[str, Any]] = []
+    for server in normalize_mcp_server_names(requested_servers):
+        check = await check_external_mcp_contract(
+            server=server,
+            project_dir=project_dir,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        checks.append(check.to_dict())
+    return checks
+
+
+def extract_mcp_tool_names(result: Mapping[str, Any]) -> tuple[str, ...]:
+    """Extract ordered tool names from an MCP tools/list result."""
+    tools = result.get("tools", ())
+    if not isinstance(tools, (list, tuple)):
+        return ()
+    names: list[str] = []
+    for tool in tools:
+        if not isinstance(tool, Mapping):
+            continue
+        name = str(tool.get("name") or "")
+        if name and name not in names:
+            names.append(name)
+    return tuple(names)
+
+
+def external_mcp_headers_for_server(
+    server: str,
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Return HTTP headers for an external MCP server without exposing secrets."""
+    server = normalize_mcp_server_name(server)
+    catalog_entry = mcp_server_catalog_entry(
+        server,
+        project_mcp_config=project_mcp_config,
+    )
+    authorization_env = str(catalog_entry.get("authorization_env") or "")
+    if not authorization_env:
+        custom_server = custom_external_mcp_server_config(
+            server,
+            project_mcp_config=project_mcp_config,
+        )
+        headers = custom_server.get("headers") if custom_server else None
+        if not isinstance(headers, Mapping):
+            return {}
+        return {str(key): str(value) for key, value in headers.items()}
+    token = str(
+        mcp_config_or_env_value(
+            authorization_env,
+            project_mcp_config=project_mcp_config,
+            environment=environment,
+        )
+        or ""
+    ).strip()
+    if not token:
+        raise RuntimeExternalMcpClientError(
+            f"External MCP server {server} requires {authorization_env}."
+        )
+    scheme = str(catalog_entry.get("authorization_scheme") or "Bearer")
+    return {"Authorization": f"{scheme} {token}"}
 
 
 def policy_for_auto_claude_tool(tool_name: str) -> RuntimeMcpToolPolicy:
@@ -1538,7 +3278,108 @@ def normalize_mcp_server_name(server_name: str) -> str:
             server = parts[1]
     if server == "graphiti-memory":
         return "graphiti"
+    if server == "linear-server":
+        return "linear"
     return server
+
+
+def configured_mcp_allowed_permissions(source: Any) -> set[str] | None:
+    """Return an MCP permission allowlist from a session/config object if present."""
+    if isinstance(source, Mapping):
+        for key in (
+            "mcp_allowed_permissions",
+            "allowed_mcp_permissions",
+            "mcp_permissions",
+        ):
+            if key in source:
+                return normalize_mcp_allowed_permissions(source.get(key))
+        return None
+
+    for key in (
+        "mcp_allowed_permissions",
+        "allowed_mcp_permissions",
+        "mcp_permissions",
+    ):
+        if hasattr(source, key):
+            return normalize_mcp_allowed_permissions(getattr(source, key))
+    return None
+
+
+def configured_mcp_project_config(source: Any) -> Mapping[str, Any] | None:
+    """Return project-level MCP configuration from a session/config object."""
+    if isinstance(source, Mapping):
+        for key in ("mcp_config", "project_mcp_config"):
+            value = source.get(key)
+            if isinstance(value, Mapping):
+                return value
+        return None
+
+    for key in ("mcp_config", "project_mcp_config"):
+        value = getattr(source, key, None)
+        if isinstance(value, Mapping):
+            return value
+    return None
+
+
+def load_project_mcp_config_for_runtime(project_dir: Path) -> Mapping[str, Any] | None:
+    """Load project MCP config without making runtime bridge depend on SDK setup."""
+    try:
+        from core.client import load_project_mcp_config
+    except Exception:
+        return None
+    config = load_project_mcp_config(project_dir)
+    if not isinstance(config, Mapping) or not config:
+        return None
+    return config
+
+
+def normalize_mcp_allowed_permissions(permissions: Any) -> set[str] | None:
+    """Normalize a bridged MCP permission allowlist.
+
+    ``None`` keeps backward-compatible allow-all behavior. An explicit empty
+    collection denies every bridged MCP tool.
+    """
+    if permissions is None:
+        permissions = os.environ.get(MCP_ALLOWED_PERMISSIONS_ENV)
+    if permissions is None:
+        return None
+    if isinstance(permissions, str):
+        permission_iterable = permissions.split(",")
+    else:
+        permission_iterable = permissions
+    normalized = {
+        str(permission).strip()
+        for permission in permission_iterable or ()
+        if str(permission).strip()
+    }
+    return normalized
+
+
+def check_mcp_tool_permission(
+    policy: RuntimeMcpToolPolicy,
+    *,
+    allowed_permissions: set[str] | None,
+) -> RuntimeMcpPermissionDecision:
+    """Check whether one MCP tool policy is allowed for the current bridge."""
+    if allowed_permissions is None or "*" in allowed_permissions:
+        return RuntimeMcpPermissionDecision(
+            allowed=True,
+            reason="allow_all",
+            allowed_permissions=None
+            if allowed_permissions is None
+            else tuple(sorted(allowed_permissions)),
+        )
+    if policy.permission in allowed_permissions:
+        return RuntimeMcpPermissionDecision(
+            allowed=True,
+            reason="permission_allowed",
+            allowed_permissions=tuple(sorted(allowed_permissions)),
+        )
+    return RuntimeMcpPermissionDecision(
+        allowed=False,
+        reason="permission_not_allowed",
+        allowed_permissions=tuple(sorted(allowed_permissions)),
+    )
 
 
 def is_mcp_action_name(tool_name: str) -> bool:

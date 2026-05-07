@@ -5,29 +5,39 @@ import sys
 import textwrap
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import pytest
 from agents.runtime import (
     EXTERNAL_MCP_CLIENT_ENV,
+    MCP_ALLOWED_PERMISSIONS_ENV,
     LocalActionExecutor,
     RuntimeCapabilities,
     RuntimeCapabilityError,
+    RuntimeExternalMcpAdapter,
+    RuntimeExternalMcpClientError,
+    RuntimeExternalMcpHttpClient,
+    RuntimeExternalMcpToolDefinition,
     RuntimeMcpBridge,
+    RuntimeMcpToolPolicy,
     RuntimeRequirements,
     RuntimeSubagentOrchestrator,
     RuntimeSubagentResult,
     RuntimeSubagentTask,
+    check_external_mcp_contract,
     create_runtime_session,
     describe_external_mcp_server_health,
     describe_mcp_server_statuses,
     executable_external_mcp_tools,
+    external_mcp_adapter_for,
     get_runtime_mode,
     local_action_response_schema,
     local_action_tool_schemas,
     local_action_tool_specs,
     mcp_bridge_audit_path,
     normalize_runtime_mode,
+    registered_external_mcp_servers,
     render_local_action_prompt,
     requirements_for_runtime_mode,
     resolve_runtime_mcp_support,
@@ -2782,6 +2792,129 @@ def test_runtime_mcp_bridge_reports_external_server_gaps(
 
 
 @pytest.mark.asyncio
+async def test_runtime_mcp_bridge_denies_external_tool_without_permission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    called = False
+
+    async def fake_call_external_mcp_tool(**_kwargs):
+        nonlocal called
+        called = True
+        return {"content": [{"type": "text", "text": "should not run"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(
+        agent_type="spec_researcher",
+        mcp_allowed_permissions=("read_memory",),
+    )
+
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    result = await bridge.execute(
+        {
+            "tool": "mcp__context7__resolve-library-id",
+            "libraryName": "pytest",
+        }
+    )
+
+    assert called is False
+    assert result.ok is False
+    assert result.tool == "mcp__context7__resolve-library-id"
+    assert "permission" in result.message.lower()
+    assert result.data["server"] == "context7"
+    assert result.data["permission"] == "read_external_docs"
+    assert result.data["permission_allowed"] is False
+    assert result.data["permission_denial_reason"] == "permission_not_allowed"
+    assert result.data["allowed_permissions"] == ["read_memory"]
+    audit_path = Path(result.data["audit_artifact"])
+    assert audit_path == mcp_bridge_audit_path(tmp_path)
+    audit_lines = [
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert audit_lines[0]["status"] == "denied"
+    assert audit_lines[0]["server"] == "context7"
+    assert audit_lines[0]["tool"] == "resolve-library-id"
+    assert audit_lines[0]["permission"] == "read_external_docs"
+    assert audit_lines[0]["permission_allowed"] is False
+    assert audit_lines[0]["reason"] == "permission_not_allowed"
+    assert audit_lines[0]["allowed_permissions"] == ["read_memory"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_allows_external_tool_from_permission_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict,
+        project_dir: Path,
+    ):
+        await asyncio.sleep(0)
+        assert health.server == "context7"
+        assert tool_name == "resolve-library-id"
+        assert arguments == {"libraryName": "pytest"}
+        assert project_dir == tmp_path
+        return {"content": [{"type": "text", "text": "/pytest-dev/pytest"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv(MCP_ALLOWED_PERMISSIONS_ENV, "read_external_docs")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(agent_type="spec_researcher")
+
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    result = await bridge.execute(
+        {
+            "tool": "mcp__context7__resolve-library-id",
+            "libraryName": "pytest",
+        }
+    )
+
+    assert result.ok is True
+    assert result.message == "/pytest-dev/pytest"
+    assert result.data["permission"] == "read_external_docs"
+    assert result.data["permission_allowed"] is True
+    assert result.data["permission_decision_reason"] == "permission_allowed"
+    assert result.data["allowed_permissions"] == ["read_external_docs"]
+    report = bridge.report()
+    assert report["permission_policy"] == {
+        "mode": "allowlist",
+        "allowed_permissions": ["read_external_docs"],
+    }
+    audit_lines = [
+        json.loads(line)
+        for line in Path(result.data["audit_artifact"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert audit_lines[0]["status"] == "ok"
+    assert audit_lines[0]["permission_allowed"] is True
+    assert audit_lines[0]["permission_decision_reason"] == "permission_allowed"
+    assert audit_lines[0]["allowed_permissions"] == ["read_external_docs"]
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2793,6 +2926,7 @@ async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
         arguments: dict,
         project_dir: Path,
     ):
+        await asyncio.sleep(0)
         assert health.server == "context7"
         assert tool_name == "resolve-library-id"
         assert arguments == {"libraryName": "pytest"}
@@ -2884,6 +3018,313 @@ async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
         "mcp__context7__resolve-library-id",
         "mcp__context7__get-library-docs",
     ]
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_executes_custom_mcp_generic_call_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    calls: list[dict[str, Any]] = []
+
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict[str, Any],
+        project_dir: Path,
+        **_kwargs,
+    ):
+        await asyncio.sleep(0)
+        calls.append(
+            {
+                "server": health.server,
+                "tool_name": tool_name,
+                "arguments": arguments,
+                "project_dir": project_dir,
+            }
+        )
+        return {"content": [{"type": "text", "text": "custom result"}]}
+
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "https://docs.example.test/mcp/",
+                "headers": {"Authorization": "Bearer test-token"},
+            }
+        ]
+    }
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(
+        auto_claude_tools=[],
+        mcp_servers=("my-docs",),
+        mcp_config=project_mcp_config,
+        mcp_allowed_permissions=("call_custom_mcp",),
+    )
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    assert bridge.provider_tool_schemas()[0]["name"] == "mcp__my-docs__call_tool"
+
+    result = await bridge.execute(
+        {
+            "tool": "mcp__my-docs__call_tool",
+            "tool_name": "search",
+            "arguments": {"query": "runtime bridge"},
+        }
+    )
+
+    assert result.ok is True
+    assert result.message == "custom result"
+    assert calls == [
+        {
+            "server": "my-docs",
+            "tool_name": "search",
+            "arguments": {"query": "runtime bridge"},
+            "project_dir": tmp_path,
+        }
+    ]
+    audit_path = Path(result.data["audit_artifact"])
+    audit_event = json.loads(audit_path.read_text(encoding="utf-8").splitlines()[0])
+    assert audit_event["server"] == "my-docs"
+    assert audit_event["tool"] == "call_tool"
+    assert audit_event["permission"] == "call_custom_mcp"
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_exposes_discovered_custom_mcp_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    calls: list[dict[str, Any]] = []
+
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict[str, Any],
+        project_dir: Path,
+        **_kwargs,
+    ):
+        await asyncio.sleep(0)
+        calls.append(
+            {
+                "server": health.server,
+                "tool_name": tool_name,
+                "arguments": arguments,
+                "project_dir": project_dir,
+            }
+        )
+        return {"content": [{"type": "text", "text": "search result"}]}
+
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "https://docs.example.test/mcp/",
+                "headers": {"Authorization": "Bearer test-token"},
+                "tools": [
+                    {
+                        "name": "search_docs",
+                        "description": "Search private documentation.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "Search query.",
+                                },
+                                "limit": {"type": "integer"},
+                            },
+                            "required": ["query"],
+                        },
+                    },
+                    {
+                        "name": "raw_status",
+                        "description": "Schema-less status probe.",
+                    },
+                ],
+            }
+        ]
+    }
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(
+        auto_claude_tools=[],
+        mcp_servers=("my-docs",),
+        mcp_config=project_mcp_config,
+        mcp_allowed_permissions=("call_custom_mcp",),
+    )
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    schemas = {schema["name"]: schema for schema in bridge.provider_tool_schemas()}
+    assert "mcp__my-docs__search_docs" in schemas
+    assert "mcp__my-docs__raw_status" in schemas
+    assert "mcp__my-docs__call_tool" in schemas
+    assert schemas["mcp__my-docs__search_docs"]["parameters"]["required"] == ["query"]
+    assert (
+        schemas["mcp__my-docs__search_docs"]["parameters"]["properties"]["query"][
+            "description"
+        ]
+        == "Search query."
+    )
+    assert schemas["mcp__my-docs__raw_status"]["parameters"]["type"] == "object"
+
+    result = await bridge.execute(
+        {
+            "tool": "mcp__my-docs__search_docs",
+            "query": "runtime bridge",
+            "limit": 3,
+        }
+    )
+
+    assert result.ok is True
+    assert result.message == "search result"
+    assert calls == [
+        {
+            "server": "my-docs",
+            "tool_name": "search_docs",
+            "arguments": {"query": "runtime bridge", "limit": 3},
+            "project_dir": tmp_path,
+        }
+    ]
+    audit_path = Path(result.data["audit_artifact"])
+    audit_event = json.loads(audit_path.read_text(encoding="utf-8").splitlines()[0])
+    assert audit_event["server"] == "my-docs"
+    assert audit_event["tool"] == "search_docs"
+    assert audit_event["permission"] == "call_custom_mcp"
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_executes_puppeteer_external_mcp_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_call_external_mcp_tool(
+        *,
+        health,
+        tool_name: str,
+        arguments: dict,
+        project_dir: Path,
+    ):
+        await asyncio.sleep(0)
+        assert health.server == "puppeteer"
+        assert tool_name == "puppeteer_navigate"
+        assert arguments == {"url": "http://localhost:3000"}
+        assert project_dir == tmp_path
+        return {"content": [{"type": "text", "text": "Navigated"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv("PUPPETEER_MCP_ENABLED", "true")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "open app",
+                "actions": [
+                    {
+                        "tool": "mcp__puppeteer__puppeteer_navigate",
+                        "url": "http://localhost:3000",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Opened browser app",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    session.mcp_servers = ("puppeteer",)
+    session.auto_claude_tools = ()
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+        agent_type="qa_reviewer",
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "open browser app",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    assert result.status == "continue"
+    assert "Opened browser app" in result.response_text
+    assert "mcp__puppeteer__puppeteer_navigate" in session.messages[0]
+    assert "Navigated" in session.messages[1]
+    observation_lines = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_observations.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    result_payload = observation_lines[0]["result"]
+    assert result_payload["ok"] is True
+    assert result_payload["data"]["server"] == "puppeteer"
+    assert result_payload["data"]["permission"] == "run_browser_automation"
+    assert result_payload["data"]["audit_level"] == "command"
+    assert result_payload["data"]["mutating"] is True
+    audit_path = Path(result_payload["data"]["audit_artifact"])
+    assert audit_path == mcp_bridge_audit_path(tmp_path)
+    audit_lines = [
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert audit_lines[0]["status"] == "ok"
+    assert audit_lines[0]["server"] == "puppeteer"
+    assert audit_lines[0]["tool"] == "puppeteer_navigate"
+    artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact["mcp_support"]["available_servers"] == ["puppeteer"]
+    assert artifact["mcp_support"]["bridge_plan"]["external_bridged_servers"] == [
+        "puppeteer"
+    ]
+    assert (
+        "mcp__puppeteer__puppeteer_navigate"
+        in artifact["mcp_support"]["bridge"]["tools"]
+    )
 
 
 @pytest.mark.asyncio
@@ -3063,6 +3504,234 @@ def test_runtime_mcp_server_statuses_explain_bridgeable_and_native_gaps(
     assert status_by_server["custom-mcp"]["runtime_path"] == "unsupported"
 
 
+def test_external_mcp_adapter_registry_exposes_context7_contract():
+    adapter = external_mcp_adapter_for("mcp__context7__resolve-library-id")
+
+    assert adapter is not None
+    assert "context7" in registered_external_mcp_servers()
+    assert adapter.server == "context7"
+    assert adapter.tool_names == ("resolve-library-id", "get-library-docs")
+    assert adapter.execution_supported(transport="stdio", command="npx") is True
+    assert adapter.transport_supported(transport="stdio") is True
+    assert adapter.transport_supported(transport="http") is False
+    assert (
+        adapter.execution_supported(
+            transport="http",
+            command=None,
+            url="http://localhost:8000/mcp/",
+        )
+        is False
+    )
+    schemas = [definition.parameters for definition in adapter.tool_definitions]
+    assert schemas[0]["required"] == ["libraryName"]
+    assert schemas[1]["required"] == ["context7CompatibleLibraryID"]
+    assert {
+        definition.policy.permission for definition in adapter.tool_definitions
+    } == {"read_external_docs"}
+
+
+def test_external_mcp_adapter_registry_contains_expected_static_servers():
+    assert set(registered_external_mcp_servers()) == {
+        "context7",
+        "graphiti",
+        "linear",
+        "electron",
+        "puppeteer",
+    }
+
+
+def test_external_mcp_adapter_registry_exposes_browser_contracts():
+    electron = external_mcp_adapter_for("mcp__electron__take_screenshot")
+    puppeteer = external_mcp_adapter_for("mcp__puppeteer__puppeteer_navigate")
+
+    assert electron is not None
+    assert puppeteer is not None
+    assert electron.tool_names == (
+        "get_electron_window_info",
+        "take_screenshot",
+        "send_command_to_electron",
+        "read_electron_logs",
+    )
+    assert puppeteer.tool_names == (
+        "puppeteer_connect_active_tab",
+        "puppeteer_navigate",
+        "puppeteer_screenshot",
+        "puppeteer_click",
+        "puppeteer_fill",
+        "puppeteer_select",
+        "puppeteer_hover",
+        "puppeteer_evaluate",
+    )
+    electron_policy_by_tool = {
+        definition.name: definition.policy for definition in electron.tool_definitions
+    }
+    puppeteer_policy_by_tool = {
+        definition.name: definition.policy for definition in puppeteer.tool_definitions
+    }
+    assert electron_policy_by_tool["take_screenshot"].permission == (
+        "read_browser_state"
+    )
+    assert electron_policy_by_tool["send_command_to_electron"].mutating is True
+    assert puppeteer_policy_by_tool["puppeteer_screenshot"].audit_level == "read"
+    assert puppeteer_policy_by_tool["puppeteer_evaluate"].mutating is True
+
+
+def test_external_mcp_adapter_registry_exposes_http_contracts():
+    graphiti = external_mcp_adapter_for("mcp__graphiti-memory__search_nodes")
+    linear = external_mcp_adapter_for("mcp__linear-server__create_issue")
+
+    assert graphiti is not None
+    assert linear is not None
+    assert graphiti.server == "graphiti"
+    assert graphiti.exposed_server_name == "graphiti-memory"
+    assert graphiti.transport_supported(transport="http") is True
+    assert (
+        graphiti.execution_supported(
+            transport="http",
+            command=None,
+            url="http://localhost:8000/mcp/",
+        )
+        is True
+    )
+    assert graphiti.tool_names == (
+        "search_nodes",
+        "search_facts",
+        "add_episode",
+        "get_episodes",
+        "get_entity_edge",
+    )
+    assert linear.server == "linear"
+    assert linear.exposed_server_name == "linear-server"
+    assert linear.transport_supported(transport="http") is True
+    assert "list_teams" in linear.tool_names
+    assert "create_issue" in linear.tool_names
+    graphiti_policy_by_tool = {
+        definition.name: definition.policy for definition in graphiti.tool_definitions
+    }
+    linear_policy_by_tool = {
+        definition.name: definition.policy for definition in linear.tool_definitions
+    }
+    assert graphiti_policy_by_tool["search_nodes"].audit_level == "read"
+    assert graphiti_policy_by_tool["add_episode"].mutating is True
+    assert linear_policy_by_tool["list_teams"].audit_level == "read"
+    assert linear_policy_by_tool["create_issue"].mutating is True
+
+
+def test_external_mcp_adapter_registry_exposes_custom_server_contract():
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "command",
+                "command": "uvx",
+                "args": ["my-docs-mcp"],
+                "description": "Private documentation server.",
+                "tools": [
+                    {
+                        "name": "search_docs",
+                        "description": "Search private documentation.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                            "required": ["query"],
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+
+    adapter = external_mcp_adapter_for(
+        "mcp__my-docs__call_tool",
+        project_mcp_config=project_mcp_config,
+    )
+    health = describe_external_mcp_server_health(
+        "my-docs",
+        project_mcp_config=project_mcp_config,
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    )
+
+    assert adapter is not None
+    assert adapter.server == "my-docs"
+    assert adapter.display_name == "My Docs"
+    assert adapter.transport == "stdio"
+    assert adapter.tool_names == ("search_docs", "call_tool")
+    assert adapter.exposed_server_name == "my-docs"
+    assert {
+        definition.policy.permission for definition in adapter.tool_definitions
+    } == {"call_custom_mcp"}
+    assert {definition.policy.mutating for definition in adapter.tool_definitions} == {
+        True
+    }
+    assert adapter.tool_definitions[0].parameters["required"] == ["query"]
+    assert adapter.tool_definitions[1].parameters["required"] == ["tool_name"]
+    assert health.status == "ready_to_connect"
+    assert health.command == "uvx"
+    assert health.args == ("my-docs-mcp",)
+    assert health.adapter_registered is True
+    assert health.executable_tools == ("search_docs", "call_tool")
+    assert executable_external_mcp_tools(
+        requested_servers=("my-docs",),
+        project_mcp_config=project_mcp_config,
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    ) == ("mcp__my-docs__search_docs", "mcp__my-docs__call_tool")
+
+
+def test_runtime_mcp_bridge_loads_custom_mcp_config_from_project_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    mcp_config_dir = tmp_path / ".auto-claude"
+    mcp_config_dir.mkdir()
+    custom_servers = [
+        {
+            "id": "my-docs",
+            "name": "My Docs",
+            "type": "command",
+            "command": "uvx",
+            "args": ["my-docs-mcp"],
+            "tools": [
+                {
+                    "name": "search_docs",
+                    "description": "Search private documentation.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"query": {"type": "string"}},
+                        "required": ["query"],
+                    },
+                }
+            ],
+        }
+    ]
+    (mcp_config_dir / ".env").write_text(
+        f"CUSTOM_MCP_SERVERS={json.dumps(custom_servers)}\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    session = SimpleNamespace(
+        auto_claude_tools=[],
+        mcp_servers=("my-docs",),
+        mcp_allowed_permissions=("call_custom_mcp",),
+    )
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    assert bridge.available_servers == ("my-docs",)
+    assert [schema["name"] for schema in bridge.provider_tool_schemas()] == [
+        "mcp__my-docs__search_docs",
+        "mcp__my-docs__call_tool",
+    ]
+    report = bridge.report()
+    assert report["server_statuses"][0]["runtime_path"] == "external_bridge"
+    assert report["bridge_plan"]["external_bridged_servers"] == ["my-docs"]
+
+
 def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     health = describe_external_mcp_server_health(
         "context7",
@@ -3076,6 +3745,11 @@ def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     assert health.command == "npx"
     assert health.args == ("-y", "@upstash/context7-mcp")
     assert health.execution_supported is True
+    assert health.adapter_registered is True
+    assert health.adapter_name == "Context7"
+    assert health.adapter_transport == "stdio"
+    assert health.transport_supported is True
+    assert health.supported_transports == ("stdio", "http")
     assert health.executable_tools == ("resolve-library-id", "get-library-docs")
     assert executable_external_mcp_tools(
         requested_servers=("context7",),
@@ -3096,6 +3770,649 @@ def test_external_mcp_health_reports_ready_context7_when_client_enabled():
     plan = support.to_dict()["bridge_plan"]
     assert plan["external_bridge_ready_servers"] == ["context7"]
     assert plan["action_required"] == "wire_external_mcp_tool_execution"
+
+
+def test_external_mcp_health_reports_ready_browser_adapters_when_enabled():
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "ELECTRON_MCP_ENABLED": "true",
+        "PUPPETEER_MCP_ENABLED": "true",
+    }
+    electron = describe_external_mcp_server_health(
+        "electron",
+        environment=environment,
+    )
+    puppeteer = describe_external_mcp_server_health(
+        "puppeteer",
+        environment=environment,
+    )
+
+    assert electron.status == "ready_to_connect"
+    assert electron.execution_supported is True
+    assert electron.adapter_registered is True
+    assert electron.executable_tools == (
+        "get_electron_window_info",
+        "take_screenshot",
+        "send_command_to_electron",
+        "read_electron_logs",
+    )
+    assert puppeteer.status == "ready_to_connect"
+    assert puppeteer.execution_supported is True
+    assert puppeteer.adapter_registered is True
+    assert "puppeteer_navigate" in puppeteer.executable_tools
+    assert executable_external_mcp_tools(
+        requested_servers=("electron", "puppeteer"),
+        environment=environment,
+    ) == (
+        "mcp__electron__get_electron_window_info",
+        "mcp__electron__take_screenshot",
+        "mcp__electron__send_command_to_electron",
+        "mcp__electron__read_electron_logs",
+        "mcp__puppeteer__puppeteer_connect_active_tab",
+        "mcp__puppeteer__puppeteer_navigate",
+        "mcp__puppeteer__puppeteer_screenshot",
+        "mcp__puppeteer__puppeteer_click",
+        "mcp__puppeteer__puppeteer_fill",
+        "mcp__puppeteer__puppeteer_select",
+        "mcp__puppeteer__puppeteer_hover",
+        "mcp__puppeteer__puppeteer_evaluate",
+    )
+
+
+def test_external_mcp_health_keeps_puppeteer_disabled_when_only_electron_enabled():
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "ELECTRON_MCP_ENABLED": "true",
+    }
+
+    electron = describe_external_mcp_server_health(
+        "electron",
+        environment=environment,
+    )
+    puppeteer = describe_external_mcp_server_health(
+        "puppeteer",
+        environment=environment,
+    )
+    executable_tools = executable_external_mcp_tools(
+        requested_servers=("electron", "puppeteer"),
+        environment=environment,
+    )
+
+    assert electron.status == "ready_to_connect"
+    assert electron.ready_to_connect is True
+    assert puppeteer.status == "server_disabled"
+    assert puppeteer.ready_to_connect is False
+    assert puppeteer.adapter_registered is True
+    assert "mcp__electron__take_screenshot" in executable_tools
+    assert "mcp__puppeteer__puppeteer_navigate" not in executable_tools
+
+
+def test_external_mcp_health_keeps_electron_disabled_when_only_puppeteer_enabled():
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "PUPPETEER_MCP_ENABLED": "true",
+    }
+
+    electron = describe_external_mcp_server_health(
+        "electron",
+        environment=environment,
+    )
+    puppeteer = describe_external_mcp_server_health(
+        "puppeteer",
+        environment=environment,
+    )
+    executable_tools = executable_external_mcp_tools(
+        requested_servers=("electron", "puppeteer"),
+        environment=environment,
+    )
+
+    assert electron.status == "server_disabled"
+    assert electron.ready_to_connect is False
+    assert electron.adapter_registered is True
+    assert puppeteer.status == "ready_to_connect"
+    assert puppeteer.ready_to_connect is True
+    assert "mcp__electron__take_screenshot" not in executable_tools
+    assert "mcp__puppeteer__puppeteer_navigate" in executable_tools
+
+
+def test_external_mcp_health_reports_ready_graphiti_http_adapter():
+    health = describe_external_mcp_server_health(
+        "graphiti",
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    )
+
+    assert health.status == "ready_to_connect"
+    assert health.configured is True
+    assert health.execution_supported is True
+    assert health.adapter_registered is True
+    assert health.adapter_name == "Graphiti"
+    assert health.adapter_transport == "http"
+    assert health.adapter_exposed_server == "graphiti-memory"
+    assert health.transport_supported is True
+    assert health.supported_transports == ("stdio", "http")
+    assert health.url == "http://localhost:8000/mcp/"
+    assert health.executable_tools == (
+        "search_nodes",
+        "search_facts",
+        "add_episode",
+        "get_episodes",
+        "get_entity_edge",
+    )
+    assert executable_external_mcp_tools(
+        requested_servers=("graphiti",),
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    ) == (
+        "mcp__graphiti-memory__search_nodes",
+        "mcp__graphiti-memory__search_facts",
+        "mcp__graphiti-memory__add_episode",
+        "mcp__graphiti-memory__get_episodes",
+        "mcp__graphiti-memory__get_entity_edge",
+    )
+
+    support = resolve_runtime_mcp_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        bridge_available=True,
+        tool_count=1,
+        requested_servers=("graphiti",),
+        external_client_enabled=True,
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    )
+    plan = support.to_dict()["bridge_plan"]
+    assert plan["external_bridge_ready_servers"] == ["graphiti"]
+    assert plan["external_bridge_adapter_missing_servers"] == []
+    assert plan["action_required"] == "wire_external_mcp_tool_execution"
+
+
+def test_external_mcp_health_reports_unsupported_transport_for_registered_sse_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    monkeypatch.setitem(
+        mcp_bridge_module.EXTERNAL_MCP_ADAPTERS,
+        "graphiti",
+        RuntimeExternalMcpAdapter(
+            server="graphiti",
+            display_name="Graphiti",
+            transport="sse",
+            tool_definitions=(
+                RuntimeExternalMcpToolDefinition(
+                    name="search_nodes",
+                    description="Search Graphiti nodes.",
+                    parameters={
+                        "type": "object",
+                        "properties": {"query": {"type": "string"}},
+                        "required": ["query"],
+                        "additionalProperties": False,
+                    },
+                    policy=RuntimeMcpToolPolicy("read_memory", "read"),
+                ),
+            ),
+        ),
+    )
+
+    health = describe_external_mcp_server_health(
+        "graphiti",
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    )
+
+    assert health.status == "unsupported_transport"
+    assert health.adapter_registered is True
+    assert health.adapter_transport == "sse"
+    assert health.transport_supported is False
+    assert health.execution_supported is False
+    assert health.supported_transports == ("stdio", "http")
+
+    support = resolve_runtime_mcp_support(
+        provider_name="openai",
+        runtime_name="generic_edit",
+        capabilities=RuntimeCapabilities.generic_edit(),
+        bridge_available=True,
+        tool_count=1,
+        requested_servers=("graphiti",),
+        external_client_enabled=True,
+        environment={
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+            "GRAPHITI_MCP_URL": "http://localhost:8000/mcp/",
+        },
+    )
+    plan = support.to_dict()["bridge_plan"]
+    assert plan["external_bridge_unsupported_transport_servers"] == ["graphiti"]
+    assert plan["action_required"] == "implement_external_mcp_transport"
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_http_client_posts_jsonrpc_with_session_and_sse(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        assert request.headers.get("Accept") == "application/json, text/event-stream"
+        assert request.headers.get("Content-Type") == "application/json"
+        assert request.headers.get("MCP-Protocol-Version") == "2025-06-18"
+        assert request.headers.get("Authorization") == "Bearer test-token"
+
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+        if payload["method"] == "tools/call":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            assert payload["params"] == {
+                "name": "search_nodes",
+                "arguments": {"query": "runtime bridge"},
+            }
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                text=(
+                    "event: message\n"
+                    'data: {"jsonrpc":"2.0","id":2,'
+                    '"result":{"content":[{"type":"text","text":"found"}]}}\n\n'
+                ),
+            )
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    client = RuntimeExternalMcpHttpClient(
+        server="graphiti",
+        url="https://graphiti.local/mcp/",
+        headers={"Authorization": "Bearer test-token"},
+        protocol_version="2025-06-18",
+    )
+
+    result = await client.call_tool(
+        name="search_nodes",
+        arguments={"query": "runtime bridge"},
+    )
+
+    assert result == {"content": [{"type": "text", "text": "found"}]}
+    assert [request.method for request in requests] == [
+        "POST",
+        "POST",
+        "POST",
+        "DELETE",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_http_client_returns_after_matching_long_lived_sse_event(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    class LongLivedSseStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"event: message\n"
+            yield (
+                b'data: {"jsonrpc":"2.0","id":2,'
+                b'"result":{"content":[{"type":"text","text":"found"}]}}\n\n'
+            )
+            raise AssertionError("client kept reading after matching SSE response")
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            return httpx.Response(202)
+        if payload["method"] == "tools/call":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                stream=LongLivedSseStream(),
+            )
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    client = RuntimeExternalMcpHttpClient(
+        server="graphiti",
+        url="https://graphiti.local/mcp/",
+        protocol_version="2025-06-18",
+    )
+
+    result = await client.call_tool(
+        name="search_nodes",
+        arguments={"query": "runtime bridge"},
+    )
+
+    assert result == {"content": [{"type": "text", "text": "found"}]}
+    assert [request.method for request in requests] == [
+        "POST",
+        "POST",
+        "POST",
+        "DELETE",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_http_client_lists_tools_with_session_and_sse(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        assert request.headers.get("Accept") == "application/json, text/event-stream"
+        assert request.headers.get("Content-Type") == "application/json"
+        assert request.headers.get("MCP-Protocol-Version") == "2025-06-18"
+
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+        if payload["method"] == "tools/list":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            assert payload["params"] == {}
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                text=(
+                    "event: message\n"
+                    'data: {"jsonrpc":"2.0","id":2,'
+                    '"result":{"tools":[{"name":"search_nodes"}]}}\n\n'
+                ),
+            )
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    client = RuntimeExternalMcpHttpClient(
+        server="graphiti",
+        url="https://graphiti.local/mcp/",
+        protocol_version="2025-06-18",
+    )
+
+    result = await client.list_tools()
+
+    assert result == {"tools": [{"name": "search_nodes"}]}
+    assert [request.method for request in requests] == [
+        "POST",
+        "POST",
+        "POST",
+        "DELETE",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_external_mcp_http_client_closes_session_when_initialize_fails(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(500, text="notification failed")
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    client = RuntimeExternalMcpHttpClient(
+        server="graphiti",
+        url="https://graphiti.local/mcp/",
+        protocol_version="2025-06-18",
+    )
+
+    with pytest.raises(RuntimeExternalMcpClientError, match="returned 500"):
+        await client.list_tools()
+
+    assert [request.method for request in requests] == ["POST", "POST", "DELETE"]
+
+
+@pytest.mark.asyncio
+async def test_check_external_mcp_contract_reports_extra_and_missing_live_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    adapter = external_mcp_adapter_for("graphiti")
+    assert adapter is not None
+    live_tool_sets = [
+        [*adapter.tool_names, "new_live_tool"],
+        ["search_nodes"],
+    ]
+    calls: list[dict[str, str]] = []
+
+    class FakeHttpClient:
+        def __init__(self, *, server: str, url: str, headers: dict[str, str]):
+            calls.append({"server": server, "url": url, "headers": str(headers)})
+
+        async def list_tools(self):
+            await asyncio.sleep(0)
+            tool_names = live_tool_sets.pop(0)
+            return {"tools": [{"name": name} for name in tool_names]}
+
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "RuntimeExternalMcpHttpClient",
+        FakeHttpClient,
+    )
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "GRAPHITI_MCP_URL": "https://graphiti.local/mcp/",
+    }
+
+    extra = await check_external_mcp_contract(
+        server="graphiti",
+        project_dir=tmp_path,
+        environment=environment,
+    )
+    missing = await check_external_mcp_contract(
+        server="graphiti",
+        project_dir=tmp_path,
+        environment=environment,
+    )
+
+    assert extra.ok is True
+    assert extra.status == "server_has_extra_tools"
+    assert extra.server_tools_missing_in_adapter == ("new_live_tool",)
+    assert missing.ok is False
+    assert missing.status == "adapter_tool_missing_on_server"
+    assert "search_facts" in missing.adapter_tools_missing_on_server
+    assert calls == [
+        {
+            "server": "graphiti",
+            "url": "https://graphiti.local/mcp/",
+            "headers": "{}",
+        },
+        {
+            "server": "graphiti",
+            "url": "https://graphiti.local/mcp/",
+            "headers": "{}",
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_call_external_mcp_tool_dispatches_http_with_linear_auth(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    calls: list[dict[str, Any]] = []
+
+    class FakeHttpClient:
+        def __init__(self, *, server: str, url: str, headers: dict[str, str]):
+            calls.append({"server": server, "url": url, "headers": headers})
+
+        async def call_tool(self, *, name: str, arguments: dict[str, Any]):
+            await asyncio.sleep(0)
+            calls.append({"name": name, "arguments": arguments})
+            return {"content": [{"type": "text", "text": "created"}]}
+
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "RuntimeExternalMcpHttpClient",
+        FakeHttpClient,
+    )
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "LINEAR_API_KEY": "linear-secret",
+    }
+    health = describe_external_mcp_server_health(
+        "linear",
+        environment=environment,
+    )
+
+    result = await mcp_bridge_module.call_external_mcp_tool(
+        health=health,
+        tool_name="create_issue",
+        arguments={"team": "ENG", "title": "Wire HTTP MCP"},
+        project_dir=tmp_path,
+        environment=environment,
+    )
+
+    assert result["content"][0]["text"] == "created"
+    assert calls == [
+        {
+            "server": "linear",
+            "url": "https://mcp.linear.app/mcp",
+            "headers": {"Authorization": "Bearer linear-secret"},
+        },
+        {
+            "name": "create_issue",
+            "arguments": {"team": "ENG", "title": "Wire HTTP MCP"},
+        },
+    ]
+
+
+def test_external_mcp_headers_use_injected_project_config(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+
+    headers = mcp_bridge_module.external_mcp_headers_for_server(
+        "linear",
+        project_mcp_config={"LINEAR_API_KEY": "project-secret"},
+        environment={"LINEAR_API_KEY": "environment-secret"},
+    )
+
+    assert headers == {"Authorization": "Bearer project-secret"}
 
 
 @pytest.mark.asyncio

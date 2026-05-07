@@ -332,6 +332,26 @@ def _validate_custom_mcp_server(server: dict) -> bool:
     if "description" in server and not isinstance(server.get("description"), str):
         return False
 
+    # Optional cached tools/list payload must contain safe, serializable metadata.
+    if "tools" in server:
+        tools = server["tools"]
+        if not isinstance(tools, list):
+            return False
+        for tool in tools:
+            if not isinstance(tool, dict):
+                return False
+            if not isinstance(tool.get("name"), str) or not tool["name"]:
+                return False
+            if "description" in tool and not isinstance(tool["description"], str):
+                return False
+            schema = (
+                tool.get("inputSchema")
+                or tool.get("input_schema")
+                or tool.get("parameters")
+            )
+            if schema is not None and not isinstance(schema, dict):
+                return False
+
     # Reject any unexpected fields that could be exploited
     allowed_fields = {
         "id",
@@ -342,6 +362,7 @@ def _validate_custom_mcp_server(server: dict) -> bool:
         "url",
         "headers",
         "description",
+        "tools",
     }
     unexpected_fields = set(server.keys()) - allowed_fields
     if unexpected_fields:

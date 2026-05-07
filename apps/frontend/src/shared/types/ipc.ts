@@ -102,6 +102,7 @@ import type {
   AIProviderConfig,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
+  RuntimeExternalMcpSmokeResult,
   RuntimeControlPlaneDiagnostics
 } from './settings';
 import type { AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent } from './app-update';
@@ -416,6 +417,7 @@ export interface ElectronAPI {
   validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
   testProviderConfig: () => Promise<IPCResult<ProviderConnectionTestResult>>;
   getProviderRuntimeDiagnostics: () => Promise<IPCResult<RuntimeControlPlaneDiagnostics>>;
+  testExternalMcpContracts: () => Promise<IPCResult<RuntimeExternalMcpSmokeResult>>;
 
   // Sentry error reporting
   notifySentryStateChanged: (enabled: boolean) => void;

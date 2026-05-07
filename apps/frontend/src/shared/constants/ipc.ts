@@ -204,6 +204,7 @@ export const IPC_CHANNELS = {
   PROVIDER_CONFIG_VALIDATE: 'provider:config:validate',
   PROVIDER_CONFIG_TEST: 'provider:config:test',
   PROVIDER_RUNTIME_DIAGNOSTICS: 'provider:runtime:diagnostics',
+  PROVIDER_EXTERNAL_MCP_SMOKE: 'provider:externalMcp:smoke',
 
   // API Profile management (custom Anthropic-compatible endpoints)
   PROFILES_GET: 'profiles:get',

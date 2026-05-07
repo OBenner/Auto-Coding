@@ -512,6 +512,8 @@ export interface RuntimeMcpBridgePlanRow {
   local_bridge_required_servers: string[];
   external_bridge_required_servers: string[];
   external_bridge_ready_servers: string[];
+  external_bridge_adapter_missing_servers?: string[];
+  external_bridge_unsupported_transport_servers?: string[];
   unsupported_servers: string[];
   bridged_servers: string[];
   local_bridged_servers: string[];
@@ -539,6 +541,37 @@ export interface RuntimeExternalMcpHealthRow {
   execution_supported: boolean;
   executable_tools: string[];
   executable_tool_count: number;
+  adapter_registered?: boolean;
+  adapter_name?: string | null;
+  adapter_transport?: string | null;
+  adapter_exposed_server?: string | null;
+  transport_supported?: boolean;
+  supported_transports?: string[];
+}
+
+export interface RuntimeExternalMcpContractCheckRow {
+  server: string;
+  ok: boolean;
+  status: string;
+  reason: string;
+  transport?: string | null;
+  adapter_tools: string[];
+  server_tools: string[];
+  adapter_tools_missing_on_server: string[];
+  server_tools_missing_in_adapter: string[];
+  error?: string | null;
+}
+
+export interface RuntimeExternalMcpSmokeSummary {
+  total: number;
+  ok: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface RuntimeExternalMcpSmokeResult {
+  external_mcp_contract_checks: RuntimeExternalMcpContractCheckRow[];
+  summary: RuntimeExternalMcpSmokeSummary;
 }
 
 export interface RuntimeFallbackMatrixRow {

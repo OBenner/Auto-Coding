@@ -15,6 +15,19 @@ def test_parse_args_with_runtime_modes():
     assert args.runtime_modes is True
 
 
+def test_parse_args_with_external_mcp_smoke():
+    from cli.main import parse_args
+
+    original_argv = sys.argv
+    sys.argv = ["run.py", "--external-mcp-smoke"]
+    try:
+        args = parse_args()
+    finally:
+        sys.argv = original_argv
+
+    assert args.external_mcp_smoke is True
+
+
 def test_parse_args_with_generic_edit_runtime_mode():
     from cli.main import parse_args
 
@@ -49,6 +62,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "generic_cli_pool" in output
     assert "opencode" in output
     assert "--provider-smoke" in output
+    assert "--external-mcp-smoke" in output
     assert payload["providers"][0]["provider"] == "claude"
 
 
@@ -101,6 +115,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert "aider" in selection_rows["generic_edit"]["selected_runner_ids"]
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
+    assert "external_mcp_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
     external_health = {
@@ -109,9 +124,25 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert external_health["context7"]["status"] == "client_disabled"
     assert external_health["context7"]["command"] == "npx"
     assert external_health["context7"]["execution_supported"] is True
+    assert external_health["context7"]["adapter_registered"] is True
+    assert external_health["context7"]["adapter_name"] == "Context7"
+    assert external_health["context7"]["adapter_transport"] == "stdio"
+    assert external_health["context7"]["transport_supported"] is True
+    assert external_health["context7"]["supported_transports"] == ["stdio", "http"]
     assert external_health["context7"]["executable_tools"] == []
     assert external_health["context7"]["executable_tool_count"] == 0
     assert external_health["graphiti"]["status"] == "missing_configuration"
+    assert external_health["graphiti"]["adapter_registered"] is True
+    assert external_health["graphiti"]["adapter_name"] == "Graphiti"
+    assert external_health["graphiti"]["adapter_transport"] == "http"
+    assert external_health["graphiti"]["adapter_exposed_server"] == "graphiti-memory"
+    assert external_health["graphiti"]["transport_supported"] is True
+    assert external_health["electron"]["status"] == "server_disabled"
+    assert external_health["electron"]["adapter_registered"] is True
+    assert external_health["electron"]["execution_supported"] is True
+    assert external_health["puppeteer"]["status"] == "server_disabled"
+    assert external_health["puppeteer"]["adapter_registered"] is True
+    assert external_health["puppeteer"]["execution_supported"] is True
     mcp_rows = {
         (row["provider"], row["runtime_mode"]): row
         for row in payload["mcp_bridge_plan_matrix"]
@@ -123,6 +154,8 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert openai_generic_mcp["status"] == "partial"
     assert openai_generic_mcp["bridged_servers"] == ["auto-claude"]
     assert "context7" in openai_generic_mcp["external_bridge_required_servers"]
+    assert openai_generic_mcp["external_bridge_adapter_missing_servers"] == []
+    assert openai_generic_mcp["external_bridge_unsupported_transport_servers"] == []
     assert openai_generic_mcp["action_required"] == "configure_external_mcp_client"
     fallback_rows = {
         (row["provider"], row["requested_mode"]): row
@@ -194,6 +227,205 @@ def test_runtime_modes_command_marks_context7_available_when_external_client_ena
         "mcp__context7__resolve-library-id",
         "mcp__context7__get-library-docs",
     ]
+
+
+def test_runtime_modes_command_marks_browser_mcp_available_when_enabled(
+    monkeypatch,
+):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
+    from cli.runtime_commands import build_runtime_modes_payload
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv("PUPPETEER_MCP_ENABLED", "true")
+
+    payload = build_runtime_modes_payload()
+    external_health = {
+        row["server"]: row for row in payload["external_mcp_server_health"]
+    }
+    mcp_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["mcp_bridge_plan_matrix"]
+    }
+    openai_generic_mcp = mcp_rows[("openai", "generic_edit")]
+
+    assert external_health["puppeteer"]["status"] == "ready_to_connect"
+    assert "puppeteer_navigate" in external_health["puppeteer"]["executable_tools"]
+    assert "puppeteer" in openai_generic_mcp["available_servers"]
+    assert "puppeteer" in openai_generic_mcp["external_bridged_servers"]
+    assert (
+        "mcp__puppeteer__puppeteer_navigate"
+        in openai_generic_mcp["executable_external_tools"]
+    )
+
+
+def test_runtime_modes_command_marks_configured_graphiti_as_external_bridged(
+    monkeypatch,
+):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
+    from cli.runtime_commands import build_runtime_modes_payload
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv("GRAPHITI_MCP_URL", "http://localhost:8000/mcp/")
+
+    payload = build_runtime_modes_payload()
+    external_health = {
+        row["server"]: row for row in payload["external_mcp_server_health"]
+    }
+    mcp_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["mcp_bridge_plan_matrix"]
+    }
+    openai_generic_mcp = mcp_rows[("openai", "generic_edit")]
+
+    assert external_health["graphiti"]["status"] == "ready_to_connect"
+    assert external_health["graphiti"]["configured"] is True
+    assert external_health["graphiti"]["adapter_registered"] is True
+    assert external_health["graphiti"]["adapter_transport"] == "http"
+    assert "graphiti" in openai_generic_mcp["external_bridged_servers"]
+    assert (
+        "graphiti" not in openai_generic_mcp["external_bridge_adapter_missing_servers"]
+    )
+    assert (
+        "mcp__graphiti-memory__search_nodes"
+        in openai_generic_mcp["executable_external_tools"]
+    )
+
+
+def test_external_mcp_smoke_command_outputs_json(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    from cli.runtime_commands import (
+        external_mcp_smoke_has_failures,
+        handle_external_mcp_smoke_command,
+    )
+
+    async def fake_check_external_mcp_contracts(
+        *,
+        requested_servers,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert "context7" in requested_servers
+        assert project_dir == tmp_path
+        assert project_mcp_config is None
+        assert environment is None
+        return [
+            {
+                "server": "graphiti",
+                "ok": True,
+                "status": "ok",
+                "reason": "Adapter tools match.",
+                "transport": "http",
+                "adapter_tools": ["search_nodes"],
+                "server_tools": ["search_nodes"],
+                "adapter_tools_missing_on_server": [],
+                "server_tools_missing_in_adapter": [],
+                "error": None,
+            },
+            {
+                "server": "context7",
+                "ok": False,
+                "status": "skipped",
+                "reason": "External MCP client bridge is disabled.",
+                "transport": "stdio",
+                "adapter_tools": ["resolve-library-id"],
+                "server_tools": [],
+                "adapter_tools_missing_on_server": [],
+                "server_tools_missing_in_adapter": [],
+                "error": None,
+            },
+            {
+                "server": "linear",
+                "ok": False,
+                "status": "error",
+                "reason": "External MCP tools/list failed.",
+                "transport": "http",
+                "adapter_tools": ["list_teams"],
+                "server_tools": [],
+                "adapter_tools_missing_on_server": [],
+                "server_tools_missing_in_adapter": [],
+                "error": "connection refused",
+            },
+        ]
+
+    monkeypatch.setattr(
+        "cli.runtime_commands.check_external_mcp_contracts",
+        fake_check_external_mcp_contracts,
+    )
+
+    payload = handle_external_mcp_smoke_command(
+        project_dir=tmp_path,
+        output_json=True,
+    )
+    output = capsys.readouterr().out
+    parsed = json.loads(output)
+
+    assert parsed == payload
+    assert parsed["summary"] == {
+        "total": 3,
+        "ok": 1,
+        "skipped": 1,
+        "failed": 1,
+    }
+    assert external_mcp_smoke_has_failures(parsed) is True
+
+
+def test_external_mcp_smoke_failure_detection_ignores_skipped():
+    from cli.runtime_commands import external_mcp_smoke_has_failures
+
+    assert (
+        external_mcp_smoke_has_failures(
+            {"summary": {"total": 5, "ok": 0, "skipped": 5, "failed": 0}}
+        )
+        is False
+    )
+
+
+def test_external_mcp_smoke_command_outputs_text(capsys, monkeypatch, tmp_path):
+    from cli.runtime_commands import handle_external_mcp_smoke_command
+
+    async def fake_check_external_mcp_contracts(
+        *,
+        requested_servers,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert project_mcp_config is None
+        return [
+            {
+                "server": "graphiti",
+                "ok": True,
+                "status": "server_has_extra_tools",
+                "reason": "Live MCP server returned extra tools.",
+                "transport": "http",
+                "adapter_tools": ["search_nodes"],
+                "server_tools": ["search_nodes", "new_tool"],
+                "adapter_tools_missing_on_server": [],
+                "server_tools_missing_in_adapter": ["new_tool"],
+                "error": None,
+            }
+        ]
+
+    monkeypatch.setattr(
+        "cli.runtime_commands.check_external_mcp_contracts",
+        fake_check_external_mcp_contracts,
+    )
+
+    payload = handle_external_mcp_smoke_command(
+        project_dir=tmp_path,
+        output_json=False,
+    )
+    output = capsys.readouterr().out
+
+    assert "External MCP Contract Smoke" in output
+    assert "graphiti" in output
+    assert "server_has_extra_tools" in output
+    assert "search_nodes" in output
+    assert payload["summary"]["ok"] == 1
 
 
 def test_cli_runner_selection_filters_runtime_mode():

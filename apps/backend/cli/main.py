@@ -50,7 +50,11 @@ from .qa_commands import (
     handle_qa_status_command,
     handle_review_status_command,
 )
-from .runtime_commands import handle_runtime_modes_command
+from .runtime_commands import (
+    external_mcp_smoke_has_failures,
+    handle_external_mcp_smoke_command,
+    handle_runtime_modes_command,
+)
 from .scheduler_commands import (
     handle_schedule_cancel_command,
     handle_schedule_command,
@@ -173,6 +177,15 @@ Environment Variables:
         "--runtime-modes",
         action="store_true",
         help="Show provider/runtime compatibility and exit",
+    )
+
+    parser.add_argument(
+        "--external-mcp-smoke",
+        action="store_true",
+        help=(
+            "Run opt-in external MCP tools/list contract checks for configured "
+            "provider-neutral bridge servers and exit"
+        ),
     )
 
     parser.add_argument(
@@ -748,6 +761,16 @@ def _run_cli() -> None:
     # Handle --runtime-modes command before requiring a spec.
     if args.runtime_modes:
         handle_runtime_modes_command(output_json=args.json)
+        return
+
+    # Handle --external-mcp-smoke command before requiring a spec.
+    if args.external_mcp_smoke:
+        payload = handle_external_mcp_smoke_command(
+            project_dir=project_dir,
+            output_json=args.json,
+        )
+        if external_mcp_smoke_has_failures(payload):
+            sys.exit(1)
         return
 
     # Handle --provider-smoke command before requiring a spec.

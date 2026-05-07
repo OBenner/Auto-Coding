@@ -27,6 +27,7 @@ import type {
   ProviderConnectionTestResult,
   ProviderRuntimeDiagnostics,
   RuntimeControlPlaneDiagnostics,
+  RuntimeExternalMcpSmokeResult,
   RuntimeExternalMcpHealthRow,
   RuntimeFallbackMatrixRow,
   RuntimeMcpBridgePlanRow,
@@ -191,6 +192,8 @@ const RUNTIME_MODE_OPTIONS: Array<{
 
 const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   amp: 'settings:aiProvider.runtimeDiagnosticValues.amp',
+  adapter_missing: 'settings:aiProvider.runtimeDiagnosticValues.adapterMissing',
+  adapter_tool_missing_on_server: 'settings:aiProvider.runtimeDiagnosticValues.adapterToolMissingOnServer',
   analysis_only: 'settings:aiProvider.runtimeDiagnosticValues.analysisOnly',
   apply_patch: 'settings:aiProvider.runtimeDiagnosticValues.applyPatch',
   blocked: 'settings:aiProvider.runtimeDiagnosticValues.blocked',
@@ -202,6 +205,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   configure_local_bridge_tools: 'settings:aiProvider.runtimeDiagnosticValues.configureLocalBridgeTools',
   cursor_cli: 'settings:aiProvider.runtimeDiagnosticValues.cursorCli',
   deepv_code: 'settings:aiProvider.runtimeDiagnosticValues.deepvCode',
+  error: 'settings:aiProvider.runtimeDiagnosticValues.error',
   external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
   filesystem_edit: 'settings:aiProvider.runtimeDiagnosticValues.filesystemEdit',
   filesystem_read: 'settings:aiProvider.runtimeDiagnosticValues.filesystemRead',
@@ -211,6 +215,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
   goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
+  implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
   native: 'settings:aiProvider.runtimeDiagnosticValues.native',
@@ -220,6 +225,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   none: 'settings:aiProvider.runtimeDiagnosticValues.none',
   not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
   not_requested: 'settings:aiProvider.runtimeDiagnosticValues.notRequested',
+  ok: 'settings:aiProvider.runtimeDiagnosticValues.ok',
   opencode: 'settings:aiProvider.runtimeDiagnosticValues.opencode',
   orchestrated: 'settings:aiProvider.runtimeDiagnosticValues.orchestrated',
   partial: 'settings:aiProvider.runtimeDiagnosticValues.partial',
@@ -228,19 +234,23 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
   ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
   ready_to_connect: 'settings:aiProvider.runtimeDiagnosticValues.readyToConnect',
+  register_external_mcp_adapter: 'settings:aiProvider.runtimeDiagnosticValues.registerExternalMcpAdapter',
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
   sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
   server_disabled: 'settings:aiProvider.runtimeDiagnosticValues.serverDisabled',
   shell: 'settings:aiProvider.runtimeDiagnosticValues.shell',
+  server_has_extra_tools: 'settings:aiProvider.runtimeDiagnosticValues.serverHasExtraTools',
   streaming_text: 'settings:aiProvider.runtimeDiagnosticValues.streamingText',
   structured_output: 'settings:aiProvider.runtimeDiagnosticValues.structuredOutput',
   subagent: 'settings:aiProvider.runtimeDiagnosticValues.subagent',
   subagents: 'settings:aiProvider.runtimeDiagnosticValues.subagents',
+  skipped: 'settings:aiProvider.runtimeDiagnosticValues.skipped',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
   text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
   unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
+  unsupported_transport: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTransport',
   use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
   wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution'
 };
@@ -555,6 +565,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     useState<RuntimeControlPlaneDiagnostics | null>(null);
   const [runtimeControlPlaneLoading, setRuntimeControlPlaneLoading] = useState(false);
   const [runtimeControlPlaneError, setRuntimeControlPlaneError] = useState<string | null>(null);
+  const [externalMcpSmokeResult, setExternalMcpSmokeResult] =
+    useState<RuntimeExternalMcpSmokeResult | null>(null);
+  const [externalMcpSmokeLoading, setExternalMcpSmokeLoading] = useState(false);
+  const [externalMcpSmokeError, setExternalMcpSmokeError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -606,6 +620,30 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       setRuntimeControlPlaneError(message);
     } finally {
       setRuntimeControlPlaneLoading(false);
+    }
+  }, [t]);
+
+  const runExternalMcpSmokeCheck = useCallback(async () => {
+    setExternalMcpSmokeLoading(true);
+    setExternalMcpSmokeError(null);
+    try {
+      const result = await getElectronAPI()?.testExternalMcpContracts?.();
+      if (result?.success && result.data) {
+        setExternalMcpSmokeResult(result.data);
+      } else {
+        setExternalMcpSmokeResult(null);
+        setExternalMcpSmokeError(
+          result?.error ?? t('settings:aiProvider.controlPlane.contractUnavailable')
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : t('settings:aiProvider.controlPlane.contractUnavailable');
+      setExternalMcpSmokeResult(null);
+      setExternalMcpSmokeError(message);
+    } finally {
+      setExternalMcpSmokeLoading(false);
     }
   }, [t]);
 
@@ -868,6 +906,18 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       mcpPlan?.executable_external_tools?.join(', ') ||
       formatExecutableExternalMcpTools(externalMcpHealthRows) ||
       noneLabel;
+    const externalMcpSmokeSummary = externalMcpSmokeResult?.summary;
+    const externalMcpSmokeFailures =
+      externalMcpSmokeResult?.external_mcp_contract_checks.filter(
+        (row) => !row.ok && row.status !== 'skipped'
+      ) ?? [];
+    const externalMcpSmokeLabel = externalMcpSmokeSummary
+      ? t('settings:aiProvider.controlPlane.contractSummary', {
+        ok: externalMcpSmokeSummary.ok,
+        failed: externalMcpSmokeSummary.failed,
+        skipped: externalMcpSmokeSummary.skipped
+      })
+      : noneLabel;
     const fallbackSelected = fallbackRow
       ? formatControlPlaneValue(fallbackRow.fallback_selected_mode)
       : noneLabel;
@@ -955,7 +1005,40 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   {executableExternalMcpTools}
                 </dd>
               </div>
+              <div>
+                <dt>{t('settings:aiProvider.controlPlane.contractSmoke')}</dt>
+                <dd className={`font-medium ${
+                  externalMcpSmokeFailures.length ? 'text-destructive' : 'text-foreground'
+                }`}
+                >
+                  {externalMcpSmokeLabel}
+                </dd>
+              </div>
             </dl>
+            {externalMcpSmokeError && (
+              <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <p>
+                  {t('settings:aiProvider.controlPlane.contractError', {
+                    error: externalMcpSmokeError
+                  })}
+                </p>
+              </div>
+            )}
+            {externalMcpSmokeFailures.length > 0 && (
+              <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+                <p className="font-medium">
+                  {t('settings:aiProvider.controlPlane.contractFailures')}
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {externalMcpSmokeFailures.map((row) => (
+                    <li key={row.server}>
+                      {row.server}: {formatRuntimeDiagnosticValue(t, row.status)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="rounded-md border border-border bg-background p-3">
@@ -1045,18 +1128,34 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            className="h-8 gap-2 self-start text-xs"
-            onClick={loadRuntimeControlPlaneDiagnostics}
-            disabled={runtimeControlPlaneLoading}
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${
-              runtimeControlPlaneLoading ? 'animate-spin' : ''
-            }`}
-            />
-            {t('settings:aiProvider.controlPlane.refresh')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="h-8 gap-2 self-start text-xs"
+              onClick={runExternalMcpSmokeCheck}
+              disabled={externalMcpSmokeLoading}
+            >
+              <ShieldCheck className={`h-3.5 w-3.5 ${
+                externalMcpSmokeLoading ? 'animate-pulse' : ''
+              }`}
+              />
+              {externalMcpSmokeLoading
+                ? t('settings:aiProvider.controlPlane.testingContracts')
+                : t('settings:aiProvider.controlPlane.testContracts')}
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 gap-2 self-start text-xs"
+              onClick={loadRuntimeControlPlaneDiagnostics}
+              disabled={runtimeControlPlaneLoading}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${
+                runtimeControlPlaneLoading ? 'animate-spin' : ''
+              }`}
+              />
+              {t('settings:aiProvider.controlPlane.refresh')}
+            </Button>
+          </div>
         </div>
 
         {controlPlaneContent}
