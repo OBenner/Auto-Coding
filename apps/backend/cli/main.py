@@ -51,6 +51,7 @@ from .qa_commands import (
     handle_review_status_command,
 )
 from .runtime_commands import (
+    external_mcp_smoke_has_failures,
     handle_external_mcp_smoke_command,
     handle_runtime_modes_command,
 )
@@ -764,10 +765,12 @@ def _run_cli() -> None:
 
     # Handle --external-mcp-smoke command before requiring a spec.
     if args.external_mcp_smoke:
-        handle_external_mcp_smoke_command(
+        payload = handle_external_mcp_smoke_command(
             project_dir=project_dir,
             output_json=args.json,
         )
+        if external_mcp_smoke_has_failures(payload):
+            sys.exit(1)
         return
 
     # Handle --provider-smoke command before requiring a spec.

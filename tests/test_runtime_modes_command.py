@@ -62,6 +62,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "generic_cli_pool" in output
     assert "opencode" in output
     assert "--provider-smoke" in output
+    assert "--external-mcp-smoke" in output
     assert payload["providers"][0]["provider"] == "claude"
 
 
@@ -114,6 +115,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert "aider" in selection_rows["generic_edit"]["selected_runner_ids"]
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
+    assert "external_mcp_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
     external_health = {
@@ -294,7 +296,10 @@ def test_external_mcp_smoke_command_outputs_json(
     monkeypatch,
     tmp_path,
 ):
-    from cli.runtime_commands import handle_external_mcp_smoke_command
+    from cli.runtime_commands import (
+        external_mcp_smoke_has_failures,
+        handle_external_mcp_smoke_command,
+    )
 
     async def fake_check_external_mcp_contracts(
         *,
@@ -363,6 +368,18 @@ def test_external_mcp_smoke_command_outputs_json(
         "skipped": 1,
         "failed": 1,
     }
+    assert external_mcp_smoke_has_failures(parsed) is True
+
+
+def test_external_mcp_smoke_failure_detection_ignores_skipped():
+    from cli.runtime_commands import external_mcp_smoke_has_failures
+
+    assert (
+        external_mcp_smoke_has_failures(
+            {"summary": {"total": 5, "ok": 0, "skipped": 5, "failed": 0}}
+        )
+        is False
+    )
 
 
 def test_external_mcp_smoke_command_outputs_text(capsys, monkeypatch, tmp_path):

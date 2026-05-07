@@ -258,6 +258,10 @@ def build_runtime_modes_payload() -> dict[str, Any]:
                 "--runtime-mode patch_proposal for coder subtasks."
             ),
             "provider_smoke": "Use --provider-smoke before running a spec.",
+            "external_mcp_smoke": (
+                "Use --external-mcp-smoke --json to run live external MCP "
+                "tools/list contract checks."
+            ),
             "runtime_fallback": (
                 "Set AUTO_CODE_RUNTIME_FALLBACK=true only when you want "
                 "incompatible non-Claude full_autonomous settings to degrade "
@@ -298,6 +302,14 @@ def build_external_mcp_smoke_payload(*, project_dir: Path) -> dict[str, Any]:
             ),
         },
     }
+
+
+def external_mcp_smoke_has_failures(payload: dict[str, Any]) -> bool:
+    """Return whether an external MCP smoke payload has hard failures."""
+    summary = payload.get("summary", {})
+    if not isinstance(summary, dict):
+        return False
+    return int(summary.get("failed") or 0) > 0
 
 
 def format_external_mcp_smoke_text(payload: dict[str, Any]) -> str:
@@ -541,6 +553,7 @@ def format_runtime_modes_text() -> str:
             "  Runtime fallback: AUTO_CODE_RUNTIME_FALLBACK=true python run.py --spec 001 --provider openai",
             "  Runner router:   AUTO_CODE_CLI_RUNNER_ROUTER=true python run.py --spec 001 --provider openai",
             "  Provider smoke:  python run.py --provider openai --provider-smoke",
+            "  External MCP:    python run.py --external-mcp-smoke --json",
         ]
     )
 
