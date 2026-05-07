@@ -4576,16 +4576,42 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         )
     )
     checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    recovery_plan_path = tmp_path / "artifacts" / "generic_edit_recovery_plan.json"
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    recovery_plan = json.loads(recovery_plan_path.read_text(encoding="utf-8"))
 
     assert artifact["status"] == "error"
     assert artifact["stop_reason"] == "unresolved_partial_failure"
     assert artifact["unresolved_partial_failure_ids"] == ["json_actions-1"]
     assert artifact["recovery_resolved"] is False
     assert artifact["recovery_checkpoint_artifact"] == str(checkpoint_path)
+    assert artifact["recovery_plan_artifact"] == str(recovery_plan_path)
+    assert artifact["recovery_plan"]["strategy"] == "repair_or_rollback"
+    assert artifact["recovery_plan"]["unresolved_transaction_ids"] == ["json_actions-1"]
+    first_transaction = artifact["transactions"][0]
+    assert first_transaction["recovery_plan"]["rollback"]["recommended_tools"] == [
+        "git_diff",
+        "apply_patch",
+    ]
+    assert first_transaction["recovery_plan"]["repair"]["recommended_tools"] == [
+        "read_file",
+        "git_diff",
+        "apply_patch",
+        "write_file",
+        "run_command",
+    ]
+    assert recovery_plan["unresolved_transactions"][0]["id"] == "json_actions-1"
+    assert recovery_plan["unresolved_transactions"][0]["mutated_paths"] == [
+        "partial.txt"
+    ]
     assert checkpoint["resume"]["strategy"] == "recover_partial_failure"
+    assert checkpoint["recovery_plan_artifact"] == str(recovery_plan_path)
+    assert checkpoint["recovery_plan"]["unresolved_transaction_ids"] == [
+        "json_actions-1"
+    ]
     assert checkpoint["unresolved_partial_failure_ids"] == ["json_actions-1"]
     assert checkpoint["last_partial_failure_mutated_paths"] == ["partial.txt"]
+    assert "repair or rollback" in checkpoint["resume"]["prompt"]
     assert "json_actions-1" in checkpoint["resume"]["prompt"]
     assert "partial.txt" in checkpoint["resume"]["prompt"]
 

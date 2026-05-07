@@ -157,6 +157,14 @@ MUTATING_LOCAL_ACTIONS = frozenset(
     }
 )
 WORKSPACE_RECOVERY_TOOLS = frozenset({"git_status", "git_diff", "run_command"})
+GENERIC_EDIT_ROLLBACK_TOOLS = ["git_diff", "apply_patch"]
+GENERIC_EDIT_REPAIR_TOOLS = [
+    "read_file",
+    "git_diff",
+    "apply_patch",
+    "write_file",
+    "run_command",
+]
 RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
     {
         "max_iterations",
@@ -1777,7 +1785,38 @@ def build_generic_edit_transaction(
             "At least one mutating action succeeded before a later action failed. "
             "Inspect affected paths and repair or confirm the workspace state before finishing."
         )
+        transaction["recovery_plan"] = build_transaction_recovery_plan(transaction)
     return transaction
+
+
+def build_transaction_recovery_plan(transaction: dict[str, Any]) -> dict[str, Any]:
+    """Return machine-readable repair/rollback guidance for one transaction."""
+    mutated_paths = list(transaction.get("mutated_paths") or [])
+    affected_paths = list(transaction.get("affected_paths") or [])
+    return {
+        "strategy": "repair_or_rollback",
+        "mutated_paths": mutated_paths,
+        "affected_paths": affected_paths,
+        "rollback": {
+            "recommended_tools": GENERIC_EDIT_ROLLBACK_TOOLS,
+            "instructions": [
+                "Run git_diff scoped to mutated paths to inspect partial changes.",
+                "Use apply_patch with an explicit reverse or corrective patch when rollback is preferred.",
+            ],
+        },
+        "repair": {
+            "recommended_tools": GENERIC_EDIT_REPAIR_TOOLS,
+            "instructions": [
+                "Read affected files and inspect git_diff before writing more changes.",
+                "Apply a focused repair patch or rewrite the affected file, then run targeted verification.",
+            ],
+        },
+        "required_before_finish": [
+            "Inspect mutated paths.",
+            "Either repair the partial mutation or intentionally roll it back.",
+            "Verify workspace consistency before finish.",
+        ],
+    }
 
 
 def action_path_values(action: dict[str, Any]) -> list[str]:
@@ -1887,6 +1926,10 @@ def save_generic_edit_artifacts(
     timestamp = datetime.now(UTC).isoformat()
     trace_summary = summarize_generic_edit_trace(trace)
     transaction_summary = summarize_generic_edit_transactions(trace)
+    recovery_plan = build_generic_edit_recovery_plan(
+        transaction_summary=transaction_summary,
+        plan_path=paths["recovery_plan"],
+    )
     recovery_checkpoint = build_generic_edit_recovery_checkpoint(
         timestamp=timestamp,
         provider_name=provider_name,
@@ -1900,6 +1943,7 @@ def save_generic_edit_artifacts(
         trace_path=paths["trace"],
         observation_path=observation_path,
         checkpoint_path=paths["recovery_checkpoint"],
+        recovery_plan=recovery_plan,
         mcp_support=mcp_support,
     )
 
@@ -1942,6 +1986,7 @@ def save_generic_edit_artifacts(
         risks=risks,
         mcp_support=mcp_support,
         recovery_checkpoint=recovery_checkpoint,
+        recovery_plan=recovery_plan,
     )
     if observation_path is not None:
         result_payload["observation_artifact"] = str(observation_path)
@@ -1949,6 +1994,10 @@ def save_generic_edit_artifacts(
         write_json_artifact(paths["recovery_checkpoint"], recovery_checkpoint)
     else:
         clear_generic_edit_recovery_checkpoint(paths["recovery_checkpoint"])
+    if recovery_plan is not None:
+        write_json_artifact(paths["recovery_plan"], recovery_plan)
+    else:
+        clear_generic_edit_recovery_checkpoint(paths["recovery_plan"])
     write_json_artifact(paths["result"], result_payload)
     write_generic_edit_transactions(paths["transactions"], transaction_summary)
     paths["summary"].write_text(
@@ -1964,6 +2013,7 @@ def save_generic_edit_artifacts(
             risks=risks,
             mcp_support=mcp_support,
             recovery_checkpoint=recovery_checkpoint,
+            recovery_plan=recovery_plan,
         ),
         encoding="utf-8",
     )
@@ -1975,6 +2025,8 @@ def save_generic_edit_artifacts(
         artifacts["generic_edit_recovery_checkpoint"] = str(
             paths["recovery_checkpoint"]
         )
+    if recovery_plan is not None:
+        artifacts["generic_edit_recovery_plan"] = str(paths["recovery_plan"])
     return artifacts
 
 
@@ -1984,6 +2036,7 @@ def generic_edit_artifact_paths(artifact_dir: Path) -> dict[str, Path]:
         "timeline": artifact_dir / "generic_edit_timeline.json",
         "transactions": artifact_dir / "generic_edit_transactions.jsonl",
         "recovery_checkpoint": artifact_dir / "generic_edit_recovery_checkpoint.json",
+        "recovery_plan": artifact_dir / "generic_edit_recovery_plan.json",
         "summary": artifact_dir / "generic_edit_summary.md",
         "result": artifact_dir / "generic_edit_result.json",
     }
@@ -2019,6 +2072,7 @@ def build_generic_edit_result_payload(
     risks: list[str] | None,
     mcp_support: dict[str, Any] | None,
     recovery_checkpoint: dict[str, Any] | None,
+    recovery_plan: dict[str, Any] | None,
 ) -> dict[str, Any]:
     payload = {
         "timestamp": timestamp,
@@ -2044,6 +2098,9 @@ def build_generic_edit_result_payload(
                 "recovery_strategy": recovery_checkpoint["resume"]["strategy"],
             }
         )
+    if recovery_plan is not None:
+        payload["recovery_plan_artifact"] = recovery_plan["artifact_path"]
+        payload["recovery_plan"] = recovery_plan
     return payload
 
 
@@ -2073,6 +2130,7 @@ def build_generic_edit_summary_markdown(
     risks: list[str] | None,
     mcp_support: dict[str, Any] | None,
     recovery_checkpoint: dict[str, Any] | None,
+    recovery_plan: dict[str, Any] | None,
 ) -> str:
     lines = [
         "# Generic Edit Summary",
@@ -2089,6 +2147,7 @@ def build_generic_edit_summary_markdown(
         summary,
         *generic_edit_timeline_lines(trace_summary["action_timeline"]),
         *generic_edit_recovery_lines(transaction_summary),
+        *generic_edit_recovery_plan_lines(recovery_plan),
         *generic_edit_resume_lines(recovery_checkpoint),
         *generic_edit_test_lines(tests),
         *generic_edit_risk_lines(risks),
@@ -2110,6 +2169,7 @@ def build_generic_edit_recovery_checkpoint(
     trace_path: Path,
     observation_path: Path | None,
     checkpoint_path: Path,
+    recovery_plan: dict[str, Any] | None,
     mcp_support: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     """Build resumable generic_edit state for interrupted/error runs."""
@@ -2124,7 +2184,7 @@ def build_generic_edit_recovery_checkpoint(
         stop_reason=stop_reason,
         transaction_summary=transaction_summary,
     )
-    return {
+    checkpoint = {
         "timestamp": timestamp,
         "provider": provider_name,
         "subtask_id": subtask_id,
@@ -2145,6 +2205,7 @@ def build_generic_edit_recovery_checkpoint(
                 trace_path=trace_path,
                 observation_path=observation_path,
                 transaction_summary=transaction_summary,
+                recovery_plan=recovery_plan,
             ),
         },
         "recent_actions": list(trace_summary.get("action_timeline") or [])[-10:],
@@ -2160,6 +2221,39 @@ def build_generic_edit_recovery_checkpoint(
             "last_partial_failure_mutated_paths"
         ],
         "mcp_support": mcp_support,
+    }
+    if recovery_plan is not None:
+        checkpoint["recovery_plan_artifact"] = recovery_plan["artifact_path"]
+        checkpoint["recovery_plan"] = recovery_plan
+    return checkpoint
+
+
+def build_generic_edit_recovery_plan(
+    *,
+    transaction_summary: dict[str, Any],
+    plan_path: Path,
+) -> dict[str, Any] | None:
+    """Build a machine-readable recovery plan for unresolved partial failures."""
+    unresolved_ids = transaction_summary["unresolved_partial_failure_ids"]
+    if not unresolved_ids:
+        return None
+
+    unresolved_transactions = [
+        transaction
+        for transaction in transaction_summary["transactions"]
+        if str(transaction.get("id")) in unresolved_ids
+    ]
+    return {
+        "strategy": "repair_or_rollback",
+        "artifact_path": str(plan_path),
+        "unresolved_transaction_ids": unresolved_ids,
+        "unresolved_transactions": unresolved_transactions,
+        "recommended_next_actions": [
+            "Inspect current git status.",
+            "Inspect diffs for mutated paths.",
+            "Choose either repair or rollback for each unresolved transaction.",
+            "Run focused verification before finish.",
+        ],
     }
 
 
@@ -2293,6 +2387,7 @@ def build_generic_edit_resume_prompt(
     trace_path: Path,
     observation_path: Path | None,
     transaction_summary: dict[str, Any],
+    recovery_plan: dict[str, Any] | None,
 ) -> str:
     """Build a concise prompt that can restart a generic_edit recovery turn."""
     prompt_lines = [
@@ -2310,7 +2405,7 @@ def build_generic_edit_resume_prompt(
             [
                 "Unresolved partial-failure transaction(s): "
                 + ", ".join(unresolved_ids),
-                "Inspect or repair mutated path(s): "
+                "Use the recovery plan to repair or rollback mutated path(s): "
                 + ", ".join(
                     transaction_summary["last_partial_failure_mutated_paths"]
                     or transaction_summary["last_partial_failure_affected_paths"]
@@ -2319,6 +2414,10 @@ def build_generic_edit_resume_prompt(
                 "Do not call finish until the workspace is consistent.",
             ]
         )
+        if recovery_plan is not None:
+            prompt_lines.append(
+                f"Recovery plan artifact: {recovery_plan['artifact_path']}"
+            )
     else:
         prompt_lines.extend(
             [
@@ -2343,6 +2442,23 @@ def generic_edit_resume_lines(
         f"- Recoverable: {str(recovery_checkpoint['recoverable']).lower()}",
         f"- Strategy: `{recovery_checkpoint['resume']['strategy']}`",
         f"- Checkpoint: `{recovery_checkpoint['artifact_path']}`",
+    ]
+
+
+def generic_edit_recovery_plan_lines(
+    recovery_plan: dict[str, Any] | None,
+) -> list[str]:
+    """Render active repair/rollback plan metadata for the markdown artifact."""
+    if recovery_plan is None:
+        return []
+    return [
+        "",
+        "## Recovery Plan",
+        "",
+        f"- Strategy: `{recovery_plan['strategy']}`",
+        f"- Plan: `{recovery_plan['artifact_path']}`",
+        "- Unresolved transactions: "
+        + ", ".join(recovery_plan["unresolved_transaction_ids"]),
     ]
 
 
