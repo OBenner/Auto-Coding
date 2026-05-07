@@ -1,4 +1,6 @@
+import builtins
 import json
+import logging
 import sys
 
 
@@ -26,6 +28,20 @@ def test_parse_args_with_external_mcp_smoke():
         sys.argv = original_argv
 
     assert args.external_mcp_smoke is True
+
+
+def test_parse_args_with_external_mcp_sync_custom_tools():
+    from cli.main import parse_args
+
+    original_argv = sys.argv
+    sys.argv = ["run.py", "--external-mcp-smoke", "--external-mcp-sync-custom-tools"]
+    try:
+        args = parse_args()
+    finally:
+        sys.argv = original_argv
+
+    assert args.external_mcp_smoke is True
+    assert args.external_mcp_sync_custom_tools is True
 
 
 def test_parse_args_with_generic_edit_runtime_mode():
@@ -371,6 +387,227 @@ def test_external_mcp_smoke_command_outputs_json(
         "failed": 1,
     }
     assert external_mcp_smoke_has_failures(parsed) is True
+
+
+def test_external_mcp_smoke_includes_project_custom_servers(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    from cli.runtime_commands import handle_external_mcp_smoke_command
+
+    custom_servers = [
+        {
+            "id": "my-docs",
+            "name": "My Docs",
+            "type": "http",
+            "url": "https://docs.example.test/mcp",
+        }
+    ]
+    env_dir = tmp_path / ".auto-claude"
+    env_dir.mkdir()
+    (env_dir / ".env").write_text(
+        f"CUSTOM_MCP_SERVERS={json.dumps(custom_servers)}\n",
+        encoding="utf-8",
+    )
+
+    async def fake_check_external_mcp_contracts(
+        *,
+        requested_servers,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert "context7" in requested_servers
+        assert "my-docs" in requested_servers
+        assert project_dir == tmp_path
+        assert project_mcp_config["CUSTOM_MCP_SERVERS"][0]["id"] == "my-docs"
+        assert environment is None
+        return []
+
+    monkeypatch.setattr(
+        "cli.runtime_commands.check_external_mcp_contracts",
+        fake_check_external_mcp_contracts,
+    )
+
+    payload = handle_external_mcp_smoke_command(
+        project_dir=tmp_path,
+        output_json=True,
+    )
+    parsed = json.loads(capsys.readouterr().out)
+
+    assert parsed == payload
+    assert parsed["summary"] == {"total": 0, "ok": 0, "skipped": 0, "failed": 0}
+
+
+def test_external_mcp_smoke_syncs_custom_tool_schemas(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
+    from cli.runtime_commands import handle_external_mcp_smoke_command
+    from core.client import load_project_mcp_config
+
+    custom_servers = [
+        {
+            "id": "my-docs",
+            "name": "My Docs",
+            "type": "http",
+            "url": "https://docs.example.test/mcp",
+            "description": "Private docs.",
+        }
+    ]
+    env_dir = tmp_path / ".auto-claude"
+    env_dir.mkdir()
+    (env_dir / ".env").write_text(
+        f"CUSTOM_MCP_SERVERS={json.dumps(custom_servers)}\n",
+        encoding="utf-8",
+    )
+
+    async def fake_check_external_mcp_contracts(
+        *,
+        requested_servers,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert "my-docs" in requested_servers
+        return [
+            {
+                "server": "my-docs",
+                "ok": True,
+                "status": "server_has_extra_tools",
+                "reason": "Live MCP server returned extra tools.",
+                "transport": "http",
+                "adapter_tools": ["call_tool"],
+                "server_tools": ["search_docs"],
+                "adapter_tools_missing_on_server": [],
+                "server_tools_missing_in_adapter": ["search_docs"],
+                "error": None,
+            }
+        ]
+
+    async def fake_discover_external_mcp_tools(
+        *,
+        health,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert health.server == "my-docs"
+        assert project_dir == tmp_path
+        return {
+            "tools": [
+                {
+                    "name": "search_docs",
+                    "description": "Search private docs.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search query.",
+                            }
+                        },
+                        "required": ["query"],
+                    },
+                },
+                {
+                    "name": "status",
+                    "description": "Read server status.",
+                },
+            ]
+        }
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        "cli.runtime_commands.check_external_mcp_contracts",
+        fake_check_external_mcp_contracts,
+    )
+    monkeypatch.setattr(
+        "cli.runtime_commands.discover_external_mcp_tools",
+        fake_discover_external_mcp_tools,
+    )
+
+    payload = handle_external_mcp_smoke_command(
+        project_dir=tmp_path,
+        output_json=True,
+        sync_custom_tools=True,
+    )
+    parsed = json.loads(capsys.readouterr().out)
+    saved_servers = load_project_mcp_config(tmp_path)["CUSTOM_MCP_SERVERS"]
+
+    assert parsed == payload
+    assert parsed["custom_mcp_tool_schema_sync"] == {
+        "updated_servers": ["my-docs"],
+        "skipped_servers": [],
+        "failed_servers": [],
+    }
+    assert saved_servers[0]["id"] == "my-docs"
+    assert saved_servers[0]["description"] == "Private docs."
+    assert saved_servers[0]["tools"] == [
+        {
+            "name": "search_docs",
+            "description": "Search private docs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query.",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "status",
+            "description": "Read server status.",
+        },
+    ]
+
+
+def test_load_project_mcp_config_warns_when_import_unavailable(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    from cli.runtime_commands import load_project_mcp_config_for_runtime_commands
+
+    original_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "core.client" and "load_project_mcp_config" in fromlist:
+            raise ImportError("missing optional sdk")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with caplog.at_level(logging.WARNING, logger="cli.runtime_commands"):
+        config = load_project_mcp_config_for_runtime_commands(tmp_path)
+
+    assert config == {}
+    assert "could not import load_project_mcp_config" in caplog.text
+    assert "missing optional sdk" in caplog.text
+
+
+def test_load_project_mcp_config_warns_on_non_dict_result(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    import core.client
+    from cli.runtime_commands import load_project_mcp_config_for_runtime_commands
+
+    monkeypatch.setattr(core.client, "load_project_mcp_config", lambda _project_dir: [])
+
+    with caplog.at_level(logging.WARNING, logger="cli.runtime_commands"):
+        config = load_project_mcp_config_for_runtime_commands(tmp_path)
+
+    assert config == {}
+    assert "ignored non-dict load_project_mcp_config result" in caplog.text
+    assert "list" in caplog.text
 
 
 def test_external_mcp_smoke_failure_detection_ignores_skipped():

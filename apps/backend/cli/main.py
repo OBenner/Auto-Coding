@@ -189,6 +189,15 @@ Environment Variables:
     )
 
     parser.add_argument(
+        "--external-mcp-sync-custom-tools",
+        action="store_true",
+        help=(
+            "With --external-mcp-smoke: persist live tools/list schemas for "
+            "configured custom MCP servers"
+        ),
+    )
+
+    parser.add_argument(
         "--provider-smoke",
         action="store_true",
         help="Run an opt-in text-only smoke check for the configured provider",
@@ -764,10 +773,11 @@ def _run_cli() -> None:
         return
 
     # Handle --external-mcp-smoke command before requiring a spec.
-    if args.external_mcp_smoke:
+    if args.external_mcp_smoke or args.external_mcp_sync_custom_tools:
         payload = handle_external_mcp_smoke_command(
             project_dir=project_dir,
             output_json=args.json,
+            sync_custom_tools=args.external_mcp_sync_custom_tools,
         )
         if external_mcp_smoke_has_failures(payload):
             sys.exit(1)
