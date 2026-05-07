@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 # Default encoding for Claude (claudetk or cl100k_base as fallback)
 DEFAULT_ENCODING = "cl100k_base"
+_UNAVAILABLE_ENCODINGS: set[str] = set()
 
 
 @dataclass
@@ -38,6 +39,10 @@ class TokenEstimator:
 
     def __post_init__(self) -> None:
         """Initialize tiktoken encoding if available."""
+        if self.encoding_name in _UNAVAILABLE_ENCODINGS:
+            self._tiktoken_available = False
+            return
+
         try:
             import tiktoken
 
@@ -48,6 +53,7 @@ class TokenEstimator:
         except Exception:
             # Handle cases where tiktoken is installed but encoding
             # initialization fails (e.g., bad encoding name, corrupted data)
+            _UNAVAILABLE_ENCODINGS.add(self.encoding_name)
             self._tiktoken_available = False
 
     def count_tokens(self, text: str) -> int:

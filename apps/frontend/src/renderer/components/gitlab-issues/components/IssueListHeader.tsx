@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { GitlabIcon, RefreshCw, Search, Filter } from 'lucide-react';
+import { GitFork as GitlabIcon, RefreshCw, Search, Filter } from 'lucide-react';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';

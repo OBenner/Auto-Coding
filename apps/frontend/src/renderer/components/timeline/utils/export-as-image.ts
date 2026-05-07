@@ -151,7 +151,7 @@ export async function exportAsImage(
       useCORS: true,
       allowTaint: true,
       // Exclude interactive elements from export
-      ignoreElements: (element: HTMLElement) => {
+      ignoreElements: (element: Element) => {
         const className = element.className;
         if (typeof className === 'string') {
           // Exclude zoom controls and pan buttons
