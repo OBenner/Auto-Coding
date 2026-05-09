@@ -49,6 +49,9 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditMcpAvailable': 'Available',
         'overview.genericEditMcpUnavailable': 'Unavailable',
         'overview.genericEditMcpActionRequired': 'Action required',
+        'overview.genericEditMcpBridgePlan': 'Bridge plan',
+        'overview.genericEditMcpBridged': 'Bridged',
+        'overview.genericEditMcpExternalBridged': 'External bridged',
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -175,7 +178,7 @@ function createManifest(): GenericEditArtifactManifest {
         status: 'partial',
         action_required: 'configure_external_mcp_client',
         bridged_servers: ['context7'],
-        external_bridged_servers: ['context7'],
+        external_bridged_servers: ['puppeteer'],
       },
       bridge: {
         tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
@@ -232,11 +235,16 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('2 MCP tools')).toBeInTheDocument();
     expect(screen.getByText('External MCP tools are bridged through generic_edit.')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
-    expect(screen.getByText('context7')).toBeInTheDocument();
+    expect(screen.getAllByText('context7')).toHaveLength(2);
     expect(screen.getByText('Unavailable')).toBeInTheDocument();
     expect(screen.getByText('linear')).toBeInTheDocument();
     expect(screen.getByText('Action required')).toBeInTheDocument();
     expect(screen.getByText('configure_external_mcp_client')).toBeInTheDocument();
+    expect(screen.getByText('Bridge plan')).toBeInTheDocument();
+    expect(screen.getByText('partial')).toBeInTheDocument();
+    expect(screen.getByText('Bridged')).toBeInTheDocument();
+    expect(screen.getByText('External bridged')).toBeInTheDocument();
+    expect(screen.getByText('puppeteer')).toBeInTheDocument();
     expect(screen.getByText('mcp__context7__resolve-library-id')).toBeInTheDocument();
   });
 

@@ -151,7 +151,10 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpToolCount = mcpNumber(mcpSupport?.tool_count) ?? mcpStringList(mcpBridge?.tools).length;
   const mcpAvailableServers = mcpStringList(mcpSupport?.available_servers);
   const mcpUnavailableServers = mcpStringList(mcpSupport?.unavailable_servers);
+  const mcpBridgePlanStatus = mcpString(mcpBridgePlan?.status);
   const mcpActionRequired = mcpString(mcpBridgePlan?.action_required);
+  const mcpBridgedServers = mcpStringList(mcpBridgePlan?.bridged_servers);
+  const mcpExternalBridgedServers = mcpStringList(mcpBridgePlan?.external_bridged_servers);
   const mcpBridgeTools = mcpStringList(mcpBridge?.tools);
   const resumeInputs = Object.entries(manifest.resume_inputs).filter(
     ([, artifactPath]) => artifactPath.length > 0
@@ -487,6 +490,45 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                 <Badge variant="warning" className="text-xs">
                   {mcpActionRequired}
                 </Badge>
+              </div>
+            )}
+
+            {(mcpBridgePlanStatus || mcpBridgedServers.length > 0 || mcpExternalBridgedServers.length > 0) && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {mcpBridgePlanStatus && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpBridgePlan')}
+                    </span>
+                    <Badge variant="outline" className="text-xs">
+                      {mcpBridgePlanStatus}
+                    </Badge>
+                  </div>
+                )}
+                {mcpBridgedServers.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpBridged')}
+                    </span>
+                    {mcpBridgedServers.map((server) => (
+                      <Badge key={server} variant="muted" className="text-xs">
+                        {server}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {mcpExternalBridgedServers.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpExternalBridged')}
+                    </span>
+                    {mcpExternalBridgedServers.map((server) => (
+                      <Badge key={server} variant="info" className="text-xs">
+                        {server}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
