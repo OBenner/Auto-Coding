@@ -543,6 +543,14 @@ def test_external_mcp_smoke_syncs_custom_tool_schemas(
         "updated_servers": ["my-docs"],
         "skipped_servers": [],
         "failed_servers": [],
+        "server_results": [
+            {
+                "server": "my-docs",
+                "status": "updated",
+                "reason": "tools_synced",
+                "tool_count": 2,
+            }
+        ],
     }
     assert saved_servers[0]["id"] == "my-docs"
     assert saved_servers[0]["description"] == "Private docs."

@@ -370,6 +370,7 @@ async def sync_custom_mcp_tool_schemas(
     updated_servers: list[str] = []
     skipped_servers: list[str] = []
     failed_servers: list[str] = []
+    server_results: list[dict[str, Any]] = []
 
     for index, server_config in enumerate(custom_servers):
         server_id = str(server_config.get("id") or "").strip()
@@ -384,6 +385,14 @@ async def sync_custom_mcp_tool_schemas(
         )
         if not health.ready_to_connect or not health.execution_supported:
             skipped_servers.append(server_id)
+            server_results.append(
+                {
+                    "server": server_id,
+                    "status": "skipped",
+                    "reason": health.reason,
+                    "tool_count": 0,
+                }
+            )
             continue
         try:
             result = await discover_external_mcp_tools(
@@ -394,15 +403,39 @@ async def sync_custom_mcp_tool_schemas(
                     CUSTOM_MCP_SERVERS_CONFIG_KEY: custom_servers,
                 },
             )
-        except Exception:
+        except Exception as exc:
             failed_servers.append(server_id)
+            server_results.append(
+                {
+                    "server": server_id,
+                    "status": "failed",
+                    "reason": str(exc),
+                    "tool_count": 0,
+                }
+            )
             continue
         tools = normalize_mcp_tools_for_persistence(result)
         if not tools:
             skipped_servers.append(server_id)
+            server_results.append(
+                {
+                    "server": server_id,
+                    "status": "skipped",
+                    "reason": "tools_list_empty",
+                    "tool_count": 0,
+                }
+            )
             continue
         custom_servers[index] = {**server_config, "tools": tools}
         updated_servers.append(server_id)
+        server_results.append(
+            {
+                "server": server_id,
+                "status": "updated",
+                "reason": "tools_synced",
+                "tool_count": len(tools),
+            }
+        )
 
     if updated_servers:
         write_project_custom_mcp_servers(project_dir, custom_servers)
@@ -411,6 +444,7 @@ async def sync_custom_mcp_tool_schemas(
         "updated_servers": updated_servers,
         "skipped_servers": skipped_servers,
         "failed_servers": failed_servers,
+        "server_results": server_results,
     }
 
 
