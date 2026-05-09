@@ -7,6 +7,7 @@ import {
   FileText,
   ListChecks,
   Loader2,
+  Network,
   PlayCircle,
   RotateCcw,
   Wrench,
@@ -95,6 +96,43 @@ function recoveryActionMeta(action: GenericEditRecoveryAction): string {
     .join(' / ');
 }
 
+function mcpRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function mcpString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function mcpNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function mcpStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  }
+  return typeof value === 'string' && value.length > 0 ? [value] : [];
+}
+
+function mcpStrategyVariant(
+  strategy: string
+): 'success' | 'destructive' | 'warning' | 'info' | 'muted' {
+  if (strategy === 'native') {
+    return 'success';
+  }
+  if (strategy === 'local_bridge') {
+    return 'info';
+  }
+  if (strategy === 'unavailable') {
+    return 'warning';
+  }
+  return 'muted';
+}
+
 export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPanelProps) {
   const { t } = useTranslation(['tasks']);
   const [preview, setPreview] = useState<{
@@ -105,6 +143,16 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   } | null>(null);
   const activeArtifacts = manifest.artifacts.filter((artifact) => artifact.active);
   const presentActiveArtifacts = activeArtifacts.filter((artifact) => artifact.present).length;
+  const mcpSupport = manifest.mcp_support;
+  const mcpBridgePlan = mcpRecord(mcpSupport?.bridge_plan);
+  const mcpBridge = mcpRecord(mcpSupport?.bridge);
+  const mcpStrategy = mcpString(mcpSupport?.strategy) ?? 'unknown';
+  const mcpReason = mcpString(mcpSupport?.reason);
+  const mcpToolCount = mcpNumber(mcpSupport?.tool_count) ?? mcpStringList(mcpBridge?.tools).length;
+  const mcpAvailableServers = mcpStringList(mcpSupport?.available_servers);
+  const mcpUnavailableServers = mcpStringList(mcpSupport?.unavailable_servers);
+  const mcpActionRequired = mcpString(mcpBridgePlan?.action_required);
+  const mcpBridgeTools = mcpStringList(mcpBridge?.tools);
   const recoveryFlags = [
     manifest.flags.resumable && t('tasks:overview.genericEditResumable'),
     manifest.flags.recoverable && t('tasks:overview.genericEditRecoverable'),
@@ -362,6 +410,75 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="truncate text-muted-foreground">
               {manifest.resume_action.checkpoint_path}
             </div>
+          </div>
+        )}
+
+        {mcpSupport && (
+          <div className="mt-4 rounded-md border bg-muted/20 px-3 py-3 text-xs">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Network className="h-3.5 w-3.5 text-info" />
+              <span className="font-semibold text-muted-foreground">
+                {t('tasks:overview.genericEditMcpSupport')}
+              </span>
+              <Badge variant={mcpStrategyVariant(mcpStrategy)} className="text-xs">
+                {mcpStrategy}
+              </Badge>
+              <Badge variant="muted" className="text-xs">
+                {t('tasks:overview.genericEditMcpTools', { count: mcpToolCount })}
+              </Badge>
+            </div>
+
+            {mcpReason && <div className="mb-2 text-muted-foreground">{mcpReason}</div>}
+
+            {(mcpAvailableServers.length > 0 || mcpUnavailableServers.length > 0) && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {mcpAvailableServers.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpAvailable')}
+                    </span>
+                    {mcpAvailableServers.map((server) => (
+                      <Badge key={server} variant="success" className="text-xs">
+                        {server}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {mcpUnavailableServers.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpUnavailable')}
+                    </span>
+                    {mcpUnavailableServers.map((server) => (
+                      <Badge key={server} variant="warning" className="text-xs">
+                        {server}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mcpActionRequired && mcpActionRequired !== 'none' && (
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                <span className="font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditMcpActionRequired')}
+                </span>
+                <Badge variant="warning" className="text-xs">
+                  {mcpActionRequired}
+                </Badge>
+              </div>
+            )}
+
+            {mcpBridgeTools.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {mcpBridgeTools.slice(0, 4).map((tool) => (
+                  <Badge key={tool} variant="outline" className="max-w-full truncate text-xs">
+                    {tool}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

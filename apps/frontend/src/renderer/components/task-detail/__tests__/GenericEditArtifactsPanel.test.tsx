@@ -43,6 +43,11 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditResumeEntrypoint': 'Resume entrypoint',
         'overview.genericEditResumeStrategy': 'Resume strategy',
         'overview.genericEditNextIteration': `Next iteration ${values?.iteration ?? ''}`,
+        'overview.genericEditMcpSupport': 'MCP support',
+        'overview.genericEditMcpTools': `${values?.count ?? 0} MCP tools`,
+        'overview.genericEditMcpAvailable': 'Available',
+        'overview.genericEditMcpUnavailable': 'Unavailable',
+        'overview.genericEditMcpActionRequired': 'Action required',
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -158,7 +163,20 @@ function createManifest(): GenericEditArtifactManifest {
       recovery_plan_artifact: '/tmp/recovery.json',
       mutation_snapshot_artifact: '/tmp/mutation-snapshots.json',
     },
-    mcp_support: null,
+    mcp_support: {
+      strategy: 'local_bridge',
+      reason: 'External MCP tools are bridged through generic_edit.',
+      tool_count: 2,
+      available_servers: ['context7'],
+      unavailable_servers: ['linear'],
+      bridge_plan: {
+        status: 'partial',
+        action_required: 'configure_external_mcp_client',
+      },
+      bridge: {
+        tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
+      },
+    },
     resume: null,
   };
 }
@@ -198,6 +216,17 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('recover_partial_failure')).toBeInTheDocument();
     expect(screen.getByText('Next iteration 3')).toBeInTheDocument();
     expect(screen.getByText('/tmp/recovery-checkpoint.json')).toBeInTheDocument();
+    expect(screen.getByText('MCP support')).toBeInTheDocument();
+    expect(screen.getByText('local_bridge')).toBeInTheDocument();
+    expect(screen.getByText('2 MCP tools')).toBeInTheDocument();
+    expect(screen.getByText('External MCP tools are bridged through generic_edit.')).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
+    expect(screen.getByText('context7')).toBeInTheDocument();
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(screen.getByText('linear')).toBeInTheDocument();
+    expect(screen.getByText('Action required')).toBeInTheDocument();
+    expect(screen.getByText('configure_external_mcp_client')).toBeInTheDocument();
+    expect(screen.getByText('mcp__context7__resolve-library-id')).toBeInTheDocument();
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {
