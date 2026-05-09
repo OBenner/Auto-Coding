@@ -10,7 +10,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agents.runtime import RuntimeRequirements, get_runtime_mode, run_runtime_session
+from agents.runtime import (
+    RuntimeRequirements,
+    create_runtime_session,
+    get_runtime_mode,
+    normalize_runtime_mode,
+    run_runtime_session,
+)
 from agents.runtime.adapters.completion import CompletionRuntimeSession
 from agents.runtime.fallback import capabilities_for_runtime_mode
 from core.providers.base import SessionConfig
@@ -24,7 +30,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_PROVIDER_SMOKE_PROMPT = (
     "Reply with one short sentence confirming the provider smoke check works."
 )
+DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT = "provider smoke ok\n"
+DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_PROMPT = (
+    "Use the available local tools to overwrite provider-smoke.txt with exactly "
+    f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}, then finish with a short "
+    "summary. Do not edit any other file."
+)
 DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS = 30.0
+PROVIDER_SMOKE_RUNTIME_MODES = ("analysis_only", "generic_edit")
 
 
 @dataclass(frozen=True)
@@ -85,14 +98,54 @@ def _provider_validation_errors(provider: Any) -> list[str]:
     return ["Provider configuration is invalid"]
 
 
+def normalize_provider_smoke_runtime_mode(value: str | None) -> str:
+    """Normalize the runtime surface that the provider smoke command validates."""
+    if value is None:
+        return "analysis_only"
+    mode = normalize_runtime_mode(value)
+    if mode not in PROVIDER_SMOKE_RUNTIME_MODES:
+        allowed = ", ".join(PROVIDER_SMOKE_RUNTIME_MODES)
+        raise ValueError(
+            f"Invalid provider smoke runtime '{value}'. Must be one of: {allowed}"
+        )
+    return mode
+
+
+def _provider_smoke_requirements(runtime_mode: str) -> RuntimeRequirements:
+    if runtime_mode == "generic_edit":
+        return RuntimeRequirements.generic_edit()
+    return RuntimeRequirements.text_only(mode="analysis_only")
+
+
+def _provider_smoke_scope(runtime_mode: str) -> str:
+    if runtime_mode == "generic_edit":
+        return "generic_edit_tool_loop"
+    return "text_completion_only"
+
+
+def _provider_smoke_note(runtime_mode: str) -> str:
+    if runtime_mode == "generic_edit":
+        return (
+            "Provider smoke validates a temporary generic_edit tool loop; full "
+            "autonomous coding still depends on MCP, subagents, recovery, and "
+            "project-specific commands."
+        )
+    return (
+        "Provider smoke validates text completion only; run runtime-specific "
+        "tests before treating a provider as autonomous."
+    )
+
+
 def build_provider_smoke_runtime_diagnostics(
     *,
     provider_name: str,
     requested_runtime_mode: str | None = None,
+    validated_runtime_mode: str = "analysis_only",
 ) -> dict[str, Any]:
     """Return the runtime scope covered by a provider smoke check."""
     requested_mode = requested_runtime_mode or get_runtime_mode("analysis")
-    smoke_requirements = RuntimeRequirements.text_only(mode="provider_smoke")
+    validated_mode = normalize_provider_smoke_runtime_mode(validated_runtime_mode)
+    smoke_requirements = _provider_smoke_requirements(validated_mode)
     requested_capabilities = capabilities_for_runtime_mode(
         provider_name,
         requested_mode,
@@ -103,18 +156,15 @@ def build_provider_smoke_runtime_diagnostics(
     )
     full_autonomous_requirements = RuntimeRequirements.full_coder()
     return {
-        "smoke_scope": "text_completion_only",
+        "smoke_scope": _provider_smoke_scope(validated_mode),
         "requested_runtime_mode": requested_mode,
-        "validated_runtime_mode": "analysis_only",
+        "validated_runtime_mode": smoke_requirements.mode,
         "validated_requirements": list(smoke_requirements.required),
         "requested_runtime_capabilities": requested_capabilities.available(),
         "full_autonomous_missing_capabilities": full_autonomous_capabilities.missing(
             full_autonomous_requirements,
         ),
-        "note": (
-            "Provider smoke validates text completion only; run runtime-specific "
-            "tests before treating a provider as autonomous."
-        ),
+        "note": _provider_smoke_note(validated_mode),
     }
 
 
@@ -124,13 +174,17 @@ async def run_provider_smoke_check(
     model: str | None = None,
     prompt: str | None = None,
     timeout_seconds: float = DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS,
+    runtime_mode: str | None = None,
 ) -> ProviderSmokeResult:
-    """Run a real text-only smoke check against the configured provider."""
+    """Run a real smoke check against the configured provider/runtime surface."""
     provider_config = ProviderConfig.from_env(agent_type="analysis")
     provider_name = provider_config.provider
     resolved_model = model or provider_config.get_model_for_provider()
+    validated_runtime_mode = normalize_provider_smoke_runtime_mode(runtime_mode)
     runtime_diagnostics = build_provider_smoke_runtime_diagnostics(
         provider_name=provider_name,
+        requested_runtime_mode=runtime_mode,
+        validated_runtime_mode=validated_runtime_mode,
     )
 
     try:
@@ -149,6 +203,8 @@ async def run_provider_smoke_check(
 
     runtime_diagnostics = build_provider_smoke_runtime_diagnostics(
         provider_name=provider.name,
+        requested_runtime_mode=runtime_mode,
+        validated_runtime_mode=validated_runtime_mode,
     )
     validation_errors = _provider_validation_errors(provider)
     if validation_errors:
@@ -170,16 +226,27 @@ async def run_provider_smoke_check(
     )
 
     try:
+        if validated_runtime_mode == "generic_edit":
+            return await _complete_provider_generic_edit_smoke(
+                provider=provider,
+                session_config=session_config,
+                prompt=prompt,
+                timeout_seconds=timeout_seconds,
+                model=resolved_model,
+                runtime_diagnostics=runtime_diagnostics,
+            )
+
         if provider.name == "claude":
             with tempfile.TemporaryDirectory(
                 prefix="auto-code-provider-smoke-"
             ) as temp_dir:
-                spec_dir = Path(temp_dir) / "spec"
-                spec_dir.mkdir(parents=True, exist_ok=True)
-                provider.create_session(
-                    session_config,
+                smoke_spec_dir = Path(temp_dir) / "spec"
+                smoke_spec_dir.mkdir(parents=True, exist_ok=True)
+                _create_provider_session(
+                    provider=provider,
+                    session_config=session_config,
                     project_dir=project_dir,
-                    spec_dir=spec_dir,
+                    spec_dir=smoke_spec_dir,
                     agent_type="planner",
                 )
                 return await _complete_provider_smoke(
@@ -190,7 +257,12 @@ async def run_provider_smoke_check(
                     runtime_diagnostics=runtime_diagnostics,
                 )
 
-        provider.create_session(session_config)
+        _create_provider_session(
+            provider=provider,
+            session_config=session_config,
+            project_dir=project_dir,
+            agent_type="planner",
+        )
         return await _complete_provider_smoke(
             provider=provider,
             prompt=prompt,
@@ -209,6 +281,27 @@ async def run_provider_smoke_check(
             error_details=str(e),
             runtime_diagnostics=runtime_diagnostics,
         )
+
+
+def _create_provider_session(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    project_dir: Path,
+    spec_dir: Path | None = None,
+    agent_type: str = "analysis",
+) -> Any:
+    """Create a provider session while preserving Claude's required directories."""
+    if provider.name == "claude":
+        if spec_dir is None:
+            raise ValueError("spec_dir is required for Claude provider smoke sessions")
+        return provider.create_session(
+            session_config,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type=agent_type,
+        )
+    return provider.create_session(session_config)
 
 
 async def _complete_provider_smoke(
@@ -257,12 +350,96 @@ async def _complete_provider_smoke(
     )
 
 
+async def _complete_provider_generic_edit_smoke(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    prompt: str | None,
+    timeout_seconds: float,
+    model: str | None,
+    runtime_diagnostics: dict[str, Any],
+) -> ProviderSmokeResult:
+    smoke_prompt = prompt or DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_PROMPT
+    with tempfile.TemporaryDirectory(prefix="auto-code-provider-smoke-") as temp_dir:
+        temp_root = Path(temp_dir)
+        smoke_project_dir = temp_root / "project"
+        smoke_spec_dir = temp_root / "spec"
+        smoke_project_dir.mkdir(parents=True, exist_ok=True)
+        smoke_spec_dir.mkdir(parents=True, exist_ok=True)
+        smoke_file = smoke_project_dir / "provider-smoke.txt"
+        smoke_file.write_text("pending\n", encoding="utf-8")
+        session = _create_provider_session(
+            provider=provider,
+            session_config=session_config,
+            project_dir=smoke_project_dir,
+            spec_dir=smoke_spec_dir,
+            agent_type="coder",
+        )
+        runtime_session = create_runtime_session(
+            provider_name=provider.name,
+            agent_session=session,
+            runtime_mode="generic_edit",
+            project_dir=smoke_project_dir,
+            agent_type="coder",
+        )
+        result = await asyncio.wait_for(
+            run_runtime_session(
+                runtime_session,
+                smoke_prompt,
+                smoke_spec_dir,
+                verbose=False,
+                phase=LogPhase.PLANNING,
+                requirements=RuntimeRequirements.generic_edit(),
+            ),
+            timeout=timeout_seconds,
+        )
+
+        smoke_content = smoke_file.read_text(encoding="utf-8")
+        if smoke_content != DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT:
+            return ProviderSmokeResult(
+                success=False,
+                provider=provider.name,
+                model=model,
+                runtime_mode="generic_edit",
+                message="Provider generic_edit smoke did not update the test file",
+                response_excerpt=_response_excerpt(result.response_text),
+                error_details=(
+                    "Expected provider-smoke.txt to contain "
+                    f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}; got "
+                    f"{smoke_content!r}"
+                ),
+                runtime_diagnostics=runtime_diagnostics,
+            )
+
+    response_text = result.response_text.strip()
+    if not response_text:
+        return ProviderSmokeResult(
+            success=False,
+            provider=provider.name,
+            model=model,
+            runtime_mode="generic_edit",
+            message="Provider generic_edit smoke returned an empty response",
+            runtime_diagnostics=runtime_diagnostics,
+        )
+
+    return ProviderSmokeResult(
+        success=True,
+        provider=provider.name,
+        model=model,
+        runtime_mode="generic_edit",
+        message="Provider generic_edit smoke passed",
+        response_excerpt=_response_excerpt(response_text),
+        runtime_diagnostics=runtime_diagnostics,
+    )
+
+
 def handle_provider_smoke_command(
     *,
     project_dir: Path,
     model: str | None,
     prompt: str | None,
     timeout_seconds: float = DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS,
+    runtime_mode: str | None = None,
     output_json: bool = False,
 ) -> ProviderSmokeResult:
     """Run and print one provider smoke check."""
@@ -272,6 +449,7 @@ def handle_provider_smoke_command(
             model=model,
             prompt=prompt,
             timeout_seconds=timeout_seconds,
+            runtime_mode=runtime_mode,
         )
     )
 

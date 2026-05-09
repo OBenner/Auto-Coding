@@ -221,6 +221,17 @@ Environment Variables:
     )
 
     parser.add_argument(
+        "--provider-smoke-runtime",
+        type=str,
+        default=None,
+        choices=("analysis_only", "analysis-only", "generic_edit", "generic-edit"),
+        help=(
+            "With --provider-smoke: runtime surface to validate "
+            "(default: analysis_only; use generic_edit for a tool-loop smoke)"
+        ),
+    )
+
+    parser.add_argument(
         "--analyze",
         action="store_true",
         help="Run a non-mutating analysis-only pass for a spec",
@@ -790,6 +801,7 @@ def _run_cli() -> None:
             model=model,
             prompt=args.provider_smoke_prompt,
             timeout_seconds=args.provider_smoke_timeout,
+            runtime_mode=args.provider_smoke_runtime,
             output_json=args.json,
         )
         if not result.success:
