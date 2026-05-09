@@ -506,6 +506,7 @@
     "genericEditResumeEntrypoint": "Point de reprise",
     "genericEditResumeStrategy": "Stratégie de reprise",
     "genericEditNextIteration": "Itération suivante {{iteration}}",
+    "genericEditResumeInputs": "Entrées de reprise",
     "genericEditMcpSupport": "Support MCP",
     "genericEditMcpTools": "{{count}} outils MCP",
     "genericEditMcpAvailable": "Disponible",

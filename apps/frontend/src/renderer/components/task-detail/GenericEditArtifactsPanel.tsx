@@ -153,6 +153,9 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpUnavailableServers = mcpStringList(mcpSupport?.unavailable_servers);
   const mcpActionRequired = mcpString(mcpBridgePlan?.action_required);
   const mcpBridgeTools = mcpStringList(mcpBridge?.tools);
+  const resumeInputs = Object.entries(manifest.resume_inputs).filter(
+    ([, artifactPath]) => artifactPath.length > 0
+  );
   const recoveryFlags = [
     manifest.flags.resumable && t('tasks:overview.genericEditResumable'),
     manifest.flags.recoverable && t('tasks:overview.genericEditRecoverable'),
@@ -410,6 +413,23 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="truncate text-muted-foreground">
               {manifest.resume_action.checkpoint_path}
             </div>
+            {resumeInputs.length > 0 && (
+              <div className="mt-3">
+                <div className="mb-1 font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditResumeInputs')}
+                </div>
+                <div className="space-y-1">
+                  {resumeInputs.map(([artifactName, artifactPath]) => (
+                    <div key={artifactName} className="flex min-w-0 items-center gap-2">
+                      <Badge variant="outline" className="shrink-0 text-xs">
+                        {artifactName}
+                      </Badge>
+                      <span className="min-w-0 truncate text-muted-foreground">{artifactPath}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

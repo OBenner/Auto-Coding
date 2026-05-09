@@ -43,6 +43,7 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditResumeEntrypoint': 'Resume entrypoint',
         'overview.genericEditResumeStrategy': 'Resume strategy',
         'overview.genericEditNextIteration': `Next iteration ${values?.iteration ?? ''}`,
+        'overview.genericEditResumeInputs': 'Resume inputs',
         'overview.genericEditMcpSupport': 'MCP support',
         'overview.genericEditMcpTools': `${values?.count ?? 0} MCP tools`,
         'overview.genericEditMcpAvailable': 'Available',
@@ -219,6 +220,13 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('recover_partial_failure')).toBeInTheDocument();
     expect(screen.getByText('Next iteration 3')).toBeInTheDocument();
     expect(screen.getByText('/tmp/recovery-checkpoint.json')).toBeInTheDocument();
+    expect(screen.getByText('Resume inputs')).toBeInTheDocument();
+    expect(screen.getByText('trace_artifact')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/trace.json')).toBeInTheDocument();
+    expect(screen.getByText('event_artifact')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/events.jsonl')).toBeInTheDocument();
+    expect(screen.getByText('mutation_snapshot_artifact')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/mutation-snapshots.json')).toBeInTheDocument();
     expect(screen.getByText('MCP support')).toBeInTheDocument();
     expect(screen.getByText('local_bridge')).toBeInTheDocument();
     expect(screen.getByText('2 MCP tools')).toBeInTheDocument();

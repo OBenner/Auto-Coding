@@ -507,6 +507,7 @@
     "genericEditResumeEntrypoint": "Resume entrypoint",
     "genericEditResumeStrategy": "Resume strategy",
     "genericEditNextIteration": "Next iteration {{iteration}}",
+    "genericEditResumeInputs": "Resume inputs",
     "genericEditMcpSupport": "MCP support",
     "genericEditMcpTools": "{{count}} MCP tools",
     "genericEditMcpAvailable": "Available",
