@@ -2253,7 +2253,7 @@ class RuntimeMcpBridge:
                 continue
             result = close()
             if inspect.isawaitable(result):
-                await result
+                _ = await result
 
     def session_lifecycle_report(self) -> dict[str, Any]:
         """Return reusable external MCP session metadata for diagnostics."""
