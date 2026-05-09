@@ -1,7 +1,10 @@
-import { Activity, AlertCircle, CheckCircle2, FileText, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import { Activity, AlertCircle, CheckCircle2, Eye, FileText, Loader2, RotateCcw, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { GenericEditArtifactManifest } from '../../../shared/types';
 import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
 
 interface GenericEditArtifactsPanelProps {
@@ -31,6 +34,12 @@ function countValue(value: number | undefined): number {
 
 export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPanelProps) {
   const { t } = useTranslation(['tasks']);
+  const [preview, setPreview] = useState<{
+    artifactName: string;
+    content: string;
+    error: string | null;
+    loading: boolean;
+  } | null>(null);
   const activeArtifacts = manifest.artifacts.filter((artifact) => artifact.active);
   const presentActiveArtifacts = activeArtifacts.filter((artifact) => artifact.present).length;
   const recoveryFlags = [
@@ -40,6 +49,35 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
     manifest.flags.has_mutation_snapshots && t('tasks:overview.genericEditMutationSnapshots'),
     manifest.flags.has_transaction_groups && t('tasks:overview.genericEditTransactionGroups'),
   ].filter((flag): flag is string => typeof flag === 'string');
+
+  const handleViewArtifact = async (artifactName: string, artifactPath: string) => {
+    setPreview({
+      artifactName,
+      content: '',
+      error: null,
+      loading: true,
+    });
+
+    try {
+      const result = await window.electronAPI.readFile(artifactPath);
+      if (!result.success || result.data === undefined) {
+        throw new Error(result.error || t('tasks:overview.genericEditArtifactLoadFailed'));
+      }
+      setPreview({
+        artifactName,
+        content: result.data,
+        error: null,
+        loading: false,
+      });
+    } catch (err) {
+      setPreview({
+        artifactName,
+        content: '',
+        error: err instanceof Error ? err.message : t('tasks:overview.genericEditArtifactLoadFailed'),
+        loading: false,
+      });
+    }
+  };
 
   return (
     <div>
@@ -136,27 +174,85 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
               <FileText className="h-3.5 w-3.5" />
               {t('tasks:overview.genericEditActiveArtifacts')}
             </div>
-            <div className="space-y-1.5">
-              {activeArtifacts.map((artifact) => (
-                <div
-                  key={artifact.name}
-                  className={cn(
-                    'flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-2 text-xs',
-                    !artifact.present && 'border-warning/50 bg-warning/10'
-                  )}
-                >
-                  {artifact.present ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
-                  ) : (
-                    <RotateCcw className="h-3.5 w-3.5 shrink-0 text-warning" />
-                  )}
-                  <span className="min-w-0 flex-1 truncate font-medium">{artifact.name}</span>
-                  <Badge variant={artifact.present ? 'muted' : 'warning'} className="text-xs">
-                    {artifact.present ? artifact.kind : t('tasks:overview.genericEditMissingArtifact')}
-                  </Badge>
+            <TooltipProvider>
+              <div className="space-y-1.5">
+                {activeArtifacts.map((artifact) => {
+                  const artifactPath = artifact.present ? artifact.path : null;
+                  const canPreview = typeof artifactPath === 'string';
+                  return (
+                    <div
+                      key={artifact.name}
+                      className={cn(
+                        'flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-2 text-xs',
+                        !artifact.present && 'border-warning/50 bg-warning/10'
+                      )}
+                    >
+                      {artifact.present ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+                      ) : (
+                        <RotateCcw className="h-3.5 w-3.5 shrink-0 text-warning" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate font-medium">{artifact.name}</span>
+                      <Badge variant={artifact.present ? 'muted' : 'warning'} className="text-xs">
+                        {artifact.present ? artifact.kind : t('tasks:overview.genericEditMissingArtifact')}
+                      </Badge>
+                      {canPreview && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 rounded-md"
+                              aria-label={t('tasks:overview.genericEditViewArtifact')}
+                              onClick={() => handleViewArtifact(artifact.name, artifactPath)}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{t('tasks:overview.genericEditViewArtifact')}</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </TooltipProvider>
+          </div>
+        )}
+
+        {preview && (
+          <div className="mt-4 rounded-md border bg-muted/20">
+            <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-muted-foreground">
+                  {t('tasks:overview.genericEditArtifactPreview')}
                 </div>
-              ))}
+                <div className="truncate text-xs font-medium">{preview.artifactName}</div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 rounded-md"
+                aria-label={t('tasks:overview.genericEditClosePreview')}
+                onClick={() => setPreview(null)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
             </div>
+            {preview.loading ? (
+              <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t('tasks:overview.genericEditLoadingArtifact')}
+              </div>
+            ) : preview.error ? (
+              <div className="px-3 py-4 text-xs text-destructive">{preview.error}</div>
+            ) : (
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all px-3 py-3 text-xs">
+                {preview.content}
+              </pre>
+            )}
           </div>
         )}
       </div>

@@ -494,6 +494,11 @@
     "genericEditArtifactsPresent": "{{present}}/{{total}} present",
     "genericEditActiveArtifacts": "Active artifacts",
     "genericEditMissingArtifact": "Missing",
+    "genericEditViewArtifact": "View artifact",
+    "genericEditArtifactPreview": "Artifact preview",
+    "genericEditClosePreview": "Close preview",
+    "genericEditLoadingArtifact": "Loading artifact...",
+    "genericEditArtifactLoadFailed": "Failed to load artifact",
     "noDataAvailable": "No overview data available yet"
   },
   "merge": {

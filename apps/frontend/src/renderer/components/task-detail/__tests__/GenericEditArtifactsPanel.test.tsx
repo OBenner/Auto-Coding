@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { GenericEditArtifactManifest } from '../../../../shared/types';
 import { GenericEditArtifactsPanel } from '../GenericEditArtifactsPanel';
@@ -28,6 +28,8 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditArtifactsPresent': `${values?.present ?? 0}/${values?.total ?? 0} present`,
         'overview.genericEditActiveArtifacts': 'Active artifacts',
         'overview.genericEditMissingArtifact': 'Missing',
+        'overview.genericEditViewArtifact': 'View artifact',
+        'overview.genericEditArtifactPreview': 'Artifact preview',
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -107,5 +109,23 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('1/2 present')).toBeInTheDocument();
     expect(screen.getByText('generic_edit_recovery_plan')).toBeInTheDocument();
     expect(screen.getByText('Missing')).toBeInTheDocument();
+  });
+
+  it('opens an inline preview for present artifacts with paths', async () => {
+    const readFile = vi.fn().mockResolvedValue({ success: true, data: '{"ok": true}' });
+    Object.defineProperty(window, 'electronAPI', {
+      value: { readFile },
+      configurable: true,
+    });
+
+    render(<GenericEditArtifactsPanel manifest={createManifest()} />);
+
+    fireEvent.click(screen.getByLabelText('View artifact'));
+
+    await waitFor(() => {
+      expect(readFile).toHaveBeenCalledWith('/tmp/result.json');
+    });
+    expect(await screen.findByText('Artifact preview')).toBeInTheDocument();
+    expect(screen.getByText('{"ok": true}')).toBeInTheDocument();
   });
 });
