@@ -213,6 +213,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   function_tools: 'settings:aiProvider.runtimeDiagnosticValues.functionTools',
   generic_cli_pool: 'settings:aiProvider.runtimeDiagnosticValues.genericCliPool',
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
+  generic_edit_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.genericEditToolLoop',
   goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
   implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',

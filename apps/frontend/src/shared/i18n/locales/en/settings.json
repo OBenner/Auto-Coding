@@ -991,6 +991,7 @@
       "functionTools": "Function tools",
       "genericCliPool": "Generic CLI pool",
       "genericEdit": "Generic edit",
+      "genericEditToolLoop": "Generic edit tool loop",
       "goose": "Goose",
       "inspectRuntimeMcpSupport": "Inspect runtime MCP support",
       "implementExternalMcpTransport": "Implement external MCP transport",

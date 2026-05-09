@@ -34,6 +34,7 @@ import { projectStore } from '../project-store';
 import { getBestAvailableProfileEnv } from '../rate-limit-detector';
 import { getAPIProfileEnv } from '../services/profile';
 import { getCodexProfileManager } from '../codex-profile-manager';
+import { resolveProviderSmokeRuntime } from './provider-smoke-runtime';
 
 const settingsPath = getSettingsPath();
 const execFileAsync = promisify(execFile);
@@ -560,6 +561,15 @@ async function runProviderConnectionTest(
   const profileEnv = getBestAvailableProfileEnv().env;
   const apiProfileEnv = await getAPIProfileEnv();
   const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
+  const commandEnv = {
+    ...process.env,
+    ...envVars,
+    ...profileEnv,
+    ...apiProfileEnv,
+    ...codexProfileEnv,
+    PYTHONIOENCODING: 'utf-8'
+  };
+  const providerSmokeRuntime = resolveProviderSmokeRuntime(commandEnv);
 
   try {
     const { stdout, stderr } = await execFileAsync(
@@ -569,19 +579,14 @@ async function runProviderConnectionTest(
         '--provider-smoke',
         '--json',
         '--provider-smoke-timeout',
-        String(PROVIDER_SMOKE_TIMEOUT_SECONDS)
+        String(PROVIDER_SMOKE_TIMEOUT_SECONDS),
+        '--provider-smoke-runtime',
+        providerSmokeRuntime
       ],
       {
         cwd: sourcePath,
         encoding: 'utf-8',
-        env: {
-          ...process.env,
-          ...envVars,
-          ...profileEnv,
-          ...apiProfileEnv,
-          ...codexProfileEnv,
-          PYTHONIOENCODING: 'utf-8'
-        },
+        env: commandEnv,
         maxBuffer: 1024 * 1024,
         timeout: PROVIDER_SMOKE_PROCESS_TIMEOUT_MS,
       }

@@ -939,6 +939,7 @@
       "functionTools": "Outils fonction",
       "genericCliPool": "Pool CLI générique",
       "genericEdit": "Édition générique",
+      "genericEditToolLoop": "Boucle d'outils d'édition générique",
       "goose": "Goose",
       "inspectRuntimeMcpSupport": "Inspecter le support MCP runtime",
       "implementExternalMcpTransport": "Implémenter le transport MCP externe",
