@@ -407,3 +407,51 @@ def test_handle_provider_smoke_command_outputs_json(
     assert payload["provider"] == "openai"
     assert payload["response_excerpt"] == "ok"
     assert payload["runtime_diagnostics"] == {}
+
+
+def test_handle_provider_smoke_command_prints_generic_edit_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        handle_provider_smoke_command,
+    )
+
+    async def fake_run_provider_smoke_check(**_kwargs):
+        await asyncio.sleep(0)
+        return ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="generic_edit",
+            message="Provider generic_edit smoke passed",
+            runtime_diagnostics={
+                "smoke_scope": "generic_edit_tool_loop",
+                "validated_runtime_execution": {
+                    "loop": "json_actions",
+                    "action_count": 2,
+                    "native_tool_fallback_count": 1,
+                },
+            },
+        )
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.run_provider_smoke_check",
+        fake_run_provider_smoke_check,
+    )
+
+    handle_provider_smoke_command(
+        project_dir=tmp_path,
+        model="gpt-4o",
+        prompt=None,
+        timeout_seconds=1,
+        output_json=False,
+    )
+    output = capsys.readouterr().out
+
+    assert "Execution loop" in output
+    assert "json_actions" in output
+    assert "Execution actions" in output
+    assert "Native tool fallbacks" in output

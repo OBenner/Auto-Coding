@@ -527,6 +527,17 @@ def handle_provider_smoke_command(
                 "Smoke scope",
                 str(result.runtime_diagnostics.get("smoke_scope", "unknown")),
             )
+            execution = result.runtime_diagnostics.get("validated_runtime_execution")
+            if isinstance(execution, dict):
+                print_key_value("Execution loop", str(execution.get("loop", "unknown")))
+                print_key_value(
+                    "Execution actions",
+                    str(execution.get("action_count", 0)),
+                )
+                print_key_value(
+                    "Native tool fallbacks",
+                    str(execution.get("native_tool_fallback_count", 0)),
+                )
         if result.response_excerpt:
             print_key_value("Response", result.response_excerpt)
         if result.error_details:
