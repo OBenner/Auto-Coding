@@ -232,6 +232,99 @@ async def test_run_provider_smoke_check_generic_edit_runtime(
 
 
 @pytest.mark.asyncio
+async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import run_provider_smoke_check
+
+    class FakeFallbackGenericEditSession:
+        provider_name = "openai"
+
+        def __init__(self):
+            self.messages: list[str] = []
+
+        async def complete_with_tool_calls(self, message, tools):
+            await asyncio.sleep(0)
+            raise RuntimeError("provider does not support tools")
+
+        async def complete(self, message: str, stream: bool = True):
+            assert stream is True
+            self.messages.append(message)
+            yield json.dumps(
+                {
+                    "actions": [
+                        {
+                            "tool": "write_file",
+                            "path": "provider-smoke.txt",
+                            "content": "provider smoke ok\n",
+                        },
+                        {
+                            "tool": "finish",
+                            "summary": "JSON fallback generic edit smoke passed",
+                            "tests": [],
+                            "risks": [],
+                        },
+                    ]
+                }
+            )
+
+        def add_tool_result(self, tool_call_id, name, result):
+            raise AssertionError("tool results should not be added after fallback")
+
+    class FakeProvider:
+        name = "openai"
+
+        def __init__(self):
+            self.session = FakeFallbackGenericEditSession()
+
+        def validate_config(self):
+            return True
+
+        def create_session(self, session_config):
+            assert session_config.model == "gpt-4o"
+            return self.session
+
+        async def send_message(self, message: str):
+            raise AssertionError(f"generic_edit smoke should not call {message!r}")
+
+    fake_provider = FakeProvider()
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="openai",
+            openai_api_key="sk-test",
+            openai_model="gpt-4o",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: fake_provider,
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model="gpt-4o",
+        prompt=None,
+        timeout_seconds=1,
+        runtime_mode="generic_edit",
+    )
+
+    assert result.success is True
+    assert result.response_excerpt.startswith("JSON fallback generic edit smoke passed")
+    assert result.runtime_diagnostics["validated_runtime_execution"] == {
+        "status": "complete",
+        "stop_reason": "finish",
+        "loop": "json_actions",
+        "action_count": 2,
+        "failed_action_count": 0,
+        "native_tool_fallback_count": 1,
+        "tool_counts": {"finish": 1, "write_file": 1},
+    }
+    assert "Respond with exactly one JSON object" in fake_provider.session.messages[0]
+
+
+@pytest.mark.asyncio
 async def test_run_provider_smoke_check_reports_validation_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
