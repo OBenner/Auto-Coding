@@ -6001,6 +6001,21 @@ def test_generic_edit_mcp_lines_render_bridge_fallback_plan():
         {
             "strategy": "local_bridge",
             "reason": "External MCP servers require a bridge.",
+            "server_statuses": [
+                {
+                    "server": "context7",
+                    "display_name": "Context7",
+                    "availability": "available",
+                    "runtime_path": "external_bridge",
+                    "reason": "External bridge is ready.",
+                },
+                {
+                    "server": "linear",
+                    "availability": "unavailable",
+                    "runtime_path": "local_bridge_required",
+                    "reason": "Local bridge tools are not configured.",
+                },
+            ],
             "bridge_plan": {
                 "status": "partial",
                 "action_required": "configure_external_mcp_client",
@@ -6039,6 +6054,14 @@ def test_generic_edit_mcp_lines_render_bridge_fallback_plan():
     assert "- MCP local-bridge-required servers: linear" in lines
     assert "- MCP external-bridge-required servers: puppeteer" in lines
     assert "- MCP unsupported servers: unknown-docs" in lines
+    assert (
+        "- MCP server `Context7`: available via `external_bridge` - External bridge is ready."
+        in lines
+    )
+    assert (
+        "- MCP server `linear`: unavailable via `local_bridge_required` - "
+        "Local bridge tools are not configured."
+    ) in lines
     assert "- MCP permission policy: `allowlist`; allowed read_external_docs." in lines
     assert "- MCP tool policies: 2 tools; 1 mutating; 2 audit-required." in lines
 

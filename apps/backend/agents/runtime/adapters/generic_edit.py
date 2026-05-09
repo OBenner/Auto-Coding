@@ -4311,6 +4311,21 @@ def generic_edit_mcp_lines(mcp_support: dict[str, Any] | None) -> list[str]:
         ):
             if line:
                 lines.append(line)
+    server_statuses = mcp_support.get("server_statuses")
+    if isinstance(server_statuses, list):
+        for status in server_statuses:
+            if not isinstance(status, dict):
+                continue
+            server = status.get("display_name") or status.get("server")
+            if not server:
+                continue
+            availability = status.get("availability", "unknown")
+            runtime_path = status.get("runtime_path", "unknown")
+            reason = status.get("reason")
+            line = f"- MCP server `{server}`: {availability} via `{runtime_path}`"
+            if reason:
+                line += f" - {reason}"
+            lines.append(line)
     bridge = mcp_support.get("bridge")
     if isinstance(bridge, dict):
         permission_policy = bridge.get("permission_policy")
