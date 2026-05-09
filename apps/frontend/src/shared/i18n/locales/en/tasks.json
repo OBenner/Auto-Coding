@@ -526,6 +526,8 @@
     "genericEditMcpUnsupported": "Unsupported",
     "genericEditMcpBridged": "Bridged",
     "genericEditMcpExternalBridged": "External bridged",
+    "genericEditMcpSessionReuse": "Session reuse",
+    "genericEditMcpOpenSessions": "{{count}} open MCP sessions",
     "genericEditViewArtifact": "View artifact",
     "genericEditArtifactPreview": "Artifact preview",
     "genericEditClosePreview": "Close preview",

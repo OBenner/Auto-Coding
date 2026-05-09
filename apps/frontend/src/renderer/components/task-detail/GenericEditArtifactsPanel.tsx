@@ -228,6 +228,11 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpPermissionPolicy = mcpRecord(mcpBridge?.permission_policy);
   const mcpPermissionMode = mcpString(mcpPermissionPolicy?.mode);
   const mcpAllowedPermissions = mcpStringList(mcpPermissionPolicy?.allowed_permissions);
+  const mcpSessionLifecycle = mcpRecord(mcpBridge?.session_lifecycle);
+  const mcpSessionReuse = mcpString(mcpSessionLifecycle?.reuse);
+  const mcpOpenSessions = mcpRecordList(mcpSessionLifecycle?.open_sessions);
+  const mcpOpenSessionCount =
+    mcpNumber(mcpSessionLifecycle?.open_session_count) ?? mcpOpenSessions.length;
   const resumeInputs = Object.entries(manifest.resume_inputs).filter(
     ([, artifactPath]) => artifactPath.length > 0
   );
@@ -603,6 +608,51 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {(mcpSessionReuse || mcpOpenSessions.length > 0 || mcpSessionLifecycle) && (
+              <div className="mb-2 space-y-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-medium text-muted-foreground">
+                    {t('tasks:overview.genericEditMcpSessionReuse')}
+                  </span>
+                  {mcpSessionReuse && (
+                    <Badge variant="outline" className="text-xs">
+                      {mcpSessionReuse}
+                    </Badge>
+                  )}
+                  <Badge variant="muted" className="text-xs">
+                    {t('tasks:overview.genericEditMcpOpenSessions', {
+                      count: mcpOpenSessionCount,
+                    })}
+                  </Badge>
+                </div>
+                {mcpOpenSessions.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {mcpOpenSessions.slice(0, 4).map((session, index) => {
+                      const server = mcpString(session.server) ?? 'unknown';
+                      const transport = mcpString(session.transport) ?? 'unknown';
+                      const sessionStatus = mcpString(session.status) ?? 'unknown';
+                      return (
+                        <div
+                          key={`${server}-${transport}-${index}`}
+                          className="flex min-w-0 flex-wrap items-center gap-1 rounded-md border bg-background/50 px-2 py-1"
+                        >
+                          <Badge variant="muted" className="text-xs">
+                            {server}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {transport}
+                          </Badge>
+                          <Badge variant={statusVariant(sessionStatus)} className="text-xs">
+                            {sessionStatus}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

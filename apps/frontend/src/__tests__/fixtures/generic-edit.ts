@@ -185,6 +185,11 @@ export function createGenericEditArtifactManifest(): GenericEditArtifactManifest
             },
           },
         ],
+        session_lifecycle: {
+          reuse: 'per_runtime_bridge',
+          open_session_count: 1,
+          open_sessions: [{ server: 'my-docs', transport: 'http', status: 'open' }],
+        },
       },
     },
     resume: null,

@@ -4509,16 +4509,31 @@ async def test_runtime_mcp_bridge_reuses_external_http_session_until_closed(
         first = await bridge.execute(
             {"tool": "mcp__my-docs__search_docs", "query": "first"}
         )
+        report_after_first_call = bridge.report()
         second = await bridge.execute(
             {"tool": "mcp__my-docs__search_docs", "query": "second"}
         )
     finally:
         await bridge.close()
+    report_after_close = bridge.report()
 
     assert first.ok is True
     assert first.message == "first"
     assert second.ok is True
     assert second.message == "second"
+    assert report_after_first_call["session_lifecycle"] == {
+        "reuse": "per_runtime_bridge",
+        "open_session_count": 1,
+        "open_sessions": [
+            {
+                "server": "my-docs",
+                "transport": "http",
+                "status": "open",
+            }
+        ],
+    }
+    assert report_after_close["session_lifecycle"]["open_session_count"] == 0
+    assert report_after_close["session_lifecycle"]["open_sessions"] == []
     assert [request.method for request in requests] == [
         "POST",
         "POST",

@@ -19,8 +19,10 @@ import type {
   QAEscalation,
   GenericEditArtifactManifest,
   GenericEditArtifactManifestEntry,
+  GenericEditMcpOpenSession,
   GenericEditMcpPermissionPolicy,
   GenericEditMcpServerStatus,
+  GenericEditMcpSessionLifecycle,
   GenericEditMcpToolPolicy,
   GenericEditRecoveryAction,
   GenericEditRecoverySummary,
@@ -356,6 +358,53 @@ function normalizeMcpPermissionPolicy(value: unknown): GenericEditMcpPermissionP
   };
 }
 
+function normalizeMcpOpenSession(value: unknown): GenericEditMcpOpenSession | null {
+  if (!isRecord(value)) return null;
+
+  const server = readString(value, 'server');
+  const transport = readString(value, 'transport');
+  const status = readString(value, 'status');
+
+  if (server === null || transport === null || status === null) {
+    return null;
+  }
+
+  return { server, transport, status };
+}
+
+function normalizeMcpOpenSessions(value: unknown): GenericEditMcpOpenSession[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditMcpOpenSession[] = [];
+  for (const item of value) {
+    const session = normalizeMcpOpenSession(item);
+    if (session === null) {
+      return null;
+    }
+    result.push(session);
+  }
+  return result;
+}
+
+function normalizeMcpSessionLifecycle(value: unknown): GenericEditMcpSessionLifecycle | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const reuse = readString(value, 'reuse');
+  const openSessionCount = normalizeOptionalNumber(value, 'open_session_count');
+  const openSessions = normalizeMcpOpenSessions(value.open_sessions);
+
+  if (reuse === null || openSessionCount === undefined || openSessionCount === null || openSessions === null) {
+    return null;
+  }
+
+  return {
+    reuse,
+    open_session_count: openSessionCount,
+    open_sessions: openSessions,
+  };
+}
+
 function normalizeMcpBridgePlan(
   value: unknown
 ): NonNullable<GenericEditArtifactManifest['mcp_support']>['bridge_plan'] {
@@ -402,11 +451,13 @@ function normalizeMcpBridge(
   const toolPolicies = normalizeOptionalMcpToolPolicies(value, 'tool_policies');
   const permissionPolicy = normalizeMcpPermissionPolicy(value.permission_policy);
   const serverStatuses = normalizeOptionalMcpServerStatuses(value, 'server_statuses');
+  const sessionLifecycle = normalizeMcpSessionLifecycle(value.session_lifecycle);
   if (
     tools === null ||
     toolPolicies === null ||
     (value.permission_policy !== undefined && value.permission_policy !== null && permissionPolicy === null) ||
-    serverStatuses === null
+    serverStatuses === null ||
+    (value.session_lifecycle !== undefined && value.session_lifecycle !== null && sessionLifecycle === null)
   ) {
     return null;
   }
@@ -416,6 +467,7 @@ function normalizeMcpBridge(
     tool_policies: toolPolicies,
     permission_policy: permissionPolicy,
     server_statuses: serverStatuses,
+    session_lifecycle: sessionLifecycle,
   };
 }
 

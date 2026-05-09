@@ -69,6 +69,8 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditMcpUnsupported': 'Unsupported',
         'overview.genericEditMcpBridged': 'Bridged',
         'overview.genericEditMcpExternalBridged': 'External bridged',
+        'overview.genericEditMcpSessionReuse': 'Session reuse',
+        'overview.genericEditMcpOpenSessions': `${interpolation('count', 0)} open MCP session`,
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -159,6 +161,11 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('External bridged')).toBeInTheDocument();
     expect(screen.getAllByText('puppeteer')).toHaveLength(2);
     expect(screen.getAllByText('mcp__context7__resolve-library-id')).toHaveLength(2);
+    expect(screen.getByText('Session reuse')).toBeInTheDocument();
+    expect(screen.getByText('per_runtime_bridge')).toBeInTheDocument();
+    expect(screen.getByText('1 open MCP session')).toBeInTheDocument();
+    expect(screen.getByText('my-docs')).toBeInTheDocument();
+    expect(screen.getByText('http')).toBeInTheDocument();
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {

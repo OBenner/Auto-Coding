@@ -525,6 +525,8 @@
     "genericEditMcpUnsupported": "Non pris en charge",
     "genericEditMcpBridged": "Bridgé",
     "genericEditMcpExternalBridged": "Bridge externe",
+    "genericEditMcpSessionReuse": "Réutilisation de session",
+    "genericEditMcpOpenSessions": "{{count}} sessions MCP ouvertes",
     "genericEditViewArtifact": "Voir l'artefact",
     "genericEditArtifactPreview": "Aperçu de l'artefact",
     "genericEditClosePreview": "Fermer l'aperçu",

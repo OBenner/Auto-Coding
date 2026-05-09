@@ -2255,6 +2255,24 @@ class RuntimeMcpBridge:
             if inspect.isawaitable(result):
                 await result
 
+    def session_lifecycle_report(self) -> dict[str, Any]:
+        """Return reusable external MCP session metadata for diagnostics."""
+        open_sessions: list[dict[str, str]] = []
+        for cache_key in sorted(self._external_mcp_sessions):
+            transport, _, server = cache_key.partition(":")
+            open_sessions.append(
+                {
+                    "server": server or cache_key,
+                    "transport": transport or "unknown",
+                    "status": "open",
+                }
+            )
+        return {
+            "reuse": "per_runtime_bridge",
+            "open_session_count": len(open_sessions),
+            "open_sessions": open_sessions,
+        }
+
     def report(self) -> dict[str, Any]:
         """Return compact bridge metadata for artifacts/debug output."""
         server_statuses = describe_mcp_server_statuses(
@@ -2297,6 +2315,7 @@ class RuntimeMcpBridge:
                 dict(server_status) for server_status in server_statuses
             ],
             "bridge_plan": bridge_plan.to_dict(),
+            "session_lifecycle": self.session_lifecycle_report(),
         }
 
     def support_for(

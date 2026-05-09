@@ -205,11 +205,24 @@ export interface GenericEditMcpPermissionPolicy {
   allowed_permissions: string[] | null;
 }
 
+export interface GenericEditMcpOpenSession {
+  server: string;
+  transport: string;
+  status: string;
+}
+
+export interface GenericEditMcpSessionLifecycle {
+  reuse: string;
+  open_session_count: number;
+  open_sessions: GenericEditMcpOpenSession[];
+}
+
 export interface GenericEditMcpBridge {
   tools: string[];
   tool_policies: GenericEditMcpToolPolicy[];
   permission_policy: GenericEditMcpPermissionPolicy | null;
   server_statuses: GenericEditMcpServerStatus[];
+  session_lifecycle: GenericEditMcpSessionLifecycle | null;
 }
 
 export interface GenericEditMcpSupport {
