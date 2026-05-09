@@ -166,12 +166,15 @@ function createManifest(): GenericEditArtifactManifest {
     mcp_support: {
       strategy: 'local_bridge',
       reason: 'External MCP tools are bridged through generic_edit.',
+      server: null,
       tool_count: 2,
       available_servers: ['context7'],
       unavailable_servers: ['linear'],
       bridge_plan: {
         status: 'partial',
         action_required: 'configure_external_mcp_client',
+        bridged_servers: ['context7'],
+        external_bridged_servers: ['context7'],
       },
       bridge: {
         tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],

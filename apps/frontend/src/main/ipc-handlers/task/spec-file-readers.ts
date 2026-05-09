@@ -219,6 +219,87 @@ function normalizeStringList(value: unknown): string[] | null {
   return result;
 }
 
+function normalizeOptionalMcpStringList(value: Record<string, unknown>, key: string): string[] | null {
+  const fieldValue = value[key];
+  if (fieldValue === undefined) return [];
+  return normalizeStringList(fieldValue);
+}
+
+function normalizeOptionalNumber(value: Record<string, unknown>, key: string): number | null | undefined {
+  const fieldValue = value[key];
+  if (fieldValue === undefined || fieldValue === null) return null;
+  if (typeof fieldValue !== 'number' || !Number.isFinite(fieldValue)) return undefined;
+  return fieldValue;
+}
+
+function normalizeMcpBridgePlan(
+  value: unknown
+): NonNullable<GenericEditArtifactManifest['mcp_support']>['bridge_plan'] {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const bridgedServers = normalizeOptionalMcpStringList(value, 'bridged_servers');
+  const externalBridgedServers = normalizeOptionalMcpStringList(value, 'external_bridged_servers');
+  if (bridgedServers === null || externalBridgedServers === null) {
+    return null;
+  }
+
+  return {
+    status: readString(value, 'status'),
+    action_required: readString(value, 'action_required'),
+    bridged_servers: bridgedServers,
+    external_bridged_servers: externalBridgedServers,
+  };
+}
+
+function normalizeMcpBridge(
+  value: unknown
+): NonNullable<GenericEditArtifactManifest['mcp_support']>['bridge'] {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const tools = normalizeOptionalMcpStringList(value, 'tools');
+  if (tools === null) {
+    return null;
+  }
+
+  return { tools };
+}
+
+function normalizeMcpSupport(value: unknown): GenericEditArtifactManifest['mcp_support'] {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const strategy = readString(value, 'strategy');
+  const toolCount = normalizeOptionalNumber(value, 'tool_count');
+  const availableServers = normalizeOptionalMcpStringList(value, 'available_servers');
+  const unavailableServers = normalizeOptionalMcpStringList(value, 'unavailable_servers');
+  const bridgePlan = normalizeMcpBridgePlan(value.bridge_plan);
+  const bridge = normalizeMcpBridge(value.bridge);
+
+  if (
+    strategy === null ||
+    toolCount === undefined ||
+    availableServers === null ||
+    unavailableServers === null ||
+    (value.bridge_plan !== undefined && value.bridge_plan !== null && bridgePlan === null) ||
+    (value.bridge !== undefined && value.bridge !== null && bridge === null)
+  ) {
+    return null;
+  }
+
+  return {
+    strategy,
+    reason: readString(value, 'reason'),
+    server: readString(value, 'server'),
+    tool_count: toolCount,
+    available_servers: availableServers,
+    unavailable_servers: unavailableServers,
+    bridge_plan: bridgePlan,
+    bridge,
+  };
+}
+
 function normalizeRecoverySummary(value: unknown): GenericEditRecoverySummary | null {
   if (value === undefined || value === null) return null;
   if (!isRecord(value)) return null;
@@ -402,6 +483,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
   const recoveryActions = normalizeRecoveryActions(value.recovery_actions);
   const resumeAction = normalizeResumeAction(value.resume_action);
   const resumeInputs = value.resume_inputs === undefined ? {} : normalizeStringMap(value.resume_inputs);
+  const mcpSupport = normalizeMcpSupport(value.mcp_support);
 
   if (
     timestamp === null ||
@@ -444,7 +526,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     recent_events: recentEvents,
     recovery_summary: recoverySummary,
     recovery_actions: recoveryActions,
-    mcp_support: isRecord(value.mcp_support) ? value.mcp_support : null,
+    mcp_support: mcpSupport,
     resume_action: resumeAction,
     resume_inputs: resumeInputs as Record<string, string>,
     resume: isRecord(value.resume) ? value.resume : null,

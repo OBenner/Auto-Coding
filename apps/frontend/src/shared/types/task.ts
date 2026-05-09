@@ -167,6 +167,28 @@ export interface GenericEditResumeAction {
   next_iteration: number;
 }
 
+export interface GenericEditMcpBridgePlan {
+  status: string | null;
+  action_required: string | null;
+  bridged_servers: string[];
+  external_bridged_servers: string[];
+}
+
+export interface GenericEditMcpBridge {
+  tools: string[];
+}
+
+export interface GenericEditMcpSupport {
+  strategy: string;
+  reason: string | null;
+  server: string | null;
+  tool_count: number | null;
+  available_servers: string[];
+  unavailable_servers: string[];
+  bridge_plan: GenericEditMcpBridgePlan | null;
+  bridge: GenericEditMcpBridge | null;
+}
+
 export interface GenericEditArtifactManifest {
   artifact_type: 'generic_edit_artifact_manifest';
   schema_version: 1;
@@ -210,7 +232,7 @@ export interface GenericEditArtifactManifest {
   recent_events: GenericEditRecentEvent[];
   recovery_summary: GenericEditRecoverySummary | null;
   recovery_actions: GenericEditRecoveryAction[];
-  mcp_support: Record<string, unknown> | null;
+  mcp_support: GenericEditMcpSupport | null;
   resume_action: GenericEditResumeAction | null;
   resume_inputs: Record<string, string>;
   resume: Record<string, unknown> | null;

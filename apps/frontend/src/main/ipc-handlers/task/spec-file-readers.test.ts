@@ -167,7 +167,23 @@ describe('readGenericEditArtifactManifest', () => {
           required_before_finish: true,
         },
       ],
-      mcp_support: { enabled: true },
+      mcp_support: {
+        strategy: 'local_bridge',
+        reason: 'External MCP tools are bridged through generic_edit.',
+        server: 'auto-claude',
+        tool_count: 2,
+        available_servers: ['context7'],
+        unavailable_servers: ['linear'],
+        bridge_plan: {
+          status: 'partial',
+          action_required: 'configure_external_mcp_client',
+          bridged_servers: ['context7'],
+          external_bridged_servers: ['context7'],
+        },
+        bridge: {
+          tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
+        },
+      },
       resume_action: {
         runtime: 'generic_edit',
         checkpoint_path: '/tmp/recovery-checkpoint.json',
@@ -244,6 +260,88 @@ describe('readGenericEditArtifactManifest', () => {
       recovery_plan_artifact: '/tmp/recovery.json',
       mutation_snapshot_artifact: '/tmp/mutation-snapshots.json',
     });
+    expect(manifest?.mcp_support).toEqual({
+      strategy: 'local_bridge',
+      reason: 'External MCP tools are bridged through generic_edit.',
+      server: 'auto-claude',
+      tool_count: 2,
+      available_servers: ['context7'],
+      unavailable_servers: ['linear'],
+      bridge_plan: {
+        status: 'partial',
+        action_required: 'configure_external_mcp_client',
+        bridged_servers: ['context7'],
+        external_bridged_servers: ['context7'],
+      },
+      bridge: {
+        tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
+      },
+    });
+  });
+
+  it('drops malformed optional mcp support without rejecting the manifest', async () => {
+    const projectPath = await createTempProject();
+    const project = createProject(projectPath);
+    const task = createTask();
+
+    await writeManifest(projectPath, task.specId, {
+      artifact_type: 'generic_edit_artifact_manifest',
+      schema_version: 1,
+      timestamp: '2026-05-09T10:00:00Z',
+      provider: 'openai',
+      subtask_id: null,
+      status: 'success',
+      stop_reason: 'finish',
+      entrypoints: {
+        result: '/tmp/result.json',
+      },
+      flags: {
+        recoverable: false,
+        resumable: false,
+        resumed: false,
+        recovery_required: false,
+        recovery_resolved: false,
+        has_recovery_plan: false,
+        has_mutation_snapshots: false,
+        has_transaction_groups: false,
+      },
+      counts: {
+        iteration_count: 1,
+        action_count: 1,
+        failed_action_count: 0,
+        event_count: 1,
+        transaction_count: 0,
+        transaction_group_count: 0,
+        mutation_snapshot_count: 0,
+        recovery_attempt_count: 0,
+        failed_recovery_attempt_count: 0,
+      },
+      artifacts: [
+        {
+          name: 'generic_edit_result',
+          kind: 'result',
+          path: '/tmp/result.json',
+          active: true,
+          required: true,
+          present: true,
+        },
+      ],
+      recent_events: [],
+      recovery_summary: null,
+      recovery_actions: [],
+      mcp_support: {
+        strategy: 'local_bridge',
+        tool_count: 'two',
+      },
+      resume_action: null,
+      resume_inputs: {},
+      resume: null,
+    });
+
+    const manifest = await readGenericEditArtifactManifest(project, task);
+
+    expect(manifest).not.toBeNull();
+    expect(manifest?.mcp_support).toBeNull();
   });
 
   it('returns null when the manifest has not been written yet', async () => {
