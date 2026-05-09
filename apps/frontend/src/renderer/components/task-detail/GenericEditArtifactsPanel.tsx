@@ -148,6 +148,7 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpBridge = mcpRecord(mcpSupport?.bridge);
   const mcpStrategy = mcpString(mcpSupport?.strategy) ?? 'unknown';
   const mcpReason = mcpString(mcpSupport?.reason);
+  const mcpServer = mcpString(mcpSupport?.server);
   const mcpToolCount = mcpNumber(mcpSupport?.tool_count) ?? mcpStringList(mcpBridge?.tools).length;
   const mcpAvailableServers = mcpStringList(mcpSupport?.available_servers);
   const mcpUnavailableServers = mcpStringList(mcpSupport?.unavailable_servers);
@@ -452,6 +453,17 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             </div>
 
             {mcpReason && <div className="mb-2 text-muted-foreground">{mcpReason}</div>}
+
+            {mcpServer && (
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                <span className="font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditMcpServer')}
+                </span>
+                <Badge variant="muted" className="text-xs">
+                  {mcpServer}
+                </Badge>
+              </div>
+            )}
 
             {(mcpAvailableServers.length > 0 || mcpUnavailableServers.length > 0) && (
               <div className="mb-2 flex flex-wrap gap-2">

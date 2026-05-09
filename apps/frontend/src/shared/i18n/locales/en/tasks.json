@@ -513,6 +513,7 @@
     "genericEditMcpAvailable": "Available",
     "genericEditMcpUnavailable": "Unavailable",
     "genericEditMcpActionRequired": "Action required",
+    "genericEditMcpServer": "MCP server",
     "genericEditMcpBridgePlan": "Bridge plan",
     "genericEditMcpBridged": "Bridged",
     "genericEditMcpExternalBridged": "External bridged",

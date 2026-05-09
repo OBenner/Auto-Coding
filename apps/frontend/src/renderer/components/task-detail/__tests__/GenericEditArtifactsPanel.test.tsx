@@ -49,6 +49,7 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditMcpAvailable': 'Available',
         'overview.genericEditMcpUnavailable': 'Unavailable',
         'overview.genericEditMcpActionRequired': 'Action required',
+        'overview.genericEditMcpServer': 'MCP server',
         'overview.genericEditMcpBridgePlan': 'Bridge plan',
         'overview.genericEditMcpBridged': 'Bridged',
         'overview.genericEditMcpExternalBridged': 'External bridged',
@@ -170,7 +171,7 @@ function createManifest(): GenericEditArtifactManifest {
     mcp_support: {
       strategy: 'local_bridge',
       reason: 'External MCP tools are bridged through generic_edit.',
-      server: null,
+      server: 'auto-claude',
       tool_count: 2,
       available_servers: ['context7'],
       unavailable_servers: ['linear'],
@@ -238,6 +239,8 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getAllByText('context7')).toHaveLength(2);
     expect(screen.getByText('Unavailable')).toBeInTheDocument();
     expect(screen.getByText('linear')).toBeInTheDocument();
+    expect(screen.getByText('MCP server')).toBeInTheDocument();
+    expect(screen.getByText('auto-claude')).toBeInTheDocument();
     expect(screen.getByText('Action required')).toBeInTheDocument();
     expect(screen.getByText('configure_external_mcp_client')).toBeInTheDocument();
     expect(screen.getByText('Bridge plan')).toBeInTheDocument();
