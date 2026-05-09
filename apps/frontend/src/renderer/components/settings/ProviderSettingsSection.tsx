@@ -1269,6 +1269,11 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     const validatedRuntime = formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.validatedRuntimeMode);
     const validatedScope = formatRuntimeDiagnosticList(t, runtimeDiagnostics?.validatedRequirements);
     const requestedCapabilities = formatRuntimeDiagnosticList(t, runtimeDiagnostics?.requestedRuntimeCapabilities);
+    const validatedCapabilities = formatRuntimeDiagnosticList(t, runtimeDiagnostics?.validatedRuntimeCapabilities);
+    const validatedMissingCapabilities = formatRuntimeDiagnosticList(
+      t,
+      runtimeDiagnostics?.validatedRuntimeMissingCapabilities
+    );
     const missingFullAutonomous = formatRuntimeDiagnosticList(
       t,
       runtimeDiagnostics?.fullAutonomousMissingCapabilities
@@ -1349,6 +1354,18 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   <dd className="font-medium text-foreground">{requestedCapabilities}</dd>
                 </div>
               )}
+              {validatedCapabilities && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.validatedCapabilities')}</dt>
+                  <dd className="font-medium text-foreground">{validatedCapabilities}</dd>
+                </div>
+              )}
+              <div>
+                <dt>{t('settings:aiProvider.connectionTest.missingValidatedRuntime')}</dt>
+                <dd className="font-medium text-foreground">
+                  {validatedMissingCapabilities || t('settings:aiProvider.connectionTest.noneMissing')}
+                </dd>
+              </div>
               <div>
                 <dt>{t('settings:aiProvider.connectionTest.missingFullAutonomous')}</dt>
                 <dd className="font-medium text-foreground">

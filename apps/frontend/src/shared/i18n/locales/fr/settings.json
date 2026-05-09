@@ -1062,6 +1062,8 @@
       "validatedRuntime": "Runtime validé",
       "validatedScope": "Périmètre validé",
       "requestedCapabilities": "Capacités demandées",
+      "validatedCapabilities": "Capacités validées",
+      "missingValidatedRuntime": "Manquant pour le runtime validé",
       "missingFullAutonomous": "Manquant pour full autonomous",
       "noneMissing": "Aucun",
       "diagnosticsNote": "Le smoke test fournisseur vérifie uniquement l'appel API ; le codage autonome dépend encore des outils runtime, MCP, subagents et du support du système de fichiers.",

@@ -150,6 +150,10 @@ def build_provider_smoke_runtime_diagnostics(
         provider_name,
         requested_mode,
     )
+    validated_capabilities = capabilities_for_runtime_mode(
+        provider_name,
+        validated_mode,
+    )
     full_autonomous_capabilities = capabilities_for_runtime_mode(
         provider_name,
         "full_autonomous",
@@ -161,6 +165,10 @@ def build_provider_smoke_runtime_diagnostics(
         "validated_runtime_mode": smoke_requirements.mode,
         "validated_requirements": list(smoke_requirements.required),
         "requested_runtime_capabilities": requested_capabilities.available(),
+        "validated_runtime_capabilities": validated_capabilities.available(),
+        "validated_runtime_missing_capabilities": validated_capabilities.missing(
+            smoke_requirements,
+        ),
         "full_autonomous_missing_capabilities": full_autonomous_capabilities.missing(
             full_autonomous_requirements,
         ),

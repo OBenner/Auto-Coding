@@ -483,6 +483,8 @@ export interface ProviderRuntimeDiagnostics {
   validatedRuntimeMode?: string;
   validatedRequirements?: string[];
   requestedRuntimeCapabilities?: string[];
+  validatedRuntimeCapabilities?: string[];
+  validatedRuntimeMissingCapabilities?: string[];
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
 }

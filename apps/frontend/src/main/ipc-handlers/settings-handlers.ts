@@ -360,6 +360,8 @@ type ProviderSmokeCliResult = {
     validated_runtime_mode?: string;
     validated_requirements?: string[];
     requested_runtime_capabilities?: string[];
+    validated_runtime_capabilities?: string[];
+    validated_runtime_missing_capabilities?: string[];
     full_autonomous_missing_capabilities?: string[];
     note?: string;
   } | null;
@@ -434,6 +436,8 @@ function mapProviderRuntimeDiagnostics(
     validatedRuntimeMode: diagnostics.validated_runtime_mode,
     validatedRequirements: arrayFromUnknown(diagnostics.validated_requirements),
     requestedRuntimeCapabilities: arrayFromUnknown(diagnostics.requested_runtime_capabilities),
+    validatedRuntimeCapabilities: arrayFromUnknown(diagnostics.validated_runtime_capabilities),
+    validatedRuntimeMissingCapabilities: arrayFromUnknown(diagnostics.validated_runtime_missing_capabilities),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note
   };

@@ -110,6 +110,11 @@ async def test_run_provider_smoke_check_success(
     assert result.runtime_diagnostics["smoke_scope"] == "text_completion_only"
     assert result.runtime_diagnostics["validated_requirements"] == ["text_completion"]
     assert (
+        "text_completion"
+        in result.runtime_diagnostics["validated_runtime_capabilities"]
+    )
+    assert result.runtime_diagnostics["validated_runtime_missing_capabilities"] == []
+    assert (
         "native_tool_loop"
         in result.runtime_diagnostics["full_autonomous_missing_capabilities"]
     )
@@ -210,6 +215,10 @@ async def test_run_provider_smoke_check_generic_edit_runtime(
     assert result.runtime_diagnostics["smoke_scope"] == "generic_edit_tool_loop"
     assert result.runtime_diagnostics["validated_runtime_mode"] == "generic_edit"
     assert "function_tools" in result.runtime_diagnostics["validated_requirements"]
+    assert (
+        "function_tools" in result.runtime_diagnostics["validated_runtime_capabilities"]
+    )
+    assert result.runtime_diagnostics["validated_runtime_missing_capabilities"] == []
     assert fake_provider.session.tool_results[0] == ("call_write", "write_file")
 
 
