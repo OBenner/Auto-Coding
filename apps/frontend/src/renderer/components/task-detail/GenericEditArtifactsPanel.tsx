@@ -24,9 +24,16 @@ import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
 
-interface GenericEditArtifactsPanelProps {
+type GenericEditArtifactsPanelProps = Readonly<{
   manifest: GenericEditArtifactManifest;
-}
+}>;
+
+type ArtifactPreview = Readonly<{
+  artifactName: string;
+  content: string;
+  error: string | null;
+  loading: boolean;
+}>;
 
 function statusVariant(status: string): 'success' | 'destructive' | 'warning' | 'info' | 'muted' {
   const normalizedStatus = status.toLowerCase();
@@ -167,14 +174,31 @@ function mcpToolPolicyName(policy: Record<string, unknown>): string {
   return mcpString(policy.exposed_name) ?? mcpString(policy.name) ?? 'unknown';
 }
 
+function ArtifactPreviewContent({
+  preview,
+  loadingLabel,
+}: Readonly<{ preview: ArtifactPreview; loadingLabel: string }>) {
+  if (preview.loading) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        {loadingLabel}
+      </div>
+    );
+  }
+  if (preview.error) {
+    return <div className="px-3 py-4 text-xs text-destructive">{preview.error}</div>;
+  }
+  return (
+    <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all px-3 py-3 text-xs">
+      {preview.content}
+    </pre>
+  );
+}
+
 export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPanelProps) {
   const { t } = useTranslation(['tasks']);
-  const [preview, setPreview] = useState<{
-    artifactName: string;
-    content: string;
-    error: string | null;
-    loading: boolean;
-  } | null>(null);
+  const [preview, setPreview] = useState<ArtifactPreview | null>(null);
   const activeArtifacts = manifest.artifacts.filter((artifact) => artifact.active);
   const presentActiveArtifacts = activeArtifacts.filter((artifact) => artifact.present).length;
   const mcpSupport = manifest.mcp_support;
@@ -224,7 +248,7 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
     });
 
     try {
-      const result = await window.electronAPI.readFile(artifactPath);
+      const result = await globalThis.electronAPI.readFile(artifactPath);
       if (!result.success || result.data === undefined) {
         throw new Error(result.error || t('tasks:overview.genericEditArtifactLoadFailed'));
       }
@@ -782,10 +806,14 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="space-y-1.5">
               {manifest.recent_events.map((event) => {
                 const meta = recentEventMeta(event);
-                const badgeText =
-                  event.event_type === 'action_result' && typeof event.ok === 'boolean'
-                    ? t(event.ok ? 'tasks:overview.genericEditEventOk' : 'tasks:overview.genericEditEventFailed')
-                    : recentEventBadge(event);
+                let badgeText = recentEventBadge(event);
+                if (event.event_type === 'action_result' && typeof event.ok === 'boolean') {
+                  badgeText = t(
+                    event.ok
+                      ? 'tasks:overview.genericEditEventOk'
+                      : 'tasks:overview.genericEditEventFailed'
+                  );
+                }
                 return (
                   <div
                     key={`${event.sequence}-${event.event_type}`}
@@ -877,18 +905,10 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
-            {preview.loading ? (
-              <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t('tasks:overview.genericEditLoadingArtifact')}
-              </div>
-            ) : preview.error ? (
-              <div className="px-3 py-4 text-xs text-destructive">{preview.error}</div>
-            ) : (
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all px-3 py-3 text-xs">
-                {preview.content}
-              </pre>
-            )}
+            <ArtifactPreviewContent
+              preview={preview}
+              loadingLabel={t('tasks:overview.genericEditLoadingArtifact')}
+            />
           </div>
         )}
       </div>

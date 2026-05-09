@@ -54,7 +54,7 @@ export function TaskOverview({ task }: TaskOverviewProps) {
     setQAEscalation(null);
     try {
       // Load implementation plan
-      const planResult = await window.electronAPI.getImplementationPlan(task.id);
+      const planResult = await globalThis.electronAPI.getImplementationPlan(task.id);
       if (planResult.success && planResult.data) {
         setImplementationPlan(planResult.data);
         // Auto-expand phases with in-progress or failed subtasks
@@ -71,19 +71,19 @@ export function TaskOverview({ task }: TaskOverviewProps) {
       }
 
       // Load Generic Edit v2 runtime artifacts if this task was executed by a generic provider.
-      const manifestResult = await window.electronAPI.getGenericEditArtifactManifest(task.id);
+      const manifestResult = await globalThis.electronAPI.getGenericEditArtifactManifest(task.id);
       if (manifestResult.success && manifestResult.data) {
         setGenericEditManifest(manifestResult.data);
       }
 
       // Load QA report if available
-      const qaResult = await window.electronAPI.getQAReport(task.id);
+      const qaResult = await globalThis.electronAPI.getQAReport(task.id);
       if (qaResult.success && qaResult.data) {
         setQAReport(qaResult.data);
       }
 
       // Load QA escalation if available
-      const escalationResult = await window.electronAPI.getQAEscalation(task.id);
+      const escalationResult = await globalThis.electronAPI.getQAEscalation(task.id);
       if (escalationResult.success && escalationResult.data) {
         setQAEscalation(escalationResult.data);
       }

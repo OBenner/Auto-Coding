@@ -4,13 +4,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import type { GenericEditArtifactManifest } from '../../../../shared/types';
+import {
+  GENERIC_EDIT_TEST_ARTIFACT_PATHS,
+  createGenericEditArtifactManifest,
+} from '../../../../__tests__/fixtures/generic-edit';
 import { GenericEditArtifactsPanel } from '../GenericEditArtifactsPanel';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) => {
       const normalizedKey = key.replace(/^tasks:/, '');
+      const interpolation = (name: string, fallback: string | number) => {
+        const value = values?.[name];
+        return typeof value === 'string' || typeof value === 'number' ? String(value) : String(fallback);
+      };
       const translations: Record<string, string> = {
         'overview.genericEditArtifacts': 'Generic Edit Artifacts',
         'overview.genericEditProvider': 'Provider',
@@ -25,7 +32,7 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditResumable': 'Resumable',
         'overview.genericEditRecoverable': 'Recoverable',
         'overview.genericEditRecoveryPlan': 'Recovery plan',
-        'overview.genericEditArtifactsPresent': `${values?.present ?? 0}/${values?.total ?? 0} present`,
+        'overview.genericEditArtifactsPresent': `${interpolation('present', 0)}/${interpolation('total', 0)} present`,
         'overview.genericEditActiveArtifacts': 'Active artifacts',
         'overview.genericEditMissingArtifact': 'Missing',
         'overview.genericEditViewArtifact': 'View artifact',
@@ -42,10 +49,10 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditRecommendedVerificationTools': 'Verification tools',
         'overview.genericEditResumeEntrypoint': 'Resume entrypoint',
         'overview.genericEditResumeStrategy': 'Resume strategy',
-        'overview.genericEditNextIteration': `Next iteration ${values?.iteration ?? ''}`,
+        'overview.genericEditNextIteration': `Next iteration ${interpolation('iteration', '')}`,
         'overview.genericEditResumeInputs': 'Resume inputs',
         'overview.genericEditMcpSupport': 'MCP support',
-        'overview.genericEditMcpTools': `${values?.count ?? 0} MCP tools`,
+        'overview.genericEditMcpTools': `${interpolation('count', 0)} MCP tools`,
         'overview.genericEditMcpAvailable': 'Available',
         'overview.genericEditMcpUnavailable': 'Unavailable',
         'overview.genericEditMcpActionRequired': 'Action required',
@@ -68,184 +75,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-function createManifest(): GenericEditArtifactManifest {
-  return {
-    artifact_type: 'generic_edit_artifact_manifest',
-    schema_version: 1,
-    timestamp: '2026-05-09T10:00:00Z',
-    provider: 'openai',
-    subtask_id: 'subtask-1',
-    status: 'error',
-    stop_reason: 'max_iterations',
-    entrypoints: {
-      result: '/tmp/result.json',
-      summary: '/tmp/summary.md',
-      events: '/tmp/events.jsonl',
-      session_state: '/tmp/session.json',
-      trace: '/tmp/trace.json',
-    },
-    flags: {
-      recoverable: true,
-      resumable: true,
-      resumed: false,
-      recovery_required: false,
-      recovery_resolved: false,
-      has_recovery_plan: true,
-      has_mutation_snapshots: true,
-      has_transaction_groups: true,
-    },
-    counts: {
-      iteration_count: 2,
-      action_count: 5,
-      failed_action_count: 1,
-      event_count: 9,
-      transaction_count: 3,
-      transaction_group_count: 1,
-      mutation_snapshot_count: 2,
-      recovery_attempt_count: 1,
-      failed_recovery_attempt_count: 0,
-    },
-    artifacts: [
-      {
-        name: 'generic_edit_result',
-        kind: 'result',
-        path: '/tmp/result.json',
-        active: true,
-        required: true,
-        present: true,
-      },
-      {
-        name: 'generic_edit_recovery_plan',
-        kind: 'recovery_plan',
-        path: '/tmp/recovery.json',
-        active: true,
-        required: false,
-        present: false,
-      },
-    ],
-    recent_events: [
-      {
-        sequence: 8,
-        event_type: 'action_result',
-        tool: 'read_file',
-        ok: false,
-        message: 'File not found',
-        transaction_id: 'json_actions-2',
-      },
-    ],
-    recovery_summary: {
-      version: 1,
-      status: 'requires_resolution',
-      finish_blocked: true,
-      unresolved_transaction_group_count: 1,
-      unresolved_transaction_group_ids: ['transaction-group-1'],
-      warning_count: 1,
-      warnings: ['Run focused verification before finish.'],
-      resolution_strategies: ['rollback_transaction', 'repair_mutation'],
-      recommended_verification_tools: ['git_diff', 'run_command'],
-    },
-    recovery_actions: [
-      {
-        id: 'inspect-json_actions-1-1',
-        kind: 'inspect_diff',
-        tool: 'git_diff',
-        transaction_id: 'json_actions-1',
-        transaction_group_id: 'transaction-group-1',
-        paths: ['partial.txt'],
-        required_before_finish: true,
-      },
-      {
-        id: 'rollback-json_actions-1',
-        kind: 'rollback_transaction',
-        tool: 'rollback_transaction',
-        transaction_id: 'json_actions-1',
-        transaction_group_id: 'transaction-group-1',
-        rollback_operation_id: 'rollback-json_actions-1',
-        mutation_snapshot_ids: ['mutation-1'],
-        required_before_finish: true,
-      },
-    ],
-    resume_action: {
-      runtime: 'generic_edit',
-      checkpoint_path: '/tmp/recovery-checkpoint.json',
-      strategy: 'recover_partial_failure',
-      next_iteration: 3,
-    },
-    resume_inputs: {
-      trace_artifact: '/tmp/trace.json',
-      event_artifact: '/tmp/events.jsonl',
-      recovery_plan_artifact: '/tmp/recovery.json',
-      mutation_snapshot_artifact: '/tmp/mutation-snapshots.json',
-    },
-    mcp_support: {
-      strategy: 'local_bridge',
-      reason: 'External MCP tools are bridged through generic_edit.',
-      server: 'auto-claude',
-      tool_count: 2,
-      available_servers: ['context7'],
-      unavailable_servers: ['linear'],
-      server_statuses: [
-        {
-          server: 'context7',
-          display_name: 'Context7',
-          availability: 'available',
-          runtime_path: 'external_bridge',
-          bridgeable: true,
-          reason: 'Available through Auto Code external MCP client bridge.',
-          notes: 'Documentation server',
-          external_client: {
-            status: 'enabled',
-            transport: 'stdio',
-          },
-        },
-      ],
-      bridge_plan: {
-        status: 'partial',
-        action_required: 'configure_external_mcp_client',
-        recommended_runtime_path: 'external_mcp_client',
-        native_required_servers: ['graphiti'],
-        local_bridge_required_servers: ['linear'],
-        external_bridge_required_servers: ['puppeteer'],
-        unsupported_servers: ['unknown-docs'],
-        bridged_servers: ['context7'],
-        external_bridged_servers: ['puppeteer'],
-      },
-      bridge: {
-        tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
-        tool_policies: [
-          {
-            server: 'context7',
-            name: 'resolve-library-id',
-            exposed_name: 'mcp__context7__resolve-library-id',
-            permission: 'mcp:context7:read',
-            audit_level: 'read',
-            mutating: false,
-            audit_required: true,
-          },
-        ],
-        permission_policy: {
-          mode: 'allowlist',
-          allowed_permissions: ['mcp:context7:read'],
-        },
-        server_statuses: [
-          {
-            server: 'context7',
-            display_name: 'Context7',
-            availability: 'available',
-            runtime_path: 'external_bridge',
-            bridgeable: true,
-            reason: 'Available through Auto Code external MCP client bridge.',
-            notes: 'Documentation server',
-            external_client: {
-              status: 'enabled',
-              transport: 'stdio',
-            },
-          },
-        ],
-      },
-    },
-    resume: null,
-  };
+function createManifest() {
+  return createGenericEditArtifactManifest();
 }
 
 describe('GenericEditArtifactsPanel', () => {
@@ -282,14 +113,14 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Resume strategy')).toBeInTheDocument();
     expect(screen.getByText('recover_partial_failure')).toBeInTheDocument();
     expect(screen.getByText('Next iteration 3')).toBeInTheDocument();
-    expect(screen.getByText('/tmp/recovery-checkpoint.json')).toBeInTheDocument();
+    expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.checkpoint)).toBeInTheDocument();
     expect(screen.getByText('Resume inputs')).toBeInTheDocument();
     expect(screen.getByText('trace_artifact')).toBeInTheDocument();
-    expect(screen.getByText('/tmp/trace.json')).toBeInTheDocument();
+    expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.trace)).toBeInTheDocument();
     expect(screen.getByText('event_artifact')).toBeInTheDocument();
-    expect(screen.getByText('/tmp/events.jsonl')).toBeInTheDocument();
+    expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.events)).toBeInTheDocument();
     expect(screen.getByText('mutation_snapshot_artifact')).toBeInTheDocument();
-    expect(screen.getByText('/tmp/mutation-snapshots.json')).toBeInTheDocument();
+    expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.mutationSnapshots)).toBeInTheDocument();
     expect(screen.getByText('MCP support')).toBeInTheDocument();
     expect(screen.getByText('local_bridge')).toBeInTheDocument();
     expect(screen.getByText('2 MCP tools')).toBeInTheDocument();
@@ -332,7 +163,7 @@ describe('GenericEditArtifactsPanel', () => {
 
   it('opens an inline preview for present artifacts with paths', async () => {
     const readFile = vi.fn().mockResolvedValue({ success: true, data: '{"ok": true}' });
-    Object.defineProperty(window, 'electronAPI', {
+    Object.defineProperty(globalThis, 'electronAPI', {
       value: { readFile },
       configurable: true,
     });
@@ -342,7 +173,7 @@ describe('GenericEditArtifactsPanel', () => {
     fireEvent.click(screen.getByLabelText('View artifact'));
 
     await waitFor(() => {
-      expect(readFile).toHaveBeenCalledWith('/tmp/result.json');
+      expect(readFile).toHaveBeenCalledWith(GENERIC_EDIT_TEST_ARTIFACT_PATHS.result);
     });
     expect(await screen.findByText('Artifact preview')).toBeInTheDocument();
     expect(screen.getByText('{"ok": true}')).toBeInTheDocument();

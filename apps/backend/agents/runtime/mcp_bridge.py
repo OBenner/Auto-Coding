@@ -35,6 +35,8 @@ DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION = "2024-11-05"
 DEFAULT_EXTERNAL_MCP_HTTP_PROTOCOL_VERSION = "2025-06-18"
 DEFAULT_EXTERNAL_MCP_TIMEOUT_SECONDS = 30.0
 SUPPORTED_EXTERNAL_MCP_TRANSPORTS = ("stdio", "http")
+EXTERNAL_MCP_METHOD_TOOLS_CALL = "tools/call"
+EXTERNAL_MCP_METHOD_TOOLS_LIST = "tools/list"
 DESCRIPTION_OPTIONAL_MAX_RESULTS = "Optional maximum number of results."
 DESCRIPTION_OPTIONAL_TEAM_ID_OR_KEY = "Optional team ID or key."
 McpSupportStrategy = Literal["native", "local_bridge", "unavailable"]
@@ -1491,19 +1493,23 @@ class RuntimeExternalMcpClient:
         if self._process is not None and self._process.returncode is None:
             return await self._request(
                 self._process,
-                "tools/call",
+                EXTERNAL_MCP_METHOD_TOOLS_CALL,
                 {"name": name, "arguments": arguments},
             )
         return await self._with_process(
-            method="tools/call",
+            method=EXTERNAL_MCP_METHOD_TOOLS_CALL,
             params={"name": name, "arguments": arguments},
         )
 
     async def list_tools(self) -> dict[str, Any]:
         """Start a stdio MCP server, list tools, and shut it down."""
         if self._process is not None and self._process.returncode is None:
-            return await self._request(self._process, "tools/list", {})
-        return await self._with_process(method="tools/list", params={})
+            return await self._request(
+                self._process, EXTERNAL_MCP_METHOD_TOOLS_LIST, {}
+            )
+        return await self._with_process(
+            method=EXTERNAL_MCP_METHOD_TOOLS_LIST, params={}
+        )
 
     async def _with_process(
         self,
@@ -1727,19 +1733,21 @@ class RuntimeExternalMcpHttpClient:
         if self._client is not None:
             return await self._request(
                 self._client,
-                "tools/call",
+                EXTERNAL_MCP_METHOD_TOOLS_CALL,
                 {"name": name, "arguments": arguments},
             )
         return await self._with_http_session(
-            method="tools/call",
+            method=EXTERNAL_MCP_METHOD_TOOLS_CALL,
             params={"name": name, "arguments": arguments},
         )
 
     async def list_tools(self) -> dict[str, Any]:
         """Initialize an HTTP MCP session, list tools, and close it."""
         if self._client is not None:
-            return await self._request(self._client, "tools/list", {})
-        return await self._with_http_session(method="tools/list", params={})
+            return await self._request(self._client, EXTERNAL_MCP_METHOD_TOOLS_LIST, {})
+        return await self._with_http_session(
+            method=EXTERNAL_MCP_METHOD_TOOLS_LIST, params={}
+        )
 
     async def _with_http_session(
         self,

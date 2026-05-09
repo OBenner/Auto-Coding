@@ -1113,6 +1113,8 @@ export interface ElectronAPI {
 }
 
 declare global {
+  var electronAPI: ElectronAPI;
+
   interface Window {
     electronAPI: ElectronAPI;
     DEBUG: boolean;

@@ -1,14 +1,24 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
-import os from 'os';
-import path from 'path';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import {
+  GENERIC_EDIT_TEST_ARTIFACT_PATHS,
+  createGenericEditArtifactManifest,
+} from '../../../__tests__/fixtures/generic-edit';
 import type { Project, Task } from '../../../shared/types';
 import { readGenericEditArtifactManifest } from './spec-file-readers';
 
 const tempRoots: string[] = [];
+let tempProjectCounter = 0;
 
 async function createTempProject(): Promise<string> {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'generic-edit-manifest-'));
+  tempProjectCounter += 1;
+  const tempRoot = path.join(
+    process.cwd(),
+    '.vitest-tmp',
+    `generic-edit-manifest-${Date.now()}-${tempProjectCounter}`
+  );
+  await mkdir(tempRoot, { recursive: true });
   tempRoots.push(tempRoot);
   return tempRoot;
 }
@@ -71,60 +81,20 @@ describe('readGenericEditArtifactManifest', () => {
     const project = createProject(projectPath);
     const task = createTask();
 
+    const manifestPayload = createGenericEditArtifactManifest();
     await writeManifest(projectPath, task.specId, {
-      artifact_type: 'generic_edit_artifact_manifest',
-      schema_version: 1,
-      timestamp: '2026-05-09T10:00:00Z',
-      provider: 'openai',
-      subtask_id: 'subtask-1',
-      status: 'error',
-      stop_reason: 'max_iterations',
-      entrypoints: {
-        result: '/tmp/result.json',
-        summary: '/tmp/summary.md',
-        events: '/tmp/events.jsonl',
-        session_state: '/tmp/session.json',
-        trace: '/tmp/trace.json',
-      },
-      flags: {
-        recoverable: true,
-        resumable: true,
-        resumed: false,
-        recovery_required: false,
-        recovery_resolved: false,
-        has_recovery_plan: true,
-        has_mutation_snapshots: true,
-        has_transaction_groups: true,
-      },
+      ...manifestPayload,
       counts: {
+        ...manifestPayload.counts,
         iteration_count: 1,
         action_count: 2,
         failed_action_count: 0,
         event_count: 4,
         transaction_count: 1,
-        transaction_group_count: 1,
         mutation_snapshot_count: 1,
         recovery_attempt_count: 0,
         failed_recovery_attempt_count: 0,
       },
-      artifacts: [
-        {
-          name: 'generic_edit_result',
-          kind: 'result',
-          path: '/tmp/result.json',
-          active: true,
-          required: true,
-          present: true,
-        },
-        {
-          name: 'generic_edit_recovery_plan',
-          kind: 'recovery_plan',
-          path: '/tmp/recovery.json',
-          active: true,
-          required: false,
-          present: false,
-        },
-      ],
       recent_events: [
         {
           sequence: 4,
@@ -135,118 +105,13 @@ describe('readGenericEditArtifactManifest', () => {
           recovery_required: true,
         },
       ],
-      recovery_summary: {
-        version: 1,
-        status: 'requires_resolution',
-        finish_blocked: true,
-        unresolved_transaction_group_count: 1,
-        unresolved_transaction_group_ids: ['transaction-group-1'],
-        warning_count: 0,
-        warnings: [],
-        resolution_strategies: ['rollback_transaction', 'repair_mutation'],
-        recommended_verification_tools: ['git_diff', 'run_command'],
-      },
-      recovery_actions: [
-        {
-          id: 'inspect-json_actions-1-1',
-          kind: 'inspect_diff',
-          tool: 'git_diff',
-          transaction_id: 'json_actions-1',
-          transaction_group_id: 'transaction-group-1',
-          paths: ['partial.txt'],
-          required_before_finish: true,
-        },
-        {
-          id: 'rollback-json_actions-1',
-          kind: 'rollback_transaction',
-          tool: 'rollback_transaction',
-          transaction_id: 'json_actions-1',
-          transaction_group_id: 'transaction-group-1',
-          rollback_operation_id: 'rollback-json_actions-1',
-          mutation_snapshot_ids: ['mutation-1'],
-          required_before_finish: true,
-        },
-      ],
-      mcp_support: {
-        strategy: 'local_bridge',
-        reason: 'External MCP tools are bridged through generic_edit.',
-        server: 'auto-claude',
-        tool_count: 2,
-        available_servers: ['context7'],
-        unavailable_servers: ['linear'],
-        server_statuses: [
-          {
-            server: 'context7',
-            display_name: 'Context7',
-            availability: 'available',
-            runtime_path: 'external_bridge',
-            bridgeable: true,
-            reason: 'Available through Auto Code external MCP client bridge.',
-            notes: 'Documentation server',
-            external_client: {
-              status: 'enabled',
-              transport: 'stdio',
-            },
-          },
-        ],
-        bridge_plan: {
-          status: 'partial',
-          action_required: 'configure_external_mcp_client',
-          recommended_runtime_path: 'external_mcp_client',
-          native_required_servers: ['graphiti'],
-          local_bridge_required_servers: ['linear'],
-          external_bridge_required_servers: ['puppeteer'],
-          unsupported_servers: ['unknown-docs'],
-          bridged_servers: ['context7'],
-          external_bridged_servers: ['context7'],
-        },
-        bridge: {
-          tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
-          tool_policies: [
-            {
-              server: 'context7',
-              name: 'resolve-library-id',
-              exposed_name: 'mcp__context7__resolve-library-id',
-              permission: 'mcp:context7:read',
-              audit_level: 'read',
-              mutating: false,
-              audit_required: true,
-            },
-          ],
-          permission_policy: {
-            mode: 'allowlist',
-            allowed_permissions: ['mcp:context7:read'],
-          },
-          server_statuses: [
-            {
-              server: 'context7',
-              display_name: 'Context7',
-              availability: 'available',
-              runtime_path: 'external_bridge',
-              bridgeable: true,
-              reason: 'Available through Auto Code external MCP client bridge.',
-              notes: 'Documentation server',
-              external_client: {
-                status: 'enabled',
-                transport: 'stdio',
-              },
-            },
-          ],
-        },
-      },
-      resume_action: {
-        runtime: 'generic_edit',
-        checkpoint_path: '/tmp/recovery-checkpoint.json',
-        strategy: 'recover_partial_failure',
-        next_iteration: 3,
-      },
-      resume_inputs: {
-        trace_artifact: '/tmp/trace.json',
-        event_artifact: '/tmp/events.jsonl',
-        recovery_plan_artifact: '/tmp/recovery.json',
-        mutation_snapshot_artifact: '/tmp/mutation-snapshots.json',
-      },
-      resume: null,
+      recovery_summary: manifestPayload.recovery_summary
+        ? {
+            ...manifestPayload.recovery_summary,
+            warning_count: 0,
+            warnings: [],
+          }
+        : null,
     });
 
     const manifest = await readGenericEditArtifactManifest(project, task);
@@ -300,83 +165,17 @@ describe('readGenericEditArtifactManifest', () => {
     ]);
     expect(manifest?.resume_action).toEqual({
       runtime: 'generic_edit',
-      checkpoint_path: '/tmp/recovery-checkpoint.json',
+      checkpoint_path: GENERIC_EDIT_TEST_ARTIFACT_PATHS.checkpoint,
       strategy: 'recover_partial_failure',
       next_iteration: 3,
     });
     expect(manifest?.resume_inputs).toEqual({
-      trace_artifact: '/tmp/trace.json',
-      event_artifact: '/tmp/events.jsonl',
-      recovery_plan_artifact: '/tmp/recovery.json',
-      mutation_snapshot_artifact: '/tmp/mutation-snapshots.json',
+      trace_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.trace,
+      event_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.events,
+      recovery_plan_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.recovery,
+      mutation_snapshot_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.mutationSnapshots,
     });
-    expect(manifest?.mcp_support).toEqual({
-      strategy: 'local_bridge',
-      reason: 'External MCP tools are bridged through generic_edit.',
-      server: 'auto-claude',
-      tool_count: 2,
-      available_servers: ['context7'],
-      unavailable_servers: ['linear'],
-      server_statuses: [
-        {
-          server: 'context7',
-          display_name: 'Context7',
-          availability: 'available',
-          runtime_path: 'external_bridge',
-          bridgeable: true,
-          reason: 'Available through Auto Code external MCP client bridge.',
-          notes: 'Documentation server',
-          external_client: {
-            status: 'enabled',
-            transport: 'stdio',
-          },
-        },
-      ],
-      bridge_plan: {
-        status: 'partial',
-        action_required: 'configure_external_mcp_client',
-        recommended_runtime_path: 'external_mcp_client',
-        native_required_servers: ['graphiti'],
-        local_bridge_required_servers: ['linear'],
-        external_bridge_required_servers: ['puppeteer'],
-        unsupported_servers: ['unknown-docs'],
-        bridged_servers: ['context7'],
-        external_bridged_servers: ['context7'],
-      },
-      bridge: {
-        tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
-        tool_policies: [
-          {
-            server: 'context7',
-            name: 'resolve-library-id',
-            exposed_name: 'mcp__context7__resolve-library-id',
-            permission: 'mcp:context7:read',
-            audit_level: 'read',
-            mutating: false,
-            audit_required: true,
-          },
-        ],
-        permission_policy: {
-          mode: 'allowlist',
-          allowed_permissions: ['mcp:context7:read'],
-        },
-        server_statuses: [
-          {
-            server: 'context7',
-            display_name: 'Context7',
-            availability: 'available',
-            runtime_path: 'external_bridge',
-            bridgeable: true,
-            reason: 'Available through Auto Code external MCP client bridge.',
-            notes: 'Documentation server',
-            external_client: {
-              status: 'enabled',
-              transport: 'stdio',
-            },
-          },
-        ],
-      },
-    });
+    expect(manifest?.mcp_support).toEqual(manifestPayload.mcp_support);
   });
 
   it('drops malformed optional mcp support without rejecting the manifest', async () => {
@@ -384,16 +183,14 @@ describe('readGenericEditArtifactManifest', () => {
     const project = createProject(projectPath);
     const task = createTask();
 
+    const manifestPayload = createGenericEditArtifactManifest();
     await writeManifest(projectPath, task.specId, {
-      artifact_type: 'generic_edit_artifact_manifest',
-      schema_version: 1,
-      timestamp: '2026-05-09T10:00:00Z',
-      provider: 'openai',
+      ...manifestPayload,
       subtask_id: null,
       status: 'success',
       stop_reason: 'finish',
       entrypoints: {
-        result: '/tmp/result.json',
+        result: GENERIC_EDIT_TEST_ARTIFACT_PATHS.result,
       },
       flags: {
         recoverable: false,
@@ -420,7 +217,7 @@ describe('readGenericEditArtifactManifest', () => {
         {
           name: 'generic_edit_result',
           kind: 'result',
-          path: '/tmp/result.json',
+          path: GENERIC_EDIT_TEST_ARTIFACT_PATHS.result,
           active: true,
           required: true,
           present: true,
