@@ -19,6 +19,7 @@ import type {
   QAEscalation,
   GenericEditArtifactManifest,
   GenericEditArtifactManifestEntry,
+  GenericEditRecoveryAction,
   GenericEditRecoverySummary,
   GenericEditRecentEvent
 } from '../../../shared/types';
@@ -259,6 +260,82 @@ function normalizeRecoverySummary(value: unknown): GenericEditRecoverySummary | 
   };
 }
 
+function normalizeOptionalString(
+  result: GenericEditRecoveryAction,
+  value: Record<string, unknown>,
+  field: 'transaction_id' | 'transaction_group_id' | 'rollback_operation_id'
+): boolean {
+  const fieldValue = value[field];
+  if (fieldValue === undefined) return true;
+  if (typeof fieldValue !== 'string') return false;
+  result[field] = fieldValue;
+  return true;
+}
+
+function normalizeOptionalStringList(
+  result: GenericEditRecoveryAction,
+  value: Record<string, unknown>,
+  field: 'paths' | 'mutation_snapshot_ids'
+): boolean {
+  const fieldValue = value[field];
+  if (fieldValue === undefined) return true;
+  const normalized = normalizeStringList(fieldValue);
+  if (normalized === null) return false;
+  result[field] = normalized;
+  return true;
+}
+
+function normalizeRecoveryAction(value: unknown): GenericEditRecoveryAction | null {
+  if (!isRecord(value)) return null;
+  const id = readString(value, 'id');
+  const kind = readString(value, 'kind');
+  const tool = readString(value, 'tool');
+  const { required_before_finish } = value;
+
+  if (id === null || kind === null || tool === null || typeof required_before_finish !== 'boolean') {
+    return null;
+  }
+
+  const result: GenericEditRecoveryAction = {
+    id,
+    kind,
+    tool,
+    required_before_finish,
+  };
+  const optionalStringFields: Array<'transaction_id' | 'transaction_group_id' | 'rollback_operation_id'> = [
+    'transaction_id',
+    'transaction_group_id',
+    'rollback_operation_id',
+  ];
+  const optionalStringListFields: Array<'paths' | 'mutation_snapshot_ids'> = [
+    'paths',
+    'mutation_snapshot_ids',
+  ];
+
+  for (const field of optionalStringFields) {
+    if (!normalizeOptionalString(result, value, field)) return null;
+  }
+  for (const field of optionalStringListFields) {
+    if (!normalizeOptionalStringList(result, value, field)) return null;
+  }
+  return result;
+}
+
+function normalizeRecoveryActions(value: unknown): GenericEditRecoveryAction[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditRecoveryAction[] = [];
+  for (const action of value) {
+    const normalizedAction = normalizeRecoveryAction(action);
+    if (!normalizedAction) {
+      return null;
+    }
+    result.push(normalizedAction);
+  }
+  return result;
+}
+
 function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifactManifest | null {
   if (!isRecord(value)) return null;
   if (value.artifact_type !== 'generic_edit_artifact_manifest' || value.schema_version !== 1) {
@@ -294,6 +371,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
   ]);
   const recentEvents = normalizeRecentEvents(value.recent_events);
   const recoverySummary = normalizeRecoverySummary(value.recovery_summary);
+  const recoveryActions = normalizeRecoveryActions(value.recovery_actions);
 
   if (
     timestamp === null ||
@@ -304,6 +382,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     flags === null ||
     counts === null ||
     recentEvents === null ||
+    recoveryActions === null ||
     !Array.isArray(value.artifacts)
   ) {
     return null;
@@ -332,6 +411,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     artifacts,
     recent_events: recentEvents,
     recovery_summary: recoverySummary,
+    recovery_actions: recoveryActions,
     mcp_support: isRecord(value.mcp_support) ? value.mcp_support : null,
     resume: isRecord(value.resume) ? value.resume : null,
   };

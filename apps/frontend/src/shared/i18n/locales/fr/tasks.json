@@ -499,6 +499,8 @@
     "genericEditRecoveryStatus": "État de récupération",
     "genericEditFinishBlocked": "Fin bloquée",
     "genericEditRecoveryWarnings": "Avertissements",
+    "genericEditRecoveryActions": "Actions de récupération",
+    "genericEditRequiredAction": "Requis",
     "genericEditViewArtifact": "Voir l'artefact",
     "genericEditArtifactPreview": "Aperçu de l'artefact",
     "genericEditClosePreview": "Fermer l'aperçu",

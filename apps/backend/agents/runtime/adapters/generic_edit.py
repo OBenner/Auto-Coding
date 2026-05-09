@@ -214,6 +214,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT = 5
+GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIMIT = 10
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "sequence",
     "event_type",
@@ -230,6 +231,18 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "failed_action_count",
     "recovery_attempt_count",
     "failed_recovery_attempt_count",
+)
+GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_STRING_FIELDS = (
+    "id",
+    "kind",
+    "tool",
+    "transaction_id",
+    "transaction_group_id",
+    "rollback_operation_id",
+)
+GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIST_FIELDS = (
+    "paths",
+    "mutation_snapshot_ids",
 )
 
 
@@ -3312,6 +3325,46 @@ def compact_generic_edit_manifest_event(event: dict[str, Any]) -> dict[str, Any]
     return compact
 
 
+def compact_generic_edit_manifest_recovery_action(
+    action: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a bounded recovery action summary for UI control planes."""
+    compact: dict[str, Any] = {}
+    for field in GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_STRING_FIELDS:
+        value = action.get(field)
+        if isinstance(value, str):
+            compact[field] = value[:300]
+    for field in GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIST_FIELDS:
+        value = action.get(field)
+        if not isinstance(value, list):
+            continue
+        compact[field] = [
+            str(item)[:300] for item in value[:20] if isinstance(item, str)
+        ]
+    if isinstance(action.get("required_before_finish"), bool):
+        compact["required_before_finish"] = action["required_before_finish"]
+    return compact
+
+
+def compact_generic_edit_manifest_recovery_actions(
+    recovery_plan: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return bounded recovery next actions from a recovery plan."""
+    if not isinstance(recovery_plan, dict):
+        return []
+    actions = recovery_plan.get("next_actions")
+    if not isinstance(actions, list):
+        return []
+    compact_actions: list[dict[str, Any]] = []
+    for action in actions[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIMIT]:
+        if not isinstance(action, dict):
+            continue
+        compact_action = compact_generic_edit_manifest_recovery_action(action)
+        if compact_action:
+            compact_actions.append(compact_action)
+    return compact_actions
+
+
 def build_generic_edit_manifest_recovery_summary(
     *,
     transaction_group_summary: dict[str, Any],
@@ -3436,6 +3489,9 @@ def build_generic_edit_artifact_manifest(
             compact_generic_edit_manifest_event(event)
             for event in events[-GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT:]
         ],
+        "recovery_actions": compact_generic_edit_manifest_recovery_actions(
+            recovery_plan
+        ),
         "recovery_summary": build_generic_edit_manifest_recovery_summary(
             transaction_group_summary=transaction_group_summary,
             recovery_plan=recovery_plan,

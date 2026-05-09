@@ -148,6 +148,18 @@ export interface GenericEditRecoverySummary {
   recommended_verification_tools: string[];
 }
 
+export interface GenericEditRecoveryAction {
+  id: string;
+  kind: string;
+  tool: string;
+  transaction_id?: string;
+  transaction_group_id?: string;
+  rollback_operation_id?: string;
+  paths?: string[];
+  mutation_snapshot_ids?: string[];
+  required_before_finish: boolean;
+}
+
 export interface GenericEditArtifactManifest {
   artifact_type: 'generic_edit_artifact_manifest';
   schema_version: 1;
@@ -190,6 +202,7 @@ export interface GenericEditArtifactManifest {
   artifacts: GenericEditArtifactManifestEntry[];
   recent_events: GenericEditRecentEvent[];
   recovery_summary: GenericEditRecoverySummary | null;
+  recovery_actions: GenericEditRecoveryAction[];
   mcp_support: Record<string, unknown> | null;
   resume: Record<string, unknown> | null;
 }

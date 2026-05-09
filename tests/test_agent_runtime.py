@@ -4716,6 +4716,27 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
             "required_before_finish": True,
         },
     ]
+    expected_manifest_recovery_actions = [
+        {
+            "id": "inspect-json_actions-1-1",
+            "kind": "inspect_diff",
+            "tool": "git_diff",
+            "transaction_id": "json_actions-1",
+            "transaction_group_id": "transaction-group-1",
+            "paths": ["partial.txt"],
+            "required_before_finish": True,
+        },
+        {
+            "id": "rollback-json_actions-1",
+            "kind": "rollback_transaction",
+            "tool": "rollback_transaction",
+            "transaction_id": "json_actions-1",
+            "transaction_group_id": "transaction-group-1",
+            "rollback_operation_id": "rollback-json_actions-1",
+            "mutation_snapshot_ids": ["mutation-1"],
+            "required_before_finish": True,
+        },
+    ]
     expected_group_policy = {
         "version": 1,
         "status": "requires_resolution",
@@ -4771,6 +4792,7 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         "resolution_strategies": ["rollback_transaction", "repair_mutation"],
         "recommended_verification_tools": ["git_diff", "run_command"],
     }
+    assert manifest["recovery_actions"] == expected_manifest_recovery_actions
     rollback_operation = recovery_plan["rollback_operations"][0]
     assert rollback_operation["tool"] == "rollback_transaction"
     assert rollback_operation["transaction_id"] == "json_actions-1"

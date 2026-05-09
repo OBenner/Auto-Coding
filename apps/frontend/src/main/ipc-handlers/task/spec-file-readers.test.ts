@@ -146,6 +146,27 @@ describe('readGenericEditArtifactManifest', () => {
         resolution_strategies: ['rollback_transaction', 'repair_mutation'],
         recommended_verification_tools: ['git_diff', 'run_command'],
       },
+      recovery_actions: [
+        {
+          id: 'inspect-json_actions-1-1',
+          kind: 'inspect_diff',
+          tool: 'git_diff',
+          transaction_id: 'json_actions-1',
+          transaction_group_id: 'transaction-group-1',
+          paths: ['partial.txt'],
+          required_before_finish: true,
+        },
+        {
+          id: 'rollback-json_actions-1',
+          kind: 'rollback_transaction',
+          tool: 'rollback_transaction',
+          transaction_id: 'json_actions-1',
+          transaction_group_id: 'transaction-group-1',
+          rollback_operation_id: 'rollback-json_actions-1',
+          mutation_snapshot_ids: ['mutation-1'],
+          required_before_finish: true,
+        },
+      ],
       mcp_support: { enabled: true },
       resume: null,
     });
@@ -178,6 +199,27 @@ describe('readGenericEditArtifactManifest', () => {
       unresolved_transaction_group_ids: ['transaction-group-1'],
       resolution_strategies: ['rollback_transaction', 'repair_mutation'],
     });
+    expect(manifest?.recovery_actions).toEqual([
+      {
+        id: 'inspect-json_actions-1-1',
+        kind: 'inspect_diff',
+        tool: 'git_diff',
+        transaction_id: 'json_actions-1',
+        transaction_group_id: 'transaction-group-1',
+        paths: ['partial.txt'],
+        required_before_finish: true,
+      },
+      {
+        id: 'rollback-json_actions-1',
+        kind: 'rollback_transaction',
+        tool: 'rollback_transaction',
+        transaction_id: 'json_actions-1',
+        transaction_group_id: 'transaction-group-1',
+        rollback_operation_id: 'rollback-json_actions-1',
+        mutation_snapshot_ids: ['mutation-1'],
+        required_before_finish: true,
+      },
+    ]);
   });
 
   it('returns null when the manifest has not been written yet', async () => {

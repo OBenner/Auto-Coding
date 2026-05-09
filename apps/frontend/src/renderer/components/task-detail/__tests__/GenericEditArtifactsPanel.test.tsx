@@ -36,6 +36,8 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditRecoveryStatus': 'Recovery status',
         'overview.genericEditFinishBlocked': 'Finish blocked',
         'overview.genericEditRecoveryWarnings': 'Warnings',
+        'overview.genericEditRecoveryActions': 'Recovery actions',
+        'overview.genericEditRequiredAction': 'Required',
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -118,6 +120,27 @@ function createManifest(): GenericEditArtifactManifest {
       resolution_strategies: ['rollback_transaction', 'repair_mutation'],
       recommended_verification_tools: ['git_diff', 'run_command'],
     },
+    recovery_actions: [
+      {
+        id: 'inspect-json_actions-1-1',
+        kind: 'inspect_diff',
+        tool: 'git_diff',
+        transaction_id: 'json_actions-1',
+        transaction_group_id: 'transaction-group-1',
+        paths: ['partial.txt'],
+        required_before_finish: true,
+      },
+      {
+        id: 'rollback-json_actions-1',
+        kind: 'rollback_transaction',
+        tool: 'rollback_transaction',
+        transaction_id: 'json_actions-1',
+        transaction_group_id: 'transaction-group-1',
+        rollback_operation_id: 'rollback-json_actions-1',
+        mutation_snapshot_ids: ['mutation-1'],
+        required_before_finish: true,
+      },
+    ],
     mcp_support: null,
     resume: null,
   };
@@ -144,6 +167,11 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Finish blocked')).toBeInTheDocument();
     expect(screen.getByText('Warnings')).toBeInTheDocument();
     expect(screen.getByText('Run focused verification before finish.')).toBeInTheDocument();
+    expect(screen.getByText('Recovery actions')).toBeInTheDocument();
+    expect(screen.getByText('inspect_diff')).toBeInTheDocument();
+    expect(screen.getByText('rollback_transaction')).toBeInTheDocument();
+    expect(screen.getByText(/partial.txt/)).toBeInTheDocument();
+    expect(screen.getAllByText('Required')).toHaveLength(2);
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {

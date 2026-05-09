@@ -500,6 +500,8 @@
     "genericEditRecoveryStatus": "Recovery status",
     "genericEditFinishBlocked": "Finish blocked",
     "genericEditRecoveryWarnings": "Warnings",
+    "genericEditRecoveryActions": "Recovery actions",
+    "genericEditRequiredAction": "Required",
     "genericEditViewArtifact": "View artifact",
     "genericEditArtifactPreview": "Artifact preview",
     "genericEditClosePreview": "Close preview",
