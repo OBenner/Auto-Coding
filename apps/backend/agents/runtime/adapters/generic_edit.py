@@ -315,22 +315,25 @@ class GenericEditRuntimeSession:
             agent_type=self.agent_type,
         )
 
-        if self._supports_native_tool_calls():
-            return await self._run_native_tool_loop(
+        try:
+            if self._supports_native_tool_calls():
+                return await self._run_native_tool_loop(
+                    message=message,
+                    spec_dir=spec_dir,
+                    verbose=verbose,
+                    phase=phase,
+                    subtask_id=subtask_id,
+                )
+
+            return await self._run_json_action_loop(
                 message=message,
                 spec_dir=spec_dir,
                 verbose=verbose,
                 phase=phase,
                 subtask_id=subtask_id,
             )
-
-        return await self._run_json_action_loop(
-            message=message,
-            spec_dir=spec_dir,
-            verbose=verbose,
-            phase=phase,
-            subtask_id=subtask_id,
-        )
+        finally:
+            await self._close_mcp_bridge()
 
     async def resume(
         self,
@@ -371,15 +374,18 @@ class GenericEditRuntimeSession:
             start_iteration=next_iteration,
         )
 
-        return await self._run_json_action_loop(
-            message=message,
-            spec_dir=spec_dir,
-            verbose=verbose,
-            phase=phase,
-            subtask_id=subtask_id or checkpoint.get("subtask_id"),
-            initial_trace=trace,
-            start_iteration=next_iteration,
-        )
+        try:
+            return await self._run_json_action_loop(
+                message=message,
+                spec_dir=spec_dir,
+                verbose=verbose,
+                phase=phase,
+                subtask_id=subtask_id or checkpoint.get("subtask_id"),
+                initial_trace=trace,
+                start_iteration=next_iteration,
+            )
+        finally:
+            await self._close_mcp_bridge()
 
     async def _run_json_action_loop(
         self,
@@ -1220,6 +1226,11 @@ class GenericEditRuntimeSession:
         if self._mcp_bridge is not None:
             schemas.extend(self._mcp_bridge.provider_tool_schemas())
         return schemas
+
+    async def _close_mcp_bridge(self) -> None:
+        if self._mcp_bridge is None:
+            return
+        await self._mcp_bridge.close()
 
     async def _execute_action(
         self,

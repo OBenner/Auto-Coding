@@ -4324,6 +4324,208 @@ async def test_external_mcp_http_client_lists_tools_with_session_and_sse(
 
 
 @pytest.mark.asyncio
+async def test_external_mcp_http_client_reuses_open_session_until_closed(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+        if payload["method"] == "tools/call":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": payload["params"]["arguments"]["query"],
+                            }
+                        ]
+                    },
+                },
+            )
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    client = RuntimeExternalMcpHttpClient(
+        server="graphiti",
+        url="https://graphiti.local/mcp/",
+        protocol_version="2025-06-18",
+    )
+
+    await client.open()
+    try:
+        first = await client.call_tool(
+            name="search_nodes",
+            arguments={"query": "first"},
+        )
+        second = await client.call_tool(
+            name="search_nodes",
+            arguments={"query": "second"},
+        )
+    finally:
+        await client.close()
+
+    assert first == {"content": [{"type": "text", "text": "first"}]}
+    assert second == {"content": [{"type": "text", "text": "second"}]}
+    assert [request.method for request in requests] == [
+        "POST",
+        "POST",
+        "POST",
+        "POST",
+        "DELETE",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_reuses_external_http_session_until_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+
+    requests: list[httpx.Request] = []
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "https://docs.local/mcp/",
+                "tools": [
+                    {
+                        "name": "search_docs",
+                        "description": "Search docs.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                            "required": ["query"],
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "DELETE":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+
+        payload = json.loads(request.content.decode("utf-8"))
+        if payload["method"] == "initialize":
+            return httpx.Response(
+                200,
+                headers={
+                    "Mcp-Session-Id": "session-1",
+                    "content-type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {"protocolVersion": "2025-06-18"},
+                },
+            )
+        if payload["method"] == "notifications/initialized":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(202)
+        if payload["method"] == "tools/call":
+            assert request.headers.get("Mcp-Session-Id") == "session-1"
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": payload["params"]["arguments"]["query"],
+                            }
+                        ]
+                    },
+                },
+            )
+        return httpx.Response(500, text="unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*, timeout: float):
+        return real_async_client(transport=transport, timeout=timeout)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_async_client)
+
+    bridge = RuntimeMcpBridge(
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+        allowed_tools=set(),
+        allowed_mcp_permissions={"call_custom_mcp"},
+        requested_servers=("my-docs",),
+        project_mcp_config=project_mcp_config,
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    )
+    try:
+        first = await bridge.execute(
+            {"tool": "mcp__my-docs__search_docs", "query": "first"}
+        )
+        second = await bridge.execute(
+            {"tool": "mcp__my-docs__search_docs", "query": "second"}
+        )
+    finally:
+        await bridge.close()
+
+    assert first.ok is True
+    assert first.message == "first"
+    assert second.ok is True
+    assert second.message == "second"
+    assert [request.method for request in requests] == [
+        "POST",
+        "POST",
+        "POST",
+        "POST",
+        "DELETE",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_external_mcp_http_client_closes_session_when_initialize_fails(
     monkeypatch: pytest.MonkeyPatch,
 ):

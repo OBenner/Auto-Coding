@@ -442,6 +442,7 @@ class RuntimeExternalMcpAdapter:
         project_dir: Path,
         project_mcp_config: Mapping[str, Any] | None = None,
         environment: Mapping[str, str] | None = None,
+        session_cache: dict[str, Any] | None = None,
     ) -> list[RuntimeMcpToolSpec]:
         """Return provider tool schemas backed by this adapter."""
         if not health.ready_to_connect or not health.execution_supported:
@@ -461,6 +462,7 @@ class RuntimeExternalMcpAdapter:
                     target_name_argument=definition.target_name_argument,
                     project_mcp_config=project_mcp_config,
                     environment=environment,
+                    session_cache=session_cache,
                 ),
             )
             for definition in self.tool_definitions
@@ -1453,11 +1455,45 @@ class RuntimeExternalMcpClient:
             or DEFAULT_EXTERNAL_MCP_PROTOCOL_VERSION
         )
         self._request_id = 0
+        self._process: asyncio.subprocess.Process | None = None
+
+    async def __aenter__(self) -> RuntimeExternalMcpClient:
+        await self.open()
+        return self
+
+    async def __aexit__(self, *exc_info: Any) -> None:
+        await self.close()
+
+    async def open(self) -> RuntimeExternalMcpClient:
+        """Open and initialize a reusable stdio MCP session."""
+        if self._process is not None and self._process.returncode is None:
+            return self
+        self._process = await self._start_process()
+        try:
+            await self._initialize(self._process)
+        except Exception:
+            await self.close()
+            raise
+        return self
+
+    async def close(self) -> None:
+        """Close the reusable stdio MCP session if one is open."""
+        process = self._process
+        if process is None:
+            return
+        self._process = None
+        await self._close_process(process)
 
     async def call_tool(
         self, *, name: str, arguments: dict[str, Any]
     ) -> dict[str, Any]:
         """Start a stdio MCP server, call one tool, and shut it down."""
+        if self._process is not None and self._process.returncode is None:
+            return await self._request(
+                self._process,
+                "tools/call",
+                {"name": name, "arguments": arguments},
+            )
         return await self._with_process(
             method="tools/call",
             params={"name": name, "arguments": arguments},
@@ -1465,6 +1501,8 @@ class RuntimeExternalMcpClient:
 
     async def list_tools(self) -> dict[str, Any]:
         """Start a stdio MCP server, list tools, and shut it down."""
+        if self._process is not None and self._process.returncode is None:
+            return await self._request(self._process, "tools/list", {})
         return await self._with_process(method="tools/list", params={})
 
     async def _with_process(
@@ -1643,11 +1681,55 @@ class RuntimeExternalMcpHttpClient:
         )
         self._request_id = 0
         self._session_id: str | None = None
+        self._client: Any | None = None
+
+    async def __aenter__(self) -> RuntimeExternalMcpHttpClient:
+        await self.open()
+        return self
+
+    async def __aexit__(self, *exc_info: Any) -> None:
+        await self.close()
+
+    async def open(self) -> RuntimeExternalMcpHttpClient:
+        """Open and initialize a reusable HTTP MCP session."""
+        if self._client is not None:
+            return self
+        try:
+            import httpx
+        except ImportError as e:
+            raise RuntimeExternalMcpClientError(
+                "httpx is required for HTTP MCP transport."
+            ) from e
+        self._client = httpx.AsyncClient(timeout=self.timeout_seconds)
+        try:
+            await self._initialize(self._client)
+        except Exception:
+            await self.close()
+            raise
+        return self
+
+    async def close(self) -> None:
+        """Close the reusable HTTP MCP session if one is open."""
+        client = self._client
+        if client is None:
+            return
+        try:
+            await self._close_session(client)
+        finally:
+            self._client = None
+            self._session_id = None
+            await client.aclose()
 
     async def call_tool(
         self, *, name: str, arguments: dict[str, Any]
     ) -> dict[str, Any]:
         """Initialize an HTTP MCP session, call one tool, and close it."""
+        if self._client is not None:
+            return await self._request(
+                self._client,
+                "tools/call",
+                {"name": name, "arguments": arguments},
+            )
         return await self._with_http_session(
             method="tools/call",
             params={"name": name, "arguments": arguments},
@@ -1655,6 +1737,8 @@ class RuntimeExternalMcpHttpClient:
 
     async def list_tools(self) -> dict[str, Any]:
         """Initialize an HTTP MCP session, list tools, and close it."""
+        if self._client is not None:
+            return await self._request(self._client, "tools/list", {})
         return await self._with_http_session(method="tools/list", params={})
 
     async def _with_http_session(
@@ -1927,6 +2011,7 @@ class RuntimeMcpBridge:
         self.requested_servers = requested_servers
         self.project_mcp_config = project_mcp_config
         self.environment = environment
+        self._external_mcp_sessions: dict[str, Any] = {}
         local_tools = load_auto_claude_bridge_tools(
             spec_dir=spec_dir,
             project_dir=project_dir,
@@ -1937,11 +2022,18 @@ class RuntimeMcpBridge:
             project_dir=project_dir,
             project_mcp_config=project_mcp_config,
             environment=environment,
+            session_cache=self._external_mcp_sessions,
         )
         self._tools = [*local_tools, *external_tools]
         self._tools_by_name = {tool.exposed_name: tool for tool in self._tools} | {
             tool.name: tool for tool in self._tools
         }
+
+    async def __aenter__(self) -> RuntimeMcpBridge:
+        return self
+
+    async def __aexit__(self, *exc_info: Any) -> None:
+        await self.close()
 
     @classmethod
     def from_agent_session(
@@ -2142,6 +2234,18 @@ class RuntimeMcpBridge:
                 "result": result,
             },
         )
+
+    async def close(self) -> None:
+        """Close reusable external MCP sessions opened by this bridge."""
+        sessions = list(self._external_mcp_sessions.values())
+        self._external_mcp_sessions.clear()
+        for session in sessions:
+            close = getattr(session, "close", None)
+            if close is None:
+                continue
+            result = close()
+            if inspect.isawaitable(result):
+                await result
 
     def report(self) -> dict[str, Any]:
         """Return compact bridge metadata for artifacts/debug output."""
@@ -2881,6 +2985,7 @@ def load_external_mcp_bridge_tools(
     project_dir: Path,
     project_mcp_config: Mapping[str, Any] | None = None,
     environment: Mapping[str, str] | None = None,
+    session_cache: dict[str, Any] | None = None,
 ) -> list[RuntimeMcpToolSpec]:
     """Load provider-neutral external MCP tool specs that are ready to connect."""
     specs: list[RuntimeMcpToolSpec] = []
@@ -2903,6 +3008,7 @@ def load_external_mcp_bridge_tools(
                     project_dir=project_dir,
                     project_mcp_config=project_mcp_config,
                     environment=environment,
+                    session_cache=session_cache,
                 )
             )
     return specs
@@ -2927,6 +3033,7 @@ def external_mcp_tool_handler(
     target_name_argument: str | None = None,
     project_mcp_config: Mapping[str, Any] | None = None,
     environment: Mapping[str, str] | None = None,
+    session_cache: dict[str, Any] | None = None,
 ) -> Any:
     """Build an async handler for one external MCP tool."""
 
@@ -2960,6 +3067,8 @@ def external_mcp_tool_handler(
             call_kwargs["project_mcp_config"] = project_mcp_config
         if environment is not None:
             call_kwargs["environment"] = environment
+        if session_cache is not None:
+            call_kwargs["session_cache"] = session_cache
         return await call_external_mcp_tool(**call_kwargs)
 
     return handler
@@ -2973,8 +3082,10 @@ async def call_external_mcp_tool(
     project_dir: Path,
     project_mcp_config: Mapping[str, Any] | None = None,
     environment: Mapping[str, str] | None = None,
+    session_cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Call one external MCP tool through the provider-neutral MCP client."""
+    cache_key = f"{health.transport}:{health.server}"
     if health.transport == "stdio" and health.command:
         client = RuntimeExternalMcpClient(
             server=health.server,
@@ -2982,6 +3093,10 @@ async def call_external_mcp_tool(
             args=health.args,
             cwd=project_dir,
         )
+        if session_cache is not None:
+            client = session_cache.get(cache_key) or client
+            await client.open()
+            session_cache[cache_key] = client
         return await client.call_tool(name=tool_name, arguments=arguments)
 
     if health.transport == "http" and health.url:
@@ -2994,6 +3109,10 @@ async def call_external_mcp_tool(
                 environment=environment,
             ),
         )
+        if session_cache is not None:
+            client = session_cache.get(cache_key) or client
+            await client.open()
+            session_cache[cache_key] = client
         return await client.call_tool(name=tool_name, arguments=arguments)
 
     target = "HTTP URL" if health.transport == "http" else "stdio command"
