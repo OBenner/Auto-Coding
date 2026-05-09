@@ -40,6 +40,9 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditRequiredAction': 'Required',
         'overview.genericEditResolutionStrategies': 'Resolution strategies',
         'overview.genericEditRecommendedVerificationTools': 'Verification tools',
+        'overview.genericEditResumeEntrypoint': 'Resume entrypoint',
+        'overview.genericEditResumeStrategy': 'Resume strategy',
+        'overview.genericEditNextIteration': `Next iteration ${values?.iteration ?? ''}`,
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -143,6 +146,18 @@ function createManifest(): GenericEditArtifactManifest {
         required_before_finish: true,
       },
     ],
+    resume_action: {
+      runtime: 'generic_edit',
+      checkpoint_path: '/tmp/recovery-checkpoint.json',
+      strategy: 'recover_partial_failure',
+      next_iteration: 3,
+    },
+    resume_inputs: {
+      trace_artifact: '/tmp/trace.json',
+      event_artifact: '/tmp/events.jsonl',
+      recovery_plan_artifact: '/tmp/recovery.json',
+      mutation_snapshot_artifact: '/tmp/mutation-snapshots.json',
+    },
     mcp_support: null,
     resume: null,
   };
@@ -178,6 +193,11 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getAllByText('rollback_transaction')).toHaveLength(2);
     expect(screen.getByText(/partial.txt/)).toBeInTheDocument();
     expect(screen.getAllByText('Required')).toHaveLength(2);
+    expect(screen.getByText('Resume entrypoint')).toBeInTheDocument();
+    expect(screen.getByText('Resume strategy')).toBeInTheDocument();
+    expect(screen.getByText('recover_partial_failure')).toBeInTheDocument();
+    expect(screen.getByText('Next iteration 3')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/recovery-checkpoint.json')).toBeInTheDocument();
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {

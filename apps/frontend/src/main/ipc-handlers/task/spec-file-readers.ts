@@ -21,6 +21,7 @@ import type {
   GenericEditArtifactManifestEntry,
   GenericEditRecoveryAction,
   GenericEditRecoverySummary,
+  GenericEditResumeAction,
   GenericEditRecentEvent
 } from '../../../shared/types';
 
@@ -336,6 +337,33 @@ function normalizeRecoveryActions(value: unknown): GenericEditRecoveryAction[] |
   return result;
 }
 
+function normalizeResumeAction(value: unknown): GenericEditResumeAction | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const runtime = readString(value, 'runtime');
+  const checkpointPath = readString(value, 'checkpoint_path');
+  const strategy = readString(value, 'strategy');
+  const nextIteration = value.next_iteration;
+
+  if (
+    runtime !== 'generic_edit' ||
+    checkpointPath === null ||
+    strategy === null ||
+    typeof nextIteration !== 'number' ||
+    !Number.isFinite(nextIteration)
+  ) {
+    return null;
+  }
+
+  return {
+    runtime,
+    checkpoint_path: checkpointPath,
+    strategy,
+    next_iteration: nextIteration,
+  };
+}
+
 function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifactManifest | null {
   if (!isRecord(value)) return null;
   if (value.artifact_type !== 'generic_edit_artifact_manifest' || value.schema_version !== 1) {
@@ -372,6 +400,8 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
   const recentEvents = normalizeRecentEvents(value.recent_events);
   const recoverySummary = normalizeRecoverySummary(value.recovery_summary);
   const recoveryActions = normalizeRecoveryActions(value.recovery_actions);
+  const resumeAction = normalizeResumeAction(value.resume_action);
+  const resumeInputs = value.resume_inputs === undefined ? {} : normalizeStringMap(value.resume_inputs);
 
   if (
     timestamp === null ||
@@ -383,6 +413,8 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     counts === null ||
     recentEvents === null ||
     recoveryActions === null ||
+    (value.resume_action !== undefined && value.resume_action !== null && resumeAction === null) ||
+    resumeInputs === null ||
     !Array.isArray(value.artifacts)
   ) {
     return null;
@@ -413,6 +445,8 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     recovery_summary: recoverySummary,
     recovery_actions: recoveryActions,
     mcp_support: isRecord(value.mcp_support) ? value.mcp_support : null,
+    resume_action: resumeAction,
+    resume_inputs: resumeInputs as Record<string, string>,
     resume: isRecord(value.resume) ? value.resume : null,
   };
 }

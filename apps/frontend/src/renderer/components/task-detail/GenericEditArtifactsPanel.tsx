@@ -7,6 +7,7 @@ import {
   FileText,
   ListChecks,
   Loader2,
+  PlayCircle,
   RotateCcw,
   Wrench,
   X,
@@ -330,6 +331,36 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {manifest.resume_action && (
+          <div className="mt-4 rounded-md border bg-muted/20 px-3 py-3 text-xs">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <PlayCircle className="h-3.5 w-3.5 text-info" />
+              <span className="font-semibold text-muted-foreground">
+                {t('tasks:overview.genericEditResumeEntrypoint')}
+              </span>
+              <Badge variant="info" className="text-xs">
+                {manifest.resume_action.runtime}
+              </Badge>
+              <Badge variant="muted" className="text-xs">
+                {t('tasks:overview.genericEditNextIteration', {
+                  iteration: manifest.resume_action.next_iteration,
+                })}
+              </Badge>
+            </div>
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="font-medium text-muted-foreground">
+                {t('tasks:overview.genericEditResumeStrategy')}
+              </span>
+              <Badge variant="outline" className="text-xs">
+                {manifest.resume_action.strategy}
+              </Badge>
+            </div>
+            <div className="truncate text-muted-foreground">
+              {manifest.resume_action.checkpoint_path}
             </div>
           </div>
         )}

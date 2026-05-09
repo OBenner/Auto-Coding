@@ -3410,6 +3410,44 @@ def build_generic_edit_manifest_recovery_summary(
     }
 
 
+def build_generic_edit_manifest_resume_action(
+    recovery_checkpoint: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Return the canonical resume action for manifest/control-plane consumers."""
+    if not isinstance(recovery_checkpoint, dict):
+        return None
+    resume = recovery_checkpoint.get("resume")
+    if not isinstance(resume, dict):
+        return None
+    return {
+        "runtime": "generic_edit",
+        "checkpoint_path": recovery_checkpoint["artifact_path"],
+        "strategy": resume["strategy"],
+        "next_iteration": recovery_checkpoint["next_iteration"],
+    }
+
+
+def build_generic_edit_manifest_resume_inputs(
+    *,
+    recovery_checkpoint: dict[str, Any] | None,
+    paths: dict[str, Path],
+    recovery_plan: dict[str, Any] | None,
+    mutation_snapshots: list[dict[str, Any]],
+) -> dict[str, str]:
+    """Return artifact inputs needed by a generic_edit resume action."""
+    if recovery_checkpoint is None:
+        return {}
+    resume_inputs = {
+        "trace_artifact": str(paths["trace"]),
+        "event_artifact": str(paths["events"]),
+    }
+    if recovery_plan is not None:
+        resume_inputs["recovery_plan_artifact"] = recovery_plan["artifact_path"]
+    if mutation_snapshots:
+        resume_inputs["mutation_snapshot_artifact"] = str(paths["mutation_snapshots"])
+    return resume_inputs
+
+
 def build_generic_edit_artifact_manifest(
     *,
     timestamp: str,
@@ -3498,6 +3536,13 @@ def build_generic_edit_artifact_manifest(
         ),
         "artifacts": artifacts,
         "mcp_support": mcp_support,
+        "resume_action": build_generic_edit_manifest_resume_action(recovery_checkpoint),
+        "resume_inputs": build_generic_edit_manifest_resume_inputs(
+            recovery_checkpoint=recovery_checkpoint,
+            paths=paths,
+            recovery_plan=recovery_plan,
+            mutation_snapshots=mutation_snapshots,
+        ),
         "resume": dict(resume_metadata) if resume_metadata is not None else None,
     }
 

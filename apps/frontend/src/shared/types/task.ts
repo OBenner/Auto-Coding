@@ -160,6 +160,13 @@ export interface GenericEditRecoveryAction {
   required_before_finish: boolean;
 }
 
+export interface GenericEditResumeAction {
+  runtime: 'generic_edit';
+  checkpoint_path: string;
+  strategy: string;
+  next_iteration: number;
+}
+
 export interface GenericEditArtifactManifest {
   artifact_type: 'generic_edit_artifact_manifest';
   schema_version: 1;
@@ -204,6 +211,8 @@ export interface GenericEditArtifactManifest {
   recovery_summary: GenericEditRecoverySummary | null;
   recovery_actions: GenericEditRecoveryAction[];
   mcp_support: Record<string, unknown> | null;
+  resume_action: GenericEditResumeAction | null;
+  resume_inputs: Record<string, string>;
   resume: Record<string, unknown> | null;
 }
 

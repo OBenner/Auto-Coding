@@ -4759,6 +4759,18 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         "resolution_strategies": ["rollback_transaction", "repair_mutation"],
         "recommended_verification_tools": ["git_diff", "run_command"],
     }
+    expected_resume_action = {
+        "runtime": "generic_edit",
+        "checkpoint_path": str(checkpoint_path),
+        "strategy": "recover_partial_failure",
+        "next_iteration": 3,
+    }
+    expected_resume_inputs = {
+        "trace_artifact": str(trace_path),
+        "event_artifact": str(event_path),
+        "recovery_plan_artifact": str(recovery_plan_path),
+        "mutation_snapshot_artifact": str(mutation_snapshot_path),
+    }
 
     assert artifact["status"] == "error"
     assert artifact["stop_reason"] == "unresolved_partial_failure"
@@ -4793,6 +4805,8 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         "recommended_verification_tools": ["git_diff", "run_command"],
     }
     assert manifest["recovery_actions"] == expected_manifest_recovery_actions
+    assert manifest["resume_action"] == expected_resume_action
+    assert manifest["resume_inputs"] == expected_resume_inputs
     rollback_operation = recovery_plan["rollback_operations"][0]
     assert rollback_operation["tool"] == "rollback_transaction"
     assert rollback_operation["transaction_id"] == "json_actions-1"
@@ -4859,18 +4873,8 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     assert session_state["iteration_count"] == 2
     assert session_state["action_count"] == 3
     assert session_state["failed_action_count"] == 1
-    assert session_state["resume_action"] == {
-        "runtime": "generic_edit",
-        "checkpoint_path": str(checkpoint_path),
-        "strategy": "recover_partial_failure",
-        "next_iteration": 3,
-    }
-    assert session_state["resume_inputs"] == {
-        "trace_artifact": str(trace_path),
-        "event_artifact": str(event_path),
-        "recovery_plan_artifact": str(recovery_plan_path),
-        "mutation_snapshot_artifact": str(mutation_snapshot_path),
-    }
+    assert session_state["resume_action"] == expected_resume_action
+    assert session_state["resume_inputs"] == expected_resume_inputs
     assert session_state["unresolved_partial_failure_ids"] == ["json_actions-1"]
     assert session_state["unresolved_transaction_group_ids"] == ["transaction-group-1"]
     assert checkpoint["resume"]["strategy"] == "recover_partial_failure"

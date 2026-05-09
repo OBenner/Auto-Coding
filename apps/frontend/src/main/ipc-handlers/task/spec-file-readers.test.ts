@@ -168,6 +168,18 @@ describe('readGenericEditArtifactManifest', () => {
         },
       ],
       mcp_support: { enabled: true },
+      resume_action: {
+        runtime: 'generic_edit',
+        checkpoint_path: '/tmp/recovery-checkpoint.json',
+        strategy: 'recover_partial_failure',
+        next_iteration: 3,
+      },
+      resume_inputs: {
+        trace_artifact: '/tmp/trace.json',
+        event_artifact: '/tmp/events.jsonl',
+        recovery_plan_artifact: '/tmp/recovery.json',
+        mutation_snapshot_artifact: '/tmp/mutation-snapshots.json',
+      },
       resume: null,
     });
 
@@ -220,6 +232,18 @@ describe('readGenericEditArtifactManifest', () => {
         required_before_finish: true,
       },
     ]);
+    expect(manifest?.resume_action).toEqual({
+      runtime: 'generic_edit',
+      checkpoint_path: '/tmp/recovery-checkpoint.json',
+      strategy: 'recover_partial_failure',
+      next_iteration: 3,
+    });
+    expect(manifest?.resume_inputs).toEqual({
+      trace_artifact: '/tmp/trace.json',
+      event_artifact: '/tmp/events.jsonl',
+      recovery_plan_artifact: '/tmp/recovery.json',
+      mutation_snapshot_artifact: '/tmp/mutation-snapshots.json',
+    });
   });
 
   it('returns null when the manifest has not been written yet', async () => {
