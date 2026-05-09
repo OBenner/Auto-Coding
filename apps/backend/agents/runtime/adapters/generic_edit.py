@@ -4311,6 +4311,38 @@ def generic_edit_mcp_lines(mcp_support: dict[str, Any] | None) -> list[str]:
         ):
             if line:
                 lines.append(line)
+    bridge = mcp_support.get("bridge")
+    if isinstance(bridge, dict):
+        permission_policy = bridge.get("permission_policy")
+        if isinstance(permission_policy, dict):
+            mode = permission_policy.get("mode", "unknown")
+            allowed_permissions = permission_policy.get("allowed_permissions")
+            if allowed_permissions:
+                allowed = ", ".join(
+                    str(permission) for permission in allowed_permissions
+                )
+                lines.append(f"- MCP permission policy: `{mode}`; allowed {allowed}.")
+            else:
+                lines.append(f"- MCP permission policy: `{mode}`.")
+        tool_policies = bridge.get("tool_policies")
+        if isinstance(tool_policies, list) and tool_policies:
+            mutating_count = sum(
+                1
+                for policy in tool_policies
+                if isinstance(policy, dict) and policy.get("mutating") is True
+            )
+            audit_required_count = sum(
+                1
+                for policy in tool_policies
+                if isinstance(policy, dict)
+                and policy.get("audit_required") is not False
+            )
+            lines.append(
+                "- MCP tool policies: "
+                f"{len(tool_policies)} tools; "
+                f"{mutating_count} mutating; "
+                f"{audit_required_count} audit-required."
+            )
     return lines
 
 

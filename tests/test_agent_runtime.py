@@ -6010,6 +6010,24 @@ def test_generic_edit_mcp_lines_render_bridge_fallback_plan():
                 "external_bridge_required_servers": ["puppeteer"],
                 "unsupported_servers": ["unknown-docs"],
             },
+            "bridge": {
+                "permission_policy": {
+                    "mode": "allowlist",
+                    "allowed_permissions": ["read_external_docs"],
+                },
+                "tool_policies": [
+                    {
+                        "permission": "read_external_docs",
+                        "mutating": False,
+                        "audit_required": True,
+                    },
+                    {
+                        "permission": "write_linear",
+                        "mutating": True,
+                        "audit_required": True,
+                    },
+                ],
+            },
         }
     )
 
@@ -6021,6 +6039,8 @@ def test_generic_edit_mcp_lines_render_bridge_fallback_plan():
     assert "- MCP local-bridge-required servers: linear" in lines
     assert "- MCP external-bridge-required servers: puppeteer" in lines
     assert "- MCP unsupported servers: unknown-docs" in lines
+    assert "- MCP permission policy: `allowlist`; allowed read_external_docs." in lines
+    assert "- MCP tool policies: 2 tools; 1 mutating; 2 audit-required." in lines
 
 
 def test_generic_edit_transaction_summary_does_not_treat_finish_as_recovery():
