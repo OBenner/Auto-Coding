@@ -273,6 +273,34 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                 ))}
               </div>
             )}
+            {manifest.recovery_summary.resolution_strategies.length > 0 && (
+              <div className="mt-3">
+                <div className="mb-1 font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditResolutionStrategies')}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {manifest.recovery_summary.resolution_strategies.map((strategy) => (
+                    <Badge key={strategy} variant="outline" className="text-xs">
+                      {strategy}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {manifest.recovery_summary.recommended_verification_tools.length > 0 && (
+              <div className="mt-3">
+                <div className="mb-1 font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditRecommendedVerificationTools')}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {manifest.recovery_summary.recommended_verification_tools.map((tool) => (
+                    <Badge key={tool} variant="muted" className="text-xs">
+                      {tool}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

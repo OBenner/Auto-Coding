@@ -501,6 +501,8 @@
     "genericEditRecoveryWarnings": "Avertissements",
     "genericEditRecoveryActions": "Actions de récupération",
     "genericEditRequiredAction": "Requis",
+    "genericEditResolutionStrategies": "Stratégies de résolution",
+    "genericEditRecommendedVerificationTools": "Outils de vérification",
     "genericEditViewArtifact": "Voir l'artefact",
     "genericEditArtifactPreview": "Aperçu de l'artefact",
     "genericEditClosePreview": "Fermer l'aperçu",

@@ -38,6 +38,8 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditRecoveryWarnings': 'Warnings',
         'overview.genericEditRecoveryActions': 'Recovery actions',
         'overview.genericEditRequiredAction': 'Required',
+        'overview.genericEditResolutionStrategies': 'Resolution strategies',
+        'overview.genericEditRecommendedVerificationTools': 'Verification tools',
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -167,9 +169,13 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Finish blocked')).toBeInTheDocument();
     expect(screen.getByText('Warnings')).toBeInTheDocument();
     expect(screen.getByText('Run focused verification before finish.')).toBeInTheDocument();
+    expect(screen.getByText('Resolution strategies')).toBeInTheDocument();
+    expect(screen.getByText('repair_mutation')).toBeInTheDocument();
+    expect(screen.getByText('Verification tools')).toBeInTheDocument();
+    expect(screen.getByText('run_command')).toBeInTheDocument();
     expect(screen.getByText('Recovery actions')).toBeInTheDocument();
     expect(screen.getByText('inspect_diff')).toBeInTheDocument();
-    expect(screen.getByText('rollback_transaction')).toBeInTheDocument();
+    expect(screen.getAllByText('rollback_transaction')).toHaveLength(2);
     expect(screen.getByText(/partial.txt/)).toBeInTheDocument();
     expect(screen.getAllByText('Required')).toHaveLength(2);
   });
