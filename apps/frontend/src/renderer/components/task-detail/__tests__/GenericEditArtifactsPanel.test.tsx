@@ -55,6 +55,11 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditMcpAllowedPermissions': 'Allowed permissions',
         'overview.genericEditMcpToolPolicies': 'Tool policies',
         'overview.genericEditMcpBridgePlan': 'Bridge plan',
+        'overview.genericEditMcpRecommendedRuntimePath': 'Recommended path',
+        'overview.genericEditMcpNativeRequired': 'Native required',
+        'overview.genericEditMcpLocalBridgeRequired': 'Local bridge required',
+        'overview.genericEditMcpExternalBridgeRequired': 'External bridge required',
+        'overview.genericEditMcpUnsupported': 'Unsupported',
         'overview.genericEditMcpBridged': 'Bridged',
         'overview.genericEditMcpExternalBridged': 'External bridged',
       };
@@ -197,6 +202,11 @@ function createManifest(): GenericEditArtifactManifest {
       bridge_plan: {
         status: 'partial',
         action_required: 'configure_external_mcp_client',
+        recommended_runtime_path: 'external_mcp_client',
+        native_required_servers: ['graphiti'],
+        local_bridge_required_servers: ['linear'],
+        external_bridge_required_servers: ['puppeteer'],
+        unsupported_servers: ['unknown-docs'],
         bridged_servers: ['context7'],
         external_bridged_servers: ['puppeteer'],
       },
@@ -287,7 +297,7 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Available')).toBeInTheDocument();
     expect(screen.getAllByText('context7')).toHaveLength(2);
     expect(screen.getByText('Unavailable')).toBeInTheDocument();
-    expect(screen.getByText('linear')).toBeInTheDocument();
+    expect(screen.getAllByText('linear')).toHaveLength(2);
     expect(screen.getByText('MCP server')).toBeInTheDocument();
     expect(screen.getByText('auto-claude')).toBeInTheDocument();
     expect(screen.getByText('Server status')).toBeInTheDocument();
@@ -304,9 +314,19 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('configure_external_mcp_client')).toBeInTheDocument();
     expect(screen.getByText('Bridge plan')).toBeInTheDocument();
     expect(screen.getByText('partial')).toBeInTheDocument();
+    expect(screen.getByText('Recommended path')).toBeInTheDocument();
+    expect(screen.getByText('external_mcp_client')).toBeInTheDocument();
+    expect(screen.getByText('Native required')).toBeInTheDocument();
+    expect(screen.getByText('graphiti')).toBeInTheDocument();
+    expect(screen.getByText('Local bridge required')).toBeInTheDocument();
+    expect(screen.getAllByText('linear')).toHaveLength(2);
+    expect(screen.getByText('External bridge required')).toBeInTheDocument();
+    expect(screen.getAllByText('puppeteer')).toHaveLength(2);
+    expect(screen.getByText('Unsupported')).toBeInTheDocument();
+    expect(screen.getByText('unknown-docs')).toBeInTheDocument();
     expect(screen.getByText('Bridged')).toBeInTheDocument();
     expect(screen.getByText('External bridged')).toBeInTheDocument();
-    expect(screen.getByText('puppeteer')).toBeInTheDocument();
+    expect(screen.getAllByText('puppeteer')).toHaveLength(2);
     expect(screen.getAllByText('mcp__context7__resolve-library-id')).toHaveLength(2);
   });
 

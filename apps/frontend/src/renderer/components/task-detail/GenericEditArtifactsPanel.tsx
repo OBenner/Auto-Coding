@@ -189,6 +189,11 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpServerStatuses = mcpRecordList(mcpSupport?.server_statuses);
   const mcpBridgePlanStatus = mcpString(mcpBridgePlan?.status);
   const mcpActionRequired = mcpString(mcpBridgePlan?.action_required);
+  const mcpRecommendedRuntimePath = mcpString(mcpBridgePlan?.recommended_runtime_path);
+  const mcpNativeRequiredServers = mcpStringList(mcpBridgePlan?.native_required_servers);
+  const mcpLocalBridgeRequiredServers = mcpStringList(mcpBridgePlan?.local_bridge_required_servers);
+  const mcpExternalBridgeRequiredServers = mcpStringList(mcpBridgePlan?.external_bridge_required_servers);
+  const mcpUnsupportedServers = mcpStringList(mcpBridgePlan?.unsupported_servers);
   const mcpBridgedServers = mcpStringList(mcpBridgePlan?.bridged_servers);
   const mcpExternalBridgedServers = mcpStringList(mcpBridgePlan?.external_bridged_servers);
   const mcpBridgeTools = mcpStringList(mcpBridge?.tools);
@@ -647,6 +652,73 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                 <Badge variant="warning" className="text-xs">
                   {mcpActionRequired}
                 </Badge>
+              </div>
+            )}
+
+            {(mcpRecommendedRuntimePath ||
+              mcpNativeRequiredServers.length > 0 ||
+              mcpLocalBridgeRequiredServers.length > 0 ||
+              mcpExternalBridgeRequiredServers.length > 0 ||
+              mcpUnsupportedServers.length > 0) && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {mcpRecommendedRuntimePath && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpRecommendedRuntimePath')}
+                    </span>
+                    <Badge variant="info" className="text-xs">
+                      {mcpRecommendedRuntimePath}
+                    </Badge>
+                  </div>
+                )}
+                {mcpNativeRequiredServers.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpNativeRequired')}
+                    </span>
+                    {mcpNativeRequiredServers.map((server) => (
+                      <Badge key={server} variant="warning" className="text-xs">
+                        {server}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {mcpLocalBridgeRequiredServers.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpLocalBridgeRequired')}
+                    </span>
+                    {mcpLocalBridgeRequiredServers.map((server) => (
+                      <Badge key={server} variant="warning" className="text-xs">
+                        {server}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {mcpExternalBridgeRequiredServers.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpExternalBridgeRequired')}
+                    </span>
+                    {mcpExternalBridgeRequiredServers.map((server) => (
+                      <Badge key={server} variant="warning" className="text-xs">
+                        {server}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {mcpUnsupportedServers.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpUnsupported')}
+                    </span>
+                    {mcpUnsupportedServers.map((server) => (
+                      <Badge key={server} variant="destructive" className="text-xs">
+                        {server}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

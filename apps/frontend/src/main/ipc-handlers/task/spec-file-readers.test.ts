@@ -192,6 +192,11 @@ describe('readGenericEditArtifactManifest', () => {
         bridge_plan: {
           status: 'partial',
           action_required: 'configure_external_mcp_client',
+          recommended_runtime_path: 'external_mcp_client',
+          native_required_servers: ['graphiti'],
+          local_bridge_required_servers: ['linear'],
+          external_bridge_required_servers: ['puppeteer'],
+          unsupported_servers: ['unknown-docs'],
           bridged_servers: ['context7'],
           external_bridged_servers: ['context7'],
         },
@@ -330,6 +335,11 @@ describe('readGenericEditArtifactManifest', () => {
       bridge_plan: {
         status: 'partial',
         action_required: 'configure_external_mcp_client',
+        recommended_runtime_path: 'external_mcp_client',
+        native_required_servers: ['graphiti'],
+        local_bridge_required_servers: ['linear'],
+        external_bridge_required_servers: ['puppeteer'],
+        unsupported_servers: ['unknown-docs'],
         bridged_servers: ['context7'],
         external_bridged_servers: ['context7'],
       },

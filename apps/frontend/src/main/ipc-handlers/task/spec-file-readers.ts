@@ -364,13 +364,29 @@ function normalizeMcpBridgePlan(
 
   const bridgedServers = normalizeOptionalMcpStringList(value, 'bridged_servers');
   const externalBridgedServers = normalizeOptionalMcpStringList(value, 'external_bridged_servers');
-  if (bridgedServers === null || externalBridgedServers === null) {
+  const nativeRequiredServers = normalizeOptionalMcpStringList(value, 'native_required_servers');
+  const localBridgeRequiredServers = normalizeOptionalMcpStringList(value, 'local_bridge_required_servers');
+  const externalBridgeRequiredServers = normalizeOptionalMcpStringList(value, 'external_bridge_required_servers');
+  const unsupportedServers = normalizeOptionalMcpStringList(value, 'unsupported_servers');
+  if (
+    bridgedServers === null ||
+    externalBridgedServers === null ||
+    nativeRequiredServers === null ||
+    localBridgeRequiredServers === null ||
+    externalBridgeRequiredServers === null ||
+    unsupportedServers === null
+  ) {
     return null;
   }
 
   return {
     status: readString(value, 'status'),
     action_required: readString(value, 'action_required'),
+    recommended_runtime_path: readString(value, 'recommended_runtime_path'),
+    native_required_servers: nativeRequiredServers,
+    local_bridge_required_servers: localBridgeRequiredServers,
+    external_bridge_required_servers: externalBridgeRequiredServers,
+    unsupported_servers: unsupportedServers,
     bridged_servers: bridgedServers,
     external_bridged_servers: externalBridgedServers,
   };

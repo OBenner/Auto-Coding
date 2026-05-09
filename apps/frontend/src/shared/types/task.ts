@@ -170,6 +170,11 @@ export interface GenericEditResumeAction {
 export interface GenericEditMcpBridgePlan {
   status: string | null;
   action_required: string | null;
+  recommended_runtime_path: string | null;
+  native_required_servers: string[];
+  local_bridge_required_servers: string[];
+  external_bridge_required_servers: string[];
+  unsupported_servers: string[];
   bridged_servers: string[];
   external_bridged_servers: string[];
 }
