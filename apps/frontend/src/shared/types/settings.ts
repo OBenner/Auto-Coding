@@ -485,8 +485,19 @@ export interface ProviderRuntimeDiagnostics {
   requestedRuntimeCapabilities?: string[];
   validatedRuntimeCapabilities?: string[];
   validatedRuntimeMissingCapabilities?: string[];
+  validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
+}
+
+export interface ProviderValidatedRuntimeExecution {
+  status?: string;
+  stopReason?: string;
+  loop?: string;
+  actionCount?: number;
+  failedActionCount?: number;
+  nativeToolFallbackCount?: number;
+  toolCounts?: Record<string, number>;
 }
 
 export interface ProviderConnectionTestResult {

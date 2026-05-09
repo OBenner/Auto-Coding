@@ -219,6 +219,15 @@ async def test_run_provider_smoke_check_generic_edit_runtime(
         "function_tools" in result.runtime_diagnostics["validated_runtime_capabilities"]
     )
     assert result.runtime_diagnostics["validated_runtime_missing_capabilities"] == []
+    assert result.runtime_diagnostics["validated_runtime_execution"] == {
+        "status": "complete",
+        "stop_reason": "finish",
+        "loop": "native_tool_calls",
+        "action_count": 2,
+        "failed_action_count": 0,
+        "native_tool_fallback_count": 0,
+        "tool_counts": {"finish": 1, "write_file": 1},
+    }
     assert fake_provider.session.tool_results[0] == ("call_write", "write_file")
 
 

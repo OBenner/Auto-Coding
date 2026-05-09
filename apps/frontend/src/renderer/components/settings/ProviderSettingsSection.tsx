@@ -215,6 +215,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
   generic_edit_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.genericEditToolLoop',
   goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
+  json_actions: 'settings:aiProvider.runtimeDiagnosticValues.jsonActions',
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
   implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
@@ -222,6 +223,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   native: 'settings:aiProvider.runtimeDiagnosticValues.native',
   native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.nativeMcpRuntime',
   native_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolLoop',
+  native_tool_calls: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolCalls',
   no: 'settings:aiProvider.runtimeDiagnosticValues.no',
   none: 'settings:aiProvider.runtimeDiagnosticValues.none',
   not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
@@ -249,6 +251,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   skipped: 'settings:aiProvider.runtimeDiagnosticValues.skipped',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
   text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
+  complete: 'settings:aiProvider.runtimeDiagnosticValues.complete',
+  finish: 'settings:aiProvider.runtimeDiagnosticValues.finish',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
   unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
   unsupported_transport: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTransport',
@@ -1274,6 +1278,19 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeDiagnostics?.validatedRuntimeMissingCapabilities
     );
+    const validatedExecution = runtimeDiagnostics?.validatedRuntimeExecution ?? null;
+    const validatedExecutionLoop = formatRuntimeDiagnosticValue(t, validatedExecution?.loop);
+    const validatedExecutionStatus = formatRuntimeDiagnosticValue(t, validatedExecution?.status);
+    const validatedExecutionStopReason = formatRuntimeDiagnosticValue(
+      t,
+      validatedExecution?.stopReason
+    );
+    const validatedExecutionToolCounts = validatedExecution?.toolCounts
+      ? Object.entries(validatedExecution.toolCounts)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([tool, count]) => `${formatRuntimeDiagnosticValue(t, tool)} x ${count}`)
+        .join(', ')
+      : null;
     const missingFullAutonomous = formatRuntimeDiagnosticList(
       t,
       runtimeDiagnostics?.fullAutonomousMissingCapabilities
@@ -1372,6 +1389,64 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   {missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
                 </dd>
               </div>
+              {validatedExecution && (
+                <>
+                  {validatedExecutionLoop && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionLoop')}</dt>
+                      <dd className="font-medium text-foreground">{validatedExecutionLoop}</dd>
+                    </div>
+                  )}
+                  {validatedExecutionStatus && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionStatus')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {validatedExecutionStatus}
+                      </dd>
+                    </div>
+                  )}
+                  {validatedExecutionStopReason && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionStopReason')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {validatedExecutionStopReason}
+                      </dd>
+                    </div>
+                  )}
+                  {typeof validatedExecution.actionCount === 'number' && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionActions')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {validatedExecution.actionCount}
+                      </dd>
+                    </div>
+                  )}
+                  {typeof validatedExecution.failedActionCount === 'number' && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionFailures')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {validatedExecution.failedActionCount}
+                      </dd>
+                    </div>
+                  )}
+                  {typeof validatedExecution.nativeToolFallbackCount === 'number' && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionNativeFallbacks')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {validatedExecution.nativeToolFallbackCount}
+                      </dd>
+                    </div>
+                  )}
+                  {validatedExecutionToolCounts && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionTools')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {validatedExecutionToolCounts}
+                      </dd>
+                    </div>
+                  )}
+                </>
+              )}
             </dl>
           </div>
         )}

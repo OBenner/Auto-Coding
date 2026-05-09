@@ -78,6 +78,49 @@ def _response_excerpt(response_text: str, max_chars: int = 500) -> str:
     return response[:max_chars].rstrip() + "..."
 
 
+def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | None:
+    """Return the generic_edit execution summary created by the smoke run."""
+    result_path = artifact_dir / "generic_edit_result.json"
+    if not result_path.exists():
+        return None
+
+    try:
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return {
+            "status": "artifact_unreadable",
+            "error": str(e),
+        }
+
+    tool_counts = payload.get("tool_counts")
+    normalized_tool_counts = {
+        str(tool): count
+        for tool, count in (
+            tool_counts.items() if isinstance(tool_counts, dict) else ()
+        )
+        if isinstance(count, int) and not isinstance(count, bool)
+    }
+    return {
+        "status": str(payload.get("status") or "unknown"),
+        "stop_reason": str(payload.get("stop_reason") or "unknown"),
+        "loop": str(payload.get("loop") or "unknown"),
+        "action_count": _int_payload_value(payload, "action_count"),
+        "failed_action_count": _int_payload_value(payload, "failed_action_count"),
+        "native_tool_fallback_count": _int_payload_value(
+            payload,
+            "native_tool_fallback_count",
+        ),
+        "tool_counts": normalized_tool_counts,
+    }
+
+
+def _int_payload_value(payload: dict[str, Any], key: str) -> int:
+    value = payload.get(key)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return 0
+
+
 def _provider_validation_errors(provider: Any) -> list[str]:
     if not hasattr(provider, "validate_config"):
         return []
@@ -401,6 +444,14 @@ async def _complete_provider_generic_edit_smoke(
             ),
             timeout=timeout_seconds,
         )
+        execution_diagnostics = _generic_edit_execution_diagnostics(
+            smoke_spec_dir / "artifacts",
+        )
+        if execution_diagnostics is not None:
+            runtime_diagnostics = {
+                **runtime_diagnostics,
+                "validated_runtime_execution": execution_diagnostics,
+            }
 
         smoke_content = smoke_file.read_text(encoding="utf-8")
         if smoke_content != DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT:

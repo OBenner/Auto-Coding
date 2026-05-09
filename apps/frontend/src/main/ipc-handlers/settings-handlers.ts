@@ -362,6 +362,15 @@ type ProviderSmokeCliResult = {
     requested_runtime_capabilities?: string[];
     validated_runtime_capabilities?: string[];
     validated_runtime_missing_capabilities?: string[];
+    validated_runtime_execution?: {
+      status?: unknown;
+      stop_reason?: unknown;
+      loop?: unknown;
+      action_count?: unknown;
+      failed_action_count?: unknown;
+      native_tool_fallback_count?: unknown;
+      tool_counts?: unknown;
+    } | null;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
   } | null;
@@ -423,6 +432,45 @@ function arrayFromUnknown(value: unknown): string[] {
     : [];
 }
 
+function stringFromUnknown(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function numberFromUnknown(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function numberRecordFromUnknown(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, number] =>
+      typeof entry[1] === 'number' && Number.isFinite(entry[1])
+  );
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function mapValidatedRuntimeExecution(
+  value: unknown
+): ProviderRuntimeDiagnostics['validatedRuntimeExecution'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const payload = value as Record<string, unknown>;
+  return {
+    status: stringFromUnknown(payload.status),
+    stopReason: stringFromUnknown(payload.stop_reason),
+    loop: stringFromUnknown(payload.loop),
+    actionCount: numberFromUnknown(payload.action_count),
+    failedActionCount: numberFromUnknown(payload.failed_action_count),
+    nativeToolFallbackCount: numberFromUnknown(payload.native_tool_fallback_count),
+    toolCounts: numberRecordFromUnknown(payload.tool_counts),
+  };
+}
+
 function mapProviderRuntimeDiagnostics(
   diagnostics: ProviderSmokeCliResult['runtime_diagnostics']
 ): ProviderRuntimeDiagnostics | null {
@@ -438,6 +486,7 @@ function mapProviderRuntimeDiagnostics(
     requestedRuntimeCapabilities: arrayFromUnknown(diagnostics.requested_runtime_capabilities),
     validatedRuntimeCapabilities: arrayFromUnknown(diagnostics.validated_runtime_capabilities),
     validatedRuntimeMissingCapabilities: arrayFromUnknown(diagnostics.validated_runtime_missing_capabilities),
+    validatedRuntimeExecution: mapValidatedRuntimeExecution(diagnostics.validated_runtime_execution),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note
   };
