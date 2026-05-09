@@ -224,6 +224,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.nativeMcpRuntime',
   native_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolLoop',
   native_tool_calls: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolCalls',
+  native_tool_request_failed: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolRequestFailed',
   no: 'settings:aiProvider.runtimeDiagnosticValues.no',
   none: 'settings:aiProvider.runtimeDiagnosticValues.none',
   not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
@@ -1285,6 +1286,11 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       validatedExecution?.stopReason
     );
+    const validatedNativeFallback = validatedExecution?.nativeToolFallbacks?.[0];
+    const validatedNativeFallbackReason = formatRuntimeDiagnosticValue(
+      t,
+      validatedNativeFallback?.reason
+    );
     const validatedExecutionToolCounts = validatedExecution?.toolCounts
       ? Object.entries(validatedExecution.toolCounts)
         .sort(([left], [right]) => left.localeCompare(right))
@@ -1434,6 +1440,22 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                       <dt>{t('settings:aiProvider.connectionTest.executionNativeFallbacks')}</dt>
                       <dd className="font-medium text-foreground">
                         {validatedExecution.nativeToolFallbackCount}
+                      </dd>
+                    </div>
+                  )}
+                  {validatedNativeFallbackReason && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionNativeFallbackReason')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {validatedNativeFallbackReason}
+                      </dd>
+                    </div>
+                  )}
+                  {validatedNativeFallback?.message && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.executionNativeFallbackMessage')}</dt>
+                      <dd className="break-words font-medium text-foreground">
+                        {validatedNativeFallback.message}
                       </dd>
                     </div>
                   )}

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from agents.runtime.local_actions import local_action_tool_schemas
 from core.providers.base import ProviderToolCall, ProviderToolCallResponse
 from core.providers.config import ProviderConfig
 
@@ -226,6 +227,7 @@ async def test_run_provider_smoke_check_generic_edit_runtime(
         "action_count": 2,
         "failed_action_count": 0,
         "native_tool_fallback_count": 0,
+        "native_tool_fallbacks": [],
         "tool_counts": {"finish": 1, "write_file": 1},
     }
     assert fake_provider.session.tool_results[0] == ("call_write", "write_file")
@@ -319,6 +321,16 @@ async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallbac
         "action_count": 2,
         "failed_action_count": 0,
         "native_tool_fallback_count": 1,
+        "native_tool_fallbacks": [
+            {
+                "provider": "openai",
+                "from_loop": "native_tool_calls",
+                "to_loop": "json_actions",
+                "reason": "native_tool_request_failed",
+                "message": "provider does not support tools",
+                "tool_schema_count": len(local_action_tool_schemas()),
+            }
+        ],
         "tool_counts": {"finish": 1, "write_file": 1},
     }
     assert "Respond with exactly one JSON object" in fake_provider.session.messages[0]
@@ -433,6 +445,12 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
                     "loop": "json_actions",
                     "action_count": 2,
                     "native_tool_fallback_count": 1,
+                    "native_tool_fallbacks": [
+                        {
+                            "reason": "native_tool_request_failed",
+                            "message": "provider does not support tools",
+                        }
+                    ],
                 },
             },
         )
@@ -455,3 +473,5 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     assert "json_actions" in output
     assert "Execution actions" in output
     assert "Native tool fallbacks" in output
+    assert "Native fallback reason" in output
+    assert "native_tool_request_failed" in output

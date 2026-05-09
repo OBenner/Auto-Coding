@@ -100,6 +100,9 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
         )
         if isinstance(count, int) and not isinstance(count, bool)
     }
+    native_tool_fallbacks = _native_tool_fallbacks_payload(
+        payload.get("native_tool_fallbacks")
+    )
     return {
         "status": str(payload.get("status") or "unknown"),
         "stop_reason": str(payload.get("stop_reason") or "unknown"),
@@ -110,8 +113,33 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
             payload,
             "native_tool_fallback_count",
         ),
+        "native_tool_fallbacks": native_tool_fallbacks,
         "tool_counts": normalized_tool_counts,
     }
+
+
+def _native_tool_fallbacks_payload(value: Any) -> list[dict[str, Any]]:
+    """Return safe native tool fallback records for provider smoke diagnostics."""
+    if not isinstance(value, list):
+        return []
+
+    fallbacks: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        fallback = {
+            key: str(item[key])
+            for key in ("provider", "from_loop", "to_loop", "reason", "message")
+            if isinstance(item.get(key), str)
+        }
+        tool_schema_count = item.get("tool_schema_count")
+        if isinstance(tool_schema_count, int) and not isinstance(
+            tool_schema_count, bool
+        ):
+            fallback["tool_schema_count"] = tool_schema_count
+        if fallback:
+            fallbacks.append(fallback)
+    return fallbacks
 
 
 def _int_payload_value(payload: dict[str, Any], key: str) -> int:
@@ -538,6 +566,14 @@ def handle_provider_smoke_command(
                     "Native tool fallbacks",
                     str(execution.get("native_tool_fallback_count", 0)),
                 )
+                fallbacks = execution.get("native_tool_fallbacks")
+                if isinstance(fallbacks, list) and fallbacks:
+                    first_fallback = fallbacks[0]
+                    if isinstance(first_fallback, dict):
+                        print_key_value(
+                            "Native fallback reason",
+                            str(first_fallback.get("reason", "unknown")),
+                        )
         if result.response_excerpt:
             print_key_value("Response", result.response_excerpt)
         if result.error_details:

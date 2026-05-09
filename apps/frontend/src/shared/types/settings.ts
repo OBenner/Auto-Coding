@@ -497,7 +497,17 @@ export interface ProviderValidatedRuntimeExecution {
   actionCount?: number;
   failedActionCount?: number;
   nativeToolFallbackCount?: number;
+  nativeToolFallbacks?: ProviderValidatedRuntimeFallback[];
   toolCounts?: Record<string, number>;
+}
+
+export interface ProviderValidatedRuntimeFallback {
+  provider?: string;
+  fromLoop?: string;
+  toLoop?: string;
+  reason?: string;
+  message?: string;
+  toolSchemaCount?: number;
 }
 
 export interface ProviderConnectionTestResult {

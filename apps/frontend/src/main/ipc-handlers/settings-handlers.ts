@@ -369,6 +369,7 @@ type ProviderSmokeCliResult = {
       action_count?: unknown;
       failed_action_count?: unknown;
       native_tool_fallback_count?: unknown;
+      native_tool_fallbacks?: unknown;
       tool_counts?: unknown;
     } | null;
     full_autonomous_missing_capabilities?: string[];
@@ -452,6 +453,26 @@ function numberRecordFromUnknown(value: unknown): Record<string, number> | undef
   return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
+function mapValidatedRuntimeFallbacks(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const fallbacks = value
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+    )
+    .map((item) => ({
+      provider: stringFromUnknown(item.provider),
+      fromLoop: stringFromUnknown(item.from_loop),
+      toLoop: stringFromUnknown(item.to_loop),
+      reason: stringFromUnknown(item.reason),
+      message: stringFromUnknown(item.message),
+      toolSchemaCount: numberFromUnknown(item.tool_schema_count),
+    }));
+  return fallbacks.length ? fallbacks : undefined;
+}
+
 function mapValidatedRuntimeExecution(
   value: unknown
 ): ProviderRuntimeDiagnostics['validatedRuntimeExecution'] {
@@ -467,6 +488,7 @@ function mapValidatedRuntimeExecution(
     actionCount: numberFromUnknown(payload.action_count),
     failedActionCount: numberFromUnknown(payload.failed_action_count),
     nativeToolFallbackCount: numberFromUnknown(payload.native_tool_fallback_count),
+    nativeToolFallbacks: mapValidatedRuntimeFallbacks(payload.native_tool_fallbacks),
     toolCounts: numberRecordFromUnknown(payload.tool_counts),
   };
 }
