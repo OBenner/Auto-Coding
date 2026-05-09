@@ -2958,6 +2958,7 @@ async def test_runtime_mcp_bridge_allows_external_tool_from_permission_env(
         tool_name: str,
         arguments: dict,
         project_dir: Path,
+        **_kwargs,
     ):
         await asyncio.sleep(0)
         assert health.server == "context7"
@@ -3022,6 +3023,7 @@ async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
         tool_name: str,
         arguments: dict,
         project_dir: Path,
+        **_kwargs,
     ):
         await asyncio.sleep(0)
         assert health.server == "context7"
@@ -3330,6 +3332,7 @@ async def test_generic_edit_runtime_executes_puppeteer_external_mcp_tool(
         tool_name: str,
         arguments: dict,
         project_dir: Path,
+        **_kwargs,
     ):
         await asyncio.sleep(0)
         assert health.server == "puppeteer"
