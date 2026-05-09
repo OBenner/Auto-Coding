@@ -5502,6 +5502,14 @@ async def test_generic_edit_runtime_writes_artifact_manifest(tmp_path: Path):
     assert manifest["flags"]["recoverable"] is True
     assert manifest["flags"]["resumable"] is True
     assert manifest["flags"]["recovery_required"] is False
+    assert len(manifest["recent_events"]) == 2
+    assert manifest["recent_events"][0]["sequence"] == 1
+    assert manifest["recent_events"][0]["event_type"] == "action_result"
+    assert manifest["recent_events"][0]["tool"] == "read_file"
+    assert manifest["recent_events"][0]["ok"] is True
+    assert "status" not in manifest["recent_events"][0]
+    assert manifest["recent_events"][1]["event_type"] == "transaction"
+    assert manifest["recent_events"][1]["transaction_id"] == "json_actions-1"
     assert manifest["entrypoints"]["result"] == str(
         artifact_dir / "generic_edit_result.json"
     )

@@ -125,6 +125,16 @@ describe('readGenericEditArtifactManifest', () => {
           present: false,
         },
       ],
+      recent_events: [
+        {
+          sequence: 4,
+          event_type: 'transaction',
+          transaction_id: 'json_actions-1',
+          status: 'partial_failure',
+          failed_action_count: 1,
+          recovery_required: true,
+        },
+      ],
       mcp_support: { enabled: true },
       resume: null,
     });
@@ -141,6 +151,16 @@ describe('readGenericEditArtifactManifest', () => {
       active: true,
       present: false,
     });
+    expect(manifest?.recent_events).toEqual([
+      {
+        sequence: 4,
+        event_type: 'transaction',
+        transaction_id: 'json_actions-1',
+        status: 'partial_failure',
+        failed_action_count: 1,
+        recovery_required: true,
+      },
+    ]);
   });
 
   it('returns null when the manifest has not been written yet', async () => {

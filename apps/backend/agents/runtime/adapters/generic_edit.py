@@ -213,6 +213,24 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
     }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
+GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT = 5
+GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
+    "sequence",
+    "event_type",
+    "tool",
+    "ok",
+    "message",
+    "status",
+    "transaction_id",
+    "group_id",
+    "path",
+    "iteration",
+    "action_index",
+    "recovery_required",
+    "failed_action_count",
+    "recovery_attempt_count",
+    "failed_recovery_attempt_count",
+)
 
 
 class GenericEditRuntimeSession:
@@ -3280,6 +3298,20 @@ def write_generic_edit_transactions(
     )
 
 
+def compact_generic_edit_manifest_event(event: dict[str, Any]) -> dict[str, Any]:
+    """Return a bounded event summary suitable for the artifact manifest."""
+    compact: dict[str, Any] = {}
+    for field in GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS:
+        if field not in event:
+            continue
+        value = event.get(field)
+        if isinstance(value, str):
+            compact[field] = value[:300]
+        elif isinstance(value, bool) or isinstance(value, int) or value is None:
+            compact[field] = value
+    return compact
+
+
 def build_generic_edit_artifact_manifest(
     *,
     timestamp: str,
@@ -3355,6 +3387,10 @@ def build_generic_edit_artifact_manifest(
                 "failed_recovery_attempt_count"
             ],
         },
+        "recent_events": [
+            compact_generic_edit_manifest_event(event)
+            for event in events[-GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT:]
+        ],
         "artifacts": artifacts,
         "mcp_support": mcp_support,
         "resume": dict(resume_metadata) if resume_metadata is not None else None,

@@ -18,7 +18,8 @@ import type {
   ImplementationPlan,
   QAEscalation,
   GenericEditArtifactManifest,
-  GenericEditArtifactManifestEntry
+  GenericEditArtifactManifestEntry,
+  GenericEditRecentEvent
 } from '../../../shared/types';
 
 /**
@@ -156,6 +157,53 @@ function normalizeManifestEntry(value: unknown): GenericEditArtifactManifestEntr
   };
 }
 
+function normalizeRecentEvent(value: unknown): GenericEditRecentEvent | null {
+  if (!isRecord(value)) return null;
+
+  const sequence = value.sequence;
+  const eventType = readString(value, 'event_type');
+
+  if (typeof sequence !== 'number' || !Number.isFinite(sequence) || eventType === null) {
+    return null;
+  }
+
+  const result: GenericEditRecentEvent = {
+    sequence,
+    event_type: eventType,
+  };
+
+  for (const [key, eventValue] of Object.entries(value)) {
+    if (key === 'sequence' || key === 'event_type') {
+      continue;
+    }
+    if (
+      typeof eventValue === 'string' ||
+      typeof eventValue === 'number' ||
+      typeof eventValue === 'boolean' ||
+      eventValue === null
+    ) {
+      result[key] = eventValue;
+    }
+  }
+
+  return result;
+}
+
+function normalizeRecentEvents(value: unknown): GenericEditRecentEvent[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditRecentEvent[] = [];
+  for (const event of value) {
+    const normalizedEvent = normalizeRecentEvent(event);
+    if (!normalizedEvent) {
+      return null;
+    }
+    result.push(normalizedEvent);
+  }
+  return result;
+}
+
 function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifactManifest | null {
   if (!isRecord(value)) return null;
   if (value.artifact_type !== 'generic_edit_artifact_manifest' || value.schema_version !== 1) {
@@ -189,6 +237,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     'recovery_attempt_count',
     'failed_recovery_attempt_count',
   ]);
+  const recentEvents = normalizeRecentEvents(value.recent_events);
 
   if (
     timestamp === null ||
@@ -198,6 +247,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     entrypoints === null ||
     flags === null ||
     counts === null ||
+    recentEvents === null ||
     !Array.isArray(value.artifacts)
   ) {
     return null;
@@ -224,6 +274,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     flags,
     counts,
     artifacts,
+    recent_events: recentEvents,
     mcp_support: isRecord(value.mcp_support) ? value.mcp_support : null,
     resume: isRecord(value.resume) ? value.resume : null,
   };

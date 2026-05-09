@@ -30,6 +30,9 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditMissingArtifact': 'Missing',
         'overview.genericEditViewArtifact': 'View artifact',
         'overview.genericEditArtifactPreview': 'Artifact preview',
+        'overview.genericEditRecentEvents': 'Recent events',
+        'overview.genericEditEventOk': 'OK',
+        'overview.genericEditEventFailed': 'Failed',
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -91,6 +94,16 @@ function createManifest(): GenericEditArtifactManifest {
         present: false,
       },
     ],
+    recent_events: [
+      {
+        sequence: 8,
+        event_type: 'action_result',
+        tool: 'read_file',
+        ok: false,
+        message: 'File not found',
+        transaction_id: 'json_actions-2',
+      },
+    ],
     mcp_support: null,
     resume: null,
   };
@@ -109,6 +122,9 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('1/2 present')).toBeInTheDocument();
     expect(screen.getByText('generic_edit_recovery_plan')).toBeInTheDocument();
     expect(screen.getByText('Missing')).toBeInTheDocument();
+    expect(screen.getByText('Recent events')).toBeInTheDocument();
+    expect(screen.getByText('read_file')).toBeInTheDocument();
+    expect(screen.getByText(/File not found/)).toBeInTheDocument();
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {

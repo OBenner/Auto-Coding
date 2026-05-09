@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { Activity, AlertCircle, CheckCircle2, Eye, FileText, Loader2, RotateCcw, X } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  FileText,
+  ListChecks,
+  Loader2,
+  RotateCcw,
+  X,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { GenericEditArtifactManifest } from '../../../shared/types';
+import type { GenericEditArtifactManifest, GenericEditRecentEvent } from '../../../shared/types';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -30,6 +40,38 @@ function statusVariant(status: string): 'success' | 'destructive' | 'warning' | 
 
 function countValue(value: number | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function recentEventVariant(
+  event: GenericEditRecentEvent
+): 'success' | 'destructive' | 'warning' | 'info' | 'muted' {
+  if (event.ok === false || event.status === 'partial_failure' || event.status === 'failed') {
+    return 'destructive';
+  }
+  if (event.recovery_required) {
+    return 'warning';
+  }
+  if (event.ok === true || event.status === 'complete' || event.status === 'resolved') {
+    return 'success';
+  }
+  if (event.event_type === 'resume') {
+    return 'info';
+  }
+  return 'muted';
+}
+
+function recentEventTitle(event: GenericEditRecentEvent): string {
+  return event.tool || event.status || event.group_id || event.transaction_id || event.event_type;
+}
+
+function recentEventBadge(event: GenericEditRecentEvent): string {
+  return event.status || event.event_type;
+}
+
+function recentEventMeta(event: GenericEditRecentEvent): string {
+  return [event.transaction_id, event.path, event.message]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' / ');
 }
 
 export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPanelProps) {
@@ -167,6 +209,37 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="font-semibold">{countValue(manifest.counts.transaction_group_count)}</div>
           </div>
         </div>
+
+        {manifest.recent_events.length > 0 && (
+          <div className="mt-4">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <ListChecks className="h-3.5 w-3.5" />
+              {t('tasks:overview.genericEditRecentEvents')}
+            </div>
+            <div className="space-y-1.5">
+              {manifest.recent_events.map((event) => {
+                const meta = recentEventMeta(event);
+                const badgeText =
+                  event.event_type === 'action_result' && typeof event.ok === 'boolean'
+                    ? t(event.ok ? 'tasks:overview.genericEditEventOk' : 'tasks:overview.genericEditEventFailed')
+                    : recentEventBadge(event);
+                return (
+                  <div
+                    key={`${event.sequence}-${event.event_type}`}
+                    className="flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-2 text-xs"
+                  >
+                    <span className="shrink-0 tabular-nums text-muted-foreground">#{event.sequence}</span>
+                    <Badge variant={recentEventVariant(event)} className="shrink-0 text-xs">
+                      {badgeText}
+                    </Badge>
+                    <span className="min-w-0 shrink-0 font-medium">{recentEventTitle(event)}</span>
+                    {meta && <span className="min-w-0 truncate text-muted-foreground">{meta}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {activeArtifacts.length > 0 && (
           <div className="mt-4">

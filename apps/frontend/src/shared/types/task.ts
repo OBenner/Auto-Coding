@@ -117,6 +117,25 @@ export interface GenericEditArtifactManifestEntry {
   present: boolean;
 }
 
+export interface GenericEditRecentEvent {
+  sequence: number;
+  event_type: string;
+  tool?: string;
+  ok?: boolean;
+  message?: string;
+  status?: string;
+  transaction_id?: string;
+  group_id?: string;
+  path?: string;
+  iteration?: number | string | null;
+  action_index?: number;
+  recovery_required?: boolean;
+  failed_action_count?: number;
+  recovery_attempt_count?: number;
+  failed_recovery_attempt_count?: number;
+  [key: string]: unknown;
+}
+
 export interface GenericEditArtifactManifest {
   artifact_type: 'generic_edit_artifact_manifest';
   schema_version: 1;
@@ -157,6 +176,7 @@ export interface GenericEditArtifactManifest {
     [key: string]: number;
   };
   artifacts: GenericEditArtifactManifestEntry[];
+  recent_events: GenericEditRecentEvent[];
   mcp_support: Record<string, unknown> | null;
   resume: Record<string, unknown> | null;
 }
