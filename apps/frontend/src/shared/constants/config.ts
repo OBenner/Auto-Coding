@@ -108,6 +108,7 @@ export const AUTO_BUILD_PATHS = {
   IMPLEMENTATION_PLAN: 'implementation_plan.json',
   SPEC_FILE: 'spec.md',
   QA_REPORT: 'qa_report.md',
+  GENERIC_EDIT_ARTIFACT_MANIFEST: 'artifacts/generic_edit_artifact_manifest.json',
   BUILD_PROGRESS: 'build-progress.txt',
   GENERATION_PROGRESS: 'generation_progress.json',
   CONTEXT: 'context.json',

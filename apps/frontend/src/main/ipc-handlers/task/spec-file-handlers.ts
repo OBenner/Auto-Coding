@@ -1,11 +1,17 @@
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../../shared/constants';
-import type { IPCResult, ImplementationPlan, QAEscalation } from '../../../shared/types';
+import type {
+  IPCResult,
+  ImplementationPlan,
+  QAEscalation,
+  GenericEditArtifactManifest
+} from '../../../shared/types';
 import { findTaskAndProject } from './shared';
 import {
   readImplementationPlan,
   readQAReport,
-  readQAEscalation
+  readQAEscalation,
+  readGenericEditArtifactManifest
 } from './spec-file-readers';
 
 /**
@@ -20,6 +26,7 @@ function isValidTaskId(taskId: unknown): taskId is string {
  *
  * These handlers provide read-only access to task specification files:
  * - implementation_plan.json: Implementation stages and progress
+ * - artifacts/generic_edit_artifact_manifest.json: Generic Edit runtime artifacts
  * - qa_report.md: QA testing results
  * - QA_ESCALATION.md: Escalated issues requiring attention
  */
@@ -52,6 +59,39 @@ export function registerSpecFileHandlers(): void {
         return {
           success: false,
           error: err instanceof Error ? err.message : 'Failed to read implementation plan'
+        };
+      }
+    }
+  );
+
+  /**
+   * Get Generic Edit artifact manifest for a task
+   * @param taskId - The task ID
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_SPEC_GENERIC_EDIT_ARTIFACT_MANIFEST_GET,
+    async (_, taskId: string): Promise<IPCResult<GenericEditArtifactManifest>> => {
+      if (!isValidTaskId(taskId)) {
+        return { success: false, error: 'Invalid taskId' };
+      }
+
+      try {
+        const { task, project } = await findTaskAndProject(taskId);
+        if (!task || !project) {
+          return { success: false, error: 'Task or project not found' };
+        }
+
+        const manifest = await readGenericEditArtifactManifest(project, task);
+        if (!manifest) {
+          return { success: false, error: 'Generic edit artifact manifest not found' };
+        }
+
+        return { success: true, data: manifest };
+      } catch (err) {
+        console.error('[IPC] TASK_SPEC_GENERIC_EDIT_ARTIFACT_MANIFEST_GET error:', err);
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to read generic edit artifact manifest'
         };
       }
     }

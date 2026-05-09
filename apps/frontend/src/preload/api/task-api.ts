@@ -7,6 +7,7 @@ import type {
   TaskStatus,
   TaskRecoveryResult,
   ImplementationPlan,
+  GenericEditArtifactManifest,
   TaskMetadata,
   TaskLogs,
   TaskLogStreamChunk,
@@ -99,6 +100,7 @@ export interface TaskAPI {
 
   // Task Spec File Reading (for task overview display)
   getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getGenericEditArtifactManifest: (taskId: string) => Promise<IPCResult<GenericEditArtifactManifest | null>>;
   getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
   getQAEscalation: (taskId: string) => Promise<IPCResult<import('../../shared/types').QAEscalation | null>>;
 
@@ -352,6 +354,9 @@ export const createTaskAPI = (): TaskAPI => ({
   // Task Spec File Reading
   getImplementationPlan: (taskId: string): Promise<IPCResult<ImplementationPlan | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_IMPLEMENTATION_PLAN_GET, taskId),
+
+  getGenericEditArtifactManifest: (taskId: string): Promise<IPCResult<GenericEditArtifactManifest | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_GENERIC_EDIT_ARTIFACT_MANIFEST_GET, taskId),
 
   getQAReport: (taskId: string): Promise<IPCResult<string | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_QA_REPORT_GET, taskId),

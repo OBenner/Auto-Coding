@@ -108,6 +108,59 @@ export interface QACommonIssue {
   occurrences: number;
 }
 
+export interface GenericEditArtifactManifestEntry {
+  name: string;
+  kind: string;
+  path: string | null;
+  active: boolean;
+  required: boolean;
+  present: boolean;
+}
+
+export interface GenericEditArtifactManifest {
+  artifact_type: 'generic_edit_artifact_manifest';
+  schema_version: 1;
+  timestamp: string;
+  provider: string;
+  subtask_id: string | null;
+  status: string;
+  stop_reason: string;
+  entrypoints: {
+    result?: string;
+    summary?: string;
+    events?: string;
+    session_state?: string;
+    trace?: string;
+    [key: string]: string | undefined;
+  };
+  flags: {
+    recoverable: boolean;
+    resumable: boolean;
+    resumed: boolean;
+    recovery_required: boolean;
+    recovery_resolved: boolean;
+    has_recovery_plan: boolean;
+    has_mutation_snapshots: boolean;
+    has_transaction_groups: boolean;
+    [key: string]: boolean;
+  };
+  counts: {
+    iteration_count: number;
+    action_count: number;
+    failed_action_count: number;
+    event_count: number;
+    transaction_count: number;
+    transaction_group_count: number;
+    mutation_snapshot_count: number;
+    recovery_attempt_count: number;
+    failed_recovery_attempt_count: number;
+    [key: string]: number;
+  };
+  artifacts: GenericEditArtifactManifestEntry[];
+  mcp_support: Record<string, unknown> | null;
+  resume: Record<string, unknown> | null;
+}
+
 // Task Log Types - for persistent, phase-based logging
 export type TaskLogPhase = 'planning' | 'coding' | 'validation';
 export type TaskLogPhaseStatus = 'pending' | 'active' | 'completed' | 'failed';

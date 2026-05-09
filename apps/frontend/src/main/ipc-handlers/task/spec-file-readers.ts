@@ -4,6 +4,7 @@
  * Provides utilities for reading task specification files from the worktree.
  * These files are read-only and provide task progress information:
  * - implementation_plan.json: Implementation stages and progress
+ * - artifacts/generic_edit_artifact_manifest.json: Generic Edit runtime artifacts
  * - qa_report.md: QA testing results
  * - QA_ESCALATION.md: Escalated issues requiring attention
  */
@@ -11,7 +12,14 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
-import type { Project, Task, ImplementationPlan, QAEscalation } from '../../../shared/types';
+import type {
+  Project,
+  Task,
+  ImplementationPlan,
+  QAEscalation,
+  GenericEditArtifactManifest,
+  GenericEditArtifactManifestEntry
+} from '../../../shared/types';
 
 /**
  * Check if an error is a "file not found" error
@@ -45,6 +53,182 @@ export function getSpecDir(project: Project, task: Task): string {
   return specDir;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readString(value: Record<string, unknown>, key: string): string | null {
+  const result = value[key];
+  return typeof result === 'string' ? result : null;
+}
+
+function readNullableString(value: Record<string, unknown>, key: string): string | null {
+  const result = value[key];
+  return typeof result === 'string' || result === null ? result : null;
+}
+
+function normalizeStringMap(value: unknown): GenericEditArtifactManifest['entrypoints'] | null {
+  if (!isRecord(value)) return null;
+  const result: GenericEditArtifactManifest['entrypoints'] = {};
+
+  for (const [key, mapValue] of Object.entries(value)) {
+    if (typeof mapValue !== 'string') {
+      return null;
+    }
+    result[key] = mapValue;
+  }
+
+  return result;
+}
+
+function normalizeBooleanMap(
+  value: unknown,
+  requiredKeys: readonly string[]
+): GenericEditArtifactManifest['flags'] | null {
+  if (!isRecord(value)) return null;
+  const result: Record<string, boolean> = {};
+
+  for (const [key, mapValue] of Object.entries(value)) {
+    if (typeof mapValue !== 'boolean') {
+      return null;
+    }
+    result[key] = mapValue;
+  }
+
+  for (const key of requiredKeys) {
+    if (typeof result[key] !== 'boolean') {
+      return null;
+    }
+  }
+
+  return result as GenericEditArtifactManifest['flags'];
+}
+
+function normalizeNumberMap(
+  value: unknown,
+  requiredKeys: readonly string[]
+): GenericEditArtifactManifest['counts'] | null {
+  if (!isRecord(value)) return null;
+  const result: Record<string, number> = {};
+
+  for (const [key, mapValue] of Object.entries(value)) {
+    if (typeof mapValue !== 'number' || !Number.isFinite(mapValue)) {
+      return null;
+    }
+    result[key] = mapValue;
+  }
+
+  for (const key of requiredKeys) {
+    if (typeof result[key] !== 'number') {
+      return null;
+    }
+  }
+
+  return result as GenericEditArtifactManifest['counts'];
+}
+
+function normalizeManifestEntry(value: unknown): GenericEditArtifactManifestEntry | null {
+  if (!isRecord(value)) return null;
+
+  const name = readString(value, 'name');
+  const kind = readString(value, 'kind');
+  const entryPath = value.path;
+  const { active, required, present } = value;
+
+  if (
+    name === null ||
+    kind === null ||
+    (entryPath !== null && typeof entryPath !== 'string') ||
+    typeof active !== 'boolean' ||
+    typeof required !== 'boolean' ||
+    typeof present !== 'boolean'
+  ) {
+    return null;
+  }
+
+  return {
+    name,
+    kind,
+    path: entryPath,
+    active,
+    required,
+    present,
+  };
+}
+
+function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifactManifest | null {
+  if (!isRecord(value)) return null;
+  if (value.artifact_type !== 'generic_edit_artifact_manifest' || value.schema_version !== 1) {
+    return null;
+  }
+
+  const timestamp = readString(value, 'timestamp');
+  const provider = readString(value, 'provider');
+  const subtaskId = readNullableString(value, 'subtask_id');
+  const status = readString(value, 'status');
+  const stopReason = readString(value, 'stop_reason');
+  const entrypoints = normalizeStringMap(value.entrypoints);
+  const flags = normalizeBooleanMap(value.flags, [
+    'recoverable',
+    'resumable',
+    'resumed',
+    'recovery_required',
+    'recovery_resolved',
+    'has_recovery_plan',
+    'has_mutation_snapshots',
+    'has_transaction_groups',
+  ]);
+  const counts = normalizeNumberMap(value.counts, [
+    'iteration_count',
+    'action_count',
+    'failed_action_count',
+    'event_count',
+    'transaction_count',
+    'transaction_group_count',
+    'mutation_snapshot_count',
+    'recovery_attempt_count',
+    'failed_recovery_attempt_count',
+  ]);
+
+  if (
+    timestamp === null ||
+    provider === null ||
+    status === null ||
+    stopReason === null ||
+    entrypoints === null ||
+    flags === null ||
+    counts === null ||
+    !Array.isArray(value.artifacts)
+  ) {
+    return null;
+  }
+
+  const artifacts: GenericEditArtifactManifestEntry[] = [];
+  for (const artifact of value.artifacts) {
+    const normalizedArtifact = normalizeManifestEntry(artifact);
+    if (!normalizedArtifact) {
+      return null;
+    }
+    artifacts.push(normalizedArtifact);
+  }
+
+  return {
+    artifact_type: 'generic_edit_artifact_manifest',
+    schema_version: 1,
+    timestamp,
+    provider,
+    subtask_id: subtaskId,
+    status,
+    stop_reason: stopReason,
+    entrypoints,
+    flags,
+    counts,
+    artifacts,
+    mcp_support: isRecord(value.mcp_support) ? value.mcp_support : null,
+    resume: isRecord(value.resume) ? value.resume : null,
+  };
+}
+
 /**
  * Read the implementation plan from implementation_plan.json
  *
@@ -69,6 +253,38 @@ export async function readImplementationPlan(
       return null;
     }
     console.error(`[spec-file-readers] Error reading implementation plan:`, err);
+    throw err;
+  }
+}
+
+/**
+ * Read and normalize the Generic Edit v2 artifact manifest.
+ *
+ * @param project - The project containing the task
+ * @param task - The task to read the manifest for
+ * @returns The parsed artifact manifest, or null if it doesn't exist or is from another schema
+ */
+export async function readGenericEditArtifactManifest(
+  project: Project,
+  task: Task
+): Promise<GenericEditArtifactManifest | null> {
+  try {
+    const specDir = getSpecDir(project, task);
+    const manifestPath = path.join(specDir, AUTO_BUILD_PATHS.GENERIC_EDIT_ARTIFACT_MANIFEST);
+
+    const manifestContent = await fs.readFile(manifestPath, 'utf-8');
+    const manifest = normalizeGenericEditArtifactManifest(JSON.parse(manifestContent));
+
+    if (!manifest) {
+      console.warn(`[spec-file-readers] Generic edit artifact manifest has unsupported schema at ${manifestPath}`);
+    }
+
+    return manifest;
+  } catch (err) {
+    if (isFileNotFoundError(err)) {
+      return null;
+    }
+    console.error(`[spec-file-readers] Error reading generic edit artifact manifest:`, err);
     throw err;
   }
 }
