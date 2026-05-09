@@ -19,6 +19,7 @@ import type {
   QAEscalation,
   GenericEditArtifactManifest,
   GenericEditArtifactManifestEntry,
+  GenericEditRecoverySummary,
   GenericEditRecentEvent
 } from '../../../shared/types';
 
@@ -204,6 +205,60 @@ function normalizeRecentEvents(value: unknown): GenericEditRecentEvent[] | null 
   return result;
 }
 
+function normalizeStringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string') {
+      return null;
+    }
+    result.push(item);
+  }
+  return result;
+}
+
+function normalizeRecoverySummary(value: unknown): GenericEditRecoverySummary | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const version = value.version;
+  const status = readString(value, 'status');
+  const { finish_blocked, unresolved_transaction_group_count, warning_count } = value;
+  const unresolvedTransactionGroupIds = normalizeStringList(value.unresolved_transaction_group_ids);
+  const warnings = normalizeStringList(value.warnings);
+  const resolutionStrategies = normalizeStringList(value.resolution_strategies);
+  const recommendedVerificationTools = normalizeStringList(value.recommended_verification_tools);
+
+  if (
+    typeof version !== 'number' ||
+    !Number.isFinite(version) ||
+    status === null ||
+    typeof finish_blocked !== 'boolean' ||
+    typeof unresolved_transaction_group_count !== 'number' ||
+    !Number.isFinite(unresolved_transaction_group_count) ||
+    typeof warning_count !== 'number' ||
+    !Number.isFinite(warning_count) ||
+    unresolvedTransactionGroupIds === null ||
+    warnings === null ||
+    resolutionStrategies === null ||
+    recommendedVerificationTools === null
+  ) {
+    return null;
+  }
+
+  return {
+    version,
+    status,
+    finish_blocked,
+    unresolved_transaction_group_count,
+    unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
+    warning_count,
+    warnings,
+    resolution_strategies: resolutionStrategies,
+    recommended_verification_tools: recommendedVerificationTools,
+  };
+}
+
 function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifactManifest | null {
   if (!isRecord(value)) return null;
   if (value.artifact_type !== 'generic_edit_artifact_manifest' || value.schema_version !== 1) {
@@ -238,6 +293,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     'failed_recovery_attempt_count',
   ]);
   const recentEvents = normalizeRecentEvents(value.recent_events);
+  const recoverySummary = normalizeRecoverySummary(value.recovery_summary);
 
   if (
     timestamp === null ||
@@ -275,6 +331,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     counts,
     artifacts,
     recent_events: recentEvents,
+    recovery_summary: recoverySummary,
     mcp_support: isRecord(value.mcp_support) ? value.mcp_support : null,
     resume: isRecord(value.resume) ? value.resume : null,
   };

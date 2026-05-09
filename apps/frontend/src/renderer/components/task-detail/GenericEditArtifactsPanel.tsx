@@ -210,6 +210,52 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
           </div>
         </div>
 
+        {manifest.recovery_summary && manifest.recovery_summary.status !== 'clean' && (
+          <div
+            className={cn(
+              'mt-4 rounded-md border px-3 py-3 text-xs',
+              manifest.recovery_summary.finish_blocked
+                ? 'border-warning/50 bg-warning/10'
+                : 'bg-muted/20'
+            )}
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <AlertCircle className="h-3.5 w-3.5 text-warning" />
+              <span className="font-semibold text-muted-foreground">
+                {t('tasks:overview.genericEditRecoveryStatus')}
+              </span>
+              <Badge
+                variant={manifest.recovery_summary.finish_blocked ? 'warning' : 'muted'}
+                className="text-xs"
+              >
+                {manifest.recovery_summary.status}
+              </Badge>
+              {manifest.recovery_summary.finish_blocked && (
+                <Badge variant="destructive" className="text-xs">
+                  {t('tasks:overview.genericEditFinishBlocked')}
+                </Badge>
+              )}
+            </div>
+            {manifest.recovery_summary.unresolved_transaction_group_ids.length > 0 && (
+              <div className="truncate text-muted-foreground">
+                {manifest.recovery_summary.unresolved_transaction_group_ids.join(', ')}
+              </div>
+            )}
+            {manifest.recovery_summary.warning_count > 0 && (
+              <div className="mt-2 space-y-1">
+                <div className="font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditRecoveryWarnings')}
+                </div>
+                {manifest.recovery_summary.warnings.map((warning) => (
+                  <div key={warning} className="text-warning">
+                    {warning}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {manifest.recent_events.length > 0 && (
           <div className="mt-4">
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">

@@ -136,6 +136,18 @@ export interface GenericEditRecentEvent {
   [key: string]: unknown;
 }
 
+export interface GenericEditRecoverySummary {
+  version: number;
+  status: string;
+  finish_blocked: boolean;
+  unresolved_transaction_group_count: number;
+  unresolved_transaction_group_ids: string[];
+  warning_count: number;
+  warnings: string[];
+  resolution_strategies: string[];
+  recommended_verification_tools: string[];
+}
+
 export interface GenericEditArtifactManifest {
   artifact_type: 'generic_edit_artifact_manifest';
   schema_version: 1;
@@ -177,6 +189,7 @@ export interface GenericEditArtifactManifest {
   };
   artifacts: GenericEditArtifactManifestEntry[];
   recent_events: GenericEditRecentEvent[];
+  recovery_summary: GenericEditRecoverySummary | null;
   mcp_support: Record<string, unknown> | null;
   resume: Record<string, unknown> | null;
 }

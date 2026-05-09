@@ -33,6 +33,9 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditRecentEvents': 'Recent events',
         'overview.genericEditEventOk': 'OK',
         'overview.genericEditEventFailed': 'Failed',
+        'overview.genericEditRecoveryStatus': 'Recovery status',
+        'overview.genericEditFinishBlocked': 'Finish blocked',
+        'overview.genericEditRecoveryWarnings': 'Warnings',
       };
       return translations[normalizedKey] || translations[key] || key;
     },
@@ -104,6 +107,17 @@ function createManifest(): GenericEditArtifactManifest {
         transaction_id: 'json_actions-2',
       },
     ],
+    recovery_summary: {
+      version: 1,
+      status: 'requires_resolution',
+      finish_blocked: true,
+      unresolved_transaction_group_count: 1,
+      unresolved_transaction_group_ids: ['transaction-group-1'],
+      warning_count: 1,
+      warnings: ['Run focused verification before finish.'],
+      resolution_strategies: ['rollback_transaction', 'repair_mutation'],
+      recommended_verification_tools: ['git_diff', 'run_command'],
+    },
     mcp_support: null,
     resume: null,
   };
@@ -125,6 +139,11 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Recent events')).toBeInTheDocument();
     expect(screen.getByText('read_file')).toBeInTheDocument();
     expect(screen.getByText(/File not found/)).toBeInTheDocument();
+    expect(screen.getByText('Recovery status')).toBeInTheDocument();
+    expect(screen.getByText('requires_resolution')).toBeInTheDocument();
+    expect(screen.getByText('Finish blocked')).toBeInTheDocument();
+    expect(screen.getByText('Warnings')).toBeInTheDocument();
+    expect(screen.getByText('Run focused verification before finish.')).toBeInTheDocument();
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {

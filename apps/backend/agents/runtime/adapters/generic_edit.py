@@ -3312,6 +3312,51 @@ def compact_generic_edit_manifest_event(event: dict[str, Any]) -> dict[str, Any]
     return compact
 
 
+def build_generic_edit_manifest_recovery_summary(
+    *,
+    transaction_group_summary: dict[str, Any],
+    recovery_plan: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return aggregate recovery state for lightweight UI control planes."""
+    policy = (
+        recovery_plan.get("recovery_policy")
+        if isinstance(recovery_plan, dict)
+        and isinstance(recovery_plan.get("recovery_policy"), dict)
+        else {}
+    )
+    warnings: list[str] = []
+    for outcome in transaction_group_summary.get("recovery_outcomes") or []:
+        if not isinstance(outcome, dict):
+            continue
+        policy_status = outcome.get("policy_status")
+        if not isinstance(policy_status, dict):
+            continue
+        warnings.extend(str(warning) for warning in policy_status.get("warnings") or [])
+    unresolved_group_ids = list(
+        transaction_group_summary.get("unresolved_transaction_group_ids") or []
+    )
+    finish_blocked = bool(policy.get("finish_blocked")) or bool(unresolved_group_ids)
+    status = str(policy.get("status") or "clean")
+    if not finish_blocked and warnings:
+        status = "resolved_with_warnings"
+    return {
+        "version": GENERIC_EDIT_RECOVERY_POLICY_VERSION,
+        "status": status,
+        "finish_blocked": finish_blocked,
+        "unresolved_transaction_group_count": int(
+            transaction_group_summary.get("unresolved_transaction_group_count") or 0
+        ),
+        "unresolved_transaction_group_ids": unresolved_group_ids,
+        "warning_count": len(warnings),
+        "warnings": warnings,
+        "resolution_strategies": list(policy.get("resolution_strategies") or []),
+        "recommended_verification_tools": list(
+            policy.get("recommended_verification_tools")
+            or GENERIC_EDIT_RECOVERY_VERIFICATION_TOOLS
+        ),
+    }
+
+
 def build_generic_edit_artifact_manifest(
     *,
     timestamp: str,
@@ -3391,6 +3436,10 @@ def build_generic_edit_artifact_manifest(
             compact_generic_edit_manifest_event(event)
             for event in events[-GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT:]
         ],
+        "recovery_summary": build_generic_edit_manifest_recovery_summary(
+            transaction_group_summary=transaction_group_summary,
+            recovery_plan=recovery_plan,
+        ),
         "artifacts": artifacts,
         "mcp_support": mcp_support,
         "resume": dict(resume_metadata) if resume_metadata is not None else None,

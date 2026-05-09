@@ -135,6 +135,17 @@ describe('readGenericEditArtifactManifest', () => {
           recovery_required: true,
         },
       ],
+      recovery_summary: {
+        version: 1,
+        status: 'requires_resolution',
+        finish_blocked: true,
+        unresolved_transaction_group_count: 1,
+        unresolved_transaction_group_ids: ['transaction-group-1'],
+        warning_count: 0,
+        warnings: [],
+        resolution_strategies: ['rollback_transaction', 'repair_mutation'],
+        recommended_verification_tools: ['git_diff', 'run_command'],
+      },
       mcp_support: { enabled: true },
       resume: null,
     });
@@ -161,6 +172,12 @@ describe('readGenericEditArtifactManifest', () => {
         recovery_required: true,
       },
     ]);
+    expect(manifest?.recovery_summary).toMatchObject({
+      status: 'requires_resolution',
+      finish_blocked: true,
+      unresolved_transaction_group_ids: ['transaction-group-1'],
+      resolution_strategies: ['rollback_transaction', 'repair_mutation'],
+    });
   });
 
   it('returns null when the manifest has not been written yet', async () => {

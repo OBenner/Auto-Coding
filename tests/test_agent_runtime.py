@@ -4675,6 +4675,7 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     session_state_path = tmp_path / "artifacts" / "generic_edit_session_state.json"
     checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
     recovery_plan_path = tmp_path / "artifacts" / "generic_edit_recovery_plan.json"
+    manifest_path = tmp_path / "artifacts" / "generic_edit_artifact_manifest.json"
     group_artifact_path = (
         tmp_path / "artifacts" / "generic_edit_transaction_groups.json"
     )
@@ -4686,6 +4687,7 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     session_state = json.loads(session_state_path.read_text(encoding="utf-8"))
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     recovery_plan = json.loads(recovery_plan_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     group_artifact = json.loads(group_artifact_path.read_text(encoding="utf-8"))
     mutation_snapshots = json.loads(mutation_snapshot_path.read_text(encoding="utf-8"))
     expected_next_actions = [
@@ -4758,6 +4760,17 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         mutation_snapshot_path
     )
     assert artifact["recovery_plan"]["next_actions"] == expected_next_actions
+    assert manifest["recovery_summary"] == {
+        "version": 1,
+        "status": "requires_resolution",
+        "finish_blocked": True,
+        "unresolved_transaction_group_count": 1,
+        "unresolved_transaction_group_ids": ["transaction-group-1"],
+        "warning_count": 0,
+        "warnings": [],
+        "resolution_strategies": ["rollback_transaction", "repair_mutation"],
+        "recommended_verification_tools": ["git_diff", "run_command"],
+    }
     rollback_operation = recovery_plan["rollback_operations"][0]
     assert rollback_operation["tool"] == "rollback_transaction"
     assert rollback_operation["transaction_id"] == "json_actions-1"
