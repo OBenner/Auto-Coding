@@ -491,6 +491,53 @@ async def test_openai_compatible_session_exposes_native_tool_calls(
 
 
 @pytest.mark.asyncio
+async def test_ollama_session_exposes_native_tool_calls(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fake_openai = _install_fake_openai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_ollama_1",
+                name="read_file",
+                arguments={"path": "README.md"},
+            )
+        ],
+    )
+    provider = OllamaProvider(
+        ProviderConfig(provider="ollama", ollama_model="llama3.1")
+    )
+    session = provider.create_session(SessionConfig(name="ollama-tools"))
+
+    response = await session.complete_with_tool_calls(
+        "Inspect the project",
+        local_action_tool_schemas(),
+    )
+    session.add_tool_result(
+        response.tool_calls[0].id,
+        response.tool_calls[0].name,
+        {"ok": True, "message": "Read README.md"},
+    )
+
+    assert response.tool_calls[0].id == "call_ollama_1"
+    assert response.tool_calls[0].name == "read_file"
+    assert response.tool_calls[0].arguments == {"path": "README.md"}
+    assert fake_openai.instances[0].kwargs["base_url"] == "http://localhost:11434/v1"
+    assert fake_openai.instances[0].kwargs["api_key"] == "ollama"
+    assert fake_openai.calls[0]["stream"] is False
+    assert fake_openai.calls[0]["tool_choice"] == "auto"
+    assert _submitted_tool_names(fake_openai.calls[0])[:4] == [
+        "stat_path",
+        "list_files",
+        "search_text",
+        "read_file",
+    ]
+    assert session.messages[-1]["role"] == "tool"
+    assert session.messages[-1]["tool_call_id"] == "call_ollama_1"
+    assert "name" not in session.messages[-1]
+
+
+@pytest.mark.asyncio
 async def test_openrouter_session_exposes_native_tool_calls(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -997,5 +1044,67 @@ async def test_google_provider_supports_generic_edit_native_tools(
     )
     assert result_artifact["status"] == "complete"
     assert result_artifact["subtask_id"] == "1.3"
+    assert result_artifact["loop"] == "native_tool_calls"
+    assert result_artifact["action_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_supports_generic_edit_native_tools(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    target = tmp_path / "ollama-generic.txt"
+    target.write_text("old\n", encoding="utf-8")
+    fake_openai = _install_fake_openai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_write",
+                name="write_file",
+                arguments={"path": "ollama-generic.txt", "content": "new\n"},
+            ),
+            _openai_tool_call_response(
+                tool_call_id="call_finish",
+                name="finish",
+                arguments={
+                    "summary": "Ollama provider generic edit smoke",
+                    "tests": [],
+                    "risks": [],
+                },
+            ),
+        ],
+    )
+    provider = OllamaProvider(
+        ProviderConfig(provider="ollama", ollama_model="llama3.1")
+    )
+    session = provider.create_session(SessionConfig(name="ollama-generic-edit"))
+    runtime_session = create_runtime_session(
+        provider_name="ollama",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "update ollama-generic.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.4",
+    )
+
+    assert result.status == "continue"
+    assert "Ollama provider generic edit smoke" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert len(fake_openai.calls) == 2
+    assert fake_openai.calls[1]["messages"][-1]["role"] == "tool"
+    assert fake_openai.calls[1]["messages"][-1]["tool_call_id"] == "call_write"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["subtask_id"] == "1.4"
     assert result_artifact["loop"] == "native_tool_calls"
     assert result_artifact["action_count"] == 2
