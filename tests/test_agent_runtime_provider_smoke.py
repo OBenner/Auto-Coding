@@ -1108,3 +1108,194 @@ async def test_ollama_provider_supports_generic_edit_native_tools(
     assert result_artifact["subtask_id"] == "1.4"
     assert result_artifact["loop"] == "native_tool_calls"
     assert result_artifact["action_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_openrouter_provider_supports_generic_edit_native_tools(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    target = tmp_path / "openrouter-generic.txt"
+    target.write_text("old\n", encoding="utf-8")
+    fake_openai = _install_fake_openai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_write",
+                name="write_file",
+                arguments={"path": "openrouter-generic.txt", "content": "new\n"},
+            ),
+            _openai_tool_call_response(
+                tool_call_id="call_finish",
+                name="finish",
+                arguments={
+                    "summary": "OpenRouter provider generic edit smoke",
+                    "tests": [],
+                    "risks": [],
+                },
+            ),
+        ],
+    )
+    provider = OpenRouterProvider(
+        ProviderConfig(provider="openrouter", openrouter_api_key="test-key")
+    )
+    session = provider.create_session(SessionConfig(name="openrouter-generic-edit"))
+    runtime_session = create_runtime_session(
+        provider_name="openrouter",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "update openrouter-generic.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.5",
+    )
+
+    assert result.status == "continue"
+    assert "OpenRouter provider generic edit smoke" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert len(fake_openai.calls) == 2
+    assert fake_openai.calls[0]["stream"] is False
+    assert fake_openai.calls[1]["messages"][-1]["tool_call_id"] == "call_write"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["subtask_id"] == "1.5"
+    assert result_artifact["loop"] == "native_tool_calls"
+    assert result_artifact["action_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_litellm_provider_supports_generic_edit_native_tools(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    target = tmp_path / "litellm-generic.txt"
+    target.write_text("old\n", encoding="utf-8")
+    fake_litellm = _install_fake_litellm_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_write",
+                name="write_file",
+                arguments={"path": "litellm-generic.txt", "content": "new\n"},
+            ),
+            _openai_tool_call_response(
+                tool_call_id="call_finish",
+                name="finish",
+                arguments={
+                    "summary": "LiteLLM provider generic edit smoke",
+                    "tests": [],
+                    "risks": [],
+                },
+            ),
+        ],
+    )
+    provider = LiteLLMProvider(
+        ProviderConfig(provider="litellm", litellm_model="openai/gpt-4o")
+    )
+    session = provider.create_session(SessionConfig(name="litellm-generic-edit"))
+    runtime_session = create_runtime_session(
+        provider_name="litellm",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "update litellm-generic.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.6",
+    )
+
+    assert result.status == "continue"
+    assert "LiteLLM provider generic edit smoke" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert len(fake_litellm.calls) == 2
+    assert fake_litellm.calls[0]["tool_choice"] == "auto"
+    assert fake_litellm.calls[1]["messages"][-1]["tool_call_id"] == "call_write"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["subtask_id"] == "1.6"
+    assert result_artifact["loop"] == "native_tool_calls"
+    assert result_artifact["action_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_zhipuai_provider_supports_generic_edit_native_tools(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    target = tmp_path / "zhipuai-generic.txt"
+    target.write_text("old\n", encoding="utf-8")
+    fake_zai = _install_fake_zai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_write",
+                name="write_file",
+                arguments={"path": "zhipuai-generic.txt", "content": "new\n"},
+            ),
+            _openai_tool_call_response(
+                tool_call_id="call_finish",
+                name="finish",
+                arguments={
+                    "summary": "ZhipuAI provider generic edit smoke",
+                    "tests": [],
+                    "risks": [],
+                },
+            ),
+        ],
+    )
+    provider = ZhipuAIProvider(
+        ProviderConfig(
+            provider="zhipuai",
+            zhipuai_api_key="test-key",
+            zhipuai_model="glm-4-flash",
+        )
+    )
+    session = provider.create_session(SessionConfig(name="zhipuai-generic-edit"))
+    runtime_session = create_runtime_session(
+        provider_name="zhipuai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "update zhipuai-generic.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.7",
+    )
+
+    assert result.status == "continue"
+    assert "ZhipuAI provider generic edit smoke" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert fake_zai.api_keys == ["test-key"]
+    assert len(fake_zai.calls) == 2
+    assert fake_zai.calls[0]["tool_choice"] == "auto"
+    assert fake_zai.calls[1]["messages"][-1]["tool_call_id"] == "call_write"
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["subtask_id"] == "1.7"
+    assert result_artifact["loop"] == "native_tool_calls"
+    assert result_artifact["action_count"] == 2
