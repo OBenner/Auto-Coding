@@ -4272,6 +4272,12 @@ def generic_edit_subtask_lines(subtask_id: str | None) -> list[str]:
 def generic_edit_mcp_lines(mcp_support: dict[str, Any] | None) -> list[str]:
     if not mcp_support:
         return []
+
+    def bridge_server_line(label: str, servers: Any) -> str | None:
+        if not servers:
+            return None
+        return f"- MCP {label} servers: " + ", ".join(str(server) for server in servers)
+
     lines = [
         "",
         "## Runtime Support",
@@ -4286,12 +4292,25 @@ def generic_edit_mcp_lines(mcp_support: dict[str, Any] | None) -> list[str]:
             f"`{bridge_plan.get('status', 'unknown')}`; "
             f"action `{bridge_plan.get('action_required', 'unknown')}`."
         )
-        native_required = bridge_plan.get("native_required_servers") or []
-        if native_required:
+        recommended_runtime_path = bridge_plan.get("recommended_runtime_path")
+        if recommended_runtime_path:
             lines.append(
-                "- MCP native-required servers: "
-                + ", ".join(str(server) for server in native_required)
+                f"- MCP recommended runtime path: `{recommended_runtime_path}`."
             )
+        native_required = bridge_plan.get("native_required_servers") or []
+        local_bridge_required = bridge_plan.get("local_bridge_required_servers") or []
+        external_bridge_required = (
+            bridge_plan.get("external_bridge_required_servers") or []
+        )
+        unsupported = bridge_plan.get("unsupported_servers") or []
+        for line in (
+            bridge_server_line("native-required", native_required),
+            bridge_server_line("local-bridge-required", local_bridge_required),
+            bridge_server_line("external-bridge-required", external_bridge_required),
+            bridge_server_line("unsupported", unsupported),
+        ):
+            if line:
+                lines.append(line)
     return lines
 
 

@@ -69,6 +69,7 @@ from agents.runtime.adapters.generic_edit import (
     build_generic_edit_file_preimage,
     build_generic_edit_rollback_operation,
     execute_generic_edit_transaction_rollback,
+    generic_edit_mcp_lines,
     summarize_generic_edit_transactions,
 )
 from agents.runtime.adapters.patch_proposal import (
@@ -5993,6 +5994,33 @@ def test_generic_edit_transaction_summary_marks_unresolved_partial_failure():
     assert summary["recovery_resolved"] is False
     assert summary["unresolved_partial_failure_count"] == 1
     assert summary["unresolved_partial_failure_ids"] == ["json_actions-1"]
+
+
+def test_generic_edit_mcp_lines_render_bridge_fallback_plan():
+    lines = generic_edit_mcp_lines(
+        {
+            "strategy": "local_bridge",
+            "reason": "External MCP servers require a bridge.",
+            "bridge_plan": {
+                "status": "partial",
+                "action_required": "configure_external_mcp_client",
+                "recommended_runtime_path": "external_mcp_client",
+                "native_required_servers": ["graphiti"],
+                "local_bridge_required_servers": ["linear"],
+                "external_bridge_required_servers": ["puppeteer"],
+                "unsupported_servers": ["unknown-docs"],
+            },
+        }
+    )
+
+    assert (
+        "- MCP bridge plan: `partial`; action `configure_external_mcp_client`." in lines
+    )
+    assert "- MCP recommended runtime path: `external_mcp_client`." in lines
+    assert "- MCP native-required servers: graphiti" in lines
+    assert "- MCP local-bridge-required servers: linear" in lines
+    assert "- MCP external-bridge-required servers: puppeteer" in lines
+    assert "- MCP unsupported servers: unknown-docs" in lines
 
 
 def test_generic_edit_transaction_summary_does_not_treat_finish_as_recovery():
