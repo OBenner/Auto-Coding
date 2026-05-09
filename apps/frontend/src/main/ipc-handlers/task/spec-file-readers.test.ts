@@ -174,6 +174,21 @@ describe('readGenericEditArtifactManifest', () => {
         tool_count: 2,
         available_servers: ['context7'],
         unavailable_servers: ['linear'],
+        server_statuses: [
+          {
+            server: 'context7',
+            display_name: 'Context7',
+            availability: 'available',
+            runtime_path: 'external_bridge',
+            bridgeable: true,
+            reason: 'Available through Auto Code external MCP client bridge.',
+            notes: 'Documentation server',
+            external_client: {
+              status: 'enabled',
+              transport: 'stdio',
+            },
+          },
+        ],
         bridge_plan: {
           status: 'partial',
           action_required: 'configure_external_mcp_client',
@@ -182,6 +197,36 @@ describe('readGenericEditArtifactManifest', () => {
         },
         bridge: {
           tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
+          tool_policies: [
+            {
+              server: 'context7',
+              name: 'resolve-library-id',
+              exposed_name: 'mcp__context7__resolve-library-id',
+              permission: 'mcp:context7:read',
+              audit_level: 'read',
+              mutating: false,
+              audit_required: true,
+            },
+          ],
+          permission_policy: {
+            mode: 'allowlist',
+            allowed_permissions: ['mcp:context7:read'],
+          },
+          server_statuses: [
+            {
+              server: 'context7',
+              display_name: 'Context7',
+              availability: 'available',
+              runtime_path: 'external_bridge',
+              bridgeable: true,
+              reason: 'Available through Auto Code external MCP client bridge.',
+              notes: 'Documentation server',
+              external_client: {
+                status: 'enabled',
+                transport: 'stdio',
+              },
+            },
+          ],
         },
       },
       resume_action: {
@@ -267,6 +312,21 @@ describe('readGenericEditArtifactManifest', () => {
       tool_count: 2,
       available_servers: ['context7'],
       unavailable_servers: ['linear'],
+      server_statuses: [
+        {
+          server: 'context7',
+          display_name: 'Context7',
+          availability: 'available',
+          runtime_path: 'external_bridge',
+          bridgeable: true,
+          reason: 'Available through Auto Code external MCP client bridge.',
+          notes: 'Documentation server',
+          external_client: {
+            status: 'enabled',
+            transport: 'stdio',
+          },
+        },
+      ],
       bridge_plan: {
         status: 'partial',
         action_required: 'configure_external_mcp_client',
@@ -275,6 +335,36 @@ describe('readGenericEditArtifactManifest', () => {
       },
       bridge: {
         tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
+        tool_policies: [
+          {
+            server: 'context7',
+            name: 'resolve-library-id',
+            exposed_name: 'mcp__context7__resolve-library-id',
+            permission: 'mcp:context7:read',
+            audit_level: 'read',
+            mutating: false,
+            audit_required: true,
+          },
+        ],
+        permission_policy: {
+          mode: 'allowlist',
+          allowed_permissions: ['mcp:context7:read'],
+        },
+        server_statuses: [
+          {
+            server: 'context7',
+            display_name: 'Context7',
+            availability: 'available',
+            runtime_path: 'external_bridge',
+            bridgeable: true,
+            reason: 'Available through Auto Code external MCP client bridge.',
+            notes: 'Documentation server',
+            external_client: {
+              status: 'enabled',
+              transport: 'stdio',
+            },
+          },
+        ],
       },
     });
   });

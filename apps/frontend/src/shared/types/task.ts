@@ -174,8 +174,37 @@ export interface GenericEditMcpBridgePlan {
   external_bridged_servers: string[];
 }
 
+export interface GenericEditMcpServerStatus {
+  server: string;
+  display_name: string | null;
+  availability: string | null;
+  runtime_path: string | null;
+  bridgeable: boolean | null;
+  reason: string | null;
+  notes: string | null;
+  external_client: Record<string, unknown> | null;
+}
+
+export interface GenericEditMcpToolPolicy {
+  server: string | null;
+  name: string;
+  exposed_name: string;
+  permission: string | null;
+  audit_level: string | null;
+  mutating: boolean | null;
+  audit_required: boolean | null;
+}
+
+export interface GenericEditMcpPermissionPolicy {
+  mode: string | null;
+  allowed_permissions: string[] | null;
+}
+
 export interface GenericEditMcpBridge {
   tools: string[];
+  tool_policies: GenericEditMcpToolPolicy[];
+  permission_policy: GenericEditMcpPermissionPolicy | null;
+  server_statuses: GenericEditMcpServerStatus[];
 }
 
 export interface GenericEditMcpSupport {
@@ -185,6 +214,7 @@ export interface GenericEditMcpSupport {
   tool_count: number | null;
   available_servers: string[];
   unavailable_servers: string[];
+  server_statuses: GenericEditMcpServerStatus[];
   bridge_plan: GenericEditMcpBridgePlan | null;
   bridge: GenericEditMcpBridge | null;
 }

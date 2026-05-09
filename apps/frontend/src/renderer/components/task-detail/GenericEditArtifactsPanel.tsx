@@ -107,8 +107,22 @@ function mcpString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function mcpBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
 function mcpNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function mcpRecordList(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (item): item is Record<string, unknown> =>
+      typeof item === 'object' && item !== null && !Array.isArray(item)
+  );
 }
 
 function mcpStringList(value: unknown): string[] {
@@ -133,6 +147,26 @@ function mcpStrategyVariant(
   return 'muted';
 }
 
+function mcpAvailabilityVariant(
+  availability: string | null
+): 'success' | 'destructive' | 'warning' | 'info' | 'muted' {
+  if (availability === 'available') {
+    return 'success';
+  }
+  if (availability === 'unavailable') {
+    return 'warning';
+  }
+  return 'muted';
+}
+
+function mcpServerStatusName(status: Record<string, unknown>): string {
+  return mcpString(status.display_name) ?? mcpString(status.server) ?? 'unknown';
+}
+
+function mcpToolPolicyName(policy: Record<string, unknown>): string {
+  return mcpString(policy.exposed_name) ?? mcpString(policy.name) ?? 'unknown';
+}
+
 export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPanelProps) {
   const { t } = useTranslation(['tasks']);
   const [preview, setPreview] = useState<{
@@ -152,11 +186,19 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpToolCount = mcpNumber(mcpSupport?.tool_count) ?? mcpStringList(mcpBridge?.tools).length;
   const mcpAvailableServers = mcpStringList(mcpSupport?.available_servers);
   const mcpUnavailableServers = mcpStringList(mcpSupport?.unavailable_servers);
+  const mcpServerStatuses = mcpRecordList(mcpSupport?.server_statuses);
   const mcpBridgePlanStatus = mcpString(mcpBridgePlan?.status);
   const mcpActionRequired = mcpString(mcpBridgePlan?.action_required);
   const mcpBridgedServers = mcpStringList(mcpBridgePlan?.bridged_servers);
   const mcpExternalBridgedServers = mcpStringList(mcpBridgePlan?.external_bridged_servers);
   const mcpBridgeTools = mcpStringList(mcpBridge?.tools);
+  const mcpBridgeServerStatuses = mcpRecordList(mcpBridge?.server_statuses);
+  const mcpDisplayedServerStatuses =
+    mcpServerStatuses.length > 0 ? mcpServerStatuses : mcpBridgeServerStatuses;
+  const mcpToolPolicies = mcpRecordList(mcpBridge?.tool_policies);
+  const mcpPermissionPolicy = mcpRecord(mcpBridge?.permission_policy);
+  const mcpPermissionMode = mcpString(mcpPermissionPolicy?.mode);
+  const mcpAllowedPermissions = mcpStringList(mcpPermissionPolicy?.allowed_permissions);
   const resumeInputs = Object.entries(manifest.resume_inputs).filter(
     ([, artifactPath]) => artifactPath.length > 0
   );
@@ -491,6 +533,109 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {mcpDisplayedServerStatuses.length > 0 && (
+              <div className="mb-2 space-y-1">
+                <div className="font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditMcpServerStatus')}
+                </div>
+                {mcpDisplayedServerStatuses.slice(0, 4).map((status) => {
+                  const serverName = mcpServerStatusName(status);
+                  const availability = mcpString(status.availability);
+                  const runtimePath = mcpString(status.runtime_path);
+                  const reason = mcpString(status.reason);
+                  const bridgeable = mcpBoolean(status.bridgeable);
+                  return (
+                    <div
+                      key={`${serverName}-${runtimePath ?? 'unknown'}`}
+                      className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border bg-background/50 px-2 py-1.5"
+                    >
+                      <Badge variant="muted" className="text-xs">
+                        {serverName}
+                      </Badge>
+                      {availability && (
+                        <Badge variant={mcpAvailabilityVariant(availability)} className="text-xs">
+                          {availability}
+                        </Badge>
+                      )}
+                      {runtimePath && (
+                        <Badge variant="outline" className="text-xs">
+                          {runtimePath}
+                        </Badge>
+                      )}
+                      {bridgeable === true && (
+                        <Badge variant="info" className="text-xs">
+                          bridgeable
+                        </Badge>
+                      )}
+                      {reason && <span className="min-w-0 truncate text-muted-foreground">{reason}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {(mcpPermissionMode || mcpAllowedPermissions.length > 0) && (
+              <div className="mb-2 space-y-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-medium text-muted-foreground">
+                    {t('tasks:overview.genericEditMcpPermissionPolicy')}
+                  </span>
+                  {mcpPermissionMode && (
+                    <Badge variant="outline" className="text-xs">
+                      {mcpPermissionMode}
+                    </Badge>
+                  )}
+                </div>
+                {mcpAllowedPermissions.length > 0 && (
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-muted-foreground">
+                      {t('tasks:overview.genericEditMcpAllowedPermissions')}
+                    </span>
+                    {mcpAllowedPermissions.map((permission) => (
+                      <Badge key={permission} variant="muted" className="max-w-full truncate text-xs">
+                        {permission}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mcpToolPolicies.length > 0 && (
+              <div className="mb-2 space-y-1">
+                <div className="font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditMcpToolPolicies')}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {mcpToolPolicies.slice(0, 4).map((policy) => {
+                    const name = mcpToolPolicyName(policy);
+                    const permission = mcpString(policy.permission);
+                    const auditLevel = mcpString(policy.audit_level);
+                    return (
+                      <div
+                        key={name}
+                        className="flex min-w-0 flex-wrap items-center gap-1 rounded-md border bg-background/50 px-2 py-1"
+                      >
+                        <Badge variant="outline" className="max-w-full truncate text-xs">
+                          {name}
+                        </Badge>
+                        {permission && (
+                          <Badge variant="muted" className="max-w-full truncate text-xs">
+                            {permission}
+                          </Badge>
+                        )}
+                        {auditLevel && (
+                          <Badge variant="info" className="text-xs">
+                            {auditLevel}
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

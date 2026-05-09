@@ -50,6 +50,10 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditMcpUnavailable': 'Unavailable',
         'overview.genericEditMcpActionRequired': 'Action required',
         'overview.genericEditMcpServer': 'MCP server',
+        'overview.genericEditMcpServerStatus': 'Server status',
+        'overview.genericEditMcpPermissionPolicy': 'Permission policy',
+        'overview.genericEditMcpAllowedPermissions': 'Allowed permissions',
+        'overview.genericEditMcpToolPolicies': 'Tool policies',
         'overview.genericEditMcpBridgePlan': 'Bridge plan',
         'overview.genericEditMcpBridged': 'Bridged',
         'overview.genericEditMcpExternalBridged': 'External bridged',
@@ -175,6 +179,21 @@ function createManifest(): GenericEditArtifactManifest {
       tool_count: 2,
       available_servers: ['context7'],
       unavailable_servers: ['linear'],
+      server_statuses: [
+        {
+          server: 'context7',
+          display_name: 'Context7',
+          availability: 'available',
+          runtime_path: 'external_bridge',
+          bridgeable: true,
+          reason: 'Available through Auto Code external MCP client bridge.',
+          notes: 'Documentation server',
+          external_client: {
+            status: 'enabled',
+            transport: 'stdio',
+          },
+        },
+      ],
       bridge_plan: {
         status: 'partial',
         action_required: 'configure_external_mcp_client',
@@ -183,6 +202,36 @@ function createManifest(): GenericEditArtifactManifest {
       },
       bridge: {
         tools: ['mcp__context7__resolve-library-id', 'mcp__context7__get-library-docs'],
+        tool_policies: [
+          {
+            server: 'context7',
+            name: 'resolve-library-id',
+            exposed_name: 'mcp__context7__resolve-library-id',
+            permission: 'mcp:context7:read',
+            audit_level: 'read',
+            mutating: false,
+            audit_required: true,
+          },
+        ],
+        permission_policy: {
+          mode: 'allowlist',
+          allowed_permissions: ['mcp:context7:read'],
+        },
+        server_statuses: [
+          {
+            server: 'context7',
+            display_name: 'Context7',
+            availability: 'available',
+            runtime_path: 'external_bridge',
+            bridgeable: true,
+            reason: 'Available through Auto Code external MCP client bridge.',
+            notes: 'Documentation server',
+            external_client: {
+              status: 'enabled',
+              transport: 'stdio',
+            },
+          },
+        ],
       },
     },
     resume: null,
@@ -241,6 +290,16 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('linear')).toBeInTheDocument();
     expect(screen.getByText('MCP server')).toBeInTheDocument();
     expect(screen.getByText('auto-claude')).toBeInTheDocument();
+    expect(screen.getByText('Server status')).toBeInTheDocument();
+    expect(screen.getByText('Context7')).toBeInTheDocument();
+    expect(screen.getByText('external_bridge')).toBeInTheDocument();
+    expect(screen.getByText('Available through Auto Code external MCP client bridge.')).toBeInTheDocument();
+    expect(screen.getByText('Permission policy')).toBeInTheDocument();
+    expect(screen.getByText('allowlist')).toBeInTheDocument();
+    expect(screen.getByText('Allowed permissions')).toBeInTheDocument();
+    expect(screen.getAllByText('mcp:context7:read')).toHaveLength(2);
+    expect(screen.getByText('Tool policies')).toBeInTheDocument();
+    expect(screen.getByText('read')).toBeInTheDocument();
     expect(screen.getByText('Action required')).toBeInTheDocument();
     expect(screen.getByText('configure_external_mcp_client')).toBeInTheDocument();
     expect(screen.getByText('Bridge plan')).toBeInTheDocument();
@@ -248,7 +307,7 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Bridged')).toBeInTheDocument();
     expect(screen.getByText('External bridged')).toBeInTheDocument();
     expect(screen.getByText('puppeteer')).toBeInTheDocument();
-    expect(screen.getByText('mcp__context7__resolve-library-id')).toBeInTheDocument();
+    expect(screen.getAllByText('mcp__context7__resolve-library-id')).toHaveLength(2);
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {
