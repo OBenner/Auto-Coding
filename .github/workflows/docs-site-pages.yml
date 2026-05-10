@@ -26,7 +26,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Markdown document index
         run: node site/scripts/build-docs-data.mjs
