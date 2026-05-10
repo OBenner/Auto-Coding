@@ -6629,6 +6629,17 @@ async def test_generic_edit_runtime_falls_back_when_native_tools_rejected(
     assert result_artifact["native_tool_fallbacks"][0]["reason"] == (
         "native_tool_request_failed"
     )
+    artifact_manifest = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert artifact_manifest["counts"]["native_tool_fallback_count"] == 1
+    assert any(
+        event["event_type"] == "native_tool_fallback"
+        and event["reason"] == "native_tool_request_failed"
+        for event in artifact_manifest["recent_events"]
+    )
     summary_markdown = (tmp_path / "artifacts" / "generic_edit_summary.md").read_text(
         encoding="utf-8"
     )

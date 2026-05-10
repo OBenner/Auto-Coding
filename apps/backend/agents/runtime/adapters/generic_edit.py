@@ -226,6 +226,10 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "group_id",
     "path",
     "iteration",
+    "from_loop",
+    "to_loop",
+    "reason",
+    "tool_schema_count",
     "action_index",
     "recovery_required",
     "failed_action_count",
@@ -3521,6 +3525,9 @@ def build_generic_edit_artifact_manifest(
             "iteration_count": iteration_count,
             "action_count": trace_summary["action_count"],
             "failed_action_count": trace_summary["failed_action_count"],
+            "native_tool_fallback_count": int(
+                trace_summary.get("native_tool_fallback_count") or 0
+            ),
             "event_count": len(events),
             "transaction_count": transaction_summary["transaction_count"],
             "transaction_group_count": transaction_group_summary[
@@ -4557,6 +4564,16 @@ def build_generic_edit_events(
             )
         )
     for iteration in trace:
+        fallback = iteration.get("native_tool_fallback")
+        if isinstance(fallback, dict):
+            events.append(
+                build_generic_edit_native_tool_fallback_event(
+                    fallback=fallback,
+                    provider_name=provider_name,
+                    subtask_id=subtask_id,
+                    iteration=iteration.get("iteration"),
+                )
+            )
         transaction = iteration.get("transaction")
         transaction_id = (
             str(transaction.get("id"))
@@ -4596,6 +4613,27 @@ def build_generic_edit_events(
     for sequence, event in enumerate(events, start=1):
         event["sequence"] = sequence
     return events
+
+
+def build_generic_edit_native_tool_fallback_event(
+    *,
+    fallback: dict[str, Any],
+    provider_name: str,
+    subtask_id: str | None,
+    iteration: Any,
+) -> dict[str, Any]:
+    """Return one normalized native tool fallback event."""
+    return {
+        "event_type": "native_tool_fallback",
+        "provider": str(fallback.get("provider") or provider_name),
+        "subtask_id": subtask_id,
+        "iteration": iteration,
+        "from_loop": str(fallback.get("from_loop") or "native_tool_calls"),
+        "to_loop": str(fallback.get("to_loop") or "json_actions"),
+        "reason": str(fallback.get("reason") or "native_tool_request_failed"),
+        "message": str(fallback.get("message") or "")[:300],
+        "tool_schema_count": int(fallback.get("tool_schema_count") or 0),
+    }
 
 
 def build_generic_edit_resume_event(

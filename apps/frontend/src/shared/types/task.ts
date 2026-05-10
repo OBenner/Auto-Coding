@@ -268,6 +268,7 @@ export interface GenericEditArtifactManifest {
     iteration_count: number;
     action_count: number;
     failed_action_count: number;
+    native_tool_fallback_count: number;
     event_count: number;
     transaction_count: number;
     transaction_group_count: number;

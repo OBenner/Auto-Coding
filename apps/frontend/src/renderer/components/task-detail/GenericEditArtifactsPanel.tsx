@@ -342,6 +342,12 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="font-semibold">{countValue(manifest.counts.transaction_count)}</div>
           </div>
           <div className="rounded-md bg-muted/30 p-2">
+            <div className="text-muted-foreground">{t('tasks:overview.genericEditNativeFallbacks')}</div>
+            <div className="font-semibold">
+              {countValue(manifest.counts.native_tool_fallback_count)}
+            </div>
+          </div>
+          <div className="rounded-md bg-muted/30 p-2">
             <div className="text-muted-foreground">{t('tasks:overview.genericEditRecoveryAttempts')}</div>
             <div className="font-semibold">
               {countValue(manifest.counts.recovery_attempt_count)}

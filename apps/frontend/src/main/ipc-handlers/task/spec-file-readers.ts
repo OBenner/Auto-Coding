@@ -709,6 +709,9 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
   ) {
     return null;
   }
+  if (typeof counts.native_tool_fallback_count !== 'number') {
+    counts.native_tool_fallback_count = 0;
+  }
 
   const artifacts: GenericEditArtifactManifestEntry[] = [];
   for (const artifact of value.artifacts) {

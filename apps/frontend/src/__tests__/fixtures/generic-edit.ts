@@ -41,6 +41,7 @@ export function createGenericEditArtifactManifest(): GenericEditArtifactManifest
       iteration_count: 2,
       action_count: 5,
       failed_action_count: 1,
+      native_tool_fallback_count: 1,
       event_count: 9,
       transaction_count: 3,
       transaction_group_count: 1,

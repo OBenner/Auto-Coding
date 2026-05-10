@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
   GENERIC_EDIT_TEST_ARTIFACT_PATHS,
@@ -26,6 +26,7 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditActions': 'Actions',
         'overview.genericEditEvents': 'Events',
         'overview.genericEditTransactions': 'Transactions',
+        'overview.genericEditNativeFallbacks': 'Native fallbacks',
         'overview.genericEditRecoveryAttempts': 'Recovery attempts',
         'overview.genericEditMutationSnapshots': 'Mutation snapshots',
         'overview.genericEditTransactionGroups': 'Transaction groups',
@@ -92,6 +93,9 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Recoverable')).toBeInTheDocument();
     expect(screen.getByText('Recovery plan')).toBeInTheDocument();
     expect(screen.getByText('1/2 present')).toBeInTheDocument();
+    const fallbackMetric = screen.getByText('Native fallbacks').parentElement;
+    expect(fallbackMetric).not.toBeNull();
+    expect(within(fallbackMetric as HTMLElement).getByText('1')).toBeInTheDocument();
     expect(screen.getByText('generic_edit_recovery_plan')).toBeInTheDocument();
     expect(screen.getByText('Missing')).toBeInTheDocument();
     expect(screen.getByText('Recent events')).toBeInTheDocument();

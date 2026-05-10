@@ -485,6 +485,7 @@
     "genericEditActions": "Actions",
     "genericEditEvents": "Events",
     "genericEditTransactions": "Transactions",
+    "genericEditNativeFallbacks": "Native fallbacks",
     "genericEditRecoveryAttempts": "Recovery attempts",
     "genericEditMutationSnapshots": "Mutation snapshots",
     "genericEditTransactionGroups": "Transaction groups",

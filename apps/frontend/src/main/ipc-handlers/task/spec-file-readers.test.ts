@@ -94,6 +94,7 @@ describe('readGenericEditArtifactManifest', () => {
         mutation_snapshot_count: 1,
         recovery_attempt_count: 0,
         failed_recovery_attempt_count: 0,
+        native_tool_fallback_count: 1,
       },
       recent_events: [
         {
@@ -120,6 +121,7 @@ describe('readGenericEditArtifactManifest', () => {
     expect(manifest?.provider).toBe('openai');
     expect(manifest?.flags.resumable).toBe(true);
     expect(manifest?.counts.mutation_snapshot_count).toBe(1);
+    expect(manifest?.counts.native_tool_fallback_count).toBe(1);
     expect(manifest?.artifacts).toHaveLength(2);
     expect(manifest?.artifacts[1]).toMatchObject({
       name: 'generic_edit_recovery_plan',
