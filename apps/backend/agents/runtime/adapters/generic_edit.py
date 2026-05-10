@@ -2870,6 +2870,7 @@ def save_generic_edit_artifacts(
         transaction_summary=transaction_summary,
         artifact_refs={
             "trace": paths["trace"],
+            "events": paths["events"],
             "observation": observation_path,
             "checkpoint": paths["recovery_checkpoint"],
             "mutation_snapshots": paths["mutation_snapshots"],
@@ -3212,27 +3213,32 @@ def build_generic_edit_session_state(
     if not resumable:
         state["resume_action"] = None
         state["resume_inputs"] = {}
+        state["resume_policy"] = None
         return state
 
     resume = recovery_checkpoint["resume"]
+    resume_inputs = build_generic_edit_resume_input_artifacts(
+        artifact_refs=artifact_refs,
+        recovery_plan=recovery_plan,
+        mutation_snapshots=mutation_snapshots,
+        transaction_group_summary=transaction_group_summary,
+    )
     state["resume_action"] = {
         "runtime": "generic_edit",
         "checkpoint_path": recovery_checkpoint["artifact_path"],
         "strategy": resume["strategy"],
         "next_iteration": recovery_checkpoint["next_iteration"],
     }
-    state["resume_inputs"] = {
-        "trace_artifact": str(artifact_refs["trace"]),
-        "event_artifact": str(artifact_refs["events"]),
-    }
-    if recovery_plan is not None:
-        state["resume_inputs"]["recovery_plan_artifact"] = recovery_plan[
-            "artifact_path"
-        ]
-    if mutation_snapshots:
-        state["resume_inputs"]["mutation_snapshot_artifact"] = str(
-            artifact_refs["mutation_snapshots"]
-        )
+    state["resume_inputs"] = resume_inputs
+    state["resume_policy"] = build_generic_edit_resume_policy(
+        strategy=resume["strategy"],
+        checkpoint_path=recovery_checkpoint["artifact_path"],
+        next_iteration=recovery_checkpoint["next_iteration"],
+        resume_inputs=resume_inputs,
+        transaction_summary=transaction_summary,
+        transaction_group_summary=transaction_group_summary,
+        recovery_plan=recovery_plan,
+    )
     return state
 
 
@@ -3467,25 +3473,120 @@ def build_generic_edit_manifest_resume_action(
     }
 
 
+def build_generic_edit_resume_input_artifacts(
+    *,
+    artifact_refs: dict[str, Path | None],
+    recovery_plan: dict[str, Any] | None,
+    mutation_snapshots: list[dict[str, Any]],
+    transaction_group_summary: dict[str, Any],
+) -> dict[str, str]:
+    """Return artifact inputs needed by a generic_edit resume action."""
+    resume_inputs: dict[str, str] = {}
+    trace_path = artifact_refs.get("trace")
+    event_path = artifact_refs.get("events")
+    if trace_path is not None:
+        resume_inputs["trace_artifact"] = str(trace_path)
+    if event_path is not None:
+        resume_inputs["event_artifact"] = str(event_path)
+    if recovery_plan is not None:
+        resume_inputs["recovery_plan_artifact"] = recovery_plan["artifact_path"]
+    mutation_snapshot_path = artifact_refs.get("mutation_snapshots")
+    if mutation_snapshots and mutation_snapshot_path is not None:
+        resume_inputs["mutation_snapshot_artifact"] = str(mutation_snapshot_path)
+    transaction_group_path = artifact_refs.get("transaction_groups")
+    if (
+        transaction_group_summary["transaction_group_count"]
+        and transaction_group_path is not None
+    ):
+        resume_inputs["transaction_group_artifact"] = str(transaction_group_path)
+    return resume_inputs
+
+
+def generic_edit_required_resolution_action_kinds(
+    recovery_plan: dict[str, Any] | None,
+) -> list[str]:
+    """Return required recovery action kinds in plan order without duplicates."""
+    if recovery_plan is None:
+        return []
+    action_kinds: list[str] = []
+    for action in recovery_plan.get("next_actions") or []:
+        if (
+            not isinstance(action, dict)
+            or action.get("required_before_finish") is not True
+        ):
+            continue
+        kind = action.get("kind")
+        if isinstance(kind, str) and kind and kind not in action_kinds:
+            action_kinds.append(kind)
+    return action_kinds
+
+
+def build_generic_edit_resume_policy(
+    *,
+    strategy: str,
+    checkpoint_path: str,
+    next_iteration: int,
+    resume_inputs: dict[str, str],
+    transaction_summary: dict[str, Any],
+    transaction_group_summary: dict[str, Any],
+    recovery_plan: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return a compact resume policy for UI and orchestrator control planes."""
+    unresolved_partial_failure_ids = list(
+        transaction_summary["unresolved_partial_failure_ids"]
+    )
+    unresolved_transaction_group_ids = list(
+        transaction_group_summary["unresolved_transaction_group_ids"]
+    )
+    finish_blocked = bool(
+        unresolved_partial_failure_ids or unresolved_transaction_group_ids
+    )
+    required_artifacts = [
+        artifact_name
+        for artifact_name in (
+            "trace_artifact",
+            "event_artifact",
+            "recovery_plan_artifact",
+            "mutation_snapshot_artifact",
+            "transaction_group_artifact",
+        )
+        if artifact_name in resume_inputs
+    ]
+    return {
+        "version": GENERIC_EDIT_RECOVERY_POLICY_VERSION,
+        "runtime": "generic_edit",
+        "status": "requires_resolution" if finish_blocked else "ready",
+        "can_resume": True,
+        "finish_blocked": finish_blocked,
+        "strategy": strategy,
+        "checkpoint_path": checkpoint_path,
+        "next_iteration": next_iteration,
+        "required_resolution_action_kinds": generic_edit_required_resolution_action_kinds(
+            recovery_plan
+        ),
+        "required_artifacts": required_artifacts,
+        "unresolved_partial_failure_ids": unresolved_partial_failure_ids,
+        "unresolved_transaction_group_ids": unresolved_transaction_group_ids,
+    }
+
+
 def build_generic_edit_manifest_resume_inputs(
     *,
     recovery_checkpoint: dict[str, Any] | None,
     paths: dict[str, Path],
     recovery_plan: dict[str, Any] | None,
     mutation_snapshots: list[dict[str, Any]],
+    transaction_group_summary: dict[str, Any],
 ) -> dict[str, str]:
     """Return artifact inputs needed by a generic_edit resume action."""
     if recovery_checkpoint is None:
         return {}
-    resume_inputs = {
-        "trace_artifact": str(paths["trace"]),
-        "event_artifact": str(paths["events"]),
-    }
-    if recovery_plan is not None:
-        resume_inputs["recovery_plan_artifact"] = recovery_plan["artifact_path"]
-    if mutation_snapshots:
-        resume_inputs["mutation_snapshot_artifact"] = str(paths["mutation_snapshots"])
-    return resume_inputs
+    return build_generic_edit_resume_input_artifacts(
+        artifact_refs=paths,
+        recovery_plan=recovery_plan,
+        mutation_snapshots=mutation_snapshots,
+        transaction_group_summary=transaction_group_summary,
+    )
 
 
 def build_generic_edit_artifact_manifest(
@@ -3519,6 +3620,26 @@ def build_generic_edit_artifact_manifest(
             transaction_group_summary["transaction_group_count"]
         ),
     )
+    resume_inputs = build_generic_edit_manifest_resume_inputs(
+        recovery_checkpoint=recovery_checkpoint,
+        paths=paths,
+        recovery_plan=recovery_plan,
+        mutation_snapshots=mutation_snapshots,
+        transaction_group_summary=transaction_group_summary,
+    )
+    resume_policy = None
+    if recovery_checkpoint is not None:
+        resume = recovery_checkpoint.get("resume")
+        if isinstance(resume, dict):
+            resume_policy = build_generic_edit_resume_policy(
+                strategy=str(resume["strategy"]),
+                checkpoint_path=str(recovery_checkpoint["artifact_path"]),
+                next_iteration=int(recovery_checkpoint["next_iteration"]),
+                resume_inputs=resume_inputs,
+                transaction_summary=transaction_summary,
+                transaction_group_summary=transaction_group_summary,
+                recovery_plan=recovery_plan,
+            )
     return {
         "artifact_type": "generic_edit_artifact_manifest",
         "schema_version": GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION,
@@ -3583,12 +3704,8 @@ def build_generic_edit_artifact_manifest(
         "artifacts": artifacts,
         "mcp_support": mcp_support,
         "resume_action": build_generic_edit_manifest_resume_action(recovery_checkpoint),
-        "resume_inputs": build_generic_edit_manifest_resume_inputs(
-            recovery_checkpoint=recovery_checkpoint,
-            paths=paths,
-            recovery_plan=recovery_plan,
-            mutation_snapshots=mutation_snapshots,
-        ),
+        "resume_inputs": resume_inputs,
+        "resume_policy": resume_policy,
         "resume": dict(resume_metadata) if resume_metadata is not None else None,
     }
 
@@ -3814,12 +3931,14 @@ def build_generic_edit_recovery_checkpoint(
         transaction_summary=transaction_summary,
     )
     trace_path = artifact_refs["trace"]
+    event_path = artifact_refs["events"]
     checkpoint_path = artifact_refs["checkpoint"]
     mutation_snapshot_path = artifact_refs["mutation_snapshots"]
     transaction_group_path = artifact_refs["transaction_groups"]
     observation_path = artifact_refs.get("observation")
     if (
         trace_path is None
+        or event_path is None
         or checkpoint_path is None
         or mutation_snapshot_path is None
         or transaction_group_path is None
@@ -3827,6 +3946,12 @@ def build_generic_edit_recovery_checkpoint(
         raise GenericEditRuntimeError(
             "Generic edit recovery artifact paths are incomplete."
         )
+    resume_inputs = build_generic_edit_resume_input_artifacts(
+        artifact_refs=artifact_refs,
+        recovery_plan=recovery_plan,
+        mutation_snapshots=mutation_snapshots,
+        transaction_group_summary=transaction_group_summary,
+    )
     checkpoint = {
         "timestamp": timestamp,
         "provider": provider_name,
@@ -3836,6 +3961,7 @@ def build_generic_edit_recovery_checkpoint(
         "message": message,
         "artifact_path": str(checkpoint_path),
         "trace_artifact": str(trace_path),
+        "event_artifact": str(event_path),
         "observation_artifact": (
             str(observation_path) if observation_path is not None else None
         ),
@@ -3853,6 +3979,16 @@ def build_generic_edit_recovery_checkpoint(
                 recovery_plan=recovery_plan,
             ),
         },
+        "resume_inputs": resume_inputs,
+        "resume_policy": build_generic_edit_resume_policy(
+            strategy=strategy,
+            checkpoint_path=str(checkpoint_path),
+            next_iteration=next_iteration,
+            resume_inputs=resume_inputs,
+            transaction_summary=transaction_summary,
+            transaction_group_summary=transaction_group_summary,
+            recovery_plan=recovery_plan,
+        ),
         "recent_actions": list(trace_summary.get("action_timeline") or [])[-10:],
         "transaction_summary": transaction_summary,
         "transaction_group_summary": transaction_group_summary,

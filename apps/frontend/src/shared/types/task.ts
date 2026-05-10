@@ -180,6 +180,21 @@ export interface GenericEditResumeAction {
   next_iteration: number;
 }
 
+export interface GenericEditResumePolicy {
+  version: number;
+  runtime: 'generic_edit';
+  status: string;
+  can_resume: boolean;
+  finish_blocked: boolean;
+  strategy: string;
+  checkpoint_path: string;
+  next_iteration: number;
+  required_resolution_action_kinds: string[];
+  required_artifacts: string[];
+  unresolved_partial_failure_ids: string[];
+  unresolved_transaction_group_ids: string[];
+}
+
 export interface GenericEditMcpBridgePlan {
   status: string | null;
   action_required: string | null;
@@ -298,6 +313,7 @@ export interface GenericEditArtifactManifest {
   mcp_support: GenericEditMcpSupport | null;
   resume_action: GenericEditResumeAction | null;
   resume_inputs: Record<string, string>;
+  resume_policy: GenericEditResumePolicy | null;
   resume: Record<string, unknown> | null;
 }
 

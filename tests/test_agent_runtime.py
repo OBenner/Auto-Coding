@@ -4991,6 +4991,30 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         "event_artifact": str(event_path),
         "recovery_plan_artifact": str(recovery_plan_path),
         "mutation_snapshot_artifact": str(mutation_snapshot_path),
+        "transaction_group_artifact": str(group_artifact_path),
+    }
+    expected_resume_policy = {
+        "version": 1,
+        "runtime": "generic_edit",
+        "status": "requires_resolution",
+        "can_resume": True,
+        "finish_blocked": True,
+        "strategy": "recover_partial_failure",
+        "checkpoint_path": str(checkpoint_path),
+        "next_iteration": 3,
+        "required_resolution_action_kinds": [
+            "inspect_diff",
+            "rollback_transaction",
+        ],
+        "required_artifacts": [
+            "trace_artifact",
+            "event_artifact",
+            "recovery_plan_artifact",
+            "mutation_snapshot_artifact",
+            "transaction_group_artifact",
+        ],
+        "unresolved_partial_failure_ids": ["json_actions-1"],
+        "unresolved_transaction_group_ids": ["transaction-group-1"],
     }
 
     assert artifact["status"] == "error"
@@ -5028,6 +5052,9 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     assert manifest["recovery_actions"] == expected_manifest_recovery_actions
     assert manifest["resume_action"] == expected_resume_action
     assert manifest["resume_inputs"] == expected_resume_inputs
+    assert manifest["resume_policy"] == expected_resume_policy
+    assert session_state["resume_policy"] == expected_resume_policy
+    assert checkpoint["resume_policy"] == expected_resume_policy
     rollback_operation = recovery_plan["rollback_operations"][0]
     assert rollback_operation["tool"] == "rollback_transaction"
     assert rollback_operation["transaction_id"] == "json_actions-1"

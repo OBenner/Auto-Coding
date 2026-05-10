@@ -28,6 +28,7 @@ import type {
   GenericEditRecoveryAction,
   GenericEditRecoverySummary,
   GenericEditResumeAction,
+  GenericEditResumePolicy,
   GenericEditRecentEvent
 } from '../../../shared/types';
 
@@ -701,6 +702,64 @@ function normalizeResumeAction(value: unknown): GenericEditResumeAction | null {
   };
 }
 
+function normalizeResumePolicy(value: unknown): GenericEditResumePolicy | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const runtime = readString(value, 'runtime');
+  const status = readString(value, 'status');
+  const strategy = readString(value, 'strategy');
+  const checkpointPath = readString(value, 'checkpoint_path');
+  const {
+    version,
+    can_resume,
+    finish_blocked,
+    next_iteration,
+    required_resolution_action_kinds,
+    required_artifacts,
+    unresolved_partial_failure_ids,
+    unresolved_transaction_group_ids,
+  } = value;
+  const requiredResolutionActionKinds = normalizeStringList(required_resolution_action_kinds);
+  const requiredArtifacts = normalizeStringList(required_artifacts);
+  const unresolvedPartialFailureIds = normalizeStringList(unresolved_partial_failure_ids);
+  const unresolvedTransactionGroupIds = normalizeStringList(unresolved_transaction_group_ids);
+
+  if (
+    typeof version !== 'number' ||
+    !Number.isFinite(version) ||
+    runtime !== 'generic_edit' ||
+    status === null ||
+    typeof can_resume !== 'boolean' ||
+    typeof finish_blocked !== 'boolean' ||
+    strategy === null ||
+    checkpointPath === null ||
+    typeof next_iteration !== 'number' ||
+    !Number.isFinite(next_iteration) ||
+    requiredResolutionActionKinds === null ||
+    requiredArtifacts === null ||
+    unresolvedPartialFailureIds === null ||
+    unresolvedTransactionGroupIds === null
+  ) {
+    return null;
+  }
+
+  return {
+    version,
+    runtime,
+    status,
+    can_resume,
+    finish_blocked,
+    strategy,
+    checkpoint_path: checkpointPath,
+    next_iteration,
+    required_resolution_action_kinds: requiredResolutionActionKinds,
+    required_artifacts: requiredArtifacts,
+    unresolved_partial_failure_ids: unresolvedPartialFailureIds,
+    unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
+  };
+}
+
 function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifactManifest | null {
   if (!isRecord(value)) return null;
   if (value.artifact_type !== 'generic_edit_artifact_manifest' || value.schema_version !== 1) {
@@ -739,6 +798,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
   const recoverySummary = normalizeRecoverySummary(value.recovery_summary);
   const recoveryActions = normalizeRecoveryActions(value.recovery_actions);
   const resumeAction = normalizeResumeAction(value.resume_action);
+  const resumePolicy = normalizeResumePolicy(value.resume_policy);
   const resumeInputs = value.resume_inputs === undefined ? {} : normalizeStringMap(value.resume_inputs);
   const mcpSupport = normalizeMcpSupport(value.mcp_support);
 
@@ -754,6 +814,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     nativeToolFallbacks === null ||
     recoveryActions === null ||
     (value.resume_action !== undefined && value.resume_action !== null && resumeAction === null) ||
+    (value.resume_policy !== undefined && value.resume_policy !== null && resumePolicy === null) ||
     resumeInputs === null ||
     !Array.isArray(value.artifacts)
   ) {
@@ -791,6 +852,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     mcp_support: mcpSupport,
     resume_action: resumeAction,
     resume_inputs: resumeInputs as Record<string, string>,
+    resume_policy: resumePolicy,
     resume: isRecord(value.resume) ? value.resume : null,
   };
 }

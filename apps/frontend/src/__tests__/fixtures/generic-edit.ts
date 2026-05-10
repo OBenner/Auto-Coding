@@ -9,6 +9,7 @@ export const GENERIC_EDIT_TEST_ARTIFACT_PATHS = {
   recovery: '/workspace/auto-code/artifacts/generic-edit/recovery.json',
   checkpoint: '/workspace/auto-code/artifacts/generic-edit/recovery-checkpoint.json',
   mutationSnapshots: '/workspace/auto-code/artifacts/generic-edit/mutation-snapshots.json',
+  transactionGroups: '/workspace/auto-code/artifacts/generic-edit/transaction-groups.json',
 };
 
 export function createGenericEditArtifactManifest(): GenericEditArtifactManifest {
@@ -130,6 +131,27 @@ export function createGenericEditArtifactManifest(): GenericEditArtifactManifest
       event_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.events,
       recovery_plan_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.recovery,
       mutation_snapshot_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.mutationSnapshots,
+      transaction_group_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.transactionGroups,
+    },
+    resume_policy: {
+      version: 1,
+      runtime: 'generic_edit',
+      status: 'requires_resolution',
+      can_resume: true,
+      finish_blocked: true,
+      strategy: 'recover_partial_failure',
+      checkpoint_path: GENERIC_EDIT_TEST_ARTIFACT_PATHS.checkpoint,
+      next_iteration: 3,
+      required_resolution_action_kinds: ['inspect_diff', 'rollback_transaction'],
+      required_artifacts: [
+        'trace_artifact',
+        'event_artifact',
+        'recovery_plan_artifact',
+        'mutation_snapshot_artifact',
+        'transaction_group_artifact',
+      ],
+      unresolved_partial_failure_ids: ['json_actions-1'],
+      unresolved_transaction_group_ids: ['transaction-group-1'],
     },
     mcp_support: {
       strategy: 'local_bridge',

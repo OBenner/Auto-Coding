@@ -196,7 +196,9 @@ describe('readGenericEditArtifactManifest', () => {
       event_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.events,
       recovery_plan_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.recovery,
       mutation_snapshot_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.mutationSnapshots,
+      transaction_group_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.transactionGroups,
     });
+    expect(manifest?.resume_policy).toEqual(manifestPayload.resume_policy);
     expect(manifest?.mcp_support).toEqual(manifestPayload.mcp_support);
   });
 
@@ -254,6 +256,7 @@ describe('readGenericEditArtifactManifest', () => {
       },
       resume_action: null,
       resume_inputs: {},
+      resume_policy: null,
       resume: null,
     });
 

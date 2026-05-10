@@ -244,6 +244,9 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const resumeInputs = Object.entries(manifest.resume_inputs).filter(
     ([, artifactPath]) => artifactPath.length > 0
   );
+  const resumePolicy = manifest.resume_policy;
+  const requiredResumeActions = resumePolicy?.required_resolution_action_kinds ?? [];
+  const requiredResumeArtifacts = resumePolicy?.required_artifacts ?? [];
   const recoveryFlags = [
     manifest.flags.resumable && t('tasks:overview.genericEditResumable'),
     manifest.flags.recoverable && t('tasks:overview.genericEditRecoverable'),
@@ -560,6 +563,51 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                       </Badge>
                       <span className="min-w-0 truncate text-muted-foreground">{artifactPath}</span>
                     </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {resumePolicy && (
+          <div className="mt-4 rounded-md border bg-muted/20 px-3 py-3 text-xs">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <ListChecks className="h-3.5 w-3.5 text-info" />
+              <span className="font-semibold text-muted-foreground">
+                {t('tasks:overview.genericEditResumePolicy')}
+              </span>
+              <Badge variant={resumePolicy.finish_blocked ? 'warning' : 'success'} className="text-xs">
+                {resumePolicy.status}
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                {resumePolicy.strategy}
+              </Badge>
+            </div>
+            {requiredResumeActions.length > 0 && (
+              <div className="mb-2">
+                <div className="mb-1 font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditRequiredResumeActions')}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {requiredResumeActions.map((actionKind) => (
+                    <Badge key={actionKind} variant="outline" className="text-xs">
+                      {actionKind}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {requiredResumeArtifacts.length > 0 && (
+              <div>
+                <div className="mb-1 font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditRequiredResumeArtifacts')}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {requiredResumeArtifacts.map((artifactName) => (
+                    <Badge key={artifactName} variant="muted" className="text-xs">
+                      {artifactName}
+                    </Badge>
                   ))}
                 </div>
               </div>

@@ -58,6 +58,9 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditResumeInputs': 'Resume inputs',
         'overview.genericEditResumeStartIteration': `Started at iteration ${interpolation('iteration', '')}`,
         'overview.genericEditResumePreviousStop': 'Previous stop',
+        'overview.genericEditResumePolicy': 'Resume policy',
+        'overview.genericEditRequiredResumeActions': 'Required resume actions',
+        'overview.genericEditRequiredResumeArtifacts': 'Required resume artifacts',
         'overview.genericEditMcpSupport': 'MCP support',
         'overview.genericEditMcpTools': `${interpolation('count', 0)} MCP tools`,
         'overview.genericEditMcpAvailable': 'Available',
@@ -111,7 +114,7 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('read_file')).toBeInTheDocument();
     expect(screen.getByText(/File not found/)).toBeInTheDocument();
     expect(screen.getByText('Recovery status')).toBeInTheDocument();
-    expect(screen.getByText('requires_resolution')).toBeInTheDocument();
+    expect(screen.getAllByText('requires_resolution')).toHaveLength(2);
     expect(screen.getByText('Finish blocked')).toBeInTheDocument();
     expect(screen.getByText('Warnings')).toBeInTheDocument();
     expect(screen.getByText('Run focused verification before finish.')).toBeInTheDocument();
@@ -120,25 +123,29 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Verification tools')).toBeInTheDocument();
     expect(screen.getByText('run_command')).toBeInTheDocument();
     expect(screen.getByText('Recovery actions')).toBeInTheDocument();
-    expect(screen.getByText('inspect_diff')).toBeInTheDocument();
-    expect(screen.getAllByText('rollback_transaction')).toHaveLength(2);
+    expect(screen.getAllByText('inspect_diff')).toHaveLength(2);
+    expect(screen.getAllByText('rollback_transaction')).toHaveLength(3);
     expect(screen.getByText(/partial.txt/)).toBeInTheDocument();
     expect(screen.getAllByText('Required')).toHaveLength(2);
     expect(screen.getByText('Resume entrypoint')).toBeInTheDocument();
     expect(screen.getByText('Resume provenance')).toBeInTheDocument();
     expect(screen.getByText('Resume strategy')).toBeInTheDocument();
-    expect(screen.getAllByText('recover_partial_failure')).toHaveLength(2);
+    expect(screen.getAllByText('recover_partial_failure')).toHaveLength(3);
     expect(screen.getByText('Next iteration 3')).toBeInTheDocument();
     expect(screen.getByText('Started at iteration 3')).toBeInTheDocument();
     expect(screen.getByText('Previous stop')).toBeInTheDocument();
     expect(screen.getByText('unresolved_partial_failure')).toBeInTheDocument();
     expect(screen.getAllByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.checkpoint)).toHaveLength(2);
+    expect(screen.getByText('Resume policy')).toBeInTheDocument();
+    expect(screen.getByText('Required resume actions')).toBeInTheDocument();
+    expect(screen.getByText('Required resume artifacts')).toBeInTheDocument();
+    expect(screen.getAllByText('transaction_group_artifact')).toHaveLength(2);
     expect(screen.getByText('Resume inputs')).toBeInTheDocument();
-    expect(screen.getByText('trace_artifact')).toBeInTheDocument();
+    expect(screen.getAllByText('trace_artifact')).toHaveLength(2);
     expect(screen.getAllByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.trace)).toHaveLength(2);
-    expect(screen.getByText('event_artifact')).toBeInTheDocument();
+    expect(screen.getAllByText('event_artifact')).toHaveLength(2);
     expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.events)).toBeInTheDocument();
-    expect(screen.getByText('mutation_snapshot_artifact')).toBeInTheDocument();
+    expect(screen.getAllByText('mutation_snapshot_artifact')).toHaveLength(2);
     expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.mutationSnapshots)).toBeInTheDocument();
     expect(screen.getByText('MCP support')).toBeInTheDocument();
     expect(screen.getByText('local_bridge')).toBeInTheDocument();
