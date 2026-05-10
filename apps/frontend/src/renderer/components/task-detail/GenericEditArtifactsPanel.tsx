@@ -233,6 +233,7 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpOpenSessions = mcpRecordList(mcpSessionLifecycle?.open_sessions);
   const mcpOpenSessionCount =
     mcpNumber(mcpSessionLifecycle?.open_session_count) ?? mcpOpenSessions.length;
+  const nativeToolFallbacks = manifest.native_tool_fallbacks;
   const resumeInputs = Object.entries(manifest.resume_inputs).filter(
     ([, artifactPath]) => artifactPath.length > 0
   );
@@ -367,6 +368,46 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="font-semibold">{countValue(manifest.counts.transaction_group_count)}</div>
           </div>
         </div>
+
+        {nativeToolFallbacks.length > 0 && (
+          <div className="mt-4 rounded-md border border-warning/40 bg-warning/5 px-3 py-3 text-xs">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <AlertCircle className="h-3.5 w-3.5 text-warning" />
+              <span className="font-semibold text-muted-foreground">
+                {t('tasks:overview.genericEditNativeFallbackDetails')}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {nativeToolFallbacks.slice(0, 3).map((fallback) => (
+                <div
+                  key={`${fallback.provider}-${fallback.from_loop}-${fallback.to_loop}-${fallback.reason}`}
+                  className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border bg-background/50 px-2 py-1.5"
+                >
+                  <Badge variant="warning" className="text-xs">
+                    {fallback.provider}
+                  </Badge>
+                  <span className="font-medium text-muted-foreground">
+                    {t('tasks:overview.genericEditNativeFallbackReason')}
+                  </span>
+                  <Badge variant="outline" className="text-xs">
+                    {fallback.reason}
+                  </Badge>
+                  <span className="font-medium text-muted-foreground">
+                    {t('tasks:overview.genericEditNativeFallbackLoop')}
+                  </span>
+                  <span className="min-w-0 truncate text-muted-foreground">
+                    {fallback.from_loop} -&gt; {fallback.to_loop}
+                  </span>
+                  {fallback.message && (
+                    <span className="min-w-0 truncate text-muted-foreground">
+                      {fallback.message}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {manifest.recovery_summary && manifest.recovery_summary.status !== 'clean' && (
           <div
@@ -636,13 +677,13 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                 </div>
                 {mcpOpenSessions.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {mcpOpenSessions.slice(0, 4).map((session, index) => {
+                    {mcpOpenSessions.slice(0, 4).map((session) => {
                       const server = mcpString(session.server) ?? 'unknown';
                       const transport = mcpString(session.transport) ?? 'unknown';
                       const sessionStatus = mcpString(session.status) ?? 'unknown';
                       return (
                         <div
-                          key={`${server}-${transport}-${index}`}
+                          key={`${server}-${transport}-${sessionStatus}`}
                           className="flex min-w-0 flex-wrap items-center gap-1 rounded-md border bg-background/50 px-2 py-1"
                         >
                           <Badge variant="muted" className="text-xs">

@@ -77,6 +77,16 @@ export function createGenericEditArtifactManifest(): GenericEditArtifactManifest
         transaction_id: 'json_actions-2',
       },
     ],
+    native_tool_fallbacks: [
+      {
+        provider: 'openai',
+        from_loop: 'native_tool_calls',
+        to_loop: 'json_actions',
+        reason: 'native_tool_request_failed',
+        message: 'provider rejected tool calls',
+        tool_schema_count: 6,
+      },
+    ],
     recovery_summary: {
       version: 1,
       status: 'requires_resolution',

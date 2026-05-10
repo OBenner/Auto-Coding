@@ -113,6 +113,16 @@ describe('readGenericEditArtifactManifest', () => {
             warnings: [],
           }
         : null,
+      native_tool_fallbacks: [
+        {
+          provider: 'openai',
+          from_loop: 'native_tool_calls',
+          to_loop: 'json_actions',
+          reason: 'native_tool_request_failed',
+          message: 'provider rejected tool calls',
+          tool_schema_count: 6,
+        },
+      ],
     });
 
     const manifest = await readGenericEditArtifactManifest(project, task);
@@ -122,6 +132,16 @@ describe('readGenericEditArtifactManifest', () => {
     expect(manifest?.flags.resumable).toBe(true);
     expect(manifest?.counts.mutation_snapshot_count).toBe(1);
     expect(manifest?.counts.native_tool_fallback_count).toBe(1);
+    expect(manifest?.native_tool_fallbacks).toEqual([
+      {
+        provider: 'openai',
+        from_loop: 'native_tool_calls',
+        to_loop: 'json_actions',
+        reason: 'native_tool_request_failed',
+        message: 'provider rejected tool calls',
+        tool_schema_count: 6,
+      },
+    ]);
     expect(manifest?.artifacts).toHaveLength(2);
     expect(manifest?.artifacts[1]).toMatchObject({
       name: 'generic_edit_recovery_plan',

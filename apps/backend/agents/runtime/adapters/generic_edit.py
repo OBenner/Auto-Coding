@@ -3340,6 +3340,31 @@ def compact_generic_edit_manifest_event(event: dict[str, Any]) -> dict[str, Any]
     return compact
 
 
+def compact_generic_edit_native_tool_fallback(
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a stable native fallback summary for UI manifests."""
+    return {
+        "provider": str(fallback.get("provider") or "unknown")[:120],
+        "from_loop": str(fallback.get("from_loop") or "native_tool_calls")[:120],
+        "to_loop": str(fallback.get("to_loop") or "json_actions")[:120],
+        "reason": str(fallback.get("reason") or "native_tool_request_failed")[:120],
+        "message": str(fallback.get("message") or "")[:300],
+        "tool_schema_count": int(fallback.get("tool_schema_count") or 0),
+    }
+
+
+def compact_generic_edit_native_tool_fallbacks(value: Any) -> list[dict[str, Any]]:
+    """Return bounded native fallback summaries for UI manifests."""
+    if not isinstance(value, list):
+        return []
+    fallbacks: list[dict[str, Any]] = []
+    for fallback in value:
+        if isinstance(fallback, dict):
+            fallbacks.append(compact_generic_edit_native_tool_fallback(fallback))
+    return fallbacks[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]
+
+
 def compact_generic_edit_manifest_recovery_action(
     action: dict[str, Any],
 ) -> dict[str, Any]:
@@ -3545,6 +3570,9 @@ def build_generic_edit_artifact_manifest(
             compact_generic_edit_manifest_event(event)
             for event in events[-GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT:]
         ],
+        "native_tool_fallbacks": compact_generic_edit_native_tool_fallbacks(
+            trace_summary.get("native_tool_fallbacks")
+        ),
         "recovery_actions": compact_generic_edit_manifest_recovery_actions(
             recovery_plan
         ),

@@ -6635,6 +6635,14 @@ async def test_generic_edit_runtime_falls_back_when_native_tools_rejected(
         )
     )
     assert artifact_manifest["counts"]["native_tool_fallback_count"] == 1
+    assert artifact_manifest["native_tool_fallbacks"][0] == {
+        "provider": "openai",
+        "from_loop": "native_tool_calls",
+        "to_loop": "json_actions",
+        "reason": "native_tool_request_failed",
+        "message": "provider rejected tool calls",
+        "tool_schema_count": len(local_action_tool_schemas()),
+    }
     assert any(
         event["event_type"] == "native_tool_fallback"
         and event["reason"] == "native_tool_request_failed"

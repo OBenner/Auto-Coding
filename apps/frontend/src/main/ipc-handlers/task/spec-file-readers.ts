@@ -24,6 +24,7 @@ import type {
   GenericEditMcpServerStatus,
   GenericEditMcpSessionLifecycle,
   GenericEditMcpToolPolicy,
+  GenericEditNativeToolFallback,
   GenericEditRecoveryAction,
   GenericEditRecoverySummary,
   GenericEditResumeAction,
@@ -626,6 +627,53 @@ function normalizeRecoveryActions(value: unknown): GenericEditRecoveryAction[] |
   return result;
 }
 
+function normalizeNativeToolFallback(value: unknown): GenericEditNativeToolFallback | null {
+  if (!isRecord(value)) return null;
+
+  const provider = readString(value, 'provider');
+  const fromLoop = readString(value, 'from_loop');
+  const toLoop = readString(value, 'to_loop');
+  const reason = readString(value, 'reason');
+  const message = readString(value, 'message');
+  const toolSchemaCount = value.tool_schema_count;
+
+  if (
+    provider === null ||
+    fromLoop === null ||
+    toLoop === null ||
+    reason === null ||
+    message === null ||
+    typeof toolSchemaCount !== 'number' ||
+    !Number.isFinite(toolSchemaCount)
+  ) {
+    return null;
+  }
+
+  return {
+    provider,
+    from_loop: fromLoop,
+    to_loop: toLoop,
+    reason,
+    message,
+    tool_schema_count: toolSchemaCount,
+  };
+}
+
+function normalizeNativeToolFallbacks(value: unknown): GenericEditNativeToolFallback[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditNativeToolFallback[] = [];
+  for (const fallback of value) {
+    const normalizedFallback = normalizeNativeToolFallback(fallback);
+    if (!normalizedFallback) {
+      return null;
+    }
+    result.push(normalizedFallback);
+  }
+  return result;
+}
+
 function normalizeResumeAction(value: unknown): GenericEditResumeAction | null {
   if (value === undefined || value === null) return null;
   if (!isRecord(value)) return null;
@@ -687,6 +735,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     'failed_recovery_attempt_count',
   ]);
   const recentEvents = normalizeRecentEvents(value.recent_events);
+  const nativeToolFallbacks = normalizeNativeToolFallbacks(value.native_tool_fallbacks);
   const recoverySummary = normalizeRecoverySummary(value.recovery_summary);
   const recoveryActions = normalizeRecoveryActions(value.recovery_actions);
   const resumeAction = normalizeResumeAction(value.resume_action);
@@ -702,6 +751,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     flags === null ||
     counts === null ||
     recentEvents === null ||
+    nativeToolFallbacks === null ||
     recoveryActions === null ||
     (value.resume_action !== undefined && value.resume_action !== null && resumeAction === null) ||
     resumeInputs === null ||
@@ -735,6 +785,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     counts,
     artifacts,
     recent_events: recentEvents,
+    native_tool_fallbacks: nativeToolFallbacks,
     recovery_summary: recoverySummary,
     recovery_actions: recoveryActions,
     mcp_support: mcpSupport,

@@ -128,6 +128,10 @@ export interface GenericEditRecentEvent {
   group_id?: string;
   path?: string;
   iteration?: number | string | null;
+  from_loop?: string;
+  to_loop?: string;
+  reason?: string;
+  tool_schema_count?: number;
   action_index?: number;
   recovery_required?: boolean;
   failed_action_count?: number;
@@ -158,6 +162,15 @@ export interface GenericEditRecoveryAction {
   paths?: string[];
   mutation_snapshot_ids?: string[];
   required_before_finish: boolean;
+}
+
+export interface GenericEditNativeToolFallback {
+  provider: string;
+  from_loop: string;
+  to_loop: string;
+  reason: string;
+  message: string;
+  tool_schema_count: number;
 }
 
 export interface GenericEditResumeAction {
@@ -279,6 +292,7 @@ export interface GenericEditArtifactManifest {
   };
   artifacts: GenericEditArtifactManifestEntry[];
   recent_events: GenericEditRecentEvent[];
+  native_tool_fallbacks: GenericEditNativeToolFallback[];
   recovery_summary: GenericEditRecoverySummary | null;
   recovery_actions: GenericEditRecoveryAction[];
   mcp_support: GenericEditMcpSupport | null;

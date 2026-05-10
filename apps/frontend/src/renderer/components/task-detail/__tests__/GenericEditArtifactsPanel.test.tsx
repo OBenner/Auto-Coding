@@ -27,6 +27,9 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditEvents': 'Events',
         'overview.genericEditTransactions': 'Transactions',
         'overview.genericEditNativeFallbacks': 'Native fallbacks',
+        'overview.genericEditNativeFallbackDetails': 'Native fallback details',
+        'overview.genericEditNativeFallbackReason': 'Reason',
+        'overview.genericEditNativeFallbackLoop': 'Loop',
         'overview.genericEditRecoveryAttempts': 'Recovery attempts',
         'overview.genericEditMutationSnapshots': 'Mutation snapshots',
         'overview.genericEditTransactionGroups': 'Transaction groups',
@@ -87,7 +90,7 @@ describe('GenericEditArtifactsPanel', () => {
     render(<GenericEditArtifactsPanel manifest={createManifest()} />);
 
     expect(screen.getByText('Generic Edit Artifacts')).toBeInTheDocument();
-    expect(screen.getByText('openai')).toBeInTheDocument();
+    expect(screen.getAllByText('openai')).toHaveLength(2);
     expect(screen.getByText('max_iterations')).toBeInTheDocument();
     expect(screen.getByText('Resumable')).toBeInTheDocument();
     expect(screen.getByText('Recoverable')).toBeInTheDocument();
@@ -96,6 +99,9 @@ describe('GenericEditArtifactsPanel', () => {
     const fallbackMetric = screen.getByText('Native fallbacks').parentElement;
     expect(fallbackMetric).not.toBeNull();
     expect(within(fallbackMetric as HTMLElement).getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('Native fallback details')).toBeInTheDocument();
+    expect(screen.getByText('native_tool_request_failed')).toBeInTheDocument();
+    expect(screen.getByText('native_tool_calls -> json_actions')).toBeInTheDocument();
     expect(screen.getByText('generic_edit_recovery_plan')).toBeInTheDocument();
     expect(screen.getByText('Missing')).toBeInTheDocument();
     expect(screen.getByText('Recent events')).toBeInTheDocument();
