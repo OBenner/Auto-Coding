@@ -53,7 +53,7 @@ uvicorn[standard]>=0.46.0
 
 # HTTP clients for webhook delivery
 # httpx - Modern async HTTP client with HTTP/2 support
-httpx>=0.25.0
+httpx>=0.28.1
 # aiohttp - Async HTTP client/server library (alternative HTTP client)
 aiohttp>=3.9.0
 
