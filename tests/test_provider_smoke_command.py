@@ -451,6 +451,14 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
                             "message": "provider does not support tools",
                         }
                     ],
+                    "resume_policy": {
+                        "status": "requires_resolution",
+                        "strategy": "recover_partial_failure",
+                        "required_resolution_action_kinds": [
+                            "inspect_diff",
+                            "rollback_transaction",
+                        ],
+                    },
                 },
             },
         )
@@ -475,3 +483,7 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     assert "Native tool fallbacks" in output
     assert "Native fallback reason" in output
     assert "native_tool_request_failed" in output
+    assert "Resume policy" in output
+    assert "requires_resolution" in output
+    assert "Resume required actions" in output
+    assert "inspect_diff, rollback_transaction" in output

@@ -103,7 +103,7 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
     native_tool_fallbacks = _native_tool_fallbacks_payload(
         payload.get("native_tool_fallbacks")
     )
-    return {
+    diagnostics = {
         "status": str(payload.get("status") or "unknown"),
         "stop_reason": str(payload.get("stop_reason") or "unknown"),
         "loop": str(payload.get("loop") or "unknown"),
@@ -116,6 +116,10 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
         "native_tool_fallbacks": native_tool_fallbacks,
         "tool_counts": normalized_tool_counts,
     }
+    resume_policy = _resume_policy_payload(payload.get("resume_policy"))
+    if resume_policy is not None:
+        diagnostics["resume_policy"] = resume_policy
+    return diagnostics
 
 
 def _native_tool_fallbacks_payload(value: Any) -> list[dict[str, Any]]:
@@ -140,6 +144,40 @@ def _native_tool_fallbacks_payload(value: Any) -> list[dict[str, Any]]:
         if fallback:
             fallbacks.append(fallback)
     return fallbacks
+
+
+def _resume_policy_payload(value: Any) -> dict[str, Any] | None:
+    """Return safe generic_edit resume policy fields for smoke diagnostics."""
+    if not isinstance(value, dict):
+        return None
+    policy: dict[str, Any] = {}
+    for key in ("status", "strategy"):
+        field_value = value.get(key)
+        if isinstance(field_value, str) and field_value:
+            policy[key] = field_value
+    for key in ("can_resume", "finish_blocked"):
+        field_value = value.get(key)
+        if isinstance(field_value, bool):
+            policy[key] = field_value
+    next_iteration = value.get("next_iteration")
+    if isinstance(next_iteration, int) and not isinstance(next_iteration, bool):
+        policy["next_iteration"] = next_iteration
+    action_kinds = _string_list_payload(value.get("required_resolution_action_kinds"))
+    if action_kinds:
+        policy["required_resolution_action_kinds"] = action_kinds
+    unresolved_groups = _string_list_payload(
+        value.get("unresolved_transaction_group_ids")
+    )
+    if unresolved_groups:
+        policy["unresolved_transaction_group_ids"] = unresolved_groups
+    return policy or None
+
+
+def _string_list_payload(value: Any) -> list[str]:
+    """Return a safe bounded string list for smoke diagnostics."""
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value[:20] if isinstance(item, str) and item]
 
 
 def _int_payload_value(payload: dict[str, Any], key: str) -> int:
@@ -573,6 +611,20 @@ def handle_provider_smoke_command(
                         print_key_value(
                             "Native fallback reason",
                             str(first_fallback.get("reason", "unknown")),
+                        )
+                resume_policy = execution.get("resume_policy")
+                if isinstance(resume_policy, dict):
+                    print_key_value(
+                        "Resume policy",
+                        str(resume_policy.get("status", "unknown")),
+                    )
+                    required_actions = resume_policy.get(
+                        "required_resolution_action_kinds"
+                    )
+                    if isinstance(required_actions, list) and required_actions:
+                        print_key_value(
+                            "Resume required actions",
+                            ", ".join(str(action) for action in required_actions),
                         )
         if result.response_excerpt:
             print_key_value("Response", result.response_excerpt)

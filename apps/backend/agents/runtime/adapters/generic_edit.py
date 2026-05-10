@@ -3307,6 +3307,7 @@ def build_generic_edit_result_payload(
             {
                 "recovery_checkpoint_artifact": recovery_checkpoint["artifact_path"],
                 "recovery_strategy": recovery_checkpoint["resume"]["strategy"],
+                "resume_policy": recovery_checkpoint["resume_policy"],
             }
         )
     if recovery_plan is not None:

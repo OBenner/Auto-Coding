@@ -5038,6 +5038,7 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         mutation_snapshot_path
     )
     assert artifact["recovery_plan"]["next_actions"] == expected_next_actions
+    assert artifact["resume_policy"] == expected_resume_policy
     assert manifest["recovery_summary"] == {
         "version": 1,
         "status": "requires_resolution",
