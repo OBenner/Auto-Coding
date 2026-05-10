@@ -203,6 +203,13 @@ export function createGenericEditArtifactManifest(): GenericEditArtifactManifest
         },
       },
     },
-    resume: null,
+    resume: {
+      checkpoint_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.checkpoint,
+      trace_artifact: GENERIC_EDIT_TEST_ARTIFACT_PATHS.trace,
+      strategy: 'recover_partial_failure',
+      start_iteration: 3,
+      previous_status: 'error',
+      previous_stop_reason: 'unresolved_partial_failure',
+    },
   };
 }

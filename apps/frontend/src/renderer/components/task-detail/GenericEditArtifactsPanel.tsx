@@ -234,6 +234,13 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpOpenSessionCount =
     mcpNumber(mcpSessionLifecycle?.open_session_count) ?? mcpOpenSessions.length;
   const nativeToolFallbacks = manifest.native_tool_fallbacks;
+  const resumeMetadata = mcpRecord(manifest.resume);
+  const resumeCheckpointArtifact = mcpString(resumeMetadata?.checkpoint_artifact);
+  const resumeTraceArtifact = mcpString(resumeMetadata?.trace_artifact);
+  const resumeStrategy = mcpString(resumeMetadata?.strategy);
+  const resumeStartIteration = mcpNumber(resumeMetadata?.start_iteration);
+  const resumePreviousStatus = mcpString(resumeMetadata?.previous_status);
+  const resumePreviousStopReason = mcpString(resumeMetadata?.previous_stop_reason);
   const resumeInputs = Object.entries(manifest.resume_inputs).filter(
     ([, artifactPath]) => artifactPath.length > 0
   );
@@ -556,6 +563,52 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                   ))}
                 </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {resumeMetadata && (
+          <div className="mt-4 rounded-md border bg-muted/20 px-3 py-3 text-xs">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <PlayCircle className="h-3.5 w-3.5 text-info" />
+              <span className="font-semibold text-muted-foreground">
+                {t('tasks:overview.genericEditResumeProvenance')}
+              </span>
+              {resumeStrategy && (
+                <Badge variant="info" className="text-xs">
+                  {resumeStrategy}
+                </Badge>
+              )}
+              {typeof resumeStartIteration === 'number' && (
+                <Badge variant="muted" className="text-xs">
+                  {t('tasks:overview.genericEditResumeStartIteration', {
+                    iteration: resumeStartIteration,
+                  })}
+                </Badge>
+              )}
+            </div>
+            {(resumePreviousStatus || resumePreviousStopReason) && (
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                <span className="font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditResumePreviousStop')}
+                </span>
+                {resumePreviousStatus && (
+                  <Badge variant={statusVariant(resumePreviousStatus)} className="text-xs">
+                    {resumePreviousStatus}
+                  </Badge>
+                )}
+                {resumePreviousStopReason && (
+                  <Badge variant="outline" className="text-xs">
+                    {resumePreviousStopReason}
+                  </Badge>
+                )}
+              </div>
+            )}
+            {resumeCheckpointArtifact && (
+              <div className="truncate text-muted-foreground">{resumeCheckpointArtifact}</div>
+            )}
+            {resumeTraceArtifact && (
+              <div className="mt-1 truncate text-muted-foreground">{resumeTraceArtifact}</div>
             )}
           </div>
         )}

@@ -52,9 +52,12 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditResolutionStrategies': 'Resolution strategies',
         'overview.genericEditRecommendedVerificationTools': 'Verification tools',
         'overview.genericEditResumeEntrypoint': 'Resume entrypoint',
+        'overview.genericEditResumeProvenance': 'Resume provenance',
         'overview.genericEditResumeStrategy': 'Resume strategy',
         'overview.genericEditNextIteration': `Next iteration ${interpolation('iteration', '')}`,
         'overview.genericEditResumeInputs': 'Resume inputs',
+        'overview.genericEditResumeStartIteration': `Started at iteration ${interpolation('iteration', '')}`,
+        'overview.genericEditResumePreviousStop': 'Previous stop',
         'overview.genericEditMcpSupport': 'MCP support',
         'overview.genericEditMcpTools': `${interpolation('count', 0)} MCP tools`,
         'overview.genericEditMcpAvailable': 'Available',
@@ -122,13 +125,17 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText(/partial.txt/)).toBeInTheDocument();
     expect(screen.getAllByText('Required')).toHaveLength(2);
     expect(screen.getByText('Resume entrypoint')).toBeInTheDocument();
+    expect(screen.getByText('Resume provenance')).toBeInTheDocument();
     expect(screen.getByText('Resume strategy')).toBeInTheDocument();
-    expect(screen.getByText('recover_partial_failure')).toBeInTheDocument();
+    expect(screen.getAllByText('recover_partial_failure')).toHaveLength(2);
     expect(screen.getByText('Next iteration 3')).toBeInTheDocument();
-    expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.checkpoint)).toBeInTheDocument();
+    expect(screen.getByText('Started at iteration 3')).toBeInTheDocument();
+    expect(screen.getByText('Previous stop')).toBeInTheDocument();
+    expect(screen.getByText('unresolved_partial_failure')).toBeInTheDocument();
+    expect(screen.getAllByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.checkpoint)).toHaveLength(2);
     expect(screen.getByText('Resume inputs')).toBeInTheDocument();
     expect(screen.getByText('trace_artifact')).toBeInTheDocument();
-    expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.trace)).toBeInTheDocument();
+    expect(screen.getAllByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.trace)).toHaveLength(2);
     expect(screen.getByText('event_artifact')).toBeInTheDocument();
     expect(screen.getByText(GENERIC_EDIT_TEST_ARTIFACT_PATHS.events)).toBeInTheDocument();
     expect(screen.getByText('mutation_snapshot_artifact')).toBeInTheDocument();
