@@ -5700,6 +5700,15 @@ async def test_generic_edit_runtime_bounds_large_mutation_preimages(tmp_path: Pa
     assert preimage["restorable"] is False
     assert "content" not in preimage
 
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert result_artifact["resume_policy"][
+        "required_resolution_action_kinds"
+    ] == ["inspect_diff", "repair_mutation"]
+
 
 def test_generic_edit_file_preimage_records_inspection_oserror(
     tmp_path: Path,

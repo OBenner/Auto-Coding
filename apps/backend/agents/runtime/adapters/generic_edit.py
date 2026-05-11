@@ -3524,15 +3524,26 @@ def generic_edit_required_resolution_action_kinds(
     if recovery_plan is None:
         return []
     action_kinds: list[str] = []
+
+    def append_action_kind(value: Any) -> None:
+        if isinstance(value, str) and value and value not in action_kinds:
+            action_kinds.append(value)
+
     for action in recovery_plan.get("next_actions") or []:
         if (
             not isinstance(action, dict)
             or action.get("required_before_finish") is not True
         ):
             continue
-        kind = action.get("kind")
-        if isinstance(kind, str) and kind and kind not in action_kinds:
-            action_kinds.append(kind)
+        append_action_kind(action.get("kind"))
+    for group in recovery_plan.get("unresolved_transaction_groups") or []:
+        if not isinstance(group, dict):
+            continue
+        recovery_policy = group.get("recovery_policy")
+        if not isinstance(recovery_policy, dict):
+            continue
+        for kind in recovery_policy.get("required_next_action_kinds") or []:
+            append_action_kind(kind)
     return action_kinds
 
 
