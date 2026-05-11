@@ -170,6 +170,11 @@ def _resume_policy_payload(value: Any) -> dict[str, Any] | None:
     )
     if unresolved_groups:
         policy["unresolved_transaction_group_ids"] = unresolved_groups
+    unresolved_failures = _string_list_payload(
+        value.get("unresolved_partial_failure_ids")
+    )
+    if unresolved_failures:
+        policy["unresolved_partial_failure_ids"] = unresolved_failures
     return policy or None
 
 

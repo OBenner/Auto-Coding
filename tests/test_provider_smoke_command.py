@@ -336,6 +336,62 @@ async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallbac
     assert "Respond with exactly one JSON object" in fake_provider.session.messages[0]
 
 
+def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "error",
+                "stop_reason": "unresolved_partial_failure",
+                "loop": "json_actions",
+                "action_count": 3,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 1,
+                "tool_counts": {"finish": 1, "read_file": 1, "write_file": 1},
+                "resume_policy": {
+                    "status": "requires_resolution",
+                    "strategy": "recover_partial_failure",
+                    "can_resume": True,
+                    "finish_blocked": True,
+                    "next_iteration": 4,
+                    "checkpoint_path": str(tmp_path / "checkpoint.json"),
+                    "required_artifacts": {
+                        "checkpoint": str(tmp_path / "checkpoint.json")
+                    },
+                    "required_resolution_action_kinds": [
+                        "inspect_diff",
+                        "rollback_transaction",
+                    ],
+                    "unresolved_partial_failure_ids": ["partial-failure-1"],
+                    "unresolved_transaction_group_ids": ["transaction-group-1"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["resume_policy"] == {
+        "status": "requires_resolution",
+        "strategy": "recover_partial_failure",
+        "can_resume": True,
+        "finish_blocked": True,
+        "next_iteration": 4,
+        "required_resolution_action_kinds": [
+            "inspect_diff",
+            "rollback_transaction",
+        ],
+        "unresolved_partial_failure_ids": ["partial-failure-1"],
+        "unresolved_transaction_group_ids": ["transaction-group-1"],
+    }
+
+
 @pytest.mark.asyncio
 async def test_run_provider_smoke_check_reports_validation_errors(
     tmp_path: Path,
