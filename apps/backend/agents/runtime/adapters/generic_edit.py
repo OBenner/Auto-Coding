@@ -235,6 +235,15 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "failed_action_count",
     "recovery_attempt_count",
     "failed_recovery_attempt_count",
+    "strategy",
+    "finish_blocked",
+    "can_resume",
+    "checkpoint_artifact",
+    "recovery_plan_artifact",
+    "required_resolution_action_kinds",
+    "required_artifacts",
+    "unresolved_partial_failure_ids",
+    "unresolved_transaction_group_ids",
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_STRING_FIELDS = (
     "id",
@@ -2844,13 +2853,6 @@ def save_generic_edit_artifacts(
         transaction_summary=transaction_summary,
         mutation_snapshots=mutation_snapshots,
     )
-    events = build_generic_edit_events(
-        trace=trace,
-        provider_name=provider_name,
-        subtask_id=subtask_id,
-        transaction_group_summary=transaction_group_summary,
-        resume_metadata=resume_metadata,
-    )
     recovery_plan = build_generic_edit_recovery_plan(
         transaction_summary=transaction_summary,
         transaction_group_summary=transaction_group_summary,
@@ -2880,6 +2882,14 @@ def save_generic_edit_artifacts(
         mutation_snapshots=mutation_snapshots,
         transaction_group_summary=transaction_group_summary,
         mcp_support=mcp_support,
+    )
+    events = build_generic_edit_events(
+        trace=trace,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+        transaction_group_summary=transaction_group_summary,
+        resume_metadata=resume_metadata,
+        recovery_checkpoint=recovery_checkpoint,
     )
     session_state = build_generic_edit_session_state(
         timestamp=timestamp,
@@ -3344,6 +3354,10 @@ def compact_generic_edit_manifest_event(event: dict[str, Any]) -> dict[str, Any]
             compact[field] = value[:300]
         elif isinstance(value, bool) or isinstance(value, int) or value is None:
             compact[field] = value
+        elif isinstance(value, list):
+            compact[field] = [
+                str(item)[:300] for item in value[:20] if isinstance(item, str)
+            ]
     return compact
 
 
@@ -4780,6 +4794,7 @@ def build_generic_edit_events(
     subtask_id: str | None,
     transaction_group_summary: dict[str, Any],
     resume_metadata: dict[str, Any] | None,
+    recovery_checkpoint: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     """Build normalized runtime events for UI/control-plane consumers."""
     events: list[dict[str, Any]] = []
@@ -4838,6 +4853,13 @@ def build_generic_edit_events(
         )
         for group in transaction_group_summary["transaction_groups"]
     )
+    resume_policy_event = build_generic_edit_resume_policy_event(
+        recovery_checkpoint=recovery_checkpoint,
+        provider_name=provider_name,
+        subtask_id=subtask_id,
+    )
+    if resume_policy_event is not None:
+        events.append(resume_policy_event)
     for sequence, event in enumerate(events, start=1):
         event["sequence"] = sequence
     return events
@@ -4890,6 +4912,51 @@ def build_generic_edit_resume_event(
         value = resume_metadata.get(key)
         if isinstance(value, str) and value:
             event[key] = value
+    return event
+
+
+def build_generic_edit_resume_policy_event(
+    *,
+    recovery_checkpoint: dict[str, Any] | None,
+    provider_name: str,
+    subtask_id: str | None,
+) -> dict[str, Any] | None:
+    """Return a normalized event for newly created resume policy metadata."""
+    if recovery_checkpoint is None:
+        return None
+    resume_policy = recovery_checkpoint.get("resume_policy")
+    if not isinstance(resume_policy, dict):
+        return None
+
+    event = {
+        "event_type": "resume_policy",
+        "provider": provider_name,
+        "subtask_id": subtask_id,
+        "status": str(resume_policy.get("status") or "unknown"),
+        "strategy": str(resume_policy.get("strategy") or "unknown"),
+        "finish_blocked": bool(resume_policy.get("finish_blocked")),
+        "can_resume": bool(resume_policy.get("can_resume")),
+        "checkpoint_artifact": str(
+            recovery_checkpoint.get("artifact_path")
+            or resume_policy.get("checkpoint_path")
+            or ""
+        ),
+        "required_resolution_action_kinds": normalize_string_list(
+            resume_policy.get("required_resolution_action_kinds")
+        ),
+        "required_artifacts": normalize_string_list(
+            resume_policy.get("required_artifacts")
+        ),
+        "unresolved_partial_failure_ids": normalize_string_list(
+            resume_policy.get("unresolved_partial_failure_ids")
+        ),
+        "unresolved_transaction_group_ids": normalize_string_list(
+            resume_policy.get("unresolved_transaction_group_ids")
+        ),
+    }
+    recovery_plan_artifact = recovery_checkpoint.get("recovery_plan_artifact")
+    if isinstance(recovery_plan_artifact, str) and recovery_plan_artifact:
+        event["recovery_plan_artifact"] = recovery_plan_artifact
     return event
 
 

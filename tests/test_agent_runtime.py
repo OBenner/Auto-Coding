@@ -4911,6 +4911,10 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     group_artifact = json.loads(group_artifact_path.read_text(encoding="utf-8"))
     mutation_snapshots = json.loads(mutation_snapshot_path.read_text(encoding="utf-8"))
+    events = [
+        json.loads(line)
+        for line in event_path.read_text(encoding="utf-8").splitlines()
+    ]
     expected_next_actions = [
         {
             "id": "inspect-json_actions-1-1",
@@ -5138,6 +5142,31 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     assert "repair or rollback" in checkpoint["resume"]["prompt"]
     assert "json_actions-1" in checkpoint["resume"]["prompt"]
     assert "partial.txt" in checkpoint["resume"]["prompt"]
+    assert events[-1] == {
+        "event_type": "resume_policy",
+        "provider": "openai",
+        "subtask_id": None,
+        "status": "requires_resolution",
+        "strategy": "recover_partial_failure",
+        "finish_blocked": True,
+        "can_resume": True,
+        "checkpoint_artifact": str(checkpoint_path),
+        "recovery_plan_artifact": str(recovery_plan_path),
+        "required_resolution_action_kinds": [
+            "inspect_diff",
+            "rollback_transaction",
+        ],
+        "required_artifacts": [
+            "trace_artifact",
+            "event_artifact",
+            "recovery_plan_artifact",
+            "mutation_snapshot_artifact",
+            "transaction_group_artifact",
+        ],
+        "unresolved_partial_failure_ids": ["json_actions-1"],
+        "unresolved_transaction_group_ids": ["transaction-group-1"],
+        "sequence": 7,
+    }
 
 
 @pytest.mark.asyncio
@@ -5790,7 +5819,7 @@ async def test_generic_edit_runtime_writes_artifact_manifest(tmp_path: Path):
     assert manifest["flags"]["recoverable"] is True
     assert manifest["flags"]["resumable"] is True
     assert manifest["flags"]["recovery_required"] is False
-    assert len(manifest["recent_events"]) == 2
+    assert len(manifest["recent_events"]) == 3
     assert manifest["recent_events"][0]["sequence"] == 1
     assert manifest["recent_events"][0]["event_type"] == "action_result"
     assert manifest["recent_events"][0]["tool"] == "read_file"
@@ -5798,6 +5827,15 @@ async def test_generic_edit_runtime_writes_artifact_manifest(tmp_path: Path):
     assert "status" not in manifest["recent_events"][0]
     assert manifest["recent_events"][1]["event_type"] == "transaction"
     assert manifest["recent_events"][1]["transaction_id"] == "json_actions-1"
+    assert manifest["recent_events"][2]["event_type"] == "resume_policy"
+    assert manifest["recent_events"][2]["status"] == "ready"
+    assert manifest["recent_events"][2]["strategy"] == "continue_from_trace"
+    assert manifest["recent_events"][2]["finish_blocked"] is False
+    assert manifest["recent_events"][2]["can_resume"] is True
+    assert manifest["recent_events"][2]["required_artifacts"] == [
+        "trace_artifact",
+        "event_artifact",
+    ]
     assert manifest["entrypoints"]["result"] == str(
         artifact_dir / "generic_edit_result.json"
     )
