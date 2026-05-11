@@ -643,6 +643,65 @@ def test_external_mcp_smoke_syncs_custom_tool_schemas_from_mapping(
     assert saved_servers[0]["tools"] == [{"name": "search_docs"}]
 
 
+def test_normalize_mcp_tools_for_persistence_normalizes_tool_schemas():
+    from cli.runtime_commands import normalize_mcp_tools_for_persistence
+
+    assert normalize_mcp_tools_for_persistence(
+        {
+            "tools": [
+                {
+                    "name": "search_docs",
+                    "description": "  Search docs.  ",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string"},
+                        },
+                        "required": ("query",),
+                    },
+                },
+                {
+                    "name": "raw_status",
+                    "inputSchema": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                {
+                    "name": "search_docs",
+                    "description": "Duplicate should be skipped.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "duplicate": {"type": "boolean"},
+                        },
+                    },
+                },
+            ]
+        }
+    ) == [
+        {
+            "name": "search_docs",
+            "description": "Search docs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "raw_status",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        },
+    ]
+
+
 def test_load_project_mcp_config_warns_when_import_unavailable(
     tmp_path,
     monkeypatch,

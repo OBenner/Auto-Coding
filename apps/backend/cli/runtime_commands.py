@@ -36,6 +36,7 @@ from agents.runtime.mcp_bridge import (
     discover_external_mcp_tools,
     executable_external_mcp_servers,
     executable_external_mcp_tools,
+    normalize_mcp_input_schema,
     registered_external_mcp_servers,
     resolve_runtime_mcp_support,
 )
@@ -471,8 +472,8 @@ def normalize_mcp_tools_for_persistence(result: dict[str, Any]) -> list[dict[str
             or raw_tool.get("input_schema")
             or raw_tool.get("parameters")
         )
-        if isinstance(schema, dict):
-            tool["inputSchema"] = schema
+        if schema is not None:
+            tool["inputSchema"] = normalize_mcp_input_schema(raw_tool)
         tools.append(tool)
     return tools
 
