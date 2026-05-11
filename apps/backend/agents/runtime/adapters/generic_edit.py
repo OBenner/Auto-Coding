@@ -4199,6 +4199,13 @@ def load_generic_edit_session_state(
             "Generic edit session state resume policy must reference the "
             "canonical recovery checkpoint."
         )
+    for artifact_name in normalize_string_list(resume_policy.get("required_artifacts")):
+        artifact_path = resume_inputs.get(artifact_name)
+        if not isinstance(artifact_path, str) or not artifact_path:
+            raise GenericEditRuntimeError(
+                "Generic edit session state is missing required resume artifact: "
+                f"{artifact_name}."
+            )
     return payload
 
 
