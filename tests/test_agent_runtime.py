@@ -1768,6 +1768,9 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "read_file",
         "read_file_range",
         "read_many_files",
+        "begin_batch",
+        "commit_batch",
+        "abort_batch",
         "write_file",
         "replace_text",
         "delete_file",
@@ -1821,6 +1824,18 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert read_many_schema["parameters"]["required"] == ["paths"]
     assert read_many_schema["parameters"]["properties"]["paths"]["maxItems"] == 10
+    begin_batch_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "begin_batch"
+    )
+    assert begin_batch_schema["parameters"]["required"] == ["batch_id"]
+    commit_batch_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "commit_batch"
+    )
+    assert commit_batch_schema["parameters"]["required"] == ["batch_id"]
+    abort_batch_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "abort_batch"
+    )
+    assert abort_batch_schema["parameters"]["required"] == ["batch_id"]
     replace_text_schema = next(
         schema for schema in provider_schemas if schema["name"] == "replace_text"
     )
@@ -4915,6 +4930,158 @@ async def test_generic_edit_runtime_records_partial_transactions_for_recovery(
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_records_committed_batch_protocol(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "batch a focused edit",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                        "description": "Update batched.txt",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "commit_batch",
+                        "batch_id": "batch-1",
+                        "summary": "batched.txt updated",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Committed batch",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "batch update batched.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert result_artifact["transaction_batch_count"] == 1
+    assert result_artifact["transaction_batch_ids"] == ["batch-1"]
+    batch = result_artifact["transaction_batches"][0]
+    assert batch["id"] == "batch-1"
+    assert batch["status"] == "committed"
+    assert batch["transaction_ids"] == ["json_actions-1"]
+    assert batch["mutation_snapshot_ids"] == ["mutation-1"]
+    assert result_artifact["transactions"][0]["batch_id"] == "batch-1"
+    assert result_artifact["transactions"][0]["batch_status"] == "committed"
+    assert result_artifact["transactions"][0]["batch_actions"] == [
+        "begin_batch",
+        "commit_batch",
+    ]
+    transaction_event = next(
+        event for event in events if event["event_type"] == "transaction"
+    )
+    assert transaction_event["batch_id"] == "batch-1"
+    assert transaction_event["batch_status"] == "committed"
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_aborts_open_batch_with_snapshot_rollback(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "abort a staged batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Use original content",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Aborted batch",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "abort batch update",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    batch = result_artifact["transaction_batches"][0]
+    assert batch["id"] == "batch-1"
+    assert batch["status"] == "aborted"
+    assert batch["mutation_snapshot_ids"] == ["mutation-1"]
+    assert batch["restored_paths"] == ["batched.txt"]
+    assert result_artifact["transactions"][0]["batch_status"] == "aborted"
+    assert result_artifact["transactions"][0]["batch_actions"] == [
+        "begin_batch",
+        "abort_batch",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failure(
     tmp_path: Path,
 ):
@@ -4991,6 +5158,12 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     ]
     transaction_group_event = next(
         event for event in events if event["event_type"] == "transaction_group"
+    )
+    partial_failure_event = next(
+        event
+        for event in events
+        if event["event_type"] == "transaction"
+        and event["status"] == "partial_failure"
     )
     expected_next_actions = [
         {
@@ -5190,6 +5363,9 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     assert group["next_actions"] == expected_next_actions
     assert group["recovery_policy"] == expected_group_policy
     assert transaction_group_event["preferred_strategy"] == "rollback_transaction"
+    assert partial_failure_event["timeline_stage"] == "partial_failure"
+    assert transaction_group_event["timeline_stage"] == "recovery_policy"
+    assert transaction_group_event["requires_user_action"] is True
     assert transaction_group_event["required_next_action_kinds"] == [
         "inspect_diff",
         "rollback_transaction",
@@ -5253,6 +5429,8 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         ],
         "unresolved_partial_failure_ids": ["json_actions-1"],
         "unresolved_transaction_group_ids": ["transaction-group-1"],
+        "timeline_stage": "resume_policy",
+        "requires_user_action": True,
         "sequence": 7,
     }
 
@@ -5520,6 +5698,7 @@ async def test_generic_edit_runtime_writes_transaction_recovery_groups(
         "strategy": "rollback_transaction",
         "tool_sequence": ["rollback_transaction", "finish"],
         "recovered_paths": ["partial.txt"],
+        "batch_ids": [],
         "mutation_snapshot_ids": ["mutation-1"],
         "recovery_attempt_count": 1,
         "failed_recovery_attempt_count": 0,
@@ -6215,6 +6394,7 @@ async def test_generic_edit_runtime_records_resume_provenance(tmp_path: Path):
     assert events[0]["checkpoint_artifact"] == str(checkpoint_path)
     assert events[0]["strategy"] == "continue_from_trace"
     assert events[0]["start_iteration"] == 2
+    assert events[0]["timeline_stage"] == "resume"
 
 
 @pytest.mark.asyncio
@@ -7028,6 +7208,21 @@ async def test_generic_edit_runtime_resumes_partial_failure_and_records_repair_m
     assert repair_transaction["tool_sequence"] == ["repair_mutation", "finish"]
     assert repair_transaction["mutating_tools"] == ["repair_mutation"]
     assert repair_transaction["can_resolve_partial_failure"] is True
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    repair_event = next(
+        event
+        for event in events
+        if event["event_type"] == "action_result"
+        and event["tool"] == "repair_mutation"
+    )
+    assert events[0]["event_type"] == "resume"
+    assert events[0]["timeline_stage"] == "resume_clean"
+    assert repair_event["timeline_stage"] == "recovery_action"
     assert group_artifact["transaction_groups"][0]["status"] == "resolved"
     assert group_artifact["transaction_groups"][0]["recovery_outcome"]["strategy"] == (
         "repair_mutation"
@@ -7135,6 +7330,102 @@ async def test_generic_edit_runtime_rejects_resume_when_mutated_path_drifted(
         )
 
     assert resume_session.messages == []
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_resume_when_trace_mismatches_checkpoint(
+    tmp_path: Path,
+):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "todo.txt"
+    target.write_text("keep going\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "inspect but do not finish yet",
+                "actions": [{"tool": "read_file", "path": "todo.txt"}],
+            }
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+        max_iterations=1,
+    )
+
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "inspect todo.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    checkpoint_path = artifact_dir / "generic_edit_recovery_checkpoint.json"
+    trace_path = artifact_dir / "generic_edit_trace.json"
+    assert first_result.status == "error"
+    assert checkpoint_path.exists()
+    trace_payload = json.loads(trace_path.read_text(encoding="utf-8"))
+    trace_payload["trace"] = []
+    trace_path.write_text(json.dumps(trace_payload, indent=2), encoding="utf-8")
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "would finish if guard allowed it",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Should not run with mismatched trace",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+        max_iterations=2,
+    )
+
+    with pytest.raises(GenericEditRuntimeError, match="trace does not match"):
+        await resume_runtime_session(
+            resume_runtime,
+            checkpoint_path,
+            tmp_path,
+            requirements=RuntimeRequirements.generic_edit(),
+        )
+
+    assert resume_session.messages == []
+
+
+def test_generic_edit_mutation_snapshot_artifact_rejects_count_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        load_generic_edit_mutation_snapshots,
+    )
+
+    snapshot_path = tmp_path / "generic_edit_mutation_snapshots.json"
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_mutation_snapshots",
+                "snapshot_count": 2,
+                "snapshots": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(GenericEditRuntimeError, match="snapshot count"):
+        load_generic_edit_mutation_snapshots(snapshot_path)
 
 
 @pytest.mark.asyncio

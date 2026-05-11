@@ -983,6 +983,180 @@ async def test_openai_provider_supports_generic_edit_mode(
 
 
 @pytest.mark.asyncio
+async def test_openai_provider_generic_edit_recovers_after_tool_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    target = tmp_path / "recover.txt"
+    target.write_text("old\n", encoding="utf-8")
+    fake_openai = _install_fake_openai_responses(
+        monkeypatch,
+        [
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content="",
+                            tool_calls=[
+                                SimpleNamespace(
+                                    id="call_write",
+                                    function=SimpleNamespace(
+                                        name="write_file",
+                                        arguments=json.dumps(
+                                            {
+                                                "path": "recover.txt",
+                                                "content": "new\n",
+                                            }
+                                        ),
+                                    ),
+                                ),
+                                SimpleNamespace(
+                                    id="call_missing",
+                                    function=SimpleNamespace(
+                                        name="read_file",
+                                        arguments=json.dumps({"path": "missing.txt"}),
+                                    ),
+                                ),
+                            ],
+                        )
+                    )
+                ]
+            ),
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content="",
+                            tool_calls=[
+                                SimpleNamespace(
+                                    id="call_rollback",
+                                    function=SimpleNamespace(
+                                        name="rollback_transaction",
+                                        arguments=json.dumps(
+                                            {"transaction_id": "native_tool_calls-1"}
+                                        ),
+                                    ),
+                                ),
+                                SimpleNamespace(
+                                    id="call_finish",
+                                    function=SimpleNamespace(
+                                        name="finish",
+                                        arguments=json.dumps(
+                                            {
+                                                "summary": "Recovered provider tool loop",
+                                                "tests": [],
+                                                "risks": [],
+                                            }
+                                        ),
+                                    ),
+                                ),
+                            ],
+                        )
+                    )
+                ]
+            ),
+        ],
+    )
+    provider = OpenAIProvider(
+        ProviderConfig(provider="openai", openai_api_key="test-key")
+    )
+    session = provider.create_session(SessionConfig(name="openai-recovery-loop"))
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "recover failed provider tool loop",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.8",
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert len(fake_openai.calls) == 2
+    assert fake_openai.calls[1]["messages"][-2]["tool_call_id"] == "call_missing"
+    assert "File not found" in fake_openai.calls[1]["messages"][-2]["content"]
+    assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["transaction_status_counts"] == {
+        "partial_failure": 1,
+        "complete": 1,
+    }
+    assert result_artifact["recovery_outcomes"][0]["strategy"] == (
+        "rollback_transaction"
+    )
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_generic_edit_reports_unsupported_tool_result(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    fake_openai = _install_fake_openai_responses(
+        monkeypatch,
+        [
+            _openai_tool_call_response(
+                tool_call_id="call_unknown",
+                name="unsupported_local_tool",
+                arguments={"path": "README.md"},
+            ),
+            _openai_tool_call_response(
+                tool_call_id="call_finish",
+                name="finish",
+                arguments={
+                    "summary": "Recovered after unsupported tool",
+                    "tests": [],
+                    "risks": [],
+                },
+            ),
+        ],
+    )
+    provider = OpenAIProvider(
+        ProviderConfig(provider="openai", openai_api_key="test-key")
+    )
+    session = provider.create_session(SessionConfig(name="openai-unsupported-tool"))
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "handle unsupported provider tool",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.9",
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert fake_openai.calls[1]["messages"][-1]["tool_call_id"] == "call_unknown"
+    assert "Unknown tool" in fake_openai.calls[1]["messages"][-1]["content"]
+    assert result_artifact["transaction_status_counts"] == {
+        "failed": 1,
+        "complete": 1,
+    }
+    assert result_artifact["failed_tools"] == {"unsupported_local_tool": 1}
+
+
+@pytest.mark.asyncio
 async def test_google_provider_supports_generic_edit_native_tools(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

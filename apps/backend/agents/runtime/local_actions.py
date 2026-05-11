@@ -47,6 +47,8 @@ MAX_SUBAGENT_ROLE_CHARS = 40
 MAX_SUBAGENT_RESULT_CHARS = 2000
 MAX_READ_RANGE_LINES = 400
 DEFAULT_READ_RANGE_LINES = 120
+MAX_BATCH_ID_CHARS = 80
+MAX_BATCH_NOTE_CHARS = 1000
 MAX_REPAIR_MUTATION_PATHS = 20
 MAX_REPAIR_MUTATION_NOTE_CHARS = 4000
 TRACE_STRING_PREVIEW_CHARS = 1000
@@ -334,6 +336,78 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
             "tool": "read_many_files",
             "paths": [EXAMPLE_WORKSPACE_FILE_PATH, "relative/other.py"],
             "max_chars_per_file": 8000,
+        },
+    ),
+    LocalActionToolSpec(
+        name="begin_batch",
+        description=(
+            "Start a named generic_edit transaction batch. Mutations after this "
+            "action are associated with the batch until commit_batch or abort_batch."
+        ),
+        parameters={
+            "batch_id": {
+                "type": "string",
+                "maxLength": MAX_BATCH_ID_CHARS,
+                "description": "Stable id for the batch, such as batch-1.",
+            },
+            "description": {
+                "type": "string",
+                "maxLength": MAX_BATCH_NOTE_CHARS,
+                "description": "Short description of the intended batch.",
+            },
+        },
+        required=("batch_id",),
+        example={
+            "tool": "begin_batch",
+            "batch_id": "batch-1",
+            "description": "Update the focused files as one recovery unit.",
+        },
+    ),
+    LocalActionToolSpec(
+        name="commit_batch",
+        description="Commit the active generic_edit transaction batch.",
+        parameters={
+            "batch_id": {
+                "type": "string",
+                "maxLength": MAX_BATCH_ID_CHARS,
+                "description": "Batch id previously opened by begin_batch.",
+            },
+            "summary": {
+                "type": "string",
+                "maxLength": MAX_BATCH_NOTE_CHARS,
+                "description": "Short summary of what the committed batch changed.",
+            },
+        },
+        required=("batch_id",),
+        example={
+            "tool": "commit_batch",
+            "batch_id": "batch-1",
+            "summary": "Focused edits applied and ready for verification.",
+        },
+    ),
+    LocalActionToolSpec(
+        name="abort_batch",
+        description=(
+            "Abort the active generic_edit transaction batch. The generic_edit "
+            "runtime rolls back captured mutation snapshots for the batch."
+        ),
+        parameters={
+            "batch_id": {
+                "type": "string",
+                "maxLength": MAX_BATCH_ID_CHARS,
+                "description": "Batch id previously opened by begin_batch.",
+            },
+            "reason": {
+                "type": "string",
+                "maxLength": MAX_BATCH_NOTE_CHARS,
+                "description": "Short reason for aborting the batch.",
+            },
+        },
+        required=("batch_id",),
+        example={
+            "tool": "abort_batch",
+            "batch_id": "batch-1",
+            "reason": "The staged mutation is no longer needed.",
         },
     ),
     LocalActionToolSpec(
@@ -791,6 +865,8 @@ class LocalActionExecutor:
             )
         if tool == "repair_mutation":
             return self._repair_mutation(action)
+        if tool in {"begin_batch", "commit_batch", "abort_batch"}:
+            return self._batch_marker(tool, action)
         if tool == "finish":
             return ToolActionResult(
                 tool=tool,
@@ -1381,6 +1457,50 @@ class LocalActionExecutor:
             tool="repair_mutation",
             ok=True,
             message=f"Recorded repair for transaction {transaction_id}.",
+            data=data,
+        )
+
+    def _batch_marker(self, tool: str, action: dict[str, Any]) -> ToolActionResult:
+        batch_id = bounded_string(
+            action,
+            "batch_id",
+            maximum=MAX_BATCH_ID_CHARS,
+        )
+        data: dict[str, Any] = {
+            "batch_id": batch_id,
+            "batch_action": tool,
+        }
+        if tool == "begin_batch":
+            note = optional_bounded_string(
+                action,
+                "description",
+                maximum=MAX_BATCH_NOTE_CHARS,
+            )
+            data["batch_status"] = "open"
+            if note:
+                data["description"] = note
+        elif tool == "commit_batch":
+            note = optional_bounded_string(
+                action,
+                "summary",
+                maximum=MAX_BATCH_NOTE_CHARS,
+            )
+            data["batch_status"] = "committed"
+            if note:
+                data["summary"] = note
+        else:
+            note = optional_bounded_string(
+                action,
+                "reason",
+                maximum=MAX_BATCH_NOTE_CHARS,
+            )
+            data["batch_status"] = "aborted"
+            if note:
+                data["reason"] = note
+        return ToolActionResult(
+            tool=tool,
+            ok=True,
+            message=f"Recorded {tool} for batch {batch_id}.",
             data=data,
         )
 
