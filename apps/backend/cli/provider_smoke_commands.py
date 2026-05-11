@@ -165,6 +165,9 @@ def _resume_policy_payload(value: Any) -> dict[str, Any] | None:
     action_kinds = _string_list_payload(value.get("required_resolution_action_kinds"))
     if action_kinds:
         policy["required_resolution_action_kinds"] = action_kinds
+    required_artifacts = _string_list_payload(value.get("required_artifacts"))
+    if required_artifacts:
+        policy["required_artifacts"] = required_artifacts
     unresolved_groups = _string_list_payload(
         value.get("unresolved_transaction_group_ids")
     )

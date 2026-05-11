@@ -359,9 +359,10 @@ def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
                     "finish_blocked": True,
                     "next_iteration": 4,
                     "checkpoint_path": str(tmp_path / "checkpoint.json"),
-                    "required_artifacts": {
-                        "checkpoint": str(tmp_path / "checkpoint.json")
-                    },
+                    "required_artifacts": [
+                        "trace_artifact",
+                        "recovery_plan_artifact",
+                    ],
                     "required_resolution_action_kinds": [
                         "inspect_diff",
                         "rollback_transaction",
@@ -386,6 +387,10 @@ def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
         "required_resolution_action_kinds": [
             "inspect_diff",
             "rollback_transaction",
+        ],
+        "required_artifacts": [
+            "trace_artifact",
+            "recovery_plan_artifact",
         ],
         "unresolved_partial_failure_ids": ["partial-failure-1"],
         "unresolved_transaction_group_ids": ["transaction-group-1"],
