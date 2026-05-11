@@ -6326,6 +6326,62 @@ def test_generic_edit_session_state_resume_requires_policy_artifacts(
         )
 
 
+def test_generic_edit_session_state_resume_requires_existing_policy_artifacts(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeError,
+        load_generic_edit_session_state,
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    checkpoint_path = artifact_dir / "generic_edit_recovery_checkpoint.json"
+    session_state_path = artifact_dir / "generic_edit_session_state.json"
+    missing_trace_path = artifact_dir / "generic_edit_trace.json"
+    session_state_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_session_state",
+                "resumable": True,
+                "resume_action": {
+                    "runtime": "generic_edit",
+                    "checkpoint_path": str(checkpoint_path),
+                    "strategy": "continue_from_trace",
+                    "next_iteration": 2,
+                },
+                "resume_inputs": {
+                    "trace_artifact": str(missing_trace_path),
+                },
+                "resume_policy": {
+                    "runtime": "generic_edit",
+                    "checkpoint_path": str(checkpoint_path),
+                    "status": "ready",
+                    "can_resume": True,
+                    "finish_blocked": False,
+                    "strategy": "continue_from_trace",
+                    "next_iteration": 2,
+                    "required_artifacts": [
+                        "trace_artifact",
+                    ],
+                    "unresolved_partial_failure_ids": [],
+                    "unresolved_transaction_group_ids": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        GenericEditRuntimeError,
+        match="required resume artifact does not exist: trace_artifact",
+    ):
+        load_generic_edit_session_state(
+            session_state_path,
+            expected_checkpoint_path=checkpoint_path,
+        )
+
+
 def test_generic_edit_session_state_resume_rejects_unblocked_unresolved_policy(
     tmp_path: Path,
 ):

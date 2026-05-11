@@ -4248,6 +4248,13 @@ def load_generic_edit_session_state(
             "Generic edit session state resume policy cannot mark unresolved "
             "failures as unblocked."
         )
+    for artifact_name in normalize_string_list(resume_policy.get("required_artifacts")):
+        artifact_path = Path(str(resume_inputs[artifact_name]))
+        if not artifact_path.exists():
+            raise GenericEditRuntimeError(
+                "Generic edit session state required resume artifact does not exist: "
+                f"{artifact_name}."
+            )
     return payload
 
 
