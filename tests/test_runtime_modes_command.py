@@ -576,6 +576,73 @@ def test_external_mcp_smoke_syncs_custom_tool_schemas(
     ]
 
 
+def test_external_mcp_smoke_syncs_custom_tool_schemas_from_mapping(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
+    from cli.runtime_commands import handle_external_mcp_smoke_command
+    from core.client import load_project_mcp_config
+
+    custom_servers = {
+        "my-docs": {
+            "name": "My Docs",
+            "type": "http",
+            "url": "https://docs.example.test/mcp",
+        }
+    }
+    env_dir = tmp_path / ".auto-claude"
+    env_dir.mkdir()
+    (env_dir / ".env").write_text(
+        f"CUSTOM_MCP_SERVERS={json.dumps(custom_servers)}\n",
+        encoding="utf-8",
+    )
+
+    async def fake_check_external_mcp_contracts(
+        *,
+        requested_servers,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert "my-docs" in requested_servers
+        return []
+
+    async def fake_discover_external_mcp_tools(
+        *,
+        health,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert health.server == "my-docs"
+        return {"tools": [{"name": "search_docs"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        "cli.runtime_commands.check_external_mcp_contracts",
+        fake_check_external_mcp_contracts,
+    )
+    monkeypatch.setattr(
+        "cli.runtime_commands.discover_external_mcp_tools",
+        fake_discover_external_mcp_tools,
+    )
+
+    payload = handle_external_mcp_smoke_command(
+        project_dir=tmp_path,
+        output_json=True,
+        sync_custom_tools=True,
+    )
+    parsed = json.loads(capsys.readouterr().out)
+    saved_servers = load_project_mcp_config(tmp_path)["CUSTOM_MCP_SERVERS"]
+
+    assert parsed == payload
+    assert parsed["custom_mcp_tool_schema_sync"]["updated_servers"] == ["my-docs"]
+    assert saved_servers[0]["id"] == "my-docs"
+    assert saved_servers[0]["tools"] == [{"name": "search_docs"}]
+
+
 def test_load_project_mcp_config_warns_when_import_unavailable(
     tmp_path,
     monkeypatch,

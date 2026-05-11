@@ -383,7 +383,7 @@ def load_project_mcp_config(project_dir: Path) -> dict:
     - PUPPETEER_MCP_ENABLED (default: false)
     - AGENT_MCP_<agent>_ADD (per-agent MCP additions)
     - AGENT_MCP_<agent>_REMOVE (per-agent MCP removals)
-    - CUSTOM_MCP_SERVERS (JSON array of custom server configs)
+    - CUSTOM_MCP_SERVERS (JSON array or object map of custom server configs)
 
     Args:
         project_dir: Path to the project directory
@@ -423,15 +423,33 @@ def load_project_mcp_config(project_dir: Path) -> dict:
                     elif key == "CUSTOM_MCP_SERVERS":
                         try:
                             parsed = json.loads(value)
-                            if not isinstance(parsed, list):
+                            if isinstance(parsed, dict):
+                                parsed_servers = [
+                                    {
+                                        **server,
+                                        "id": server.get("id") or str(server_id),
+                                    }
+                                    for server_id, server in parsed.items()
+                                    if isinstance(server, dict)
+                                ]
+                            elif isinstance(parsed, list):
+                                parsed_servers = parsed
+                            else:
                                 logger.warning(
-                                    "CUSTOM_MCP_SERVERS must be a JSON array"
+                                    "CUSTOM_MCP_SERVERS must be a JSON array or object"
                                 )
                                 config["CUSTOM_MCP_SERVERS"] = []
-                            else:
+                                continue
+
+                            if len(parsed_servers) != len(parsed):
+                                logger.warning(
+                                    "CUSTOM_MCP_SERVERS contains non-object entries"
+                                )
+
+                            if parsed_servers:
                                 # Validate each server and filter out invalid ones
                                 valid_servers = []
-                                for i, server in enumerate(parsed):
+                                for i, server in enumerate(parsed_servers):
                                     if _validate_custom_mcp_server(server):
                                         valid_servers.append(server)
                                     else:
@@ -439,6 +457,8 @@ def load_project_mcp_config(project_dir: Path) -> dict:
                                             f"Skipping invalid custom MCP server at index {i}"
                                         )
                                 config["CUSTOM_MCP_SERVERS"] = valid_servers
+                            else:
+                                config["CUSTOM_MCP_SERVERS"] = []
                         except json.JSONDecodeError:
                             logger.warning(
                                 f"Failed to parse CUSTOM_MCP_SERVERS JSON: {value}"
