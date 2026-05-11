@@ -941,6 +941,7 @@
       "genericEdit": "Édition générique",
       "genericEditToolLoop": "Boucle d'outils d'édition générique",
       "goose": "Goose",
+      "inspectDiff": "Inspecter le diff",
       "jsonActions": "Actions JSON",
       "inspectRuntimeMcpSupport": "Inspecter le support MCP runtime",
       "implementExternalMcpTransport": "Implémenter le transport MCP externe",
@@ -964,6 +965,7 @@
       "readOnly": "Lecture seule",
       "ready": "Prêt",
       "readyToConnect": "Prêt à connecter",
+      "recoverPartialFailure": "Récupérer l'échec partiel",
       "registerExternalMcpAdapter": "Enregistrer l'adaptateur MCP externe",
       "registerOrRemoveUnsupportedServers": "Enregistrer ou retirer les serveurs non supportés",
       "reviewOnly": "Review seule",
@@ -984,7 +986,8 @@
       "unsupported": "Non supporté",
       "unsupportedTransport": "Transport non supporté",
       "useNativeMcpRuntime": "Utiliser le runtime MCP natif",
-      "wireExternalMcpToolExecution": "Câbler l'exécution MCP externe"
+      "wireExternalMcpToolExecution": "Câbler l'exécution MCP externe",
+      "yes": "Oui"
     },
     "compatibility": {
       "claudeFirst": "Claude Agent SDK reste le runtime autonome complet. Les autres fournisseurs fonctionnent via des modes runtime limités.",
@@ -1081,6 +1084,9 @@
       "executionTools": "Outils exécutés",
       "resumePolicy": "Politique de reprise",
       "resumeStrategy": "Stratégie de reprise",
+      "resumeCanResume": "Peut reprendre",
+      "resumeFinishBlocked": "Fin bloquée",
+      "resumeNextIteration": "Itération suivante",
       "resumeRequiredActions": "Actions de récupération requises",
       "resumeRequiredArtifacts": "Artefacts de reprise requis",
       "resumeUnresolvedFailures": "Échecs partiels non résolus",

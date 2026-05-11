@@ -26,6 +26,7 @@ import type {
   ProviderConfigValidation,
   ProviderConnectionTestResult,
   ProviderRuntimeDiagnostics,
+  ProviderValidatedRuntimeResumePolicy,
   RuntimeControlPlaneDiagnostics,
   RuntimeExternalMcpSmokeResult,
   RuntimeExternalMcpHealthRow,
@@ -215,6 +216,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
   generic_edit_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.genericEditToolLoop',
   goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
+  inspect_diff: 'settings:aiProvider.runtimeDiagnosticValues.inspectDiff',
   json_actions: 'settings:aiProvider.runtimeDiagnosticValues.jsonActions',
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
   implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
@@ -238,6 +240,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
   ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
   ready_to_connect: 'settings:aiProvider.runtimeDiagnosticValues.readyToConnect',
+  recover_partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure',
   register_external_mcp_adapter: 'settings:aiProvider.runtimeDiagnosticValues.registerExternalMcpAdapter',
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
@@ -258,7 +261,15 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
   unsupported_transport: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTransport',
   use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
-  wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution'
+  wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution',
+  yes: 'settings:aiProvider.runtimeDiagnosticValues.yes'
+};
+
+type RuntimeDiagnosticTranslate = (key: string) => string;
+
+export type ProviderResumePolicyDiagnosticRow = {
+  labelKey: string;
+  value: string;
 };
 
 function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderConfig {
@@ -412,7 +423,7 @@ function getCostInfo(config: AIProviderConfig, primaryModel: string) {
 }
 
 function formatRuntimeDiagnosticValue(
-  translate: (key: string) => string,
+  translate: RuntimeDiagnosticTranslate,
   value?: string | null
 ): string {
   const trimmed = value?.trim();
@@ -427,7 +438,7 @@ function formatRuntimeDiagnosticValue(
 }
 
 function formatRuntimeDiagnosticList(
-  translate: (key: string) => string,
+  translate: RuntimeDiagnosticTranslate,
   values?: string[] | null
 ): string {
   if (!values?.length) {
@@ -437,6 +448,74 @@ function formatRuntimeDiagnosticList(
     .map((value) => formatRuntimeDiagnosticValue(translate, value))
     .filter(Boolean)
     .join(', ');
+}
+
+function formatRuntimeDiagnosticBoolean(
+  translate: RuntimeDiagnosticTranslate,
+  value?: boolean | null
+): string {
+  if (typeof value !== 'boolean') {
+    return '';
+  }
+  return formatRuntimeDiagnosticValue(translate, value ? 'yes' : 'no');
+}
+
+export function buildProviderResumePolicyDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  resumePolicy?: ProviderValidatedRuntimeResumePolicy | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!resumePolicy) {
+    return [];
+  }
+  return [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumePolicy',
+      value: formatRuntimeDiagnosticValue(translate, resumePolicy.status),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeStrategy',
+      value: formatRuntimeDiagnosticValue(translate, resumePolicy.strategy),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeCanResume',
+      value: formatRuntimeDiagnosticBoolean(translate, resumePolicy.canResume),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeFinishBlocked',
+      value: formatRuntimeDiagnosticBoolean(translate, resumePolicy.finishBlocked),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeNextIteration',
+      value: typeof resumePolicy.nextIteration === 'number'
+        ? String(resumePolicy.nextIteration)
+        : '',
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeRequiredActions',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        resumePolicy.requiredResolutionActionKinds
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeRequiredArtifacts',
+      value: formatRuntimeDiagnosticList(translate, resumePolicy.requiredArtifacts),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeUnresolvedFailures',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        resumePolicy.unresolvedPartialFailureIds
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeUnresolvedGroups',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        resumePolicy.unresolvedTransactionGroupIds
+      ),
+    },
+  ].filter((row) => row.value);
 }
 
 function hasRuntimeDiagnostics(
@@ -1287,24 +1366,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       validatedExecution?.stopReason
     );
     const resumePolicy = validatedExecution?.resumePolicy;
-    const resumePolicyStatus = formatRuntimeDiagnosticValue(t, resumePolicy?.status);
-    const resumePolicyStrategy = formatRuntimeDiagnosticValue(t, resumePolicy?.strategy);
-    const resumeRequiredActions = formatRuntimeDiagnosticList(
-      t,
-      resumePolicy?.requiredResolutionActionKinds
-    );
-    const resumeRequiredArtifacts = formatRuntimeDiagnosticList(
-      t,
-      resumePolicy?.requiredArtifacts
-    );
-    const resumeUnresolvedFailures = formatRuntimeDiagnosticList(
-      t,
-      resumePolicy?.unresolvedPartialFailureIds
-    );
-    const resumeUnresolvedGroups = formatRuntimeDiagnosticList(
-      t,
-      resumePolicy?.unresolvedTransactionGroupIds
-    );
+    const resumePolicyRows = buildProviderResumePolicyDiagnosticRows(t, resumePolicy);
     const validatedNativeFallback = validatedExecution?.nativeToolFallbacks?.[0];
     const validatedNativeFallbackReason = formatRuntimeDiagnosticValue(
       t,
@@ -1486,54 +1548,14 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                       </dd>
                     </div>
                   )}
-                  {resumePolicyStatus && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.resumePolicy')}</dt>
+                  {resumePolicyRows.map((row) => (
+                    <div key={row.labelKey}>
+                      <dt>{t(row.labelKey)}</dt>
                       <dd className="font-medium text-foreground">
-                        {resumePolicyStatus}
+                        {row.value}
                       </dd>
                     </div>
-                  )}
-                  {resumePolicyStrategy && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.resumeStrategy')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {resumePolicyStrategy}
-                      </dd>
-                    </div>
-                  )}
-                  {resumeRequiredActions && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.resumeRequiredActions')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {resumeRequiredActions}
-                      </dd>
-                    </div>
-                  )}
-                  {resumeRequiredArtifacts && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.resumeRequiredArtifacts')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {resumeRequiredArtifacts}
-                      </dd>
-                    </div>
-                  )}
-                  {resumeUnresolvedFailures && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.resumeUnresolvedFailures')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {resumeUnresolvedFailures}
-                      </dd>
-                    </div>
-                  )}
-                  {resumeUnresolvedGroups && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.resumeUnresolvedGroups')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {resumeUnresolvedGroups}
-                      </dd>
-                    </div>
-                  )}
+                  ))}
                 </>
               )}
             </dl>
