@@ -638,9 +638,7 @@ def handle_provider_smoke_command(
                     if isinstance(required_artifacts, list) and required_artifacts:
                         print_key_value(
                             "Resume required artifacts",
-                            ", ".join(
-                                str(artifact) for artifact in required_artifacts
-                            ),
+                            ", ".join(str(artifact) for artifact in required_artifacts),
                         )
                     unresolved_failures = resume_policy.get(
                         "unresolved_partial_failure_ids"

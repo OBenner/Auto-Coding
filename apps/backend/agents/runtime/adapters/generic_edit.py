@@ -182,9 +182,7 @@ REPAIR_MUTATION_TOOL = "repair_mutation"
 BEGIN_BATCH_TOOL = "begin_batch"
 COMMIT_BATCH_TOOL = "commit_batch"
 ABORT_BATCH_TOOL = "abort_batch"
-BATCH_CONTROL_TOOLS = frozenset(
-    {BEGIN_BATCH_TOOL, COMMIT_BATCH_TOOL, ABORT_BATCH_TOOL}
-)
+BATCH_CONTROL_TOOLS = frozenset({BEGIN_BATCH_TOOL, COMMIT_BATCH_TOOL, ABORT_BATCH_TOOL})
 MUTATING_LOCAL_ACTIONS = frozenset(
     {
         "write_file",
@@ -2133,9 +2131,7 @@ def build_generic_edit_transaction(
         if action_tool(action) == ROLLBACK_TRANSACTION_TOOL
         and str(action.get("transaction_id") or "").strip()
     ]
-    batch_actions = [
-        tool for tool in tool_sequence if tool in BATCH_CONTROL_TOOLS
-    ]
+    batch_actions = [tool for tool in tool_sequence if tool in BATCH_CONTROL_TOOLS]
     batch_ids = list(
         dict.fromkeys(
             [
@@ -2985,8 +2981,12 @@ def execute_generic_edit_batch_abort(
         mutation_snapshot_ids.extend(
             str(item) for item in result.data.get("mutation_snapshot_ids") or []
         )
-        restored_paths.extend(str(path) for path in result.data.get("restored_paths") or [])
-        deleted_paths.extend(str(path) for path in result.data.get("deleted_paths") or [])
+        restored_paths.extend(
+            str(path) for path in result.data.get("restored_paths") or []
+        )
+        deleted_paths.extend(
+            str(path) for path in result.data.get("deleted_paths") or []
+        )
 
     affected_paths = sorted(dict.fromkeys([*restored_paths, *deleted_paths]))
     return ToolActionResult(
@@ -4621,10 +4621,9 @@ def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, An
             "Generic edit recovery checkpoint resume policy is not resumable."
         )
     resume = payload["resume"]
-    if (
-        resume_policy.get("strategy") != resume.get("strategy")
-        or resume_policy.get("next_iteration") != payload.get("next_iteration")
-    ):
+    if resume_policy.get("strategy") != resume.get("strategy") or resume_policy.get(
+        "next_iteration"
+    ) != payload.get("next_iteration"):
         raise GenericEditRuntimeError(
             "Generic edit recovery checkpoint resume policy does not match resume metadata."
         )
@@ -4740,10 +4739,9 @@ def load_generic_edit_session_state(
         raise GenericEditRuntimeError(
             "Generic edit session state resume policy is not resumable."
         )
-    if (
-        resume_policy.get("strategy") != resume_action.get("strategy")
-        or resume_policy.get("next_iteration") != resume_action.get("next_iteration")
-    ):
+    if resume_policy.get("strategy") != resume_action.get(
+        "strategy"
+    ) or resume_policy.get("next_iteration") != resume_action.get("next_iteration"):
         raise GenericEditRuntimeError(
             "Generic edit session state resume policy does not match resume action."
         )
@@ -4933,16 +4931,12 @@ def build_generic_edit_checkpoint_resume_message(
             resume_policy.get("required_resolution_action_kinds")
         )
         if required_actions:
-            lines.append(
-                "Required recovery actions: " + ", ".join(required_actions)
-            )
+            lines.append("Required recovery actions: " + ", ".join(required_actions))
         required_artifacts = normalize_string_list(
             resume_policy.get("required_artifacts")
         )
         if required_artifacts:
-            lines.append(
-                "Required resume artifacts: " + ", ".join(required_artifacts)
-            )
+            lines.append("Required resume artifacts: " + ", ".join(required_artifacts))
         unresolved_failures = normalize_string_list(
             resume_policy.get("unresolved_partial_failure_ids")
         )
@@ -5870,9 +5864,7 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
         last_partial_failure_mutated_paths = list(
             last_partial_failure.get("mutated_paths") or []
         )
-    transaction_batch_summary = summarize_generic_edit_transaction_batches(
-        transactions
-    )
+    transaction_batch_summary = summarize_generic_edit_transaction_batches(transactions)
     return {
         "transactions": transactions,
         "transaction_count": len(transactions),
