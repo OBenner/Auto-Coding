@@ -4161,6 +4161,30 @@ def load_generic_edit_session_state(
         raise GenericEditRuntimeError(
             "Generic edit session state must reference the canonical recovery checkpoint."
         )
+    resume_inputs = payload.get("resume_inputs")
+    if not isinstance(resume_inputs, dict):
+        raise GenericEditRuntimeError(
+            "Generic edit session state is missing resume input metadata."
+        )
+    resume_policy = payload.get("resume_policy")
+    if not isinstance(resume_policy, dict):
+        raise GenericEditRuntimeError(
+            "Generic edit session state is missing resume policy metadata."
+        )
+    if resume_policy.get("runtime") != "generic_edit":
+        raise GenericEditRuntimeError(
+            "Generic edit session state resume policy targets an unexpected runtime."
+        )
+    policy_checkpoint_path = resume_policy.get("checkpoint_path")
+    if (
+        not isinstance(policy_checkpoint_path, str)
+        or not policy_checkpoint_path
+        or Path(policy_checkpoint_path).resolve() != expected_checkpoint_path.resolve()
+    ):
+        raise GenericEditRuntimeError(
+            "Generic edit session state resume policy must reference the "
+            "canonical recovery checkpoint."
+        )
     return payload
 
 
