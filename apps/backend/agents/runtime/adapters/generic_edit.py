@@ -4217,6 +4217,22 @@ def load_generic_edit_session_state(
                 "Generic edit session state is missing required resume artifact: "
                 f"{artifact_name}."
             )
+    if resume_policy.get("can_resume") is not True:
+        raise GenericEditRuntimeError(
+            "Generic edit session state resume policy is not resumable."
+        )
+    unresolved_policy_ids = [
+        *normalize_string_list(resume_policy.get("unresolved_partial_failure_ids")),
+        *normalize_string_list(resume_policy.get("unresolved_transaction_group_ids")),
+    ]
+    if unresolved_policy_ids and (
+        resume_policy.get("finish_blocked") is not True
+        or str(resume_policy.get("status") or "") == "ready"
+    ):
+        raise GenericEditRuntimeError(
+            "Generic edit session state resume policy cannot mark unresolved "
+            "failures as unblocked."
+        )
     return payload
 
 

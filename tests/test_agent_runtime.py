@@ -6326,6 +6326,124 @@ def test_generic_edit_session_state_resume_requires_policy_artifacts(
         )
 
 
+def test_generic_edit_session_state_resume_rejects_unblocked_unresolved_policy(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeError,
+        load_generic_edit_session_state,
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    checkpoint_path = artifact_dir / "generic_edit_recovery_checkpoint.json"
+    session_state_path = artifact_dir / "generic_edit_session_state.json"
+    session_state_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_session_state",
+                "resumable": True,
+                "resume_action": {
+                    "runtime": "generic_edit",
+                    "checkpoint_path": str(checkpoint_path),
+                    "strategy": "recover_partial_failure",
+                    "next_iteration": 3,
+                },
+                "resume_inputs": {
+                    "trace_artifact": str(
+                        artifact_dir / "generic_edit_trace.json"
+                    ),
+                    "recovery_plan_artifact": str(
+                        artifact_dir / "generic_edit_recovery_plan.json"
+                    ),
+                },
+                "resume_policy": {
+                    "runtime": "generic_edit",
+                    "checkpoint_path": str(checkpoint_path),
+                    "status": "ready",
+                    "can_resume": True,
+                    "finish_blocked": False,
+                    "strategy": "recover_partial_failure",
+                    "next_iteration": 3,
+                    "required_artifacts": [
+                        "trace_artifact",
+                        "recovery_plan_artifact",
+                    ],
+                    "unresolved_partial_failure_ids": ["json_actions-1"],
+                    "unresolved_transaction_group_ids": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        GenericEditRuntimeError,
+        match="resume policy cannot mark unresolved failures as unblocked",
+    ):
+        load_generic_edit_session_state(
+            session_state_path,
+            expected_checkpoint_path=checkpoint_path,
+        )
+
+
+def test_generic_edit_session_state_resume_requires_resumable_policy(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeError,
+        load_generic_edit_session_state,
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    checkpoint_path = artifact_dir / "generic_edit_recovery_checkpoint.json"
+    session_state_path = artifact_dir / "generic_edit_session_state.json"
+    session_state_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_session_state",
+                "resumable": True,
+                "resume_action": {
+                    "runtime": "generic_edit",
+                    "checkpoint_path": str(checkpoint_path),
+                    "strategy": "continue_from_trace",
+                    "next_iteration": 2,
+                },
+                "resume_inputs": {
+                    "trace_artifact": str(
+                        artifact_dir / "generic_edit_trace.json"
+                    ),
+                },
+                "resume_policy": {
+                    "runtime": "generic_edit",
+                    "checkpoint_path": str(checkpoint_path),
+                    "status": "ready",
+                    "can_resume": False,
+                    "finish_blocked": False,
+                    "strategy": "continue_from_trace",
+                    "next_iteration": 2,
+                    "required_artifacts": [
+                        "trace_artifact",
+                    ],
+                    "unresolved_partial_failure_ids": [],
+                    "unresolved_transaction_group_ids": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        GenericEditRuntimeError,
+        match="resume policy is not resumable",
+    ):
+        load_generic_edit_session_state(
+            session_state_path,
+            expected_checkpoint_path=checkpoint_path,
+        )
+
+
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_resume_preserves_mutation_snapshots(
     tmp_path: Path,
