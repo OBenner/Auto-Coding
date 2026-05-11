@@ -202,6 +202,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   claude_code: 'settings:aiProvider.runtimeDiagnosticValues.claudeCode',
   client_disabled: 'settings:aiProvider.runtimeDiagnosticValues.clientDisabled',
   codex_cli: 'settings:aiProvider.runtimeDiagnosticValues.codexCli',
+  configuration_blocked: 'settings:aiProvider.runtimeDiagnosticValues.configurationBlocked',
+  configuration_error: 'settings:aiProvider.runtimeDiagnosticValues.configurationError',
   configure_external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.configureExternalMcpClient',
   configure_local_bridge_tools: 'settings:aiProvider.runtimeDiagnosticValues.configureLocalBridgeTools',
   cursor_cli: 'settings:aiProvider.runtimeDiagnosticValues.cursorCli',
@@ -209,6 +211,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   error: 'settings:aiProvider.runtimeDiagnosticValues.error',
   external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
   failed: 'settings:aiProvider.runtimeDiagnosticValues.failed',
+  fallback_active: 'settings:aiProvider.runtimeDiagnosticValues.fallbackActive',
   filesystem_edit: 'settings:aiProvider.runtimeDiagnosticValues.filesystemEdit',
   filesystem_read: 'settings:aiProvider.runtimeDiagnosticValues.filesystemRead',
   full_autonomous: 'settings:aiProvider.runtimeDiagnosticValues.fullAutonomous',
@@ -217,6 +220,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
   generic_edit_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.genericEditToolLoop',
   goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
+  gateway_blocked: 'settings:aiProvider.runtimeDiagnosticValues.gatewayBlocked',
+  gateway_error: 'settings:aiProvider.runtimeDiagnosticValues.gatewayError',
   incomplete: 'settings:aiProvider.runtimeDiagnosticValues.incomplete',
   inspect_diff: 'settings:aiProvider.runtimeDiagnosticValues.inspectDiff',
   json_actions: 'settings:aiProvider.runtimeDiagnosticValues.jsonActions',
@@ -224,6 +229,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
   implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
+  model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
+  model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
   native: 'settings:aiProvider.runtimeDiagnosticValues.native',
   native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.nativeMcpRuntime',
@@ -245,6 +252,9 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.partialFailure',
   passed: 'settings:aiProvider.runtimeDiagnosticValues.passed',
   patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
+  provider_error: 'settings:aiProvider.runtimeDiagnosticValues.providerError',
+  provider_smoke_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeBlocked',
+  provider_smoke_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeReady',
   qwen_code: 'settings:aiProvider.runtimeDiagnosticValues.qwenCode',
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
   ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
@@ -264,8 +274,14 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   subagent: 'settings:aiProvider.runtimeDiagnosticValues.subagent',
   subagents: 'settings:aiProvider.runtimeDiagnosticValues.subagents',
   skipped: 'settings:aiProvider.runtimeDiagnosticValues.skipped',
+  smoke_not_completed: 'settings:aiProvider.runtimeDiagnosticValues.smokeNotCompleted',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
+  text_completion_ready: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionReady',
   text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
+  tool_loop_blocked: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopBlocked',
+  tool_loop_limited: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopLimited',
+  tool_loop_needs_recovery: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopNeedsRecovery',
+  tool_loop_ready: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopReady',
   complete: 'settings:aiProvider.runtimeDiagnosticValues.complete',
   finish: 'settings:aiProvider.runtimeDiagnosticValues.finish',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
@@ -273,6 +289,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   unresolved: 'settings:aiProvider.runtimeDiagnosticValues.unresolved',
   unresolved_partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.unresolvedPartialFailure',
   unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
+  unsupported_local_tool: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedLocalTool',
+  unsupported_tools: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTools',
   unsupported_transport: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTransport',
   use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
   wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution',
@@ -1363,6 +1381,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     const smokeScope = runtimeDiagnostics?.smokeScope === 'text_completion_only'
       ? t('settings:aiProvider.connectionTest.textCompletionOnly')
       : formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.smokeScope);
+    const contractHealth = runtimeDiagnostics?.providerContractHealth;
+    const contractHealthStatus = formatRuntimeDiagnosticValue(t, contractHealth?.status);
+    const contractHealthReason = formatRuntimeDiagnosticValue(t, contractHealth?.reason);
+    const contractHealthMessage = contractHealth?.message?.trim();
     const requestedRuntime = formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.requestedRuntimeMode);
     const validatedRuntime = formatRuntimeDiagnosticValue(t, runtimeDiagnostics?.validatedRuntimeMode);
     const validatedScope = formatRuntimeDiagnosticList(t, runtimeDiagnostics?.validatedRequirements);
@@ -1454,6 +1476,30 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 <div>
                   <dt>{t('settings:aiProvider.connectionTest.smokeScope')}</dt>
                   <dd className="font-medium text-foreground">{smokeScope}</dd>
+                </div>
+              )}
+              {contractHealthStatus && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.providerContractHealth')}</dt>
+                  <dd className="font-medium text-foreground">
+                    {contractHealthStatus}
+                  </dd>
+                </div>
+              )}
+              {contractHealthReason && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.providerContractReason')}</dt>
+                  <dd className="font-medium text-foreground">
+                    {contractHealthReason}
+                  </dd>
+                </div>
+              )}
+              {contractHealthMessage && (
+                <div>
+                  <dt>{t('settings:aiProvider.connectionTest.providerContractMessage')}</dt>
+                  <dd className="break-words font-medium text-foreground">
+                    {contractHealthMessage}
+                  </dd>
                 </div>
               )}
               {requestedRuntime && (

@@ -479,6 +479,7 @@ export interface ProviderConfigValidation {
 
 export interface ProviderRuntimeDiagnostics {
   smokeScope?: string;
+  providerContractHealth?: ProviderContractHealth;
   requestedRuntimeMode?: string;
   validatedRuntimeMode?: string;
   validatedRequirements?: string[];
@@ -488,6 +489,18 @@ export interface ProviderRuntimeDiagnostics {
   validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
+}
+
+export interface ProviderContractHealth {
+  status?: string;
+  smokeScope?: string;
+  reason?: string;
+  message?: string;
+  toolCallSupport?: string;
+  toolResultSupport?: string;
+  fallback?: string;
+  fallbackReason?: string;
+  recoveryStatus?: string;
 }
 
 export interface ProviderValidatedRuntimeExecution {

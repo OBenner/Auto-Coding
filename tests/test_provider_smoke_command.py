@@ -115,6 +115,10 @@ async def test_run_provider_smoke_check_success(
         in result.runtime_diagnostics["validated_runtime_capabilities"]
     )
     assert result.runtime_diagnostics["validated_runtime_missing_capabilities"] == []
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "text_completion_ready",
+        "smoke_scope": "text_completion_only",
+    }
     assert (
         "native_tool_loop"
         in result.runtime_diagnostics["full_autonomous_missing_capabilities"]
@@ -237,6 +241,14 @@ async def test_run_provider_smoke_check_generic_edit_runtime(
             "recovery_status": "not_required",
         },
     }
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "tool_loop_ready",
+        "smoke_scope": "generic_edit_tool_loop",
+        "tool_call_support": "native",
+        "tool_result_support": "normalized",
+        "fallback": "none",
+        "recovery_status": "not_required",
+    }
     assert fake_provider.session.tool_results[0] == ("call_write", "write_file")
 
 
@@ -347,6 +359,16 @@ async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallbac
             "fallback_reason": "native_tool_request_failed",
             "recovery_status": "not_required",
         },
+    }
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "tool_loop_limited",
+        "smoke_scope": "generic_edit_tool_loop",
+        "reason": "native_tool_request_failed",
+        "tool_call_support": "json_fallback",
+        "tool_result_support": "normalized",
+        "fallback": "json_actions",
+        "fallback_reason": "native_tool_request_failed",
+        "recovery_status": "not_required",
     }
     assert "Respond with exactly one JSON object" in fake_provider.session.messages[0]
 
@@ -500,6 +522,43 @@ def test_generic_edit_execution_diagnostics_classifies_fallback_recovery_contrac
     }
 
 
+def test_generic_edit_execution_diagnostics_classifies_unsupported_tool_contract(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "stop_reason": "finish",
+                "loop": "native_tool_calls",
+                "action_count": 2,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 0,
+                "native_tool_fallbacks": [],
+                "tool_counts": {"finish": 1, "unsupported_local_tool": 1},
+                "failed_tools": {"unsupported_local_tool": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["failed_tools"] == {"unsupported_local_tool": 1}
+    assert diagnostics["tool_loop_contract"] == {
+        "status": "unsupported_tools",
+        "tool_call_support": "native",
+        "tool_result_support": "failed",
+        "fallback": "none",
+        "recovery_status": "unresolved",
+        "blocking_reason": "unsupported_local_tool",
+    }
+
+
 @pytest.mark.asyncio
 async def test_run_provider_smoke_check_reports_validation_errors(
     tmp_path: Path,
@@ -540,6 +599,104 @@ async def test_run_provider_smoke_check_reports_validation_errors(
     assert "incomplete" in result.message
     assert "OPENAI_API_KEY" in result.error_details
     assert result.runtime_diagnostics["validated_runtime_mode"] == "analysis_only"
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "configuration_blocked",
+        "smoke_scope": "text_completion_only",
+        "reason": "configuration_error",
+        "message": "OpenAI provider requires OPENAI_API_KEY environment variable",
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_check_classifies_gateway_limitations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import run_provider_smoke_check
+
+    class FakeProvider:
+        name = "litellm"
+
+        def validate_config(self):
+            return True
+
+        def create_session(self, session_config):
+            raise RuntimeError("502 Bad gateway from LiteLLM upstream")
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="litellm",
+            litellm_api_key="sk-test",
+            litellm_model="openai/gpt-4o",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: FakeProvider(),
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model=None,
+        prompt=None,
+        timeout_seconds=1,
+        runtime_mode="generic_edit",
+    )
+
+    assert result.success is False
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "gateway_blocked",
+        "smoke_scope": "generic_edit_tool_loop",
+        "reason": "gateway_error",
+        "message": "502 Bad gateway from LiteLLM upstream",
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_check_classifies_model_limitations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import run_provider_smoke_check
+
+    class FakeProvider:
+        name = "openrouter"
+
+        def validate_config(self):
+            return True
+
+        def create_session(self, session_config):
+            raise RuntimeError("Model not found: provider/model-without-tools")
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="openrouter",
+            openrouter_api_key="sk-test",
+            openrouter_model="provider/model-without-tools",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: FakeProvider(),
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model=None,
+        prompt=None,
+        timeout_seconds=1,
+        runtime_mode="generic_edit",
+    )
+
+    assert result.success is False
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "model_blocked",
+        "smoke_scope": "generic_edit_tool_loop",
+        "reason": "model_unavailable",
+        "message": "Model not found: provider/model-without-tools",
+    }
 
 
 def test_handle_provider_smoke_command_outputs_json(
@@ -605,6 +762,10 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
             message="Provider generic_edit smoke passed",
             runtime_diagnostics={
                 "smoke_scope": "generic_edit_tool_loop",
+                "provider_contract_health": {
+                    "status": "tool_loop_limited",
+                    "reason": "native_tool_request_failed",
+                },
                 "validated_runtime_execution": {
                     "loop": "json_actions",
                     "action_count": 2,
@@ -656,6 +817,9 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     output = capsys.readouterr().out
 
     assert "Execution loop" in output
+    assert "Provider health" in output
+    assert "tool_loop_limited" in output
+    assert "Provider health reason" in output
     assert "json_actions" in output
     assert "Tool-loop contract" in output
     assert "json_fallback" in output

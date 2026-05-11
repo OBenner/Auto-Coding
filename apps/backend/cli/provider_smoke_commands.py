@@ -92,14 +92,8 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
             "error": str(e),
         }
 
-    tool_counts = payload.get("tool_counts")
-    normalized_tool_counts = {
-        str(tool): count
-        for tool, count in (
-            tool_counts.items() if isinstance(tool_counts, dict) else ()
-        )
-        if isinstance(count, int) and not isinstance(count, bool)
-    }
+    normalized_tool_counts = _number_record_payload(payload.get("tool_counts"))
+    failed_tools = _number_record_payload(payload.get("failed_tools"))
     native_tool_fallbacks = _native_tool_fallbacks_payload(
         payload.get("native_tool_fallbacks")
     )
@@ -116,6 +110,8 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
         "native_tool_fallbacks": native_tool_fallbacks,
         "tool_counts": normalized_tool_counts,
     }
+    if failed_tools:
+        diagnostics["failed_tools"] = failed_tools
     resume_policy = _resume_policy_payload(payload.get("resume_policy"))
     if resume_policy is not None:
         diagnostics["resume_policy"] = resume_policy
@@ -140,10 +136,12 @@ def _generic_edit_tool_loop_contract(
     action_count = _int_payload_value(payload, "action_count")
     failed_action_count = _int_payload_value(payload, "failed_action_count")
     fallback_count = _int_payload_value(payload, "native_tool_fallback_count")
+    failed_tools = _number_record_payload(payload.get("failed_tools"))
 
     first_fallback = native_tool_fallbacks[0] if native_tool_fallbacks else {}
     fallback_reason = first_fallback.get("reason")
     fallback_target = first_fallback.get("to_loop") or "json_actions"
+    blocking_reason = next(iter(failed_tools), stop_reason) if failed_tools else None
 
     contract: dict[str, Any] = {
         "status": _generic_edit_contract_status(
@@ -151,6 +149,7 @@ def _generic_edit_tool_loop_contract(
             stop_reason=stop_reason,
             failed_action_count=failed_action_count,
             resume_policy=resume_policy,
+            failed_tools=failed_tools,
         ),
         "tool_call_support": _generic_edit_tool_call_support(
             loop=loop,
@@ -169,8 +168,8 @@ def _generic_edit_tool_loop_contract(
     }
     if fallback_reason:
         contract["fallback_reason"] = fallback_reason
-    if contract["status"] in {"blocked", "needs_recovery"}:
-        contract["blocking_reason"] = stop_reason
+    if contract["status"] in {"blocked", "needs_recovery", "unsupported_tools"}:
+        contract["blocking_reason"] = blocking_reason or stop_reason
     return contract
 
 
@@ -180,7 +179,10 @@ def _generic_edit_contract_status(
     stop_reason: str,
     failed_action_count: int,
     resume_policy: dict[str, Any] | None,
+    failed_tools: dict[str, int],
 ) -> str:
+    if failed_tools:
+        return "unsupported_tools"
     if resume_policy and resume_policy.get("status") == "requires_resolution":
         return "needs_recovery"
     if status == "complete" and stop_reason == "finish" and failed_action_count == 0:
@@ -300,6 +302,167 @@ def _int_payload_value(payload: dict[str, Any], key: str) -> int:
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     return 0
+
+
+def _number_record_payload(value: Any) -> dict[str, int]:
+    """Return a safe string->int record for smoke diagnostics."""
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key): count
+        for key, count in value.items()
+        if isinstance(count, int) and not isinstance(count, bool)
+    }
+
+
+def _provider_contract_health(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    success: bool | None = None,
+    error_details: str | None = None,
+) -> dict[str, Any]:
+    """Return a compact provider health classification for UI/automation."""
+    smoke_scope = str(runtime_diagnostics.get("smoke_scope") or "unknown")
+    if error_details:
+        issue = _provider_issue_from_error(error_details)
+        return {
+            "status": issue["status"],
+            "smoke_scope": smoke_scope,
+            "reason": issue["reason"],
+            "message": _response_excerpt(error_details, max_chars=240),
+        }
+
+    execution = runtime_diagnostics.get("validated_runtime_execution")
+    if isinstance(execution, dict):
+        contract = execution.get("tool_loop_contract")
+        if isinstance(contract, dict):
+            health = _provider_health_from_tool_loop_contract(
+                contract,
+                smoke_scope=smoke_scope,
+            )
+            if health:
+                return health
+
+    if success is True and smoke_scope == "text_completion_only":
+        return {
+            "status": "text_completion_ready",
+            "smoke_scope": smoke_scope,
+        }
+    if success is True:
+        return {
+            "status": "provider_smoke_ready",
+            "smoke_scope": smoke_scope,
+        }
+    return {
+        "status": "not_observed",
+        "smoke_scope": smoke_scope,
+        "reason": "smoke_not_completed",
+    }
+
+
+def _with_provider_contract_health(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    success: bool | None = None,
+    error_details: str | None = None,
+) -> dict[str, Any]:
+    """Attach provider health classification without mutating caller payloads."""
+    return {
+        **runtime_diagnostics,
+        "provider_contract_health": _provider_contract_health(
+            runtime_diagnostics,
+            success=success,
+            error_details=error_details,
+        ),
+    }
+
+
+def _provider_health_from_tool_loop_contract(
+    contract: dict[str, Any],
+    *,
+    smoke_scope: str,
+) -> dict[str, Any]:
+    status = str(contract.get("status") or "unknown")
+    fallback = str(contract.get("fallback") or "none")
+    fallback_reason = str(contract.get("fallback_reason") or "")
+    blocking_reason = str(contract.get("blocking_reason") or "")
+    health_status = {
+        "passed": "tool_loop_limited" if fallback != "none" else "tool_loop_ready",
+        "needs_recovery": "tool_loop_needs_recovery",
+        "unsupported_tools": "unsupported_tools",
+        "blocked": "tool_loop_blocked",
+    }.get(status, "tool_loop_blocked")
+    health: dict[str, Any] = {
+        "status": health_status,
+        "smoke_scope": smoke_scope,
+        "tool_call_support": str(contract.get("tool_call_support") or "unknown"),
+        "tool_result_support": str(contract.get("tool_result_support") or "unknown"),
+        "fallback": fallback,
+        "recovery_status": str(contract.get("recovery_status") or "unknown"),
+    }
+    if fallback_reason:
+        health["fallback_reason"] = fallback_reason
+    if health_status == "tool_loop_limited":
+        health["reason"] = fallback_reason or "fallback_active"
+    elif blocking_reason:
+        health["reason"] = blocking_reason
+    return health
+
+
+def _provider_issue_from_error(error_details: str) -> dict[str, str]:
+    error_text = error_details.lower()
+    if any(
+        marker in error_text
+        for marker in (
+            "api key",
+            "api_key",
+            "authentication",
+            "invalid key",
+            "unauthorized",
+            "forbidden",
+            "permission denied",
+        )
+    ):
+        return {"status": "configuration_blocked", "reason": "configuration_error"}
+    if any(
+        marker in error_text
+        for marker in (
+            "model not found",
+            "model_not_found",
+            "unknown model",
+            "invalid model",
+            "does not exist",
+        )
+    ):
+        return {"status": "model_blocked", "reason": "model_unavailable"}
+    if any(
+        marker in error_text
+        for marker in (
+            "bad gateway",
+            "gateway",
+            "upstream",
+            "proxy",
+            "502",
+            "503",
+            "504",
+            "connection",
+            "timed out",
+            "timeout",
+            "rate limit",
+        )
+    ):
+        return {"status": "gateway_blocked", "reason": "gateway_error"}
+    if any(
+        marker in error_text
+        for marker in (
+            "does not support tools",
+            "function calling",
+            "tool_choice",
+            "unsupported tool",
+        )
+    ):
+        return {"status": "unsupported_tools", "reason": "unsupported_tools"}
+    return {"status": "provider_smoke_blocked", "reason": "provider_error"}
 
 
 def _provider_validation_errors(provider: Any) -> list[str]:
@@ -430,7 +593,10 @@ async def run_provider_smoke_check(
             runtime_mode="analysis_only",
             message=f"Could not create provider {provider_name}: {e}",
             error_details=str(e),
-            runtime_diagnostics=runtime_diagnostics,
+            runtime_diagnostics=_with_provider_contract_health(
+                runtime_diagnostics,
+                error_details=str(e),
+            ),
         )
 
     runtime_diagnostics = build_provider_smoke_runtime_diagnostics(
@@ -440,14 +606,18 @@ async def run_provider_smoke_check(
     )
     validation_errors = _provider_validation_errors(provider)
     if validation_errors:
+        error_details = "; ".join(validation_errors)
         return ProviderSmokeResult(
             success=False,
             provider=provider.name,
             model=resolved_model,
             runtime_mode="analysis_only",
             message="Provider configuration is incomplete",
-            error_details="; ".join(validation_errors),
-            runtime_diagnostics=runtime_diagnostics,
+            error_details=error_details,
+            runtime_diagnostics=_with_provider_contract_health(
+                runtime_diagnostics,
+                error_details=error_details,
+            ),
         )
 
     session_config = SessionConfig(
@@ -511,7 +681,10 @@ async def run_provider_smoke_check(
             runtime_mode="analysis_only",
             message=f"Provider smoke check failed: {e}",
             error_details=str(e),
-            runtime_diagnostics=runtime_diagnostics,
+            runtime_diagnostics=_with_provider_contract_health(
+                runtime_diagnostics,
+                error_details=str(e),
+            ),
         )
 
 
@@ -568,7 +741,10 @@ async def _complete_provider_smoke(
             model=model,
             runtime_mode="analysis_only",
             message="Provider returned an empty response",
-            runtime_diagnostics=runtime_diagnostics,
+            runtime_diagnostics=_with_provider_contract_health(
+                runtime_diagnostics,
+                error_details="Provider returned an empty response",
+            ),
         )
 
     return ProviderSmokeResult(
@@ -578,7 +754,10 @@ async def _complete_provider_smoke(
         runtime_mode="analysis_only",
         message="Provider smoke check passed",
         response_excerpt=_response_excerpt(response_text),
-        runtime_diagnostics=runtime_diagnostics,
+        runtime_diagnostics=_with_provider_contract_health(
+            runtime_diagnostics,
+            success=True,
+        ),
     )
 
 
@@ -636,6 +815,11 @@ async def _complete_provider_generic_edit_smoke(
 
         smoke_content = smoke_file.read_text(encoding="utf-8")
         if smoke_content != DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT:
+            error_details = (
+                "Expected provider-smoke.txt to contain "
+                f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}; got "
+                f"{smoke_content!r}"
+            )
             return ProviderSmokeResult(
                 success=False,
                 provider=provider.name,
@@ -643,12 +827,11 @@ async def _complete_provider_generic_edit_smoke(
                 runtime_mode="generic_edit",
                 message="Provider generic_edit smoke did not update the test file",
                 response_excerpt=_response_excerpt(result.response_text),
-                error_details=(
-                    "Expected provider-smoke.txt to contain "
-                    f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}; got "
-                    f"{smoke_content!r}"
+                error_details=error_details,
+                runtime_diagnostics=_with_provider_contract_health(
+                    runtime_diagnostics,
+                    error_details=error_details,
                 ),
-                runtime_diagnostics=runtime_diagnostics,
             )
 
     response_text = result.response_text.strip()
@@ -659,7 +842,10 @@ async def _complete_provider_generic_edit_smoke(
             model=model,
             runtime_mode="generic_edit",
             message="Provider generic_edit smoke returned an empty response",
-            runtime_diagnostics=runtime_diagnostics,
+            runtime_diagnostics=_with_provider_contract_health(
+                runtime_diagnostics,
+                error_details="Provider generic_edit smoke returned an empty response",
+            ),
         )
 
     return ProviderSmokeResult(
@@ -669,7 +855,10 @@ async def _complete_provider_generic_edit_smoke(
         runtime_mode="generic_edit",
         message="Provider generic_edit smoke passed",
         response_excerpt=_response_excerpt(response_text),
-        runtime_diagnostics=runtime_diagnostics,
+        runtime_diagnostics=_with_provider_contract_health(
+            runtime_diagnostics,
+            success=True,
+        ),
     )
 
 
@@ -708,6 +897,15 @@ def handle_provider_smoke_command(
                 "Smoke scope",
                 str(result.runtime_diagnostics.get("smoke_scope", "unknown")),
             )
+            health = result.runtime_diagnostics.get("provider_contract_health")
+            if isinstance(health, dict):
+                print_key_value(
+                    "Provider health",
+                    str(health.get("status", "unknown")),
+                )
+                reason = health.get("reason")
+                if isinstance(reason, str) and reason:
+                    print_key_value("Provider health reason", reason)
             execution = result.runtime_diagnostics.get("validated_runtime_execution")
             if isinstance(execution, dict):
                 print_key_value("Execution loop", str(execution.get("loop", "unknown")))

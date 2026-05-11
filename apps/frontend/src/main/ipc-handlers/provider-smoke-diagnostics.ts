@@ -1,4 +1,5 @@
 import type {
+  ProviderContractHealth,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedToolLoopContract
 } from '../../shared/types';
@@ -74,5 +75,30 @@ export function mapProviderToolLoopContract(
 
   return Object.values(contract).some((field) => field !== undefined)
     ? contract
+    : undefined;
+}
+
+export function mapProviderContractHealth(
+  value: unknown
+): ProviderContractHealth | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const health: ProviderContractHealth = {
+    status: stringFromUnknown(payload.status),
+    smokeScope: stringFromUnknown(payload.smoke_scope),
+    reason: stringFromUnknown(payload.reason),
+    message: stringFromUnknown(payload.message),
+    toolCallSupport: stringFromUnknown(payload.tool_call_support),
+    toolResultSupport: stringFromUnknown(payload.tool_result_support),
+    fallback: stringFromUnknown(payload.fallback),
+    fallbackReason: stringFromUnknown(payload.fallback_reason),
+    recoveryStatus: stringFromUnknown(payload.recovery_status),
+  };
+
+  return Object.values(health).some((field) => field !== undefined)
+    ? health
     : undefined;
 }

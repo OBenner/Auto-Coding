@@ -35,6 +35,7 @@ import { getBestAvailableProfileEnv } from '../rate-limit-detector';
 import { getAPIProfileEnv } from '../services/profile';
 import { getCodexProfileManager } from '../codex-profile-manager';
 import {
+  mapProviderContractHealth,
   mapProviderRuntimeResumePolicy,
   mapProviderToolLoopContract,
 } from './provider-smoke-diagnostics';
@@ -360,6 +361,7 @@ type ProviderSmokeCliResult = {
   error_details?: string | null;
   runtime_diagnostics?: {
     smoke_scope?: string;
+    provider_contract_health?: unknown;
     requested_runtime_mode?: string;
     validated_runtime_mode?: string;
     validated_requirements?: string[];
@@ -510,6 +512,7 @@ function mapProviderRuntimeDiagnostics(
 
   return {
     smokeScope: diagnostics.smoke_scope,
+    providerContractHealth: mapProviderContractHealth(diagnostics.provider_contract_health),
     requestedRuntimeMode: diagnostics.requested_runtime_mode,
     validatedRuntimeMode: diagnostics.validated_runtime_mode,
     validatedRequirements: arrayFromUnknown(diagnostics.validated_requirements),

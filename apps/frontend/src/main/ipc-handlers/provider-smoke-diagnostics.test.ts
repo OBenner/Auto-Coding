@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  mapProviderContractHealth,
   mapProviderRuntimeResumePolicy,
   mapProviderToolLoopContract
 } from './provider-smoke-diagnostics';
@@ -60,5 +61,38 @@ describe('mapProviderToolLoopContract', () => {
 
   it('returns undefined for empty tool-loop contract payloads', () => {
     expect(mapProviderToolLoopContract({})).toBeUndefined();
+  });
+});
+
+describe('mapProviderContractHealth', () => {
+  it('maps safe provider contract health fields', () => {
+    expect(
+      mapProviderContractHealth({
+        status: 'gateway_blocked',
+        smoke_scope: 'generic_edit_tool_loop',
+        reason: 'gateway_error',
+        message: '502 Bad gateway from LiteLLM upstream',
+        tool_call_support: 'json_fallback',
+        tool_result_support: 'normalized',
+        fallback: 'json_actions',
+        fallback_reason: 'native_tool_request_failed',
+        recovery_status: 'not_required',
+        ignored_private_path: '/tmp/provider-state.json',
+      })
+    ).toEqual({
+      status: 'gateway_blocked',
+      smokeScope: 'generic_edit_tool_loop',
+      reason: 'gateway_error',
+      message: '502 Bad gateway from LiteLLM upstream',
+      toolCallSupport: 'json_fallback',
+      toolResultSupport: 'normalized',
+      fallback: 'json_actions',
+      fallbackReason: 'native_tool_request_failed',
+      recoveryStatus: 'not_required',
+    });
+  });
+
+  it('returns undefined for empty provider contract health payloads', () => {
+    expect(mapProviderContractHealth({})).toBeUndefined();
   });
 });
