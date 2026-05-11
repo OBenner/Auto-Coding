@@ -70,6 +70,7 @@ Rules:
 - Use run_subagents only for read-only exploration, review, or comparison work.
 - Treat each actions array as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Use rollback_transaction when you choose to restore a partial transaction from mutation snapshots.
+- Use repair_mutation after repairing or intentionally accepting a partial transaction's affected paths.
 - Keep iterating until the task is done, then call finish.
 
 Return schema:
@@ -104,6 +105,7 @@ Rules:
 - Use run_subagents only for read-only exploration, review, or comparison work.
 - Treat each tool-call batch as a transaction boundary. If an observation reports partial_failure, inspect/recover before finishing.
 - Use rollback_transaction when you choose to restore a partial transaction from mutation snapshots.
+- Use repair_mutation after repairing or intentionally accepting a partial transaction's affected paths.
 - Call finish with a concise summary, verification commands, and risks when complete.
 
 Task:
@@ -173,6 +175,7 @@ class JsonActionExecutionResult:
 
 
 ROLLBACK_TRANSACTION_TOOL = "rollback_transaction"
+REPAIR_MUTATION_TOOL = "repair_mutation"
 MUTATING_LOCAL_ACTIONS = frozenset(
     {
         "write_file",
@@ -182,6 +185,7 @@ MUTATING_LOCAL_ACTIONS = frozenset(
         "apply_patch",
         "run_command",
         ROLLBACK_TRANSACTION_TOOL,
+        REPAIR_MUTATION_TOOL,
     }
 )
 WORKSPACE_RECOVERY_TOOLS = frozenset(
@@ -194,6 +198,7 @@ GENERIC_EDIT_REPAIR_TOOLS = [
     "apply_patch",
     "write_file",
     "run_command",
+    REPAIR_MUTATION_TOOL,
 ]
 GENERIC_EDIT_RECOVERY_POLICY_VERSION = 1
 GENERIC_EDIT_RECOVERY_VERIFICATION_TOOLS = ["git_diff", "run_command"]
@@ -2167,10 +2172,10 @@ def build_generic_edit_recovery_next_actions(
     else:
         action = {
             "id": f"repair-{transaction_id}",
-            "kind": "repair_mutation",
-            "tool": "repair_mutation",
+            "kind": REPAIR_MUTATION_TOOL,
+            "tool": REPAIR_MUTATION_TOOL,
             "action": {
-                "tool": "repair_mutation",
+                "tool": REPAIR_MUTATION_TOOL,
                 "transaction_id": transaction_id,
                 "paths": inspect_paths,
             },
@@ -2194,7 +2199,7 @@ def build_generic_edit_recovery_policy(
 ) -> dict[str, Any]:
     """Return a compact recovery policy for UI/orchestrator decisioning."""
     path_scope = list(dict.fromkeys(mutated_paths or affected_paths or []))
-    resolution_strategies = ["repair_mutation"]
+    resolution_strategies = [REPAIR_MUTATION_TOOL]
     if rollback_restorable:
         resolution_strategies.insert(0, ROLLBACK_TRANSACTION_TOOL)
     required_next_action_kinds = ["inspect_diff"]
@@ -2238,7 +2243,7 @@ def build_generic_edit_recovery_plan_policy(
             if strategy_value not in resolution_strategies:
                 resolution_strategies.append(strategy_value)
     if not resolution_strategies:
-        resolution_strategies = [ROLLBACK_TRANSACTION_TOOL, "repair_mutation"]
+        resolution_strategies = [ROLLBACK_TRANSACTION_TOOL, REPAIR_MUTATION_TOOL]
     return {
         "version": GENERIC_EDIT_RECOVERY_POLICY_VERSION,
         "status": "requires_resolution",

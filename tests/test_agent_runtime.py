@@ -70,6 +70,7 @@ from agents.runtime.adapters.generic_edit import (
     build_generic_edit_rollback_operation,
     execute_generic_edit_transaction_rollback,
     generic_edit_mcp_lines,
+    summarize_generic_edit_transaction_groups,
     summarize_generic_edit_transactions,
 )
 from agents.runtime.adapters.patch_proposal import (
@@ -5173,6 +5174,7 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         "apply_patch",
         "write_file",
         "run_command",
+        "repair_mutation",
     ]
     assert recovery_plan["unresolved_transactions"][0]["id"] == "json_actions-1"
     assert recovery_plan["unresolved_transactions"][0]["mutated_paths"] == [
@@ -6908,6 +6910,124 @@ async def test_generic_edit_runtime_resumes_partial_failure_and_rolls_back(
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_resumes_partial_failure_and_records_repair_mutation(
+    tmp_path: Path,
+):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "partial.txt"
+    target.write_text("original\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then fail before checkpoint",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "finish too early",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "done before repair marker",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+    )
+
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "create partial failure",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    assert first_result.status == "error"
+    assert checkpoint_path.exists()
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "record repair after resume",
+                "actions": [
+                    {
+                        "tool": "repair_mutation",
+                        "transaction_id": "json_actions-1",
+                        "paths": ["partial.txt"],
+                        "summary": "Accepted the edited content after inspection.",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Resumed and repaired partial edit",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+        max_iterations=2,
+    )
+
+    resumed = await resume_runtime_session(
+        resume_runtime,
+        checkpoint_path,
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    group_artifact = json.loads(
+        (artifact_dir / "generic_edit_transaction_groups.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    repair_transaction = result_artifact["transactions"][2]
+
+    assert resumed.status == "continue"
+    assert target.read_text(encoding="utf-8") == "changed\n"
+    assert result_artifact["resumed"] is True
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["unresolved_partial_failure_ids"] == []
+    assert result_artifact["unresolved_transaction_group_ids"] == []
+    assert repair_transaction["tool_sequence"] == ["repair_mutation", "finish"]
+    assert repair_transaction["mutating_tools"] == ["repair_mutation"]
+    assert repair_transaction["can_resolve_partial_failure"] is True
+    assert group_artifact["transaction_groups"][0]["status"] == "resolved"
+    assert group_artifact["transaction_groups"][0]["recovery_outcome"]["strategy"] == (
+        "repair_mutation"
+    )
+    assert group_artifact["transaction_groups"][0]["resolution_transaction_id"] == (
+        "json_actions-3"
+    )
+    assert not checkpoint_path.exists()
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_native_tools_reject_finish_with_unresolved_partial_failure(
     tmp_path: Path,
 ):
@@ -7178,6 +7298,44 @@ def test_generic_edit_transaction_summary_requires_rollback_to_target_partial_fa
     assert summary["recovery_transaction_ids"] == []
     assert summary["recovery_resolved"] is False
     assert summary["unresolved_partial_failure_ids"] == ["json_actions-1"]
+
+
+def test_generic_edit_transaction_summary_classifies_repair_mutation_resolution():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["target.txt"],
+                    "mutated_paths": ["target.txt"],
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-2",
+                    "status": "complete",
+                    "tool_sequence": ["repair_mutation"],
+                    "affected_paths": ["target.txt"],
+                    "mutated_paths": ["target.txt"],
+                    "can_resolve_partial_failure": True,
+                }
+            },
+        ]
+    )
+    groups = summarize_generic_edit_transaction_groups(
+        transaction_summary=summary,
+        mutation_snapshots=[],
+    )
+
+    assert summary["recovery_transaction_ids"] == ["json_actions-2"]
+    assert summary["recovery_resolved"] is True
+    assert summary["unresolved_partial_failure_ids"] == []
+    assert groups["recovery_outcomes"][0]["strategy"] == "repair_mutation"
+    assert groups["transaction_groups"][0]["recovery_attempts"][0]["strategy"] == (
+        "repair_mutation"
+    )
 
 
 def test_generic_edit_transaction_summary_allows_workspace_recovery_verification():
