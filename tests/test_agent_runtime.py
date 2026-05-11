@@ -6907,6 +6907,81 @@ def test_generic_edit_transaction_summary_requires_recovery_path_coverage():
     assert summary["unresolved_partial_failure_ids"] == ["json_actions-1"]
 
 
+def test_generic_edit_transaction_summary_tracks_each_unresolved_partial_failure():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["first.txt"],
+                    "mutated_paths": ["first.txt"],
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-2",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["second.txt"],
+                    "mutated_paths": ["second.txt"],
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-3",
+                    "status": "complete",
+                    "tool_sequence": ["git_diff"],
+                    "affected_paths": ["second.txt"],
+                    "mutated_paths": [],
+                    "can_resolve_partial_failure": True,
+                }
+            },
+        ]
+    )
+
+    assert summary["partial_failure_count"] == 2
+    assert summary["partial_failure_transaction_ids"] == [
+        "json_actions-1",
+        "json_actions-2",
+    ]
+    assert summary["recovery_transaction_ids"] == ["json_actions-3"]
+    assert summary["recovery_resolved"] is False
+    assert summary["unresolved_partial_failure_ids"] == ["json_actions-1"]
+
+
+def test_generic_edit_transaction_summary_requires_rollback_to_target_partial_failure():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["target.txt"],
+                    "mutated_paths": ["target.txt"],
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-2",
+                    "status": "complete",
+                    "tool_sequence": ["rollback_transaction"],
+                    "rollback_transaction_ids": ["json_actions-99"],
+                    "affected_paths": ["other.txt"],
+                    "mutated_paths": ["other.txt"],
+                    "can_resolve_partial_failure": True,
+                }
+            },
+        ]
+    )
+
+    assert summary["recovery_transaction_ids"] == []
+    assert summary["recovery_resolved"] is False
+    assert summary["unresolved_partial_failure_ids"] == ["json_actions-1"]
+
+
 def test_generic_edit_transaction_summary_allows_workspace_recovery_verification():
     summary = summarize_generic_edit_transactions(
         [

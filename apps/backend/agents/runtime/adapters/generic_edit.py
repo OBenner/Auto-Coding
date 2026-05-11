@@ -2004,6 +2004,12 @@ def build_generic_edit_transaction(
         for result in results
         if result.ok and result.data.get("mutation_snapshot_id")
     ]
+    rollback_transaction_ids = [
+        str(action.get("transaction_id")).strip()
+        for action in actions
+        if action_tool(action) == ROLLBACK_TRANSACTION_TOOL
+        and str(action.get("transaction_id") or "").strip()
+    ]
     first_failure_index = next(
         (index for index, result in enumerate(results, start=1) if not result.ok),
         None,
@@ -2046,6 +2052,8 @@ def build_generic_edit_transaction(
             tool_sequence=tool_sequence,
         ),
     }
+    if rollback_transaction_ids:
+        transaction["rollback_transaction_ids"] = rollback_transaction_ids
     if first_failure_index is not None:
         failed_result = results[first_failure_index - 1]
         transaction.update(
@@ -5190,24 +5198,31 @@ def summarize_generic_edit_transactions(trace: list[dict[str, Any]]) -> dict[str
         if last_partial_failure_index is not None
         else None
     )
-    recovery_resolved = True
-    if last_partial_failure_index is not None:
-        recovery_transaction_ids = [
-            str(transaction.get("id") or index)
-            for index, transaction in enumerate(
-                transactions[last_partial_failure_index + 1 :],
-                start=last_partial_failure_index + 1,
-            )
+    unresolved_partial_failure_ids: list[str] = []
+    for partial_index in partial_failure_indexes:
+        partial_failure = transactions[partial_index]
+        next_partial_index = next(
+            (index for index in partial_failure_indexes if index > partial_index),
+            len(transactions),
+        )
+        resolved = False
+        for index, transaction in enumerate(
+            transactions[partial_index + 1 : next_partial_index],
+            start=partial_index + 1,
+        ):
             if transaction_resolves_partial_failure(
                 transaction=transaction,
-                partial_failure=last_partial_failure,
+                partial_failure=partial_failure,
+            ):
+                recovery_transaction_ids.append(str(transaction.get("id") or index))
+                resolved = True
+                break
+        if not resolved:
+            unresolved_partial_failure_ids.append(
+                str(partial_failure.get("id") or partial_index)
             )
-        ]
-        recovery_resolved = bool(recovery_transaction_ids)
+    recovery_resolved = not unresolved_partial_failure_ids
     partial_failure_count = status_counts.get("partial_failure", 0)
-    unresolved_partial_failure_ids = (
-        [] if recovery_resolved else partial_failure_transaction_ids
-    )
     last_partial_failure_id = (
         str(last_partial_failure.get("id"))
         if isinstance(last_partial_failure, dict) and last_partial_failure.get("id")
@@ -5430,8 +5445,17 @@ def transaction_resolves_partial_failure(
         return False
 
     tool_sequence = {str(tool) for tool in transaction.get("tool_sequence") or ()}
-    if tool_sequence & WORKSPACE_RECOVERY_TOOLS:
+    non_targeted_recovery_tools = WORKSPACE_RECOVERY_TOOLS - {ROLLBACK_TRANSACTION_TOOL}
+    if tool_sequence & non_targeted_recovery_tools:
         return True
+
+    if ROLLBACK_TRANSACTION_TOOL in tool_sequence:
+        partial_transaction_id = str(partial_failure.get("id") or "")
+        rollback_transaction_ids = normalize_string_list(
+            transaction.get("rollback_transaction_ids")
+        )
+        if partial_transaction_id and rollback_transaction_ids:
+            return partial_transaction_id in rollback_transaction_ids
 
     partial_paths = transaction_path_set(partial_failure, prefer_mutated=True)
     if not partial_paths:
