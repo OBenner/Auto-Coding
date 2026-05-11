@@ -1172,7 +1172,14 @@ def custom_external_mcp_server_configs(
         except json.JSONDecodeError:
             return ()
     if isinstance(raw_servers, Mapping):
-        raw_servers = tuple(raw_servers.values())
+        raw_servers = tuple(
+            {
+                **server_config,
+                "id": server_config.get("id") or str(server_id),
+            }
+            for server_id, server_config in raw_servers.items()
+            if isinstance(server_config, Mapping)
+        )
     if not isinstance(raw_servers, (list, tuple)):
         return ()
     return tuple(server for server in raw_servers if isinstance(server, Mapping))

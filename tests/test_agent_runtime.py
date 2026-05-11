@@ -3778,6 +3778,45 @@ def test_external_mcp_adapter_registry_exposes_custom_server_contract():
     ) == ("mcp__my-docs__search_docs", "mcp__my-docs__call_tool")
 
 
+def test_external_mcp_adapter_registry_preserves_custom_server_mapping_ids():
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": {
+            "my-docs": {
+                "name": "My Docs",
+                "type": "command",
+                "command": "uvx",
+                "args": ["my-docs-mcp"],
+                "tools": [
+                    {
+                        "name": "search_docs",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                            "required": ["query"],
+                        },
+                    }
+                ],
+            }
+        }
+    }
+
+    adapter = external_mcp_adapter_for(
+        "mcp__my-docs__search_docs",
+        project_mcp_config=project_mcp_config,
+    )
+    health = describe_external_mcp_server_health(
+        "my-docs",
+        project_mcp_config=project_mcp_config,
+        environment={EXTERNAL_MCP_CLIENT_ENV: "true"},
+    )
+
+    assert adapter is not None
+    assert adapter.server == "my-docs"
+    assert adapter.tool_names == ("search_docs", "call_tool")
+    assert health.status == "ready_to_connect"
+    assert health.command == "uvx"
+
+
 def test_runtime_mcp_bridge_loads_custom_mcp_config_from_project_env(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
