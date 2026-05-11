@@ -4146,6 +4146,66 @@ def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, An
         raise GenericEditRuntimeError(
             "Generic edit recovery checkpoint is missing resume metadata."
         )
+    resume_policy = payload.get("resume_policy")
+    if not isinstance(resume_policy, dict):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint is missing resume policy metadata."
+        )
+    if resume_policy.get("runtime") != "generic_edit":
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint resume policy targets an unexpected runtime."
+        )
+    policy_checkpoint_path = resume_policy.get("checkpoint_path")
+    if (
+        not isinstance(policy_checkpoint_path, str)
+        or not policy_checkpoint_path
+        or Path(policy_checkpoint_path).resolve() != checkpoint_path.resolve()
+    ):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint resume policy must reference the "
+            "canonical recovery checkpoint."
+        )
+    if resume_policy.get("can_resume") is not True:
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint resume policy is not resumable."
+        )
+    resume = payload["resume"]
+    if (
+        resume_policy.get("strategy") != resume.get("strategy")
+        or resume_policy.get("next_iteration") != payload.get("next_iteration")
+    ):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint resume policy does not match resume metadata."
+        )
+    unresolved_policy_ids = [
+        *normalize_string_list(resume_policy.get("unresolved_partial_failure_ids")),
+        *normalize_string_list(resume_policy.get("unresolved_transaction_group_ids")),
+    ]
+    if unresolved_policy_ids and (
+        resume_policy.get("finish_blocked") is not True
+        or str(resume_policy.get("status") or "") == "ready"
+    ):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint resume policy cannot mark unresolved "
+            "failures as unblocked."
+        )
+    resume_inputs = payload.get("resume_inputs")
+    if not isinstance(resume_inputs, dict):
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint is missing resume input metadata."
+        )
+    for artifact_name in normalize_string_list(resume_policy.get("required_artifacts")):
+        artifact_path = resume_inputs.get(artifact_name)
+        if not isinstance(artifact_path, str) or not artifact_path:
+            raise GenericEditRuntimeError(
+                "Generic edit recovery checkpoint is missing required resume artifact: "
+                f"{artifact_name}."
+            )
+        if not Path(artifact_path).exists():
+            raise GenericEditRuntimeError(
+                "Generic edit recovery checkpoint required resume artifact does not "
+                f"exist: {artifact_name}."
+            )
     return payload
 
 

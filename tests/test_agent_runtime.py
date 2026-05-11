@@ -6275,6 +6275,87 @@ def test_generic_edit_session_state_resume_requires_policy(
         )
 
 
+def test_generic_edit_recovery_checkpoint_requires_resume_policy(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeError,
+        load_generic_edit_recovery_checkpoint,
+    )
+
+    checkpoint_path = tmp_path / "generic_edit_recovery_checkpoint.json"
+    checkpoint_path.write_text(
+        json.dumps(
+            {
+                "recoverable": True,
+                "artifact_path": str(checkpoint_path),
+                "next_iteration": 2,
+                "resume": {
+                    "strategy": "continue_from_trace",
+                    "prompt": "Continue.",
+                },
+                "resume_inputs": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        GenericEditRuntimeError,
+        match="missing resume policy",
+    ):
+        load_generic_edit_recovery_checkpoint(checkpoint_path)
+
+
+def test_generic_edit_recovery_checkpoint_requires_existing_policy_artifacts(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeError,
+        load_generic_edit_recovery_checkpoint,
+    )
+
+    checkpoint_path = tmp_path / "generic_edit_recovery_checkpoint.json"
+    missing_trace_path = tmp_path / "generic_edit_trace.json"
+    checkpoint_path.write_text(
+        json.dumps(
+            {
+                "recoverable": True,
+                "artifact_path": str(checkpoint_path),
+                "next_iteration": 2,
+                "resume": {
+                    "strategy": "continue_from_trace",
+                    "prompt": "Continue.",
+                },
+                "resume_inputs": {
+                    "trace_artifact": str(missing_trace_path),
+                },
+                "resume_policy": {
+                    "runtime": "generic_edit",
+                    "checkpoint_path": str(checkpoint_path),
+                    "status": "ready",
+                    "can_resume": True,
+                    "finish_blocked": False,
+                    "strategy": "continue_from_trace",
+                    "next_iteration": 2,
+                    "required_artifacts": [
+                        "trace_artifact",
+                    ],
+                    "unresolved_partial_failure_ids": [],
+                    "unresolved_transaction_group_ids": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        GenericEditRuntimeError,
+        match="required resume artifact does not exist: trace_artifact",
+    ):
+        load_generic_edit_recovery_checkpoint(checkpoint_path)
+
+
 def test_generic_edit_session_state_resume_requires_policy_artifacts(
     tmp_path: Path,
 ):
