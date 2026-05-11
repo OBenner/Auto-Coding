@@ -47,6 +47,8 @@ MAX_SUBAGENT_ROLE_CHARS = 40
 MAX_SUBAGENT_RESULT_CHARS = 2000
 MAX_READ_RANGE_LINES = 400
 DEFAULT_READ_RANGE_LINES = 120
+MAX_REPAIR_MUTATION_PATHS = 20
+MAX_REPAIR_MUTATION_NOTE_CHARS = 4000
 TRACE_STRING_PREVIEW_CHARS = 1000
 TRACE_REDACTED_FIELDS = {
     "content",
@@ -490,6 +492,42 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
     ),
     LocalActionToolSpec(
+        name="repair_mutation",
+        description=(
+            "Record that a partial generic_edit mutation was manually repaired "
+            "after inspecting or changing the affected files."
+        ),
+        parameters={
+            "transaction_id": {
+                "type": "string",
+                "description": "Partial-failure transaction id that was repaired.",
+            },
+            "paths": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": MAX_REPAIR_MUTATION_PATHS,
+                "description": "Workspace-relative paths covered by the repair.",
+            },
+            "summary": {
+                "type": "string",
+                "description": "Short description of the repair that was performed.",
+            },
+            "verification": {
+                "type": "string",
+                "description": "Focused verification that was run after repair.",
+            },
+        },
+        required=("transaction_id", "paths"),
+        example={
+            "tool": "repair_mutation",
+            "transaction_id": "json_actions-1",
+            "paths": [EXAMPLE_WORKSPACE_FILE_PATH],
+            "summary": "Re-applied the intended edit after inspecting the diff.",
+            "verification": "pytest tests/test_file.py -q",
+        },
+    ),
+    LocalActionToolSpec(
         name="git_status",
         description="Inspect git worktree status without invoking a shell.",
         parameters={
@@ -751,6 +789,8 @@ class LocalActionExecutor:
                     "mutation snapshots."
                 ),
             )
+        if tool == "repair_mutation":
+            return self._repair_mutation(action)
         if tool == "finish":
             return ToolActionResult(
                 tool=tool,
@@ -1310,6 +1350,40 @@ class LocalActionExecutor:
             data={"bytes": len(patch.encode("utf-8"))},
         )
 
+    def _repair_mutation(self, action: dict[str, Any]) -> ToolActionResult:
+        transaction_id = require_string(action, "transaction_id")
+        paths = require_string_list(
+            action,
+            "paths",
+            maximum=MAX_REPAIR_MUTATION_PATHS,
+        )
+        summary = optional_bounded_string(
+            action,
+            "summary",
+            maximum=MAX_REPAIR_MUTATION_NOTE_CHARS,
+        )
+        verification = optional_bounded_string(
+            action,
+            "verification",
+            maximum=MAX_REPAIR_MUTATION_NOTE_CHARS,
+        )
+        data: dict[str, Any] = {
+            "transaction_id": transaction_id,
+            "affected_paths": paths,
+            "mutated_paths": paths,
+            "recovery_strategy": "repair_mutation",
+        }
+        if summary:
+            data["summary"] = summary
+        if verification:
+            data["verification"] = verification
+        return ToolActionResult(
+            tool="repair_mutation",
+            ok=True,
+            message=f"Recorded repair for transaction {transaction_id}.",
+            data=data,
+        )
+
     async def _run_command(self, action: dict[str, Any]) -> ToolActionResult:
         command = require_string(action, "command")
         timeout = bounded_positive_int(
@@ -1680,6 +1754,25 @@ def bounded_optional_string(
 ) -> str:
     """Read a required string that may be empty but must stay bounded."""
     value = action.get(field_name)
+    if not isinstance(value, str):
+        raise LocalActionError(f"Action field '{field_name}' must be a string")
+    if len(value) > maximum:
+        raise LocalActionError(
+            f"Action field '{field_name}' must be at most {maximum} characters"
+        )
+    return value
+
+
+def optional_bounded_string(
+    action: dict[str, Any],
+    field_name: str,
+    *,
+    maximum: int,
+) -> str:
+    """Read an optional string with a maximum length."""
+    value = action.get(field_name)
+    if value is None:
+        return ""
     if not isinstance(value, str):
         raise LocalActionError(f"Action field '{field_name}' must be a string")
     if len(value) > maximum:

@@ -1774,6 +1774,7 @@ def test_local_action_manifest_describes_generic_edit_contract():
         "apply_patch",
         "run_command",
         "rollback_transaction",
+        "repair_mutation",
         "git_status",
         "git_diff",
         "run_subagents",
@@ -1848,6 +1849,11 @@ def test_local_action_manifest_describes_generic_edit_contract():
     )
     assert rollback_schema["parameters"]["required"] == ["transaction_id"]
     assert "snapshot_ids" in rollback_schema["parameters"]["properties"]
+    repair_schema = next(
+        schema for schema in provider_schemas if schema["name"] == "repair_mutation"
+    )
+    assert repair_schema["parameters"]["required"] == ["transaction_id", "paths"]
+    assert "verification" in repair_schema["parameters"]["properties"]
     git_status_schema = next(
         schema for schema in provider_schemas if schema["name"] == "git_status"
     )
@@ -1871,6 +1877,34 @@ def test_local_action_manifest_describes_generic_edit_contract():
     ]["properties"]
     assert task_properties["merge_policy"]["enum"] == ["read_only"]
     assert task_properties["max_attempts"]["maximum"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_local_action_executor_records_repair_mutation_marker(
+    tmp_path: Path,
+):
+    executor = LocalActionExecutor(tmp_path)
+
+    result = await executor.execute(
+        {
+            "tool": "repair_mutation",
+            "transaction_id": "json_actions-1",
+            "paths": ["src/app.py"],
+            "summary": "Restored missing guard.",
+            "verification": "pytest tests/test_app.py -q",
+        }
+    )
+
+    assert result.ok is True
+    assert result.tool == "repair_mutation"
+    assert result.data == {
+        "transaction_id": "json_actions-1",
+        "affected_paths": ["src/app.py"],
+        "mutated_paths": ["src/app.py"],
+        "recovery_strategy": "repair_mutation",
+        "summary": "Restored missing guard.",
+        "verification": "pytest tests/test_app.py -q",
+    }
 
 
 @pytest.mark.asyncio
@@ -4954,6 +4988,9 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
         json.loads(line)
         for line in event_path.read_text(encoding="utf-8").splitlines()
     ]
+    transaction_group_event = next(
+        event for event in events if event["event_type"] == "transaction_group"
+    )
     expected_next_actions = [
         {
             "id": "inspect-json_actions-1-1",
@@ -5150,6 +5187,16 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     assert group["status"] == "unresolved"
     assert group["next_actions"] == expected_next_actions
     assert group["recovery_policy"] == expected_group_policy
+    assert transaction_group_event["preferred_strategy"] == "rollback_transaction"
+    assert transaction_group_event["required_next_action_kinds"] == [
+        "inspect_diff",
+        "rollback_transaction",
+    ]
+    assert transaction_group_event["resolution_strategies"] == [
+        "rollback_transaction",
+        "repair_mutation",
+    ]
+    assert transaction_group_event["next_action_count"] == 2
     assert mutation_snapshots["artifact_type"] == "generic_edit_mutation_snapshots"
     assert mutation_snapshots["snapshot_count"] == 1
     assert mutation_snapshots["snapshots"][0]["id"] == "mutation-1"
@@ -5708,6 +5755,20 @@ async def test_generic_edit_runtime_bounds_large_mutation_preimages(tmp_path: Pa
     assert result_artifact["resume_policy"][
         "required_resolution_action_kinds"
     ] == ["inspect_diff", "repair_mutation"]
+    assert result_artifact["recovery_plan"]["next_actions"][1] == {
+        "id": "repair-json_actions-1",
+        "kind": "repair_mutation",
+        "tool": "repair_mutation",
+        "action": {
+            "tool": "repair_mutation",
+            "transaction_id": "json_actions-1",
+            "paths": ["large.txt"],
+        },
+        "transaction_id": "json_actions-1",
+        "transaction_group_id": "transaction-group-1",
+        "paths": ["large.txt"],
+        "required_before_finish": True,
+    }
 
 
 def test_generic_edit_file_preimage_records_inspection_oserror(

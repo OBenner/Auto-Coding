@@ -2164,6 +2164,23 @@ def build_generic_edit_recovery_next_actions(
         if transaction_group_id is not None:
             action["transaction_group_id"] = transaction_group_id
         next_actions.append(action)
+    else:
+        action = {
+            "id": f"repair-{transaction_id}",
+            "kind": "repair_mutation",
+            "tool": "repair_mutation",
+            "action": {
+                "tool": "repair_mutation",
+                "transaction_id": transaction_id,
+                "paths": inspect_paths,
+            },
+            "transaction_id": transaction_id,
+            "paths": inspect_paths,
+            "required_before_finish": True,
+        }
+        if transaction_group_id is not None:
+            action["transaction_group_id"] = transaction_group_id
+        next_actions.append(action)
     return next_actions
 
 
@@ -5169,7 +5186,20 @@ def build_generic_edit_transaction_group_event(
     if isinstance(group.get("recovery_outcome"), dict):
         event["recovery_outcome"] = group["recovery_outcome"]
     if isinstance(group.get("recovery_policy"), dict):
-        event["recovery_policy"] = group["recovery_policy"]
+        recovery_policy = group["recovery_policy"]
+        event["recovery_policy"] = recovery_policy
+        event["preferred_strategy"] = str(
+            recovery_policy.get("preferred_strategy") or ""
+        )
+        event["required_next_action_kinds"] = normalize_string_list(
+            recovery_policy.get("required_next_action_kinds")
+        )
+        event["resolution_strategies"] = normalize_string_list(
+            recovery_policy.get("resolution_strategies")
+        )
+    next_actions = group.get("next_actions")
+    if isinstance(next_actions, list):
+        event["next_action_count"] = len(next_actions)
     return event
 
 
