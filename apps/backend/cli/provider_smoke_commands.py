@@ -631,6 +631,32 @@ def handle_provider_smoke_command(
                             "Resume required actions",
                             ", ".join(str(action) for action in required_actions),
                         )
+                    required_artifacts = resume_policy.get("required_artifacts")
+                    if isinstance(required_artifacts, list) and required_artifacts:
+                        print_key_value(
+                            "Resume required artifacts",
+                            ", ".join(
+                                str(artifact) for artifact in required_artifacts
+                            ),
+                        )
+                    unresolved_failures = resume_policy.get(
+                        "unresolved_partial_failure_ids"
+                    )
+                    if isinstance(unresolved_failures, list) and unresolved_failures:
+                        print_key_value(
+                            "Resume unresolved failures",
+                            ", ".join(
+                                str(failure_id) for failure_id in unresolved_failures
+                            ),
+                        )
+                    unresolved_groups = resume_policy.get(
+                        "unresolved_transaction_group_ids"
+                    )
+                    if isinstance(unresolved_groups, list) and unresolved_groups:
+                        print_key_value(
+                            "Resume unresolved groups",
+                            ", ".join(str(group_id) for group_id in unresolved_groups),
+                        )
         if result.response_excerpt:
             print_key_value("Response", result.response_excerpt)
         if result.error_details:

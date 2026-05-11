@@ -514,6 +514,12 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
                             "inspect_diff",
                             "rollback_transaction",
                         ],
+                        "required_artifacts": [
+                            "trace_artifact",
+                            "recovery_plan_artifact",
+                        ],
+                        "unresolved_partial_failure_ids": ["json_actions-1"],
+                        "unresolved_transaction_group_ids": ["transaction-group-1"],
                     },
                 },
             },
@@ -543,3 +549,9 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     assert "requires_resolution" in output
     assert "Resume required actions" in output
     assert "inspect_diff, rollback_transaction" in output
+    assert "Resume required artifacts" in output
+    assert "trace_artifact, recovery_plan_artifact" in output
+    assert "Resume unresolved failures" in output
+    assert "json_actions-1" in output
+    assert "Resume unresolved groups" in output
+    assert "transaction-group-1" in output
