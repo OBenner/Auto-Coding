@@ -5914,6 +5914,71 @@ async def test_generic_edit_runtime_resumes_from_recovery_checkpoint(tmp_path: P
     assert "## Resume" not in summary_markdown
 
 
+def test_generic_edit_resume_message_includes_resume_policy(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        build_generic_edit_checkpoint_resume_message,
+    )
+
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    trace_path = tmp_path / "artifacts" / "generic_edit_trace.json"
+    recovery_plan_path = tmp_path / "artifacts" / "generic_edit_recovery_plan.json"
+    mutation_snapshot_path = (
+        tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json"
+    )
+    transaction_group_path = (
+        tmp_path / "artifacts" / "generic_edit_transaction_groups.json"
+    )
+    checkpoint = {
+        "artifact_path": str(checkpoint_path),
+        "resume": {
+            "strategy": "recover_partial_failure",
+            "prompt": "Resume this generic_edit run from the persisted checkpoint.",
+        },
+        "recovery_plan_artifact": str(recovery_plan_path),
+        "mutation_snapshot_artifact": str(mutation_snapshot_path),
+        "transaction_group_artifact": str(transaction_group_path),
+        "resume_inputs": {
+            "trace_artifact": str(trace_path),
+            "recovery_plan_artifact": str(recovery_plan_path),
+            "mutation_snapshot_artifact": str(mutation_snapshot_path),
+            "transaction_group_artifact": str(transaction_group_path),
+        },
+        "resume_policy": {
+            "status": "requires_resolution",
+            "required_resolution_action_kinds": [
+                "inspect_diff",
+                "rollback_transaction",
+            ],
+            "required_artifacts": [
+                "trace_artifact",
+                "recovery_plan_artifact",
+                "mutation_snapshot_artifact",
+                "transaction_group_artifact",
+            ],
+            "unresolved_partial_failure_ids": ["json_actions-1"],
+            "unresolved_transaction_group_ids": ["transaction-group-1"],
+        },
+    }
+
+    message = build_generic_edit_checkpoint_resume_message(
+        checkpoint=checkpoint,
+        trace_path=trace_path,
+    )
+
+    assert "Resume policy: requires_resolution" in message
+    assert "Required recovery actions: inspect_diff, rollback_transaction" in message
+    assert (
+        "Required resume artifacts: trace_artifact, recovery_plan_artifact, "
+        "mutation_snapshot_artifact, transaction_group_artifact"
+    ) in message
+    assert "Unresolved partial failures: json_actions-1" in message
+    assert "Unresolved transaction groups: transaction-group-1" in message
+    assert f"Recovery plan artifact: {recovery_plan_path}" in message
+    assert f"Transaction group artifact: {transaction_group_path}" in message
+
+
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_records_resume_provenance(tmp_path: Path):
     from agents.runtime import resume_runtime_session

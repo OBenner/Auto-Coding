@@ -4279,9 +4279,48 @@ def build_generic_edit_checkpoint_resume_message(
         f"Previous trace artifact: {trace_path}",
         f"Resume strategy: {resume.get('strategy', 'unknown')}",
     ]
+    resume_policy = checkpoint.get("resume_policy")
+    if isinstance(resume_policy, dict):
+        policy_status = resume_policy.get("status")
+        if isinstance(policy_status, str) and policy_status:
+            lines.append(f"Resume policy: {policy_status}")
+        required_actions = normalize_string_list(
+            resume_policy.get("required_resolution_action_kinds")
+        )
+        if required_actions:
+            lines.append(
+                "Required recovery actions: " + ", ".join(required_actions)
+            )
+        required_artifacts = normalize_string_list(
+            resume_policy.get("required_artifacts")
+        )
+        if required_artifacts:
+            lines.append(
+                "Required resume artifacts: " + ", ".join(required_artifacts)
+            )
+        unresolved_failures = normalize_string_list(
+            resume_policy.get("unresolved_partial_failure_ids")
+        )
+        if unresolved_failures:
+            lines.append(
+                "Unresolved partial failures: " + ", ".join(unresolved_failures)
+            )
+        unresolved_groups = normalize_string_list(
+            resume_policy.get("unresolved_transaction_group_ids")
+        )
+        if unresolved_groups:
+            lines.append(
+                "Unresolved transaction groups: " + ", ".join(unresolved_groups)
+            )
+    recovery_plan_artifact = checkpoint.get("recovery_plan_artifact")
+    if isinstance(recovery_plan_artifact, str) and recovery_plan_artifact:
+        lines.append(f"Recovery plan artifact: {recovery_plan_artifact}")
     mutation_snapshot_artifact = checkpoint.get("mutation_snapshot_artifact")
     if isinstance(mutation_snapshot_artifact, str) and mutation_snapshot_artifact:
         lines.append(f"Mutation snapshot artifact: {mutation_snapshot_artifact}")
+    transaction_group_artifact = checkpoint.get("transaction_group_artifact")
+    if isinstance(transaction_group_artifact, str) and transaction_group_artifact:
+        lines.append(f"Transaction group artifact: {transaction_group_artifact}")
     lines.append(
         "Use the previous trace as already completed context; inspect "
         "current workspace state before any new mutation."
