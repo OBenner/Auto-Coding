@@ -1,5 +1,6 @@
 """Provider-neutral local edit/tool runtime."""
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -380,6 +381,11 @@ class GenericEditRuntimeSession:
         self._mutation_snapshots = load_generic_edit_mutation_snapshots(
             generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path)
         )
+        workspace_guard = validate_generic_edit_resume_workspace_guard(
+            project_dir=self._executor.project_dir,
+            mutation_snapshots=self._mutation_snapshots,
+        )
+        checkpoint["workspace_guard"] = workspace_guard
         message = build_generic_edit_checkpoint_resume_message(
             checkpoint=checkpoint,
             trace_path=trace_path,
@@ -390,6 +396,7 @@ class GenericEditRuntimeSession:
             checkpoint_path=checkpoint_path,
             trace_path=trace_path,
             start_iteration=next_iteration,
+            workspace_guard=workspace_guard,
         )
 
         try:
@@ -1337,6 +1344,17 @@ class GenericEditRuntimeSession:
         """Attach a successful mutation snapshot to result metadata and artifacts."""
         if snapshot is None or not result.ok:
             return
+        snapshot["postimages"] = [
+            build_generic_edit_file_preimage(
+                project_dir=self._executor.project_dir,
+                path=str(path),
+            )
+            for path in snapshot.get("paths", [])
+            if isinstance(path, str) and path
+        ]
+        snapshot["workspace_guard"] = build_generic_edit_snapshot_workspace_guard(
+            snapshot
+        )
         self._mutation_snapshots.append(snapshot)
         result.data = {
             **result.data,
@@ -2499,10 +2517,193 @@ def build_generic_edit_file_preimage(
             "content": content,
             "content_encoding": "utf-8",
             "content_truncated": False,
+            "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
             "line_count": len(content.splitlines()),
         }
     )
     return payload
+
+
+def build_generic_edit_snapshot_workspace_guard(
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    """Return guard metadata for one mutation snapshot's captured post-state."""
+    postimages = [
+        postimage
+        for postimage in snapshot.get("postimages") or []
+        if isinstance(postimage, dict)
+    ]
+    verifiable_paths = [
+        str(postimage.get("path"))
+        for postimage in postimages
+        if generic_edit_file_state_is_verifiable(postimage)
+    ]
+    tracked_paths = [
+        str(postimage.get("path")) for postimage in postimages if postimage.get("path")
+    ]
+    return {
+        "status": "captured" if postimages else "unavailable",
+        "tracked_paths": tracked_paths,
+        "tracked_path_count": len(tracked_paths),
+        "verifiable_path_count": len(verifiable_paths),
+        "unverifiable_path_count": len(tracked_paths) - len(verifiable_paths),
+    }
+
+
+def validate_generic_edit_resume_workspace_guard(
+    *,
+    project_dir: Path,
+    mutation_snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate that snapshot-tracked files did not drift before resume."""
+    guard = build_generic_edit_resume_workspace_guard(
+        project_dir=project_dir,
+        mutation_snapshots=mutation_snapshots,
+    )
+    if guard["status"] != "drifted":
+        return guard
+
+    drift_paths = [
+        str(drift.get("path"))
+        for drift in guard["drifts"]
+        if isinstance(drift, dict) and drift.get("path")
+    ]
+    raise GenericEditRuntimeError(
+        "Generic edit resume blocked by workspace drift on path(s): "
+        + ", ".join(drift_paths[:10])
+        + ".",
+        data={"workspace_guard": guard},
+    )
+
+
+def build_generic_edit_resume_workspace_guard(
+    *,
+    project_dir: Path,
+    mutation_snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compare persisted mutation postimages with the current workspace."""
+    checks: list[dict[str, Any]] = []
+    for snapshot in mutation_snapshots:
+        postimages = snapshot.get("postimages")
+        if not isinstance(postimages, list):
+            continue
+        for postimage in postimages:
+            if not isinstance(postimage, dict):
+                continue
+            path = str(postimage.get("path") or "")
+            if not path:
+                continue
+            current = build_generic_edit_file_preimage(
+                project_dir=project_dir,
+                path=path,
+            )
+            checks.append(
+                compare_generic_edit_file_state(
+                    expected=postimage,
+                    current=current,
+                    snapshot=snapshot,
+                )
+            )
+
+    drifts = [check for check in checks if check["status"] == "drifted"]
+    unverified = [check for check in checks if check["status"] == "unverified"]
+    if drifts:
+        status = "drifted"
+    elif checks:
+        status = "clean"
+    else:
+        status = "unavailable"
+    return {
+        "status": status,
+        "checked_path_count": len(checks) - len(unverified),
+        "unverified_path_count": len(unverified),
+        "drift_count": len(drifts),
+        "drifts": drifts,
+        "unverified": unverified,
+    }
+
+
+def compare_generic_edit_file_state(
+    *,
+    expected: dict[str, Any],
+    current: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    """Return one drift check without embedding file contents."""
+    path = str(expected.get("path") or current.get("path") or "")
+    base = {
+        "path": path,
+        "snapshot_id": str(snapshot.get("id") or ""),
+        "transaction_id": str(snapshot.get("transaction_id") or ""),
+        "expected": generic_edit_file_state_fingerprint(expected),
+        "current": generic_edit_file_state_fingerprint(current),
+    }
+    if not generic_edit_file_state_is_verifiable(expected):
+        return {
+            **base,
+            "status": "unverified",
+            "reason": "expected_state_unverifiable",
+        }
+    if not generic_edit_file_state_is_verifiable(current):
+        return {
+            **base,
+            "status": "drifted",
+            "reason": "current_state_unverifiable",
+        }
+    if generic_edit_file_state_signature(expected) != generic_edit_file_state_signature(
+        current
+    ):
+        return {
+            **base,
+            "status": "drifted",
+            "reason": "workspace_state_changed",
+        }
+    return {**base, "status": "clean"}
+
+
+def generic_edit_file_state_is_verifiable(state: dict[str, Any]) -> bool:
+    """Return true when a captured file state can be compared exactly."""
+    if state.get("type") == "missing" and state.get("exists") is False:
+        return True
+    return (
+        state.get("type") == "file"
+        and state.get("exists") is True
+        and state.get("content_encoding") == "utf-8"
+        and state.get("content_truncated") is False
+        and isinstance(state.get("content_sha256"), str)
+    )
+
+
+def generic_edit_file_state_signature(state: dict[str, Any]) -> tuple[Any, ...]:
+    """Return a comparable file-state signature without raw content."""
+    if state.get("type") == "missing" and state.get("exists") is False:
+        return (False, "missing")
+    return (
+        True,
+        "file",
+        state.get("bytes"),
+        state.get("content_sha256"),
+        state.get("line_count"),
+    )
+
+
+def generic_edit_file_state_fingerprint(state: dict[str, Any]) -> dict[str, Any]:
+    """Return safe file-state metadata for guard diagnostics."""
+    fingerprint: dict[str, Any] = {
+        "exists": bool(state.get("exists")),
+        "type": str(state.get("type") or "unknown"),
+    }
+    for key in (
+        "bytes",
+        "content_encoding",
+        "content_truncated",
+        "content_bytes_limit",
+        "content_sha256",
+        "line_count",
+    ):
+        if key in state:
+            fingerprint[key] = state[key]
+    return fingerprint
 
 
 def execute_generic_edit_transaction_rollback(
@@ -4510,6 +4711,7 @@ def build_generic_edit_resume_metadata(
     checkpoint_path: Path,
     trace_path: Path,
     start_iteration: int,
+    workspace_guard: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return compact provenance for a run resumed from a checkpoint."""
     resume = (
@@ -4523,6 +4725,8 @@ def build_generic_edit_resume_metadata(
         "previous_status": checkpoint.get("status"),
         "previous_stop_reason": checkpoint.get("stop_reason"),
     }
+    if workspace_guard is not None:
+        metadata["workspace_guard"] = workspace_guard
     for key in (
         "recovery_plan_artifact",
         "mutation_snapshot_artifact",
@@ -5050,6 +5254,17 @@ def build_generic_edit_resume_event(
         value = resume_metadata.get(key)
         if isinstance(value, str) and value:
             event[key] = value
+    workspace_guard = resume_metadata.get("workspace_guard")
+    if isinstance(workspace_guard, dict):
+        event["workspace_guard_status"] = str(
+            workspace_guard.get("status") or "unknown"
+        )
+        event["workspace_guard_drift_count"] = int(
+            workspace_guard.get("drift_count") or 0
+        )
+        event["workspace_guard_unverified_path_count"] = int(
+            workspace_guard.get("unverified_path_count") or 0
+        )
     return event
 
 

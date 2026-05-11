@@ -6899,6 +6899,7 @@ async def test_generic_edit_runtime_resumes_partial_failure_and_rolls_back(
     assert result_artifact["resumed"] is True
     assert result_artifact["status"] == "complete"
     assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["resume"]["workspace_guard"]["status"] == "clean"
     assert result_artifact["unresolved_partial_failure_ids"] == []
     assert result_artifact["unresolved_transaction_group_ids"] == []
     assert "recovery_checkpoint_artifact" not in result_artifact
@@ -6960,6 +6961,15 @@ async def test_generic_edit_runtime_resumes_partial_failure_and_records_repair_m
     checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
     assert first_result.status == "error"
     assert checkpoint_path.exists()
+    mutation_snapshots = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    first_snapshot = mutation_snapshots["snapshots"][0]
+    assert first_snapshot["workspace_guard"]["status"] == "captured"
+    assert first_snapshot["postimages"][0]["content"] == "changed\n"
+    assert first_snapshot["postimages"][0]["content_sha256"]
 
     resume_session = FakeGenericEditSession(
         [
@@ -7012,6 +7022,7 @@ async def test_generic_edit_runtime_resumes_partial_failure_and_records_repair_m
     assert result_artifact["resumed"] is True
     assert result_artifact["status"] == "complete"
     assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["resume"]["workspace_guard"]["status"] == "clean"
     assert result_artifact["unresolved_partial_failure_ids"] == []
     assert result_artifact["unresolved_transaction_group_ids"] == []
     assert repair_transaction["tool_sequence"] == ["repair_mutation", "finish"]
@@ -7025,6 +7036,105 @@ async def test_generic_edit_runtime_resumes_partial_failure_and_records_repair_m
         "json_actions-3"
     )
     assert not checkpoint_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_resume_when_mutated_path_drifted(
+    tmp_path: Path,
+):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "partial.txt"
+    target.write_text("original\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then fail before checkpoint",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "finish too early",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "done before drift check",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+    )
+
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "create partial failure",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    assert first_result.status == "error"
+    assert checkpoint_path.exists()
+    mutation_snapshots = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    first_snapshot = mutation_snapshots["snapshots"][0]
+    assert first_snapshot["workspace_guard"]["status"] == "captured"
+    assert first_snapshot["postimages"][0]["content"] == "changed\n"
+    target.write_text("external edit\n", encoding="utf-8")
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "would repair if guard allowed it",
+                "actions": [
+                    {
+                        "tool": "repair_mutation",
+                        "transaction_id": "json_actions-1",
+                        "paths": ["partial.txt"],
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Should not run after drift",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+        max_iterations=2,
+    )
+
+    with pytest.raises(GenericEditRuntimeError, match="workspace drift"):
+        await resume_runtime_session(
+            resume_runtime,
+            checkpoint_path,
+            tmp_path,
+            requirements=RuntimeRequirements.generic_edit(),
+        )
+
+    assert resume_session.messages == []
 
 
 @pytest.mark.asyncio
