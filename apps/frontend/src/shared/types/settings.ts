@@ -500,6 +500,7 @@ export interface ProviderValidatedRuntimeExecution {
   nativeToolFallbacks?: ProviderValidatedRuntimeFallback[];
   toolCounts?: Record<string, number>;
   resumePolicy?: ProviderValidatedRuntimeResumePolicy;
+  toolLoopContract?: ProviderValidatedToolLoopContract;
 }
 
 export interface ProviderValidatedRuntimeFallback {
@@ -521,6 +522,16 @@ export interface ProviderValidatedRuntimeResumePolicy {
   requiredArtifacts?: string[];
   unresolvedPartialFailureIds?: string[];
   unresolvedTransactionGroupIds?: string[];
+}
+
+export interface ProviderValidatedToolLoopContract {
+  status?: string;
+  toolCallSupport?: string;
+  toolResultSupport?: string;
+  fallback?: string;
+  fallbackReason?: string;
+  recoveryStatus?: string;
+  blockingReason?: string;
 }
 
 export interface ProviderConnectionTestResult {

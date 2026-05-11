@@ -208,6 +208,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   deepv_code: 'settings:aiProvider.runtimeDiagnosticValues.deepvCode',
   error: 'settings:aiProvider.runtimeDiagnosticValues.error',
   external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
+  failed: 'settings:aiProvider.runtimeDiagnosticValues.failed',
   filesystem_edit: 'settings:aiProvider.runtimeDiagnosticValues.filesystemEdit',
   filesystem_read: 'settings:aiProvider.runtimeDiagnosticValues.filesystemRead',
   full_autonomous: 'settings:aiProvider.runtimeDiagnosticValues.fullAutonomous',
@@ -216,8 +217,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
   generic_edit_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.genericEditToolLoop',
   goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
+  incomplete: 'settings:aiProvider.runtimeDiagnosticValues.incomplete',
   inspect_diff: 'settings:aiProvider.runtimeDiagnosticValues.inspectDiff',
   json_actions: 'settings:aiProvider.runtimeDiagnosticValues.jsonActions',
+  json_fallback: 'settings:aiProvider.runtimeDiagnosticValues.jsonFallback',
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
   implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
@@ -227,20 +230,28 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   native_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolLoop',
   native_tool_calls: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolCalls',
   native_tool_request_failed: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolRequestFailed',
+  needs_recovery: 'settings:aiProvider.runtimeDiagnosticValues.needsRecovery',
+  normalized: 'settings:aiProvider.runtimeDiagnosticValues.normalized',
   no: 'settings:aiProvider.runtimeDiagnosticValues.no',
   none: 'settings:aiProvider.runtimeDiagnosticValues.none',
+  not_observed: 'settings:aiProvider.runtimeDiagnosticValues.notObserved',
+  not_required: 'settings:aiProvider.runtimeDiagnosticValues.notRequired',
   not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
   not_requested: 'settings:aiProvider.runtimeDiagnosticValues.notRequested',
   ok: 'settings:aiProvider.runtimeDiagnosticValues.ok',
   opencode: 'settings:aiProvider.runtimeDiagnosticValues.opencode',
   orchestrated: 'settings:aiProvider.runtimeDiagnosticValues.orchestrated',
   partial: 'settings:aiProvider.runtimeDiagnosticValues.partial',
+  partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.partialFailure',
+  passed: 'settings:aiProvider.runtimeDiagnosticValues.passed',
   patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
   qwen_code: 'settings:aiProvider.runtimeDiagnosticValues.qwenCode',
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
   ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
   ready_to_connect: 'settings:aiProvider.runtimeDiagnosticValues.readyToConnect',
   recover_partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure',
+  recovered: 'settings:aiProvider.runtimeDiagnosticValues.recovered',
+  requires_resolution: 'settings:aiProvider.runtimeDiagnosticValues.requiresResolution',
   register_external_mcp_adapter: 'settings:aiProvider.runtimeDiagnosticValues.registerExternalMcpAdapter',
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
@@ -258,6 +269,9 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   complete: 'settings:aiProvider.runtimeDiagnosticValues.complete',
   finish: 'settings:aiProvider.runtimeDiagnosticValues.finish',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
+  unknown: 'settings:aiProvider.runtimeDiagnosticValues.unknown',
+  unresolved: 'settings:aiProvider.runtimeDiagnosticValues.unresolved',
+  unresolved_partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.unresolvedPartialFailure',
   unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
   unsupported_transport: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTransport',
   use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
@@ -1365,6 +1379,14 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       validatedExecution?.stopReason
     );
+    const toolLoopContract = validatedExecution?.toolLoopContract;
+    const toolLoopContractStatus = formatRuntimeDiagnosticValue(t, toolLoopContract?.status);
+    const toolLoopCallSupport = formatRuntimeDiagnosticValue(t, toolLoopContract?.toolCallSupport);
+    const toolLoopResultSupport = formatRuntimeDiagnosticValue(t, toolLoopContract?.toolResultSupport);
+    const toolLoopFallback = formatRuntimeDiagnosticValue(t, toolLoopContract?.fallback);
+    const toolLoopFallbackReason = formatRuntimeDiagnosticValue(t, toolLoopContract?.fallbackReason);
+    const toolLoopRecoveryStatus = formatRuntimeDiagnosticValue(t, toolLoopContract?.recoveryStatus);
+    const toolLoopBlockingReason = formatRuntimeDiagnosticValue(t, toolLoopContract?.blockingReason);
     const resumePolicy = validatedExecution?.resumePolicy;
     const resumePolicyRows = buildProviderResumePolicyDiagnosticRows(t, resumePolicy);
     const validatedNativeFallback = validatedExecution?.nativeToolFallbacks?.[0];
@@ -1497,6 +1519,62 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                       <dt>{t('settings:aiProvider.connectionTest.executionStopReason')}</dt>
                       <dd className="font-medium text-foreground">
                         {validatedExecutionStopReason}
+                      </dd>
+                    </div>
+                  )}
+                  {toolLoopContractStatus && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.toolLoopContract')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {toolLoopContractStatus}
+                      </dd>
+                    </div>
+                  )}
+                  {toolLoopCallSupport && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.toolCallSupport')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {toolLoopCallSupport}
+                      </dd>
+                    </div>
+                  )}
+                  {toolLoopResultSupport && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.toolResultSupport')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {toolLoopResultSupport}
+                      </dd>
+                    </div>
+                  )}
+                  {toolLoopFallback && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.toolLoopFallback')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {toolLoopFallback}
+                      </dd>
+                    </div>
+                  )}
+                  {toolLoopFallbackReason && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.toolLoopFallbackReason')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {toolLoopFallbackReason}
+                      </dd>
+                    </div>
+                  )}
+                  {toolLoopRecoveryStatus && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.toolLoopRecovery')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {toolLoopRecoveryStatus}
+                      </dd>
+                    </div>
+                  )}
+                  {toolLoopBlockingReason && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.toolLoopBlockingReason')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {toolLoopBlockingReason}
                       </dd>
                     </div>
                   )}

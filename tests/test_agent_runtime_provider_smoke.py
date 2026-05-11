@@ -266,6 +266,22 @@ def _google_tool_response(name: str, arguments: dict) -> SimpleNamespace:
     )
 
 
+def _google_tool_batch_response(
+    calls: list[tuple[str, dict]],
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        parts=[
+            SimpleNamespace(
+                function_call=SimpleNamespace(
+                    name=name,
+                    args=arguments,
+                )
+            )
+            for name, arguments in calls
+        ]
+    )
+
+
 def _install_fake_google_tool_responses(
     monkeypatch: pytest.MonkeyPatch,
     responses: list[SimpleNamespace],
@@ -1154,6 +1170,271 @@ async def test_openai_provider_generic_edit_reports_unsupported_tool_result(
         "complete": 1,
     }
     assert result_artifact["failed_tools"] == {"unsupported_local_tool": 1}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("provider_name", "subtask_id"),
+    [
+        ("openai", "1.10"),
+        ("openrouter", "1.11"),
+        ("ollama", "1.12"),
+        ("litellm", "1.13"),
+        ("zhipuai", "1.14"),
+    ],
+)
+async def test_openai_compatible_providers_generic_edit_recover_after_tool_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    provider_name: str,
+    subtask_id: str,
+):
+    target = tmp_path / f"{provider_name}-recover.txt"
+    target.write_text("old\n", encoding="utf-8")
+    responses = [
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_write",
+                                function=SimpleNamespace(
+                                    name="write_file",
+                                    arguments=json.dumps(
+                                        {
+                                            "path": target.name,
+                                            "content": "new\n",
+                                        }
+                                    ),
+                                ),
+                            ),
+                            SimpleNamespace(
+                                id="call_missing",
+                                function=SimpleNamespace(
+                                    name="read_file",
+                                    arguments=json.dumps({"path": "missing.txt"}),
+                                ),
+                            ),
+                        ],
+                    )
+                )
+            ]
+        ),
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_rollback",
+                                function=SimpleNamespace(
+                                    name="rollback_transaction",
+                                    arguments=json.dumps(
+                                        {"transaction_id": "native_tool_calls-1"}
+                                    ),
+                                ),
+                            ),
+                            SimpleNamespace(
+                                id="call_finish",
+                                function=SimpleNamespace(
+                                    name="finish",
+                                    arguments=json.dumps(
+                                        {
+                                            "summary": (
+                                                f"{provider_name} recovered provider "
+                                                "tool loop"
+                                            ),
+                                            "tests": [],
+                                            "risks": [],
+                                        }
+                                    ),
+                                ),
+                            ),
+                        ],
+                    )
+                )
+            ]
+        ),
+    ]
+    provider, calls = _provider_with_fake_openai_compatible_responses(
+        monkeypatch,
+        provider_name,
+        responses,
+    )
+    session = provider.create_session(SessionConfig(name=f"{provider_name}-recovery"))
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        f"recover failed {provider_name} provider tool loop",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id=subtask_id,
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert len(calls) == 2
+    assert calls[1]["messages"][-2]["tool_call_id"] == "call_missing"
+    assert "File not found" in calls[1]["messages"][-2]["content"]
+    assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["transaction_status_counts"] == {
+        "partial_failure": 1,
+        "complete": 1,
+    }
+    assert result_artifact["recovery_outcomes"][0]["strategy"] == (
+        "rollback_transaction"
+    )
+
+
+def _provider_with_fake_openai_compatible_responses(
+    monkeypatch: pytest.MonkeyPatch,
+    provider_name: str,
+    responses: list[SimpleNamespace],
+):
+    if provider_name == "openai":
+        fake_openai = _install_fake_openai_responses(monkeypatch, responses)
+        return (
+            OpenAIProvider(
+                ProviderConfig(provider="openai", openai_api_key="test-key")
+            ),
+            fake_openai.calls,
+        )
+    if provider_name == "openrouter":
+        fake_openai = _install_fake_openai_responses(monkeypatch, responses)
+        return (
+            OpenRouterProvider(
+                ProviderConfig(provider="openrouter", openrouter_api_key="test-key")
+            ),
+            fake_openai.calls,
+        )
+    if provider_name == "ollama":
+        fake_openai = _install_fake_openai_responses(monkeypatch, responses)
+        return (
+            OllamaProvider(ProviderConfig(provider="ollama", ollama_model="llama3.1")),
+            fake_openai.calls,
+        )
+    if provider_name == "litellm":
+        fake_litellm = _install_fake_litellm_responses(monkeypatch, responses)
+        return (
+            LiteLLMProvider(
+                ProviderConfig(provider="litellm", litellm_model="openai/gpt-4o")
+            ),
+            fake_litellm.calls,
+        )
+    if provider_name == "zhipuai":
+        fake_zai = _install_fake_zai_responses(monkeypatch, responses)
+        return (
+            ZhipuAIProvider(
+                ProviderConfig(
+                    provider="zhipuai",
+                    zhipuai_api_key="test-key",
+                    zhipuai_model="glm-4-flash",
+                )
+            ),
+            fake_zai.calls,
+        )
+    raise AssertionError(f"Unsupported provider fixture: {provider_name}")
+
+
+@pytest.mark.asyncio
+async def test_google_provider_generic_edit_recovers_after_tool_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    target = tmp_path / "google-recover.txt"
+    target.write_text("old\n", encoding="utf-8")
+    fake_google = _install_fake_google_tool_responses(
+        monkeypatch,
+        [
+            _google_tool_batch_response(
+                [
+                    ("write_file", {"path": target.name, "content": "new\n"}),
+                    ("read_file", {"path": "missing.txt"}),
+                ]
+            ),
+            _google_tool_batch_response(
+                [
+                    (
+                        "rollback_transaction",
+                        {"transaction_id": "native_tool_calls-1"},
+                    ),
+                    (
+                        "finish",
+                        {
+                            "summary": "Google recovered provider tool loop",
+                            "tests": [],
+                            "risks": [],
+                        },
+                    ),
+                ]
+            ),
+        ],
+    )
+    provider = GoogleProvider(
+        ProviderConfig(
+            provider="google",
+            google_api_key="test-key",
+            google_model="gemini-2.0-flash",
+        )
+    )
+    session = provider.create_session(SessionConfig(name="google-recovery-loop"))
+    runtime_session = create_runtime_session(
+        provider_name="google",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "recover failed google provider tool loop",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.15",
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    function_responses = [
+        part["function_response"]
+        for content in fake_google.generate_calls[1]["contents"]
+        for part in content["parts"]
+        if "function_response" in part
+    ]
+    missing_tool_response = next(
+        response for response in function_responses if response["name"] == "read_file"
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert missing_tool_response["name"] == "read_file"
+    assert "File not found" in json.dumps(missing_tool_response["response"])
+    assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["transaction_status_counts"] == {
+        "partial_failure": 1,
+        "complete": 1,
+    }
+    assert result_artifact["recovery_outcomes"][0]["strategy"] == (
+        "rollback_transaction"
+    )
 
 
 @pytest.mark.asyncio

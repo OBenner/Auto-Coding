@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { mapProviderRuntimeResumePolicy } from './provider-smoke-diagnostics';
+import {
+  mapProviderRuntimeResumePolicy,
+  mapProviderToolLoopContract
+} from './provider-smoke-diagnostics';
 
 describe('mapProviderRuntimeResumePolicy', () => {
   it('maps safe generic edit resume policy fields from provider smoke diagnostics', () => {
@@ -28,5 +31,34 @@ describe('mapProviderRuntimeResumePolicy', () => {
       unresolvedPartialFailureIds: ['json_actions-1'],
       unresolvedTransactionGroupIds: ['transaction-group-1'],
     });
+  });
+});
+
+describe('mapProviderToolLoopContract', () => {
+  it('maps safe generic edit tool-loop contract fields', () => {
+    expect(
+      mapProviderToolLoopContract({
+        status: 'needs_recovery',
+        tool_call_support: 'json_fallback',
+        tool_result_support: 'partial_failure',
+        fallback: 'json_actions',
+        fallback_reason: 'native_tool_request_failed',
+        recovery_status: 'requires_resolution',
+        blocking_reason: 'unresolved_partial_failure',
+        ignored_private_path: '/tmp/checkpoint.json',
+      })
+    ).toEqual({
+      status: 'needs_recovery',
+      toolCallSupport: 'json_fallback',
+      toolResultSupport: 'partial_failure',
+      fallback: 'json_actions',
+      fallbackReason: 'native_tool_request_failed',
+      recoveryStatus: 'requires_resolution',
+      blockingReason: 'unresolved_partial_failure',
+    });
+  });
+
+  it('returns undefined for empty tool-loop contract payloads', () => {
+    expect(mapProviderToolLoopContract({})).toBeUndefined();
   });
 });

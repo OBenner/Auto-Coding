@@ -229,6 +229,13 @@ async def test_run_provider_smoke_check_generic_edit_runtime(
         "native_tool_fallback_count": 0,
         "native_tool_fallbacks": [],
         "tool_counts": {"finish": 1, "write_file": 1},
+        "tool_loop_contract": {
+            "status": "passed",
+            "tool_call_support": "native",
+            "tool_result_support": "normalized",
+            "fallback": "none",
+            "recovery_status": "not_required",
+        },
     }
     assert fake_provider.session.tool_results[0] == ("call_write", "write_file")
 
@@ -332,6 +339,14 @@ async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallbac
             }
         ],
         "tool_counts": {"finish": 1, "write_file": 1},
+        "tool_loop_contract": {
+            "status": "passed",
+            "tool_call_support": "json_fallback",
+            "tool_result_support": "normalized",
+            "fallback": "json_actions",
+            "fallback_reason": "native_tool_request_failed",
+            "recovery_status": "not_required",
+        },
     }
     assert "Respond with exactly one JSON object" in fake_provider.session.messages[0]
 
@@ -394,6 +409,94 @@ def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
         ],
         "unresolved_partial_failure_ids": ["partial-failure-1"],
         "unresolved_transaction_group_ids": ["transaction-group-1"],
+    }
+
+
+def test_generic_edit_execution_diagnostics_classifies_native_tool_contract(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "stop_reason": "finish",
+                "loop": "native_tool_calls",
+                "action_count": 2,
+                "failed_action_count": 0,
+                "native_tool_fallback_count": 0,
+                "native_tool_fallbacks": [],
+                "tool_counts": {"finish": 1, "write_file": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["tool_loop_contract"] == {
+        "status": "passed",
+        "tool_call_support": "native",
+        "tool_result_support": "normalized",
+        "fallback": "none",
+        "recovery_status": "not_required",
+    }
+
+
+def test_generic_edit_execution_diagnostics_classifies_fallback_recovery_contract(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "error",
+                "stop_reason": "unresolved_partial_failure",
+                "loop": "json_actions",
+                "action_count": 3,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 1,
+                "native_tool_fallbacks": [
+                    {
+                        "provider": "openai",
+                        "from_loop": "native_tool_calls",
+                        "to_loop": "json_actions",
+                        "reason": "native_tool_request_failed",
+                        "message": "provider does not support tools",
+                    }
+                ],
+                "tool_counts": {"finish": 1, "read_file": 1, "write_file": 1},
+                "resume_policy": {
+                    "status": "requires_resolution",
+                    "strategy": "recover_partial_failure",
+                    "can_resume": True,
+                    "finish_blocked": True,
+                    "required_resolution_action_kinds": [
+                        "inspect_diff",
+                        "rollback_transaction",
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["tool_loop_contract"] == {
+        "status": "needs_recovery",
+        "tool_call_support": "json_fallback",
+        "tool_result_support": "partial_failure",
+        "fallback": "json_actions",
+        "fallback_reason": "native_tool_request_failed",
+        "recovery_status": "requires_resolution",
+        "blocking_reason": "unresolved_partial_failure",
     }
 
 
@@ -506,6 +609,14 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
                     "loop": "json_actions",
                     "action_count": 2,
                     "native_tool_fallback_count": 1,
+                    "tool_loop_contract": {
+                        "status": "passed",
+                        "tool_call_support": "json_fallback",
+                        "tool_result_support": "normalized",
+                        "fallback": "json_actions",
+                        "fallback_reason": "native_tool_request_failed",
+                        "recovery_status": "not_required",
+                    },
                     "native_tool_fallbacks": [
                         {
                             "reason": "native_tool_request_failed",
@@ -546,6 +657,8 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
 
     assert "Execution loop" in output
     assert "json_actions" in output
+    assert "Tool-loop contract" in output
+    assert "json_fallback" in output
     assert "Execution actions" in output
     assert "Native tool fallbacks" in output
     assert "Native fallback reason" in output

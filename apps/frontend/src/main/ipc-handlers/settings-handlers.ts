@@ -34,7 +34,10 @@ import { projectStore } from '../project-store';
 import { getBestAvailableProfileEnv } from '../rate-limit-detector';
 import { getAPIProfileEnv } from '../services/profile';
 import { getCodexProfileManager } from '../codex-profile-manager';
-import { mapProviderRuntimeResumePolicy } from './provider-smoke-diagnostics';
+import {
+  mapProviderRuntimeResumePolicy,
+  mapProviderToolLoopContract,
+} from './provider-smoke-diagnostics';
 import { resolveProviderSmokeRuntime } from './provider-smoke-runtime';
 
 const settingsPath = getSettingsPath();
@@ -373,6 +376,7 @@ type ProviderSmokeCliResult = {
       native_tool_fallbacks?: unknown;
       tool_counts?: unknown;
       resume_policy?: unknown;
+      tool_loop_contract?: unknown;
     } | null;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
@@ -493,6 +497,7 @@ function mapValidatedRuntimeExecution(
     nativeToolFallbacks: mapValidatedRuntimeFallbacks(payload.native_tool_fallbacks),
     toolCounts: numberRecordFromUnknown(payload.tool_counts),
     resumePolicy: mapProviderRuntimeResumePolicy(payload.resume_policy),
+    toolLoopContract: mapProviderToolLoopContract(payload.tool_loop_contract),
   };
 }
 

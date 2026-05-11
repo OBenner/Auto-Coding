@@ -1,4 +1,7 @@
-import type { ProviderValidatedRuntimeResumePolicy } from '../../shared/types';
+import type {
+  ProviderValidatedRuntimeResumePolicy,
+  ProviderValidatedToolLoopContract
+} from '../../shared/types';
 
 function arrayFromUnknown(value: unknown): string[] {
   return Array.isArray(value)
@@ -48,5 +51,28 @@ export function mapProviderRuntimeResumePolicy(
     Array.isArray(field) ? field.length > 0 : field !== undefined
   )
     ? policy
+    : undefined;
+}
+
+export function mapProviderToolLoopContract(
+  value: unknown
+): ProviderValidatedToolLoopContract | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const contract: ProviderValidatedToolLoopContract = {
+    status: stringFromUnknown(payload.status),
+    toolCallSupport: stringFromUnknown(payload.tool_call_support),
+    toolResultSupport: stringFromUnknown(payload.tool_result_support),
+    fallback: stringFromUnknown(payload.fallback),
+    fallbackReason: stringFromUnknown(payload.fallback_reason),
+    recoveryStatus: stringFromUnknown(payload.recovery_status),
+    blockingReason: stringFromUnknown(payload.blocking_reason),
+  };
+
+  return Object.values(contract).some((field) => field !== undefined)
+    ? contract
     : undefined;
 }

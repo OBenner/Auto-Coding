@@ -119,7 +119,114 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
     resume_policy = _resume_policy_payload(payload.get("resume_policy"))
     if resume_policy is not None:
         diagnostics["resume_policy"] = resume_policy
+    diagnostics["tool_loop_contract"] = _generic_edit_tool_loop_contract(
+        payload=payload,
+        native_tool_fallbacks=native_tool_fallbacks,
+        resume_policy=resume_policy,
+    )
     return diagnostics
+
+
+def _generic_edit_tool_loop_contract(
+    *,
+    payload: dict[str, Any],
+    native_tool_fallbacks: list[dict[str, Any]],
+    resume_policy: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return a compact provider contract summary for UI/CLI diagnostics."""
+    status = str(payload.get("status") or "unknown")
+    stop_reason = str(payload.get("stop_reason") or "unknown")
+    loop = str(payload.get("loop") or "unknown")
+    action_count = _int_payload_value(payload, "action_count")
+    failed_action_count = _int_payload_value(payload, "failed_action_count")
+    fallback_count = _int_payload_value(payload, "native_tool_fallback_count")
+
+    first_fallback = native_tool_fallbacks[0] if native_tool_fallbacks else {}
+    fallback_reason = first_fallback.get("reason")
+    fallback_target = first_fallback.get("to_loop") or "json_actions"
+
+    contract: dict[str, Any] = {
+        "status": _generic_edit_contract_status(
+            status=status,
+            stop_reason=stop_reason,
+            failed_action_count=failed_action_count,
+            resume_policy=resume_policy,
+        ),
+        "tool_call_support": _generic_edit_tool_call_support(
+            loop=loop,
+            fallback_count=fallback_count,
+        ),
+        "tool_result_support": _generic_edit_tool_result_support(
+            action_count=action_count,
+            failed_action_count=failed_action_count,
+            resume_policy=resume_policy,
+        ),
+        "fallback": fallback_target if fallback_count > 0 else "none",
+        "recovery_status": _generic_edit_recovery_status(
+            failed_action_count=failed_action_count,
+            resume_policy=resume_policy,
+        ),
+    }
+    if fallback_reason:
+        contract["fallback_reason"] = fallback_reason
+    if contract["status"] in {"blocked", "needs_recovery"}:
+        contract["blocking_reason"] = stop_reason
+    return contract
+
+
+def _generic_edit_contract_status(
+    *,
+    status: str,
+    stop_reason: str,
+    failed_action_count: int,
+    resume_policy: dict[str, Any] | None,
+) -> str:
+    if resume_policy and resume_policy.get("status") == "requires_resolution":
+        return "needs_recovery"
+    if status == "complete" and stop_reason == "finish" and failed_action_count == 0:
+        return "passed"
+    if status == "complete":
+        return "recovered" if failed_action_count else "passed"
+    if status == "error":
+        return "blocked"
+    return "incomplete"
+
+
+def _generic_edit_tool_call_support(*, loop: str, fallback_count: int) -> str:
+    if loop == "native_tool_calls" and fallback_count == 0:
+        return "native"
+    if fallback_count > 0:
+        return "json_fallback"
+    if loop == "json_actions":
+        return "json_actions"
+    return "unknown"
+
+
+def _generic_edit_tool_result_support(
+    *,
+    action_count: int,
+    failed_action_count: int,
+    resume_policy: dict[str, Any] | None,
+) -> str:
+    if action_count <= 0:
+        return "not_observed"
+    if failed_action_count <= 0:
+        return "normalized"
+    if resume_policy and resume_policy.get("status") == "requires_resolution":
+        return "partial_failure"
+    return "failed"
+
+
+def _generic_edit_recovery_status(
+    *,
+    failed_action_count: int,
+    resume_policy: dict[str, Any] | None,
+) -> str:
+    if resume_policy and resume_policy.get("status") == "requires_resolution":
+        return "requires_resolution"
+    if failed_action_count > 0:
+        return "unresolved"
+    return "not_required"
 
 
 def _native_tool_fallbacks_payload(value: Any) -> list[dict[str, Any]]:
@@ -604,6 +711,23 @@ def handle_provider_smoke_command(
             execution = result.runtime_diagnostics.get("validated_runtime_execution")
             if isinstance(execution, dict):
                 print_key_value("Execution loop", str(execution.get("loop", "unknown")))
+                contract = execution.get("tool_loop_contract")
+                if isinstance(contract, dict):
+                    contract_parts = [
+                        str(contract[field])
+                        for field in (
+                            "status",
+                            "tool_call_support",
+                            "tool_result_support",
+                            "recovery_status",
+                        )
+                        if isinstance(contract.get(field), str) and str(contract[field])
+                    ]
+                    if contract_parts:
+                        print_key_value(
+                            "Tool-loop contract",
+                            ", ".join(contract_parts),
+                        )
                 print_key_value(
                     "Execution actions",
                     str(execution.get("action_count", 0)),
