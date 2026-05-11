@@ -6322,6 +6322,120 @@ async def test_generic_edit_runtime_resume_preserves_mutation_snapshots(
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_resumes_partial_failure_and_rolls_back(
+    tmp_path: Path,
+):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "partial.txt"
+    target.write_text("original\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then fail before checkpoint",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "finish too early",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "done before rollback",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+    )
+
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "create partial failure",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    assert first_result.status == "error"
+    assert checkpoint_path.exists()
+    assert target.read_text(encoding="utf-8") == "changed\n"
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "rollback after resume",
+                "actions": [
+                    {
+                        "tool": "rollback_transaction",
+                        "transaction_id": "json_actions-1",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Resumed and rolled back partial edit",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+        max_iterations=2,
+    )
+
+    resumed = await resume_runtime_session(
+        resume_runtime,
+        checkpoint_path,
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    group_artifact = json.loads(
+        (artifact_dir / "generic_edit_transaction_groups.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert resumed.status == "continue"
+    assert "Required recovery actions: inspect_diff, rollback_transaction" in (
+        resume_session.messages[0]
+    )
+    assert target.read_text(encoding="utf-8") == "original\n"
+    assert result_artifact["resumed"] is True
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["recovery_resolved"] is True
+    assert result_artifact["unresolved_partial_failure_ids"] == []
+    assert result_artifact["unresolved_transaction_group_ids"] == []
+    assert "recovery_checkpoint_artifact" not in result_artifact
+    assert group_artifact["transaction_groups"][0]["status"] == "resolved"
+    assert group_artifact["transaction_groups"][0]["resolution_transaction_id"] == (
+        "json_actions-3"
+    )
+    assert not checkpoint_path.exists()
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_native_tools_reject_finish_with_unresolved_partial_failure(
     tmp_path: Path,
 ):
