@@ -4221,6 +4221,13 @@ def load_generic_edit_session_state(
         raise GenericEditRuntimeError(
             "Generic edit session state resume policy is not resumable."
         )
+    if (
+        resume_policy.get("strategy") != resume_action.get("strategy")
+        or resume_policy.get("next_iteration") != resume_action.get("next_iteration")
+    ):
+        raise GenericEditRuntimeError(
+            "Generic edit session state resume policy does not match resume action."
+        )
     unresolved_policy_ids = [
         *normalize_string_list(resume_policy.get("unresolved_partial_failure_ids")),
         *normalize_string_list(resume_policy.get("unresolved_transaction_group_ids")),
