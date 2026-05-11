@@ -1286,6 +1286,25 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       validatedExecution?.stopReason
     );
+    const resumePolicy = validatedExecution?.resumePolicy;
+    const resumePolicyStatus = formatRuntimeDiagnosticValue(t, resumePolicy?.status);
+    const resumePolicyStrategy = formatRuntimeDiagnosticValue(t, resumePolicy?.strategy);
+    const resumeRequiredActions = formatRuntimeDiagnosticList(
+      t,
+      resumePolicy?.requiredResolutionActionKinds
+    );
+    const resumeRequiredArtifacts = formatRuntimeDiagnosticList(
+      t,
+      resumePolicy?.requiredArtifacts
+    );
+    const resumeUnresolvedFailures = formatRuntimeDiagnosticList(
+      t,
+      resumePolicy?.unresolvedPartialFailureIds
+    );
+    const resumeUnresolvedGroups = formatRuntimeDiagnosticList(
+      t,
+      resumePolicy?.unresolvedTransactionGroupIds
+    );
     const validatedNativeFallback = validatedExecution?.nativeToolFallbacks?.[0];
     const validatedNativeFallbackReason = formatRuntimeDiagnosticValue(
       t,
@@ -1464,6 +1483,54 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                       <dt>{t('settings:aiProvider.connectionTest.executionTools')}</dt>
                       <dd className="font-medium text-foreground">
                         {validatedExecutionToolCounts}
+                      </dd>
+                    </div>
+                  )}
+                  {resumePolicyStatus && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.resumePolicy')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {resumePolicyStatus}
+                      </dd>
+                    </div>
+                  )}
+                  {resumePolicyStrategy && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.resumeStrategy')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {resumePolicyStrategy}
+                      </dd>
+                    </div>
+                  )}
+                  {resumeRequiredActions && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.resumeRequiredActions')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {resumeRequiredActions}
+                      </dd>
+                    </div>
+                  )}
+                  {resumeRequiredArtifacts && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.resumeRequiredArtifacts')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {resumeRequiredArtifacts}
+                      </dd>
+                    </div>
+                  )}
+                  {resumeUnresolvedFailures && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.resumeUnresolvedFailures')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {resumeUnresolvedFailures}
+                      </dd>
+                    </div>
+                  )}
+                  {resumeUnresolvedGroups && (
+                    <div>
+                      <dt>{t('settings:aiProvider.connectionTest.resumeUnresolvedGroups')}</dt>
+                      <dd className="font-medium text-foreground">
+                        {resumeUnresolvedGroups}
                       </dd>
                     </div>
                   )}

@@ -499,6 +499,7 @@ export interface ProviderValidatedRuntimeExecution {
   nativeToolFallbackCount?: number;
   nativeToolFallbacks?: ProviderValidatedRuntimeFallback[];
   toolCounts?: Record<string, number>;
+  resumePolicy?: ProviderValidatedRuntimeResumePolicy;
 }
 
 export interface ProviderValidatedRuntimeFallback {
@@ -508,6 +509,18 @@ export interface ProviderValidatedRuntimeFallback {
   reason?: string;
   message?: string;
   toolSchemaCount?: number;
+}
+
+export interface ProviderValidatedRuntimeResumePolicy {
+  status?: string;
+  strategy?: string;
+  canResume?: boolean;
+  finishBlocked?: boolean;
+  nextIteration?: number;
+  requiredResolutionActionKinds?: string[];
+  requiredArtifacts?: string[];
+  unresolvedPartialFailureIds?: string[];
+  unresolvedTransactionGroupIds?: string[];
 }
 
 export interface ProviderConnectionTestResult {
