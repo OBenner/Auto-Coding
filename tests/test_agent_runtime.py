@@ -70,6 +70,7 @@ from agents.runtime.adapters.generic_edit import (
     build_generic_edit_rollback_operation,
     execute_generic_edit_transaction_rollback,
     generic_edit_mcp_lines,
+    link_generic_edit_transaction_batches_to_groups,
     summarize_generic_edit_transaction_groups,
     summarize_generic_edit_transactions,
 )
@@ -8172,6 +8173,55 @@ def test_generic_edit_transaction_summary_classifies_repair_mutation_resolution(
     assert groups["transaction_groups"][0]["recovery_attempts"][0]["strategy"] == (
         "repair_mutation"
     )
+
+
+def test_generic_edit_transaction_batches_link_recovery_outcomes():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["target.txt"],
+                    "mutated_paths": ["target.txt"],
+                    "batch_ids": ["batch-1"],
+                    "batch_status": "open",
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-2",
+                    "status": "complete",
+                    "tool_sequence": ["repair_mutation"],
+                    "affected_paths": ["target.txt"],
+                    "mutated_paths": ["target.txt"],
+                    "can_resolve_partial_failure": True,
+                    "batch_ids": ["batch-1"],
+                    "batch_status": "committed",
+                }
+            },
+        ]
+    )
+    groups = summarize_generic_edit_transaction_groups(
+        transaction_summary=summary,
+        mutation_snapshots=[],
+    )
+    linked = link_generic_edit_transaction_batches_to_groups(
+        transaction_summary=summary,
+        transaction_group_summary=groups,
+    )
+
+    batch = linked["transaction_batches"][0]
+    assert batch["id"] == "batch-1"
+    assert batch["transaction_group_ids"] == ["transaction-group-1"]
+    assert batch["transaction_group_count"] == 1
+    assert batch["recovery_outcome_count"] == 1
+    assert batch["recovery_outcomes"][0]["transaction_group_id"] == (
+        "transaction-group-1"
+    )
+    assert batch["recovery_outcomes"][0]["strategy"] == "repair_mutation"
+    assert "unresolved_transaction_group_ids" not in batch
 
 
 def test_generic_edit_transaction_summary_allows_workspace_recovery_verification():

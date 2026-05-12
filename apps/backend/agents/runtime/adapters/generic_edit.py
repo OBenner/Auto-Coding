@@ -3464,6 +3464,10 @@ def save_generic_edit_artifacts(
         transaction_summary=transaction_summary,
         mutation_snapshots=mutation_snapshots,
     )
+    transaction_summary = link_generic_edit_transaction_batches_to_groups(
+        transaction_summary=transaction_summary,
+        transaction_group_summary=transaction_group_summary,
+    )
     recovery_plan = build_generic_edit_recovery_plan(
         transaction_summary=transaction_summary,
         transaction_group_summary=transaction_group_summary,
@@ -6569,6 +6573,81 @@ def summarize_generic_edit_transaction_groups(
         "recovery_outcome_count": len(recovery_outcomes),
         "recovery_outcomes": recovery_outcomes,
     }
+
+
+def link_generic_edit_transaction_batches_to_groups(
+    *,
+    transaction_summary: dict[str, Any],
+    transaction_group_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Attach recovery group and outcome links to transaction batch summaries."""
+    batches = [
+        dict(batch)
+        for batch in transaction_summary.get("transaction_batches") or []
+        if isinstance(batch, dict)
+    ]
+    if not batches:
+        return transaction_summary
+
+    batches_by_id = {str(batch.get("id") or ""): batch for batch in batches}
+    for group in transaction_group_summary.get("transaction_groups") or []:
+        if not isinstance(group, dict):
+            continue
+        group_id = str(group.get("id") or "")
+        if not group_id:
+            continue
+        for batch_id in normalize_string_list(group.get("batch_ids")):
+            batch = batches_by_id.get(batch_id)
+            if batch is None:
+                continue
+            append_unique_string(batch, "transaction_group_ids", group_id)
+            if str(group.get("status") or "") == "unresolved":
+                append_unique_string(
+                    batch,
+                    "unresolved_transaction_group_ids",
+                    group_id,
+                )
+            recovery_outcome = group.get("recovery_outcome")
+            if isinstance(recovery_outcome, dict):
+                outcomes = batch.setdefault("recovery_outcomes", [])
+                if all(
+                    outcome.get("transaction_group_id") != group_id
+                    for outcome in outcomes
+                    if isinstance(outcome, dict)
+                ):
+                    outcomes.append(recovery_outcome)
+
+    for batch in batches:
+        transaction_group_ids = normalize_string_list(
+            batch.get("transaction_group_ids")
+        )
+        unresolved_group_ids = normalize_string_list(
+            batch.get("unresolved_transaction_group_ids")
+        )
+        recovery_outcomes = [
+            outcome
+            for outcome in batch.get("recovery_outcomes") or []
+            if isinstance(outcome, dict)
+        ]
+        if transaction_group_ids:
+            batch["transaction_group_count"] = len(transaction_group_ids)
+        if unresolved_group_ids:
+            batch["unresolved_transaction_group_count"] = len(unresolved_group_ids)
+        if recovery_outcomes:
+            batch["recovery_outcome_count"] = len(recovery_outcomes)
+
+    return {
+        **transaction_summary,
+        "transaction_batches": batches,
+    }
+
+
+def append_unique_string(target: dict[str, Any], field_name: str, value: str) -> None:
+    """Append a string to a list field if it is not already present."""
+    values = normalize_string_list(target.get(field_name))
+    if value not in values:
+        values.append(value)
+    target[field_name] = values
 
 
 def transaction_id_value(transaction: dict[str, Any], index: int) -> str:
