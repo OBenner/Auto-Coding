@@ -15,7 +15,7 @@ describe('mapProviderRuntimeResumePolicy', () => {
         can_resume: true,
         finish_blocked: true,
         next_iteration: 4,
-        checkpoint_path: '/tmp/private/checkpoint.json',
+        checkpoint_path: 'workspace-private/checkpoint.json',
         required_resolution_action_kinds: ['inspect_diff', 'rollback_transaction', 42],
         required_artifacts: ['trace_artifact', 'recovery_plan_artifact', null],
         unresolved_partial_failure_ids: ['json_actions-1'],
@@ -46,7 +46,7 @@ describe('mapProviderToolLoopContract', () => {
         fallback_reason: 'native_tool_request_failed',
         recovery_status: 'requires_resolution',
         blocking_reason: 'unresolved_partial_failure',
-        ignored_private_path: '/tmp/checkpoint.json',
+        ignored_private_path: 'workspace-private/checkpoint.json',
       })
     ).toEqual({
       status: 'needs_recovery',
@@ -77,7 +77,7 @@ describe('mapProviderContractHealth', () => {
         fallback: 'json_actions',
         fallback_reason: 'native_tool_request_failed',
         recovery_status: 'not_required',
-        ignored_private_path: '/tmp/provider-state.json',
+        ignored_private_path: 'workspace-private/provider-state.json',
       })
     ).toEqual({
       status: 'gateway_blocked',

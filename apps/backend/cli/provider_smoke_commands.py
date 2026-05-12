@@ -862,6 +862,134 @@ async def _complete_provider_generic_edit_smoke(
     )
 
 
+def _print_provider_smoke_result(result: ProviderSmokeResult) -> None:
+    """Print the human-readable provider smoke result."""
+    print_status(
+        result.message,
+        "success" if result.success else "error",
+    )
+    print_key_value("Provider", result.provider)
+    print_key_value("Model", result.model or "default")
+    print_key_value("Runtime mode", result.runtime_mode)
+    _print_provider_runtime_diagnostics(result.runtime_diagnostics)
+    if result.response_excerpt:
+        print_key_value("Response", result.response_excerpt)
+    if result.error_details:
+        print_key_value("Details", result.error_details)
+
+
+def _print_provider_runtime_diagnostics(
+    runtime_diagnostics: dict[str, Any],
+) -> None:
+    """Print provider runtime diagnostics when the smoke result includes them."""
+    if not runtime_diagnostics:
+        return
+    print_key_value(
+        "Smoke scope",
+        str(runtime_diagnostics.get("smoke_scope", "unknown")),
+    )
+    _print_provider_contract_health(runtime_diagnostics.get("provider_contract_health"))
+    _print_provider_execution_diagnostics(
+        runtime_diagnostics.get("validated_runtime_execution")
+    )
+
+
+def _print_provider_contract_health(health: Any) -> None:
+    """Print the provider contract health summary."""
+    if not isinstance(health, dict):
+        return
+    print_key_value(
+        "Provider health",
+        str(health.get("status", "unknown")),
+    )
+    reason = health.get("reason")
+    if isinstance(reason, str) and reason:
+        print_key_value("Provider health reason", reason)
+
+
+def _print_provider_execution_diagnostics(execution: Any) -> None:
+    """Print validated generic_edit execution diagnostics."""
+    if not isinstance(execution, dict):
+        return
+    print_key_value("Execution loop", str(execution.get("loop", "unknown")))
+    _print_tool_loop_contract(execution.get("tool_loop_contract"))
+    print_key_value(
+        "Execution actions",
+        str(execution.get("action_count", 0)),
+    )
+    print_key_value(
+        "Native tool fallbacks",
+        str(execution.get("native_tool_fallback_count", 0)),
+    )
+    _print_first_native_tool_fallback(execution.get("native_tool_fallbacks"))
+    _print_provider_resume_policy(execution.get("resume_policy"))
+
+
+def _print_tool_loop_contract(contract: Any) -> None:
+    """Print the compact provider tool-loop contract line."""
+    if not isinstance(contract, dict):
+        return
+    contract_parts = [
+        str(contract[field])
+        for field in (
+            "status",
+            "tool_call_support",
+            "tool_result_support",
+            "recovery_status",
+        )
+        if isinstance(contract.get(field), str) and str(contract[field])
+    ]
+    if contract_parts:
+        print_key_value(
+            "Tool-loop contract",
+            ", ".join(contract_parts),
+        )
+
+
+def _print_first_native_tool_fallback(fallbacks: Any) -> None:
+    """Print the first native-tool fallback reason for quick CLI diagnosis."""
+    if not isinstance(fallbacks, list) or not fallbacks:
+        return
+    first_fallback = fallbacks[0]
+    if isinstance(first_fallback, dict):
+        print_key_value(
+            "Native fallback reason",
+            str(first_fallback.get("reason", "unknown")),
+        )
+
+
+def _print_provider_resume_policy(resume_policy: Any) -> None:
+    """Print the generic_edit resume policy summary."""
+    if not isinstance(resume_policy, dict):
+        return
+    print_key_value(
+        "Resume policy",
+        str(resume_policy.get("status", "unknown")),
+    )
+    _print_string_list_line(
+        "Resume required actions",
+        resume_policy.get("required_resolution_action_kinds"),
+    )
+    _print_string_list_line(
+        "Resume required artifacts",
+        resume_policy.get("required_artifacts"),
+    )
+    _print_string_list_line(
+        "Resume unresolved failures",
+        resume_policy.get("unresolved_partial_failure_ids"),
+    )
+    _print_string_list_line(
+        "Resume unresolved groups",
+        resume_policy.get("unresolved_transaction_group_ids"),
+    )
+
+
+def _print_string_list_line(label: str, value: Any) -> None:
+    """Print a comma-separated list value when present."""
+    if isinstance(value, list) and value:
+        print_key_value(label, ", ".join(str(item) for item in value))
+
+
 def handle_provider_smoke_command(
     *,
     project_dir: Path,
@@ -885,104 +1013,6 @@ def handle_provider_smoke_command(
     if output_json:
         print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
     else:
-        print_status(
-            result.message,
-            "success" if result.success else "error",
-        )
-        print_key_value("Provider", result.provider)
-        print_key_value("Model", result.model or "default")
-        print_key_value("Runtime mode", result.runtime_mode)
-        if result.runtime_diagnostics:
-            print_key_value(
-                "Smoke scope",
-                str(result.runtime_diagnostics.get("smoke_scope", "unknown")),
-            )
-            health = result.runtime_diagnostics.get("provider_contract_health")
-            if isinstance(health, dict):
-                print_key_value(
-                    "Provider health",
-                    str(health.get("status", "unknown")),
-                )
-                reason = health.get("reason")
-                if isinstance(reason, str) and reason:
-                    print_key_value("Provider health reason", reason)
-            execution = result.runtime_diagnostics.get("validated_runtime_execution")
-            if isinstance(execution, dict):
-                print_key_value("Execution loop", str(execution.get("loop", "unknown")))
-                contract = execution.get("tool_loop_contract")
-                if isinstance(contract, dict):
-                    contract_parts = [
-                        str(contract[field])
-                        for field in (
-                            "status",
-                            "tool_call_support",
-                            "tool_result_support",
-                            "recovery_status",
-                        )
-                        if isinstance(contract.get(field), str) and str(contract[field])
-                    ]
-                    if contract_parts:
-                        print_key_value(
-                            "Tool-loop contract",
-                            ", ".join(contract_parts),
-                        )
-                print_key_value(
-                    "Execution actions",
-                    str(execution.get("action_count", 0)),
-                )
-                print_key_value(
-                    "Native tool fallbacks",
-                    str(execution.get("native_tool_fallback_count", 0)),
-                )
-                fallbacks = execution.get("native_tool_fallbacks")
-                if isinstance(fallbacks, list) and fallbacks:
-                    first_fallback = fallbacks[0]
-                    if isinstance(first_fallback, dict):
-                        print_key_value(
-                            "Native fallback reason",
-                            str(first_fallback.get("reason", "unknown")),
-                        )
-                resume_policy = execution.get("resume_policy")
-                if isinstance(resume_policy, dict):
-                    print_key_value(
-                        "Resume policy",
-                        str(resume_policy.get("status", "unknown")),
-                    )
-                    required_actions = resume_policy.get(
-                        "required_resolution_action_kinds"
-                    )
-                    if isinstance(required_actions, list) and required_actions:
-                        print_key_value(
-                            "Resume required actions",
-                            ", ".join(str(action) for action in required_actions),
-                        )
-                    required_artifacts = resume_policy.get("required_artifacts")
-                    if isinstance(required_artifacts, list) and required_artifacts:
-                        print_key_value(
-                            "Resume required artifacts",
-                            ", ".join(str(artifact) for artifact in required_artifacts),
-                        )
-                    unresolved_failures = resume_policy.get(
-                        "unresolved_partial_failure_ids"
-                    )
-                    if isinstance(unresolved_failures, list) and unresolved_failures:
-                        print_key_value(
-                            "Resume unresolved failures",
-                            ", ".join(
-                                str(failure_id) for failure_id in unresolved_failures
-                            ),
-                        )
-                    unresolved_groups = resume_policy.get(
-                        "unresolved_transaction_group_ids"
-                    )
-                    if isinstance(unresolved_groups, list) and unresolved_groups:
-                        print_key_value(
-                            "Resume unresolved groups",
-                            ", ".join(str(group_id) for group_id in unresolved_groups),
-                        )
-        if result.response_excerpt:
-            print_key_value("Response", result.response_excerpt)
-        if result.error_details:
-            print_key_value("Details", result.error_details)
+        _print_provider_smoke_result(result)
 
     return result

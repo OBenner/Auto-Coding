@@ -304,6 +304,27 @@ export type ProviderResumePolicyDiagnosticRow = {
   value: string;
 };
 
+type RuntimeDiagnosticRowProps = {
+  label: string;
+  value?: ReactNode;
+  breakWords?: boolean;
+};
+
+function RuntimeDiagnosticRow({ label, value, breakWords = false }: RuntimeDiagnosticRowProps) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd className={`${breakWords ? 'break-words ' : ''}font-medium text-foreground`}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function normalizeProviderRuntimeConfig(config: AIProviderConfig): AIProviderConfig {
   if (config.provider === 'claude' || config.provider === 'codex') {
     return config;
@@ -1472,213 +1493,124 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
               </div>
             </div>
             <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-              {smokeScope && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.smokeScope')}</dt>
-                  <dd className="font-medium text-foreground">{smokeScope}</dd>
-                </div>
-              )}
-              {contractHealthStatus && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.providerContractHealth')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {contractHealthStatus}
-                  </dd>
-                </div>
-              )}
-              {contractHealthReason && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.providerContractReason')}</dt>
-                  <dd className="font-medium text-foreground">
-                    {contractHealthReason}
-                  </dd>
-                </div>
-              )}
-              {contractHealthMessage && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.providerContractMessage')}</dt>
-                  <dd className="break-words font-medium text-foreground">
-                    {contractHealthMessage}
-                  </dd>
-                </div>
-              )}
-              {requestedRuntime && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.requestedRuntime')}</dt>
-                  <dd className="font-medium text-foreground">{requestedRuntime}</dd>
-                </div>
-              )}
-              {validatedRuntime && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.validatedRuntime')}</dt>
-                  <dd className="font-medium text-foreground">{validatedRuntime}</dd>
-                </div>
-              )}
-              {validatedScope && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.validatedScope')}</dt>
-                  <dd className="font-medium text-foreground">{validatedScope}</dd>
-                </div>
-              )}
-              {requestedCapabilities && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.requestedCapabilities')}</dt>
-                  <dd className="font-medium text-foreground">{requestedCapabilities}</dd>
-                </div>
-              )}
-              {validatedCapabilities && (
-                <div>
-                  <dt>{t('settings:aiProvider.connectionTest.validatedCapabilities')}</dt>
-                  <dd className="font-medium text-foreground">{validatedCapabilities}</dd>
-                </div>
-              )}
-              <div>
-                <dt>{t('settings:aiProvider.connectionTest.missingValidatedRuntime')}</dt>
-                <dd className="font-medium text-foreground">
-                  {validatedMissingCapabilities || t('settings:aiProvider.connectionTest.noneMissing')}
-                </dd>
-              </div>
-              <div>
-                <dt>{t('settings:aiProvider.connectionTest.missingFullAutonomous')}</dt>
-                <dd className="font-medium text-foreground">
-                  {missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
-                </dd>
-              </div>
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.smokeScope')}
+                value={smokeScope}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.providerContractHealth')}
+                value={contractHealthStatus}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.providerContractReason')}
+                value={contractHealthReason}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.providerContractMessage')}
+                value={contractHealthMessage}
+                breakWords
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.requestedRuntime')}
+                value={requestedRuntime}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.validatedRuntime')}
+                value={validatedRuntime}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.validatedScope')}
+                value={validatedScope}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.requestedCapabilities')}
+                value={requestedCapabilities}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.validatedCapabilities')}
+                value={validatedCapabilities}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.missingValidatedRuntime')}
+                value={validatedMissingCapabilities || t('settings:aiProvider.connectionTest.noneMissing')}
+              />
+              <RuntimeDiagnosticRow
+                label={t('settings:aiProvider.connectionTest.missingFullAutonomous')}
+                value={missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
+              />
               {validatedExecution && (
                 <>
-                  {validatedExecutionLoop && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionLoop')}</dt>
-                      <dd className="font-medium text-foreground">{validatedExecutionLoop}</dd>
-                    </div>
-                  )}
-                  {validatedExecutionStatus && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionStatus')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {validatedExecutionStatus}
-                      </dd>
-                    </div>
-                  )}
-                  {validatedExecutionStopReason && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionStopReason')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {validatedExecutionStopReason}
-                      </dd>
-                    </div>
-                  )}
-                  {toolLoopContractStatus && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.toolLoopContract')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {toolLoopContractStatus}
-                      </dd>
-                    </div>
-                  )}
-                  {toolLoopCallSupport && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.toolCallSupport')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {toolLoopCallSupport}
-                      </dd>
-                    </div>
-                  )}
-                  {toolLoopResultSupport && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.toolResultSupport')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {toolLoopResultSupport}
-                      </dd>
-                    </div>
-                  )}
-                  {toolLoopFallback && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.toolLoopFallback')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {toolLoopFallback}
-                      </dd>
-                    </div>
-                  )}
-                  {toolLoopFallbackReason && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.toolLoopFallbackReason')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {toolLoopFallbackReason}
-                      </dd>
-                    </div>
-                  )}
-                  {toolLoopRecoveryStatus && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.toolLoopRecovery')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {toolLoopRecoveryStatus}
-                      </dd>
-                    </div>
-                  )}
-                  {toolLoopBlockingReason && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.toolLoopBlockingReason')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {toolLoopBlockingReason}
-                      </dd>
-                    </div>
-                  )}
-                  {typeof validatedExecution.actionCount === 'number' && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionActions')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {validatedExecution.actionCount}
-                      </dd>
-                    </div>
-                  )}
-                  {typeof validatedExecution.failedActionCount === 'number' && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionFailures')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {validatedExecution.failedActionCount}
-                      </dd>
-                    </div>
-                  )}
-                  {typeof validatedExecution.nativeToolFallbackCount === 'number' && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionNativeFallbacks')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {validatedExecution.nativeToolFallbackCount}
-                      </dd>
-                    </div>
-                  )}
-                  {validatedNativeFallbackReason && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionNativeFallbackReason')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {validatedNativeFallbackReason}
-                      </dd>
-                    </div>
-                  )}
-                  {validatedNativeFallback?.message && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionNativeFallbackMessage')}</dt>
-                      <dd className="break-words font-medium text-foreground">
-                        {validatedNativeFallback.message}
-                      </dd>
-                    </div>
-                  )}
-                  {validatedExecutionToolCounts && (
-                    <div>
-                      <dt>{t('settings:aiProvider.connectionTest.executionTools')}</dt>
-                      <dd className="font-medium text-foreground">
-                        {validatedExecutionToolCounts}
-                      </dd>
-                    </div>
-                  )}
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionLoop')}
+                    value={validatedExecutionLoop}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionStatus')}
+                    value={validatedExecutionStatus}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionStopReason')}
+                    value={validatedExecutionStopReason}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.toolLoopContract')}
+                    value={toolLoopContractStatus}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.toolCallSupport')}
+                    value={toolLoopCallSupport}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.toolResultSupport')}
+                    value={toolLoopResultSupport}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.toolLoopFallback')}
+                    value={toolLoopFallback}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.toolLoopFallbackReason')}
+                    value={toolLoopFallbackReason}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.toolLoopRecovery')}
+                    value={toolLoopRecoveryStatus}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.toolLoopBlockingReason')}
+                    value={toolLoopBlockingReason}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionActions')}
+                    value={typeof validatedExecution.actionCount === 'number' ? validatedExecution.actionCount : null}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionFailures')}
+                    value={typeof validatedExecution.failedActionCount === 'number' ? validatedExecution.failedActionCount : null}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionNativeFallbacks')}
+                    value={typeof validatedExecution.nativeToolFallbackCount === 'number' ? validatedExecution.nativeToolFallbackCount : null}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionNativeFallbackReason')}
+                    value={validatedNativeFallbackReason}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionNativeFallbackMessage')}
+                    value={validatedNativeFallback?.message}
+                    breakWords
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.executionTools')}
+                    value={validatedExecutionToolCounts}
+                  />
                   {resumePolicyRows.map((row) => (
-                    <div key={row.labelKey}>
-                      <dt>{t(row.labelKey)}</dt>
-                      <dd className="font-medium text-foreground">
-                        {row.value}
-                      </dd>
-                    </div>
+                    <RuntimeDiagnosticRow
+                      key={row.labelKey}
+                      label={t(row.labelKey)}
+                      value={row.value}
+                    />
                   ))}
                 </>
               )}
