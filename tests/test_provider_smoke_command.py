@@ -9,6 +9,43 @@ from core.providers.base import ProviderToolCall, ProviderToolCallResponse
 from core.providers.config import ProviderConfig
 
 
+class _FakeSmokeProvider:
+    name = "openai"
+
+    def __init__(self, session):
+        self.session = session
+
+    def validate_config(self):
+        return True
+
+    def create_session(self, session_config):
+        assert session_config.model == "gpt-4o"
+        return self.session
+
+    async def send_message(self, message: str):
+        raise AssertionError(f"generic_edit smoke should not call {message!r}")
+
+
+def _install_fake_generic_edit_smoke_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    session,
+) -> _FakeSmokeProvider:
+    fake_provider = _FakeSmokeProvider(session)
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="openai",
+            openai_api_key="sk-test",
+            openai_model="gpt-4o",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: fake_provider,
+    )
+    return fake_provider
+
+
 def test_parse_args_with_provider_smoke():
     from cli.main import parse_args
 
@@ -175,34 +212,9 @@ async def test_run_provider_smoke_check_generic_edit_runtime(
         def add_tool_result(self, tool_call_id, name, result):
             self.tool_results.append((tool_call_id, name))
 
-    class FakeProvider:
-        name = "openai"
-
-        def __init__(self):
-            self.session = FakeGenericEditSession()
-
-        def validate_config(self):
-            return True
-
-        def create_session(self, session_config):
-            assert session_config.model == "gpt-4o"
-            return self.session
-
-        async def send_message(self, message: str):
-            raise AssertionError(f"generic_edit smoke should not call {message!r}")
-
-    fake_provider = FakeProvider()
-    monkeypatch.setattr(
-        "cli.provider_smoke_commands.ProviderConfig.from_env",
-        lambda agent_type=None: ProviderConfig(
-            provider="openai",
-            openai_api_key="sk-test",
-            openai_model="gpt-4o",
-        ),
-    )
-    monkeypatch.setattr(
-        "cli.provider_smoke_commands.create_engine_provider",
-        lambda _config: fake_provider,
+    fake_provider = _install_fake_generic_edit_smoke_provider(
+        monkeypatch,
+        FakeGenericEditSession(),
     )
 
     result = await run_provider_smoke_check(
@@ -293,34 +305,9 @@ async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallbac
         def add_tool_result(self, tool_call_id, name, result):
             raise AssertionError("tool results should not be added after fallback")
 
-    class FakeProvider:
-        name = "openai"
-
-        def __init__(self):
-            self.session = FakeFallbackGenericEditSession()
-
-        def validate_config(self):
-            return True
-
-        def create_session(self, session_config):
-            assert session_config.model == "gpt-4o"
-            return self.session
-
-        async def send_message(self, message: str):
-            raise AssertionError(f"generic_edit smoke should not call {message!r}")
-
-    fake_provider = FakeProvider()
-    monkeypatch.setattr(
-        "cli.provider_smoke_commands.ProviderConfig.from_env",
-        lambda agent_type=None: ProviderConfig(
-            provider="openai",
-            openai_api_key="sk-test",
-            openai_model="gpt-4o",
-        ),
-    )
-    monkeypatch.setattr(
-        "cli.provider_smoke_commands.create_engine_provider",
-        lambda _config: fake_provider,
+    fake_provider = _install_fake_generic_edit_smoke_provider(
+        monkeypatch,
+        FakeFallbackGenericEditSession(),
     )
 
     result = await run_provider_smoke_check(

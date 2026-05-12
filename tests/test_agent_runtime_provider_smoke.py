@@ -114,6 +114,53 @@ def _openai_tool_call_response(
     return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
+def _openai_multi_tool_call_response(
+    *calls: tuple[str, str, dict],
+    content: str | None = "",
+) -> SimpleNamespace:
+    tool_calls = [
+        SimpleNamespace(
+            id=tool_call_id,
+            function=SimpleNamespace(
+                name=name,
+                arguments=json.dumps(arguments),
+            ),
+        )
+        for tool_call_id, name, arguments in calls
+    ]
+    message = SimpleNamespace(content=content, tool_calls=tool_calls)
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
+def _openai_recovery_tool_call_responses(
+    *,
+    path: str,
+    finish_summary: str,
+) -> list[SimpleNamespace]:
+    return [
+        _openai_multi_tool_call_response(
+            (
+                "call_write",
+                "write_file",
+                {"path": path, "content": "new\n"},
+            ),
+            ("call_missing", "read_file", {"path": "missing.txt"}),
+        ),
+        _openai_multi_tool_call_response(
+            (
+                "call_rollback",
+                "rollback_transaction",
+                {"transaction_id": "native_tool_calls-1"},
+            ),
+            (
+                "call_finish",
+                "finish",
+                {"summary": finish_summary, "tests": [], "risks": []},
+            ),
+        ),
+    ]
+
+
 def _submitted_tool_names(call: dict) -> list[str]:
     return [tool["function"]["name"] for tool in call["tools"]]
 
@@ -1007,71 +1054,10 @@ async def test_openai_provider_generic_edit_recovers_after_tool_failure(
     target.write_text("old\n", encoding="utf-8")
     fake_openai = _install_fake_openai_responses(
         monkeypatch,
-        [
-            SimpleNamespace(
-                choices=[
-                    SimpleNamespace(
-                        message=SimpleNamespace(
-                            content="",
-                            tool_calls=[
-                                SimpleNamespace(
-                                    id="call_write",
-                                    function=SimpleNamespace(
-                                        name="write_file",
-                                        arguments=json.dumps(
-                                            {
-                                                "path": "recover.txt",
-                                                "content": "new\n",
-                                            }
-                                        ),
-                                    ),
-                                ),
-                                SimpleNamespace(
-                                    id="call_missing",
-                                    function=SimpleNamespace(
-                                        name="read_file",
-                                        arguments=json.dumps({"path": "missing.txt"}),
-                                    ),
-                                ),
-                            ],
-                        )
-                    )
-                ]
-            ),
-            SimpleNamespace(
-                choices=[
-                    SimpleNamespace(
-                        message=SimpleNamespace(
-                            content="",
-                            tool_calls=[
-                                SimpleNamespace(
-                                    id="call_rollback",
-                                    function=SimpleNamespace(
-                                        name="rollback_transaction",
-                                        arguments=json.dumps(
-                                            {"transaction_id": "native_tool_calls-1"}
-                                        ),
-                                    ),
-                                ),
-                                SimpleNamespace(
-                                    id="call_finish",
-                                    function=SimpleNamespace(
-                                        name="finish",
-                                        arguments=json.dumps(
-                                            {
-                                                "summary": "Recovered provider tool loop",
-                                                "tests": [],
-                                                "risks": [],
-                                            }
-                                        ),
-                                    ),
-                                ),
-                            ],
-                        )
-                    )
-                ]
-            ),
-        ],
+        _openai_recovery_tool_call_responses(
+            path="recover.txt",
+            finish_summary="Recovered provider tool loop",
+        ),
     )
     provider = OpenAIProvider(
         ProviderConfig(provider="openai", openai_api_key="test-key")
@@ -1191,74 +1177,10 @@ async def test_openai_compatible_providers_generic_edit_recover_after_tool_failu
 ):
     target = tmp_path / f"{provider_name}-recover.txt"
     target.write_text("old\n", encoding="utf-8")
-    responses = [
-        SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    message=SimpleNamespace(
-                        content="",
-                        tool_calls=[
-                            SimpleNamespace(
-                                id="call_write",
-                                function=SimpleNamespace(
-                                    name="write_file",
-                                    arguments=json.dumps(
-                                        {
-                                            "path": target.name,
-                                            "content": "new\n",
-                                        }
-                                    ),
-                                ),
-                            ),
-                            SimpleNamespace(
-                                id="call_missing",
-                                function=SimpleNamespace(
-                                    name="read_file",
-                                    arguments=json.dumps({"path": "missing.txt"}),
-                                ),
-                            ),
-                        ],
-                    )
-                )
-            ]
-        ),
-        SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    message=SimpleNamespace(
-                        content="",
-                        tool_calls=[
-                            SimpleNamespace(
-                                id="call_rollback",
-                                function=SimpleNamespace(
-                                    name="rollback_transaction",
-                                    arguments=json.dumps(
-                                        {"transaction_id": "native_tool_calls-1"}
-                                    ),
-                                ),
-                            ),
-                            SimpleNamespace(
-                                id="call_finish",
-                                function=SimpleNamespace(
-                                    name="finish",
-                                    arguments=json.dumps(
-                                        {
-                                            "summary": (
-                                                f"{provider_name} recovered provider "
-                                                "tool loop"
-                                            ),
-                                            "tests": [],
-                                            "risks": [],
-                                        }
-                                    ),
-                                ),
-                            ),
-                        ],
-                    )
-                )
-            ]
-        ),
-    ]
+    responses = _openai_recovery_tool_call_responses(
+        path=target.name,
+        finish_summary=f"{provider_name} recovered provider tool loop",
+    )
     provider, calls = _provider_with_fake_openai_compatible_responses(
         monkeypatch,
         provider_name,
