@@ -2584,7 +2584,15 @@ def build_generic_edit_recovery_plan_policy(
                 resolution_strategies.append(strategy_value)
     if not resolution_strategies:
         resolution_strategies = [ROLLBACK_TRANSACTION_TOOL, REPAIR_MUTATION_TOOL]
-    return {
+    transaction_batch_policies = build_generic_edit_transaction_batch_policies(
+        transaction_summary,
+    )
+    blocked_transaction_batch_ids = [
+        policy["batch_id"]
+        for policy in transaction_batch_policies
+        if policy["finish_blocked"]
+    ]
+    policy = {
         "version": GENERIC_EDIT_RECOVERY_POLICY_VERSION,
         "status": "requires_resolution",
         "finish_blocked": True,
@@ -2599,6 +2607,11 @@ def build_generic_edit_recovery_plan_policy(
             GENERIC_EDIT_RECOVERY_VERIFICATION_TOOLS
         ),
     }
+    if transaction_batch_policies:
+        policy["blocked_transaction_batch_ids"] = blocked_transaction_batch_ids
+        policy["transaction_batch_policy_count"] = len(transaction_batch_policies)
+        policy["transaction_batch_policies"] = transaction_batch_policies
+    return policy
 
 
 def build_generic_edit_recovery_policy_status(
@@ -4066,6 +4079,8 @@ def compact_generic_edit_manifest_transaction_batches(
         compact: dict[str, Any] = {
             "id": str(batch.get("id") or "")[:120],
             "status": str(batch.get("status") or "unknown")[:120],
+            "recovery_status": str(batch.get("recovery_status") or "clean")[:120],
+            "finish_blocked": bool(batch.get("finish_blocked")),
             "transaction_ids": normalize_string_list(batch.get("transaction_ids")),
             "mutation_snapshot_ids": normalize_string_list(
                 batch.get("mutation_snapshot_ids")
@@ -4075,6 +4090,12 @@ def compact_generic_edit_manifest_transaction_batches(
             ),
             "unresolved_transaction_group_ids": normalize_string_list(
                 batch.get("unresolved_transaction_group_ids")
+            ),
+            "required_next_action_kinds": normalize_string_list(
+                batch.get("required_next_action_kinds")
+            ),
+            "resolution_strategies": normalize_string_list(
+                batch.get("resolution_strategies")
             ),
             "recovery_outcome_count": int(batch.get("recovery_outcome_count") or 0),
         }
@@ -7137,6 +7158,10 @@ def link_generic_edit_transaction_batches_to_groups(
                     "unresolved_transaction_group_ids",
                     group_id,
                 )
+                link_generic_edit_unresolved_group_policy_to_batch(
+                    batch=batch,
+                    group=group,
+                )
             recovery_outcome = group.get("recovery_outcome")
             if isinstance(recovery_outcome, dict):
                 outcomes = batch.setdefault("recovery_outcomes", [])
@@ -7165,11 +7190,76 @@ def link_generic_edit_transaction_batches_to_groups(
             batch["unresolved_transaction_group_count"] = len(unresolved_group_ids)
         if recovery_outcomes:
             batch["recovery_outcome_count"] = len(recovery_outcomes)
+        batch["recovery_status"] = generic_edit_transaction_batch_recovery_status(
+            batch,
+        )
+        batch["finish_blocked"] = batch["recovery_status"] in {
+            "requires_resolution",
+            "open",
+        }
 
     return {
         **transaction_summary,
         "transaction_batches": batches,
     }
+
+
+def link_generic_edit_unresolved_group_policy_to_batch(
+    *,
+    batch: dict[str, Any],
+    group: dict[str, Any],
+) -> None:
+    """Attach unresolved group policy hints to a batch summary."""
+    policy = group.get("recovery_policy")
+    if not isinstance(policy, dict):
+        return
+    for kind in policy.get("required_next_action_kinds") or []:
+        append_unique_string(batch, "required_next_action_kinds", str(kind))
+    for strategy in policy.get("resolution_strategies") or []:
+        append_unique_string(batch, "resolution_strategies", str(strategy))
+
+
+def generic_edit_transaction_batch_recovery_status(batch: dict[str, Any]) -> str:
+    """Return the batch-level recovery status for control-plane consumers."""
+    if normalize_string_list(batch.get("unresolved_transaction_group_ids")):
+        return "requires_resolution"
+    if str(batch.get("status") or "open") not in {"committed", "aborted"}:
+        return "open"
+    if batch.get("recovery_outcome_count"):
+        return "resolved"
+    return "clean"
+
+
+def build_generic_edit_transaction_batch_policies(
+    transaction_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return per-batch recovery policy summaries."""
+    policies: list[dict[str, Any]] = []
+    for batch in transaction_summary.get("transaction_batches") or []:
+        if not isinstance(batch, dict):
+            continue
+        batch_id = str(batch.get("id") or "")
+        if not batch_id:
+            continue
+        recovery_status = generic_edit_transaction_batch_recovery_status(batch)
+        policy: dict[str, Any] = {
+            "batch_id": batch_id,
+            "status": recovery_status,
+            "finish_blocked": recovery_status in {"requires_resolution", "open"},
+        }
+        unresolved_group_ids = normalize_string_list(
+            batch.get("unresolved_transaction_group_ids")
+        )
+        if unresolved_group_ids:
+            policy["unresolved_transaction_group_ids"] = unresolved_group_ids
+        required_kinds = normalize_string_list(batch.get("required_next_action_kinds"))
+        if required_kinds:
+            policy["required_next_action_kinds"] = required_kinds
+        strategies = normalize_string_list(batch.get("resolution_strategies"))
+        if strategies:
+            policy["resolution_strategies"] = strategies
+        policies.append(policy)
+    return policies
 
 
 def append_unique_string(target: dict[str, Any], field_name: str, value: str) -> None:

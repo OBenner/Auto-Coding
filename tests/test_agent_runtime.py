@@ -67,7 +67,9 @@ from agents.runtime.adapters.generic_edit import (
     GenericEditRuntimeError,
     bounded_subagent_attempts,
     build_generic_edit_file_preimage,
+    build_generic_edit_recovery_plan_policy,
     build_generic_edit_rollback_operation,
+    compact_generic_edit_manifest_transaction_batches,
     execute_generic_edit_transaction_rollback,
     generic_edit_mcp_lines,
     link_generic_edit_transaction_batches_to_groups,
@@ -8644,6 +8646,89 @@ def test_generic_edit_transaction_batches_link_recovery_outcomes():
     )
     assert batch["recovery_outcomes"][0]["strategy"] == "repair_mutation"
     assert "unresolved_transaction_group_ids" not in batch
+
+
+def test_generic_edit_transaction_batches_expose_multi_batch_recovery_policy():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["first.txt"],
+                    "mutated_paths": ["first.txt"],
+                    "batch_ids": ["batch-1"],
+                    "batch_status": "open",
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-2",
+                    "status": "partial_failure",
+                    "recovery_required": True,
+                    "affected_paths": ["second.txt"],
+                    "mutated_paths": ["second.txt"],
+                    "batch_ids": ["batch-2"],
+                    "batch_status": "open",
+                }
+            },
+        ]
+    )
+    groups = summarize_generic_edit_transaction_groups(
+        transaction_summary=summary,
+        mutation_snapshots=[],
+    )
+    linked = link_generic_edit_transaction_batches_to_groups(
+        transaction_summary=summary,
+        transaction_group_summary=groups,
+    )
+    policy = build_generic_edit_recovery_plan_policy(
+        transaction_summary=linked,
+        transaction_group_summary=groups,
+    )
+
+    assert [batch["recovery_status"] for batch in linked["transaction_batches"]] == [
+        "requires_resolution",
+        "requires_resolution",
+    ]
+    assert [
+        batch["unresolved_transaction_group_ids"]
+        for batch in linked["transaction_batches"]
+    ] == [["transaction-group-1"], ["transaction-group-2"]]
+    assert linked["transaction_batches"][0]["finish_blocked"] is True
+    assert linked["transaction_batches"][0]["required_next_action_kinds"] == [
+        "inspect_diff",
+        "repair_mutation",
+    ]
+    assert policy["blocked_transaction_batch_ids"] == ["batch-1", "batch-2"]
+    assert policy["transaction_batch_policy_count"] == 2
+    assert policy["transaction_batch_policies"] == [
+        {
+            "batch_id": "batch-1",
+            "status": "requires_resolution",
+            "finish_blocked": True,
+            "unresolved_transaction_group_ids": ["transaction-group-1"],
+            "required_next_action_kinds": ["inspect_diff", "repair_mutation"],
+            "resolution_strategies": ["repair_mutation"],
+        },
+        {
+            "batch_id": "batch-2",
+            "status": "requires_resolution",
+            "finish_blocked": True,
+            "unresolved_transaction_group_ids": ["transaction-group-2"],
+            "required_next_action_kinds": ["inspect_diff", "repair_mutation"],
+            "resolution_strategies": ["repair_mutation"],
+        },
+    ]
+    compact_batches = compact_generic_edit_manifest_transaction_batches(linked)
+    assert compact_batches[0]["recovery_status"] == "requires_resolution"
+    assert compact_batches[0]["finish_blocked"] is True
+    assert compact_batches[0]["required_next_action_kinds"] == [
+        "inspect_diff",
+        "repair_mutation",
+    ]
+    assert compact_batches[0]["resolution_strategies"] == ["repair_mutation"]
 
 
 def test_generic_edit_transaction_summary_allows_workspace_recovery_verification():
