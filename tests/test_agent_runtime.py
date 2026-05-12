@@ -6903,6 +6903,100 @@ def test_generic_edit_recovery_checkpoint_reports_corrupt_json_health(
     }
 
 
+def write_minimal_generic_edit_resume_artifacts(
+    tmp_path: Path,
+    *,
+    checkpoint_next_iteration: int = 2,
+    session_next_iteration: int | None = None,
+    write_session_state: bool = True,
+    trace_exists: bool = True,
+    transaction_summary: dict[str, Any] | None = None,
+    mutation_snapshots: list[dict[str, Any]] | None = None,
+) -> tuple[Path, Path, Path, Path]:
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir(exist_ok=True)
+    checkpoint_path = artifact_dir / "generic_edit_recovery_checkpoint.json"
+    session_state_path = artifact_dir / "generic_edit_session_state.json"
+    trace_path = artifact_dir / "generic_edit_trace.json"
+    mutation_snapshot_path = artifact_dir / "generic_edit_mutation_snapshots.json"
+    resume_policy = {
+        "runtime": "generic_edit",
+        "checkpoint_path": str(checkpoint_path),
+        "status": "ready",
+        "can_resume": True,
+        "finish_blocked": False,
+        "strategy": "continue_from_trace",
+        "next_iteration": checkpoint_next_iteration,
+        "required_artifacts": ["trace_artifact"],
+        "unresolved_partial_failure_ids": [],
+        "unresolved_transaction_group_ids": [],
+    }
+    resume_inputs = {"trace_artifact": str(trace_path)}
+    checkpoint_path.write_text(
+        json.dumps(
+            {
+                "recoverable": True,
+                "artifact_path": str(checkpoint_path),
+                "status": "error",
+                "stop_reason": "max_iterations",
+                "next_iteration": checkpoint_next_iteration,
+                "resume": {
+                    "strategy": "continue_from_trace",
+                    "prompt": "Continue from trace.",
+                },
+                "resume_inputs": resume_inputs,
+                "resume_policy": resume_policy,
+                "transaction_summary": transaction_summary or {"transaction_count": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    if trace_exists:
+        trace_path.write_text(
+            json.dumps(
+                {
+                    "trace": [
+                        {"iteration": iteration + 1, "actions": []}
+                        for iteration in range(checkpoint_next_iteration - 1)
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+    if mutation_snapshots is not None:
+        mutation_snapshot_path.write_text(
+            json.dumps(
+                {
+                    "artifact_type": "generic_edit_mutation_snapshots",
+                    "snapshot_count": len(mutation_snapshots),
+                    "snapshots": mutation_snapshots,
+                }
+            ),
+            encoding="utf-8",
+        )
+    if write_session_state:
+        session_iteration = session_next_iteration or checkpoint_next_iteration
+        session_policy = {**resume_policy, "next_iteration": session_iteration}
+        session_state_path.write_text(
+            json.dumps(
+                {
+                    "artifact_type": "generic_edit_session_state",
+                    "resumable": True,
+                    "resume_action": {
+                        "runtime": "generic_edit",
+                        "checkpoint_path": str(checkpoint_path),
+                        "strategy": "continue_from_trace",
+                        "next_iteration": session_iteration,
+                    },
+                    "resume_inputs": resume_inputs,
+                    "resume_policy": session_policy,
+                }
+            ),
+            encoding="utf-8",
+        )
+    return artifact_dir, checkpoint_path, session_state_path, trace_path
+
+
 def test_generic_edit_resume_preflight_blocks_corrupt_checkpoint(
     tmp_path: Path,
 ):
@@ -6929,6 +7023,99 @@ def test_generic_edit_resume_preflight_blocks_corrupt_checkpoint(
         "path": str(checkpoint_path),
     }
     assert preflight["blockers"] == [preflight["resume_artifact_health"]]
+
+
+def test_generic_edit_resume_preflight_reports_missing_trace_artifact(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    _, checkpoint_path, _, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+        write_session_state=False,
+        trace_exists=False,
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "trace"
+    assert health["reason"] == "missing"
+    assert health["path"] == str(trace_path)
+    assert health["artifact_name"] == "trace_artifact"
+    assert health["owner_artifact"] == "recovery_checkpoint"
+
+
+def test_generic_edit_resume_preflight_blocks_session_state_checkpoint_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    _, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+            session_next_iteration=3,
+        )
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "session_state",
+        "reason": "checkpoint_mismatch",
+        "path": str(session_state_path),
+    }
+
+
+def test_generic_edit_resume_preflight_blocks_missing_checkpoint_snapshot_ref(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    _, checkpoint_path, _, _ = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+        transaction_summary={
+            "transaction_count": 0,
+            "transaction_batches": [
+                {
+                    "id": "batch-1",
+                    "status": "committed",
+                    "mutation_snapshot_ids": ["mutation-missing"],
+                }
+            ],
+        },
+        mutation_snapshots=[],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "checkpoint_mismatch"
+    assert health["missing_snapshot_ids"] == ["mutation-missing"]
 
 
 def test_generic_edit_recovery_checkpoint_requires_existing_policy_artifacts(

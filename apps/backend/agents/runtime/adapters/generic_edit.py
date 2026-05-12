@@ -185,6 +185,34 @@ def generic_edit_resume_error_health(
     return fallback
 
 
+def generic_edit_required_resume_artifact_error(
+    message: str,
+    *,
+    owner_artifact: str,
+    owner_path: Path,
+    artifact_name: str,
+    artifact_path: str | None,
+    reason: str,
+) -> GenericEditRuntimeError:
+    """Return a structured error for a missing required resume artifact."""
+    artifact = {
+        "trace_artifact": "trace",
+        "event_artifact": "events",
+        "recovery_plan_artifact": "recovery_plan",
+        "mutation_snapshot_artifact": "mutation_snapshots",
+        "transaction_group_artifact": "transaction_groups",
+    }.get(artifact_name, artifact_name)
+    return generic_edit_resume_artifact_error(
+        message,
+        artifact=artifact,
+        reason=reason,
+        path=artifact_path,
+        artifact_name=artifact_name,
+        owner_artifact=owner_artifact,
+        owner_path=str(owner_path),
+    )
+
+
 def generic_edit_resume_blocked_preflight(
     *,
     checkpoint_path: Path,
@@ -4885,14 +4913,24 @@ def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, An
     for artifact_name in normalize_string_list(resume_policy.get("required_artifacts")):
         artifact_path = resume_inputs.get(artifact_name)
         if not isinstance(artifact_path, str) or not artifact_path:
-            raise GenericEditRuntimeError(
+            raise generic_edit_required_resume_artifact_error(
                 "Generic edit recovery checkpoint is missing required resume artifact: "
-                f"{artifact_name}."
+                f"{artifact_name}.",
+                owner_artifact="recovery_checkpoint",
+                owner_path=checkpoint_path,
+                artifact_name=artifact_name,
+                artifact_path=None,
+                reason="missing_path",
             )
         if not Path(artifact_path).exists():
-            raise GenericEditRuntimeError(
+            raise generic_edit_required_resume_artifact_error(
                 "Generic edit recovery checkpoint required resume artifact does not "
-                f"exist: {artifact_name}."
+                f"exist: {artifact_name}.",
+                owner_artifact="recovery_checkpoint",
+                owner_path=checkpoint_path,
+                artifact_name=artifact_name,
+                artifact_path=artifact_path,
+                reason="missing",
             )
     return payload
 
@@ -4978,9 +5016,14 @@ def load_generic_edit_session_state(
     for artifact_name in normalize_string_list(resume_policy.get("required_artifacts")):
         artifact_path = resume_inputs.get(artifact_name)
         if not isinstance(artifact_path, str) or not artifact_path:
-            raise GenericEditRuntimeError(
+            raise generic_edit_required_resume_artifact_error(
                 "Generic edit session state is missing required resume artifact: "
-                f"{artifact_name}."
+                f"{artifact_name}.",
+                owner_artifact="session_state",
+                owner_path=session_state_path,
+                artifact_name=artifact_name,
+                artifact_path=None,
+                reason="missing_path",
             )
     if resume_policy.get("can_resume") is not True:
         raise GenericEditRuntimeError(
@@ -5007,9 +5050,14 @@ def load_generic_edit_session_state(
     for artifact_name in normalize_string_list(resume_policy.get("required_artifacts")):
         artifact_path = Path(str(resume_inputs[artifact_name]))
         if not artifact_path.exists():
-            raise GenericEditRuntimeError(
+            raise generic_edit_required_resume_artifact_error(
                 "Generic edit session state required resume artifact does not exist: "
-                f"{artifact_name}."
+                f"{artifact_name}.",
+                owner_artifact="session_state",
+                owner_path=session_state_path,
+                artifact_name=artifact_name,
+                artifact_path=str(artifact_path),
+                reason="missing",
             )
     return payload
 
@@ -5157,6 +5205,97 @@ def validate_generic_edit_checkpoint_trace_consistency(
             )
 
 
+def validate_generic_edit_session_state_checkpoint_consistency(
+    *,
+    session_state: dict[str, Any],
+    checkpoint: dict[str, Any],
+    session_state_path: Path,
+) -> None:
+    """Reject resume when session_state and checkpoint describe different runs."""
+    session_resume_action = session_state.get("resume_action")
+    checkpoint_resume = checkpoint.get("resume")
+    if not isinstance(session_resume_action, dict) or not isinstance(
+        checkpoint_resume, dict
+    ):
+        return
+
+    checkpoint_policy = checkpoint.get("resume_policy")
+    session_policy = session_state.get("resume_policy")
+    if session_policy != checkpoint_policy:
+        raise generic_edit_resume_artifact_error(
+            "Generic edit session state resume policy does not match recovery checkpoint.",
+            artifact="session_state",
+            reason="checkpoint_mismatch",
+            path=session_state_path,
+        )
+    if session_resume_action.get("strategy") != checkpoint_resume.get(
+        "strategy"
+    ) or session_resume_action.get("next_iteration") != checkpoint.get(
+        "next_iteration"
+    ):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit session state resume action does not match recovery checkpoint.",
+            artifact="session_state",
+            reason="checkpoint_mismatch",
+            path=session_state_path,
+        )
+    if session_state.get("resume_inputs") != checkpoint.get("resume_inputs"):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit session state resume inputs do not match recovery checkpoint.",
+            artifact="session_state",
+            reason="checkpoint_mismatch",
+            path=session_state_path,
+        )
+
+
+def collect_generic_edit_mutation_snapshot_ids(value: Any) -> list[str]:
+    """Collect mutation snapshot references from checkpoint metadata."""
+    snapshot_ids: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "mutation_snapshot_ids":
+                snapshot_ids.extend(normalize_string_list(item))
+            else:
+                snapshot_ids.extend(collect_generic_edit_mutation_snapshot_ids(item))
+    elif isinstance(value, list):
+        for item in value:
+            snapshot_ids.extend(collect_generic_edit_mutation_snapshot_ids(item))
+    return list(dict.fromkeys(snapshot_ids))
+
+
+def validate_generic_edit_checkpoint_mutation_snapshots(
+    *,
+    checkpoint: dict[str, Any],
+    mutation_snapshots: list[dict[str, Any]],
+    mutation_snapshot_path: Path,
+) -> None:
+    """Reject resume when checkpoint references snapshots absent from artifact."""
+    expected_snapshot_ids = collect_generic_edit_mutation_snapshot_ids(checkpoint)
+    if not expected_snapshot_ids:
+        return
+    actual_snapshot_ids = {
+        str(snapshot.get("id"))
+        for snapshot in mutation_snapshots
+        if isinstance(snapshot.get("id"), str) and snapshot.get("id")
+    }
+    missing_snapshot_ids = [
+        snapshot_id
+        for snapshot_id in expected_snapshot_ids
+        if snapshot_id not in actual_snapshot_ids
+    ]
+    if missing_snapshot_ids:
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact is missing checkpoint "
+            "snapshot reference(s): " + ", ".join(missing_snapshot_ids[:10]) + ".",
+            artifact="mutation_snapshots",
+            reason="checkpoint_mismatch",
+            path=mutation_snapshot_path,
+            missing_snapshot_ids=missing_snapshot_ids,
+            expected_snapshot_ids=expected_snapshot_ids,
+            actual_snapshot_ids=sorted(actual_snapshot_ids),
+        )
+
+
 def checkpoint_next_iteration(
     checkpoint: dict[str, Any],
     trace: list[dict[str, Any]],
@@ -5226,9 +5365,10 @@ def inspect_generic_edit_resume_artifacts(
     session_state_path = (
         spec_dir / "artifacts" / "generic_edit_session_state.json"
     ).resolve()
+    session_state: dict[str, Any] | None = None
     if session_state_path.exists():
         try:
-            load_generic_edit_session_state(
+            session_state = load_generic_edit_session_state(
                 session_state_path,
                 expected_checkpoint_path=resolved_checkpoint_path,
             )
@@ -5269,6 +5409,25 @@ def inspect_generic_edit_resume_artifacts(
             artifacts=artifacts,
         )
     artifacts["recovery_checkpoint"]["status"] = "ready"
+    if session_state is not None:
+        try:
+            validate_generic_edit_session_state_checkpoint_consistency(
+                session_state=session_state,
+                checkpoint=checkpoint,
+                session_state_path=session_state_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="session_state",
+                    path=session_state_path,
+                ),
+                artifacts=artifacts,
+            )
 
     trace_path = generic_edit_trace_path_for_checkpoint(resolved_checkpoint_path)
     artifacts["trace"] = {"status": "pending", "path": str(trace_path)}
@@ -5324,6 +5483,24 @@ def inspect_generic_edit_resume_artifacts(
         "path": str(mutation_snapshot_path),
         "snapshot_count": len(mutation_snapshots),
     }
+    try:
+        validate_generic_edit_checkpoint_mutation_snapshots(
+            checkpoint=checkpoint,
+            mutation_snapshots=mutation_snapshots,
+            mutation_snapshot_path=mutation_snapshot_path,
+        )
+    except GenericEditRuntimeError as e:
+        return generic_edit_resume_blocked_preflight(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            artifact_health=generic_edit_resume_error_health(
+                e,
+                artifact="mutation_snapshots",
+                path=mutation_snapshot_path,
+            ),
+            artifacts=artifacts,
+        )
 
     try:
         active_batch_id = generic_edit_resume_open_batch_id(
