@@ -5307,7 +5307,9 @@ def inspect_generic_edit_resume_artifacts(
             artifacts=artifacts,
         )
 
-    resume = checkpoint.get("resume") if isinstance(checkpoint.get("resume"), dict) else {}
+    resume = (
+        checkpoint.get("resume") if isinstance(checkpoint.get("resume"), dict) else {}
+    )
     resume_policy = (
         checkpoint.get("resume_policy")
         if isinstance(checkpoint.get("resume_policy"), dict)
