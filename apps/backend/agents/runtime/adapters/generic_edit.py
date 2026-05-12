@@ -5289,12 +5289,95 @@ def validate_generic_edit_session_state_checkpoint_consistency(
         )
 
 
+def generic_edit_expected_resume_counts(
+    *,
+    checkpoint: dict[str, Any],
+    trace: list[dict[str, Any]],
+) -> dict[str, int]:
+    """Return canonical resume counters derived from checkpoint and trace."""
+    trace_summary = summarize_generic_edit_trace(trace)
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    return {
+        "iteration_count": len(trace),
+        "action_count": int(trace_summary.get("action_count") or 0),
+        "failed_action_count": int(trace_summary.get("failed_action_count") or 0),
+        "transaction_count": int(transaction_summary.get("transaction_count") or 0),
+        "next_iteration": int(checkpoint.get("next_iteration") or len(trace) + 1),
+    }
+
+
+def generic_edit_validate_resume_count_fields(
+    *,
+    count_payload: dict[str, Any],
+    expected_counts: dict[str, int],
+    artifact: str,
+    path: Path,
+) -> None:
+    """Reject stale resume counters when artifacts expose them."""
+    for field, expected_value in expected_counts.items():
+        actual_value = count_payload.get(field)
+        if actual_value is None:
+            continue
+        if actual_value != expected_value:
+            raise generic_edit_resume_artifact_error(
+                f"Generic edit {artifact} {field} does not match checkpoint trace.",
+                artifact=artifact,
+                reason="checkpoint_mismatch",
+                path=path,
+                **{
+                    f"expected_{field}": expected_value,
+                    f"actual_{field}": actual_value,
+                },
+            )
+
+
+def validate_generic_edit_session_state_trace_counts(
+    *,
+    session_state: dict[str, Any],
+    checkpoint: dict[str, Any],
+    trace: list[dict[str, Any]],
+    session_state_path: Path,
+) -> None:
+    """Reject session state counters that disagree with checkpoint trace contents."""
+    generic_edit_validate_resume_count_fields(
+        count_payload=session_state,
+        expected_counts=generic_edit_expected_resume_counts(
+            checkpoint=checkpoint,
+            trace=trace,
+        ),
+        artifact="session_state",
+        path=session_state_path,
+    )
+
+
 def generic_edit_raise_manifest_mismatch(message: str, manifest_path: Path) -> None:
     """Raise a structured manifest/checkpoint mismatch error."""
     raise generic_edit_resume_artifact_error(
         message,
         artifact="artifact_manifest",
         reason="checkpoint_mismatch",
+        path=manifest_path,
+    )
+
+
+def validate_generic_edit_manifest_trace_counts(
+    *,
+    manifest: dict[str, Any],
+    checkpoint: dict[str, Any],
+    trace: list[dict[str, Any]],
+    manifest_path: Path,
+) -> None:
+    """Reject manifest counters that disagree with checkpoint trace contents."""
+    counts = manifest.get("counts")
+    if not isinstance(counts, dict):
+        return
+    generic_edit_validate_resume_count_fields(
+        count_payload=counts,
+        expected_counts=generic_edit_expected_resume_counts(
+            checkpoint=checkpoint,
+            trace=trace,
+        ),
+        artifact="artifact_manifest",
         path=manifest_path,
     )
 
@@ -5584,6 +5667,7 @@ def inspect_generic_edit_resume_artifacts(
     artifact_manifest_path = generic_edit_artifact_manifest_path_for_checkpoint(
         resolved_checkpoint_path,
     )
+    artifact_manifest: dict[str, Any] | None = None
     artifacts["artifact_manifest"] = {
         "status": "pending",
         "path": str(artifact_manifest_path),
@@ -5648,6 +5732,46 @@ def inspect_generic_edit_resume_artifacts(
         "path": str(trace_path),
         "iteration_count": len(trace),
     }
+    if session_state is not None:
+        try:
+            validate_generic_edit_session_state_trace_counts(
+                session_state=session_state,
+                checkpoint=checkpoint,
+                trace=trace,
+                session_state_path=session_state_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="session_state",
+                    path=session_state_path,
+                ),
+                artifacts=artifacts,
+            )
+    if artifact_manifest is not None:
+        try:
+            validate_generic_edit_manifest_trace_counts(
+                manifest=artifact_manifest,
+                checkpoint=checkpoint,
+                trace=trace,
+                manifest_path=artifact_manifest_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="artifact_manifest",
+                    path=artifact_manifest_path,
+                ),
+                artifacts=artifacts,
+            )
 
     mutation_snapshot_path = generic_edit_mutation_snapshot_path_for_checkpoint(
         resolved_checkpoint_path,

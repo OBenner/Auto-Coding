@@ -7029,6 +7029,7 @@ def write_minimal_generic_edit_artifact_manifest(
     session_state_path: Path,
     trace_path: Path,
     next_iteration: int = 2,
+    iteration_count: int | None = None,
 ) -> Path:
     manifest_path = artifact_dir / "generic_edit_artifact_manifest.json"
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -7041,6 +7042,16 @@ def write_minimal_generic_edit_artifact_manifest(
                 "flags": {
                     "recoverable": True,
                     "resumable": True,
+                },
+                "counts": {
+                    "iteration_count": (
+                        checkpoint["next_iteration"] - 1
+                        if iteration_count is None
+                        else iteration_count
+                    ),
+                    "transaction_count": checkpoint["transaction_summary"][
+                        "transaction_count"
+                    ],
                 },
                 "entrypoints": {
                     "result": str(artifact_dir / "generic_edit_result.json"),
@@ -7062,6 +7073,18 @@ def write_minimal_generic_edit_artifact_manifest(
         encoding="utf-8",
     )
     return manifest_path
+
+
+def update_generic_edit_session_state(
+    session_state_path: Path,
+    **updates: Any,
+) -> None:
+    session_state = json.loads(session_state_path.read_text(encoding="utf-8"))
+    session_state.update(updates)
+    session_state_path.write_text(
+        json.dumps(session_state),
+        encoding="utf-8",
+    )
 
 
 def test_generic_edit_resume_preflight_blocks_corrupt_checkpoint(
@@ -7244,6 +7267,80 @@ def test_generic_edit_resume_preflight_blocks_manifest_checkpoint_mismatch(
         "artifact": "artifact_manifest",
         "reason": "checkpoint_mismatch",
         "path": str(manifest_path),
+    }
+
+
+def test_generic_edit_resume_preflight_blocks_session_state_count_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    _, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    update_generic_edit_session_state(
+        session_state_path,
+        iteration_count=99,
+        transaction_count=0,
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "session_state",
+        "reason": "checkpoint_mismatch",
+        "path": str(session_state_path),
+        "expected_iteration_count": 1,
+        "actual_iteration_count": 99,
+    }
+
+
+def test_generic_edit_resume_preflight_blocks_manifest_count_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+        iteration_count=99,
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "artifact_manifest",
+        "reason": "checkpoint_mismatch",
+        "path": str(manifest_path),
+        "expected_iteration_count": 1,
+        "actual_iteration_count": 99,
     }
 
 
