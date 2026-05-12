@@ -1301,6 +1301,77 @@ async def test_openai_compatible_providers_generic_edit_recover_after_tool_failu
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("provider_name", "subtask_id"),
+    [
+        ("openrouter", "1.16"),
+        ("ollama", "1.17"),
+        ("litellm", "1.18"),
+        ("zhipuai", "1.19"),
+    ],
+)
+async def test_openai_compatible_providers_generic_edit_report_unsupported_tool_result(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    provider_name: str,
+    subtask_id: str,
+):
+    responses = [
+        _openai_tool_call_response(
+            tool_call_id="call_unknown",
+            name="unsupported_local_tool",
+            arguments={"path": "README.md"},
+        ),
+        _openai_tool_call_response(
+            tool_call_id="call_finish",
+            name="finish",
+            arguments={
+                "summary": f"{provider_name} recovered after unsupported tool",
+                "tests": [],
+                "risks": [],
+            },
+        ),
+    ]
+    provider, calls = _provider_with_fake_openai_compatible_responses(
+        monkeypatch,
+        provider_name,
+        responses,
+    )
+    session = provider.create_session(
+        SessionConfig(name=f"{provider_name}-unsupported-tool")
+    )
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        f"handle unsupported {provider_name} provider tool",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id=subtask_id,
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert calls[1]["messages"][-1]["tool_call_id"] == "call_unknown"
+    assert "Unknown tool" in calls[1]["messages"][-1]["content"]
+    assert result_artifact["transaction_status_counts"] == {
+        "failed": 1,
+        "complete": 1,
+    }
+    assert result_artifact["failed_tools"] == {"unsupported_local_tool": 1}
+
+
 def _provider_with_fake_openai_compatible_responses(
     monkeypatch: pytest.MonkeyPatch,
     provider_name: str,
@@ -1435,6 +1506,70 @@ async def test_google_provider_generic_edit_recovers_after_tool_failure(
     assert result_artifact["recovery_outcomes"][0]["strategy"] == (
         "rollback_transaction"
     )
+
+
+@pytest.mark.asyncio
+async def test_google_provider_generic_edit_reports_unsupported_tool_result(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    fake_google = _install_fake_google_tool_responses(
+        monkeypatch,
+        [
+            _google_tool_response(
+                "unsupported_local_tool",
+                {"path": "README.md"},
+            ),
+            _google_tool_response(
+                "finish",
+                {
+                    "summary": "Google recovered after unsupported tool",
+                    "tests": [],
+                    "risks": [],
+                },
+            ),
+        ],
+    )
+    provider = GoogleProvider(
+        ProviderConfig(
+            provider="google",
+            google_api_key="test-key",
+            google_model="gemini-2.0-flash",
+        )
+    )
+    session = provider.create_session(SessionConfig(name="google-unsupported-tool"))
+    runtime_session = create_runtime_session(
+        provider_name="google",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "handle unsupported google provider tool",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+        subtask_id="1.20",
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    function_response = fake_google.generate_calls[1]["contents"][-1]["parts"][0][
+        "function_response"
+    ]
+
+    assert result.status == "continue"
+    assert function_response["name"] == "unsupported_local_tool"
+    assert "Unknown tool" in json.dumps(function_response["response"])
+    assert result_artifact["transaction_status_counts"] == {
+        "failed": 1,
+        "complete": 1,
+    }
+    assert result_artifact["failed_tools"] == {"unsupported_local_tool": 1}
 
 
 @pytest.mark.asyncio
