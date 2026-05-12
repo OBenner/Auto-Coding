@@ -52,7 +52,9 @@ from .qa_commands import (
 )
 from .runtime_commands import (
     external_mcp_smoke_has_failures,
+    generic_edit_resume_preflight_has_failures,
     handle_external_mcp_smoke_command,
+    handle_generic_edit_resume_preflight_command,
     handle_runtime_modes_command,
 )
 from .scheduler_commands import (
@@ -194,6 +196,17 @@ Environment Variables:
         help=(
             "With --external-mcp-smoke: persist live tools/list schemas for "
             "configured custom MCP servers"
+        ),
+    )
+
+    parser.add_argument(
+        "--generic-edit-resume-preflight",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Inspect generic_edit resume checkpoint/session artifacts without "
+            "starting a provider session"
         ),
     )
 
@@ -791,6 +804,17 @@ def _run_cli() -> None:
             sync_custom_tools=args.external_mcp_sync_custom_tools,
         )
         if external_mcp_smoke_has_failures(payload):
+            sys.exit(1)
+        return
+
+    # Handle --generic-edit-resume-preflight command before requiring a spec.
+    if args.generic_edit_resume_preflight is not None:
+        payload = handle_generic_edit_resume_preflight_command(
+            checkpoint_path=args.generic_edit_resume_preflight,
+            project_dir=project_dir,
+            output_json=args.json,
+        )
+        if generic_edit_resume_preflight_has_failures(payload):
             sys.exit(1)
         return
 

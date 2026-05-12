@@ -44,6 +44,25 @@ def test_parse_args_with_external_mcp_sync_custom_tools():
     assert args.external_mcp_sync_custom_tools is True
 
 
+def test_parse_args_with_generic_edit_resume_preflight():
+    from cli.main import parse_args
+
+    original_argv = sys.argv
+    sys.argv = [
+        "run.py",
+        "--generic-edit-resume-preflight",
+        ".auto-Codex/specs/001/artifacts/generic_edit_recovery_checkpoint.json",
+    ]
+    try:
+        args = parse_args()
+    finally:
+        sys.argv = original_argv
+
+    assert str(args.generic_edit_resume_preflight).endswith(
+        "generic_edit_recovery_checkpoint.json"
+    )
+
+
 def test_parse_args_with_generic_edit_runtime_mode():
     from cli.main import parse_args
 
@@ -131,6 +150,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert "aider" in selection_rows["generic_edit"]["selected_runner_ids"]
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
+    assert "generic_edit_resume_preflight" in payload["recommendations"]
     assert "external_mcp_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
@@ -305,6 +325,59 @@ def test_runtime_modes_command_marks_configured_graphiti_as_external_bridged(
         "mcp__graphiti-memory__search_nodes"
         in openai_generic_mcp["executable_external_tools"]
     )
+
+
+def test_generic_edit_resume_preflight_command_outputs_json(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    from cli.runtime_commands import (
+        generic_edit_resume_preflight_has_failures,
+        handle_generic_edit_resume_preflight_command,
+    )
+
+    checkpoint_path = (
+        tmp_path / "spec-001" / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    )
+
+    def fake_inspect_generic_edit_resume_artifacts(
+        *,
+        checkpoint_path,
+        spec_dir,
+        project_dir,
+    ):
+        assert checkpoint_path.name == "generic_edit_recovery_checkpoint.json"
+        assert spec_dir == tmp_path / "spec-001"
+        assert project_dir == tmp_path
+        return {
+            "runtime": "generic_edit",
+            "status": "blocked",
+            "requested_path": str(checkpoint_path),
+            "resume_artifact_health": {
+                "status": "blocked",
+                "artifact": "trace",
+                "reason": "missing",
+            },
+            "artifacts": {},
+            "blockers": [],
+        }
+
+    monkeypatch.setattr(
+        "cli.runtime_commands.inspect_generic_edit_resume_artifacts",
+        fake_inspect_generic_edit_resume_artifacts,
+    )
+
+    payload = handle_generic_edit_resume_preflight_command(
+        checkpoint_path=checkpoint_path,
+        project_dir=tmp_path,
+        output_json=True,
+    )
+    parsed = json.loads(capsys.readouterr().out)
+
+    assert payload["status"] == "blocked"
+    assert parsed["resume_artifact_health"]["reason"] == "missing"
+    assert generic_edit_resume_preflight_has_failures(payload) is True
 
 
 def test_external_mcp_smoke_command_outputs_json(

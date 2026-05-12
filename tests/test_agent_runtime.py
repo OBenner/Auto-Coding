@@ -5173,6 +5173,79 @@ async def test_generic_edit_runtime_rejects_finish_with_open_batch(
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_resume_preflight_reports_ready_open_batch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "forget to close a batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Finished with an open batch",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+    result = await run_runtime_session(
+        runtime_session,
+        "leave batch open",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert result.status == "error"
+    assert preflight["status"] == "ready"
+    assert preflight["resume"] == {
+        "strategy": "resolve_open_batch",
+        "next_iteration": 2,
+        "active_batch_id": "batch-1",
+    }
+    assert preflight["resume_policy"]["open_transaction_batch_ids"] == ["batch-1"]
+    assert preflight["resume_policy"]["required_resolution_action_kinds"] == [
+        "commit_batch",
+        "abort_batch",
+    ]
+    assert preflight["artifacts"]["recovery_checkpoint"]["status"] == "ready"
+    assert preflight["artifacts"]["session_state"]["status"] == "ready"
+    assert preflight["artifacts"]["trace"]["iteration_count"] == 1
+    assert preflight["workspace_guard"]["status"] == "clean"
+    assert preflight["blockers"] == []
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_resumes_open_batch_and_commits(
     tmp_path: Path,
 ):
@@ -6820,6 +6893,34 @@ def test_generic_edit_recovery_checkpoint_reports_corrupt_json_health(
     }
 
 
+def test_generic_edit_resume_preflight_blocks_corrupt_checkpoint(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    checkpoint_path = artifact_dir / "generic_edit_recovery_checkpoint.json"
+    checkpoint_path.write_text("{", encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "recovery_checkpoint",
+        "reason": "corrupt_json",
+        "path": str(checkpoint_path),
+    }
+    assert preflight["blockers"] == [preflight["resume_artifact_health"]]
+
+
 def test_generic_edit_recovery_checkpoint_requires_existing_policy_artifacts(
     tmp_path: Path,
 ):
@@ -7524,7 +7625,10 @@ async def test_generic_edit_runtime_rejects_resume_when_mutated_path_drifted(
     tmp_path: Path,
 ):
     from agents.runtime import resume_runtime_session
-    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeSession,
+        inspect_generic_edit_resume_artifacts,
+    )
 
     target = tmp_path / "partial.txt"
     target.write_text("original\n", encoding="utf-8")
@@ -7580,6 +7684,19 @@ async def test_generic_edit_runtime_rejects_resume_when_mutated_path_drifted(
     assert first_snapshot["postimages"][0]["content"] == "changed\n"
     target.write_text("external edit\n", encoding="utf-8")
 
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "workspace_guard",
+        "reason": "workspace_drift",
+        "drift_paths": ["partial.txt"],
+    }
+
     resume_session = FakeGenericEditSession(
         [
             {
@@ -7629,7 +7746,10 @@ async def test_generic_edit_runtime_rejects_resume_when_trace_mismatches_checkpo
     tmp_path: Path,
 ):
     from agents.runtime import resume_runtime_session
-    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeSession,
+        inspect_generic_edit_resume_artifacts,
+    )
 
     target = tmp_path / "todo.txt"
     target.write_text("keep going\n", encoding="utf-8")
@@ -7663,6 +7783,20 @@ async def test_generic_edit_runtime_rejects_resume_when_trace_mismatches_checkpo
     trace_payload = json.loads(trace_path.read_text(encoding="utf-8"))
     trace_payload["trace"] = []
     trace_path.write_text(json.dumps(trace_payload, indent=2), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "trace",
+        "reason": "checkpoint_mismatch",
+        "expected_iterations": 1,
+        "actual_iterations": 0,
+    }
 
     resume_session = FakeGenericEditSession(
         [

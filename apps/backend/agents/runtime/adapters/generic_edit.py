@@ -164,6 +164,48 @@ def generic_edit_resume_artifact_error(
     )
 
 
+def generic_edit_resume_error_health(
+    error: GenericEditRuntimeError,
+    *,
+    artifact: str,
+    path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Return structured artifact health for a resume preflight error."""
+    health = error.data.get("resume_artifact_health")
+    if isinstance(health, dict):
+        return dict(health)
+    fallback: dict[str, Any] = {
+        "status": "blocked",
+        "artifact": artifact,
+        "reason": "validation_error",
+        "message": str(error),
+    }
+    if path is not None:
+        fallback["path"] = str(path)
+    return fallback
+
+
+def generic_edit_resume_blocked_preflight(
+    *,
+    checkpoint_path: Path,
+    spec_dir: Path,
+    project_dir: Path,
+    artifact_health: dict[str, Any],
+    artifacts: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return a read-only resume preflight payload for a blocked resume."""
+    return {
+        "runtime": "generic_edit",
+        "status": "blocked",
+        "requested_path": str(checkpoint_path),
+        "spec_dir": str(spec_dir),
+        "project_dir": str(project_dir),
+        "artifacts": dict(artifacts or {}),
+        "resume_artifact_health": dict(artifact_health),
+        "blockers": [dict(artifact_health)],
+    }
+
+
 @dataclass
 class NativeToolExecutionResult:
     """Actions executed during one native provider tool-call iteration."""
@@ -5110,6 +5152,203 @@ def generic_edit_resume_open_batch_id(
             "resume supports one active transaction batch."
         )
     return open_batch_ids[0] if open_batch_ids else None
+
+
+def inspect_generic_edit_resume_artifacts(
+    *,
+    checkpoint_path: Path,
+    spec_dir: Path,
+    project_dir: Path,
+) -> dict[str, Any]:
+    """Return read-only diagnostics for a generic_edit resume checkpoint."""
+    artifacts: dict[str, Any] = {}
+    try:
+        resolved_checkpoint_path = resolve_generic_edit_resume_checkpoint_path(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+        )
+    except GenericEditRuntimeError as e:
+        return generic_edit_resume_blocked_preflight(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            artifact_health=generic_edit_resume_error_health(
+                e,
+                artifact="resume_checkpoint_path",
+                path=checkpoint_path,
+            ),
+            artifacts=artifacts,
+        )
+
+    artifacts["recovery_checkpoint"] = {
+        "status": "pending",
+        "path": str(resolved_checkpoint_path),
+    }
+    session_state_path = (
+        spec_dir / "artifacts" / "generic_edit_session_state.json"
+    ).resolve()
+    if session_state_path.exists():
+        try:
+            load_generic_edit_session_state(
+                session_state_path,
+                expected_checkpoint_path=resolved_checkpoint_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="session_state",
+                    path=session_state_path,
+                ),
+                artifacts=artifacts,
+            )
+        artifacts["session_state"] = {
+            "status": "ready",
+            "path": str(session_state_path),
+        }
+    else:
+        artifacts["session_state"] = {
+            "status": "missing_optional",
+            "path": str(session_state_path),
+        }
+
+    try:
+        checkpoint = load_generic_edit_recovery_checkpoint(resolved_checkpoint_path)
+    except GenericEditRuntimeError as e:
+        return generic_edit_resume_blocked_preflight(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            artifact_health=generic_edit_resume_error_health(
+                e,
+                artifact="recovery_checkpoint",
+                path=resolved_checkpoint_path,
+            ),
+            artifacts=artifacts,
+        )
+    artifacts["recovery_checkpoint"]["status"] = "ready"
+
+    trace_path = generic_edit_trace_path_for_checkpoint(resolved_checkpoint_path)
+    artifacts["trace"] = {"status": "pending", "path": str(trace_path)}
+    try:
+        trace = load_generic_edit_checkpoint_trace(trace_path)
+        validate_generic_edit_checkpoint_trace_consistency(
+            checkpoint=checkpoint,
+            trace=trace,
+        )
+    except GenericEditRuntimeError as e:
+        return generic_edit_resume_blocked_preflight(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            artifact_health=generic_edit_resume_error_health(
+                e,
+                artifact="trace",
+                path=trace_path,
+            ),
+            artifacts=artifacts,
+        )
+    artifacts["trace"] = {
+        "status": "ready",
+        "path": str(trace_path),
+        "iteration_count": len(trace),
+    }
+
+    mutation_snapshot_path = generic_edit_mutation_snapshot_path_for_checkpoint(
+        resolved_checkpoint_path,
+    )
+    artifacts["mutation_snapshots"] = {
+        "status": "pending",
+        "path": str(mutation_snapshot_path),
+    }
+    try:
+        mutation_snapshots = load_generic_edit_mutation_snapshots(
+            mutation_snapshot_path,
+        )
+    except GenericEditRuntimeError as e:
+        return generic_edit_resume_blocked_preflight(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            artifact_health=generic_edit_resume_error_health(
+                e,
+                artifact="mutation_snapshots",
+                path=mutation_snapshot_path,
+            ),
+            artifacts=artifacts,
+        )
+    artifacts["mutation_snapshots"] = {
+        "status": "ready" if mutation_snapshot_path.exists() else "missing_optional",
+        "path": str(mutation_snapshot_path),
+        "snapshot_count": len(mutation_snapshots),
+    }
+
+    try:
+        active_batch_id = generic_edit_resume_open_batch_id(
+            checkpoint=checkpoint,
+            trace=trace,
+        )
+        workspace_guard = validate_generic_edit_resume_workspace_guard(
+            project_dir=project_dir,
+            mutation_snapshots=mutation_snapshots,
+        )
+    except GenericEditRuntimeError as e:
+        return generic_edit_resume_blocked_preflight(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            artifact_health=generic_edit_resume_error_health(
+                e,
+                artifact="workspace_guard",
+            ),
+            artifacts=artifacts,
+        )
+
+    resume = checkpoint.get("resume") if isinstance(checkpoint.get("resume"), dict) else {}
+    resume_policy = (
+        checkpoint.get("resume_policy")
+        if isinstance(checkpoint.get("resume_policy"), dict)
+        else {}
+    )
+    return {
+        "runtime": "generic_edit",
+        "status": "ready",
+        "requested_path": str(checkpoint_path),
+        "checkpoint_path": str(resolved_checkpoint_path),
+        "spec_dir": str(spec_dir),
+        "project_dir": str(project_dir),
+        "artifacts": artifacts,
+        "resume": {
+            "strategy": str(resume.get("strategy") or "unknown"),
+            "next_iteration": checkpoint_next_iteration(checkpoint, trace),
+            "active_batch_id": active_batch_id,
+        },
+        "resume_policy": {
+            "status": resume_policy.get("status", "unknown"),
+            "can_resume": bool(resume_policy.get("can_resume")),
+            "finish_blocked": bool(resume_policy.get("finish_blocked")),
+            "required_resolution_action_kinds": normalize_string_list(
+                resume_policy.get("required_resolution_action_kinds")
+            ),
+            "required_artifacts": normalize_string_list(
+                resume_policy.get("required_artifacts")
+            ),
+            "unresolved_partial_failure_ids": normalize_string_list(
+                resume_policy.get("unresolved_partial_failure_ids")
+            ),
+            "unresolved_transaction_group_ids": normalize_string_list(
+                resume_policy.get("unresolved_transaction_group_ids")
+            ),
+            "open_transaction_batch_ids": normalize_string_list(
+                resume_policy.get("open_transaction_batch_ids")
+            ),
+        },
+        "workspace_guard": workspace_guard,
+        "blockers": [],
+    }
 
 
 def build_generic_edit_checkpoint_resume_message(
