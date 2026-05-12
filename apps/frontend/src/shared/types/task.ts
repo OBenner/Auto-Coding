@@ -195,6 +195,7 @@ export interface GenericEditResumePolicy {
   required_artifacts: string[];
   unresolved_partial_failure_ids: string[];
   unresolved_transaction_group_ids: string[];
+  open_transaction_batch_ids?: string[];
 }
 
 export interface GenericEditMcpBridgePlan {

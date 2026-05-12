@@ -221,6 +221,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
         "max_iterations",
         "native_tool_error",
         "non_terminal_finish",
+        "open_batch",
         "parse_error",
         "unresolved_partial_failure",
     }
@@ -262,9 +263,11 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "required_artifacts",
     "unresolved_partial_failure_ids",
     "unresolved_transaction_group_ids",
+    "open_transaction_batch_ids",
     "workspace_guard_status",
     "workspace_guard_drift_count",
     "workspace_guard_unverified_path_count",
+    "active_batch_id",
     "start_iteration",
     "previous_status",
     "previous_stop_reason",
@@ -280,6 +283,7 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_STAGES = frozenset(
         "resume",
         "resume_clean",
         "resume_policy",
+        "batch_open",
     }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_STRING_FIELDS = (
@@ -419,6 +423,10 @@ class GenericEditRuntimeSession:
         self._mutation_snapshots = load_generic_edit_mutation_snapshots(
             generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path)
         )
+        self._active_batch_id = generic_edit_resume_open_batch_id(
+            checkpoint=checkpoint,
+            trace=trace,
+        )
         workspace_guard = validate_generic_edit_resume_workspace_guard(
             project_dir=self._executor.project_dir,
             mutation_snapshots=self._mutation_snapshots,
@@ -435,6 +443,7 @@ class GenericEditRuntimeSession:
             trace_path=trace_path,
             start_iteration=next_iteration,
             workspace_guard=workspace_guard,
+            active_batch_id=self._active_batch_id,
         )
 
         try:
@@ -769,6 +778,13 @@ class GenericEditRuntimeSession:
             results=action_results,
         )
         finish_trace = [*trace, iteration_entry]
+        if has_open_transaction_batch(finish_trace):
+            return self._open_batch_finish_result(
+                trace=finish_trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
         if has_unresolved_partial_failure(finish_trace):
             return self._unresolved_partial_failure_finish_result(
                 trace=finish_trace,
@@ -1210,6 +1226,13 @@ class GenericEditRuntimeSession:
             results=action_results,
         )
         finish_trace = [*trace, iteration_entry]
+        if has_open_transaction_batch(finish_trace):
+            return self._open_batch_finish_result(
+                trace=finish_trace,
+                spec_dir=spec_dir,
+                observation_path=observation_path,
+                subtask_id=subtask_id,
+            )
         if has_unresolved_partial_failure(finish_trace):
             return self._unresolved_partial_failure_finish_result(
                 trace=finish_trace,
@@ -1243,6 +1266,40 @@ class GenericEditRuntimeSession:
         return AgentRunResult(
             status="continue",
             response_text="\n".join(response_lines),
+        )
+
+    def _open_batch_finish_result(
+        self,
+        *,
+        trace: list[dict[str, Any]],
+        spec_dir: Path,
+        observation_path: Path,
+        subtask_id: str | None,
+    ) -> AgentRunResult:
+        """Reject finish while a runtime-managed transaction batch is open."""
+        transaction_summary = summarize_generic_edit_transactions(trace)
+        open_batch_ids = transaction_summary["open_transaction_batch_ids"]
+        message = (
+            "Generic edit runtime rejected finish because transaction batch(es) "
+            f"remain open: {', '.join(open_batch_ids)}."
+        )
+        artifacts = save_generic_edit_artifacts(
+            spec_dir=spec_dir,
+            provider_name=self.provider_name,
+            subtask_id=subtask_id,
+            status="error",
+            stop_reason="open_batch",
+            message=message,
+            trace=trace,
+            summary=message,
+            observation_path=observation_path,
+            mutation_snapshots=self._mutation_snapshots,
+            mcp_support=self._mcp_support_payload(),
+            resume_metadata=self._resume_metadata,
+        )
+        return AgentRunResult(
+            status="error",
+            response_text=f"{message}\nArtifacts: {artifacts['generic_edit_trace']}",
         )
 
     def _unresolved_partial_failure_finish_result(
@@ -3682,6 +3739,7 @@ def build_generic_edit_session_state(
         "unresolved_transaction_group_ids": transaction_group_summary[
             "unresolved_transaction_group_ids"
         ],
+        "open_transaction_batch_ids": transaction_summary["open_transaction_batch_ids"],
         "artifacts": {
             "trace": str(artifact_refs["trace"]),
             "events": str(artifact_refs["events"]),
@@ -4065,9 +4123,21 @@ def build_generic_edit_resume_policy(
     unresolved_transaction_group_ids = list(
         transaction_group_summary["unresolved_transaction_group_ids"]
     )
-    finish_blocked = bool(
-        unresolved_partial_failure_ids or unresolved_transaction_group_ids
+    open_transaction_batch_ids = list(
+        transaction_summary.get("open_transaction_batch_ids") or []
     )
+    finish_blocked = bool(
+        unresolved_partial_failure_ids
+        or unresolved_transaction_group_ids
+        or open_transaction_batch_ids
+    )
+    required_resolution_action_kinds = generic_edit_required_resolution_action_kinds(
+        recovery_plan
+    )
+    if open_transaction_batch_ids:
+        for action_kind in (COMMIT_BATCH_TOOL, ABORT_BATCH_TOOL):
+            if action_kind not in required_resolution_action_kinds:
+                required_resolution_action_kinds.append(action_kind)
     required_artifacts = [
         artifact_name
         for artifact_name in (
@@ -4079,7 +4149,7 @@ def build_generic_edit_resume_policy(
         )
         if artifact_name in resume_inputs
     ]
-    return {
+    policy = {
         "version": GENERIC_EDIT_RECOVERY_POLICY_VERSION,
         "runtime": "generic_edit",
         "status": "requires_resolution" if finish_blocked else "ready",
@@ -4088,13 +4158,14 @@ def build_generic_edit_resume_policy(
         "strategy": strategy,
         "checkpoint_path": checkpoint_path,
         "next_iteration": next_iteration,
-        "required_resolution_action_kinds": generic_edit_required_resolution_action_kinds(
-            recovery_plan
-        ),
+        "required_resolution_action_kinds": required_resolution_action_kinds,
         "required_artifacts": required_artifacts,
         "unresolved_partial_failure_ids": unresolved_partial_failure_ids,
         "unresolved_transaction_group_ids": unresolved_transaction_group_ids,
     }
+    if open_transaction_batch_ids:
+        policy["open_transaction_batch_ids"] = open_transaction_batch_ids
+    return policy
 
 
 def build_generic_edit_manifest_resume_inputs(
@@ -4526,6 +4597,7 @@ def build_generic_edit_recovery_checkpoint(
         "unresolved_transaction_group_ids": transaction_group_summary[
             "unresolved_transaction_group_ids"
         ],
+        "open_transaction_batch_ids": transaction_summary["open_transaction_batch_ids"],
         "last_partial_failure_id": transaction_summary["last_partial_failure_id"],
         "last_partial_failure_affected_paths": transaction_summary[
             "last_partial_failure_affected_paths"
@@ -4947,6 +5019,31 @@ def checkpoint_next_iteration(
     return len(trace) + 1
 
 
+def generic_edit_resume_open_batch_id(
+    *,
+    checkpoint: dict[str, Any],
+    trace: list[dict[str, Any]],
+) -> str | None:
+    """Return the single open batch that must remain active across resume."""
+    open_batch_ids = normalize_string_list(checkpoint.get("open_transaction_batch_ids"))
+    if not open_batch_ids:
+        transaction_summary = checkpoint.get("transaction_summary")
+        if isinstance(transaction_summary, dict):
+            open_batch_ids = normalize_string_list(
+                transaction_summary.get("open_transaction_batch_ids")
+            )
+    if not open_batch_ids:
+        open_batch_ids = summarize_generic_edit_transactions(trace)[
+            "open_transaction_batch_ids"
+        ]
+    if len(open_batch_ids) > 1:
+        raise GenericEditRuntimeError(
+            "Generic edit recovery checkpoint contains multiple open batches; "
+            "resume supports one active transaction batch."
+        )
+    return open_batch_ids[0] if open_batch_ids else None
+
+
 def build_generic_edit_checkpoint_resume_message(
     *,
     checkpoint: dict[str, Any],
@@ -5017,6 +5114,7 @@ def build_generic_edit_resume_metadata(
     trace_path: Path,
     start_iteration: int,
     workspace_guard: dict[str, Any] | None = None,
+    active_batch_id: str | None = None,
 ) -> dict[str, Any]:
     """Return compact provenance for a run resumed from a checkpoint."""
     resume = (
@@ -5032,6 +5130,8 @@ def build_generic_edit_resume_metadata(
     }
     if workspace_guard is not None:
         metadata["workspace_guard"] = workspace_guard
+    if active_batch_id:
+        metadata["active_batch_id"] = active_batch_id
     for key in (
         "recovery_plan_artifact",
         "mutation_snapshot_artifact",
@@ -5054,6 +5154,8 @@ def should_write_generic_edit_recovery_checkpoint(
         return False
     if transaction_summary["unresolved_partial_failure_count"] > 0:
         return True
+    if transaction_summary["open_transaction_batch_count"] > 0:
+        return True
     return stop_reason in RECOVERABLE_GENERIC_EDIT_STOP_REASONS
 
 
@@ -5065,6 +5167,8 @@ def generic_edit_resume_strategy(
     """Return the checkpoint resume strategy for UI/orchestrator consumers."""
     if transaction_summary["unresolved_partial_failure_count"] > 0:
         return "recover_partial_failure"
+    if transaction_summary["open_transaction_batch_count"] > 0:
+        return "resolve_open_batch"
     if stop_reason in {"cancelled", "max_iterations"}:
         return "continue_from_trace"
     if stop_reason == "native_tool_error":
@@ -5111,6 +5215,16 @@ def build_generic_edit_resume_prompt(
             prompt_lines.append(
                 f"Recovery plan artifact: {recovery_plan['artifact_path']}"
             )
+    elif strategy == "resolve_open_batch":
+        open_batch_ids = transaction_summary.get("open_transaction_batch_ids") or []
+        prompt_lines.extend(
+            [
+                "Open transaction batch(es): " + ", ".join(open_batch_ids),
+                "Commit each open batch with commit_batch, or abort it with "
+                "abort_batch to rollback staged mutations, before calling finish.",
+                "Inspect current workspace state before choosing commit or abort.",
+            ]
+        )
     else:
         prompt_lines.extend(
             [
@@ -5526,6 +5640,10 @@ def enrich_generic_edit_timeline_event(event: dict[str, Any]) -> None:
         event["timeline_stage"] = "partial_failure"
         event["requires_user_action"] = True
         return
+    if event_type == "transaction" and event.get("batch_status") == "open":
+        event["timeline_stage"] = "batch_open"
+        event["requires_user_action"] = True
+        return
     if event_type == "transaction_group":
         if event.get("status") == "unresolved":
             event["timeline_stage"] = "recovery_policy"
@@ -5587,6 +5705,9 @@ def build_generic_edit_resume_event(
         "previous_status": resume_metadata.get("previous_status"),
         "previous_stop_reason": resume_metadata.get("previous_stop_reason"),
     }
+    active_batch_id = resume_metadata.get("active_batch_id")
+    if isinstance(active_batch_id, str) and active_batch_id:
+        event["active_batch_id"] = active_batch_id
     for key in (
         "recovery_plan_artifact",
         "mutation_snapshot_artifact",
@@ -5648,6 +5769,11 @@ def build_generic_edit_resume_policy_event(
             resume_policy.get("unresolved_transaction_group_ids")
         ),
     }
+    open_batch_ids = normalize_string_list(
+        resume_policy.get("open_transaction_batch_ids")
+    )
+    if open_batch_ids:
+        event["open_transaction_batch_ids"] = open_batch_ids
     recovery_plan_artifact = recovery_checkpoint.get("recovery_plan_artifact")
     if isinstance(recovery_plan_artifact, str) and recovery_plan_artifact:
         event["recovery_plan_artifact"] = recovery_plan_artifact
@@ -5961,10 +6087,22 @@ def summarize_generic_edit_transaction_batches(
                 batch["status"] = str(transaction["batch_status"])
 
     ordered_batches = list(batches.values())
+    batch_status_counts: dict[str, int] = {}
+    for batch in ordered_batches:
+        status = str(batch.get("status") or "open")
+        batch_status_counts[status] = batch_status_counts.get(status, 0) + 1
+    open_batch_ids = [
+        str(batch["id"])
+        for batch in ordered_batches
+        if str(batch.get("status") or "open") not in {"committed", "aborted"}
+    ]
     return {
         "transaction_batch_count": len(ordered_batches),
         "transaction_batch_ids": [batch["id"] for batch in ordered_batches],
         "transaction_batches": ordered_batches,
+        "transaction_batch_status_counts": batch_status_counts,
+        "open_transaction_batch_count": len(open_batch_ids),
+        "open_transaction_batch_ids": open_batch_ids,
     }
 
 
@@ -6148,6 +6286,13 @@ def has_unresolved_partial_failure(trace: list[dict[str, Any]]) -> bool:
     return (
         summarize_generic_edit_transactions(trace)["unresolved_partial_failure_count"]
         > 0
+    )
+
+
+def has_open_transaction_batch(trace: list[dict[str, Any]]) -> bool:
+    """Return true when finish would leave a transaction batch uncommitted."""
+    return (
+        summarize_generic_edit_transactions(trace)["open_transaction_batch_count"] > 0
     )
 
 

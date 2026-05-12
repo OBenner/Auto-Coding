@@ -724,6 +724,10 @@ function normalizeResumePolicy(value: unknown): GenericEditResumePolicy | null {
   const requiredArtifacts = normalizeStringList(required_artifacts);
   const unresolvedPartialFailureIds = normalizeStringList(unresolved_partial_failure_ids);
   const unresolvedTransactionGroupIds = normalizeStringList(unresolved_transaction_group_ids);
+  const openTransactionBatchIds =
+    value.open_transaction_batch_ids === undefined
+      ? []
+      : normalizeStringList(value.open_transaction_batch_ids);
 
   if (
     typeof version !== 'number' ||
@@ -739,12 +743,13 @@ function normalizeResumePolicy(value: unknown): GenericEditResumePolicy | null {
     requiredResolutionActionKinds === null ||
     requiredArtifacts === null ||
     unresolvedPartialFailureIds === null ||
-    unresolvedTransactionGroupIds === null
+    unresolvedTransactionGroupIds === null ||
+    openTransactionBatchIds === null
   ) {
     return null;
   }
 
-  return {
+  const policy: GenericEditResumePolicy = {
     version,
     runtime,
     status,
@@ -758,6 +763,10 @@ function normalizeResumePolicy(value: unknown): GenericEditResumePolicy | null {
     unresolved_partial_failure_ids: unresolvedPartialFailureIds,
     unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
   };
+  if (openTransactionBatchIds.length > 0) {
+    policy.open_transaction_batch_ids = openTransactionBatchIds;
+  }
+  return policy;
 }
 
 function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifactManifest | null {

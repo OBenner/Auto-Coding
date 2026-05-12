@@ -202,6 +202,34 @@ describe('readGenericEditArtifactManifest', () => {
     expect(manifest?.mcp_support).toEqual(manifestPayload.mcp_support);
   });
 
+  it('preserves open transaction batch ids in resume policy', async () => {
+    const projectPath = await createTempProject();
+    const project = createProject(projectPath);
+    const task = createTask();
+
+    const manifestPayload = createGenericEditArtifactManifest();
+    await writeManifest(projectPath, task.specId, {
+      ...manifestPayload,
+      resume_policy: {
+        ...manifestPayload.resume_policy,
+        strategy: 'resolve_open_batch',
+        required_resolution_action_kinds: ['commit_batch', 'abort_batch'],
+        unresolved_partial_failure_ids: [],
+        unresolved_transaction_group_ids: [],
+        open_transaction_batch_ids: ['batch-1'],
+      },
+    });
+
+    const manifest = await readGenericEditArtifactManifest(project, task);
+
+    expect(manifest?.resume_policy?.strategy).toBe('resolve_open_batch');
+    expect(manifest?.resume_policy?.open_transaction_batch_ids).toEqual(['batch-1']);
+    expect(manifest?.resume_policy?.required_resolution_action_kinds).toEqual([
+      'commit_batch',
+      'abort_batch',
+    ]);
+  });
+
   it('drops malformed optional mcp support without rejecting the manifest', async () => {
     const projectPath = await createTempProject();
     const project = createProject(projectPath);

@@ -5082,6 +5082,192 @@ async def test_generic_edit_runtime_aborts_open_batch_with_snapshot_rollback(
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_finish_with_open_batch(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "forget to close a batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Finished with an open batch",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "leave batch open",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    checkpoint = json.loads(
+        (artifact_dir / "generic_edit_recovery_checkpoint.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    session_state = json.loads(
+        (artifact_dir / "generic_edit_session_state.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(
+        (artifact_dir / "generic_edit_artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert result.status == "error"
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert result_artifact["stop_reason"] == "open_batch"
+    assert result_artifact["open_transaction_batch_ids"] == ["batch-1"]
+    assert result_artifact["recoverable"] is True
+    assert checkpoint["resume"]["strategy"] == "resolve_open_batch"
+    assert checkpoint["resume_policy"]["finish_blocked"] is True
+    assert checkpoint["resume_policy"]["required_resolution_action_kinds"] == [
+        "commit_batch",
+        "abort_batch",
+    ]
+    assert checkpoint["resume_policy"]["open_transaction_batch_ids"] == ["batch-1"]
+    assert session_state["resume_policy"] == checkpoint["resume_policy"]
+    assert manifest["resume_policy"]["open_transaction_batch_ids"] == ["batch-1"]
+    assert any(
+        event["event_type"] == "transaction"
+        and event.get("batch_status") == "open"
+        and event.get("timeline_stage") == "batch_open"
+        and event.get("requires_user_action") is True
+        for event in events
+    )
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_resumes_open_batch_and_commits(
+    tmp_path: Path,
+):
+    from agents.runtime import resume_runtime_session
+    from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    initial_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "forget to close a batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Finished with an open batch",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    initial_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=initial_session,
+        project_dir=tmp_path,
+    )
+    first_result = await run_runtime_session(
+        initial_runtime,
+        "leave batch open",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+    checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    assert first_result.status == "error"
+    assert checkpoint_path.exists()
+
+    resume_session = FakeGenericEditSession(
+        [
+            {
+                "thought": "commit the previously open batch",
+                "actions": [
+                    {
+                        "tool": "commit_batch",
+                        "batch_id": "batch-1",
+                        "summary": "Accept staged update",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Committed recovered batch",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    resume_runtime = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=resume_session,
+        project_dir=tmp_path,
+    )
+
+    resumed = await resume_runtime_session(
+        resume_runtime,
+        checkpoint_path,
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert resumed.status == "continue"
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert result_artifact["status"] == "complete"
+    assert result_artifact["transaction_batches"][0]["status"] == "committed"
+    assert result_artifact["open_transaction_batch_ids"] == []
+    assert not checkpoint_path.exists()
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failure(
     tmp_path: Path,
 ):
