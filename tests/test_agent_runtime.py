@@ -7081,7 +7081,7 @@ def update_generic_edit_session_state(
 ) -> None:
     session_state = json.loads(session_state_path.read_text(encoding="utf-8"))
     session_state.update(updates)
-    session_state_path.write_text(
+    session_state_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
         json.dumps(session_state),
         encoding="utf-8",
     )
