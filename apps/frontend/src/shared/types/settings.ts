@@ -535,6 +535,7 @@ export interface ProviderValidatedRuntimeResumePolicy {
   requiredArtifacts?: string[];
   unresolvedPartialFailureIds?: string[];
   unresolvedTransactionGroupIds?: string[];
+  openTransactionBatchIds?: string[];
 }
 
 export interface ProviderValidatedToolLoopContract {

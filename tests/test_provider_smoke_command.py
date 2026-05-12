@@ -406,6 +406,7 @@ def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
                     ],
                     "unresolved_partial_failure_ids": ["partial-failure-1"],
                     "unresolved_transaction_group_ids": ["transaction-group-1"],
+                    "open_transaction_batch_ids": ["batch-1"],
                 },
             }
         ),
@@ -431,6 +432,7 @@ def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
         ],
         "unresolved_partial_failure_ids": ["partial-failure-1"],
         "unresolved_transaction_group_ids": ["transaction-group-1"],
+        "open_transaction_batch_ids": ["batch-1"],
     }
 
 
@@ -797,6 +799,7 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
                         ],
                         "unresolved_partial_failure_ids": ["json_actions-1"],
                         "unresolved_transaction_group_ids": ["transaction-group-1"],
+                        "open_transaction_batch_ids": ["batch-1"],
                     },
                 },
             },
@@ -837,3 +840,5 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     assert "json_actions-1" in output
     assert "Resume unresolved groups" in output
     assert "transaction-group-1" in output
+    assert "Resume open batches" in output
+    assert "batch-1" in output

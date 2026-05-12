@@ -1133,6 +1133,7 @@
       "resumeRequiredArtifacts": "Artefacts de reprise requis",
       "resumeUnresolvedFailures": "Échecs partiels non résolus",
       "resumeUnresolvedGroups": "Groupes de transaction non résolus",
+      "resumeOpenBatches": "Lots de transaction ouverts",
       "noneMissing": "Aucun",
       "diagnosticsNote": "Le smoke test fournisseur vérifie uniquement l'appel API ; le codage autonome dépend encore des outils runtime, MCP, subagents et du support du système de fichiers.",
       "defaultModel": "Modèle par défaut",

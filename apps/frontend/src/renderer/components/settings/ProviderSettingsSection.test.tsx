@@ -16,6 +16,7 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.resumeRequiredArtifacts': 'Required resume artifacts',
     'settings:aiProvider.connectionTest.resumeUnresolvedFailures': 'Unresolved partial failures',
     'settings:aiProvider.connectionTest.resumeUnresolvedGroups': 'Unresolved transaction groups',
+    'settings:aiProvider.connectionTest.resumeOpenBatches': 'Open transaction batches',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
     'settings:aiProvider.runtimeDiagnosticValues.ready': 'Ready',
     'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure': 'Recover partial failure',
@@ -35,6 +36,7 @@ describe('buildProviderResumePolicyDiagnosticRows', () => {
         requiredArtifacts: ['trace_artifact'],
         unresolvedPartialFailureIds: ['json_actions-1'],
         unresolvedTransactionGroupIds: ['transaction-group-1'],
+        openTransactionBatchIds: ['batch-1'],
       })
     ).toEqual([
       { labelKey: 'settings:aiProvider.connectionTest.resumePolicy', value: 'Ready' },
@@ -60,6 +62,10 @@ describe('buildProviderResumePolicyDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.resumeUnresolvedGroups',
         value: 'transaction-group-1',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.resumeOpenBatches',
+        value: 'batch-1',
       },
     ]);
   });

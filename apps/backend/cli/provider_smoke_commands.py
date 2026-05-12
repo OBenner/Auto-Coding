@@ -287,6 +287,9 @@ def _resume_policy_payload(value: Any) -> dict[str, Any] | None:
     )
     if unresolved_failures:
         policy["unresolved_partial_failure_ids"] = unresolved_failures
+    open_batches = _string_list_payload(value.get("open_transaction_batch_ids"))
+    if open_batches:
+        policy["open_transaction_batch_ids"] = open_batches
     return policy or None
 
 
@@ -981,6 +984,10 @@ def _print_provider_resume_policy(resume_policy: Any) -> None:
     _print_string_list_line(
         "Resume unresolved groups",
         resume_policy.get("unresolved_transaction_group_ids"),
+    )
+    _print_string_list_line(
+        "Resume open batches",
+        resume_policy.get("open_transaction_batch_ids"),
     )
 
 

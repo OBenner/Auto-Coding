@@ -568,6 +568,13 @@ export function buildProviderResumePolicyDiagnosticRows(
         resumePolicy.unresolvedTransactionGroupIds
       ),
     },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.resumeOpenBatches',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        resumePolicy.openTransactionBatchIds
+      ),
+    },
   ].filter((row) => row.value);
 }
 

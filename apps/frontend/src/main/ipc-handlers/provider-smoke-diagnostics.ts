@@ -46,6 +46,7 @@ export function mapProviderRuntimeResumePolicy(
     unresolvedTransactionGroupIds: arrayFromUnknown(
       payload.unresolved_transaction_group_ids
     ),
+    openTransactionBatchIds: arrayFromUnknown(payload.open_transaction_batch_ids),
   };
 
   return Object.values(policy).some((field) =>

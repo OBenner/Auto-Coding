@@ -20,6 +20,7 @@ describe('mapProviderRuntimeResumePolicy', () => {
         required_artifacts: ['trace_artifact', 'recovery_plan_artifact', null],
         unresolved_partial_failure_ids: ['json_actions-1'],
         unresolved_transaction_group_ids: ['transaction-group-1'],
+        open_transaction_batch_ids: ['batch-1', 12],
       })
     ).toEqual({
       status: 'requires_resolution',
@@ -31,6 +32,7 @@ describe('mapProviderRuntimeResumePolicy', () => {
       requiredArtifacts: ['trace_artifact', 'recovery_plan_artifact'],
       unresolvedPartialFailureIds: ['json_actions-1'],
       unresolvedTransactionGroupIds: ['transaction-group-1'],
+      openTransactionBatchIds: ['batch-1'],
     });
   });
 });
