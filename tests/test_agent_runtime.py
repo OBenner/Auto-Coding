@@ -7022,6 +7022,48 @@ def write_minimal_generic_edit_resume_artifacts(
     return artifact_dir, checkpoint_path, session_state_path, trace_path
 
 
+def write_minimal_generic_edit_artifact_manifest(
+    artifact_dir: Path,
+    *,
+    checkpoint_path: Path,
+    session_state_path: Path,
+    trace_path: Path,
+    next_iteration: int = 2,
+) -> Path:
+    manifest_path = artifact_dir / "generic_edit_artifact_manifest.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    resume_policy = dict(checkpoint["resume_policy"])
+    resume_policy["next_iteration"] = next_iteration
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_artifact_manifest",
+                "flags": {
+                    "recoverable": True,
+                    "resumable": True,
+                },
+                "entrypoints": {
+                    "result": str(artifact_dir / "generic_edit_result.json"),
+                    "summary": str(artifact_dir / "generic_edit_summary.md"),
+                    "events": str(artifact_dir / "generic_edit_events.jsonl"),
+                    "session_state": str(session_state_path),
+                    "trace": str(trace_path),
+                },
+                "resume_action": {
+                    "runtime": "generic_edit",
+                    "checkpoint_path": str(checkpoint_path),
+                    "strategy": checkpoint["resume"]["strategy"],
+                    "next_iteration": next_iteration,
+                },
+                "resume_inputs": checkpoint["resume_inputs"],
+                "resume_policy": resume_policy,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
 def test_generic_edit_resume_preflight_blocks_corrupt_checkpoint(
     tmp_path: Path,
 ):
@@ -7141,6 +7183,68 @@ def test_generic_edit_resume_preflight_blocks_missing_checkpoint_snapshot_ref(
     assert health["artifact"] == "mutation_snapshots"
     assert health["reason"] == "checkpoint_mismatch"
     assert health["missing_snapshot_ids"] == ["mutation-missing"]
+
+
+def test_generic_edit_resume_preflight_blocks_corrupt_artifact_manifest(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, _, _ = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+    )
+    manifest_path = artifact_dir / "generic_edit_artifact_manifest.json"
+    manifest_path.write_text("{", encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "artifact_manifest"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(manifest_path)
+
+
+def test_generic_edit_resume_preflight_blocks_manifest_checkpoint_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+        next_iteration=3,
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "artifact_manifest",
+        "reason": "checkpoint_mismatch",
+        "path": str(manifest_path),
+    }
 
 
 def test_generic_edit_recovery_checkpoint_requires_existing_policy_artifacts(

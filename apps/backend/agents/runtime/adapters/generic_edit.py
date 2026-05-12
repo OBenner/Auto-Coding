@@ -5134,6 +5134,47 @@ def generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path: Path) ->
     return checkpoint_path.parent / "generic_edit_mutation_snapshots.json"
 
 
+def generic_edit_artifact_manifest_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted artifact manifest path colocated with a checkpoint."""
+    return checkpoint_path.parent / "generic_edit_artifact_manifest.json"
+
+
+def load_generic_edit_artifact_manifest(manifest_path: Path) -> dict[str, Any]:
+    """Load and validate the optional generic_edit artifact manifest."""
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit artifact manifest not found: {manifest_path}",
+            artifact="artifact_manifest",
+            reason="missing",
+            path=manifest_path,
+        ) from e
+    except json.JSONDecodeError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit artifact manifest is not valid JSON: {e}",
+            artifact="artifact_manifest",
+            reason="corrupt_json",
+            path=manifest_path,
+        ) from e
+
+    if not isinstance(payload, dict):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit artifact manifest must be a JSON object.",
+            artifact="artifact_manifest",
+            reason="invalid_schema",
+            path=manifest_path,
+        )
+    if payload.get("artifact_type") != "generic_edit_artifact_manifest":
+        raise generic_edit_resume_artifact_error(
+            "Generic edit artifact manifest has unexpected artifact type.",
+            artifact="artifact_manifest",
+            reason="invalid_schema",
+            path=manifest_path,
+        )
+    return payload
+
+
 def load_generic_edit_checkpoint_trace(
     trace_path: Path,
 ) -> list[dict[str, Any]]:
@@ -5246,6 +5287,116 @@ def validate_generic_edit_session_state_checkpoint_consistency(
             reason="checkpoint_mismatch",
             path=session_state_path,
         )
+
+
+def generic_edit_raise_manifest_mismatch(message: str, manifest_path: Path) -> None:
+    """Raise a structured manifest/checkpoint mismatch error."""
+    raise generic_edit_resume_artifact_error(
+        message,
+        artifact="artifact_manifest",
+        reason="checkpoint_mismatch",
+        path=manifest_path,
+    )
+
+
+def validate_generic_edit_manifest_resume_action(
+    *,
+    manifest: dict[str, Any],
+    checkpoint: dict[str, Any],
+    checkpoint_path: Path,
+    manifest_path: Path,
+) -> None:
+    """Reject manifest resume actions that disagree with the checkpoint."""
+    resume_action = manifest.get("resume_action")
+    checkpoint_resume = checkpoint.get("resume")
+    if not isinstance(resume_action, dict) or not isinstance(checkpoint_resume, dict):
+        generic_edit_raise_manifest_mismatch(
+            "Generic edit artifact manifest is missing resume action metadata.",
+            manifest_path,
+        )
+    checkpoint_path_value = resume_action.get("checkpoint_path")
+    if (
+        not isinstance(checkpoint_path_value, str)
+        or Path(checkpoint_path_value).resolve() != checkpoint_path.resolve()
+    ):
+        generic_edit_raise_manifest_mismatch(
+            "Generic edit artifact manifest resume action references a different checkpoint.",
+            manifest_path,
+        )
+    if resume_action.get("strategy") != checkpoint_resume.get(
+        "strategy"
+    ) or resume_action.get("next_iteration") != checkpoint.get("next_iteration"):
+        generic_edit_raise_manifest_mismatch(
+            "Generic edit artifact manifest resume action does not match checkpoint.",
+            manifest_path,
+        )
+
+
+def validate_generic_edit_manifest_entrypoints(
+    *,
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    session_state_path: Path,
+    trace_path: Path,
+) -> None:
+    """Reject manifest entrypoints that point away from canonical resume artifacts."""
+    entrypoints = manifest.get("entrypoints")
+    if not isinstance(entrypoints, dict):
+        generic_edit_raise_manifest_mismatch(
+            "Generic edit artifact manifest is missing entrypoints.",
+            manifest_path,
+        )
+    expected_paths = {
+        "session_state": session_state_path.resolve(),
+        "trace": trace_path.resolve(),
+    }
+    for name, expected_path in expected_paths.items():
+        value = entrypoints.get(name)
+        if not isinstance(value, str) or Path(value).resolve() != expected_path:
+            generic_edit_raise_manifest_mismatch(
+                f"Generic edit artifact manifest {name} entrypoint is stale.",
+                manifest_path,
+            )
+
+
+def validate_generic_edit_artifact_manifest_checkpoint_consistency(
+    *,
+    manifest: dict[str, Any],
+    checkpoint: dict[str, Any],
+    checkpoint_path: Path,
+    session_state_path: Path,
+    trace_path: Path,
+    manifest_path: Path,
+) -> None:
+    """Reject resume when manifest, checkpoint, and canonical paths diverge."""
+    flags = manifest.get("flags")
+    if not isinstance(flags, dict) or flags.get("resumable") is not True:
+        generic_edit_raise_manifest_mismatch(
+            "Generic edit artifact manifest is not marked resumable.",
+            manifest_path,
+        )
+    if manifest.get("resume_policy") != checkpoint.get("resume_policy"):
+        generic_edit_raise_manifest_mismatch(
+            "Generic edit artifact manifest resume policy does not match checkpoint.",
+            manifest_path,
+        )
+    if manifest.get("resume_inputs") != checkpoint.get("resume_inputs"):
+        generic_edit_raise_manifest_mismatch(
+            "Generic edit artifact manifest resume inputs do not match checkpoint.",
+            manifest_path,
+        )
+    validate_generic_edit_manifest_resume_action(
+        manifest=manifest,
+        checkpoint=checkpoint,
+        checkpoint_path=checkpoint_path,
+        manifest_path=manifest_path,
+    )
+    validate_generic_edit_manifest_entrypoints(
+        manifest=manifest,
+        manifest_path=manifest_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
 
 
 def collect_generic_edit_mutation_snapshot_ids(value: Any) -> list[str]:
@@ -5430,6 +5581,49 @@ def inspect_generic_edit_resume_artifacts(
             )
 
     trace_path = generic_edit_trace_path_for_checkpoint(resolved_checkpoint_path)
+    artifact_manifest_path = generic_edit_artifact_manifest_path_for_checkpoint(
+        resolved_checkpoint_path,
+    )
+    artifacts["artifact_manifest"] = {
+        "status": "pending",
+        "path": str(artifact_manifest_path),
+    }
+    if artifact_manifest_path.exists():
+        try:
+            artifact_manifest = load_generic_edit_artifact_manifest(
+                artifact_manifest_path
+            )
+            validate_generic_edit_artifact_manifest_checkpoint_consistency(
+                manifest=artifact_manifest,
+                checkpoint=checkpoint,
+                checkpoint_path=resolved_checkpoint_path,
+                session_state_path=session_state_path,
+                trace_path=trace_path,
+                manifest_path=artifact_manifest_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="artifact_manifest",
+                    path=artifact_manifest_path,
+                ),
+                artifacts=artifacts,
+            )
+        artifacts["artifact_manifest"] = {
+            "status": "ready",
+            "path": str(artifact_manifest_path),
+            "schema_version": artifact_manifest.get("schema_version"),
+        }
+    else:
+        artifacts["artifact_manifest"] = {
+            "status": "missing_optional",
+            "path": str(artifact_manifest_path),
+        }
+
     artifacts["trace"] = {"status": "pending", "path": str(trace_path)}
     try:
         trace = load_generic_edit_checkpoint_trace(trace_path)

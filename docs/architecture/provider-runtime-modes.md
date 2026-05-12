@@ -229,7 +229,7 @@ Last updated: 2026-05-12.
 |------|----------------|------|-----------|
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
-| Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, mutation snapshots, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing artifact preflight blockers, artifact manifest transaction batches, and rich runtime events are implemented. | Harden non-happy-path recovery further for corrupt traces, mixed checkpoint/session/trace drift, multi-batch recovery policy, staged apply semantics, and UI-driven repair/rollback workflows. |
+| Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, mutation snapshots, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing artifact preflight blockers, artifact manifest transaction batches, manifest/checkpoint consistency checks, and rich runtime events are implemented. | Harden non-happy-path recovery further for mixed trace/session/checkpoint drift, multi-batch recovery policy, staged apply semantics, and UI-driven repair/rollback workflows. |
 | Provider reliability | Partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, and open transaction batches. The settings UI surfaces the same diagnostics. | Add provider-specific e2e suites for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama covering native tool calls, normalized tool results, unsupported tools, fallback reasons, and recovery loops. |
 | MCP Bridge v1 | Partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, permission/audit metadata, unavailable-tool observations, and readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers are represented. | Generalize execution beyond Context7, enforce permissions at every bridge boundary, normalize arbitrary live schemas/results, reuse external sessions safely, and make custom MCP server lifecycle failures first-class. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, and read-only merge plans. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, and policy gates before enabling mutable subagents. |
@@ -351,9 +351,10 @@ Auto Code validates and executes these actions locally:
 - interrupted or partial runs persist `generic_edit_session_state.json`,
   `generic_edit_recovery_checkpoint.json`, `generic_edit_mutation_snapshots.json`,
   and `generic_edit_transaction_groups.json`. The read-only resume preflight
-  blocks corrupt checkpoints, missing required artifacts, mismatched
-  session/checkpoint policies, missing checkpoint snapshot references, trace
-  mismatches, and workspace drift before a resumed run mutates files;
+  blocks corrupt checkpoints, corrupt manifests, missing required artifacts,
+  mismatched session/checkpoint/manifest policies, missing checkpoint snapshot
+  references, trace mismatches, and workspace drift before a resumed run mutates
+  files;
 - `finish` is rejected when a previous partial-failure transaction remains
   unresolved, so limited runtimes cannot report success after a partially
   applied mutating batch.
