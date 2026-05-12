@@ -380,6 +380,39 @@ def test_generic_edit_resume_preflight_command_outputs_json(
     assert generic_edit_resume_preflight_has_failures(payload) is True
 
 
+def test_generic_edit_resume_preflight_command_formats_blocker_details():
+    from cli.runtime_commands import format_generic_edit_resume_preflight_text
+
+    text = format_generic_edit_resume_preflight_text(
+        {
+            "runtime": "generic_edit",
+            "status": "blocked",
+            "requested_path": "/workspace/spec/artifacts/generic_edit_recovery_checkpoint.json",
+            "resume_artifact_health": {
+                "status": "blocked",
+                "artifact": "mutation_snapshots",
+                "reason": "checkpoint_mismatch",
+                "path": "/workspace/spec/artifacts/generic_edit_mutation_snapshots.json",
+                "artifact_name": "mutation_snapshot_artifact",
+                "owner_artifact": "recovery_checkpoint",
+                "missing_snapshot_ids": ["mutation-missing"],
+            },
+            "artifacts": {
+                "recovery_checkpoint": {
+                    "status": "ready",
+                    "path": "/workspace/spec/artifacts/generic_edit_recovery_checkpoint.json",
+                }
+            },
+        }
+    )
+
+    assert "artifact: mutation_snapshots" in text
+    assert "reason: checkpoint_mismatch" in text
+    assert "artifact_name: mutation_snapshot_artifact" in text
+    assert "owner_artifact: recovery_checkpoint" in text
+    assert "missing_snapshot_ids: mutation-missing" in text
+
+
 def test_external_mcp_smoke_command_outputs_json(
     capsys,
     monkeypatch,
