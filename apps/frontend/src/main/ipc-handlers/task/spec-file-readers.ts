@@ -794,6 +794,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     'failed_recovery_attempt_count',
   ]);
   const recentEvents = normalizeRecentEvents(value.recent_events);
+  const recoveryTimeline = normalizeRecentEvents(value.recovery_timeline);
   const nativeToolFallbacks = normalizeNativeToolFallbacks(value.native_tool_fallbacks);
   const recoverySummary = normalizeRecoverySummary(value.recovery_summary);
   const recoveryActions = normalizeRecoveryActions(value.recovery_actions);
@@ -811,6 +812,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     flags === null ||
     counts === null ||
     recentEvents === null ||
+    recoveryTimeline === null ||
     nativeToolFallbacks === null ||
     recoveryActions === null ||
     (value.resume_action !== undefined && value.resume_action !== null && resumeAction === null) ||
@@ -846,6 +848,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     counts,
     artifacts,
     recent_events: recentEvents,
+    recovery_timeline: recoveryTimeline,
     native_tool_fallbacks: nativeToolFallbacks,
     recovery_summary: recoverySummary,
     recovery_actions: recoveryActions,

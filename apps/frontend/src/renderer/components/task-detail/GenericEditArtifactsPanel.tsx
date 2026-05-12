@@ -62,7 +62,7 @@ function recentEventVariant(
   if (event.ok === false || event.status === 'partial_failure' || event.status === 'failed') {
     return 'destructive';
   }
-  if (event.recovery_required) {
+  if (event.recovery_required || event.requires_user_action) {
     return 'warning';
   }
   if (event.ok === true || event.status === 'complete' || event.status === 'resolved') {
@@ -80,6 +80,21 @@ function recentEventTitle(event: GenericEditRecentEvent): string {
 
 function recentEventBadge(event: GenericEditRecentEvent): string {
   return event.status || event.event_type;
+}
+
+function recoveryTimelineTitle(event: GenericEditRecentEvent): string {
+  const strategy = typeof event.strategy === 'string' ? event.strategy : '';
+  return event.tool || event.group_id || event.transaction_id || strategy || event.event_type;
+}
+
+function recoveryTimelineBadge(event: GenericEditRecentEvent): string {
+  return event.timeline_stage || event.status || event.event_type;
+}
+
+function recoveryTimelineMeta(event: GenericEditRecentEvent): string {
+  return [event.status, event.strategy, event.message, event.transaction_id]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' / ');
 }
 
 function recentEventMeta(event: GenericEditRecentEvent): string {
@@ -245,6 +260,7 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
     ([, artifactPath]) => artifactPath.length > 0
   );
   const resumePolicy = manifest.resume_policy;
+  const recoveryTimeline = manifest.recovery_timeline ?? [];
   const requiredResumeActions = resumePolicy?.required_resolution_action_kinds ?? [];
   const requiredResumeArtifacts = resumePolicy?.required_artifacts ?? [];
   const recoveryFlags = [
@@ -1022,6 +1038,33 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                       {badgeText}
                     </Badge>
                     <span className="min-w-0 shrink-0 font-medium">{recentEventTitle(event)}</span>
+                    {meta && <span className="min-w-0 truncate text-muted-foreground">{meta}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {recoveryTimeline.length > 0 && (
+          <div className="mt-4">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <RotateCcw className="h-3.5 w-3.5" />
+              {t('tasks:overview.genericEditRecoveryTimeline')}
+            </div>
+            <div className="space-y-1.5">
+              {recoveryTimeline.map((event) => {
+                const meta = recoveryTimelineMeta(event);
+                return (
+                  <div
+                    key={`${event.sequence}-${event.timeline_stage ?? event.event_type}`}
+                    className="flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-2 text-xs"
+                  >
+                    <span className="shrink-0 tabular-nums text-muted-foreground">#{event.sequence}</span>
+                    <Badge variant={recentEventVariant(event)} className="shrink-0 text-xs">
+                      {recoveryTimelineBadge(event)}
+                    </Badge>
+                    <span className="min-w-0 shrink-0 font-medium">{recoveryTimelineTitle(event)}</span>
                     {meta && <span className="min-w-0 truncate text-muted-foreground">{meta}</span>}
                   </div>
                 );

@@ -133,7 +133,9 @@ export interface GenericEditRecentEvent {
   reason?: string;
   tool_schema_count?: number;
   action_index?: number;
+  timeline_stage?: string;
   recovery_required?: boolean;
+  requires_user_action?: boolean;
   failed_action_count?: number;
   recovery_attempt_count?: number;
   failed_recovery_attempt_count?: number;
@@ -307,6 +309,7 @@ export interface GenericEditArtifactManifest {
   };
   artifacts: GenericEditArtifactManifestEntry[];
   recent_events: GenericEditRecentEvent[];
+  recovery_timeline: GenericEditRecentEvent[];
   native_tool_fallbacks: GenericEditNativeToolFallback[];
   recovery_summary: GenericEditRecoverySummary | null;
   recovery_actions: GenericEditRecoveryAction[];

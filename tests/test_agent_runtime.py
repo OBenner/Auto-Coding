@@ -5153,8 +5153,7 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     group_artifact = json.loads(group_artifact_path.read_text(encoding="utf-8"))
     mutation_snapshots = json.loads(mutation_snapshot_path.read_text(encoding="utf-8"))
     events = [
-        json.loads(line)
-        for line in event_path.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in event_path.read_text(encoding="utf-8").splitlines()
     ]
     transaction_group_event = next(
         event for event in events if event["event_type"] == "transaction_group"
@@ -5162,8 +5161,7 @@ async def test_generic_edit_runtime_rejects_finish_with_unresolved_partial_failu
     partial_failure_event = next(
         event
         for event in events
-        if event["event_type"] == "transaction"
-        and event["status"] == "partial_failure"
+        if event["event_type"] == "transaction" and event["status"] == "partial_failure"
     )
     expected_next_actions = [
         {
@@ -5933,9 +5931,10 @@ async def test_generic_edit_runtime_bounds_large_mutation_preimages(tmp_path: Pa
             encoding="utf-8"
         )
     )
-    assert result_artifact["resume_policy"][
-        "required_resolution_action_kinds"
-    ] == ["inspect_diff", "repair_mutation"]
+    assert result_artifact["resume_policy"]["required_resolution_action_kinds"] == [
+        "inspect_diff",
+        "repair_mutation",
+    ]
     assert result_artifact["recovery_plan"]["next_actions"][1] == {
         "id": "repair-json_actions-1",
         "kind": "repair_mutation",
@@ -6138,6 +6137,68 @@ async def test_generic_edit_runtime_writes_artifact_manifest(tmp_path: Path):
     assert artifacts_by_name["generic_edit_mutation_snapshots"]["active"] is False
     assert "## Artifact Manifest" in summary_markdown
     assert str(manifest_path) in summary_markdown
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_manifest_exposes_recovery_timeline(tmp_path: Path):
+    target = tmp_path / "partial.txt"
+    target.write_text("original\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mutate then fail",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "partial.txt",
+                        "content": "changed\n",
+                    },
+                    {"tool": "read_file", "path": "missing.txt"},
+                ],
+            },
+            {
+                "thought": "finish before recovery",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "done too early",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "create a recoverable partial failure",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    manifest = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "error"
+    assert [event["timeline_stage"] for event in manifest["recovery_timeline"]] == [
+        "partial_failure",
+        "recovery_policy",
+        "resume_policy",
+    ]
+    assert manifest["recovery_timeline"][0]["transaction_id"] == "json_actions-1"
+    assert manifest["recovery_timeline"][1]["group_id"] == "transaction-group-1"
+    assert manifest["recovery_timeline"][1]["requires_user_action"] is True
+    assert manifest["recovery_timeline"][2]["finish_blocked"] is True
 
 
 @pytest.mark.asyncio
@@ -6499,9 +6560,7 @@ def test_generic_edit_session_state_resume_requires_policy(
                     "next_iteration": 2,
                 },
                 "resume_inputs": {
-                    "trace_artifact": str(
-                        artifact_dir / "generic_edit_trace.json"
-                    ),
+                    "trace_artifact": str(artifact_dir / "generic_edit_trace.json"),
                 },
             }
         ),
@@ -6623,9 +6682,7 @@ def test_generic_edit_session_state_resume_requires_policy_artifacts(
                     "next_iteration": 3,
                 },
                 "resume_inputs": {
-                    "trace_artifact": str(
-                        artifact_dir / "generic_edit_trace.json"
-                    ),
+                    "trace_artifact": str(artifact_dir / "generic_edit_trace.json"),
                 },
                 "resume_policy": {
                     "runtime": "generic_edit",
@@ -6730,9 +6787,7 @@ def test_generic_edit_session_state_resume_rejects_unblocked_unresolved_policy(
                     "next_iteration": 3,
                 },
                 "resume_inputs": {
-                    "trace_artifact": str(
-                        artifact_dir / "generic_edit_trace.json"
-                    ),
+                    "trace_artifact": str(artifact_dir / "generic_edit_trace.json"),
                     "recovery_plan_artifact": str(
                         artifact_dir / "generic_edit_recovery_plan.json"
                     ),
@@ -6791,9 +6846,7 @@ def test_generic_edit_session_state_resume_requires_resumable_policy(
                     "next_iteration": 2,
                 },
                 "resume_inputs": {
-                    "trace_artifact": str(
-                        artifact_dir / "generic_edit_trace.json"
-                    ),
+                    "trace_artifact": str(artifact_dir / "generic_edit_trace.json"),
                 },
                 "resume_policy": {
                     "runtime": "generic_edit",
@@ -6848,9 +6901,7 @@ def test_generic_edit_session_state_resume_requires_matching_policy_action(
                     "next_iteration": 3,
                 },
                 "resume_inputs": {
-                    "trace_artifact": str(
-                        artifact_dir / "generic_edit_trace.json"
-                    ),
+                    "trace_artifact": str(artifact_dir / "generic_edit_trace.json"),
                 },
                 "resume_policy": {
                     "runtime": "generic_edit",
@@ -7072,8 +7123,9 @@ async def test_generic_edit_runtime_resumes_partial_failure_and_rolls_back(
     )
 
     assert resumed.status == "continue"
-    assert "Required recovery actions: inspect_diff, rollback_transaction" in (
-        resume_session.messages[0]
+    assert (
+        "Required recovery actions: inspect_diff, rollback_transaction"
+        in (resume_session.messages[0])
     )
     assert target.read_text(encoding="utf-8") == "original\n"
     assert result_artifact["resumed"] is True
@@ -7217,8 +7269,7 @@ async def test_generic_edit_runtime_resumes_partial_failure_and_records_repair_m
     repair_event = next(
         event
         for event in events
-        if event["event_type"] == "action_result"
-        and event["tool"] == "repair_mutation"
+        if event["event_type"] == "action_result" and event["tool"] == "repair_mutation"
     )
     assert events[0]["event_type"] == "resume"
     assert events[0]["timeline_stage"] == "resume_clean"

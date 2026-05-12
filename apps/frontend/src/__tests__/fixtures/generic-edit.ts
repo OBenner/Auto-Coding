@@ -78,6 +78,34 @@ export function createGenericEditArtifactManifest(): GenericEditArtifactManifest
         transaction_id: 'json_actions-2',
       },
     ],
+    recovery_timeline: [
+      {
+        sequence: 3,
+        event_type: 'transaction',
+        transaction_id: 'json_actions-1',
+        status: 'partial_failure',
+        timeline_stage: 'partial_failure',
+        recovery_required: true,
+        requires_user_action: true,
+      },
+      {
+        sequence: 7,
+        event_type: 'transaction_group',
+        group_id: 'transaction-group-1',
+        status: 'unresolved',
+        timeline_stage: 'recovery_policy',
+        requires_user_action: true,
+      },
+      {
+        sequence: 9,
+        event_type: 'resume_policy',
+        status: 'requires_resolution',
+        strategy: 'recover_partial_failure',
+        timeline_stage: 'resume_policy',
+        finish_blocked: true,
+        can_resume: true,
+      },
+    ],
     native_tool_fallbacks: [
       {
         provider: 'openai',

@@ -227,6 +227,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT = 5
+GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_LIMIT = 20
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIMIT = 10
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "sequence",
@@ -261,6 +262,25 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "required_artifacts",
     "unresolved_partial_failure_ids",
     "unresolved_transaction_group_ids",
+    "workspace_guard_status",
+    "workspace_guard_drift_count",
+    "workspace_guard_unverified_path_count",
+    "start_iteration",
+    "previous_status",
+    "previous_stop_reason",
+    "preferred_strategy",
+    "next_action_count",
+)
+GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_STAGES = frozenset(
+    {
+        "partial_failure",
+        "recovery_policy",
+        "recovery_action",
+        "recovery_resolved",
+        "resume",
+        "resume_clean",
+        "resume_policy",
+    }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_STRING_FIELDS = (
     "id",
@@ -3820,6 +3840,28 @@ def compact_generic_edit_manifest_event(event: dict[str, Any]) -> dict[str, Any]
     return compact
 
 
+def build_generic_edit_manifest_recovery_timeline(
+    events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return bounded recovery-significant events for UI timelines."""
+    timeline_events = [
+        event
+        for event in events
+        if str(event.get("timeline_stage") or "")
+        in GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_STAGES
+    ]
+    if len(timeline_events) > GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_LIMIT:
+        timeline_events = timeline_events[
+            -GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_LIMIT:
+        ]
+    compact_events: list[dict[str, Any]] = []
+    for event in timeline_events:
+        compact = compact_generic_edit_manifest_event(event)
+        if compact:
+            compact_events.append(compact)
+    return compact_events
+
+
 def compact_generic_edit_native_tool_fallback(
     fallback: dict[str, Any],
 ) -> dict[str, Any]:
@@ -4176,6 +4218,7 @@ def build_generic_edit_artifact_manifest(
             compact_generic_edit_manifest_event(event)
             for event in events[-GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT:]
         ],
+        "recovery_timeline": build_generic_edit_manifest_recovery_timeline(events),
         "native_tool_fallbacks": compact_generic_edit_native_tool_fallbacks(
             trace_summary.get("native_tool_fallbacks")
         ),

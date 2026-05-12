@@ -498,6 +498,7 @@
     "genericEditActiveArtifacts": "Artefacts actifs",
     "genericEditMissingArtifact": "Manquant",
     "genericEditRecentEvents": "Événements récents",
+    "genericEditRecoveryTimeline": "Chronologie de récupération",
     "genericEditEventOk": "OK",
     "genericEditEventFailed": "Échec",
     "genericEditRecoveryStatus": "État de récupération",

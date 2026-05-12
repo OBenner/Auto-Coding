@@ -42,6 +42,7 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditViewArtifact': 'View artifact',
         'overview.genericEditArtifactPreview': 'Artifact preview',
         'overview.genericEditRecentEvents': 'Recent events',
+        'overview.genericEditRecoveryTimeline': 'Recovery timeline',
         'overview.genericEditEventOk': 'OK',
         'overview.genericEditEventFailed': 'Failed',
         'overview.genericEditRecoveryStatus': 'Recovery status',
@@ -111,6 +112,10 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('generic_edit_recovery_plan')).toBeInTheDocument();
     expect(screen.getByText('Missing')).toBeInTheDocument();
     expect(screen.getByText('Recent events')).toBeInTheDocument();
+    expect(screen.getByText('Recovery timeline')).toBeInTheDocument();
+    expect(screen.getByText('partial_failure')).toBeInTheDocument();
+    expect(screen.getByText('recovery_policy')).toBeInTheDocument();
+    expect(screen.getByText('resume_policy')).toBeInTheDocument();
     expect(screen.getByText('read_file')).toBeInTheDocument();
     expect(screen.getByText(/File not found/)).toBeInTheDocument();
     expect(screen.getByText('Recovery status')).toBeInTheDocument();
@@ -130,7 +135,7 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Resume entrypoint')).toBeInTheDocument();
     expect(screen.getByText('Resume provenance')).toBeInTheDocument();
     expect(screen.getByText('Resume strategy')).toBeInTheDocument();
-    expect(screen.getAllByText('recover_partial_failure')).toHaveLength(3);
+    expect(screen.getAllByText('recover_partial_failure')).toHaveLength(4);
     expect(screen.getByText('Next iteration 3')).toBeInTheDocument();
     expect(screen.getByText('Started at iteration 3')).toBeInTheDocument();
     expect(screen.getByText('Previous stop')).toBeInTheDocument();
