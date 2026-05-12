@@ -27,6 +27,7 @@ import type {
   GenericEditNativeToolFallback,
   GenericEditRecoveryAction,
   GenericEditRecoverySummary,
+  GenericEditTransactionBatch,
   GenericEditResumeAction,
   GenericEditResumePolicy,
   GenericEditRecentEvent
@@ -675,6 +676,65 @@ function normalizeNativeToolFallbacks(value: unknown): GenericEditNativeToolFall
   return result;
 }
 
+function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch | null {
+  if (!isRecord(value)) return null;
+
+  const id = readString(value, 'id');
+  const status = readString(value, 'status');
+  const transactionIds =
+    value.transaction_ids === undefined ? [] : normalizeStringList(value.transaction_ids);
+  const mutationSnapshotIds =
+    value.mutation_snapshot_ids === undefined
+      ? []
+      : normalizeStringList(value.mutation_snapshot_ids);
+  const transactionGroupIds =
+    value.transaction_group_ids === undefined ? [] : normalizeStringList(value.transaction_group_ids);
+  const unresolvedTransactionGroupIds =
+    value.unresolved_transaction_group_ids === undefined
+      ? []
+      : normalizeStringList(value.unresolved_transaction_group_ids);
+  const recoveryOutcomeCount =
+    value.recovery_outcome_count === undefined ? 0 : value.recovery_outcome_count;
+
+  if (
+    id === null ||
+    status === null ||
+    transactionIds === null ||
+    mutationSnapshotIds === null ||
+    transactionGroupIds === null ||
+    unresolvedTransactionGroupIds === null ||
+    typeof recoveryOutcomeCount !== 'number' ||
+    !Number.isFinite(recoveryOutcomeCount)
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    status,
+    transaction_ids: transactionIds,
+    mutation_snapshot_ids: mutationSnapshotIds,
+    transaction_group_ids: transactionGroupIds,
+    unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
+    recovery_outcome_count: recoveryOutcomeCount,
+  };
+}
+
+function normalizeTransactionBatches(value: unknown): GenericEditTransactionBatch[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditTransactionBatch[] = [];
+  for (const batch of value) {
+    const normalizedBatch = normalizeTransactionBatch(batch);
+    if (!normalizedBatch) {
+      return null;
+    }
+    result.push(normalizedBatch);
+  }
+  return result;
+}
+
 function normalizeResumeAction(value: unknown): GenericEditResumeAction | null {
   if (value === undefined || value === null) return null;
   if (!isRecord(value)) return null;
@@ -805,6 +865,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
   const recentEvents = normalizeRecentEvents(value.recent_events);
   const recoveryTimeline = normalizeRecentEvents(value.recovery_timeline);
   const nativeToolFallbacks = normalizeNativeToolFallbacks(value.native_tool_fallbacks);
+  const transactionBatches = normalizeTransactionBatches(value.transaction_batches);
   const recoverySummary = normalizeRecoverySummary(value.recovery_summary);
   const recoveryActions = normalizeRecoveryActions(value.recovery_actions);
   const resumeAction = normalizeResumeAction(value.resume_action);
@@ -823,6 +884,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     recentEvents === null ||
     recoveryTimeline === null ||
     nativeToolFallbacks === null ||
+    transactionBatches === null ||
     recoveryActions === null ||
     (value.resume_action !== undefined && value.resume_action !== null && resumeAction === null) ||
     (value.resume_policy !== undefined && value.resume_policy !== null && resumePolicy === null) ||
@@ -833,6 +895,9 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
   }
   if (typeof counts.native_tool_fallback_count !== 'number') {
     counts.native_tool_fallback_count = 0;
+  }
+  if (typeof counts.transaction_batch_count !== 'number') {
+    counts.transaction_batch_count = 0;
   }
 
   const artifacts: GenericEditArtifactManifestEntry[] = [];
@@ -859,6 +924,7 @@ function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifa
     recent_events: recentEvents,
     recovery_timeline: recoveryTimeline,
     native_tool_fallbacks: nativeToolFallbacks,
+    transaction_batches: transactionBatches,
     recovery_summary: recoverySummary,
     recovery_actions: recoveryActions,
     mcp_support: mcpSupport,

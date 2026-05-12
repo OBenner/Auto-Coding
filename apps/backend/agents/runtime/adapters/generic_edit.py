@@ -4024,6 +4024,37 @@ def compact_generic_edit_native_tool_fallbacks(value: Any) -> list[dict[str, Any
     return fallbacks[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]
 
 
+def compact_generic_edit_manifest_transaction_batches(
+    transaction_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return bounded transaction batch summaries for UI manifests."""
+    batches = transaction_summary.get("transaction_batches")
+    if not isinstance(batches, list):
+        return []
+    compact_batches: list[dict[str, Any]] = []
+    for batch in batches[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]:
+        if not isinstance(batch, dict):
+            continue
+        compact: dict[str, Any] = {
+            "id": str(batch.get("id") or "")[:120],
+            "status": str(batch.get("status") or "unknown")[:120],
+            "transaction_ids": normalize_string_list(batch.get("transaction_ids")),
+            "mutation_snapshot_ids": normalize_string_list(
+                batch.get("mutation_snapshot_ids")
+            ),
+            "transaction_group_ids": normalize_string_list(
+                batch.get("transaction_group_ids")
+            ),
+            "unresolved_transaction_group_ids": normalize_string_list(
+                batch.get("unresolved_transaction_group_ids")
+            ),
+            "recovery_outcome_count": int(batch.get("recovery_outcome_count") or 0),
+        }
+        if compact["id"]:
+            compact_batches.append(compact)
+    return compact_batches
+
+
 def compact_generic_edit_manifest_recovery_action(
     action: dict[str, Any],
 ) -> dict[str, Any]:
@@ -4353,6 +4384,7 @@ def build_generic_edit_artifact_manifest(
             ),
             "event_count": len(events),
             "transaction_count": transaction_summary["transaction_count"],
+            "transaction_batch_count": transaction_summary["transaction_batch_count"],
             "transaction_group_count": transaction_group_summary[
                 "transaction_group_count"
             ],
@@ -4371,6 +4403,9 @@ def build_generic_edit_artifact_manifest(
         "recovery_timeline": build_generic_edit_manifest_recovery_timeline(events),
         "native_tool_fallbacks": compact_generic_edit_native_tool_fallbacks(
             trace_summary.get("native_tool_fallbacks")
+        ),
+        "transaction_batches": compact_generic_edit_manifest_transaction_batches(
+            transaction_summary
         ),
         "recovery_actions": compact_generic_edit_manifest_recovery_actions(
             recovery_plan

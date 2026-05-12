@@ -177,6 +177,16 @@ export interface GenericEditNativeToolFallback {
   tool_schema_count: number;
 }
 
+export interface GenericEditTransactionBatch {
+  id: string;
+  status: string;
+  transaction_ids: string[];
+  mutation_snapshot_ids: string[];
+  transaction_group_ids: string[];
+  unresolved_transaction_group_ids: string[];
+  recovery_outcome_count: number;
+}
+
 export interface GenericEditResumeAction {
   runtime: 'generic_edit';
   checkpoint_path: string;
@@ -304,6 +314,7 @@ export interface GenericEditArtifactManifest {
     native_tool_fallback_count: number;
     event_count: number;
     transaction_count: number;
+    transaction_batch_count: number;
     transaction_group_count: number;
     mutation_snapshot_count: number;
     recovery_attempt_count: number;
@@ -314,6 +325,7 @@ export interface GenericEditArtifactManifest {
   recent_events: GenericEditRecentEvent[];
   recovery_timeline: GenericEditRecentEvent[];
   native_tool_fallbacks: GenericEditNativeToolFallback[];
+  transaction_batches: GenericEditTransactionBatch[];
   recovery_summary: GenericEditRecoverySummary | null;
   recovery_actions: GenericEditRecoveryAction[];
   mcp_support: GenericEditMcpSupport | null;

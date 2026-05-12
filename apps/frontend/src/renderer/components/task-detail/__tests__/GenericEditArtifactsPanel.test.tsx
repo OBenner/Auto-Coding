@@ -32,7 +32,11 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditNativeFallbackLoop': 'Loop',
         'overview.genericEditRecoveryAttempts': 'Recovery attempts',
         'overview.genericEditMutationSnapshots': 'Mutation snapshots',
+        'overview.genericEditTransactionBatches': 'Transaction batches',
         'overview.genericEditTransactionGroups': 'Transaction groups',
+        'overview.genericEditBatchGroups': 'Groups',
+        'overview.genericEditBatchUnresolvedGroups': 'Unresolved groups',
+        'overview.genericEditBatchRecoveryOutcomes': `${interpolation('count', 0)} recovery outcome`,
         'overview.genericEditResumable': 'Resumable',
         'overview.genericEditRecoverable': 'Recoverable',
         'overview.genericEditRecoveryPlan': 'Recovery plan',
@@ -110,6 +114,13 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Native fallback details')).toBeInTheDocument();
     expect(screen.getByText('native_tool_request_failed')).toBeInTheDocument();
     expect(screen.getByText('native_tool_calls -> json_actions')).toBeInTheDocument();
+    expect(screen.getAllByText('Transaction batches')).toHaveLength(2);
+    expect(screen.getByText('committed')).toBeInTheDocument();
+    expect(screen.getByText('batch-1')).toBeInTheDocument();
+    expect(screen.getAllByText(/json_actions-1 \/ mutation-1/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Groups')).toBeInTheDocument();
+    expect(screen.getAllByText('transaction-group-1').length).toBeGreaterThan(0);
+    expect(screen.getByText('1 recovery outcome')).toBeInTheDocument();
     expect(screen.getByText('generic_edit_recovery_plan')).toBeInTheDocument();
     expect(screen.getByText('Missing')).toBeInTheDocument();
     expect(screen.getByText('Recent events')).toBeInTheDocument();
@@ -226,7 +237,7 @@ describe('GenericEditArtifactsPanel', () => {
 
     expect(screen.getByText('resolve_open_batch')).toBeInTheDocument();
     expect(screen.getByText('Open transaction batches')).toBeInTheDocument();
-    expect(screen.getByText('batch-1')).toBeInTheDocument();
+    expect(screen.getAllByText('batch-1').length).toBeGreaterThan(0);
     expect(screen.getByText('batch_open')).toBeInTheDocument();
     expect(screen.getByText(/json_actions-1 \/ batch-1/)).toBeInTheDocument();
   });

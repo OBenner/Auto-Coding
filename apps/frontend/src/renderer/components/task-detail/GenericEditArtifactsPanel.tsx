@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Eye,
   FileText,
+  Layers,
   ListChecks,
   Loader2,
   Network,
@@ -18,6 +19,7 @@ import type {
   GenericEditArtifactManifest,
   GenericEditRecentEvent,
   GenericEditRecoveryAction,
+  GenericEditTransactionBatch,
 } from '../../../shared/types';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -50,6 +52,20 @@ function statusVariant(status: string): 'success' | 'destructive' | 'warning' | 
     return 'info';
   }
   return 'muted';
+}
+
+function batchStatusVariant(status: string): 'success' | 'destructive' | 'warning' | 'info' | 'muted' {
+  const normalizedStatus = status.toLowerCase();
+  if (normalizedStatus === 'committed') {
+    return 'success';
+  }
+  if (normalizedStatus === 'aborted') {
+    return 'warning';
+  }
+  if (normalizedStatus === 'open') {
+    return 'info';
+  }
+  return statusVariant(status);
 }
 
 function countValue(value: number | undefined): number {
@@ -116,6 +132,10 @@ function recoveryActionMeta(action: GenericEditRecoveryAction): string {
   ]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .join(' / ');
+}
+
+function transactionBatchMeta(batch: GenericEditTransactionBatch): string {
+  return [...batch.transaction_ids, ...batch.mutation_snapshot_ids].join(' / ');
 }
 
 function mcpRecord(value: unknown): Record<string, unknown> | null {
@@ -249,6 +269,7 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const mcpOpenSessionCount =
     mcpNumber(mcpSessionLifecycle?.open_session_count) ?? mcpOpenSessions.length;
   const nativeToolFallbacks = manifest.native_tool_fallbacks;
+  const transactionBatches = manifest.transaction_batches;
   const resumeMetadata = mcpRecord(manifest.resume);
   const resumeCheckpointArtifact = mcpString(resumeMetadata?.checkpoint_artifact);
   const resumeTraceArtifact = mcpString(resumeMetadata?.trace_artifact);
@@ -370,6 +391,14 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="font-semibold">{countValue(manifest.counts.transaction_count)}</div>
           </div>
           <div className="rounded-md bg-muted/30 p-2">
+            <div className="text-muted-foreground">
+              {t('tasks:overview.genericEditTransactionBatches')}
+            </div>
+            <div className="font-semibold">
+              {countValue(manifest.counts.transaction_batch_count)}
+            </div>
+          </div>
+          <div className="rounded-md bg-muted/30 p-2">
             <div className="text-muted-foreground">{t('tasks:overview.genericEditNativeFallbacks')}</div>
             <div className="font-semibold">
               {countValue(manifest.counts.native_tool_fallback_count)}
@@ -432,6 +461,67 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {transactionBatches.length > 0 && (
+          <div className="mt-4 rounded-md border bg-muted/20 px-3 py-3 text-xs">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Layers className="h-3.5 w-3.5 text-info" />
+              <span className="font-semibold text-muted-foreground">
+                {t('tasks:overview.genericEditTransactionBatches')}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {transactionBatches.slice(0, 4).map((batch) => {
+                const meta = transactionBatchMeta(batch);
+                return (
+                  <div
+                    key={batch.id}
+                    className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border bg-background/50 px-2 py-1.5"
+                  >
+                    <Badge variant={batchStatusVariant(batch.status)} className="text-xs">
+                      {batch.status}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {batch.id}
+                    </Badge>
+                    {meta && <span className="min-w-0 truncate text-muted-foreground">{meta}</span>}
+                    {batch.transaction_group_ids.length > 0 && (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        <span className="font-medium text-muted-foreground">
+                          {t('tasks:overview.genericEditBatchGroups')}
+                        </span>
+                        {batch.transaction_group_ids.map((groupId) => (
+                          <Badge key={groupId} variant="muted" className="text-xs">
+                            {groupId}
+                          </Badge>
+                        ))}
+                      </span>
+                    )}
+                    {batch.unresolved_transaction_group_ids.length > 0 && (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        <span className="font-medium text-muted-foreground">
+                          {t('tasks:overview.genericEditBatchUnresolvedGroups')}
+                        </span>
+                        {batch.unresolved_transaction_group_ids.map((groupId) => (
+                          <Badge key={groupId} variant="warning" className="text-xs">
+                            {groupId}
+                          </Badge>
+                        ))}
+                      </span>
+                    )}
+                    {batch.recovery_outcome_count > 0 && (
+                      <Badge variant="info" className="text-xs">
+                        {t('tasks:overview.genericEditBatchRecoveryOutcomes', {
+                          count: batch.recovery_outcome_count,
+                        })}
+                      </Badge>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

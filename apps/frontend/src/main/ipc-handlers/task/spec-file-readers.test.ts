@@ -91,6 +91,7 @@ describe('readGenericEditArtifactManifest', () => {
         failed_action_count: 0,
         event_count: 4,
         transaction_count: 1,
+        transaction_batch_count: 1,
         mutation_snapshot_count: 1,
         recovery_attempt_count: 0,
         failed_recovery_attempt_count: 0,
@@ -132,6 +133,7 @@ describe('readGenericEditArtifactManifest', () => {
     expect(manifest?.flags.resumable).toBe(true);
     expect(manifest?.counts.mutation_snapshot_count).toBe(1);
     expect(manifest?.counts.native_tool_fallback_count).toBe(1);
+    expect(manifest?.counts.transaction_batch_count).toBe(1);
     expect(manifest?.native_tool_fallbacks).toEqual([
       {
         provider: 'openai',
@@ -140,6 +142,17 @@ describe('readGenericEditArtifactManifest', () => {
         reason: 'native_tool_request_failed',
         message: 'provider rejected tool calls',
         tool_schema_count: 6,
+      },
+    ]);
+    expect(manifest?.transaction_batches).toEqual([
+      {
+        id: 'batch-1',
+        status: 'committed',
+        transaction_ids: ['json_actions-1'],
+        mutation_snapshot_ids: ['mutation-1'],
+        transaction_group_ids: ['transaction-group-1'],
+        unresolved_transaction_group_ids: [],
+        recovery_outcome_count: 1,
       },
     ]);
     expect(manifest?.artifacts).toHaveLength(2);

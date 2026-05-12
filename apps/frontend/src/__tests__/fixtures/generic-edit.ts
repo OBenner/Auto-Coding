@@ -45,6 +45,7 @@ export function createGenericEditArtifactManifest(): GenericEditArtifactManifest
       native_tool_fallback_count: 1,
       event_count: 9,
       transaction_count: 3,
+      transaction_batch_count: 1,
       transaction_group_count: 1,
       mutation_snapshot_count: 2,
       recovery_attempt_count: 1,
@@ -114,6 +115,17 @@ export function createGenericEditArtifactManifest(): GenericEditArtifactManifest
         reason: 'native_tool_request_failed',
         message: 'provider rejected tool calls',
         tool_schema_count: 6,
+      },
+    ],
+    transaction_batches: [
+      {
+        id: 'batch-1',
+        status: 'committed',
+        transaction_ids: ['json_actions-1'],
+        mutation_snapshot_ids: ['mutation-1'],
+        transaction_group_ids: ['transaction-group-1'],
+        unresolved_transaction_group_ids: [],
+        recovery_outcome_count: 1,
       },
     ],
     recovery_summary: {

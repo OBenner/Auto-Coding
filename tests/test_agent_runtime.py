@@ -4984,6 +4984,11 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
     result_artifact = json.loads(
         (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
     )
+    manifest = json.loads(
+        (artifact_dir / "generic_edit_artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
     events = [
         json.loads(line)
         for line in (artifact_dir / "generic_edit_events.jsonl")
@@ -5006,6 +5011,10 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
         "begin_batch",
         "commit_batch",
     ]
+    assert manifest["counts"]["transaction_batch_count"] == 1
+    assert manifest["transaction_batches"][0]["id"] == "batch-1"
+    assert manifest["transaction_batches"][0]["status"] == "committed"
+    assert manifest["transaction_batches"][0]["transaction_ids"] == ["json_actions-1"]
     transaction_event = next(
         event for event in events if event["event_type"] == "transaction"
     )
