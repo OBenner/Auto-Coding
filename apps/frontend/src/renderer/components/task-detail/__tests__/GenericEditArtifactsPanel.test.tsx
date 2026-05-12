@@ -61,6 +61,7 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditResumePreviousStop': 'Previous stop',
         'overview.genericEditResumePolicy': 'Resume policy',
         'overview.genericEditRequiredResumeActions': 'Required resume actions',
+        'overview.genericEditOpenTransactionBatches': 'Open transaction batches',
         'overview.genericEditRequiredResumeArtifacts': 'Required resume artifacts',
         'overview.genericEditMcpSupport': 'MCP support',
         'overview.genericEditMcpTools': `${interpolation('count', 0)} MCP tools`,
@@ -195,6 +196,39 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('1 open MCP session')).toBeInTheDocument();
     expect(screen.getByText('my-docs')).toBeInTheDocument();
     expect(screen.getByText('http')).toBeInTheDocument();
+  });
+
+  it('renders open batch resume policy and timeline metadata', () => {
+    const manifest = createManifest();
+    manifest.resume_policy = manifest.resume_policy
+      ? {
+          ...manifest.resume_policy,
+          strategy: 'resolve_open_batch',
+          required_resolution_action_kinds: ['commit_batch', 'abort_batch'],
+          unresolved_partial_failure_ids: [],
+          unresolved_transaction_group_ids: [],
+          open_transaction_batch_ids: ['batch-1'],
+        }
+      : null;
+    manifest.recovery_timeline = [
+      {
+        sequence: 9,
+        event_type: 'transaction',
+        timeline_stage: 'batch_open',
+        transaction_id: 'json_actions-1',
+        batch_id: 'batch-1',
+        status: 'complete',
+        requires_user_action: true,
+      },
+    ];
+
+    render(<GenericEditArtifactsPanel manifest={manifest} />);
+
+    expect(screen.getByText('resolve_open_batch')).toBeInTheDocument();
+    expect(screen.getByText('Open transaction batches')).toBeInTheDocument();
+    expect(screen.getByText('batch-1')).toBeInTheDocument();
+    expect(screen.getByText('batch_open')).toBeInTheDocument();
+    expect(screen.getByText(/json_actions-1 \/ batch-1/)).toBeInTheDocument();
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {

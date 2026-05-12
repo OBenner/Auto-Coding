@@ -517,6 +517,7 @@
     "genericEditResumePreviousStop": "Arrêt précédent",
     "genericEditResumePolicy": "Politique de reprise",
     "genericEditRequiredResumeActions": "Actions de reprise requises",
+    "genericEditOpenTransactionBatches": "Lots de transaction ouverts",
     "genericEditRequiredResumeArtifacts": "Artefacts de reprise requis",
     "genericEditMcpSupport": "Support MCP",
     "genericEditMcpTools": "{{count}} outils MCP",

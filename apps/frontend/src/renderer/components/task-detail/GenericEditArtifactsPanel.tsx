@@ -92,7 +92,7 @@ function recoveryTimelineBadge(event: GenericEditRecentEvent): string {
 }
 
 function recoveryTimelineMeta(event: GenericEditRecentEvent): string {
-  return [event.status, event.strategy, event.message, event.transaction_id]
+  return [event.status, event.strategy, event.message, event.transaction_id, event.batch_id, event.active_batch_id]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .join(' / ');
 }
@@ -263,6 +263,7 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
   const recoveryTimeline = manifest.recovery_timeline ?? [];
   const requiredResumeActions = resumePolicy?.required_resolution_action_kinds ?? [];
   const requiredResumeArtifacts = resumePolicy?.required_artifacts ?? [];
+  const openResumeBatches = resumePolicy?.open_transaction_batch_ids ?? [];
   const recoveryFlags = [
     manifest.flags.resumable && t('tasks:overview.genericEditResumable'),
     manifest.flags.recoverable && t('tasks:overview.genericEditRecoverable'),
@@ -609,6 +610,20 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                   {requiredResumeActions.map((actionKind) => (
                     <Badge key={actionKind} variant="outline" className="text-xs">
                       {actionKind}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {openResumeBatches.length > 0 && (
+              <div className="mb-2">
+                <div className="mb-1 font-medium text-muted-foreground">
+                  {t('tasks:overview.genericEditOpenTransactionBatches')}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {openResumeBatches.map((batchId) => (
+                    <Badge key={batchId} variant="warning" className="text-xs">
+                      {batchId}
                     </Badge>
                   ))}
                 </div>

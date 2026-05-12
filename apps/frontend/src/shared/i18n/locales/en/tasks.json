@@ -518,6 +518,7 @@
     "genericEditResumePreviousStop": "Previous stop",
     "genericEditResumePolicy": "Resume policy",
     "genericEditRequiredResumeActions": "Required resume actions",
+    "genericEditOpenTransactionBatches": "Open transaction batches",
     "genericEditRequiredResumeArtifacts": "Required resume artifacts",
     "genericEditMcpSupport": "MCP support",
     "genericEditMcpTools": "{{count}} MCP tools",

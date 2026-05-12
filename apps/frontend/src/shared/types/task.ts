@@ -125,6 +125,8 @@ export interface GenericEditRecentEvent {
   message?: string;
   status?: string;
   transaction_id?: string;
+  batch_id?: string;
+  active_batch_id?: string;
   group_id?: string;
   path?: string;
   iteration?: number | string | null;
