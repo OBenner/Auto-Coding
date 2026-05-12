@@ -6795,6 +6795,31 @@ def test_generic_edit_recovery_checkpoint_requires_resume_policy(
         load_generic_edit_recovery_checkpoint(checkpoint_path)
 
 
+def test_generic_edit_recovery_checkpoint_reports_corrupt_json_health(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeError,
+        load_generic_edit_recovery_checkpoint,
+    )
+
+    checkpoint_path = tmp_path / "generic_edit_recovery_checkpoint.json"
+    checkpoint_path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(
+        GenericEditRuntimeError,
+        match="not valid JSON",
+    ) as exc_info:
+        load_generic_edit_recovery_checkpoint(checkpoint_path)
+
+    assert exc_info.value.data["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "recovery_checkpoint",
+        "reason": "corrupt_json",
+        "path": str(checkpoint_path),
+    }
+
+
 def test_generic_edit_recovery_checkpoint_requires_existing_policy_artifacts(
     tmp_path: Path,
 ):
@@ -6842,6 +6867,30 @@ def test_generic_edit_recovery_checkpoint_requires_existing_policy_artifacts(
         match="required resume artifact does not exist: trace_artifact",
     ):
         load_generic_edit_recovery_checkpoint(checkpoint_path)
+
+
+def test_generic_edit_checkpoint_trace_reports_missing_trace_health(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        GenericEditRuntimeError,
+        load_generic_edit_checkpoint_trace,
+    )
+
+    trace_path = tmp_path / "generic_edit_trace.json"
+
+    with pytest.raises(
+        GenericEditRuntimeError,
+        match="trace not found",
+    ) as exc_info:
+        load_generic_edit_checkpoint_trace(trace_path)
+
+    assert exc_info.value.data["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "trace",
+        "reason": "missing",
+        "path": str(trace_path),
+    }
 
 
 def test_generic_edit_session_state_resume_requires_policy_artifacts(
@@ -7558,7 +7607,7 @@ async def test_generic_edit_runtime_rejects_resume_when_mutated_path_drifted(
         max_iterations=2,
     )
 
-    with pytest.raises(GenericEditRuntimeError, match="workspace drift"):
+    with pytest.raises(GenericEditRuntimeError, match="workspace drift") as exc_info:
         await resume_runtime_session(
             resume_runtime,
             checkpoint_path,
@@ -7566,6 +7615,12 @@ async def test_generic_edit_runtime_rejects_resume_when_mutated_path_drifted(
             requirements=RuntimeRequirements.generic_edit(),
         )
 
+    assert exc_info.value.data["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "workspace_guard",
+        "reason": "workspace_drift",
+        "drift_paths": ["partial.txt"],
+    }
     assert resume_session.messages == []
 
 
@@ -7631,7 +7686,9 @@ async def test_generic_edit_runtime_rejects_resume_when_trace_mismatches_checkpo
         max_iterations=2,
     )
 
-    with pytest.raises(GenericEditRuntimeError, match="trace does not match"):
+    with pytest.raises(
+        GenericEditRuntimeError, match="trace does not match"
+    ) as exc_info:
         await resume_runtime_session(
             resume_runtime,
             checkpoint_path,
@@ -7639,6 +7696,13 @@ async def test_generic_edit_runtime_rejects_resume_when_trace_mismatches_checkpo
             requirements=RuntimeRequirements.generic_edit(),
         )
 
+    assert exc_info.value.data["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "trace",
+        "reason": "checkpoint_mismatch",
+        "expected_iterations": 1,
+        "actual_iterations": 0,
+    }
     assert resume_session.messages == []
 
 

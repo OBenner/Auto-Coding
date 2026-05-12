@@ -139,6 +139,31 @@ class GenericEditRuntimeError(RuntimeError):
             self.data.setdefault("deleted_paths", self.deleted_paths)
 
 
+def generic_edit_resume_artifact_error(
+    message: str,
+    *,
+    artifact: str,
+    reason: str,
+    path: Path | str | None = None,
+    **details: Any,
+) -> GenericEditRuntimeError:
+    """Return a structured resume-blocking artifact error."""
+    health: dict[str, Any] = {
+        "status": "blocked",
+        "artifact": artifact,
+        "reason": reason,
+    }
+    if path is not None:
+        health["path"] = str(path)
+    for key, value in details.items():
+        if value is not None:
+            health[key] = value
+    return GenericEditRuntimeError(
+        message,
+        data={"resume_artifact_health": health},
+    )
+
+
 @dataclass
 class NativeToolExecutionResult:
     """Actions executed during one native provider tool-call iteration."""
@@ -2812,7 +2837,15 @@ def validate_generic_edit_resume_workspace_guard(
         "Generic edit resume blocked by workspace drift on path(s): "
         + ", ".join(drift_paths[:10])
         + ".",
-        data={"workspace_guard": guard},
+        data={
+            "workspace_guard": guard,
+            "resume_artifact_health": {
+                "status": "blocked",
+                "artifact": "workspace_guard",
+                "reason": "workspace_drift",
+                "drift_paths": drift_paths,
+            },
+        },
     )
 
 
@@ -4692,17 +4725,26 @@ def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, An
     try:
         payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     except FileNotFoundError as e:
-        raise GenericEditRuntimeError(
-            f"Generic edit recovery checkpoint not found: {checkpoint_path}"
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit recovery checkpoint not found: {checkpoint_path}",
+            artifact="recovery_checkpoint",
+            reason="missing",
+            path=checkpoint_path,
         ) from e
     except json.JSONDecodeError as e:
-        raise GenericEditRuntimeError(
-            f"Generic edit recovery checkpoint is not valid JSON: {e}"
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit recovery checkpoint is not valid JSON: {e}",
+            artifact="recovery_checkpoint",
+            reason="corrupt_json",
+            path=checkpoint_path,
         ) from e
 
     if not isinstance(payload, dict):
-        raise GenericEditRuntimeError(
-            "Generic edit recovery checkpoint must be a JSON object."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery checkpoint must be a JSON object.",
+            artifact="recovery_checkpoint",
+            reason="invalid_schema",
+            path=checkpoint_path,
         )
     if payload.get("recoverable") is not True:
         raise GenericEditRuntimeError(
@@ -4783,17 +4825,26 @@ def load_generic_edit_session_state(
     try:
         payload = json.loads(session_state_path.read_text(encoding="utf-8"))
     except FileNotFoundError as e:
-        raise GenericEditRuntimeError(
-            f"Generic edit session state not found: {session_state_path}"
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit session state not found: {session_state_path}",
+            artifact="session_state",
+            reason="missing",
+            path=session_state_path,
         ) from e
     except json.JSONDecodeError as e:
-        raise GenericEditRuntimeError(
-            f"Generic edit session state is not valid JSON: {e}"
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit session state is not valid JSON: {e}",
+            artifact="session_state",
+            reason="corrupt_json",
+            path=session_state_path,
         ) from e
 
     if not isinstance(payload, dict):
-        raise GenericEditRuntimeError(
-            "Generic edit session state must be a JSON object."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit session state must be a JSON object.",
+            artifact="session_state",
+            reason="invalid_schema",
+            path=session_state_path,
         )
     if payload.get("artifact_type") != "generic_edit_session_state":
         raise GenericEditRuntimeError(
@@ -4961,18 +5012,27 @@ def load_generic_edit_checkpoint_trace(
     try:
         payload = json.loads(trace_path.read_text(encoding="utf-8"))
     except FileNotFoundError as e:
-        raise GenericEditRuntimeError(
-            f"Generic edit recovery trace not found: {trace_path}"
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit recovery trace not found: {trace_path}",
+            artifact="trace",
+            reason="missing",
+            path=trace_path,
         ) from e
     except json.JSONDecodeError as e:
-        raise GenericEditRuntimeError(
-            f"Generic edit recovery trace is not valid JSON: {e}"
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit recovery trace is not valid JSON: {e}",
+            artifact="trace",
+            reason="corrupt_json",
+            path=trace_path,
         ) from e
 
     trace = payload.get("trace") if isinstance(payload, dict) else None
     if not isinstance(trace, list) or not all(isinstance(item, dict) for item in trace):
-        raise GenericEditRuntimeError(
-            "Generic edit recovery trace must contain a trace object list."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery trace must contain a trace object list.",
+            artifact="trace",
+            reason="invalid_schema",
+            path=trace_path,
         )
     return trace
 
@@ -4987,9 +5047,13 @@ def validate_generic_edit_checkpoint_trace_consistency(
     if isinstance(next_iteration, int) and next_iteration > 0:
         expected_trace_length = next_iteration - 1
         if len(trace) != expected_trace_length:
-            raise GenericEditRuntimeError(
+            raise generic_edit_resume_artifact_error(
                 "Generic edit recovery trace does not match checkpoint metadata: "
-                f"expected {expected_trace_length} iteration(s), found {len(trace)}."
+                f"expected {expected_trace_length} iteration(s), found {len(trace)}.",
+                artifact="trace",
+                reason="checkpoint_mismatch",
+                expected_iterations=expected_trace_length,
+                actual_iterations=len(trace),
             )
     transaction_summary = checkpoint.get("transaction_summary")
     if isinstance(transaction_summary, dict):
@@ -5001,10 +5065,14 @@ def validate_generic_edit_checkpoint_trace_consistency(
             isinstance(expected_transaction_count, int)
             and expected_transaction_count != actual_transaction_count
         ):
-            raise GenericEditRuntimeError(
+            raise generic_edit_resume_artifact_error(
                 "Generic edit recovery trace does not match checkpoint transaction "
                 "metadata: expected "
-                f"{expected_transaction_count}, found {actual_transaction_count}."
+                f"{expected_transaction_count}, found {actual_transaction_count}.",
+                artifact="trace",
+                reason="checkpoint_mismatch",
+                expected_transaction_count=expected_transaction_count,
+                actual_transaction_count=actual_transaction_count,
             )
 
 
