@@ -1037,6 +1037,10 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "input_tokens": 1,
         "output_tokens": 2,
     }
+    assert artifact["results"][0]["child_context_id"] == ("child-explore-api-attempt-1")
+    assert artifact["results"][0]["attempts"][0]["child_context_id"] == (
+        "child-explore-api-attempt-1"
+    )
     artifact_dir = tmp_path / "artifacts"
     child_artifact_path = assert_artifact_path_inside(
         artifact["results"][0]["artifact_path"],
@@ -1054,6 +1058,10 @@ async def test_runtime_subagent_orchestrator_runs_child_sessions(tmp_path: Path)
         "requires_parent_merge": False,
     }
     assert "Auto Code subagent `explore-api`" in created_sessions[0].prompts[0]
+    assert (
+        "Child context id: child-explore-api-attempt-1."
+        in (created_sessions[0].prompts[0])
+    )
     assert "Isolation contract:" in created_sessions[0].prompts[0]
     assert "Merge policy: read_only" in created_sessions[0].prompts[0]
     assert '"paths": [' in created_sessions[0].prompts[0]
@@ -1234,8 +1242,20 @@ async def test_runtime_subagent_orchestrator_retries_isolated_child_attempts(
         "error",
         "complete",
     ]
+    assert [attempt.child_context_id for attempt in run.results[0].attempts] == [
+        "child-inspect-retry-attempt-1",
+        "child-inspect-retry-attempt-2",
+    ]
     assert "Attempt: 1 of 2" in created_sessions[0].prompts[0]
     assert "Attempt: 2 of 2" in created_sessions[1].prompts[0]
+    assert (
+        "Child context id: child-inspect-retry-attempt-1."
+        in (created_sessions[0].prompts[0])
+    )
+    assert (
+        "Child context id: child-inspect-retry-attempt-2."
+        in (created_sessions[1].prompts[0])
+    )
     assert '"focus": "runtime retries"' in created_sessions[1].prompts[0]
 
     artifact_path = tmp_path / "artifacts" / "runtime_subagents.json"
@@ -1245,9 +1265,14 @@ async def test_runtime_subagent_orchestrator_retries_isolated_child_attempts(
     assert result_payload["context"] == {"focus": "runtime retries"}
     assert result_payload["attempt_count"] == 2
     assert result_payload["max_attempts"] == 2
+    assert result_payload["child_context_id"] == "child-inspect-retry-attempt-2"
     assert [attempt["status"] for attempt in result_payload["attempts"]] == [
         "error",
         "complete",
+    ]
+    assert [attempt["child_context_id"] for attempt in result_payload["attempts"]] == [
+        "child-inspect-retry-attempt-1",
+        "child-inspect-retry-attempt-2",
     ]
     assert artifact["summary"]["retried_result_ids"] == ["inspect-retry"]
     assert artifact["summary"]["max_attempts_exhausted_result_ids"] == []
