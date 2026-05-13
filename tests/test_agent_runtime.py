@@ -8731,6 +8731,54 @@ def test_generic_edit_transaction_batches_expose_multi_batch_recovery_policy():
     assert compact_batches[0]["resolution_strategies"] == ["repair_mutation"]
 
 
+def test_generic_edit_transaction_batches_expose_staged_mutation_metadata():
+    summary = summarize_generic_edit_transactions(
+        [
+            {
+                "transaction": {
+                    "id": "json_actions-1",
+                    "status": "complete",
+                    "tool_sequence": ["begin_batch", "write_file", "delete_file"],
+                    "batch_ids": ["batch-1"],
+                    "batch_status": "open",
+                    "mutation_snapshot_ids": ["mutation-1", "mutation-2"],
+                    "mutated_paths": ["created.txt", "updated.txt"],
+                    "restored_paths": ["restored.txt"],
+                    "deleted_paths": ["deleted.txt"],
+                }
+            },
+            {
+                "transaction": {
+                    "id": "json_actions-2",
+                    "status": "complete",
+                    "tool_sequence": ["commit_batch"],
+                    "batch_ids": ["batch-1"],
+                    "batch_status": "committed",
+                }
+            },
+        ]
+    )
+
+    batch = summary["transaction_batches"][0]
+    assert batch["id"] == "batch-1"
+    assert batch["status"] == "committed"
+    assert batch["staged_mutation_ids"] == ["mutation-1", "mutation-2"]
+    assert batch["staged_mutated_paths"] == ["created.txt", "updated.txt"]
+    assert batch["staged_restored_paths"] == ["restored.txt"]
+    assert batch["staged_deleted_paths"] == ["deleted.txt"]
+    assert batch["staged_mutation_count"] == 2
+    assert batch["staged_path_count"] == 4
+
+    compact_batches = compact_generic_edit_manifest_transaction_batches(summary)
+    assert compact_batches[0]["staged_mutation_count"] == 2
+    assert compact_batches[0]["staged_path_count"] == 4
+    assert compact_batches[0]["staged_mutated_paths"] == [
+        "created.txt",
+        "updated.txt",
+    ]
+    assert compact_batches[0]["staged_deleted_paths"] == ["deleted.txt"]
+
+
 def test_generic_edit_transaction_summary_allows_workspace_recovery_verification():
     summary = summarize_generic_edit_transactions(
         [

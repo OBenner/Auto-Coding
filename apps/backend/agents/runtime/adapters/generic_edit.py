@@ -4085,6 +4085,20 @@ def compact_generic_edit_manifest_transaction_batches(
             "mutation_snapshot_ids": normalize_string_list(
                 batch.get("mutation_snapshot_ids")
             ),
+            "staged_mutation_ids": normalize_string_list(
+                batch.get("staged_mutation_ids")
+            ),
+            "staged_mutated_paths": normalize_string_list(
+                batch.get("staged_mutated_paths")
+            ),
+            "staged_restored_paths": normalize_string_list(
+                batch.get("staged_restored_paths")
+            ),
+            "staged_deleted_paths": normalize_string_list(
+                batch.get("staged_deleted_paths")
+            ),
+            "staged_mutation_count": int(batch.get("staged_mutation_count") or 0),
+            "staged_path_count": int(batch.get("staged_path_count") or 0),
             "transaction_group_ids": normalize_string_list(
                 batch.get("transaction_group_ids")
             ),
@@ -6934,6 +6948,10 @@ def summarize_generic_edit_transaction_batches(
                     "restored_paths": [],
                     "deleted_paths": [],
                     "batch_actions": [],
+                    "staged_mutation_ids": [],
+                    "staged_mutated_paths": [],
+                    "staged_restored_paths": [],
+                    "staged_deleted_paths": [],
                 },
             )
             if transaction_id and transaction_id not in batch["transaction_ids"]:
@@ -6947,6 +6965,15 @@ def summarize_generic_edit_transaction_batches(
                 for value in normalize_string_list(transaction.get(field_name)):
                     if value not in batch[field_name]:
                         batch[field_name].append(value)
+            for source_field, staged_field in (
+                ("mutation_snapshot_ids", "staged_mutation_ids"),
+                ("mutated_paths", "staged_mutated_paths"),
+                ("restored_paths", "staged_restored_paths"),
+                ("deleted_paths", "staged_deleted_paths"),
+            ):
+                for value in normalize_string_list(transaction.get(source_field)):
+                    if value not in batch[staged_field]:
+                        batch[staged_field].append(value)
             if transaction.get("batch_status"):
                 batch["status"] = str(transaction["batch_status"])
 
@@ -6955,6 +6982,19 @@ def summarize_generic_edit_transaction_batches(
     for batch in ordered_batches:
         status = str(batch.get("status") or "open")
         batch_status_counts[status] = batch_status_counts.get(status, 0) + 1
+        batch["staged_mutation_count"] = len(
+            normalize_string_list(batch.get("staged_mutation_ids"))
+        )
+        staged_paths = {
+            path
+            for field_name in (
+                "staged_mutated_paths",
+                "staged_restored_paths",
+                "staged_deleted_paths",
+            )
+            for path in normalize_string_list(batch.get(field_name))
+        }
+        batch["staged_path_count"] = len(staged_paths)
     open_batch_ids = [
         str(batch["id"])
         for batch in ordered_batches
