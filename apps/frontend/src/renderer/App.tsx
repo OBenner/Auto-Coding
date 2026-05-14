@@ -62,6 +62,7 @@ import { SDKRateLimitModal } from './components/SDKRateLimitModal';
 import { AuthFailureModal } from './components/AuthFailureModal';
 import { VersionWarningModal } from './components/VersionWarningModal';
 import { OnboardingWizard } from './components/onboarding';
+import { TutorialWizard } from './components/tutorial';
 import { AppUpdateNotification } from './components/AppUpdateNotification';
 import { AgentAttentionNotification } from './components/AgentAttentionNotification';
 import { ProactiveSwapListener } from './components/ProactiveSwapListener';
@@ -158,6 +159,7 @@ export function App() {
   const [activeView, setActiveView] = useState<SidebarView>('kanban');
   const [sessionFilterSpecId, setSessionFilterSpecId] = useState<string | undefined>(undefined);
   const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState(false);
+  const [isTutorialWizardOpen, setIsTutorialWizardOpen] = useState(false);
   const [isVersionWarningModalOpen, setIsVersionWarningModalOpen] = useState(false);
   const [isRefreshingTasks, setIsRefreshingTasks] = useState(false);
 
@@ -1330,6 +1332,10 @@ export function App() {
         <OnboardingWizard
           open={isOnboardingWizardOpen}
           onOpenChange={setIsOnboardingWizardOpen}
+          onOpenTutorial={() => {
+            setIsOnboardingWizardOpen(false);
+            setIsTutorialWizardOpen(true);
+          }}
           onOpenTaskCreator={() => {
             setIsOnboardingWizardOpen(false);
             setIsNewTaskDialogOpen(true);
@@ -1338,6 +1344,12 @@ export function App() {
             setIsOnboardingWizardOpen(false);
             setIsSettingsDialogOpen(true);
           }}
+        />
+
+        {/* Tutorial Wizard - interactive getting started tutorial */}
+        <TutorialWizard
+          open={isTutorialWizardOpen}
+          onOpenChange={setIsTutorialWizardOpen}
         />
 
         {/* App Update Notification - shows when new app version is available */}

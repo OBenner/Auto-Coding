@@ -828,5 +828,17 @@ export const IPC_CHANNELS = {
   // Collaboration events (main -> renderer)
   COLLABORATION_COMMENT_ADDED: 'collaboration:commentAdded',
   COLLABORATION_APPROVAL_STATUS_CHANGED: 'collaboration:approvalStatusChanged',
-  COLLABORATION_NOTIFICATION_RECEIVED: 'collaboration:notificationReceived'
+  COLLABORATION_NOTIFICATION_RECEIVED: 'collaboration:notificationReceived',
+
+  // Tutorial operations (onboarding tutorial)
+  TUTORIAL_START: 'tutorial:start',
+  TUTORIAL_GET_STATUS: 'tutorial:getStatus',
+  TUTORIAL_CANCEL: 'tutorial:cancel',
+
+  // Tutorial events (main -> renderer)
+  TUTORIAL_PHASE_START: 'tutorial:phaseStart',
+  TUTORIAL_PHASE_PROGRESS: 'tutorial:phaseProgress',
+  TUTORIAL_PHASE_COMPLETE: 'tutorial:phaseComplete',
+  TUTORIAL_COMPLETE: 'tutorial:complete',
+  TUTORIAL_ERROR: 'tutorial:error'
 } as const;

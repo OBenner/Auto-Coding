@@ -1,0 +1,215 @@
+{
+  "title": "Tutoriel de démarrage",
+  "description": "Découvrez comment fonctionne Auto Code avec un exemple pratique",
+  "progress": "Progression",
+
+  "steps": {
+    "intro": "Introduction",
+    "specPhase": "Création de spécification",
+    "planningPhase": "Planification",
+    "codingPhase": "Codage",
+    "qaPhase": "Revue QA",
+    "completion": "Terminé"
+  },
+
+  "intro": {
+    "title": "Bienvenue dans votre première construction autonome",
+    "description": "Parcourons ensemble la construction d'un composant de formulaire de connexion simple",
+    "whatYouWillLearn": "Ce que vous allez apprendre",
+    "learningPoints": {
+      "specs": "Comment les agents créent des spécifications détaillées à partir de demandes simples",
+      "planning": "Comment les tâches sont décomposées en sous-tâches gérables",
+      "coding": "Comment les agents IA implémentent des fonctionnalités de manière autonome",
+      "qa": "Comment l'assurance qualité valide l'implémentation",
+      "workflow": "Le flux de travail complet du développement autonome"
+    },
+    "exampleTask": "Exemple de tâche",
+    "exampleTaskTitle": "Ajouter un composant de formulaire de connexion",
+    "exampleTaskDescription": "Nous allons construire un formulaire de connexion simple mais complet avec email, mot de passe, validation et gestion de la soumission.",
+    "timeEstimate": "Temps estimé",
+    "timeEstimateValue": "Moins de 15 minutes",
+    "readyToStart": "Prêt à commencer votre parcours de codage autonome ?"
+  },
+
+  "spec_phase": {
+    "title": "Phase de création de spécification",
+    "description": "L'agent crée une spécification détaillée pour votre fonctionnalité",
+    "whatIsHappening": "Ce qui se passe",
+    "explanation": "L'agent de spécification analyse votre demande et crée une spécification complète qui définit exactement ce qui sera construit. Cela inclut les user stories, les critères d'acceptation et les exigences techniques.",
+    "whyImportant": "Pourquoi c'est important",
+    "importance": "Une spécification claire garantit que l'implémentation répond à vos besoins et fournit un point de référence pour l'assurance qualité. C'est comme créer un plan avant de construire une maison.",
+    "explainMore": {
+      "title": "Qu'est-ce qu'une spécification ?",
+      "whatIsSpec": "Une spécification (spec) est un document détaillé qui décrit :",
+      "components": {
+        "userStories": "User stories - qui a besoin de cette fonctionnalité et pourquoi",
+        "acceptance": "Critères d'acceptation - à quoi ressemble le succès",
+        "technical": "Exigences techniques - comment cela devrait fonctionner",
+        "context": "Contexte - modèles de code pertinents et dépendances"
+      },
+      "discovery": "L'agent de spécification découvre les modèles de code existants, analyse les dépendances et recherche les meilleures pratiques pour créer un plan complet.",
+      "review": "Vous aurez l'occasion de réviser et d'approuver la spécification avant le début de l'implémentation."
+    },
+    "checkpoint": {
+      "title": "Point de contrôle : Révision de la spécification",
+      "description": "La spécification a été créée. Vous pouvez la réviser pour vous assurer qu'elle correspond à vos attentes avant de passer à l'implémentation."
+    }
+  },
+
+  "planning_phase": {
+    "title": "Phase de planification",
+    "description": "L'agent crée un plan d'implémentation avec des sous-tâches",
+    "whatIsHappening": "Ce qui se passe",
+    "explanation": "L'agent de planification décompose la spécification en sous-tâches concrètes et actionnables. Chaque sous-tâche cible des fichiers spécifiques et comporte des étapes de vérification claires.",
+    "whyImportant": "Pourquoi c'est important",
+    "importance": "Décomposer le travail en sous-tâches rend la progression traçable, permet une exécution parallèle et facilite la récupération en cas d'erreurs. C'est comme avoir une liste de contrôle détaillée pour un projet complexe.",
+    "explainMore": {
+      "title": "Comment fonctionne la planification ?",
+      "strategy": "Le planificateur analyse la spécification et crée un plan tenant compte des dépendances :",
+      "components": {
+        "subtasks": "Sous-tâches - unités de travail individuelles avec des objectifs clairs",
+        "files": "Fichiers cibles - quels fichiers créer ou modifier",
+        "verification": "Vérification - comment tester chaque sous-tâche",
+        "dependencies": "Dépendances - quelles tâches doivent être terminées en premier"
+      },
+      "parallel": "Les sous-tâches qui ne dépendent pas les unes des autres peuvent s'exécuter en parallèle, accélérant le développement.",
+      "tracking": "Chaque sous-tâche a un suivi d'état (en attente, en cours, terminée, échouée) afin que vous puissiez voir exactement où en est la construction."
+    },
+    "checkpoint": {
+      "title": "Point de contrôle : Révision du plan",
+      "description": "Le plan d'implémentation est prêt. Révisez les sous-tâches pour comprendre ce qui sera construit et dans quel ordre."
+    }
+  },
+
+  "coding_phase": {
+    "title": "Phase de codage",
+    "description": "L'agent implémente la fonctionnalité de manière autonome",
+    "whatIsHappening": "Ce qui se passe",
+    "explanation": "L'agent codeur implémente chaque sous-tâche en lisant les fichiers pertinents, en suivant les modèles de code et en écrivant du code propre et maintenable. Il exécute des commandes de vérification après chaque sous-tâche pour garantir l'exactitude.",
+    "whyImportant": "Pourquoi c'est important",
+    "importance": "Le codage autonome suit les modèles existants, maintient la qualité du code et gère de manière cohérente les modifications multi-fichiers complexes. C'est comme avoir un développeur expérimenté qui ne se fatigue jamais et ne fait jamais d'erreurs par inattention.",
+    "explainMore": {
+      "title": "Comment fonctionne l'agent codeur ?",
+      "process": "Le codeur suit une approche systématique :",
+      "steps": {
+        "read": "Lire les fichiers modèles pour comprendre le style de code existant",
+        "analyze": "Analyser les fichiers à modifier et leur contexte",
+        "implement": "Implémenter les modifications en suivant les modèles établis",
+        "verify": "Exécuter des commandes de vérification pour vérifier l'exactitude",
+        "commit": "Valider les modifications avec des messages descriptifs"
+      },
+      "patterns": "L'agent étudie les modèles de code existants (comme des composants similaires) pour maintenir la cohérence dans votre base de code.",
+      "recovery": "Si une sous-tâche échoue à la vérification, l'agent peut réessayer avec une stratégie de récupération ou escalader pour révision.",
+      "subagents": "Pour les travaux complexes, l'agent peut engendrer des sous-agents pour travailler sur des sous-tâches indépendantes en parallèle."
+    },
+    "realTimeUpdates": "Suivez la progression en temps réel au fur et à mesure que chaque sous-tâche est terminée",
+    "subtaskProgress": "Progression des sous-tâches"
+  },
+
+  "qa_phase": {
+    "title": "Phase de revue QA",
+    "description": "L'agent QA valide l'implémentation",
+    "whatIsHappening": "Ce qui se passe",
+    "explanation": "L'agent de revue QA vérifie l'implémentation par rapport aux critères d'acceptation de la spécification. Il examine la qualité du code, teste les fonctionnalités et s'assure que toutes les exigences sont satisfaites.",
+    "whyImportant": "Pourquoi c'est important",
+    "importance": "La QA automatisée détecte les problèmes tôt, garantit que les critères d'acceptation sont satisfaits et maintient une haute qualité de code. C'est comme avoir un ingénieur QA dédié qui révise chaque modification.",
+    "explainMore": {
+      "title": "Que révise la QA ?",
+      "checks": "L'agent QA effectue une validation complète :",
+      "criteria": {
+        "acceptance": "Critères d'acceptation - toutes les exigences de la spécification sont satisfaites",
+        "code": "Qualité du code - suit les modèles, pas de console.log, gestion appropriée des erreurs",
+        "tests": "Vérification - toutes les commandes de vérification réussissent",
+        "integration": "Intégration - les modifications fonctionnent avec le code existant",
+        "e2e": "Tests de bout en bout - les flux UI fonctionnent comme prévu (pour les modifications frontend)"
+      },
+      "testing": "Pour les modifications frontend, l'agent QA peut utiliser le serveur Electron MCP pour effectuer des tests de bout en bout automatisés en interagissant avec l'application en cours d'exécution.",
+      "outcomes": "Trois résultats possibles :",
+      "outcomeTypes": {
+        "approved": "Approuvé - tous les critères satisfaits, prêt à fusionner",
+        "fixable": "Problèmes corrigibles - problèmes mineurs qui peuvent être automatiquement corrigés",
+        "rejected": "Rejeté - problèmes importants nécessitant une révision"
+      },
+      "fixes": "Si des problèmes corrigibles sont trouvés, l'agent de correction QA les résoudra automatiquement et relancera la validation."
+    },
+    "validationInProgress": "Validation de l'implémentation en cours...",
+    "runningTests": "Exécution des tests et vérifications"
+  },
+
+  "completion": {
+    "title": "Tutoriel terminé !",
+    "subtitle": "Vous avez appris comment fonctionne Auto Code - vous êtes maintenant prêt à tout construire",
+    "congratulations": "Félicitations",
+    "whatYouLearned": "Ce que vous avez appris",
+    "learnedPoints": {
+      "specs": "Comment les agents de spécification créent des plans détaillés à partir de demandes simples",
+      "planning": "Comment le travail est décomposé en sous-tâches gérables et traçables",
+      "coding": "Comment les agents IA écrivent du code de manière autonome en suivant vos modèles",
+      "qa": "Comment la QA automatisée garantit la qualité et détecte les problèmes tôt",
+      "workflow": "Le flux de travail complet du développement autonome, de l'idée au code fusionnable"
+    },
+    "yourBranch": "Votre branche",
+    "branchReady": "Une implémentation complète et testée est prête dans une branche isolée :",
+    "branchName": "auto-code/tutorial-login-form",
+    "branchActions": {
+      "review": "Révisez les modifications dans votre éditeur",
+      "test": "Testez le composant de formulaire de connexion",
+      "merge": "Fusionnez-le dans votre projet quand vous êtes prêt"
+    },
+    "nextSteps": "Et ensuite ?",
+    "createTask": {
+      "title": "Créez votre première vraie tâche",
+      "description": "Commencez à construire des fonctionnalités avec des agents autonomes",
+      "action": "Créer une tâche"
+    },
+    "exploreFeatures": {
+      "title": "Explorez les fonctionnalités avancées",
+      "description": "Découvrez la mémoire, l'exécution parallèle et les intégrations",
+      "features": {
+        "memory": "Mémoire Graphiti - contexte et insights inter-sessions",
+        "parallel": "Agents parallèles - plusieurs agents travaillant simultanément",
+        "integrations": "Intégrations - Linear, GitHub, et plus"
+      }
+    },
+    "readDocs": {
+      "title": "Lisez la documentation",
+      "description": "Plongez en profondeur dans les capacités d'Auto Code",
+      "links": {
+        "quickStart": "Guide de démarrage rapide",
+        "specs": "Rédiger des spécifications efficaces",
+        "workflow": "Comprendre le flux de travail",
+        "troubleshooting": "Guide de dépannage"
+      }
+    },
+    "tips": {
+      "title": "Conseils Pro",
+      "tip1": "Commencez avec des descriptions de tâches claires et spécifiques pour de meilleurs résultats",
+      "tip2": "Révisez les spécifications avant l'implémentation pour vous assurer qu'elles correspondent à votre vision",
+      "tip3": "Utilisez le système de mémoire pour construire le contexte sur plusieurs sessions",
+      "tip4": "Laissez les agents travailler de manière autonome - ils demanderont s'ils ont besoin de clarification"
+    }
+  },
+
+  "navigation": {
+    "back": "Retour",
+    "next": "Suivant",
+    "finish": "Terminer le tutoriel",
+    "skip": "Ignorer le tutoriel",
+    "cancel": "Annuler"
+  },
+
+  "status": {
+    "preparing": "Préparation du tutoriel...",
+    "running": "Exécution de la phase...",
+    "completed": "Phase terminée",
+    "failed": "Échec de la phase",
+    "reviewing": "Révision en cours..."
+  },
+
+  "errors": {
+    "startFailed": "Échec du démarrage du tutoriel",
+    "phaseFailed": "Échec de la phase : {{phase}}",
+    "connectionLost": "Connexion au backend perdue",
+    "tryAgain": "Veuillez réessayer ou ignorer le tutoriel"
+  }
+}

@@ -176,6 +176,11 @@
     "setupComplete": "Configuration terminée",
     "setupCompleteDescription": "Votre environnement est configuré et prêt. Vous pouvez commencer à créer des tâches immédiatement ou explorer l'application à votre rythme.",
     "whatsNext": "Et maintenant ?",
+    "startTutorial": {
+      "title": "Démarrer le tutoriel",
+      "description": "Découvrez le fonctionnement d'Auto Code avec un exemple pratique (moins de 15 minutes).",
+      "action": "Démarrer le tutoriel"
+    },
     "createTask": {
       "title": "Créer une tâche",
       "description": "Commencez par créer votre première tâche pour voir Auto-Coding en action.",
