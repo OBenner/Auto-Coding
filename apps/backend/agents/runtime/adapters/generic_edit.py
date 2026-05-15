@@ -432,6 +432,7 @@ class GenericEditRuntimeSession:
         self._mutation_snapshots: list[dict[str, Any]] = []
         self._resume_metadata: dict[str, Any] | None = None
         self._active_batch_id: str | None = None
+        self._batch_recovery_blockers: dict[str, list[str]] = {}
 
     @property
     def context_client(self) -> Any:
@@ -459,6 +460,7 @@ class GenericEditRuntimeSession:
         self._mutation_snapshots = []
         self._resume_metadata = None
         self._active_batch_id = None
+        self._batch_recovery_blockers = {}
         self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
             agent_session=self.agent_session,
             spec_dir=spec_dir,
@@ -498,6 +500,7 @@ class GenericEditRuntimeSession:
         """Resume generic_edit execution from a recovery checkpoint artifact."""
         self._cancel_requested = False
         self._active_batch_id = None
+        self._batch_recovery_blockers = {}
         self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
             agent_session=self.agent_session,
             spec_dir=spec_dir,
@@ -522,6 +525,7 @@ class GenericEditRuntimeSession:
             checkpoint=checkpoint,
             trace=trace,
         )
+        self._refresh_batch_recovery_guards(trace)
         workspace_guard = validate_generic_edit_resume_workspace_guard(
             project_dir=self._executor.project_dir,
             mutation_snapshots=self._mutation_snapshots,
@@ -646,6 +650,7 @@ class GenericEditRuntimeSession:
                 results=execution.action_results,
             )
             trace.append(iteration_entry)
+            self._refresh_batch_recovery_guards(trace)
             prompt = build_observation_prompt(
                 base_prompt=base_prompt,
                 results=execution.action_results,
@@ -1033,6 +1038,7 @@ class GenericEditRuntimeSession:
             results=execution.action_results,
         )
         trace.append(iteration_entry)
+        self._refresh_batch_recovery_guards(trace)
         return build_native_recovery_prompt(iteration_entry["transaction"]), None
 
     def _max_iterations_result(
@@ -1529,6 +1535,24 @@ class GenericEditRuntimeSession:
             )
 
         if tool == COMMIT_BATCH_TOOL:
+            blockers = self._batch_recovery_blockers.get(batch_id) or []
+            if blockers:
+                return ToolActionResult(
+                    tool=tool,
+                    ok=False,
+                    message=(
+                        f"Cannot commit batch {batch_id}: unresolved recovery "
+                        "group(s) remain inside the batch: "
+                        f"{', '.join(blockers)}."
+                    ),
+                    data={
+                        "batch_id": batch_id,
+                        "batch_action": COMMIT_BATCH_TOOL,
+                        "batch_boundary_error": True,
+                        "batch_boundary_error_reason": "unresolved_batch_recovery",
+                        "blocked_transaction_group_ids": blockers,
+                    },
+                )
             self._active_batch_id = None
             return ToolActionResult(
                 tool=tool,
@@ -1556,6 +1580,29 @@ class GenericEditRuntimeSession:
             )
         self._active_batch_id = None
         return result
+
+    def _refresh_batch_recovery_guards(self, trace: list[dict[str, Any]]) -> None:
+        """Refresh per-batch unresolved recovery blockers from the trace."""
+        transaction_summary = summarize_generic_edit_transactions(trace)
+        transaction_group_summary = summarize_generic_edit_transaction_groups(
+            transaction_summary=transaction_summary,
+            mutation_snapshots=self._mutation_snapshots,
+        )
+        linked_summary = link_generic_edit_transaction_batches_to_groups(
+            transaction_summary=transaction_summary,
+            transaction_group_summary=transaction_group_summary,
+        )
+        blockers: dict[str, list[str]] = {}
+        for batch in linked_summary.get("transaction_batches") or []:
+            if not isinstance(batch, dict):
+                continue
+            batch_id = str(batch.get("id") or "")
+            unresolved = normalize_string_list(
+                batch.get("unresolved_transaction_group_ids")
+            )
+            if batch_id and unresolved:
+                blockers[batch_id] = unresolved
+        self._batch_recovery_blockers = blockers
 
     def _rollback_transaction_action(self, action: dict[str, Any]) -> ToolActionResult:
         """Restore workspace files from captured mutation snapshots."""
@@ -2329,6 +2376,18 @@ def build_generic_edit_transaction(
         ),
         None,
     )
+    batch_boundary_errors = [
+        {
+            "tool": result.tool,
+            "batch_id": str(result.data.get("batch_id") or ""),
+            "reason": str(result.data.get("batch_boundary_error_reason") or ""),
+            "blocked_transaction_group_ids": normalize_string_list(
+                result.data.get("blocked_transaction_group_ids")
+            ),
+        }
+        for result in results
+        if result.data.get("batch_boundary_error")
+    ]
     restored_paths = sorted(
         dict.fromkeys(
             str(path)
@@ -2395,6 +2454,14 @@ def build_generic_edit_transaction(
         transaction["batch_actions"] = batch_actions
     if batch_status:
         transaction["batch_status"] = batch_status
+    if batch_boundary_errors:
+        transaction["batch_boundary_errors"] = batch_boundary_errors
+        transaction["batch_boundary_error_count"] = len(batch_boundary_errors)
+        transaction["batch_boundary_error_reasons"] = list(
+            dict.fromkeys(
+                error["reason"] for error in batch_boundary_errors if error["reason"]
+            )
+        )
     if restored_paths:
         transaction["restored_paths"] = restored_paths
     if deleted_paths:
@@ -4099,6 +4166,10 @@ def compact_generic_edit_manifest_transaction_batches(
             ),
             "staged_mutation_count": int(batch.get("staged_mutation_count") or 0),
             "staged_path_count": int(batch.get("staged_path_count") or 0),
+            "boundary_error_count": int(batch.get("boundary_error_count") or 0),
+            "boundary_error_reasons": normalize_string_list(
+                batch.get("boundary_error_reasons")
+            ),
             "transaction_group_ids": normalize_string_list(
                 batch.get("transaction_group_ids")
             ),
@@ -6535,6 +6606,10 @@ def enrich_generic_edit_timeline_event(event: dict[str, Any]) -> None:
         if event.get("finish_blocked"):
             event["requires_user_action"] = True
         return
+    if event_type == "action_result" and event.get("batch_boundary_error"):
+        event["timeline_stage"] = "batch_boundary_blocked"
+        event["requires_user_action"] = True
+        return
     if event_type == "action_result" and event.get("tool") in {
         ROLLBACK_TRANSACTION_TOOL,
         REPAIR_MUTATION_TOOL,
@@ -6697,6 +6772,14 @@ def build_generic_edit_action_event(
         event["batch_id"] = str(data["batch_id"])
     if data.get("batch_status"):
         event["batch_status"] = str(data["batch_status"])
+    if data.get("batch_boundary_error"):
+        event["batch_boundary_error"] = True
+        event["batch_boundary_error_reason"] = str(
+            data.get("batch_boundary_error_reason") or ""
+        )
+        event["blocked_transaction_group_ids"] = normalize_string_list(
+            data.get("blocked_transaction_group_ids")
+        )
     if data.get("rollback_available") is not None:
         event["rollback_available"] = bool(data["rollback_available"])
     if data.get("exit_code") is not None:
@@ -6731,6 +6814,13 @@ def build_generic_edit_transaction_event(
         event["batch_status"] = str(transaction["batch_status"])
     if transaction.get("batch_actions"):
         event["batch_actions"] = list(transaction["batch_actions"])
+    if transaction.get("batch_boundary_error_count"):
+        event["batch_boundary_error_count"] = int(
+            transaction["batch_boundary_error_count"]
+        )
+        event["batch_boundary_error_reasons"] = normalize_string_list(
+            transaction.get("batch_boundary_error_reasons")
+        )
     return event
 
 
@@ -6952,6 +7042,8 @@ def summarize_generic_edit_transaction_batches(
                     "staged_mutated_paths": [],
                     "staged_restored_paths": [],
                     "staged_deleted_paths": [],
+                    "boundary_errors": [],
+                    "boundary_error_reasons": [],
                 },
             )
             if transaction_id and transaction_id not in batch["transaction_ids"]:
@@ -6974,6 +7066,22 @@ def summarize_generic_edit_transaction_batches(
                 for value in normalize_string_list(transaction.get(source_field)):
                     if value not in batch[staged_field]:
                         batch[staged_field].append(value)
+            for error in transaction.get("batch_boundary_errors") or []:
+                if not isinstance(error, dict):
+                    continue
+                compact_error = {
+                    "tool": str(error.get("tool") or ""),
+                    "batch_id": str(error.get("batch_id") or batch_id),
+                    "reason": str(error.get("reason") or ""),
+                    "blocked_transaction_group_ids": normalize_string_list(
+                        error.get("blocked_transaction_group_ids")
+                    ),
+                }
+                if compact_error not in batch["boundary_errors"]:
+                    batch["boundary_errors"].append(compact_error)
+                reason = compact_error["reason"]
+                if reason and reason not in batch["boundary_error_reasons"]:
+                    batch["boundary_error_reasons"].append(reason)
             if transaction.get("batch_status"):
                 batch["status"] = str(transaction["batch_status"])
 
@@ -6995,6 +7103,7 @@ def summarize_generic_edit_transaction_batches(
             for path in normalize_string_list(batch.get(field_name))
         }
         batch["staged_path_count"] = len(staged_paths)
+        batch["boundary_error_count"] = len(batch["boundary_errors"])
     open_batch_ids = [
         str(batch["id"])
         for batch in ordered_batches

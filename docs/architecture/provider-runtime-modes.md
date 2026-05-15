@@ -223,13 +223,13 @@ what is already implemented from what still blocks OpenAI, Gemini, OpenRouter,
 LiteLLM, ZhipuAI, and Ollama from being treated as full autonomous coding
 providers.
 
-Last updated: 2026-05-13.
+Last updated: 2026-05-15.
 
 | Area | Current status | Done | Remaining |
 |------|----------------|------|-----------|
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
-| Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, mutation snapshots, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing artifact preflight blockers, artifact manifest transaction batches, manifest/checkpoint consistency checks, trace/session/manifest counter drift checks, and rich runtime events are implemented. | Harden non-happy-path recovery further for true staged apply/commit isolation and UI-driven repair/rollback workflows. |
+| Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, batch boundary guards, mutation snapshots, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing artifact preflight blockers, artifact manifest transaction batches, manifest/checkpoint consistency checks, trace/session/manifest counter drift checks, and rich runtime events are implemented. | Harden non-happy-path recovery further for true staged apply isolation and UI-driven repair/rollback workflows. |
 | Provider reliability | Partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, and open transaction batches. The settings UI surfaces the same diagnostics. | Add provider-specific e2e suites for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama covering native tool calls, normalized tool results, unsupported tools, fallback reasons, and recovery loops. |
 | MCP Bridge v1 | Partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, permission/audit metadata, unavailable-tool observations, and readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers are represented. | Generalize execution beyond Context7, enforce permissions at every bridge boundary, normalize arbitrary live schemas/results, reuse external sessions safely, and make custom MCP server lifecycle failures first-class. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, and read-only merge plans. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, and policy gates before enabling mutable subagents. |
@@ -346,9 +346,10 @@ Auto Code validates and executes these actions locally:
   transaction, and any unresolved partial failures;
 - transaction batches link batch ids to transaction ids, staged mutation ids,
   staged path metadata, mutation snapshots, transaction groups, unresolved
-  groups, per-batch recovery policies, and recovery outcomes. `finish` is
-  rejected while a batch is still open, and open-batch state is preserved in the
-  recovery checkpoint and provider smoke diagnostics;
+  groups, per-batch recovery policies, boundary errors, and recovery outcomes.
+  `commit_batch` is rejected while the batch still has unresolved recovery
+  groups, `finish` is rejected while a batch is still open, and open-batch state
+  is preserved in the recovery checkpoint and provider smoke diagnostics;
 - interrupted or partial runs persist `generic_edit_session_state.json`,
   `generic_edit_recovery_checkpoint.json`, `generic_edit_mutation_snapshots.json`,
   and `generic_edit_transaction_groups.json`. The read-only resume preflight
