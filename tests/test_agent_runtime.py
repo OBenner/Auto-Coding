@@ -5050,6 +5050,82 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_mutation_after_batch_commit_in_same_turn(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    outside = tmp_path / "outside.txt"
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mix committed batch with a follow-up mutation",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "commit_batch",
+                        "batch_id": "batch-1",
+                        "summary": "batched.txt updated",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "outside.txt",
+                        "content": "outside\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Should not mix batch and outside mutation",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "reject mixed batch mutation",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+
+    assert result.status == "error"
+    assert "write_file cannot run after commit_batch" in result.response_text
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert not outside.exists()
+    assert result_artifact["stop_reason"] == "batch_boundary_violation"
+    assert trace["trace"][0]["error"] == (
+        "Generic edit action write_file cannot run after commit_batch in the "
+        "same provider turn. Start a new provider iteration before additional "
+        "mutations."
+    )
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_aborts_open_batch_with_snapshot_rollback(
     tmp_path: Path,
 ):

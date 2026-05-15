@@ -752,6 +752,23 @@ class GenericEditRuntimeSession:
                     response_prefix="Generic edit runtime rejected provider actions",
                 ),
             )
+        try:
+            validate_batch_boundary_actions(actions)
+        except GenericEditRuntimeError as e:
+            return JsonActionParseResult(
+                actions=[],
+                terminal_result=self._json_error_result(
+                    error=e,
+                    iteration_entry=iteration_entry,
+                    trace=trace,
+                    spec_dir=spec_dir,
+                    observation_path=observation_path,
+                    subtask_id=subtask_id,
+                    stop_reason="batch_boundary_violation",
+                    summary="Generic edit runtime rejected a batch boundary violation.",
+                    response_prefix="Generic edit runtime rejected provider actions",
+                ),
+            )
         return JsonActionParseResult(actions=actions)
 
     def _json_error_result(
@@ -1222,6 +1239,32 @@ class GenericEditRuntimeSession:
                 message=str(e),
                 trace=trace,
                 summary="Generic edit runtime rejected a non-terminal finish.",
+                observation_path=observation_path,
+                mutation_snapshots=self._mutation_snapshots,
+                mcp_support=self._mcp_support_payload(),
+                resume_metadata=self._resume_metadata,
+            )
+            return AgentRunResult(
+                status="error",
+                response_text=(
+                    f"Generic edit runtime rejected provider tool calls: {e}\n"
+                    f"Artifacts: {artifacts['generic_edit_trace']}"
+                ),
+            )
+        try:
+            validate_batch_boundary_actions([action for _, action in tool_actions])
+        except GenericEditRuntimeError as e:
+            iteration_entry["error"] = str(e)
+            trace.append(iteration_entry)
+            artifacts = save_generic_edit_artifacts(
+                spec_dir=spec_dir,
+                provider_name=self.provider_name,
+                subtask_id=subtask_id,
+                status="error",
+                stop_reason="batch_boundary_violation",
+                message=str(e),
+                trace=trace,
+                summary="Generic edit runtime rejected a batch boundary violation.",
                 observation_path=observation_path,
                 mutation_snapshots=self._mutation_snapshots,
                 mcp_support=self._mcp_support_payload(),
@@ -2125,6 +2168,25 @@ def validate_terminal_finish(actions: list[dict[str, Any]]) -> None:
             raise GenericEditRuntimeError(
                 "Generic edit action 'finish' must be the final action"
             )
+
+
+def validate_batch_boundary_actions(actions: list[dict[str, Any]]) -> None:
+    """Reject mutating actions after a batch closes in the same provider turn."""
+    closing_tool: str | None = None
+    for action in actions:
+        tool = action_tool(action)
+        if not tool:
+            continue
+        if closing_tool and (
+            tool in MUTATING_LOCAL_ACTIONS or tool in BATCH_CONTROL_TOOLS
+        ):
+            raise GenericEditRuntimeError(
+                f"Generic edit action {tool} cannot run after {closing_tool} "
+                "in the same provider turn. Start a new provider iteration "
+                "before additional mutations."
+            )
+        if tool in {COMMIT_BATCH_TOOL, ABORT_BATCH_TOOL}:
+            closing_tool = tool
 
 
 def parse_runtime_subagent_action_tasks(
