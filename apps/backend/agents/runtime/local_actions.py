@@ -47,6 +47,10 @@ MAX_SUBAGENT_ROLE_CHARS = 40
 MAX_SUBAGENT_RESULT_CHARS = 2000
 MAX_READ_RANGE_LINES = 400
 DEFAULT_READ_RANGE_LINES = 120
+MAX_BATCH_ID_CHARS = 80
+MAX_BATCH_NOTE_CHARS = 1000
+MAX_REPAIR_MUTATION_PATHS = 20
+MAX_REPAIR_MUTATION_NOTE_CHARS = 4000
 TRACE_STRING_PREVIEW_CHARS = 1000
 TRACE_REDACTED_FIELDS = {
     "content",
@@ -335,6 +339,78 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
         },
     ),
     LocalActionToolSpec(
+        name="begin_batch",
+        description=(
+            "Start a named generic_edit transaction batch. Mutations after this "
+            "action are associated with the batch until commit_batch or abort_batch."
+        ),
+        parameters={
+            "batch_id": {
+                "type": "string",
+                "maxLength": MAX_BATCH_ID_CHARS,
+                "description": "Stable id for the batch, such as batch-1.",
+            },
+            "description": {
+                "type": "string",
+                "maxLength": MAX_BATCH_NOTE_CHARS,
+                "description": "Short description of the intended batch.",
+            },
+        },
+        required=("batch_id",),
+        example={
+            "tool": "begin_batch",
+            "batch_id": "batch-1",
+            "description": "Update the focused files as one recovery unit.",
+        },
+    ),
+    LocalActionToolSpec(
+        name="commit_batch",
+        description="Commit the active generic_edit transaction batch.",
+        parameters={
+            "batch_id": {
+                "type": "string",
+                "maxLength": MAX_BATCH_ID_CHARS,
+                "description": "Batch id previously opened by begin_batch.",
+            },
+            "summary": {
+                "type": "string",
+                "maxLength": MAX_BATCH_NOTE_CHARS,
+                "description": "Short summary of what the committed batch changed.",
+            },
+        },
+        required=("batch_id",),
+        example={
+            "tool": "commit_batch",
+            "batch_id": "batch-1",
+            "summary": "Focused edits applied and ready for verification.",
+        },
+    ),
+    LocalActionToolSpec(
+        name="abort_batch",
+        description=(
+            "Abort the active generic_edit transaction batch. The generic_edit "
+            "runtime rolls back captured mutation snapshots for the batch."
+        ),
+        parameters={
+            "batch_id": {
+                "type": "string",
+                "maxLength": MAX_BATCH_ID_CHARS,
+                "description": "Batch id previously opened by begin_batch.",
+            },
+            "reason": {
+                "type": "string",
+                "maxLength": MAX_BATCH_NOTE_CHARS,
+                "description": "Short reason for aborting the batch.",
+            },
+        },
+        required=("batch_id",),
+        example={
+            "tool": "abort_batch",
+            "batch_id": "batch-1",
+            "reason": "The staged mutation is no longer needed.",
+        },
+    ),
+    LocalActionToolSpec(
         name="write_file",
         description="Write complete UTF-8 text content to a workspace file.",
         parameters={
@@ -461,6 +537,68 @@ LOCAL_ACTION_TOOL_SPECS: tuple[LocalActionToolSpec, ...] = (
             "tool": "run_command",
             "command": "pytest tests/test_file.py -q",
             "timeout": DEFAULT_COMMAND_TIMEOUT_SECONDS,
+        },
+    ),
+    LocalActionToolSpec(
+        name="rollback_transaction",
+        description=(
+            "Roll back one generic_edit transaction using runtime-managed "
+            "mutation snapshots."
+        ),
+        parameters={
+            "transaction_id": {
+                "type": "string",
+                "description": "Transaction id to roll back, such as json_actions-1.",
+            },
+            "snapshot_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional mutation snapshot ids. Defaults to all snapshots "
+                    "captured for transaction_id."
+                ),
+            },
+        },
+        required=("transaction_id",),
+        example={
+            "tool": "rollback_transaction",
+            "transaction_id": "json_actions-1",
+        },
+    ),
+    LocalActionToolSpec(
+        name="repair_mutation",
+        description=(
+            "Record that a partial generic_edit mutation was manually repaired "
+            "after inspecting or changing the affected files."
+        ),
+        parameters={
+            "transaction_id": {
+                "type": "string",
+                "description": "Partial-failure transaction id that was repaired.",
+            },
+            "paths": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": MAX_REPAIR_MUTATION_PATHS,
+                "description": "Workspace-relative paths covered by the repair.",
+            },
+            "summary": {
+                "type": "string",
+                "description": "Short description of the repair that was performed.",
+            },
+            "verification": {
+                "type": "string",
+                "description": "Focused verification that was run after repair.",
+            },
+        },
+        required=("transaction_id", "paths"),
+        example={
+            "tool": "repair_mutation",
+            "transaction_id": "json_actions-1",
+            "paths": [EXAMPLE_WORKSPACE_FILE_PATH],
+            "summary": "Re-applied the intended edit after inspecting the diff.",
+            "verification": "pytest tests/test_file.py -q",
         },
     ),
     LocalActionToolSpec(
@@ -716,6 +854,19 @@ class LocalActionExecutor:
                     "cannot be executed by the standalone local action executor."
                 ),
             )
+        if tool == "rollback_transaction":
+            return ToolActionResult(
+                tool=tool,
+                ok=False,
+                message=(
+                    "rollback_transaction requires generic_edit runtime-managed "
+                    "mutation snapshots."
+                ),
+            )
+        if tool == "repair_mutation":
+            return self._repair_mutation(action)
+        if tool in {"begin_batch", "commit_batch", "abort_batch"}:
+            return self._batch_marker(tool, action)
         if tool == "finish":
             return ToolActionResult(
                 tool=tool,
@@ -1275,6 +1426,84 @@ class LocalActionExecutor:
             data={"bytes": len(patch.encode("utf-8"))},
         )
 
+    def _repair_mutation(self, action: dict[str, Any]) -> ToolActionResult:
+        transaction_id = require_string(action, "transaction_id")
+        paths = require_string_list(
+            action,
+            "paths",
+            maximum=MAX_REPAIR_MUTATION_PATHS,
+        )
+        summary = optional_bounded_string(
+            action,
+            "summary",
+            maximum=MAX_REPAIR_MUTATION_NOTE_CHARS,
+        )
+        verification = optional_bounded_string(
+            action,
+            "verification",
+            maximum=MAX_REPAIR_MUTATION_NOTE_CHARS,
+        )
+        data: dict[str, Any] = {
+            "transaction_id": transaction_id,
+            "affected_paths": paths,
+            "mutated_paths": paths,
+            "recovery_strategy": "repair_mutation",
+        }
+        if summary:
+            data["summary"] = summary
+        if verification:
+            data["verification"] = verification
+        return ToolActionResult(
+            tool="repair_mutation",
+            ok=True,
+            message=f"Recorded repair for transaction {transaction_id}.",
+            data=data,
+        )
+
+    def _batch_marker(self, tool: str, action: dict[str, Any]) -> ToolActionResult:
+        batch_id = bounded_string(
+            action,
+            "batch_id",
+            maximum=MAX_BATCH_ID_CHARS,
+        )
+        data: dict[str, Any] = {
+            "batch_id": batch_id,
+            "batch_action": tool,
+        }
+        if tool == "begin_batch":
+            note = optional_bounded_string(
+                action,
+                "description",
+                maximum=MAX_BATCH_NOTE_CHARS,
+            )
+            data["batch_status"] = "open"
+            if note:
+                data["description"] = note
+        elif tool == "commit_batch":
+            note = optional_bounded_string(
+                action,
+                "summary",
+                maximum=MAX_BATCH_NOTE_CHARS,
+            )
+            data["batch_status"] = "committed"
+            if note:
+                data["summary"] = note
+        else:
+            note = optional_bounded_string(
+                action,
+                "reason",
+                maximum=MAX_BATCH_NOTE_CHARS,
+            )
+            data["batch_status"] = "aborted"
+            if note:
+                data["reason"] = note
+        return ToolActionResult(
+            tool=tool,
+            ok=True,
+            message=f"Recorded {tool} for batch {batch_id}.",
+            data=data,
+        )
+
     async def _run_command(self, action: dict[str, Any]) -> ToolActionResult:
         command = require_string(action, "command")
         timeout = bounded_positive_int(
@@ -1645,6 +1874,25 @@ def bounded_optional_string(
 ) -> str:
     """Read a required string that may be empty but must stay bounded."""
     value = action.get(field_name)
+    if not isinstance(value, str):
+        raise LocalActionError(f"Action field '{field_name}' must be a string")
+    if len(value) > maximum:
+        raise LocalActionError(
+            f"Action field '{field_name}' must be at most {maximum} characters"
+        )
+    return value
+
+
+def optional_bounded_string(
+    action: dict[str, Any],
+    field_name: str,
+    *,
+    maximum: int,
+) -> str:
+    """Read an optional string with a maximum length."""
+    value = action.get(field_name)
+    if value is None:
+        return ""
     if not isinstance(value, str):
         raise LocalActionError(f"Action field '{field_name}' must be a string")
     if len(value) > maximum:

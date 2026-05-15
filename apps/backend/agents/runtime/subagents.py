@@ -73,6 +73,7 @@ class RuntimeSubagentAttempt:
     """One execution attempt for a child runtime task."""
 
     attempt: int
+    child_context_id: str
     status: str
     started_at: str
     finished_at: str
@@ -95,6 +96,7 @@ class RuntimeSubagentResult:
     attempt_count: int = 1
     max_attempts: int = DEFAULT_SUBAGENT_MAX_ATTEMPTS
     attempts: list[RuntimeSubagentAttempt] = field(default_factory=list)
+    child_context_id: str | None = None
     context: dict[str, Any] = field(default_factory=dict)
     merge_policy: str = DEFAULT_SUBAGENT_MERGE_POLICY
     write_scope: tuple[str, ...] = ()
@@ -298,12 +300,14 @@ class RuntimeSubagentOrchestrator:
         started_at = datetime.now(UTC)
         started_monotonic = time.perf_counter()
         runtime_session: Any | None = None
+        child_context_id = subagent_child_context_id(task, attempt=attempt)
         try:
             runtime_session = await maybe_await(self.session_factory(task))
             agent_result = await self._run_child_session(
                 runtime_session,
                 task,
                 attempt=attempt,
+                child_context_id=child_context_id,
                 verbose=verbose,
                 phase=phase,
             )
@@ -325,6 +329,7 @@ class RuntimeSubagentOrchestrator:
         duration_ms = int((time.perf_counter() - started_monotonic) * 1000)
         attempt_record = RuntimeSubagentAttempt(
             attempt=attempt,
+            child_context_id=child_context_id,
             status=result.status,
             started_at=started_at.isoformat(),
             finished_at=finished_at.isoformat(),
@@ -339,6 +344,7 @@ class RuntimeSubagentOrchestrator:
         task: RuntimeSubagentTask,
         *,
         attempt: int,
+        child_context_id: str,
         verbose: bool,
         phase: Any,
     ) -> AgentRunResult:
@@ -346,7 +352,11 @@ class RuntimeSubagentOrchestrator:
         return await asyncio.wait_for(
             run_runtime_session(
                 runtime_session,
-                build_subagent_prompt(task, attempt=attempt),
+                build_subagent_prompt(
+                    task,
+                    attempt=attempt,
+                    child_context_id=child_context_id,
+                ),
                 self.spec_dir,
                 verbose=verbose,
                 phase=phase,
@@ -405,6 +415,7 @@ def attach_task_contract_to_result(
     result.attempt_count = len(attempts)
     result.max_attempts = bounded_subagent_attempts(task.max_attempts)
     result.attempts = list(attempts)
+    result.child_context_id = attempts[-1].child_context_id if attempts else None
     result.context = dict(task.context)
     result.merge_policy = task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY
     result.write_scope = tuple(task.write_scope)
@@ -568,8 +579,10 @@ def build_subagent_prompt(
     task: RuntimeSubagentTask,
     *,
     attempt: int = 1,
+    child_context_id: str | None = None,
 ) -> str:
     """Build an isolated prompt envelope for one delegated runtime task."""
+    context_id = child_context_id or subagent_child_context_id(task, attempt=attempt)
     metadata = json.dumps(task.metadata, ensure_ascii=False, indent=2)
     context = json.dumps(task.context, ensure_ascii=False, indent=2)
     write_scope = (
@@ -580,10 +593,13 @@ def build_subagent_prompt(
     return (
         f"You are running as Auto Code subagent `{task.id}` "
         f"with role `{task.role}`.\n"
+        f"Child context id: {context_id}.\n"
         f"Attempt: {attempt} of {bounded_subagent_attempts(task.max_attempts)}.\n\n"
         "Isolation contract:\n"
         "- Treat this as an isolated child context; do not assume sibling "
         "subagents share state with you.\n"
+        "- Treat each retry as a fresh child context unless the prompt gives you "
+        "explicit parent-provided context.\n"
         "- Return findings that the parent runtime can merge explicitly.\n"
         f"- Merge policy: {task.merge_policy or DEFAULT_SUBAGENT_MERGE_POLICY}.\n"
         f"- Write scope:\n{write_scope}\n"
@@ -595,6 +611,15 @@ def build_subagent_prompt(
         f"Metadata:\n{metadata}\n\n"
         f"Task:\n{task.prompt}"
     )
+
+
+def subagent_child_context_id(
+    task: RuntimeSubagentTask,
+    *,
+    attempt: int,
+) -> str:
+    """Return a stable child-context id for one isolated task attempt."""
+    return f"child-{safe_artifact_id(task.id)}-attempt-{attempt}"
 
 
 def summarize_subagent_status(results: list[RuntimeSubagentResult]) -> str:

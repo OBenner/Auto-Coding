@@ -216,6 +216,32 @@ contexts with a read-only merge policy, bounded attempts, and per-child
 artifacts; this is useful for parallel exploration but is not Claude SDK Task
 tool parity.
 
+## Full Autonomous Provider Roadmap Status
+
+Keep this table current when advancing direct-provider autonomy. It separates
+what is already implemented from what still blocks OpenAI, Gemini, OpenRouter,
+LiteLLM, ZhipuAI, and Ollama from being treated as full autonomous coding
+providers.
+
+Last updated: 2026-05-13.
+
+| Area | Current status | Done | Remaining |
+|------|----------------|------|-----------|
+| Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
+| Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
+| Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, mutation snapshots, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing artifact preflight blockers, artifact manifest transaction batches, manifest/checkpoint consistency checks, trace/session/manifest counter drift checks, and rich runtime events are implemented. | Harden non-happy-path recovery further for true staged apply/commit isolation and UI-driven repair/rollback workflows. |
+| Provider reliability | Partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, and open transaction batches. The settings UI surfaces the same diagnostics. | Add provider-specific e2e suites for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama covering native tool calls, normalized tool results, unsupported tools, fallback reasons, and recovery loops. |
+| MCP Bridge v1 | Partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, permission/audit metadata, unavailable-tool observations, and readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers are represented. | Generalize execution beyond Context7, enforce permissions at every bridge boundary, normalize arbitrary live schemas/results, reuse external sessions safely, and make custom MCP server lifecycle failures first-class. |
+| Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, and read-only merge plans. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, and policy gates before enabling mutable subagents. |
+| CLI runtimes as full runtime class | Partial | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners. | Wire Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs to the same `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata contract. |
+| Frontend runtime control plane | Partial | Provider settings show runtime diagnostics, MCP bridge status, provider smoke results, tool-loop contract, resume policy, transaction batches in Generic Edit artifacts, recovery timeline, and open-batch resume state. | Consolidate live capability matrix, runtime health, MCP availability, executable tools, warnings for incompatible settings, cost estimates, provider test controls, and artifact viewers into one operator-grade surface. |
+| Policy and evals | Early | Runtime recommendations and compatibility diagnostics exist. | Add policy rules for planner/coder/QA runtime selection, allowed fallback cases, when Claude/Codex full autonomy is required, comparative evals across Claude/Codex/OpenAI/Gemini/Ollama, and cost/quality/safety reporting. |
+
+The practical rule remains: a direct API provider is not `full_autonomous` until
+it can reliably run the whole tool loop, preserve transactional recovery state,
+execute the required MCP/subagent surfaces, and pass the provider reliability
+suite without relying on Claude SDK semantics.
+
 ## Generic Edit Contract
 
 `generic_edit` mode asks the model to return one JSON object per iteration. Auto
@@ -239,12 +265,17 @@ Supported actions:
     { "tool": "read_file", "path": "relative/path.py", "max_chars": 12000 },
     { "tool": "read_file_range", "path": "relative/path.py", "start_line": 40, "max_lines": 120 },
     { "tool": "read_many_files", "paths": ["relative/path.py", "relative/other.py"], "max_chars_per_file": 8000 },
+    { "tool": "begin_batch", "batch_id": "batch-1", "description": "Update focused files as one recovery unit." },
     { "tool": "write_file", "path": "relative/path.py", "content": "..." },
     { "tool": "replace_text", "path": "relative/path.py", "old": "old_name", "new": "new_name", "count": 1 },
     { "tool": "delete_file", "path": "relative/path.py" },
     { "tool": "move_file", "source": "relative/path.py", "destination": "relative/new-name.py", "overwrite": false },
     { "tool": "apply_patch", "patch": "unified diff" },
     { "tool": "run_command", "command": "pytest tests/test_file.py -q", "timeout": 60 },
+    { "tool": "commit_batch", "batch_id": "batch-1", "summary": "Focused edits applied and ready for verification." },
+    { "tool": "abort_batch", "batch_id": "batch-1", "reason": "The staged mutation is no longer needed." },
+    { "tool": "rollback_transaction", "transaction_id": "json_actions-1", "snapshot_ids": ["mutation-1"] },
+    { "tool": "repair_mutation", "transaction_id": "json_actions-1", "paths": ["relative/path.py"], "note": "Inspected and repaired the partial mutation." },
     { "tool": "git_status", "path": ".", "include_untracked": true },
     { "tool": "git_diff", "path": "relative/path.py", "max_chars": 8000 },
     { "tool": "run_subagents", "tasks": [{ "id": "inspect-api", "role": "explorer", "prompt": "Inspect the API layer and report relevant files." }] },
@@ -299,19 +330,32 @@ Auto Code validates and executes these actions locally:
 - runtime subagents run as bounded read-only child sessions for analysis,
   exploration, review, or comparison work; they do not receive Claude SDK Task
   tool parity or independent mutating runtime privileges, and each child
-  session has an isolated context envelope, bounded retry metadata, and a
-  timeout/cancellation guard;
+  attempt has an isolated context envelope, explicit child context id, bounded
+  retry metadata, per-child result artifact, and a timeout/cancellation guard;
 - JSON and native tool-call batches stop after the first failed local action, so
   later actions in the same batch do not run against a partially failed
   transaction;
 - traces, summaries, safe action timelines, and per-action observations are saved
   as `generic_edit_trace.json`, `generic_edit_result.json`,
-  `generic_edit_timeline.json`, `generic_edit_observations.jsonl`, and
+  `generic_edit_timeline.json`, `generic_edit_events.jsonl`,
+  `generic_edit_observations.jsonl`, `generic_edit_artifact_manifest.json`, and
   `generic_edit_summary.md`;
 - transaction summaries include tool sequences, affected/mutated paths,
   partial-failure ids, the last partial-failure path set, whether recovery was
   resolved by a later covered inspection/repair or workspace verification
   transaction, and any unresolved partial failures;
+- transaction batches link batch ids to transaction ids, staged mutation ids,
+  staged path metadata, mutation snapshots, transaction groups, unresolved
+  groups, per-batch recovery policies, and recovery outcomes. `finish` is
+  rejected while a batch is still open, and open-batch state is preserved in the
+  recovery checkpoint and provider smoke diagnostics;
+- interrupted or partial runs persist `generic_edit_session_state.json`,
+  `generic_edit_recovery_checkpoint.json`, `generic_edit_mutation_snapshots.json`,
+  and `generic_edit_transaction_groups.json`. The read-only resume preflight
+  blocks corrupt checkpoints, corrupt manifests, missing required artifacts,
+  mismatched session/checkpoint/manifest policies, stale trace/session/manifest
+  counters, missing checkpoint snapshot references, trace mismatches, and
+  workspace drift before a resumed run mutates files;
 - `finish` is rejected when a previous partial-failure transaction remains
   unresolved, so limited runtimes cannot report success after a partially
   applied mutating batch.

@@ -170,6 +170,11 @@ export const taskMock = {
     data: null
   }),
 
+  getGenericEditArtifactManifest: async () => ({
+    success: true,
+    data: null
+  }),
+
   getQAReport: async () => ({
     success: true,
     data: null

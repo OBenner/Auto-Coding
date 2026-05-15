@@ -108,6 +108,233 @@ export interface QACommonIssue {
   occurrences: number;
 }
 
+export interface GenericEditArtifactManifestEntry {
+  name: string;
+  kind: string;
+  path: string | null;
+  active: boolean;
+  required: boolean;
+  present: boolean;
+}
+
+export interface GenericEditRecentEvent {
+  sequence: number;
+  event_type: string;
+  tool?: string;
+  ok?: boolean;
+  message?: string;
+  status?: string;
+  transaction_id?: string;
+  batch_id?: string;
+  active_batch_id?: string;
+  group_id?: string;
+  path?: string;
+  iteration?: number | string | null;
+  from_loop?: string;
+  to_loop?: string;
+  reason?: string;
+  tool_schema_count?: number;
+  action_index?: number;
+  timeline_stage?: string;
+  recovery_required?: boolean;
+  requires_user_action?: boolean;
+  failed_action_count?: number;
+  recovery_attempt_count?: number;
+  failed_recovery_attempt_count?: number;
+  [key: string]: unknown;
+}
+
+export interface GenericEditRecoverySummary {
+  version: number;
+  status: string;
+  finish_blocked: boolean;
+  unresolved_transaction_group_count: number;
+  unresolved_transaction_group_ids: string[];
+  warning_count: number;
+  warnings: string[];
+  resolution_strategies: string[];
+  recommended_verification_tools: string[];
+}
+
+export interface GenericEditRecoveryAction {
+  id: string;
+  kind: string;
+  tool: string;
+  transaction_id?: string;
+  transaction_group_id?: string;
+  rollback_operation_id?: string;
+  paths?: string[];
+  mutation_snapshot_ids?: string[];
+  required_before_finish: boolean;
+}
+
+export interface GenericEditNativeToolFallback {
+  provider: string;
+  from_loop: string;
+  to_loop: string;
+  reason: string;
+  message: string;
+  tool_schema_count: number;
+}
+
+export interface GenericEditTransactionBatch {
+  id: string;
+  status: string;
+  transaction_ids: string[];
+  mutation_snapshot_ids: string[];
+  transaction_group_ids: string[];
+  unresolved_transaction_group_ids: string[];
+  recovery_outcome_count: number;
+}
+
+export interface GenericEditResumeAction {
+  runtime: 'generic_edit';
+  checkpoint_path: string;
+  strategy: string;
+  next_iteration: number;
+}
+
+export interface GenericEditResumePolicy {
+  version: number;
+  runtime: 'generic_edit';
+  status: string;
+  can_resume: boolean;
+  finish_blocked: boolean;
+  strategy: string;
+  checkpoint_path: string;
+  next_iteration: number;
+  required_resolution_action_kinds: string[];
+  required_artifacts: string[];
+  unresolved_partial_failure_ids: string[];
+  unresolved_transaction_group_ids: string[];
+  open_transaction_batch_ids?: string[];
+}
+
+export interface GenericEditMcpBridgePlan {
+  status: string | null;
+  action_required: string | null;
+  recommended_runtime_path: string | null;
+  native_required_servers: string[];
+  local_bridge_required_servers: string[];
+  external_bridge_required_servers: string[];
+  unsupported_servers: string[];
+  bridged_servers: string[];
+  external_bridged_servers: string[];
+}
+
+export interface GenericEditMcpServerStatus {
+  server: string;
+  display_name: string | null;
+  availability: string | null;
+  runtime_path: string | null;
+  bridgeable: boolean | null;
+  reason: string | null;
+  notes: string | null;
+  external_client: Record<string, unknown> | null;
+}
+
+export interface GenericEditMcpToolPolicy {
+  server: string | null;
+  name: string;
+  exposed_name: string;
+  permission: string | null;
+  audit_level: string | null;
+  mutating: boolean | null;
+  audit_required: boolean | null;
+}
+
+export interface GenericEditMcpPermissionPolicy {
+  mode: string | null;
+  allowed_permissions: string[] | null;
+}
+
+export interface GenericEditMcpOpenSession {
+  server: string;
+  transport: string;
+  status: string;
+}
+
+export interface GenericEditMcpSessionLifecycle {
+  reuse: string;
+  open_session_count: number;
+  open_sessions: GenericEditMcpOpenSession[];
+}
+
+export interface GenericEditMcpBridge {
+  tools: string[];
+  tool_policies: GenericEditMcpToolPolicy[];
+  permission_policy: GenericEditMcpPermissionPolicy | null;
+  server_statuses: GenericEditMcpServerStatus[];
+  session_lifecycle: GenericEditMcpSessionLifecycle | null;
+}
+
+export interface GenericEditMcpSupport {
+  strategy: string;
+  reason: string | null;
+  server: string | null;
+  tool_count: number | null;
+  available_servers: string[];
+  unavailable_servers: string[];
+  server_statuses: GenericEditMcpServerStatus[];
+  bridge_plan: GenericEditMcpBridgePlan | null;
+  bridge: GenericEditMcpBridge | null;
+}
+
+export interface GenericEditArtifactManifest {
+  artifact_type: 'generic_edit_artifact_manifest';
+  schema_version: 1;
+  timestamp: string;
+  provider: string;
+  subtask_id: string | null;
+  status: string;
+  stop_reason: string;
+  entrypoints: {
+    result?: string;
+    summary?: string;
+    events?: string;
+    session_state?: string;
+    trace?: string;
+    [key: string]: string | undefined;
+  };
+  flags: {
+    recoverable: boolean;
+    resumable: boolean;
+    resumed: boolean;
+    recovery_required: boolean;
+    recovery_resolved: boolean;
+    has_recovery_plan: boolean;
+    has_mutation_snapshots: boolean;
+    has_transaction_groups: boolean;
+    [key: string]: boolean;
+  };
+  counts: {
+    iteration_count: number;
+    action_count: number;
+    failed_action_count: number;
+    native_tool_fallback_count: number;
+    event_count: number;
+    transaction_count: number;
+    transaction_batch_count: number;
+    transaction_group_count: number;
+    mutation_snapshot_count: number;
+    recovery_attempt_count: number;
+    failed_recovery_attempt_count: number;
+    [key: string]: number;
+  };
+  artifacts: GenericEditArtifactManifestEntry[];
+  recent_events: GenericEditRecentEvent[];
+  recovery_timeline: GenericEditRecentEvent[];
+  native_tool_fallbacks: GenericEditNativeToolFallback[];
+  transaction_batches: GenericEditTransactionBatch[];
+  recovery_summary: GenericEditRecoverySummary | null;
+  recovery_actions: GenericEditRecoveryAction[];
+  mcp_support: GenericEditMcpSupport | null;
+  resume_action: GenericEditResumeAction | null;
+  resume_inputs: Record<string, string>;
+  resume_policy: GenericEditResumePolicy | null;
+  resume: Record<string, unknown> | null;
+}
+
 // Task Log Types - for persistent, phase-based logging
 export type TaskLogPhase = 'planning' | 'coding' | 'validation';
 export type TaskLogPhaseStatus = 'pending' | 'active' | 'completed' | 'failed';

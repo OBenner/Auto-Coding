@@ -479,12 +479,73 @@ export interface ProviderConfigValidation {
 
 export interface ProviderRuntimeDiagnostics {
   smokeScope?: string;
+  providerContractHealth?: ProviderContractHealth;
   requestedRuntimeMode?: string;
   validatedRuntimeMode?: string;
   validatedRequirements?: string[];
   requestedRuntimeCapabilities?: string[];
+  validatedRuntimeCapabilities?: string[];
+  validatedRuntimeMissingCapabilities?: string[];
+  validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
+}
+
+export interface ProviderContractHealth {
+  status?: string;
+  smokeScope?: string;
+  reason?: string;
+  message?: string;
+  toolCallSupport?: string;
+  toolResultSupport?: string;
+  fallback?: string;
+  fallbackReason?: string;
+  recoveryStatus?: string;
+}
+
+export interface ProviderValidatedRuntimeExecution {
+  status?: string;
+  stopReason?: string;
+  loop?: string;
+  actionCount?: number;
+  failedActionCount?: number;
+  nativeToolFallbackCount?: number;
+  nativeToolFallbacks?: ProviderValidatedRuntimeFallback[];
+  toolCounts?: Record<string, number>;
+  resumePolicy?: ProviderValidatedRuntimeResumePolicy;
+  toolLoopContract?: ProviderValidatedToolLoopContract;
+}
+
+export interface ProviderValidatedRuntimeFallback {
+  provider?: string;
+  fromLoop?: string;
+  toLoop?: string;
+  reason?: string;
+  message?: string;
+  toolSchemaCount?: number;
+}
+
+export interface ProviderValidatedRuntimeResumePolicy {
+  status?: string;
+  strategy?: string;
+  canResume?: boolean;
+  finishBlocked?: boolean;
+  nextIteration?: number;
+  requiredResolutionActionKinds?: string[];
+  requiredArtifacts?: string[];
+  unresolvedPartialFailureIds?: string[];
+  unresolvedTransactionGroupIds?: string[];
+  openTransactionBatchIds?: string[];
+}
+
+export interface ProviderValidatedToolLoopContract {
+  status?: string;
+  toolCallSupport?: string;
+  toolResultSupport?: string;
+  fallback?: string;
+  fallbackReason?: string;
+  recoveryStatus?: string;
+  blockingReason?: string;
 }
 
 export interface ProviderConnectionTestResult {

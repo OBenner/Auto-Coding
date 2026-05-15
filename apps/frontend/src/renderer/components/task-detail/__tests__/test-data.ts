@@ -430,6 +430,71 @@ export function generateSpecializedTestLogs(
   scenario: 'errors-only' | 'tools-only' | 'text-only' | 'mixed-heavy',
   count: number = 100
 ): TaskLogEntry[] {
+  const specializedEntry = (
+    index: number,
+    type: TaskLogEntryType
+  ): TaskLogEntry => {
+    const timestamp = new Date(
+      DEFAULT_OPTIONS.startTimestamp.getTime() + index * 1000
+    ).toISOString();
+    const base: TaskLogEntry = {
+      timestamp,
+      type,
+      content: `Specialized ${type} entry ${index + 1}`,
+      phase: 'coding',
+      subtask_id: `test-subtask-${(index % 10) + 1}`,
+      session: 1
+    };
+
+    if (type === 'error') {
+      return {
+        ...base,
+        content: SAMPLE_MESSAGES.error[index % SAMPLE_MESSAGES.error.length],
+        detail: `Deterministic error detail for entry ${index + 1}`,
+        collapsed: false
+      };
+    }
+    if (type === 'tool_start' || type === 'tool_end') {
+      const toolName = TOOL_NAMES[index % TOOL_NAMES.length];
+      return {
+        ...base,
+        content:
+          type === 'tool_start'
+            ? `Starting: ${toolName}`
+            : `Completed: ${toolName}`,
+        tool_name: toolName,
+        tool_input: type === 'tool_start' ? `fixture-${index + 1}.ts` : undefined,
+        collapsed: type === 'tool_end'
+      };
+    }
+    if (type === 'info') {
+      return {
+        ...base,
+        content: SAMPLE_MESSAGES.info[index % SAMPLE_MESSAGES.info.length]
+      };
+    }
+    return {
+      ...base,
+      content: SAMPLE_MESSAGES.text[index % SAMPLE_MESSAGES.text.length]
+    };
+  };
+
+  if (scenario === 'errors-only') {
+    return Array.from({ length: count }, (_, index) =>
+      specializedEntry(index, 'error')
+    );
+  }
+  if (scenario === 'tools-only') {
+    return Array.from({ length: count }, (_, index) =>
+      specializedEntry(index, index % 2 === 0 ? 'tool_start' : 'tool_end')
+    );
+  }
+  if (scenario === 'text-only') {
+    return Array.from({ length: count }, (_, index) =>
+      specializedEntry(index, index % 2 === 0 ? 'text' : 'info')
+    );
+  }
+
   const options: TestDataGeneratorOptions = {
     entryCount: count,
     startTimestamp: new Date(),
@@ -439,22 +504,8 @@ export function generateSpecializedTestLogs(
   };
 
   const allEntries = generateTestLogEntries(options);
-
-  switch (scenario) {
-    case 'errors-only':
-      return allEntries.filter(e => e.type === 'error');
-
-    case 'tools-only':
-      return allEntries.filter(e => e.type === 'tool_start' || e.type === 'tool_end');
-
-    case 'text-only':
-      return allEntries.filter(e => e.type === 'text' || e.type === 'info');
-
-    default:
-      // Return all entries with extra detail content
-      return allEntries.map(entry => ({
-        ...entry,
-        detail: entry.detail || `Extended detail content for entry testing purposes.\n`.repeat(5)
-      }));
-  }
+  return allEntries.map(entry => ({
+    ...entry,
+    detail: entry.detail || `Extended detail content for entry testing purposes.\n`.repeat(5)
+  }));
 }

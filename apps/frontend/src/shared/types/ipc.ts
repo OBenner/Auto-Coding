@@ -31,6 +31,7 @@ import type {
   TaskStatus,
   TaskStartOptions,
   ImplementationPlan,
+  GenericEditArtifactManifest,
   ExecutionProgress,
   WorktreeStatus,
   WorktreeDiff,
@@ -974,6 +975,7 @@ export interface ElectronAPI {
 
   // Task spec file reading (for task overview display)
   getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getGenericEditArtifactManifest: (taskId: string) => Promise<IPCResult<GenericEditArtifactManifest | null>>;
   getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
   getQAEscalation: (taskId: string) => Promise<IPCResult<import('./task').QAEscalation | null>>;
 
@@ -1111,6 +1113,8 @@ export interface ElectronAPI {
 }
 
 declare global {
+  var electronAPI: ElectronAPI;
+
   interface Window {
     electronAPI: ElectronAPI;
     DEBUG: boolean;

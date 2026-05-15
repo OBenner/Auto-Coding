@@ -4,6 +4,7 @@ import os
 import subprocess
 from unittest.mock import patch
 
+import core.git_executable as git_executable
 from core.git_executable import (
     GIT_ENV_VARS_TO_CLEAR,
     get_git_executable,
@@ -183,6 +184,35 @@ class TestRunGit:
             assert result.returncode == -1
             assert "not found" in result.stderr
 
+    def test_retries_transient_windows_git_process_start_failure(self):
+        """run_git should retry the Windows git process init failure once."""
+        first = subprocess.CompletedProcess(
+            args=["git", "status"],
+            returncode=3221225794,
+            stdout="",
+            stderr="",
+        )
+        second = subprocess.CompletedProcess(
+            args=["git", "status"],
+            returncode=0,
+            stdout="ok",
+            stderr="",
+        )
+        with (
+            patch("core.git_executable.os.name", "nt"),
+            patch("core.git_executable.get_git_executable", return_value="git"),
+            patch("core.git_executable.subprocess.run") as mock_run,
+            patch("core.git_executable.time.sleep") as mock_sleep,
+        ):
+            mock_run.side_effect = [first, second]
+
+            result = run_git(["status"])
+
+            assert result.returncode == 0
+            assert result.stdout == "ok"
+            assert mock_run.call_count == 2
+            mock_sleep.assert_called_once()
+
 
 class TestGetGitExecutable:
     """Tests for get_git_executable() function."""
@@ -199,3 +229,24 @@ class TestGetGitExecutable:
         result1 = get_git_executable()
         result2 = get_git_executable()
         assert result1 == result2
+
+    def test_windows_prefers_cmd_git_when_path_finds_bin_git(self):
+        """Windows should prefer cmd/git.exe when PATH resolves bin/git.exe."""
+        git_executable._cached_git_path = None
+        try:
+            with (
+                patch("core.git_executable.os.name", "nt"),
+                patch("core.git_executable.os.environ.get", return_value=None),
+                patch(
+                    "core.git_executable.shutil.which",
+                    return_value=r"C:\Program Files\Git\bin\git.exe",
+                ),
+                patch("core.git_executable.os.path.isfile") as mock_is_file,
+            ):
+                mock_is_file.return_value = True
+
+                result = get_git_executable()
+
+                assert result == r"C:\Program Files\Git\cmd\git.exe"
+        finally:
+            git_executable._cached_git_path = None

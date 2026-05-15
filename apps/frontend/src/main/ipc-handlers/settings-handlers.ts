@@ -34,6 +34,12 @@ import { projectStore } from '../project-store';
 import { getBestAvailableProfileEnv } from '../rate-limit-detector';
 import { getAPIProfileEnv } from '../services/profile';
 import { getCodexProfileManager } from '../codex-profile-manager';
+import {
+  mapProviderContractHealth,
+  mapProviderRuntimeResumePolicy,
+  mapProviderToolLoopContract,
+} from './provider-smoke-diagnostics';
+import { resolveProviderSmokeRuntime } from './provider-smoke-runtime';
 
 const settingsPath = getSettingsPath();
 const execFileAsync = promisify(execFile);
@@ -355,10 +361,25 @@ type ProviderSmokeCliResult = {
   error_details?: string | null;
   runtime_diagnostics?: {
     smoke_scope?: string;
+    provider_contract_health?: unknown;
     requested_runtime_mode?: string;
     validated_runtime_mode?: string;
     validated_requirements?: string[];
     requested_runtime_capabilities?: string[];
+    validated_runtime_capabilities?: string[];
+    validated_runtime_missing_capabilities?: string[];
+    validated_runtime_execution?: {
+      status?: unknown;
+      stop_reason?: unknown;
+      loop?: unknown;
+      action_count?: unknown;
+      failed_action_count?: unknown;
+      native_tool_fallback_count?: unknown;
+      native_tool_fallbacks?: unknown;
+      tool_counts?: unknown;
+      resume_policy?: unknown;
+      tool_loop_contract?: unknown;
+    } | null;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
   } | null;
@@ -420,6 +441,68 @@ function arrayFromUnknown(value: unknown): string[] {
     : [];
 }
 
+function stringFromUnknown(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function numberFromUnknown(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function numberRecordFromUnknown(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, number] =>
+      typeof entry[1] === 'number' && Number.isFinite(entry[1])
+  );
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function mapValidatedRuntimeFallbacks(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const fallbacks = value
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+    )
+    .map((item) => ({
+      provider: stringFromUnknown(item.provider),
+      fromLoop: stringFromUnknown(item.from_loop),
+      toLoop: stringFromUnknown(item.to_loop),
+      reason: stringFromUnknown(item.reason),
+      message: stringFromUnknown(item.message),
+      toolSchemaCount: numberFromUnknown(item.tool_schema_count),
+    }));
+  return fallbacks.length ? fallbacks : undefined;
+}
+
+function mapValidatedRuntimeExecution(
+  value: unknown
+): ProviderRuntimeDiagnostics['validatedRuntimeExecution'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const payload = value as Record<string, unknown>;
+  return {
+    status: stringFromUnknown(payload.status),
+    stopReason: stringFromUnknown(payload.stop_reason),
+    loop: stringFromUnknown(payload.loop),
+    actionCount: numberFromUnknown(payload.action_count),
+    failedActionCount: numberFromUnknown(payload.failed_action_count),
+    nativeToolFallbackCount: numberFromUnknown(payload.native_tool_fallback_count),
+    nativeToolFallbacks: mapValidatedRuntimeFallbacks(payload.native_tool_fallbacks),
+    toolCounts: numberRecordFromUnknown(payload.tool_counts),
+    resumePolicy: mapProviderRuntimeResumePolicy(payload.resume_policy),
+    toolLoopContract: mapProviderToolLoopContract(payload.tool_loop_contract),
+  };
+}
+
 function mapProviderRuntimeDiagnostics(
   diagnostics: ProviderSmokeCliResult['runtime_diagnostics']
 ): ProviderRuntimeDiagnostics | null {
@@ -429,10 +512,14 @@ function mapProviderRuntimeDiagnostics(
 
   return {
     smokeScope: diagnostics.smoke_scope,
+    providerContractHealth: mapProviderContractHealth(diagnostics.provider_contract_health),
     requestedRuntimeMode: diagnostics.requested_runtime_mode,
     validatedRuntimeMode: diagnostics.validated_runtime_mode,
     validatedRequirements: arrayFromUnknown(diagnostics.validated_requirements),
     requestedRuntimeCapabilities: arrayFromUnknown(diagnostics.requested_runtime_capabilities),
+    validatedRuntimeCapabilities: arrayFromUnknown(diagnostics.validated_runtime_capabilities),
+    validatedRuntimeMissingCapabilities: arrayFromUnknown(diagnostics.validated_runtime_missing_capabilities),
+    validatedRuntimeExecution: mapValidatedRuntimeExecution(diagnostics.validated_runtime_execution),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note
   };
@@ -560,6 +647,15 @@ async function runProviderConnectionTest(
   const profileEnv = getBestAvailableProfileEnv().env;
   const apiProfileEnv = await getAPIProfileEnv();
   const codexProfileEnv = getCodexProfileManager().getActiveProfileEnv();
+  const commandEnv = {
+    ...process.env,
+    ...envVars,
+    ...profileEnv,
+    ...apiProfileEnv,
+    ...codexProfileEnv,
+    PYTHONIOENCODING: 'utf-8'
+  };
+  const providerSmokeRuntime = resolveProviderSmokeRuntime(commandEnv);
 
   try {
     const { stdout, stderr } = await execFileAsync(
@@ -569,19 +665,14 @@ async function runProviderConnectionTest(
         '--provider-smoke',
         '--json',
         '--provider-smoke-timeout',
-        String(PROVIDER_SMOKE_TIMEOUT_SECONDS)
+        String(PROVIDER_SMOKE_TIMEOUT_SECONDS),
+        '--provider-smoke-runtime',
+        providerSmokeRuntime
       ],
       {
         cwd: sourcePath,
         encoding: 'utf-8',
-        env: {
-          ...process.env,
-          ...envVars,
-          ...profileEnv,
-          ...apiProfileEnv,
-          ...codexProfileEnv,
-          PYTHONIOENCODING: 'utf-8'
-        },
+        env: commandEnv,
         maxBuffer: 1024 * 1024,
         timeout: PROVIDER_SMOKE_PROCESS_TIMEOUT_MS,
       }

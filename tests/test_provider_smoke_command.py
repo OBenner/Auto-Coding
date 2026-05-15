@@ -4,7 +4,46 @@ import sys
 from pathlib import Path
 
 import pytest
+from agents.runtime.local_actions import local_action_tool_schemas
+from core.providers.base import ProviderToolCall, ProviderToolCallResponse
 from core.providers.config import ProviderConfig
+
+
+class _FakeSmokeProvider:
+    name = "openai"
+
+    def __init__(self, session):
+        self.session = session
+
+    def validate_config(self):
+        return True
+
+    def create_session(self, session_config):
+        assert session_config.model == "gpt-4o"
+        return self.session
+
+    async def send_message(self, message: str):
+        raise AssertionError(f"generic_edit smoke should not call {message!r}")
+
+
+def _install_fake_generic_edit_smoke_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    session,
+) -> _FakeSmokeProvider:
+    fake_provider = _FakeSmokeProvider(session)
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="openai",
+            openai_api_key="sk-test",
+            openai_model="gpt-4o",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: fake_provider,
+    )
+    return fake_provider
 
 
 def test_parse_args_with_provider_smoke():
@@ -33,6 +72,28 @@ def test_parse_args_with_provider_smoke():
     assert args.provider_smoke is True
     assert args.provider_smoke_prompt == "Say ok"
     assert args.provider_smoke_timeout == 12
+
+
+def test_parse_args_with_provider_smoke_runtime():
+    from cli.main import parse_args
+
+    original_argv = sys.argv
+    sys.argv = [
+        "run.py",
+        "--provider",
+        "openai",
+        "--provider-smoke",
+        "--provider-smoke-runtime",
+        "generic_edit",
+    ]
+    try:
+        args = parse_args()
+    finally:
+        sys.argv = original_argv
+
+    assert args.provider == "openai"
+    assert args.provider_smoke is True
+    assert args.provider_smoke_runtime == "generic_edit"
 
 
 @pytest.mark.asyncio
@@ -85,12 +146,406 @@ async def test_run_provider_smoke_check_success(
     assert result.model == "gpt-4o"
     assert result.response_excerpt == "ok from provider"
     assert result.runtime_diagnostics["smoke_scope"] == "text_completion_only"
-    assert result.runtime_diagnostics["validated_requirements"] == [
+    assert result.runtime_diagnostics["validated_requirements"] == ["text_completion"]
+    assert (
         "text_completion"
-    ]
-    assert "native_tool_loop" in result.runtime_diagnostics[
-        "full_autonomous_missing_capabilities"
-    ]
+        in result.runtime_diagnostics["validated_runtime_capabilities"]
+    )
+    assert result.runtime_diagnostics["validated_runtime_missing_capabilities"] == []
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "text_completion_ready",
+        "smoke_scope": "text_completion_only",
+    }
+    assert (
+        "native_tool_loop"
+        in result.runtime_diagnostics["full_autonomous_missing_capabilities"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_check_generic_edit_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import run_provider_smoke_check
+
+    class FakeGenericEditSession:
+        provider_name = "openai"
+
+        def __init__(self):
+            self.calls = 0
+            self.tool_results: list[tuple[str, str]] = []
+
+        async def complete_with_tool_calls(self, message, tools):
+            self.calls += 1
+            assert any(tool["name"] == "write_file" for tool in tools)
+            if self.calls == 1:
+                assert "provider-smoke.txt" in message
+                return ProviderToolCallResponse(
+                    content="",
+                    tool_calls=(
+                        ProviderToolCall(
+                            id="call_write",
+                            name="write_file",
+                            arguments={
+                                "path": "provider-smoke.txt",
+                                "content": "provider smoke ok\n",
+                            },
+                        ),
+                    ),
+                )
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="call_finish",
+                        name="finish",
+                        arguments={
+                            "summary": "Generic edit provider smoke passed",
+                            "tests": [],
+                            "risks": [],
+                        },
+                    ),
+                ),
+            )
+
+        def add_tool_result(self, tool_call_id, name, result):
+            self.tool_results.append((tool_call_id, name))
+
+    fake_provider = _install_fake_generic_edit_smoke_provider(
+        monkeypatch,
+        FakeGenericEditSession(),
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model="gpt-4o",
+        prompt=None,
+        timeout_seconds=1,
+        runtime_mode="generic_edit",
+    )
+
+    assert result.success is True
+    assert result.provider == "openai"
+    assert result.runtime_mode == "generic_edit"
+    assert result.response_excerpt.startswith("Generic edit provider smoke passed")
+    assert result.runtime_diagnostics["smoke_scope"] == "generic_edit_tool_loop"
+    assert result.runtime_diagnostics["validated_runtime_mode"] == "generic_edit"
+    assert "function_tools" in result.runtime_diagnostics["validated_requirements"]
+    assert (
+        "function_tools" in result.runtime_diagnostics["validated_runtime_capabilities"]
+    )
+    assert result.runtime_diagnostics["validated_runtime_missing_capabilities"] == []
+    assert result.runtime_diagnostics["validated_runtime_execution"] == {
+        "status": "complete",
+        "stop_reason": "finish",
+        "loop": "native_tool_calls",
+        "action_count": 2,
+        "failed_action_count": 0,
+        "native_tool_fallback_count": 0,
+        "native_tool_fallbacks": [],
+        "tool_counts": {"finish": 1, "write_file": 1},
+        "tool_loop_contract": {
+            "status": "passed",
+            "tool_call_support": "native",
+            "tool_result_support": "normalized",
+            "fallback": "none",
+            "recovery_status": "not_required",
+        },
+    }
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "tool_loop_ready",
+        "smoke_scope": "generic_edit_tool_loop",
+        "tool_call_support": "native",
+        "tool_result_support": "normalized",
+        "fallback": "none",
+        "recovery_status": "not_required",
+    }
+    assert fake_provider.session.tool_results[0] == ("call_write", "write_file")
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import run_provider_smoke_check
+
+    class FakeFallbackGenericEditSession:
+        provider_name = "openai"
+
+        def __init__(self):
+            self.messages: list[str] = []
+
+        async def complete_with_tool_calls(self, message, tools):
+            await asyncio.sleep(0)
+            raise RuntimeError("provider does not support tools")
+
+        async def complete(self, message: str, stream: bool = True):
+            assert stream is True
+            self.messages.append(message)
+            yield json.dumps(
+                {
+                    "actions": [
+                        {
+                            "tool": "write_file",
+                            "path": "provider-smoke.txt",
+                            "content": "provider smoke ok\n",
+                        },
+                        {
+                            "tool": "finish",
+                            "summary": "JSON fallback generic edit smoke passed",
+                            "tests": [],
+                            "risks": [],
+                        },
+                    ]
+                }
+            )
+
+        def add_tool_result(self, tool_call_id, name, result):
+            raise AssertionError("tool results should not be added after fallback")
+
+    fake_provider = _install_fake_generic_edit_smoke_provider(
+        monkeypatch,
+        FakeFallbackGenericEditSession(),
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model="gpt-4o",
+        prompt=None,
+        timeout_seconds=1,
+        runtime_mode="generic_edit",
+    )
+
+    assert result.success is True
+    assert result.response_excerpt.startswith("JSON fallback generic edit smoke passed")
+    assert result.runtime_diagnostics["validated_runtime_execution"] == {
+        "status": "complete",
+        "stop_reason": "finish",
+        "loop": "json_actions",
+        "action_count": 2,
+        "failed_action_count": 0,
+        "native_tool_fallback_count": 1,
+        "native_tool_fallbacks": [
+            {
+                "provider": "openai",
+                "from_loop": "native_tool_calls",
+                "to_loop": "json_actions",
+                "reason": "native_tool_request_failed",
+                "message": "provider does not support tools",
+                "tool_schema_count": len(local_action_tool_schemas()),
+            }
+        ],
+        "tool_counts": {"finish": 1, "write_file": 1},
+        "tool_loop_contract": {
+            "status": "passed",
+            "tool_call_support": "json_fallback",
+            "tool_result_support": "normalized",
+            "fallback": "json_actions",
+            "fallback_reason": "native_tool_request_failed",
+            "recovery_status": "not_required",
+        },
+    }
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "tool_loop_limited",
+        "smoke_scope": "generic_edit_tool_loop",
+        "reason": "native_tool_request_failed",
+        "tool_call_support": "json_fallback",
+        "tool_result_support": "normalized",
+        "fallback": "json_actions",
+        "fallback_reason": "native_tool_request_failed",
+        "recovery_status": "not_required",
+    }
+    assert "Respond with exactly one JSON object" in fake_provider.session.messages[0]
+
+
+def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "error",
+                "stop_reason": "unresolved_partial_failure",
+                "loop": "json_actions",
+                "action_count": 3,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 1,
+                "tool_counts": {"finish": 1, "read_file": 1, "write_file": 1},
+                "resume_policy": {
+                    "status": "requires_resolution",
+                    "strategy": "recover_partial_failure",
+                    "can_resume": True,
+                    "finish_blocked": True,
+                    "next_iteration": 4,
+                    "checkpoint_path": str(tmp_path / "checkpoint.json"),
+                    "required_artifacts": [
+                        "trace_artifact",
+                        "recovery_plan_artifact",
+                    ],
+                    "required_resolution_action_kinds": [
+                        "inspect_diff",
+                        "rollback_transaction",
+                    ],
+                    "unresolved_partial_failure_ids": ["partial-failure-1"],
+                    "unresolved_transaction_group_ids": ["transaction-group-1"],
+                    "open_transaction_batch_ids": ["batch-1"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["resume_policy"] == {
+        "status": "requires_resolution",
+        "strategy": "recover_partial_failure",
+        "can_resume": True,
+        "finish_blocked": True,
+        "next_iteration": 4,
+        "required_resolution_action_kinds": [
+            "inspect_diff",
+            "rollback_transaction",
+        ],
+        "required_artifacts": [
+            "trace_artifact",
+            "recovery_plan_artifact",
+        ],
+        "unresolved_partial_failure_ids": ["partial-failure-1"],
+        "unresolved_transaction_group_ids": ["transaction-group-1"],
+        "open_transaction_batch_ids": ["batch-1"],
+    }
+
+
+def test_generic_edit_execution_diagnostics_classifies_native_tool_contract(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "stop_reason": "finish",
+                "loop": "native_tool_calls",
+                "action_count": 2,
+                "failed_action_count": 0,
+                "native_tool_fallback_count": 0,
+                "native_tool_fallbacks": [],
+                "tool_counts": {"finish": 1, "write_file": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["tool_loop_contract"] == {
+        "status": "passed",
+        "tool_call_support": "native",
+        "tool_result_support": "normalized",
+        "fallback": "none",
+        "recovery_status": "not_required",
+    }
+
+
+def test_generic_edit_execution_diagnostics_classifies_fallback_recovery_contract(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "error",
+                "stop_reason": "unresolved_partial_failure",
+                "loop": "json_actions",
+                "action_count": 3,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 1,
+                "native_tool_fallbacks": [
+                    {
+                        "provider": "openai",
+                        "from_loop": "native_tool_calls",
+                        "to_loop": "json_actions",
+                        "reason": "native_tool_request_failed",
+                        "message": "provider does not support tools",
+                    }
+                ],
+                "tool_counts": {"finish": 1, "read_file": 1, "write_file": 1},
+                "resume_policy": {
+                    "status": "requires_resolution",
+                    "strategy": "recover_partial_failure",
+                    "can_resume": True,
+                    "finish_blocked": True,
+                    "required_resolution_action_kinds": [
+                        "inspect_diff",
+                        "rollback_transaction",
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["tool_loop_contract"] == {
+        "status": "needs_recovery",
+        "tool_call_support": "json_fallback",
+        "tool_result_support": "partial_failure",
+        "fallback": "json_actions",
+        "fallback_reason": "native_tool_request_failed",
+        "recovery_status": "requires_resolution",
+        "blocking_reason": "unresolved_partial_failure",
+    }
+
+
+def test_generic_edit_execution_diagnostics_classifies_unsupported_tool_contract(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "stop_reason": "finish",
+                "loop": "native_tool_calls",
+                "action_count": 2,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 0,
+                "native_tool_fallbacks": [],
+                "tool_counts": {"finish": 1, "unsupported_local_tool": 1},
+                "failed_tools": {"unsupported_local_tool": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["failed_tools"] == {"unsupported_local_tool": 1}
+    assert diagnostics["tool_loop_contract"] == {
+        "status": "unsupported_tools",
+        "tool_call_support": "native",
+        "tool_result_support": "failed",
+        "fallback": "none",
+        "recovery_status": "unresolved",
+        "blocking_reason": "unsupported_local_tool",
+    }
 
 
 @pytest.mark.asyncio
@@ -133,6 +588,104 @@ async def test_run_provider_smoke_check_reports_validation_errors(
     assert "incomplete" in result.message
     assert "OPENAI_API_KEY" in result.error_details
     assert result.runtime_diagnostics["validated_runtime_mode"] == "analysis_only"
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "configuration_blocked",
+        "smoke_scope": "text_completion_only",
+        "reason": "configuration_error",
+        "message": "OpenAI provider requires OPENAI_API_KEY environment variable",
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_check_classifies_gateway_limitations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import run_provider_smoke_check
+
+    class FakeProvider:
+        name = "litellm"
+
+        def validate_config(self):
+            return True
+
+        def create_session(self, session_config):
+            raise RuntimeError("502 Bad gateway from LiteLLM upstream")
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="litellm",
+            litellm_api_key="sk-test",
+            litellm_model="openai/gpt-4o",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: FakeProvider(),
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model=None,
+        prompt=None,
+        timeout_seconds=1,
+        runtime_mode="generic_edit",
+    )
+
+    assert result.success is False
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "gateway_blocked",
+        "smoke_scope": "generic_edit_tool_loop",
+        "reason": "gateway_error",
+        "message": "502 Bad gateway from LiteLLM upstream",
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_check_classifies_model_limitations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import run_provider_smoke_check
+
+    class FakeProvider:
+        name = "openrouter"
+
+        def validate_config(self):
+            return True
+
+        def create_session(self, session_config):
+            raise RuntimeError("Model not found: provider/model-without-tools")
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="openrouter",
+            openrouter_api_key="sk-test",
+            openrouter_model="provider/model-without-tools",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: FakeProvider(),
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model=None,
+        prompt=None,
+        timeout_seconds=1,
+        runtime_mode="generic_edit",
+    )
+
+    assert result.success is False
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "model_blocked",
+        "smoke_scope": "generic_edit_tool_loop",
+        "reason": "model_unavailable",
+        "message": "Model not found: provider/model-without-tools",
+    }
 
 
 def test_handle_provider_smoke_command_outputs_json(
@@ -176,3 +729,103 @@ def test_handle_provider_smoke_command_outputs_json(
     assert payload["provider"] == "openai"
     assert payload["response_excerpt"] == "ok"
     assert payload["runtime_diagnostics"] == {}
+
+
+def test_handle_provider_smoke_command_prints_generic_edit_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        handle_provider_smoke_command,
+    )
+
+    async def fake_run_provider_smoke_check(**_kwargs):
+        await asyncio.sleep(0)
+        return ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="generic_edit",
+            message="Provider generic_edit smoke passed",
+            runtime_diagnostics={
+                "smoke_scope": "generic_edit_tool_loop",
+                "provider_contract_health": {
+                    "status": "tool_loop_limited",
+                    "reason": "native_tool_request_failed",
+                },
+                "validated_runtime_execution": {
+                    "loop": "json_actions",
+                    "action_count": 2,
+                    "native_tool_fallback_count": 1,
+                    "tool_loop_contract": {
+                        "status": "passed",
+                        "tool_call_support": "json_fallback",
+                        "tool_result_support": "normalized",
+                        "fallback": "json_actions",
+                        "fallback_reason": "native_tool_request_failed",
+                        "recovery_status": "not_required",
+                    },
+                    "native_tool_fallbacks": [
+                        {
+                            "reason": "native_tool_request_failed",
+                            "message": "provider does not support tools",
+                        }
+                    ],
+                    "resume_policy": {
+                        "status": "requires_resolution",
+                        "strategy": "recover_partial_failure",
+                        "required_resolution_action_kinds": [
+                            "inspect_diff",
+                            "rollback_transaction",
+                        ],
+                        "required_artifacts": [
+                            "trace_artifact",
+                            "recovery_plan_artifact",
+                        ],
+                        "unresolved_partial_failure_ids": ["json_actions-1"],
+                        "unresolved_transaction_group_ids": ["transaction-group-1"],
+                        "open_transaction_batch_ids": ["batch-1"],
+                    },
+                },
+            },
+        )
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.run_provider_smoke_check",
+        fake_run_provider_smoke_check,
+    )
+
+    handle_provider_smoke_command(
+        project_dir=tmp_path,
+        model="gpt-4o",
+        prompt=None,
+        timeout_seconds=1,
+        output_json=False,
+    )
+    output = capsys.readouterr().out
+
+    assert "Execution loop" in output
+    assert "Provider health" in output
+    assert "tool_loop_limited" in output
+    assert "Provider health reason" in output
+    assert "json_actions" in output
+    assert "Tool-loop contract" in output
+    assert "json_fallback" in output
+    assert "Execution actions" in output
+    assert "Native tool fallbacks" in output
+    assert "Native fallback reason" in output
+    assert "native_tool_request_failed" in output
+    assert "Resume policy" in output
+    assert "requires_resolution" in output
+    assert "Resume required actions" in output
+    assert "inspect_diff, rollback_transaction" in output
+    assert "Resume required artifacts" in output
+    assert "trace_artifact, recovery_plan_artifact" in output
+    assert "Resume unresolved failures" in output
+    assert "json_actions-1" in output
+    assert "Resume unresolved groups" in output
+    assert "transaction-group-1" in output
+    assert "Resume open batches" in output
+    assert "batch-1" in output

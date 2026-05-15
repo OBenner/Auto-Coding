@@ -44,6 +44,25 @@ def test_parse_args_with_external_mcp_sync_custom_tools():
     assert args.external_mcp_sync_custom_tools is True
 
 
+def test_parse_args_with_generic_edit_resume_preflight():
+    from cli.main import parse_args
+
+    original_argv = sys.argv
+    sys.argv = [
+        "run.py",
+        "--generic-edit-resume-preflight",
+        ".auto-Codex/specs/001/artifacts/generic_edit_recovery_checkpoint.json",
+    ]
+    try:
+        args = parse_args()
+    finally:
+        sys.argv = original_argv
+
+    assert str(args.generic_edit_resume_preflight).endswith(
+        "generic_edit_recovery_checkpoint.json"
+    )
+
+
 def test_parse_args_with_generic_edit_runtime_mode():
     from cli.main import parse_args
 
@@ -131,6 +150,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert "aider" in selection_rows["generic_edit"]["selected_runner_ids"]
     assert "generic_edit" in payload["recommendations"]
     assert "provider_smoke" in payload["recommendations"]
+    assert "generic_edit_resume_preflight" in payload["recommendations"]
     assert "external_mcp_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
@@ -305,6 +325,92 @@ def test_runtime_modes_command_marks_configured_graphiti_as_external_bridged(
         "mcp__graphiti-memory__search_nodes"
         in openai_generic_mcp["executable_external_tools"]
     )
+
+
+def test_generic_edit_resume_preflight_command_outputs_json(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    from cli.runtime_commands import (
+        generic_edit_resume_preflight_has_failures,
+        handle_generic_edit_resume_preflight_command,
+    )
+
+    checkpoint_path = (
+        tmp_path / "spec-001" / "artifacts" / "generic_edit_recovery_checkpoint.json"
+    )
+
+    def fake_inspect_generic_edit_resume_artifacts(
+        *,
+        checkpoint_path,
+        spec_dir,
+        project_dir,
+    ):
+        assert checkpoint_path.name == "generic_edit_recovery_checkpoint.json"
+        assert spec_dir == tmp_path / "spec-001"
+        assert project_dir == tmp_path
+        return {
+            "runtime": "generic_edit",
+            "status": "blocked",
+            "requested_path": str(checkpoint_path),
+            "resume_artifact_health": {
+                "status": "blocked",
+                "artifact": "trace",
+                "reason": "missing",
+            },
+            "artifacts": {},
+            "blockers": [],
+        }
+
+    monkeypatch.setattr(
+        "cli.runtime_commands.inspect_generic_edit_resume_artifacts",
+        fake_inspect_generic_edit_resume_artifacts,
+    )
+
+    payload = handle_generic_edit_resume_preflight_command(
+        checkpoint_path=checkpoint_path,
+        project_dir=tmp_path,
+        output_json=True,
+    )
+    parsed = json.loads(capsys.readouterr().out)
+
+    assert payload["status"] == "blocked"
+    assert parsed["resume_artifact_health"]["reason"] == "missing"
+    assert generic_edit_resume_preflight_has_failures(payload) is True
+
+
+def test_generic_edit_resume_preflight_command_formats_blocker_details():
+    from cli.runtime_commands import format_generic_edit_resume_preflight_text
+
+    text = format_generic_edit_resume_preflight_text(
+        {
+            "runtime": "generic_edit",
+            "status": "blocked",
+            "requested_path": "/workspace/spec/artifacts/generic_edit_recovery_checkpoint.json",
+            "resume_artifact_health": {
+                "status": "blocked",
+                "artifact": "mutation_snapshots",
+                "reason": "checkpoint_mismatch",
+                "path": "/workspace/spec/artifacts/generic_edit_mutation_snapshots.json",
+                "artifact_name": "mutation_snapshot_artifact",
+                "owner_artifact": "recovery_checkpoint",
+                "missing_snapshot_ids": ["mutation-missing"],
+            },
+            "artifacts": {
+                "recovery_checkpoint": {
+                    "status": "ready",
+                    "path": "/workspace/spec/artifacts/generic_edit_recovery_checkpoint.json",
+                }
+            },
+        }
+    )
+
+    assert "artifact: mutation_snapshots" in text
+    assert "reason: checkpoint_mismatch" in text
+    assert "artifact_name: mutation_snapshot_artifact" in text
+    assert "owner_artifact: recovery_checkpoint" in text
+    assert "missing_snapshot_ids: mutation-missing" in text
 
 
 def test_external_mcp_smoke_command_outputs_json(
@@ -543,6 +649,14 @@ def test_external_mcp_smoke_syncs_custom_tool_schemas(
         "updated_servers": ["my-docs"],
         "skipped_servers": [],
         "failed_servers": [],
+        "server_results": [
+            {
+                "server": "my-docs",
+                "status": "updated",
+                "reason": "tools_synced",
+                "tool_count": 2,
+            }
+        ],
     }
     assert saved_servers[0]["id"] == "my-docs"
     assert saved_servers[0]["description"] == "Private docs."
@@ -564,6 +678,132 @@ def test_external_mcp_smoke_syncs_custom_tool_schemas(
         {
             "name": "status",
             "description": "Read server status.",
+        },
+    ]
+
+
+def test_external_mcp_smoke_syncs_custom_tool_schemas_from_mapping(
+    capsys,
+    monkeypatch,
+    tmp_path,
+):
+    from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
+    from cli.runtime_commands import handle_external_mcp_smoke_command
+    from core.client import load_project_mcp_config
+
+    custom_servers = {
+        "my-docs": {
+            "name": "My Docs",
+            "type": "http",
+            "url": "https://docs.example.test/mcp",
+        }
+    }
+    env_dir = tmp_path / ".auto-claude"
+    env_dir.mkdir()
+    (env_dir / ".env").write_text(
+        f"CUSTOM_MCP_SERVERS={json.dumps(custom_servers)}\n",
+        encoding="utf-8",
+    )
+
+    async def fake_check_external_mcp_contracts(
+        *,
+        requested_servers,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert "my-docs" in requested_servers
+        return []
+
+    async def fake_discover_external_mcp_tools(
+        *,
+        health,
+        project_dir,
+        project_mcp_config=None,
+        environment=None,
+    ):
+        assert health.server == "my-docs"
+        return {"tools": [{"name": "search_docs"}]}
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        "cli.runtime_commands.check_external_mcp_contracts",
+        fake_check_external_mcp_contracts,
+    )
+    monkeypatch.setattr(
+        "cli.runtime_commands.discover_external_mcp_tools",
+        fake_discover_external_mcp_tools,
+    )
+
+    payload = handle_external_mcp_smoke_command(
+        project_dir=tmp_path,
+        output_json=True,
+        sync_custom_tools=True,
+    )
+    parsed = json.loads(capsys.readouterr().out)
+    saved_servers = load_project_mcp_config(tmp_path)["CUSTOM_MCP_SERVERS"]
+
+    assert parsed == payload
+    assert parsed["custom_mcp_tool_schema_sync"]["updated_servers"] == ["my-docs"]
+    assert saved_servers[0]["id"] == "my-docs"
+    assert saved_servers[0]["tools"] == [{"name": "search_docs"}]
+
+
+def test_normalize_mcp_tools_for_persistence_normalizes_tool_schemas():
+    from cli.runtime_commands import normalize_mcp_tools_for_persistence
+
+    assert normalize_mcp_tools_for_persistence(
+        {
+            "tools": [
+                {
+                    "name": "search_docs",
+                    "description": "  Search docs.  ",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string"},
+                        },
+                        "required": ("query",),
+                    },
+                },
+                {
+                    "name": "raw_status",
+                    "inputSchema": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                {
+                    "name": "search_docs",
+                    "description": "Duplicate should be skipped.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "duplicate": {"type": "boolean"},
+                        },
+                    },
+                },
+            ]
+        }
+    ) == [
+        {
+            "name": "search_docs",
+            "description": "Search docs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "raw_status",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
         },
     ]
 

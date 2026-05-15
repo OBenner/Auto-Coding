@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_artifacts
 from agents.runtime.cli_profiles import (
     CLI_RUNNER_PROFILES,
     cli_runner_profiles_as_dicts,
@@ -36,6 +37,7 @@ from agents.runtime.mcp_bridge import (
     discover_external_mcp_tools,
     executable_external_mcp_servers,
     executable_external_mcp_tools,
+    normalize_mcp_input_schema,
     registered_external_mcp_servers,
     resolve_runtime_mcp_support,
 )
@@ -263,6 +265,10 @@ def build_runtime_modes_payload() -> dict[str, Any]:
                 "--runtime-mode patch_proposal for coder subtasks."
             ),
             "provider_smoke": "Use --provider-smoke before running a spec.",
+            "generic_edit_resume_preflight": (
+                "Use --generic-edit-resume-preflight PATH before resuming "
+                "a stopped generic_edit session."
+            ),
             "external_mcp_smoke": (
                 "Use --external-mcp-smoke --json to run live external MCP "
                 "tools/list contract checks."
@@ -370,6 +376,7 @@ async def sync_custom_mcp_tool_schemas(
     updated_servers: list[str] = []
     skipped_servers: list[str] = []
     failed_servers: list[str] = []
+    server_results: list[dict[str, Any]] = []
 
     for index, server_config in enumerate(custom_servers):
         server_id = str(server_config.get("id") or "").strip()
@@ -384,6 +391,14 @@ async def sync_custom_mcp_tool_schemas(
         )
         if not health.ready_to_connect or not health.execution_supported:
             skipped_servers.append(server_id)
+            server_results.append(
+                {
+                    "server": server_id,
+                    "status": "skipped",
+                    "reason": health.reason,
+                    "tool_count": 0,
+                }
+            )
             continue
         try:
             result = await discover_external_mcp_tools(
@@ -394,15 +409,39 @@ async def sync_custom_mcp_tool_schemas(
                     CUSTOM_MCP_SERVERS_CONFIG_KEY: custom_servers,
                 },
             )
-        except Exception:
+        except Exception as exc:
             failed_servers.append(server_id)
+            server_results.append(
+                {
+                    "server": server_id,
+                    "status": "failed",
+                    "reason": str(exc),
+                    "tool_count": 0,
+                }
+            )
             continue
         tools = normalize_mcp_tools_for_persistence(result)
         if not tools:
             skipped_servers.append(server_id)
+            server_results.append(
+                {
+                    "server": server_id,
+                    "status": "skipped",
+                    "reason": "tools_list_empty",
+                    "tool_count": 0,
+                }
+            )
             continue
         custom_servers[index] = {**server_config, "tools": tools}
         updated_servers.append(server_id)
+        server_results.append(
+            {
+                "server": server_id,
+                "status": "updated",
+                "reason": "tools_synced",
+                "tool_count": len(tools),
+            }
+        )
 
     if updated_servers:
         write_project_custom_mcp_servers(project_dir, custom_servers)
@@ -411,6 +450,7 @@ async def sync_custom_mcp_tool_schemas(
         "updated_servers": updated_servers,
         "skipped_servers": skipped_servers,
         "failed_servers": failed_servers,
+        "server_results": server_results,
     }
 
 
@@ -437,8 +477,8 @@ def normalize_mcp_tools_for_persistence(result: dict[str, Any]) -> list[dict[str
             or raw_tool.get("input_schema")
             or raw_tool.get("parameters")
         )
-        if isinstance(schema, dict):
-            tool["inputSchema"] = schema
+        if schema is not None:
+            tool["inputSchema"] = normalize_mcp_input_schema(raw_tool)
         tools.append(tool)
     return tools
 
@@ -522,6 +562,120 @@ def handle_external_mcp_smoke_command(
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         print(format_external_mcp_smoke_text(payload))
+    return payload
+
+
+def generic_edit_resume_preflight_has_failures(payload: dict[str, Any]) -> bool:
+    """Return true when a generic_edit resume preflight is blocked."""
+    return payload.get("status") != "ready"
+
+
+def _generic_edit_resume_spec_dir(checkpoint_path: Path) -> Path:
+    """Infer the spec directory from a generic_edit resume artifact path."""
+    artifact_dir = checkpoint_path.parent
+    if artifact_dir.name == "artifacts":
+        return artifact_dir.parent
+    return artifact_dir
+
+
+def format_generic_edit_resume_preflight_text(payload: dict[str, Any]) -> str:
+    """Format generic_edit resume preflight diagnostics for humans."""
+    artifacts = (
+        payload.get("artifacts") if isinstance(payload.get("artifacts"), dict) else {}
+    )
+    artifact_rows = [
+        [
+            name,
+            str(row.get("status", "unknown")),
+            str(row.get("path", "")),
+        ]
+        for name, row in artifacts.items()
+        if isinstance(row, dict)
+    ]
+    sections = [
+        "Generic Edit Resume Preflight",
+        f"Status: {payload.get('status', 'unknown')}",
+        f"Requested path: {payload.get('requested_path', '')}",
+    ]
+    checkpoint_path = payload.get("checkpoint_path")
+    if isinstance(checkpoint_path, str) and checkpoint_path:
+        sections.append(f"Checkpoint: {checkpoint_path}")
+
+    resume = payload.get("resume") if isinstance(payload.get("resume"), dict) else {}
+    if resume:
+        sections.append(f"Strategy: {resume.get('strategy', 'unknown')}")
+        sections.append(f"Next iteration: {resume.get('next_iteration', 'unknown')}")
+        if resume.get("active_batch_id"):
+            sections.append(f"Active batch: {resume['active_batch_id']}")
+
+    if artifact_rows:
+        sections.extend(
+            [
+                "",
+                _format_table(["Artifact", "Status", "Path"], artifact_rows),
+            ]
+        )
+
+    blocker = payload.get("resume_artifact_health")
+    if isinstance(blocker, dict):
+        sections.extend(
+            [
+                "",
+                "Blocker:",
+                f"  artifact: {blocker.get('artifact', 'unknown')}",
+                f"  reason: {blocker.get('reason', 'unknown')}",
+            ]
+        )
+        for key in ("artifact_name", "path", "owner_artifact", "owner_path"):
+            value = blocker.get(key)
+            if isinstance(value, str) and value:
+                sections.append(f"  {key}: {value}")
+        for key in (
+            "missing_snapshot_ids",
+            "drift_paths",
+            "expected_snapshot_ids",
+            "actual_snapshot_ids",
+        ):
+            value = blocker.get(key)
+            if isinstance(value, list) and value:
+                items = [str(item) for item in value[:10]]
+                sections.append(f"  {key}: {', '.join(items)}")
+        message = blocker.get("message")
+        if isinstance(message, str) and message:
+            sections.append(f"  message: {message}")
+
+    workspace_guard = payload.get("workspace_guard")
+    if isinstance(workspace_guard, dict):
+        sections.extend(
+            [
+                "",
+                "Workspace guard:",
+                f"  status: {workspace_guard.get('status', 'unknown')}",
+                f"  drift_count: {workspace_guard.get('drift_count', 0)}",
+                "  unverified_path_count: "
+                f"{workspace_guard.get('unverified_path_count', 0)}",
+            ]
+        )
+
+    return "\n".join(sections)
+
+
+def handle_generic_edit_resume_preflight_command(
+    *,
+    checkpoint_path: Path,
+    project_dir: Path,
+    output_json: bool = False,
+) -> dict[str, Any]:
+    """Run a read-only generic_edit resume artifact preflight."""
+    payload = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=_generic_edit_resume_spec_dir(checkpoint_path),
+        project_dir=project_dir,
+    )
+    if output_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(format_generic_edit_resume_preflight_text(payload))
     return payload
 
 
@@ -719,6 +873,8 @@ def format_runtime_modes_text() -> str:
             "  Runtime fallback: AUTO_CODE_RUNTIME_FALLBACK=true python run.py --spec 001 --provider openai",
             "  Runner router:   AUTO_CODE_CLI_RUNNER_ROUTER=true python run.py --spec 001 --provider openai",
             "  Provider smoke:  python run.py --provider openai --provider-smoke",
+            "  Resume preflight: python run.py --generic-edit-resume-preflight "
+            ".auto-Codex/specs/001/artifacts/generic_edit_recovery_checkpoint.json",
             "  External MCP:    python run.py --external-mcp-smoke --json",
         ]
     )

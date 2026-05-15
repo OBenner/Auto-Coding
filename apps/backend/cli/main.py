@@ -52,7 +52,9 @@ from .qa_commands import (
 )
 from .runtime_commands import (
     external_mcp_smoke_has_failures,
+    generic_edit_resume_preflight_has_failures,
     handle_external_mcp_smoke_command,
+    handle_generic_edit_resume_preflight_command,
     handle_runtime_modes_command,
 )
 from .scheduler_commands import (
@@ -198,6 +200,17 @@ Environment Variables:
     )
 
     parser.add_argument(
+        "--generic-edit-resume-preflight",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Inspect generic_edit resume checkpoint/session artifacts without "
+            "starting a provider session"
+        ),
+    )
+
+    parser.add_argument(
         "--provider-smoke",
         action="store_true",
         help="Run an opt-in text-only smoke check for the configured provider",
@@ -217,6 +230,17 @@ Environment Variables:
         help=(
             "With --provider-smoke: timeout in seconds "
             f"(default: {DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS:g})"
+        ),
+    )
+
+    parser.add_argument(
+        "--provider-smoke-runtime",
+        type=str,
+        default=None,
+        choices=("analysis_only", "analysis-only", "generic_edit", "generic-edit"),
+        help=(
+            "With --provider-smoke: runtime surface to validate "
+            "(default: analysis_only; use generic_edit for a tool-loop smoke)"
         ),
     )
 
@@ -783,6 +807,17 @@ def _run_cli() -> None:
             sys.exit(1)
         return
 
+    # Handle --generic-edit-resume-preflight command before requiring a spec.
+    if args.generic_edit_resume_preflight is not None:
+        payload = handle_generic_edit_resume_preflight_command(
+            checkpoint_path=args.generic_edit_resume_preflight,
+            project_dir=project_dir,
+            output_json=args.json,
+        )
+        if generic_edit_resume_preflight_has_failures(payload):
+            sys.exit(1)
+        return
+
     # Handle --provider-smoke command before requiring a spec.
     if args.provider_smoke:
         result = handle_provider_smoke_command(
@@ -790,6 +825,7 @@ def _run_cli() -> None:
             model=model,
             prompt=args.provider_smoke_prompt,
             timeout_seconds=args.provider_smoke_timeout,
+            runtime_mode=args.provider_smoke_runtime,
             output_json=args.json,
         )
         if not result.success:

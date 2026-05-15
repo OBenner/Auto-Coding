@@ -17,7 +17,15 @@ import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '../../lib/utils';
-import type { Task, ImplementationPlan, Phase, SubtaskStatus, QAEscalation } from '../../../shared/types';
+import type {
+  Task,
+  ImplementationPlan,
+  Phase,
+  SubtaskStatus,
+  QAEscalation,
+  GenericEditArtifactManifest
+} from '../../../shared/types';
+import { GenericEditArtifactsPanel } from './GenericEditArtifactsPanel';
 
 interface TaskOverviewProps {
   task: Task;
@@ -26,6 +34,7 @@ interface TaskOverviewProps {
 export function TaskOverview({ task }: TaskOverviewProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const [implementationPlan, setImplementationPlan] = useState<ImplementationPlan | null>(null);
+  const [genericEditManifest, setGenericEditManifest] = useState<GenericEditArtifactManifest | null>(null);
   const [qaReport, setQAReport] = useState<string | null>(null);
   const [qaEscalation, setQAEscalation] = useState<QAEscalation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,9 +48,13 @@ export function TaskOverview({ task }: TaskOverviewProps) {
   const loadTaskOverviewData = async () => {
     setIsLoading(true);
     setError(null);
+    setImplementationPlan(null);
+    setGenericEditManifest(null);
+    setQAReport(null);
+    setQAEscalation(null);
     try {
       // Load implementation plan
-      const planResult = await window.electronAPI.getImplementationPlan(task.id);
+      const planResult = await globalThis.electronAPI.getImplementationPlan(task.id);
       if (planResult.success && planResult.data) {
         setImplementationPlan(planResult.data);
         // Auto-expand phases with in-progress or failed subtasks
@@ -57,14 +70,20 @@ export function TaskOverview({ task }: TaskOverviewProps) {
         setExpandedPhases(phasesToExpand);
       }
 
+      // Load Generic Edit v2 runtime artifacts if this task was executed by a generic provider.
+      const manifestResult = await globalThis.electronAPI.getGenericEditArtifactManifest(task.id);
+      if (manifestResult.success && manifestResult.data) {
+        setGenericEditManifest(manifestResult.data);
+      }
+
       // Load QA report if available
-      const qaResult = await window.electronAPI.getQAReport(task.id);
+      const qaResult = await globalThis.electronAPI.getQAReport(task.id);
       if (qaResult.success && qaResult.data) {
         setQAReport(qaResult.data);
       }
 
       // Load QA escalation if available
-      const escalationResult = await window.electronAPI.getQAEscalation(task.id);
+      const escalationResult = await globalThis.electronAPI.getQAEscalation(task.id);
       if (escalationResult.success && escalationResult.data) {
         setQAEscalation(escalationResult.data);
       }
@@ -233,6 +252,14 @@ export function TaskOverview({ task }: TaskOverviewProps) {
         </div>
       )}
 
+      {/* Generic Edit Runtime Artifacts Section */}
+      {genericEditManifest && (
+        <>
+          {implementationPlan && <Separator />}
+          <GenericEditArtifactsPanel manifest={genericEditManifest} />
+        </>
+      )}
+
       {/* QA Report Section */}
       {qaReport && (
         <>
@@ -339,7 +366,7 @@ export function TaskOverview({ task }: TaskOverviewProps) {
       )}
 
       {/* No Data Available */}
-      {!implementationPlan && !qaReport && !qaEscalation && (
+      {!implementationPlan && !genericEditManifest && !qaReport && !qaEscalation && (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
           <p className="text-sm">{t('tasks:overview.noDataAvailable')}</p>

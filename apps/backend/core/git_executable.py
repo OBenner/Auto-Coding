@@ -13,7 +13,8 @@ Separated into its own module to avoid circular imports.
 import os
 import shutil
 import subprocess
-from pathlib import Path
+import time
+from pathlib import Path, PureWindowsPath
 
 # Git environment variables that can interfere with worktree operations
 # when set by pre-commit hooks or other git configurations.
@@ -34,6 +35,11 @@ GIT_ENV_VARS_TO_CLEAR = [
 ]
 
 _cached_git_path: str | None = None
+WINDOWS_TRANSIENT_GIT_EXIT_CODES = {
+    3221225794,  # STATUS_DLL_INIT_FAILED surfaced by Git for Windows.
+    -1073741502,  # Same status code when represented as signed int.
+}
+WINDOWS_TRANSIENT_GIT_RETRY_DELAY_SECONDS = 0.1
 
 
 def get_isolated_git_env(base_env: dict | None = None) -> dict:
@@ -104,7 +110,7 @@ def _find_git_executable() -> str:
     # 2. Try shutil.which (works if git is in PATH)
     git_path = shutil.which("git")
     if git_path:
-        return git_path
+        return _prefer_windows_cmd_git(git_path)
 
     # 3. Windows-specific: check common installation locations
     if os.name == "nt":
@@ -145,6 +151,29 @@ def _find_git_executable() -> str:
     return "git"
 
 
+def _prefer_windows_cmd_git(git_path: str) -> str:
+    """Prefer Git for Windows cmd/git.exe when PATH resolves bin/git.exe."""
+    if os.name != "nt":
+        return git_path
+
+    try:
+        path = PureWindowsPath(git_path)
+        if path.name.lower() != "git.exe":
+            return git_path
+        if path.parent.name.lower() == "cmd":
+            return str(path)
+        if path.parent.name.lower() != "bin":
+            return git_path
+
+        cmd_git = path.parent.parent / "cmd" / "git.exe"
+        if os.path.isfile(str(cmd_git)):
+            return str(cmd_git)
+    except (OSError, ValueError):
+        return git_path
+
+    return git_path
+
+
 def run_git(
     args: list[str],
     cwd: Path | str | None = None,
@@ -171,29 +200,48 @@ def run_git(
     if env is None and isolate_env:
         env = get_isolated_git_env()
 
-    try:
-        return subprocess.run(
-            [git] + args,
-            cwd=cwd,
-            input=input_data,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            env=env,
+    max_attempts = 2 if os.name == "nt" else 1
+    for attempt in range(max_attempts):
+        try:
+            result = subprocess.run(
+                [git] + args,
+                cwd=cwd,
+                input=input_data,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                env=env,
+            )
+        except subprocess.TimeoutExpired:
+            return subprocess.CompletedProcess(
+                args=[git] + args,
+                returncode=-1,
+                stdout="",
+                stderr=f"Command timed out after {timeout} seconds",
+            )
+        except FileNotFoundError:
+            return subprocess.CompletedProcess(
+                args=[git] + args,
+                returncode=-1,
+                stdout="",
+                stderr="Git executable not found. Please ensure git is installed and in PATH.",
+            )
+
+        has_retry = attempt + 1 < max_attempts
+        empty_output = (
+            not str(result.stdout or "").strip()
+            and not str(result.stderr or "").strip()
         )
-    except subprocess.TimeoutExpired:
-        return subprocess.CompletedProcess(
-            args=[git] + args,
-            returncode=-1,
-            stdout="",
-            stderr=f"Command timed out after {timeout} seconds",
-        )
-    except FileNotFoundError:
-        return subprocess.CompletedProcess(
-            args=[git] + args,
-            returncode=-1,
-            stdout="",
-            stderr="Git executable not found. Please ensure git is installed and in PATH.",
-        )
+        if (
+            has_retry
+            and result.returncode in WINDOWS_TRANSIENT_GIT_EXIT_CODES
+            and empty_output
+        ):
+            time.sleep(WINDOWS_TRANSIENT_GIT_RETRY_DELAY_SECONDS)
+            continue
+
+        return result
+
+    return result

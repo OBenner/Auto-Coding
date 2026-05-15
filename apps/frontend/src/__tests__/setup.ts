@@ -36,6 +36,16 @@ if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollIntoView)
   });
 }
 
+// Keep Radix/browser events inside jsdom's Event hierarchy on Node versions
+// that expose their own global CustomEvent constructor.
+if (typeof window !== 'undefined' && typeof window.CustomEvent === 'function') {
+  Object.defineProperty(globalThis, 'CustomEvent', {
+    value: window.CustomEvent,
+    configurable: true,
+    writable: true
+  });
+}
+
 // Mock requestAnimationFrame/cancelAnimationFrame for jsdom
 // Required by useXterm.ts which uses requestAnimationFrame for initial fit
 if (typeof global.requestAnimationFrame === 'undefined') {
@@ -98,6 +108,10 @@ if (typeof window !== 'undefined') {
     onTaskError: vi.fn(() => vi.fn()),
     onTaskLog: vi.fn(() => vi.fn()),
     onTaskStatusChange: vi.fn(() => vi.fn()),
+    getImplementationPlan: vi.fn().mockResolvedValue({ success: true, data: null }),
+    getGenericEditArtifactManifest: vi.fn().mockResolvedValue({ success: true, data: null }),
+    getQAReport: vi.fn().mockResolvedValue({ success: true, data: null }),
+    getQAEscalation: vi.fn().mockResolvedValue({ success: true, data: null }),
     getSettings: vi.fn(),
     saveSettings: vi.fn(),
     selectDirectory: vi.fn(),

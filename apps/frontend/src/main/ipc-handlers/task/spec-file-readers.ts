@@ -4,6 +4,7 @@
  * Provides utilities for reading task specification files from the worktree.
  * These files are read-only and provide task progress information:
  * - implementation_plan.json: Implementation stages and progress
+ * - artifacts/generic_edit_artifact_manifest.json: Generic Edit runtime artifacts
  * - qa_report.md: QA testing results
  * - QA_ESCALATION.md: Escalated issues requiring attention
  */
@@ -11,7 +12,26 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
-import type { Project, Task, ImplementationPlan, QAEscalation } from '../../../shared/types';
+import type {
+  Project,
+  Task,
+  ImplementationPlan,
+  QAEscalation,
+  GenericEditArtifactManifest,
+  GenericEditArtifactManifestEntry,
+  GenericEditMcpOpenSession,
+  GenericEditMcpPermissionPolicy,
+  GenericEditMcpServerStatus,
+  GenericEditMcpSessionLifecycle,
+  GenericEditMcpToolPolicy,
+  GenericEditNativeToolFallback,
+  GenericEditRecoveryAction,
+  GenericEditRecoverySummary,
+  GenericEditTransactionBatch,
+  GenericEditResumeAction,
+  GenericEditResumePolicy,
+  GenericEditRecentEvent
+} from '../../../shared/types';
 
 /**
  * Check if an error is a "file not found" error
@@ -45,6 +65,876 @@ export function getSpecDir(project: Project, task: Task): string {
   return specDir;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readString(value: Record<string, unknown>, key: string): string | null {
+  const result = value[key];
+  return typeof result === 'string' ? result : null;
+}
+
+function readNullableString(value: Record<string, unknown>, key: string): string | null {
+  const result = value[key];
+  return typeof result === 'string' || result === null ? result : null;
+}
+
+function normalizeStringMap(value: unknown): GenericEditArtifactManifest['entrypoints'] | null {
+  if (!isRecord(value)) return null;
+  const result: GenericEditArtifactManifest['entrypoints'] = {};
+
+  for (const [key, mapValue] of Object.entries(value)) {
+    if (typeof mapValue !== 'string') {
+      return null;
+    }
+    result[key] = mapValue;
+  }
+
+  return result;
+}
+
+function normalizeBooleanMap(
+  value: unknown,
+  requiredKeys: readonly string[]
+): GenericEditArtifactManifest['flags'] | null {
+  if (!isRecord(value)) return null;
+  const result: Record<string, boolean> = {};
+
+  for (const [key, mapValue] of Object.entries(value)) {
+    if (typeof mapValue !== 'boolean') {
+      return null;
+    }
+    result[key] = mapValue;
+  }
+
+  for (const key of requiredKeys) {
+    if (typeof result[key] !== 'boolean') {
+      return null;
+    }
+  }
+
+  return result as GenericEditArtifactManifest['flags'];
+}
+
+function normalizeNumberMap(
+  value: unknown,
+  requiredKeys: readonly string[]
+): GenericEditArtifactManifest['counts'] | null {
+  if (!isRecord(value)) return null;
+  const result: Record<string, number> = {};
+
+  for (const [key, mapValue] of Object.entries(value)) {
+    if (typeof mapValue !== 'number' || !Number.isFinite(mapValue)) {
+      return null;
+    }
+    result[key] = mapValue;
+  }
+
+  for (const key of requiredKeys) {
+    if (typeof result[key] !== 'number') {
+      return null;
+    }
+  }
+
+  return result as GenericEditArtifactManifest['counts'];
+}
+
+function normalizeManifestEntry(value: unknown): GenericEditArtifactManifestEntry | null {
+  if (!isRecord(value)) return null;
+
+  const name = readString(value, 'name');
+  const kind = readString(value, 'kind');
+  const entryPath = value.path;
+  const { active, required, present } = value;
+
+  if (
+    name === null ||
+    kind === null ||
+    (entryPath !== null && typeof entryPath !== 'string') ||
+    typeof active !== 'boolean' ||
+    typeof required !== 'boolean' ||
+    typeof present !== 'boolean'
+  ) {
+    return null;
+  }
+
+  return {
+    name,
+    kind,
+    path: entryPath,
+    active,
+    required,
+    present,
+  };
+}
+
+function normalizeRecentEvent(value: unknown): GenericEditRecentEvent | null {
+  if (!isRecord(value)) return null;
+
+  const sequence = value.sequence;
+  const eventType = readString(value, 'event_type');
+
+  if (typeof sequence !== 'number' || !Number.isFinite(sequence) || eventType === null) {
+    return null;
+  }
+
+  const result: GenericEditRecentEvent = {
+    sequence,
+    event_type: eventType,
+  };
+
+  for (const [key, eventValue] of Object.entries(value)) {
+    if (key === 'sequence' || key === 'event_type') {
+      continue;
+    }
+    if (
+      typeof eventValue === 'string' ||
+      typeof eventValue === 'number' ||
+      typeof eventValue === 'boolean' ||
+      eventValue === null
+    ) {
+      result[key] = eventValue;
+    }
+  }
+
+  return result;
+}
+
+function normalizeRecentEvents(value: unknown): GenericEditRecentEvent[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditRecentEvent[] = [];
+  for (const event of value) {
+    const normalizedEvent = normalizeRecentEvent(event);
+    if (!normalizedEvent) {
+      return null;
+    }
+    result.push(normalizedEvent);
+  }
+  return result;
+}
+
+function normalizeStringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string') {
+      return null;
+    }
+    result.push(item);
+  }
+  return result;
+}
+
+function normalizeOptionalMcpStringList(value: Record<string, unknown>, key: string): string[] | null {
+  const fieldValue = value[key];
+  if (fieldValue === undefined) return [];
+  return normalizeStringList(fieldValue);
+}
+
+function normalizeOptionalNumber(value: Record<string, unknown>, key: string): number | null | undefined {
+  const fieldValue = value[key];
+  if (fieldValue === undefined || fieldValue === null) return null;
+  if (typeof fieldValue !== 'number' || !Number.isFinite(fieldValue)) return undefined;
+  return fieldValue;
+}
+
+function normalizeOptionalBoolean(value: Record<string, unknown>, key: string): boolean | null | undefined {
+  const fieldValue = value[key];
+  if (fieldValue === undefined || fieldValue === null) return null;
+  if (typeof fieldValue !== 'boolean') return undefined;
+  return fieldValue;
+}
+
+function normalizeOptionalRecord(value: Record<string, unknown>, key: string): Record<string, unknown> | null | undefined {
+  const fieldValue = value[key];
+  if (fieldValue === undefined || fieldValue === null) return null;
+  if (!isRecord(fieldValue)) return undefined;
+  return { ...fieldValue };
+}
+
+function normalizeMcpServerStatus(value: unknown): GenericEditMcpServerStatus | null {
+  if (!isRecord(value)) return null;
+
+  const server = readString(value, 'server');
+  const bridgeable = normalizeOptionalBoolean(value, 'bridgeable');
+  const externalClient = normalizeOptionalRecord(value, 'external_client');
+
+  if (server === null || bridgeable === undefined || externalClient === undefined) {
+    return null;
+  }
+
+  return {
+    server,
+    display_name: readString(value, 'display_name'),
+    availability: readString(value, 'availability'),
+    runtime_path: readString(value, 'runtime_path'),
+    bridgeable,
+    reason: readString(value, 'reason'),
+    notes: readString(value, 'notes'),
+    external_client: externalClient,
+  };
+}
+
+function normalizeOptionalMcpServerStatuses(
+  value: Record<string, unknown>,
+  key: string
+): GenericEditMcpServerStatus[] | null {
+  const fieldValue = value[key];
+  if (fieldValue === undefined) return [];
+  if (!Array.isArray(fieldValue)) return null;
+
+  const result: GenericEditMcpServerStatus[] = [];
+  for (const item of fieldValue) {
+    const status = normalizeMcpServerStatus(item);
+    if (status === null) {
+      return null;
+    }
+    result.push(status);
+  }
+  return result;
+}
+
+function normalizeMcpToolPolicy(value: unknown): GenericEditMcpToolPolicy | null {
+  if (!isRecord(value)) return null;
+
+  const name = readString(value, 'name');
+  const exposedName = readString(value, 'exposed_name');
+  const mutating = normalizeOptionalBoolean(value, 'mutating');
+  const auditRequired = normalizeOptionalBoolean(value, 'audit_required');
+
+  if (name === null || exposedName === null || mutating === undefined || auditRequired === undefined) {
+    return null;
+  }
+
+  return {
+    server: readString(value, 'server'),
+    name,
+    exposed_name: exposedName,
+    permission: readString(value, 'permission'),
+    audit_level: readString(value, 'audit_level'),
+    mutating,
+    audit_required: auditRequired,
+  };
+}
+
+function normalizeOptionalMcpToolPolicies(
+  value: Record<string, unknown>,
+  key: string
+): GenericEditMcpToolPolicy[] | null {
+  const fieldValue = value[key];
+  if (fieldValue === undefined) return [];
+  if (!Array.isArray(fieldValue)) return null;
+
+  const result: GenericEditMcpToolPolicy[] = [];
+  for (const item of fieldValue) {
+    const policy = normalizeMcpToolPolicy(item);
+    if (policy === null) {
+      return null;
+    }
+    result.push(policy);
+  }
+  return result;
+}
+
+function normalizeMcpPermissionPolicy(value: unknown): GenericEditMcpPermissionPolicy | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const allowedPermissions = value.allowed_permissions;
+  if (allowedPermissions !== null && allowedPermissions !== undefined && !Array.isArray(allowedPermissions)) {
+    return null;
+  }
+  const normalizedAllowedPermissions =
+    allowedPermissions === null || allowedPermissions === undefined
+      ? null
+      : normalizeStringList(allowedPermissions);
+
+  if (normalizedAllowedPermissions === null && Array.isArray(allowedPermissions)) {
+    return null;
+  }
+
+  return {
+    mode: readString(value, 'mode'),
+    allowed_permissions: normalizedAllowedPermissions,
+  };
+}
+
+function normalizeMcpOpenSession(value: unknown): GenericEditMcpOpenSession | null {
+  if (!isRecord(value)) return null;
+
+  const server = readString(value, 'server');
+  const transport = readString(value, 'transport');
+  const status = readString(value, 'status');
+
+  if (server === null || transport === null || status === null) {
+    return null;
+  }
+
+  return { server, transport, status };
+}
+
+function normalizeMcpOpenSessions(value: unknown): GenericEditMcpOpenSession[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditMcpOpenSession[] = [];
+  for (const item of value) {
+    const session = normalizeMcpOpenSession(item);
+    if (session === null) {
+      return null;
+    }
+    result.push(session);
+  }
+  return result;
+}
+
+function normalizeMcpSessionLifecycle(value: unknown): GenericEditMcpSessionLifecycle | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const reuse = readString(value, 'reuse');
+  const openSessionCount = normalizeOptionalNumber(value, 'open_session_count');
+  const openSessions = normalizeMcpOpenSessions(value.open_sessions);
+
+  if (reuse === null || openSessionCount === undefined || openSessionCount === null || openSessions === null) {
+    return null;
+  }
+
+  return {
+    reuse,
+    open_session_count: openSessionCount,
+    open_sessions: openSessions,
+  };
+}
+
+function normalizeMcpBridgePlan(
+  value: unknown
+): NonNullable<GenericEditArtifactManifest['mcp_support']>['bridge_plan'] {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const bridgedServers = normalizeOptionalMcpStringList(value, 'bridged_servers');
+  const externalBridgedServers = normalizeOptionalMcpStringList(value, 'external_bridged_servers');
+  const nativeRequiredServers = normalizeOptionalMcpStringList(value, 'native_required_servers');
+  const localBridgeRequiredServers = normalizeOptionalMcpStringList(value, 'local_bridge_required_servers');
+  const externalBridgeRequiredServers = normalizeOptionalMcpStringList(value, 'external_bridge_required_servers');
+  const unsupportedServers = normalizeOptionalMcpStringList(value, 'unsupported_servers');
+  if (
+    bridgedServers === null ||
+    externalBridgedServers === null ||
+    nativeRequiredServers === null ||
+    localBridgeRequiredServers === null ||
+    externalBridgeRequiredServers === null ||
+    unsupportedServers === null
+  ) {
+    return null;
+  }
+
+  return {
+    status: readString(value, 'status'),
+    action_required: readString(value, 'action_required'),
+    recommended_runtime_path: readString(value, 'recommended_runtime_path'),
+    native_required_servers: nativeRequiredServers,
+    local_bridge_required_servers: localBridgeRequiredServers,
+    external_bridge_required_servers: externalBridgeRequiredServers,
+    unsupported_servers: unsupportedServers,
+    bridged_servers: bridgedServers,
+    external_bridged_servers: externalBridgedServers,
+  };
+}
+
+function normalizeMcpBridge(
+  value: unknown
+): NonNullable<GenericEditArtifactManifest['mcp_support']>['bridge'] {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const tools = normalizeOptionalMcpStringList(value, 'tools');
+  const toolPolicies = normalizeOptionalMcpToolPolicies(value, 'tool_policies');
+  const permissionPolicy = normalizeMcpPermissionPolicy(value.permission_policy);
+  const serverStatuses = normalizeOptionalMcpServerStatuses(value, 'server_statuses');
+  const sessionLifecycle = normalizeMcpSessionLifecycle(value.session_lifecycle);
+  if (
+    tools === null ||
+    toolPolicies === null ||
+    (value.permission_policy !== undefined && value.permission_policy !== null && permissionPolicy === null) ||
+    serverStatuses === null ||
+    (value.session_lifecycle !== undefined && value.session_lifecycle !== null && sessionLifecycle === null)
+  ) {
+    return null;
+  }
+
+  return {
+    tools,
+    tool_policies: toolPolicies,
+    permission_policy: permissionPolicy,
+    server_statuses: serverStatuses,
+    session_lifecycle: sessionLifecycle,
+  };
+}
+
+function normalizeMcpSupport(value: unknown): GenericEditArtifactManifest['mcp_support'] {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const strategy = readString(value, 'strategy');
+  const toolCount = normalizeOptionalNumber(value, 'tool_count');
+  const availableServers = normalizeOptionalMcpStringList(value, 'available_servers');
+  const unavailableServers = normalizeOptionalMcpStringList(value, 'unavailable_servers');
+  const serverStatuses = normalizeOptionalMcpServerStatuses(value, 'server_statuses');
+  const bridgePlan = normalizeMcpBridgePlan(value.bridge_plan);
+  const bridge = normalizeMcpBridge(value.bridge);
+
+  if (
+    strategy === null ||
+    toolCount === undefined ||
+    availableServers === null ||
+    unavailableServers === null ||
+    serverStatuses === null ||
+    (value.bridge_plan !== undefined && value.bridge_plan !== null && bridgePlan === null) ||
+    (value.bridge !== undefined && value.bridge !== null && bridge === null)
+  ) {
+    return null;
+  }
+
+  return {
+    strategy,
+    reason: readString(value, 'reason'),
+    server: readString(value, 'server'),
+    tool_count: toolCount,
+    available_servers: availableServers,
+    unavailable_servers: unavailableServers,
+    server_statuses: serverStatuses,
+    bridge_plan: bridgePlan,
+    bridge,
+  };
+}
+
+function normalizeRecoverySummary(value: unknown): GenericEditRecoverySummary | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const version = value.version;
+  const status = readString(value, 'status');
+  const { finish_blocked, unresolved_transaction_group_count, warning_count } = value;
+  const unresolvedTransactionGroupIds = normalizeStringList(value.unresolved_transaction_group_ids);
+  const warnings = normalizeStringList(value.warnings);
+  const resolutionStrategies = normalizeStringList(value.resolution_strategies);
+  const recommendedVerificationTools = normalizeStringList(value.recommended_verification_tools);
+
+  if (
+    typeof version !== 'number' ||
+    !Number.isFinite(version) ||
+    status === null ||
+    typeof finish_blocked !== 'boolean' ||
+    typeof unresolved_transaction_group_count !== 'number' ||
+    !Number.isFinite(unresolved_transaction_group_count) ||
+    typeof warning_count !== 'number' ||
+    !Number.isFinite(warning_count) ||
+    unresolvedTransactionGroupIds === null ||
+    warnings === null ||
+    resolutionStrategies === null ||
+    recommendedVerificationTools === null
+  ) {
+    return null;
+  }
+
+  return {
+    version,
+    status,
+    finish_blocked,
+    unresolved_transaction_group_count,
+    unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
+    warning_count,
+    warnings,
+    resolution_strategies: resolutionStrategies,
+    recommended_verification_tools: recommendedVerificationTools,
+  };
+}
+
+function normalizeOptionalString(
+  result: GenericEditRecoveryAction,
+  value: Record<string, unknown>,
+  field: 'transaction_id' | 'transaction_group_id' | 'rollback_operation_id'
+): boolean {
+  const fieldValue = value[field];
+  if (fieldValue === undefined) return true;
+  if (typeof fieldValue !== 'string') return false;
+  result[field] = fieldValue;
+  return true;
+}
+
+function normalizeOptionalStringList(
+  result: GenericEditRecoveryAction,
+  value: Record<string, unknown>,
+  field: 'paths' | 'mutation_snapshot_ids'
+): boolean {
+  const fieldValue = value[field];
+  if (fieldValue === undefined) return true;
+  const normalized = normalizeStringList(fieldValue);
+  if (normalized === null) return false;
+  result[field] = normalized;
+  return true;
+}
+
+function normalizeRecoveryAction(value: unknown): GenericEditRecoveryAction | null {
+  if (!isRecord(value)) return null;
+  const id = readString(value, 'id');
+  const kind = readString(value, 'kind');
+  const tool = readString(value, 'tool');
+  const { required_before_finish } = value;
+
+  if (id === null || kind === null || tool === null || typeof required_before_finish !== 'boolean') {
+    return null;
+  }
+
+  const result: GenericEditRecoveryAction = {
+    id,
+    kind,
+    tool,
+    required_before_finish,
+  };
+  const optionalStringFields: Array<'transaction_id' | 'transaction_group_id' | 'rollback_operation_id'> = [
+    'transaction_id',
+    'transaction_group_id',
+    'rollback_operation_id',
+  ];
+  const optionalStringListFields: Array<'paths' | 'mutation_snapshot_ids'> = [
+    'paths',
+    'mutation_snapshot_ids',
+  ];
+
+  for (const field of optionalStringFields) {
+    if (!normalizeOptionalString(result, value, field)) return null;
+  }
+  for (const field of optionalStringListFields) {
+    if (!normalizeOptionalStringList(result, value, field)) return null;
+  }
+  return result;
+}
+
+function normalizeRecoveryActions(value: unknown): GenericEditRecoveryAction[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditRecoveryAction[] = [];
+  for (const action of value) {
+    const normalizedAction = normalizeRecoveryAction(action);
+    if (!normalizedAction) {
+      return null;
+    }
+    result.push(normalizedAction);
+  }
+  return result;
+}
+
+function normalizeNativeToolFallback(value: unknown): GenericEditNativeToolFallback | null {
+  if (!isRecord(value)) return null;
+
+  const provider = readString(value, 'provider');
+  const fromLoop = readString(value, 'from_loop');
+  const toLoop = readString(value, 'to_loop');
+  const reason = readString(value, 'reason');
+  const message = readString(value, 'message');
+  const toolSchemaCount = value.tool_schema_count;
+
+  if (
+    provider === null ||
+    fromLoop === null ||
+    toLoop === null ||
+    reason === null ||
+    message === null ||
+    typeof toolSchemaCount !== 'number' ||
+    !Number.isFinite(toolSchemaCount)
+  ) {
+    return null;
+  }
+
+  return {
+    provider,
+    from_loop: fromLoop,
+    to_loop: toLoop,
+    reason,
+    message,
+    tool_schema_count: toolSchemaCount,
+  };
+}
+
+function normalizeNativeToolFallbacks(value: unknown): GenericEditNativeToolFallback[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditNativeToolFallback[] = [];
+  for (const fallback of value) {
+    const normalizedFallback = normalizeNativeToolFallback(fallback);
+    if (!normalizedFallback) {
+      return null;
+    }
+    result.push(normalizedFallback);
+  }
+  return result;
+}
+
+function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch | null {
+  if (!isRecord(value)) return null;
+
+  const id = readString(value, 'id');
+  const status = readString(value, 'status');
+  const transactionIds =
+    value.transaction_ids === undefined ? [] : normalizeStringList(value.transaction_ids);
+  const mutationSnapshotIds =
+    value.mutation_snapshot_ids === undefined
+      ? []
+      : normalizeStringList(value.mutation_snapshot_ids);
+  const transactionGroupIds =
+    value.transaction_group_ids === undefined ? [] : normalizeStringList(value.transaction_group_ids);
+  const unresolvedTransactionGroupIds =
+    value.unresolved_transaction_group_ids === undefined
+      ? []
+      : normalizeStringList(value.unresolved_transaction_group_ids);
+  const recoveryOutcomeCount =
+    value.recovery_outcome_count === undefined ? 0 : value.recovery_outcome_count;
+
+  if (
+    id === null ||
+    status === null ||
+    transactionIds === null ||
+    mutationSnapshotIds === null ||
+    transactionGroupIds === null ||
+    unresolvedTransactionGroupIds === null ||
+    typeof recoveryOutcomeCount !== 'number' ||
+    !Number.isFinite(recoveryOutcomeCount)
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    status,
+    transaction_ids: transactionIds,
+    mutation_snapshot_ids: mutationSnapshotIds,
+    transaction_group_ids: transactionGroupIds,
+    unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
+    recovery_outcome_count: recoveryOutcomeCount,
+  };
+}
+
+function normalizeTransactionBatches(value: unknown): GenericEditTransactionBatch[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditTransactionBatch[] = [];
+  for (const batch of value) {
+    const normalizedBatch = normalizeTransactionBatch(batch);
+    if (!normalizedBatch) {
+      return null;
+    }
+    result.push(normalizedBatch);
+  }
+  return result;
+}
+
+function normalizeResumeAction(value: unknown): GenericEditResumeAction | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const runtime = readString(value, 'runtime');
+  const checkpointPath = readString(value, 'checkpoint_path');
+  const strategy = readString(value, 'strategy');
+  const nextIteration = value.next_iteration;
+
+  if (
+    runtime !== 'generic_edit' ||
+    checkpointPath === null ||
+    strategy === null ||
+    typeof nextIteration !== 'number' ||
+    !Number.isFinite(nextIteration)
+  ) {
+    return null;
+  }
+
+  return {
+    runtime,
+    checkpoint_path: checkpointPath,
+    strategy,
+    next_iteration: nextIteration,
+  };
+}
+
+function normalizeResumePolicy(value: unknown): GenericEditResumePolicy | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return null;
+
+  const runtime = readString(value, 'runtime');
+  const status = readString(value, 'status');
+  const strategy = readString(value, 'strategy');
+  const checkpointPath = readString(value, 'checkpoint_path');
+  const {
+    version,
+    can_resume,
+    finish_blocked,
+    next_iteration,
+    required_resolution_action_kinds,
+    required_artifacts,
+    unresolved_partial_failure_ids,
+    unresolved_transaction_group_ids,
+  } = value;
+  const requiredResolutionActionKinds = normalizeStringList(required_resolution_action_kinds);
+  const requiredArtifacts = normalizeStringList(required_artifacts);
+  const unresolvedPartialFailureIds = normalizeStringList(unresolved_partial_failure_ids);
+  const unresolvedTransactionGroupIds = normalizeStringList(unresolved_transaction_group_ids);
+  const openTransactionBatchIds =
+    value.open_transaction_batch_ids === undefined
+      ? []
+      : normalizeStringList(value.open_transaction_batch_ids);
+
+  if (
+    typeof version !== 'number' ||
+    !Number.isFinite(version) ||
+    runtime !== 'generic_edit' ||
+    status === null ||
+    typeof can_resume !== 'boolean' ||
+    typeof finish_blocked !== 'boolean' ||
+    strategy === null ||
+    checkpointPath === null ||
+    typeof next_iteration !== 'number' ||
+    !Number.isFinite(next_iteration) ||
+    requiredResolutionActionKinds === null ||
+    requiredArtifacts === null ||
+    unresolvedPartialFailureIds === null ||
+    unresolvedTransactionGroupIds === null ||
+    openTransactionBatchIds === null
+  ) {
+    return null;
+  }
+
+  const policy: GenericEditResumePolicy = {
+    version,
+    runtime,
+    status,
+    can_resume,
+    finish_blocked,
+    strategy,
+    checkpoint_path: checkpointPath,
+    next_iteration,
+    required_resolution_action_kinds: requiredResolutionActionKinds,
+    required_artifacts: requiredArtifacts,
+    unresolved_partial_failure_ids: unresolvedPartialFailureIds,
+    unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
+  };
+  if (openTransactionBatchIds.length > 0) {
+    policy.open_transaction_batch_ids = openTransactionBatchIds;
+  }
+  return policy;
+}
+
+function normalizeGenericEditArtifactManifest(value: unknown): GenericEditArtifactManifest | null {
+  if (!isRecord(value)) return null;
+  if (value.artifact_type !== 'generic_edit_artifact_manifest' || value.schema_version !== 1) {
+    return null;
+  }
+
+  const timestamp = readString(value, 'timestamp');
+  const provider = readString(value, 'provider');
+  const subtaskId = readNullableString(value, 'subtask_id');
+  const status = readString(value, 'status');
+  const stopReason = readString(value, 'stop_reason');
+  const entrypoints = normalizeStringMap(value.entrypoints);
+  const flags = normalizeBooleanMap(value.flags, [
+    'recoverable',
+    'resumable',
+    'resumed',
+    'recovery_required',
+    'recovery_resolved',
+    'has_recovery_plan',
+    'has_mutation_snapshots',
+    'has_transaction_groups',
+  ]);
+  const counts = normalizeNumberMap(value.counts, [
+    'iteration_count',
+    'action_count',
+    'failed_action_count',
+    'event_count',
+    'transaction_count',
+    'transaction_group_count',
+    'mutation_snapshot_count',
+    'recovery_attempt_count',
+    'failed_recovery_attempt_count',
+  ]);
+  const recentEvents = normalizeRecentEvents(value.recent_events);
+  const recoveryTimeline = normalizeRecentEvents(value.recovery_timeline);
+  const nativeToolFallbacks = normalizeNativeToolFallbacks(value.native_tool_fallbacks);
+  const transactionBatches = normalizeTransactionBatches(value.transaction_batches);
+  const recoverySummary = normalizeRecoverySummary(value.recovery_summary);
+  const recoveryActions = normalizeRecoveryActions(value.recovery_actions);
+  const resumeAction = normalizeResumeAction(value.resume_action);
+  const resumePolicy = normalizeResumePolicy(value.resume_policy);
+  const resumeInputs = value.resume_inputs === undefined ? {} : normalizeStringMap(value.resume_inputs);
+  const mcpSupport = normalizeMcpSupport(value.mcp_support);
+
+  if (
+    timestamp === null ||
+    provider === null ||
+    status === null ||
+    stopReason === null ||
+    entrypoints === null ||
+    flags === null ||
+    counts === null ||
+    recentEvents === null ||
+    recoveryTimeline === null ||
+    nativeToolFallbacks === null ||
+    transactionBatches === null ||
+    recoveryActions === null ||
+    (value.resume_action !== undefined && value.resume_action !== null && resumeAction === null) ||
+    (value.resume_policy !== undefined && value.resume_policy !== null && resumePolicy === null) ||
+    resumeInputs === null ||
+    !Array.isArray(value.artifacts)
+  ) {
+    return null;
+  }
+  if (typeof counts.native_tool_fallback_count !== 'number') {
+    counts.native_tool_fallback_count = 0;
+  }
+  if (typeof counts.transaction_batch_count !== 'number') {
+    counts.transaction_batch_count = 0;
+  }
+
+  const artifacts: GenericEditArtifactManifestEntry[] = [];
+  for (const artifact of value.artifacts) {
+    const normalizedArtifact = normalizeManifestEntry(artifact);
+    if (!normalizedArtifact) {
+      return null;
+    }
+    artifacts.push(normalizedArtifact);
+  }
+
+  return {
+    artifact_type: 'generic_edit_artifact_manifest',
+    schema_version: 1,
+    timestamp,
+    provider,
+    subtask_id: subtaskId,
+    status,
+    stop_reason: stopReason,
+    entrypoints,
+    flags,
+    counts,
+    artifacts,
+    recent_events: recentEvents,
+    recovery_timeline: recoveryTimeline,
+    native_tool_fallbacks: nativeToolFallbacks,
+    transaction_batches: transactionBatches,
+    recovery_summary: recoverySummary,
+    recovery_actions: recoveryActions,
+    mcp_support: mcpSupport,
+    resume_action: resumeAction,
+    resume_inputs: resumeInputs as Record<string, string>,
+    resume_policy: resumePolicy,
+    resume: isRecord(value.resume) ? value.resume : null,
+  };
+}
+
 /**
  * Read the implementation plan from implementation_plan.json
  *
@@ -69,6 +959,38 @@ export async function readImplementationPlan(
       return null;
     }
     console.error(`[spec-file-readers] Error reading implementation plan:`, err);
+    throw err;
+  }
+}
+
+/**
+ * Read and normalize the Generic Edit v2 artifact manifest.
+ *
+ * @param project - The project containing the task
+ * @param task - The task to read the manifest for
+ * @returns The parsed artifact manifest, or null if it doesn't exist or is from another schema
+ */
+export async function readGenericEditArtifactManifest(
+  project: Project,
+  task: Task
+): Promise<GenericEditArtifactManifest | null> {
+  try {
+    const specDir = getSpecDir(project, task);
+    const manifestPath = path.join(specDir, AUTO_BUILD_PATHS.GENERIC_EDIT_ARTIFACT_MANIFEST);
+
+    const manifestContent = await fs.readFile(manifestPath, 'utf-8');
+    const manifest = normalizeGenericEditArtifactManifest(JSON.parse(manifestContent));
+
+    if (!manifest) {
+      console.warn(`[spec-file-readers] Generic edit artifact manifest has unsupported schema at ${manifestPath}`);
+    }
+
+    return manifest;
+  } catch (err) {
+    if (isFileNotFoundError(err)) {
+      return null;
+    }
+    console.error(`[spec-file-readers] Error reading generic edit artifact manifest:`, err);
     throw err;
   }
 }
