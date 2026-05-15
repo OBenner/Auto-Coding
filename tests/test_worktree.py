@@ -800,10 +800,11 @@ class TestWorktreeUtilities:
         """get_test_commands detects Python project commands."""
         manager = WorktreeManager(temp_git_repo)
         manager.setup()
-        info = manager.create_worktree("test-spec")
+        worktree_path = manager.get_worktree_path("test-spec")
+        worktree_path.mkdir(parents=True)
 
         # Create requirements.txt
-        (info.path / "requirements.txt").write_text("flask\n")
+        (worktree_path / "requirements.txt").write_text("flask\n")
 
         commands = manager.get_test_commands("test-spec")
 
@@ -813,10 +814,11 @@ class TestWorktreeUtilities:
         """get_test_commands detects Node.js project commands."""
         manager = WorktreeManager(temp_git_repo)
         manager.setup()
-        info = manager.create_worktree("test-spec-node")
+        worktree_path = manager.get_worktree_path("test-spec-node")
+        worktree_path.mkdir(parents=True)
 
         # Create package.json
-        (info.path / "package.json").write_text('{"name": "test"}')
+        (worktree_path / "package.json").write_text('{"name": "test"}')
 
         commands = manager.get_test_commands("test-spec-node")
 
