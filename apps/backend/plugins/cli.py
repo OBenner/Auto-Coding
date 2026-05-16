@@ -22,6 +22,7 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import shutil
 import sys
@@ -66,6 +67,127 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _add_json_flag(parser: argparse.ArgumentParser) -> None:
+    """Add the common machine-readable output flag to a subcommand parser."""
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON on stdout",
+    )
+
+
+def _wants_json(args: argparse.Namespace) -> bool:
+    """Return True when a command should emit JSON output."""
+    return getattr(args, "json", False) is True
+
+
+def _emit_json(payload: dict) -> None:
+    """Print a JSON payload for frontend and automation callers."""
+    print(json.dumps(payload, ensure_ascii=False))
+
+
+def _enum_value(value):
+    """Serialize enum-like values without coupling to a concrete enum class."""
+    return value.value if hasattr(value, "value") else value
+
+
+def _string_value(value, default: str = "") -> str:
+    """Return a string value, ignoring mock sentinels and unset attributes."""
+    return value if isinstance(value, str) else default
+
+
+def _optional_string_value(value) -> str | None:
+    """Return an optional string value, ignoring mock sentinels."""
+    return value if isinstance(value, str) else None
+
+
+def _metadata_to_dict(plugin) -> dict:
+    """Serialize plugin metadata robustly for real plugins and test doubles."""
+    metadata = getattr(plugin, "metadata", None)
+    if metadata is not None:
+        to_dict = getattr(metadata, "to_dict", None)
+        if callable(to_dict):
+            serialized = to_dict()
+            if isinstance(serialized, dict):
+                return serialized
+
+    raw_permissions = (
+        getattr(metadata, "required_permissions", []) if metadata is not None else []
+    )
+    permissions = raw_permissions if isinstance(raw_permissions, list) else []
+    raw_dependencies = (
+        getattr(metadata, "dependencies", []) if metadata is not None else []
+    )
+
+    return {
+        "name": _string_value(getattr(plugin, "name", "")),
+        "version": _string_value(getattr(plugin, "version", "")),
+        "author": _string_value(getattr(metadata, "author", ""))
+        if metadata is not None
+        else "",
+        "description": _string_value(getattr(metadata, "description", ""))
+        if metadata is not None
+        else "",
+        "plugin_type": _enum_value(getattr(plugin, "plugin_type", "")),
+        "required_permissions": [
+            _enum_value(permission)
+            for permission in permissions
+            if isinstance(permission, str) or hasattr(permission, "value")
+        ],
+        "dependencies": raw_dependencies if isinstance(raw_dependencies, list) else [],
+        "homepage": _optional_string_value(getattr(metadata, "homepage", None))
+        if metadata is not None
+        else None,
+        "license": _optional_string_value(getattr(metadata, "license", None))
+        if metadata is not None
+        else None,
+    }
+
+
+def _plugin_dir_for(registry: PluginRegistry, plugin) -> str:
+    """Return the best-known installation directory for a plugin."""
+    name = getattr(plugin, "name", "")
+    loader = getattr(registry, "loader", None)
+    user_plugins_dir = getattr(loader, "user_plugins_dir", None)
+    system_plugins_dir = getattr(loader, "system_plugins_dir", None)
+
+    if user_plugins_dir is not None:
+        user_plugin_dir = Path(user_plugins_dir) / name
+        if user_plugin_dir.exists():
+            return str(user_plugin_dir)
+
+    if system_plugins_dir is not None:
+        return str(Path(system_plugins_dir) / name)
+
+    plugin_dir = getattr(plugin, "plugin_dir", "")
+    return str(plugin_dir) if isinstance(plugin_dir, (str, Path)) else ""
+
+
+def _plugin_to_json(plugin, registry: PluginRegistry) -> dict:
+    """Convert a plugin instance to the frontend PluginInfo wire shape."""
+    metadata = _metadata_to_dict(plugin)
+    metadata["name"] = metadata.get("name") or _string_value(
+        getattr(plugin, "name", "")
+    )
+    metadata["version"] = metadata.get("version") or _string_value(
+        getattr(plugin, "version", "")
+    )
+    metadata["plugin_type"] = metadata.get("plugin_type") or _enum_value(
+        getattr(plugin, "plugin_type", "")
+    )
+    metadata["description"] = metadata.get("description") or getattr(
+        getattr(plugin, "metadata", None),
+        "description",
+        "",
+    )
+
+    return {
+        "metadata": metadata,
+        "status": "enabled" if getattr(plugin, "is_enabled", False) else "disabled",
+        "plugin_dir": _plugin_dir_for(registry, plugin),
+    }
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser for plugin CLI."""
     parser = argparse.ArgumentParser(
@@ -108,6 +230,7 @@ Examples:
         action="store_true",
         help="Show only enabled plugins",
     )
+    _add_json_flag(list_parser)
 
     # Enable command
     enable_parser = subparsers.add_parser(
@@ -119,6 +242,7 @@ Examples:
         "plugin_name",
         help="Name of the plugin to enable",
     )
+    _add_json_flag(enable_parser)
 
     # Disable command
     disable_parser = subparsers.add_parser(
@@ -130,6 +254,7 @@ Examples:
         "plugin_name",
         help="Name of the plugin to disable",
     )
+    _add_json_flag(disable_parser)
 
     # Install command
     install_parser = subparsers.add_parser(
@@ -140,10 +265,14 @@ Examples:
     install_source = install_parser.add_mutually_exclusive_group(required=True)
     install_source.add_argument(
         "--path",
+        "--from-directory",
+        dest="path",
         help="Local path to plugin directory",
     )
     install_source.add_argument(
         "--url",
+        "--from-url",
+        dest="url",
         help="Git URL to remote plugin repository",
     )
     install_parser.add_argument(
@@ -156,6 +285,7 @@ Examples:
         action="store_true",
         help="Validate plugin without installing",
     )
+    _add_json_flag(install_parser)
 
     # Info command
     info_parser = subparsers.add_parser(
@@ -167,6 +297,7 @@ Examples:
         "plugin_name",
         help="Name of the plugin",
     )
+    _add_json_flag(info_parser)
 
     # Uninstall command
     uninstall_parser = subparsers.add_parser(
@@ -183,6 +314,7 @@ Examples:
         action="store_true",
         help="Skip confirmation prompt",
     )
+    _add_json_flag(uninstall_parser)
 
     return parser
 
@@ -224,7 +356,21 @@ def cmd_list(args: argparse.Namespace) -> int:
 
         # Display results
         if not plugins:
+            if _wants_json(args):
+                _emit_json({"success": True, "plugins": []})
+                return 0
             print("No plugins found.")
+            return 0
+
+        if _wants_json(args):
+            _emit_json(
+                {
+                    "success": True,
+                    "plugins": [
+                        _plugin_to_json(plugin, registry) for plugin in plugins
+                    ],
+                }
+            )
             return 0
 
         # Calculate column widths
@@ -293,6 +439,9 @@ def cmd_enable(args: argparse.Namespace) -> int:
         registry.enable_plugin(args.plugin_name)
 
         # Confirm success
+        if _wants_json(args):
+            _emit_json({"success": True, "plugin_name": args.plugin_name})
+            return 0
         print(f"Plugin '{args.plugin_name}' enabled successfully")
         return 0
 
@@ -333,6 +482,9 @@ def cmd_disable(args: argparse.Namespace) -> int:
         registry.disable_plugin(args.plugin_name)
 
         # Confirm success
+        if _wants_json(args):
+            _emit_json({"success": True, "plugin_name": args.plugin_name})
+            return 0
         print(f"Plugin '{args.plugin_name}' disabled successfully")
         return 0
 
@@ -354,19 +506,26 @@ def cmd_install(args: argparse.Namespace) -> int:
     Returns:
         0 on success, 1 on error
     """
+    json_output = _wants_json(args)
+
     # Handle local path installation
     if args.path:
-        return _install_from_path(args.path, args.force, args.dry_run)
+        return _install_from_path(args.path, args.force, args.dry_run, json_output)
 
     # Handle remote URL installation
     if args.url:
-        return _install_from_url(args.url, args.force, args.dry_run)
+        return _install_from_url(args.url, args.force, args.dry_run, json_output)
 
     logger.error("Either --path or --url must be specified")
     return 1
 
 
-def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> int:
+def _install_from_path(
+    source_path: str,
+    force: bool,
+    dry_run: bool = False,
+    json_output: bool = False,
+) -> int:
     """
     Install a plugin from a local directory path.
 
@@ -412,11 +571,12 @@ def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> 
 
         # Display security warnings
         if warnings:
-            print("\n⚠️  Security warnings detected:")
-            print("=" * 60)
-            for warning in warnings:
-                print(f"  • {warning}")
-            print("=" * 60)
+            if not json_output:
+                print("\n⚠️  Security warnings detected:")
+                print("=" * 60)
+                for warning in warnings:
+                    print(f"  • {warning}")
+                print("=" * 60)
 
         # Block installation if plugin is not safe
         if not is_safe:
@@ -429,14 +589,26 @@ def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> 
         # If there are warnings but plugin is safe (e.g., suspicious imports)
         # show them but allow installation
         if warnings:
-            print("\nNote: Plugin has security warnings but is not blocked.")
-            print("Review the warnings above before enabling this plugin.\n")
+            if not json_output:
+                print("\nNote: Plugin has security warnings but is not blocked.")
+                print("Review the warnings above before enabling this plugin.\n")
 
         # Determine target directory
         target_dir = loader.user_plugins_dir / metadata.name
 
         # Dry run mode - stop here
         if dry_run:
+            if json_output:
+                _emit_json(
+                    {
+                        "success": True,
+                        "dry_run": True,
+                        "plugin": metadata.to_dict(),
+                        "target": str(target_dir),
+                        "warnings": warnings,
+                    }
+                )
+                return 0
             print(
                 f"[DRY RUN] Would install plugin: {metadata.name} v{metadata.version}"
             )
@@ -478,6 +650,17 @@ def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> 
             return 1
 
         # Success
+        if json_output:
+            _emit_json(
+                {
+                    "success": True,
+                    "plugin": metadata.to_dict(),
+                    "target": str(target_dir),
+                    "warnings": warnings,
+                }
+            )
+            return 0
+
         print(f"✓ Plugin '{metadata.name}' v{metadata.version} installed successfully")
         print(f"  Location: {target_dir}")
         print(f"  Description: {metadata.description}")
@@ -493,7 +676,12 @@ def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> 
         return 1
 
 
-def _install_from_url(git_url: str, force: bool, dry_run: bool = False) -> int:
+def _install_from_url(
+    git_url: str,
+    force: bool,
+    dry_run: bool = False,
+    json_output: bool = False,
+) -> int:
     """
     Install a plugin from a remote git repository.
 
@@ -527,7 +715,7 @@ def _install_from_url(git_url: str, force: bool, dry_run: bool = False) -> int:
         logger.info("Repository cloned successfully")
 
         # Install from the cloned directory
-        return _install_from_path(str(temp_dir), force, dry_run)
+        return _install_from_path(str(temp_dir), force, dry_run, json_output)
 
     except Exception as e:
         logger.error(f"Installation from URL failed: {e}")
@@ -543,15 +731,63 @@ def _install_from_url(git_url: str, force: bool, dry_run: bool = False) -> int:
 
 
 def cmd_info(args: argparse.Namespace) -> int:
-    """Show plugin information (placeholder)."""
-    print(f"Info command for '{args.plugin_name}' - to be implemented")
-    return 0
+    """Show plugin information."""
+    try:
+        registry = PluginRegistry.get_instance()
+        if not registry.list_plugins():
+            registry.load_all_plugins()
+
+        plugin = registry.get_plugin(args.plugin_name)
+        if plugin is None:
+            logger.error(f"Plugin not found: {args.plugin_name}")
+            return 1
+
+        payload = _plugin_to_json(plugin, registry)
+        if _wants_json(args):
+            _emit_json({"success": True, "plugin": payload})
+        else:
+            metadata = payload["metadata"]
+            print(f"Name: {metadata['name']}")
+            print(f"Version: {metadata['version']}")
+            print(f"Type: {metadata['plugin_type']}")
+            print(f"Status: {payload['status']}")
+            print(f"Description: {metadata['description']}")
+        return 0
+    except Exception as e:
+        logger.error(f"Failed to show plugin '{args.plugin_name}': {e}")
+        return 1
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
-    """Uninstall a plugin (placeholder)."""
-    print(f"Uninstall command for '{args.plugin_name}' - to be implemented")
-    return 0
+    """Uninstall a user plugin."""
+    try:
+        registry = PluginRegistry.get_instance()
+        if not registry.list_plugins():
+            registry.load_all_plugins()
+
+        plugin = registry.get_plugin(args.plugin_name)
+        if plugin is None:
+            logger.error(f"Plugin not found: {args.plugin_name}")
+            return 1
+
+        target_dir = registry.loader.user_plugins_dir / args.plugin_name
+        if not target_dir.exists():
+            logger.error(
+                f"Plugin '{args.plugin_name}' is not installed as a user plugin"
+            )
+            return 1
+
+        registry.unload_plugin(args.plugin_name)
+        shutil.rmtree(target_dir)
+
+        if _wants_json(args):
+            _emit_json({"success": True, "plugin_name": args.plugin_name})
+        else:
+            print(f"Plugin '{args.plugin_name}' uninstalled successfully")
+        return 0
+    except Exception as e:
+        logger.error(f"Failed to uninstall plugin '{args.plugin_name}': {e}")
+        return 1
 
 
 def main() -> int:

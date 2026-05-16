@@ -4,7 +4,7 @@
  * Displays all installed plugins, allows enabling/disabling/uninstalling plugins,
  * and provides a button to install new plugins.
  */
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Puzzle, Plus, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -14,7 +14,11 @@ import { PluginCard } from './PluginCard';
 import { InstallPluginDialog } from './InstallPluginDialog';
 import type { PluginInfo } from '../../../main/plugins/types';
 
-export function PluginManager() {
+interface PluginManagerProps {
+  projectPath: string;
+}
+
+export function PluginManager({ projectPath }: PluginManagerProps) {
   const { t } = useTranslation(['plugins', 'common']);
   const { toast } = useToast();
 
@@ -24,19 +28,14 @@ export function PluginManager() {
   const [operatingPluginName, setOperatingPluginName] = useState<string | null>(null);
   const [isInstallDialogOpen, setIsInstallDialogOpen] = useState(false);
 
-  // Load plugins on mount
-  useEffect(() => {
-    loadPlugins();
-  }, []);
-
   /**
    * Load all installed plugins
    */
-  const loadPlugins = async () => {
+  const loadPlugins = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await window.electronAPI.listPlugins({});
+      const result = await window.electronAPI.listPlugins({ projectPath });
 
       if (result.success && result.data) {
         setPlugins(result.data);
@@ -59,7 +58,12 @@ export function PluginManager() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [projectPath, t, toast]);
+
+  // Load plugins on mount and when switching projects
+  useEffect(() => {
+    loadPlugins();
+  }, [loadPlugins]);
 
   /**
    * Enable a plugin
@@ -67,7 +71,7 @@ export function PluginManager() {
   const handleEnable = async (pluginName: string) => {
     setOperatingPluginName(pluginName);
     try {
-      const result = await window.electronAPI.enablePlugin(pluginName);
+      const result = await window.electronAPI.enablePlugin(pluginName, projectPath);
 
       if (result.success) {
         toast({
@@ -99,7 +103,7 @@ export function PluginManager() {
   const handleDisable = async (pluginName: string) => {
     setOperatingPluginName(pluginName);
     try {
-      const result = await window.electronAPI.disablePlugin(pluginName);
+      const result = await window.electronAPI.disablePlugin(pluginName, projectPath);
 
       if (result.success) {
         toast({
@@ -131,7 +135,7 @@ export function PluginManager() {
   const handleUninstall = async (pluginName: string) => {
     setOperatingPluginName(pluginName);
     try {
-      const result = await window.electronAPI.uninstallPlugin(pluginName);
+      const result = await window.electronAPI.uninstallPlugin(pluginName, projectPath);
 
       if (result.success) {
         toast({
@@ -245,6 +249,7 @@ export function PluginManager() {
       <InstallPluginDialog
         open={isInstallDialogOpen}
         onOpenChange={setIsInstallDialogOpen}
+        projectPath={projectPath}
         onPluginInstalled={loadPlugins}
       />
     </div>

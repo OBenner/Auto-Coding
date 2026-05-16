@@ -89,6 +89,13 @@ class TestPluginCLIParser:
         args = parser.parse_args(["list", "--enabled-only"])
         assert args.enabled_only is True
 
+    def test_list_command_parses_json_flag(self):
+        """Test that list command parses --json for machine-readable output."""
+        parser = create_parser()
+
+        args = parser.parse_args(["list", "--json"])
+        assert args.json is True
+
     def test_enable_command_parses_plugin_name(self):
         """Test that enable command parses plugin name."""
         parser = create_parser()
@@ -115,12 +122,32 @@ class TestPluginCLIParser:
         assert args.url is None
         assert args.force is False
 
+    def test_install_command_accepts_directory_alias(self):
+        """Test that install accepts the frontend directory flag alias."""
+        parser = create_parser()
+
+        args = parser.parse_args(["install", "--from-directory", "/some/path"])
+        assert args.command == "install"
+        assert args.path == "/some/path"
+        assert args.url is None
+
     def test_install_command_parses_url(self):
         """Test that install command parses --url argument."""
         parser = create_parser()
 
         args = parser.parse_args(
             ["install", "--url", "https://github.com/user/plugin.git"]
+        )
+        assert args.command == "install"
+        assert args.url == "https://github.com/user/plugin.git"
+        assert args.path is None
+
+    def test_install_command_accepts_remote_alias(self):
+        """Test that install accepts the frontend remote URL flag alias."""
+        parser = create_parser()
+
+        args = parser.parse_args(
+            ["install", "--from-url", "https://github.com/user/plugin.git"]
         )
         assert args.command == "install"
         assert args.url == "https://github.com/user/plugin.git"
@@ -208,6 +235,26 @@ class TestListCommand:
             assert "test-agent" in captured.out
             assert "test-integration" in captured.out
             assert "Total: 2 plugin(s)" in captured.out
+
+    def test_list_json_outputs_machine_readable_plugins(self, mock_plugins, capsys):
+        """Test listing plugins as JSON for frontend IPC parsing."""
+        with patch("plugins.cli.PluginRegistry.get_instance") as mock_get_instance:
+            mock_registry = MagicMock()
+            mock_registry.list_plugins.return_value = mock_plugins
+            mock_get_instance.return_value = mock_registry
+
+            args = MagicMock(type="all", enabled_only=False, json=True)
+            result = cmd_list(args)
+
+            assert result == 0
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["success"] is True
+            assert [plugin["metadata"]["name"] for plugin in payload["plugins"]] == [
+                "test-agent",
+                "test-integration",
+            ]
+            assert payload["plugins"][0]["status"] == "enabled"
+            assert payload["plugins"][1]["status"] == "disabled"
 
     def test_list_filters_by_type(self, mock_plugins, capsys):
         """Test listing plugins filtered by type."""
@@ -329,6 +376,26 @@ class TestEnableCommand:
 
             captured = capsys.readouterr()
             assert "Plugin 'test-plugin' enabled successfully" in captured.out
+
+    def test_enable_json_outputs_operation_result(self, capsys):
+        """Test enabling an existing plugin as JSON for frontend IPC parsing."""
+        with patch("plugins.cli.PluginRegistry.get_instance") as mock_get_instance:
+            mock_plugin = MagicMock()
+            mock_plugin.name = "test-plugin"
+
+            mock_registry = MagicMock()
+            mock_registry.list_plugins.return_value = [mock_plugin]
+            mock_registry.get_plugin.return_value = mock_plugin
+            mock_get_instance.return_value = mock_registry
+
+            args = MagicMock(plugin_name="test-plugin", json=True)
+            result = cmd_enable(args)
+
+            assert result == 0
+            assert json.loads(capsys.readouterr().out) == {
+                "success": True,
+                "plugin_name": "test-plugin",
+            }
 
     def test_enable_nonexistent_plugin(self, caplog):
         """Test enabling a plugin that doesn't exist."""
@@ -811,31 +878,60 @@ class TestInstallCommand:
 
 
 class TestInfoCommand:
-    """Tests for the info command (placeholder)."""
+    """Tests for the info command."""
 
     def test_info_command_placeholder(self, capsys):
-        """Test that info command returns placeholder message."""
-        args = MagicMock(plugin_name="test-plugin")
-        result = cmd_info(args)
+        """Test that info command shows plugin details."""
+        with patch("plugins.cli.PluginRegistry.get_instance") as mock_get_instance:
+            mock_plugin = MagicMock()
+            mock_plugin.name = "test-plugin"
+            mock_plugin.version = "1.0.0"
+            mock_plugin.plugin_type = PluginType.AGENT
+            mock_plugin.is_enabled = True
+            mock_plugin.metadata.description = "Test plugin"
+
+            mock_registry = MagicMock()
+            mock_registry.list_plugins.return_value = [mock_plugin]
+            mock_registry.get_plugin.return_value = mock_plugin
+            mock_get_instance.return_value = mock_registry
+
+            args = MagicMock(plugin_name="test-plugin")
+            result = cmd_info(args)
 
         assert result == 0
         captured = capsys.readouterr()
-        assert "Info command" in captured.out
-        assert "test-plugin" in captured.out
+        assert "Name: test-plugin" in captured.out
+        assert "Version: 1.0.0" in captured.out
 
 
 class TestUninstallCommand:
-    """Tests for the uninstall command (placeholder)."""
+    """Tests for the uninstall command."""
 
-    def test_uninstall_command_placeholder(self, capsys):
-        """Test that uninstall command returns placeholder message."""
-        args = MagicMock(plugin_name="test-plugin")
-        result = cmd_uninstall(args)
+    def test_uninstall_command_placeholder(self, temp_dir, capsys):
+        """Test that uninstall removes a user plugin."""
+        user_plugins_dir = temp_dir / "user_plugins"
+        target_dir = user_plugins_dir / "test-plugin"
+        target_dir.mkdir(parents=True)
+        (target_dir / "plugin.json").write_text("{}")
+
+        with patch("plugins.cli.PluginRegistry.get_instance") as mock_get_instance:
+            mock_plugin = MagicMock()
+            mock_plugin.name = "test-plugin"
+
+            mock_registry = MagicMock()
+            mock_registry.list_plugins.return_value = [mock_plugin]
+            mock_registry.get_plugin.return_value = mock_plugin
+            mock_registry.loader.user_plugins_dir = user_plugins_dir
+            mock_get_instance.return_value = mock_registry
+
+            args = MagicMock(plugin_name="test-plugin")
+            result = cmd_uninstall(args)
 
         assert result == 0
+        assert not target_dir.exists()
+        mock_registry.unload_plugin.assert_called_once_with("test-plugin")
         captured = capsys.readouterr()
-        assert "Uninstall command" in captured.out
-        assert "test-plugin" in captured.out
+        assert "Plugin 'test-plugin' uninstalled successfully" in captured.out
 
 
 class TestMainFunction:
