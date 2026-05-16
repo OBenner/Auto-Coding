@@ -18,37 +18,9 @@ if str(_PARENT_DIR) not in sys.path:
 
 from agents.runtime.compatibility import provider_choices, runtime_mode_choices
 
-from .analysis_commands import handle_analysis_command
-from .analytics_commands import handle_analytics_command
-from .batch_commands import (
-    handle_batch_cleanup_command,
-    handle_batch_create_command,
-    handle_batch_status_command,
-)
-from .build_commands import handle_build_command
-from .followup_commands import handle_followup_command
-from .migration_commands import (
-    handle_migration_command,
-    handle_migration_status_command,
-)
-from .pattern_commands import (
-    handle_pattern_analyze_command,
-    handle_pattern_query_command,
-    handle_pattern_stats_command,
-)
-from .predictive_scan_commands import (
-    handle_predictive_scan_check_command,
-    handle_predictive_scan_command,
-    handle_predictive_scan_status_command,
-)
 from .provider_smoke_commands import (
     DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS,
     handle_provider_smoke_command,
-)
-from .qa_commands import (
-    handle_qa_command,
-    handle_qa_status_command,
-    handle_review_status_command,
 )
 from .runtime_commands import (
     external_mcp_smoke_has_failures,
@@ -57,33 +29,12 @@ from .runtime_commands import (
     handle_generic_edit_resume_preflight_command,
     handle_runtime_modes_command,
 )
-from .scheduler_commands import (
-    handle_schedule_cancel_command,
-    handle_schedule_command,
-    handle_schedule_start_command,
-    handle_schedule_status_command,
-    handle_schedule_stop_command,
-)
-from .security_commands import handle_security_audit_command
-from .setup_commands import handle_setup_command
-from .spec_commands import print_specs_list
 from .utils import (
     DEFAULT_MODEL,
     find_spec,
     get_project_dir,
     print_banner,
     setup_environment,
-)
-from .workspace_commands import (
-    handle_cleanup_worktrees_command,
-    handle_create_pr_command,
-    handle_discard_command,
-    handle_list_worktrees_command,
-    handle_merge_analytics_export_command,
-    handle_merge_analytics_list_command,
-    handle_merge_analytics_summary_command,
-    handle_merge_command,
-    handle_review_command,
 )
 
 
@@ -237,10 +188,18 @@ Environment Variables:
         "--provider-smoke-runtime",
         type=str,
         default=None,
-        choices=("analysis_only", "analysis-only", "generic_edit", "generic-edit"),
+        choices=(
+            "analysis_only",
+            "analysis-only",
+            "generic_edit",
+            "generic-edit",
+            "mini_pipeline",
+            "mini-pipeline",
+        ),
         help=(
             "With --provider-smoke: runtime surface to validate "
-            "(default: analysis_only; use generic_edit for a tool-loop smoke)"
+            "(default: analysis_only; use generic_edit for a tool-loop smoke "
+            "or mini_pipeline for a tiny planner/coder/reviewer task)"
         ),
     )
 
@@ -834,22 +793,30 @@ def _run_cli() -> None:
 
     # Handle --list command
     if args.list:
+        from .spec_commands import print_specs_list
+
         print_banner()
         print_specs_list(project_dir)
         return
 
     # Handle --list-worktrees command
     if args.list_worktrees:
+        from .workspace_commands import handle_list_worktrees_command
+
         handle_list_worktrees_command(project_dir)
         return
 
     # Handle --cleanup-worktrees command
     if args.cleanup_worktrees:
+        from .workspace_commands import handle_cleanup_worktrees_command
+
         handle_cleanup_worktrees_command(project_dir)
         return
 
     # Handle --setup command
     if args.setup:
+        from .setup_commands import handle_setup_command
+
         result = handle_setup_command(
             project_dir=project_dir,
             dry_run=args.dry_run,
@@ -869,19 +836,27 @@ def _run_cli() -> None:
 
     # Handle batch commands
     if args.batch_create:
+        from .batch_commands import handle_batch_create_command
+
         handle_batch_create_command(args.batch_create, str(project_dir))
         return
 
     if args.batch_status:
+        from .batch_commands import handle_batch_status_command
+
         handle_batch_status_command(str(project_dir))
         return
 
     if args.batch_cleanup:
+        from .batch_commands import handle_batch_cleanup_command
+
         handle_batch_cleanup_command(str(project_dir), dry_run=not args.no_dry_run)
         return
 
     # Handle scheduler commands
     if args.schedule:
+        from .scheduler_commands import handle_schedule_command
+
         deps = (
             [d.strip() for d in args.schedule_deps.split(",") if d.strip()]
             if args.schedule_deps
@@ -897,33 +872,47 @@ def _run_cli() -> None:
         return
 
     if args.schedule_status:
+        from .scheduler_commands import handle_schedule_status_command
+
         handle_schedule_status_command(str(project_dir))
         return
 
     if args.schedule_cancel:
+        from .scheduler_commands import handle_schedule_cancel_command
+
         handle_schedule_cancel_command(args.schedule_cancel, str(project_dir))
         return
 
     if args.schedule_start:
+        from .scheduler_commands import handle_schedule_start_command
+
         handle_schedule_start_command(str(project_dir))
         return
 
     if args.schedule_stop:
+        from .scheduler_commands import handle_schedule_stop_command
+
         handle_schedule_stop_command(str(project_dir))
         return
 
     # Handle merge analytics commands
     if args.merge_analytics_list:
+        from .workspace_commands import handle_merge_analytics_list_command
+
         handle_merge_analytics_list_command(
             project_dir, limit=args.analytics_limit, task_id=args.analytics_task
         )
         return
 
     if args.merge_analytics_summary:
+        from .workspace_commands import handle_merge_analytics_summary_command
+
         handle_merge_analytics_summary_command(project_dir)
         return
 
     if args.merge_analytics_export:
+        from .workspace_commands import handle_merge_analytics_export_command
+
         handle_merge_analytics_export_command(
             project_dir,
             output_path=args.analytics_output,
@@ -933,6 +922,8 @@ def _run_cli() -> None:
 
     # Handle productivity analytics command
     if args.analytics:
+        from .analytics_commands import handle_analytics_command
+
         export_path = (
             Path(args.analytics_export_path) if args.analytics_export_path else None
         )
@@ -948,6 +939,8 @@ def _run_cli() -> None:
 
     # Handle predictive scan commands
     if args.predictive_scan:
+        from .predictive_scan_commands import handle_predictive_scan_command
+
         scan_spec_dir = None
         if args.spec:
             scan_spec_dir = find_spec(project_dir, args.spec)
@@ -964,6 +957,9 @@ def _run_cli() -> None:
         sys.exit(exit_code)
 
     if args.predictive_status:
+        from .predictive_scan_commands import handle_predictive_scan_status_command
+        from .spec_commands import print_specs_list
+
         if not args.spec:
             print("Warning: --spec required for --predictive-status")
             sys.exit(1)
@@ -984,6 +980,9 @@ def _run_cli() -> None:
         return
 
     if args.predictive_check:
+        from .predictive_scan_commands import handle_predictive_scan_check_command
+        from .spec_commands import print_specs_list
+
         spec_dir = None
         if args.spec:
             spec_dir = find_spec(project_dir, args.spec)
@@ -1003,6 +1002,9 @@ def _run_cli() -> None:
 
     # Handle security audit command
     if args.security_audit:
+        from .security_commands import handle_security_audit_command
+        from .spec_commands import print_specs_list
+
         # Security audit can run with or without a spec
         spec_dir = None
         if args.spec:
@@ -1024,6 +1026,8 @@ def _run_cli() -> None:
 
     # Handle failure pattern analyze command
     if args.failure_pattern_analyze:
+        from .pattern_commands import handle_pattern_analyze_command
+
         handle_pattern_analyze_command(
             project_dir=project_dir,
             spec_id=args.spec,
@@ -1033,6 +1037,9 @@ def _run_cli() -> None:
 
     # Handle failure pattern query command
     if args.failure_pattern_query is not None:
+        from .pattern_commands import handle_pattern_query_command
+        from .spec_commands import print_specs_list
+
         # Requires --spec for context
         if not args.spec:
             print_banner()
@@ -1064,6 +1071,9 @@ def _run_cli() -> None:
 
     # Handle failure pattern statistics command
     if args.failure_pattern_stats:
+        from .pattern_commands import handle_pattern_stats_command
+        from .spec_commands import print_specs_list
+
         # Requires --spec for context
         if not args.spec:
             print_banner()
@@ -1102,6 +1112,8 @@ def _run_cli() -> None:
     debug("run.py", "Finding spec", spec_identifier=args.spec)
     spec_dir = find_spec(project_dir, args.spec)
     if not spec_dir:
+        from .spec_commands import print_specs_list
+
         debug_error("run.py", "Spec not found", spec=args.spec)
         print_banner()
         print(f"\nError: Spec '{args.spec}' not found")
@@ -1134,6 +1146,8 @@ def _run_cli() -> None:
         return
 
     if args.merge:
+        from .workspace_commands import handle_merge_command
+
         success = handle_merge_command(
             project_dir,
             spec_dir.name,
@@ -1145,14 +1159,20 @@ def _run_cli() -> None:
         return
 
     if args.review:
+        from .workspace_commands import handle_review_command
+
         handle_review_command(project_dir, spec_dir.name)
         return
 
     if args.discard:
+        from .workspace_commands import handle_discard_command
+
         handle_discard_command(project_dir, spec_dir.name)
         return
 
     if args.create_pr:
+        from .workspace_commands import handle_create_pr_command
+
         # Pass args.pr_target directly - WorktreeManager._detect_base_branch
         # handles base branch detection internally when target_branch is None
         result = handle_create_pr_command(
@@ -1169,14 +1189,20 @@ def _run_cli() -> None:
 
     # Handle QA commands
     if args.qa_status:
+        from .qa_commands import handle_qa_status_command
+
         handle_qa_status_command(spec_dir)
         return
 
     if args.review_status:
+        from .qa_commands import handle_review_status_command
+
         handle_review_status_command(spec_dir)
         return
 
     if args.analyze:
+        from .analysis_commands import handle_analysis_command
+
         handle_analysis_command(
             project_dir=project_dir,
             spec_dir=spec_dir,
@@ -1188,6 +1214,8 @@ def _run_cli() -> None:
         return
 
     if args.qa:
+        from .qa_commands import handle_qa_command
+
         handle_qa_command(
             project_dir=project_dir,
             spec_dir=spec_dir,
@@ -1198,6 +1226,8 @@ def _run_cli() -> None:
 
     # Handle --followup command
     if args.followup:
+        from .followup_commands import handle_followup_command
+
         handle_followup_command(
             project_dir=project_dir,
             spec_dir=spec_dir,
@@ -1208,10 +1238,14 @@ def _run_cli() -> None:
 
     # Handle migration commands
     if args.migration_status:
+        from .migration_commands import handle_migration_status_command
+
         handle_migration_status_command(project_dir, spec_dir)
         return
 
     if args.migrate:
+        from .migration_commands import handle_migration_command
+
         handle_migration_command(
             project_dir=project_dir,
             spec_dir=spec_dir,
@@ -1221,6 +1255,8 @@ def _run_cli() -> None:
         return
 
     # Normal build flow
+    from .build_commands import handle_build_command
+
     handle_build_command(
         project_dir=project_dir,
         spec_dir=spec_dir,

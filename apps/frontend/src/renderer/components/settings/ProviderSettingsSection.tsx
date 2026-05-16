@@ -204,6 +204,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   choose_concrete_server: 'settings:aiProvider.runtimeDiagnosticValues.chooseConcreteServer',
   claude_code: 'settings:aiProvider.runtimeDiagnosticValues.claudeCode',
   client_disabled: 'settings:aiProvider.runtimeDiagnosticValues.clientDisabled',
+  coder: 'settings:aiProvider.runtimeDiagnosticValues.coder',
   codex_cli: 'settings:aiProvider.runtimeDiagnosticValues.codexCli',
   configuration_blocked: 'settings:aiProvider.runtimeDiagnosticValues.configurationBlocked',
   configuration_error: 'settings:aiProvider.runtimeDiagnosticValues.configurationError',
@@ -235,6 +236,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
   model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
+  mini_pipeline: 'settings:aiProvider.runtimeDiagnosticValues.miniPipeline',
+  mini_pipeline_blocked: 'settings:aiProvider.runtimeDiagnosticValues.miniPipelineBlocked',
+  mini_pipeline_ready: 'settings:aiProvider.runtimeDiagnosticValues.miniPipelineReady',
+  mini_task_pipeline: 'settings:aiProvider.runtimeDiagnosticValues.miniTaskPipeline',
   native: 'settings:aiProvider.runtimeDiagnosticValues.native',
   native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.nativeMcpRuntime',
   native_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolLoop',
@@ -261,6 +266,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_smoke_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeBlocked',
   provider_smoke_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeReady',
   pre_execution_blocked: 'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked',
+  planner: 'settings:aiProvider.runtimeDiagnosticValues.planner',
   qwen_code: 'settings:aiProvider.runtimeDiagnosticValues.qwenCode',
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
   ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
@@ -271,6 +277,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   register_external_mcp_adapter: 'settings:aiProvider.runtimeDiagnosticValues.registerExternalMcpAdapter',
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
+  reviewer: 'settings:aiProvider.runtimeDiagnosticValues.reviewer',
   sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
   runtime_blocked: 'settings:aiProvider.runtimeDiagnosticValues.runtimeBlocked',
   server_disabled: 'settings:aiProvider.runtimeDiagnosticValues.serverDisabled',
@@ -285,6 +292,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
   text_completion_ready: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionReady',
   text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
+  tests: 'settings:aiProvider.runtimeDiagnosticValues.tests',
   tool_loop_blocked: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopBlocked',
   tool_loop_limited: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopLimited',
   tool_loop_needs_recovery: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopNeedsRecovery',
@@ -759,6 +767,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
   const [testingProvider, setTestingProvider] = useState(false);
+  const [testingPipeline, setTestingPipeline] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [validationStatus, setValidationStatus] = useState<ProviderConfigValidation | null>(null);
   const [connectionTestStatus, setConnectionTestStatus] = useState<ProviderConnectionTestResult | null>(null);
@@ -941,8 +950,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     }
   };
 
-  const handleTestProvider = async () => {
-    setTestingProvider(true);
+  const runProviderSmokeTest = async (requestedRuntime?: string) => {
+    const isPipelineCheck = requestedRuntime === 'mini_pipeline';
+    if (isPipelineCheck) {
+      setTestingPipeline(true);
+    } else {
+      setTestingProvider(true);
+    }
     setSaveStatus('idle');
     setValidationStatus(null);
     setConnectionTestStatus(null);
@@ -962,7 +976,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
         return;
       }
 
-      const testResult = await getElectronAPI()?.testProviderConfig?.();
+      const testResult = await getElectronAPI()?.testProviderConfig?.(requestedRuntime);
       if (testResult?.success && testResult.data) {
         setConnectionTestStatus(testResult.data);
         setSaveStatus('success');
@@ -989,7 +1003,11 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       });
       setSaveStatus('error');
     } finally {
-      setTestingProvider(false);
+      if (isPipelineCheck) {
+        setTestingPipeline(false);
+      } else {
+        setTestingProvider(false);
+      }
     }
   };
 
@@ -1500,6 +1518,18 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       transactionBatchContract
     );
+    const miniPipeline = runtimeDiagnostics?.miniPipeline ?? null;
+    const miniPipelineStatus = formatRuntimeDiagnosticValue(t, miniPipeline?.status);
+    const miniPipelineReason = formatRuntimeDiagnosticValue(t, miniPipeline?.reason);
+    const miniPipelinePhases = miniPipeline?.phases
+      ?.map((phase) => {
+        const name = formatRuntimeDiagnosticValue(t, phase.name);
+        const status = formatRuntimeDiagnosticValue(t, phase.status);
+        return name && status ? `${name}: ${status}` : name || status;
+      })
+      .filter(Boolean)
+      .join(', ');
+    const miniPipelineChangedFiles = miniPipeline?.changedFiles?.join(', ');
     const validatedNativeFallback = validatedExecution?.nativeToolFallbacks?.[0];
     const validatedNativeFallbackReason = formatRuntimeDiagnosticValue(
       t,
@@ -1606,6 +1636,38 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 label={t('settings:aiProvider.connectionTest.missingFullAutonomous')}
                 value={missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
               />
+              {miniPipeline && (
+                <>
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.pipelineStatus')}
+                    value={miniPipelineStatus}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.pipelineTask')}
+                    value={miniPipeline.task}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.pipelinePhases')}
+                    value={miniPipelinePhases}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.pipelineTestCommand')}
+                    value={miniPipeline.testCommand}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.pipelineTestExitCode')}
+                    value={typeof miniPipeline.testExitCode === 'number' ? miniPipeline.testExitCode : null}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.pipelineChangedFiles')}
+                    value={miniPipelineChangedFiles}
+                  />
+                  <RuntimeDiagnosticRow
+                    label={t('settings:aiProvider.connectionTest.pipelineReason')}
+                    value={miniPipelineReason}
+                  />
+                </>
+              )}
               {validatedExecution && (
                 <>
                   <RuntimeDiagnosticRow
@@ -2115,7 +2177,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           <Button
             variant="outline"
             onClick={handleValidate}
-            disabled={saving || validating || testingProvider || loading}
+            disabled={saving || validating || testingProvider || testingPipeline || loading}
           >
             {validating
               ? t('settings:aiProvider.validation.validating')
@@ -2124,13 +2186,24 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           <Button
             variant="outline"
             className="gap-2"
-            onClick={handleTestProvider}
-            disabled={saving || validating || testingProvider || loading}
+            onClick={() => runProviderSmokeTest()}
+            disabled={saving || validating || testingProvider || testingPipeline || loading}
           >
             <Activity className="h-4 w-4" />
             {testingProvider
               ? t('settings:aiProvider.connectionTest.testing')
               : t('settings:aiProvider.connectionTest.action')}
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => runProviderSmokeTest('mini_pipeline')}
+            disabled={saving || validating || testingProvider || testingPipeline || loading}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            {testingPipeline
+              ? t('settings:aiProvider.connectionTest.pipelineTesting')
+              : t('settings:aiProvider.connectionTest.pipelineAction')}
           </Button>
           {saveStatus === 'success' && (
             <span className="inline-flex items-center gap-1.5 text-sm text-success">

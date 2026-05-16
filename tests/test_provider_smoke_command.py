@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -74,6 +76,39 @@ def test_parse_args_with_provider_smoke():
     assert args.provider_smoke_timeout == 12
 
 
+def test_cli_main_import_does_not_require_claude_agent_sdk():
+    backend_path = Path(__file__).resolve().parents[1] / "apps" / "backend"
+    code = """
+import importlib.abc
+import sys
+
+class BlockClaudeSdk(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "claude_agent_sdk":
+            raise ModuleNotFoundError("No module named 'claude_agent_sdk'")
+        return None
+
+sys.meta_path.insert(0, BlockClaudeSdk())
+import cli.main
+print("ok")
+"""
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(backend_path),
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "ok"
+
+
 def test_parse_args_with_provider_smoke_runtime():
     from cli.main import parse_args
 
@@ -94,6 +129,28 @@ def test_parse_args_with_provider_smoke_runtime():
     assert args.provider == "openai"
     assert args.provider_smoke is True
     assert args.provider_smoke_runtime == "generic_edit"
+
+
+def test_parse_args_with_provider_smoke_mini_pipeline_runtime():
+    from cli.main import parse_args
+
+    original_argv = sys.argv
+    sys.argv = [
+        "run.py",
+        "--provider",
+        "openai",
+        "--provider-smoke",
+        "--provider-smoke-runtime",
+        "mini_pipeline",
+    ]
+    try:
+        args = parse_args()
+    finally:
+        sys.argv = original_argv
+
+    assert args.provider == "openai"
+    assert args.provider_smoke is True
+    assert args.provider_smoke_runtime == "mini_pipeline"
 
 
 @pytest.mark.asyncio
@@ -370,6 +427,145 @@ async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallbac
         "recovery_status": "not_required",
     }
     assert "Respond with exactly one JSON object" in fake_provider.session.messages[0]
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_check_mini_pipeline_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import run_provider_smoke_check
+
+    class FakeMiniPipelineGenericEditSession:
+        provider_name = "openai"
+
+        def __init__(self):
+            self.calls = 0
+            self.tool_results: list[tuple[str, str]] = []
+
+        async def complete_with_tool_calls(self, message, tools):
+            self.calls += 1
+            assert "slugify" in message
+            assert any(tool["name"] == "write_file" for tool in tools)
+            if self.calls == 1:
+                return ProviderToolCallResponse(
+                    content="",
+                    tool_calls=(
+                        ProviderToolCall(
+                            id="call_write_slugify",
+                            name="write_file",
+                            arguments={
+                                "path": "string_tools.py",
+                                "content": (
+                                    "import re\n\n\n"
+                                    "def normalize_space(value: str) -> str:\n"
+                                    "    return \" \".join(value.split())\n\n\n"
+                                    "def slugify(value: str) -> str:\n"
+                                    "    slug = re.sub(\n"
+                                    "        r\"[^a-z0-9]+\", \"-\", value.strip().lower()\n"
+                                    "    )\n"
+                                    "    return slug.strip(\"-\")\n"
+                                ),
+                            },
+                        ),
+                    ),
+                )
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="call_finish_pipeline",
+                        name="finish",
+                        arguments={
+                            "summary": "Implemented slugify and kept unittest coverage.",
+                            "tests": ["python -m unittest -q"],
+                            "risks": [],
+                        },
+                    ),
+                ),
+            )
+
+        def add_tool_result(self, tool_call_id, name, result):
+            self.tool_results.append((tool_call_id, name))
+
+    class FakeMiniPipelineProvider:
+        name = "openai"
+
+        def __init__(self):
+            self.session = FakeMiniPipelineGenericEditSession()
+            self.messages: list[str] = []
+
+        def validate_config(self):
+            return True
+
+        def create_session(self, session_config):
+            assert session_config.model == "gpt-4o"
+            return self.session
+
+        async def send_message(self, message: str):
+            self.messages.append(message)
+            if len(self.messages) == 1:
+                yield "Plan: implement slugify, run unittest, review results."
+            else:
+                assert "python -m unittest -q" in message
+                yield "Review passed: implementation satisfies the mini task."
+
+    fake_provider = FakeMiniPipelineProvider()
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="openai",
+            openai_api_key="sk-test",
+            openai_model="gpt-4o",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: fake_provider,
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model="gpt-4o",
+        prompt=None,
+        timeout_seconds=3,
+        runtime_mode="mini_pipeline",
+    )
+
+    assert result.success is True
+    assert result.provider == "openai"
+    assert result.runtime_mode == "mini_pipeline"
+    assert result.response_excerpt.startswith("Review passed")
+    assert result.runtime_diagnostics["smoke_scope"] == "mini_task_pipeline"
+    assert result.runtime_diagnostics["validated_runtime_mode"] == "mini_pipeline"
+    assert "function_tools" in result.runtime_diagnostics["validated_requirements"]
+    assert result.runtime_diagnostics["validated_runtime_missing_capabilities"] == []
+    assert result.runtime_diagnostics["provider_contract_health"] == {
+        "status": "mini_pipeline_ready",
+        "smoke_scope": "mini_task_pipeline",
+        "tool_call_support": "native",
+        "tool_result_support": "normalized",
+        "fallback": "none",
+        "recovery_status": "not_required",
+    }
+    assert result.runtime_diagnostics["mini_pipeline"] == {
+        "status": "passed",
+        "task": "Implement slugify(value: str) in string_tools.py.",
+        "test_command": "python -m unittest -q",
+        "test_exit_code": 0,
+        "changed_files": ["string_tools.py"],
+        "phases": [
+            {"name": "planner", "status": "passed"},
+            {"name": "coder", "status": "passed"},
+            {"name": "tests", "status": "passed"},
+            {"name": "reviewer", "status": "passed"},
+        ],
+    }
+    assert result.runtime_diagnostics["validated_runtime_execution"][
+        "tool_counts"
+    ] == {"write_file": 1}
+    assert fake_provider.messages[0].startswith("Plan a tiny Auto Code readiness task")
+    assert fake_provider.session.tool_results[0] == ("call_write_slugify", "write_file")
 
 
 def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(

@@ -59,9 +59,6 @@ load_dotenv = import_dotenv()
 # NOTE: graphiti_config is imported lazily in validate_environment() to avoid
 # triggering graphiti_core -> real_ladybug -> pywintypes import chain before
 # platform dependency validation can run. See ACS-253.
-from linear_integration import LinearManager
-from linear_updater import is_linear_enabled
-from spec.pipeline import get_specs_dir
 from ui import (
     Icons,
     bold,
@@ -137,6 +134,8 @@ def find_spec(project_dir: Path, spec_identifier: str) -> Path | None:
     Returns:
         Path to spec folder, or None if not found
     """
+    from spec.pipeline import get_specs_dir
+
     specs_dir = get_specs_dir(project_dir)
 
     if specs_dir.exists():
@@ -219,6 +218,9 @@ def validate_environment(spec_dir: Path) -> bool:
         valid = False
 
     # Check Linear integration (optional but show status)
+    from linear_integration import LinearManager
+    from linear_updater import is_linear_enabled
+
     if is_linear_enabled():
         print("Linear integration: ENABLED")
         # Show Linear project status if initialized
@@ -314,4 +316,6 @@ def find_specs_dir(project_dir: Path) -> Path:
     Returns:
         Path to specs directory (always returns a valid Path)
     """
+    from spec.pipeline import get_specs_dir
+
     return get_specs_dir(project_dir)
