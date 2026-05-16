@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import path from 'path';
 
 type IpcHandler = (_event: unknown, payload?: unknown) => Promise<unknown>;
 
 const registeredHandlers = new Map<string, IpcHandler>();
+const pluginCliPath = path.join('/app/source', 'apps', 'backend', 'plugins', 'cli.py');
 
 const { mockExecFileSync } = vi.hoisted(() => ({
   mockExecFileSync: vi.fn()
@@ -92,7 +94,7 @@ describe('plugin IPC handlers', () => {
     expect(mockExecFileSync).toHaveBeenCalledWith(
       '/usr/bin/python3',
       [
-        '/app/source/apps/backend/plugins/cli.py',
+        pluginCliPath,
         'list',
         '--json',
         '--type',
@@ -143,7 +145,7 @@ describe('plugin IPC handlers', () => {
     expect(mockExecFileSync).toHaveBeenCalledWith(
       '/usr/bin/python3',
       [
-        '/app/source/apps/backend/plugins/cli.py',
+        pluginCliPath,
         'install',
         '--json',
         '--path',
