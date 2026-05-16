@@ -25,6 +25,7 @@ import type {
   AIProviderConfig,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
+  ProviderReliabilityDiagnostics,
   ProviderRuntimeDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
@@ -250,6 +251,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   normalized: 'settings:aiProvider.runtimeDiagnosticValues.normalized',
   no: 'settings:aiProvider.runtimeDiagnosticValues.no',
   none: 'settings:aiProvider.runtimeDiagnosticValues.none',
+  not_covered: 'settings:aiProvider.runtimeDiagnosticValues.notCovered',
   not_observed: 'settings:aiProvider.runtimeDiagnosticValues.notObserved',
   not_required: 'settings:aiProvider.runtimeDiagnosticValues.notRequired',
   not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
@@ -262,9 +264,11 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   orchestrated: 'settings:aiProvider.runtimeDiagnosticValues.orchestrated',
   partial: 'settings:aiProvider.runtimeDiagnosticValues.partial',
   partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.partialFailure',
+  partial_coverage: 'settings:aiProvider.runtimeDiagnosticValues.partialCoverage',
   passed: 'settings:aiProvider.runtimeDiagnosticValues.passed',
   patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
   provider_error: 'settings:aiProvider.runtimeDiagnosticValues.providerError',
+  provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired',
   provider_smoke_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeBlocked',
   provider_smoke_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeReady',
   pre_execution_blocked: 'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked',
@@ -301,7 +305,9 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   tool_loop_needs_recovery: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopNeedsRecovery',
   tool_loop_ready: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopReady',
   complete: 'settings:aiProvider.runtimeDiagnosticValues.complete',
+  direct_api_full_autonomy: 'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy',
   finish: 'settings:aiProvider.runtimeDiagnosticValues.finish',
+  gateway_model_limitations: 'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
   unknown: 'settings:aiProvider.runtimeDiagnosticValues.unknown',
   unresolved: 'settings:aiProvider.runtimeDiagnosticValues.unresolved',
@@ -595,6 +601,59 @@ export function buildProviderResumePolicyDiagnosticRows(
       ),
     },
   ].filter((row) => row.value);
+}
+
+export function buildProviderReliabilityDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  reliability?: ProviderReliabilityDiagnostics | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!reliability) {
+    return [];
+  }
+  const coverageValue = [
+    typeof reliability.passedCaseCount === 'number'
+      && typeof reliability.requiredCaseCount === 'number'
+      ? `${reliability.passedCaseCount}/${reliability.requiredCaseCount} passed`
+      : '',
+    typeof reliability.observedCaseCount === 'number'
+      ? `${reliability.observedCaseCount} observed`
+      : '',
+  ].filter(Boolean).join(', ');
+  const caseValue = reliability.cases
+    ?.map((entry) => {
+      const name = formatRuntimeDiagnosticValue(translate, entry.case);
+      const status = formatRuntimeDiagnosticValue(translate, entry.status);
+      const source = formatRuntimeDiagnosticValue(translate, entry.source);
+      if (!name || !status) {
+        return '';
+      }
+      return source ? `${name}: ${status} (${source})` : `${name}: ${status}`;
+    })
+    .filter(Boolean)
+    .join(', ');
+  const rows: ProviderResumePolicyDiagnosticRow[] = [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.reliabilityStatus',
+      value: formatRuntimeDiagnosticValue(translate, reliability.status) || '',
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.reliabilitySuite',
+      value: formatRuntimeDiagnosticValue(translate, reliability.suite) || '',
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.reliabilityCoverage',
+      value: coverageValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.reliabilityUncovered',
+      value: formatRuntimeDiagnosticList(translate, reliability.uncoveredCases),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.reliabilityCases',
+      value: caseValue || '',
+    },
+  ];
+  return rows.filter((row) => row.value);
 }
 
 export function buildProviderTransactionBatchDiagnosticRows(
@@ -1554,6 +1613,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       .filter(Boolean)
       .join(', ');
     const miniPipelineChangedFiles = miniPipeline?.changedFiles?.join(', ');
+    const reliabilityRows = buildProviderReliabilityDiagnosticRows(
+      t,
+      runtimeDiagnostics?.providerReliability
+    );
     const validatedNativeFallback = validatedExecution?.nativeToolFallbacks?.[0];
     const validatedNativeFallbackReason = formatRuntimeDiagnosticValue(
       t,
@@ -1660,6 +1723,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 label={t('settings:aiProvider.connectionTest.missingFullAutonomous')}
                 value={missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
               />
+              {reliabilityRows.map((row) => (
+                <RuntimeDiagnosticRow
+                  key={row.labelKey}
+                  label={t(row.labelKey)}
+                  value={row.value}
+                />
+              ))}
               {miniPipeline && (
                 <>
                   <RuntimeDiagnosticRow

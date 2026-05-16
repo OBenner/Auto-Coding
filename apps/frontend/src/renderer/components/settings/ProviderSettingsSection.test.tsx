@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildProviderReliabilityDiagnosticRows,
   buildProviderResumePolicyDiagnosticRows,
   buildProviderTransactionBatchDiagnosticRows
 } from './ProviderSettingsSection';
@@ -28,14 +29,28 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.batchPreferredStrategy': 'Batch preferred strategy',
     'settings:aiProvider.connectionTest.batchRequiredActions': 'Batch required actions',
     'settings:aiProvider.connectionTest.batchResolutionStrategies': 'Batch resolution strategies',
+    'settings:aiProvider.connectionTest.reliabilityStatus': 'Provider reliability',
+    'settings:aiProvider.connectionTest.reliabilitySuite': 'Reliability suite',
+    'settings:aiProvider.connectionTest.reliabilityCoverage': 'Reliability coverage',
+    'settings:aiProvider.connectionTest.reliabilityUncovered': 'Reliability uncovered',
+    'settings:aiProvider.connectionTest.reliabilityCases': 'Reliability cases',
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
+    'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
+    'settings:aiProvider.runtimeDiagnosticValues.notCovered': 'Not covered',
+    'settings:aiProvider.runtimeDiagnosticValues.partialCoverage': 'Partial coverage',
     'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked': 'Pre-execution blocked',
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired': 'Provider e2e required',
     'settings:aiProvider.runtimeDiagnosticValues.ready': 'Ready',
     'settings:aiProvider.runtimeDiagnosticValues.repairMutation': 'Repair mutation',
     'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure': 'Recover partial failure',
+    'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations': 'Gateway model limitations',
+    'settings:aiProvider.runtimeDiagnosticValues.miniPipeline': 'Mini pipeline',
+    'settings:aiProvider.runtimeDiagnosticValues.passed': 'Passed',
+    'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
+    'settings:aiProvider.runtimeDiagnosticValues.unsupportedTools': 'Unsupported tools',
     'settings:aiProvider.runtimeDiagnosticValues.yes': 'Yes',
   })[key] ?? key;
 
@@ -82,6 +97,58 @@ describe('buildProviderResumePolicyDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.resumeOpenBatches',
         value: 'batch-1',
+      },
+    ]);
+  });
+});
+
+describe('buildProviderReliabilityDiagnosticRows', () => {
+  it('includes provider e2e coverage and uncovered cases', () => {
+    expect(
+      buildProviderReliabilityDiagnosticRows(translate, {
+        provider: 'openai',
+        suite: 'direct_api_full_autonomy',
+        status: 'partial_coverage',
+        observedCaseCount: 5,
+        passedCaseCount: 5,
+        requiredCaseCount: 7,
+        uncoveredCases: ['unsupported_tools', 'gateway_model_limitations'],
+        cases: [
+          {
+            case: 'text_completion',
+            status: 'passed',
+            source: 'mini_pipeline',
+          },
+          {
+            case: 'unsupported_tools',
+            status: 'not_covered',
+            source: 'provider_e2e_required',
+          },
+        ],
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.reliabilityStatus',
+        value: 'Partial coverage',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.reliabilitySuite',
+        value: 'Direct API full autonomy',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.reliabilityCoverage',
+        value: '5/7 passed, 5 observed',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.reliabilityUncovered',
+        value: 'Unsupported tools, Gateway model limitations',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.reliabilityCases',
+        value: (
+          'Text completion: Passed (Mini pipeline), Unsupported tools: '
+          + 'Not covered (Provider e2e required)'
+        ),
       },
     ]);
   });

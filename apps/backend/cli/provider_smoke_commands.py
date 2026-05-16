@@ -102,6 +102,14 @@ MINI_PIPELINE_TEST_FILE = (
 )
 DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS = 30.0
 PROVIDER_SMOKE_RUNTIME_MODES = ("analysis_only", "generic_edit", "mini_pipeline")
+PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = (
+    "openai",
+    "google",
+    "openrouter",
+    "litellm",
+    "zhipuai",
+    "ollama",
+)
 
 
 @dataclass(frozen=True)
@@ -616,14 +624,254 @@ def _with_provider_contract_health(
     error_details: str | None = None,
 ) -> dict[str, Any]:
     """Attach provider health classification without mutating caller payloads."""
-    return {
+    provider_contract_health = _provider_contract_health(
+        runtime_diagnostics,
+        success=success,
+        error_details=error_details,
+    )
+    diagnostics = {
         **runtime_diagnostics,
-        "provider_contract_health": _provider_contract_health(
-            runtime_diagnostics,
-            success=success,
-            error_details=error_details,
-        ),
+        "provider_contract_health": provider_contract_health,
     }
+    provider_reliability = _provider_reliability_diagnostics(
+        diagnostics,
+        provider_contract_health=provider_contract_health,
+        success=success,
+    )
+    if provider_reliability is not None:
+        diagnostics["provider_reliability"] = provider_reliability
+    return diagnostics
+
+
+def _provider_reliability_diagnostics(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    provider_contract_health: dict[str, Any],
+    success: bool | None,
+) -> dict[str, Any] | None:
+    """Return direct-provider e2e coverage status from one smoke run."""
+    provider = str(runtime_diagnostics.get("provider") or "").lower()
+    if provider not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return None
+
+    cases = [
+        _provider_text_completion_case(runtime_diagnostics, success=success),
+        _provider_generic_edit_case(runtime_diagnostics),
+        _provider_native_tool_case(runtime_diagnostics),
+        _provider_tool_result_case(runtime_diagnostics),
+        _provider_recovery_loop_case(runtime_diagnostics),
+        _provider_unsupported_tools_case(
+            runtime_diagnostics,
+            provider_contract_health=provider_contract_health,
+        ),
+        _provider_gateway_model_case(provider_contract_health),
+    ]
+    observed_cases = [case for case in cases if case.get("status") != "not_covered"]
+    passed_cases = [case for case in cases if case.get("status") == "passed"]
+    uncovered_cases = [
+        str(case["case"]) for case in cases if case.get("status") == "not_covered"
+    ]
+    return {
+        "provider": provider,
+        "suite": "direct_api_full_autonomy",
+        "status": "complete" if len(passed_cases) == len(cases) else "partial_coverage",
+        "observed_case_count": len(observed_cases),
+        "passed_case_count": len(passed_cases),
+        "required_case_count": len(cases),
+        "uncovered_cases": uncovered_cases,
+        "cases": cases,
+    }
+
+
+def _provider_text_completion_case(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    success: bool | None,
+) -> dict[str, str]:
+    smoke_scope = str(runtime_diagnostics.get("smoke_scope") or "unknown")
+    if success is True:
+        return {
+            "case": "text_completion",
+            "status": "passed",
+            "source": "mini_pipeline"
+            if smoke_scope == "mini_task_pipeline"
+            else smoke_scope,
+        }
+    if smoke_scope != "unknown":
+        return {
+            "case": "text_completion",
+            "status": "blocked",
+            "source": smoke_scope,
+        }
+    return {
+        "case": "text_completion",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_generic_edit_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    contract = _provider_tool_loop_contract(runtime_diagnostics)
+    status = str(contract.get("status") or "") if isinstance(contract, dict) else ""
+    if status in {"passed", "recovered"}:
+        return {
+            "case": "generic_edit_tool_loop",
+            "status": "passed",
+            "source": "tool_loop_contract",
+        }
+    if status in {"needs_recovery", "unsupported_tools", "blocked"}:
+        return {
+            "case": "generic_edit_tool_loop",
+            "status": "blocked",
+            "source": "tool_loop_contract",
+        }
+    return {
+        "case": "generic_edit_tool_loop",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_native_tool_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    contract = _provider_tool_loop_contract(runtime_diagnostics)
+    support = (
+        str(contract.get("tool_call_support") or "")
+        if isinstance(contract, dict)
+        else ""
+    )
+    if support == "native":
+        return {
+            "case": "native_tool_calls",
+            "status": "passed",
+            "source": "tool_loop_contract",
+        }
+    if support in {"json_fallback", "json_actions"}:
+        return {
+            "case": "native_tool_calls",
+            "status": "limited",
+            "source": "tool_loop_contract",
+        }
+    return {
+        "case": "native_tool_calls",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_tool_result_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    contract = _provider_tool_loop_contract(runtime_diagnostics)
+    support = (
+        str(contract.get("tool_result_support") or "")
+        if isinstance(contract, dict)
+        else ""
+    )
+    if support == "normalized":
+        return {
+            "case": "tool_results",
+            "status": "passed",
+            "source": "tool_loop_contract",
+        }
+    if support == "partial_failure":
+        return {
+            "case": "tool_results",
+            "status": "limited",
+            "source": "tool_loop_contract",
+        }
+    if support == "failed":
+        return {
+            "case": "tool_results",
+            "status": "blocked",
+            "source": "tool_loop_contract",
+        }
+    return {
+        "case": "tool_results",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_recovery_loop_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    mini_pipeline = runtime_diagnostics.get("mini_pipeline")
+    recovery_loop = (
+        mini_pipeline.get("recovery_loop") if isinstance(mini_pipeline, dict) else None
+    )
+    if isinstance(recovery_loop, dict):
+        status = str(recovery_loop.get("status") or "")
+        if status == "passed":
+            return {
+                "case": "recovery_loop",
+                "status": "passed",
+                "source": "mini_pipeline",
+            }
+        if status:
+            return {
+                "case": "recovery_loop",
+                "status": "blocked",
+                "source": "mini_pipeline",
+            }
+    return {
+        "case": "recovery_loop",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_unsupported_tools_case(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    provider_contract_health: dict[str, Any],
+) -> dict[str, str]:
+    contract = _provider_tool_loop_contract(runtime_diagnostics)
+    contract_status = (
+        str(contract.get("status") or "") if isinstance(contract, dict) else ""
+    )
+    health_status = str(provider_contract_health.get("status") or "")
+    if contract_status == "unsupported_tools" or health_status == "unsupported_tools":
+        return {
+            "case": "unsupported_tools",
+            "status": "blocked",
+            "source": "tool_loop_contract",
+        }
+    return {
+        "case": "unsupported_tools",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_gateway_model_case(
+    provider_contract_health: dict[str, Any],
+) -> dict[str, str]:
+    health_status = str(provider_contract_health.get("status") or "")
+    if health_status in {"gateway_blocked", "model_blocked"}:
+        return {
+            "case": "gateway_model_limitations",
+            "status": "blocked",
+            "source": "provider_contract_health",
+        }
+    return {
+        "case": "gateway_model_limitations",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_tool_loop_contract(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, Any] | None:
+    execution = runtime_diagnostics.get("validated_runtime_execution")
+    if not isinstance(execution, dict):
+        return None
+    contract = execution.get("tool_loop_contract")
+    return contract if isinstance(contract, dict) else None
 
 
 def _provider_health_from_tool_loop_contract(
@@ -879,6 +1127,7 @@ def build_provider_smoke_runtime_diagnostics(
     )
     full_autonomous_requirements = RuntimeRequirements.full_coder()
     return {
+        "provider": provider_name,
         "smoke_scope": _provider_smoke_scope(validated_mode),
         "requested_runtime_mode": requested_mode,
         "validated_runtime_mode": smoke_requirements.mode,
@@ -1724,6 +1973,7 @@ def _print_provider_runtime_diagnostics(
         str(runtime_diagnostics.get("smoke_scope", "unknown")),
     )
     _print_provider_contract_health(runtime_diagnostics.get("provider_contract_health"))
+    _print_provider_reliability(runtime_diagnostics.get("provider_reliability"))
     _print_provider_execution_diagnostics(
         runtime_diagnostics.get("validated_runtime_execution")
     )
@@ -1740,6 +1990,34 @@ def _print_provider_contract_health(health: Any) -> None:
     reason = health.get("reason")
     if isinstance(reason, str) and reason:
         print_key_value("Provider health reason", reason)
+
+
+def _print_provider_reliability(reliability: Any) -> None:
+    """Print direct-provider reliability coverage diagnostics."""
+    if not isinstance(reliability, dict):
+        return
+    status = reliability.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Provider reliability", status)
+    coverage_parts = [
+        (
+            f"{reliability['passed_case_count']}/"
+            f"{reliability['required_case_count']} passed"
+        )
+        if isinstance(reliability.get("passed_case_count"), int)
+        and not isinstance(reliability.get("passed_case_count"), bool)
+        and isinstance(reliability.get("required_case_count"), int)
+        and not isinstance(reliability.get("required_case_count"), bool)
+        else "",
+        f"{reliability['observed_case_count']} observed"
+        if isinstance(reliability.get("observed_case_count"), int)
+        and not isinstance(reliability.get("observed_case_count"), bool)
+        else "",
+    ]
+    coverage = ", ".join(part for part in coverage_parts if part)
+    if coverage:
+        print_key_value("Reliability coverage", coverage)
+    _print_string_list_line("Reliability uncovered", reliability.get("uncovered_cases"))
 
 
 def _print_provider_execution_diagnostics(execution: Any) -> None:

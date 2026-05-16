@@ -488,6 +488,7 @@ export interface ProviderRuntimeDiagnostics {
   validatedRuntimeMissingCapabilities?: string[];
   validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
   miniPipeline?: ProviderMiniPipelineDiagnostics | null;
+  providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
 }
@@ -575,6 +576,23 @@ export interface ProviderMiniPipelineDiagnostics {
 export interface ProviderMiniPipelinePhase {
   name?: string;
   status?: string;
+}
+
+export interface ProviderReliabilityDiagnostics {
+  provider?: string;
+  suite?: string;
+  status?: string;
+  observedCaseCount?: number;
+  passedCaseCount?: number;
+  requiredCaseCount?: number;
+  uncoveredCases?: string[];
+  cases?: ProviderReliabilityCase[];
+}
+
+export interface ProviderReliabilityCase {
+  case?: string;
+  status?: string;
+  source?: string;
 }
 
 export interface ProviderConnectionTestResult {

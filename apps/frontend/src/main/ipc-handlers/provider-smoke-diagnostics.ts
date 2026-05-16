@@ -1,5 +1,6 @@
 import type {
   ProviderContractHealth,
+  ProviderReliabilityDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
   ProviderValidatedToolLoopContract
@@ -135,5 +136,43 @@ export function mapProviderContractHealth(
 
   return Object.values(health).some((field) => field !== undefined)
     ? health
+    : undefined;
+}
+
+export function mapProviderReliability(
+  value: unknown
+): ProviderReliabilityDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const cases = Array.isArray(payload.cases)
+    ? payload.cases
+      .filter((item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+      )
+      .map((item) => ({
+        case: stringFromUnknown(item.case),
+        status: stringFromUnknown(item.status),
+        source: stringFromUnknown(item.source),
+      }))
+      .filter((item) => Object.values(item).some((field) => field !== undefined))
+    : undefined;
+  const reliability: ProviderReliabilityDiagnostics = {
+    provider: stringFromUnknown(payload.provider),
+    suite: stringFromUnknown(payload.suite),
+    status: stringFromUnknown(payload.status),
+    observedCaseCount: numberFromUnknown(payload.observed_case_count),
+    passedCaseCount: numberFromUnknown(payload.passed_case_count),
+    requiredCaseCount: numberFromUnknown(payload.required_case_count),
+    uncoveredCases: arrayFromUnknown(payload.uncovered_cases),
+    cases: cases?.length ? cases : undefined,
+  };
+
+  return Object.values(reliability).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? reliability
     : undefined;
 }

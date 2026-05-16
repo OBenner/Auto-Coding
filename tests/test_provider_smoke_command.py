@@ -1044,6 +1044,84 @@ def test_generic_edit_execution_diagnostics_classifies_unsupported_tool_contract
     }
 
 
+def test_provider_reliability_diagnostics_tracks_mini_pipeline_coverage():
+    from cli.provider_smoke_commands import _with_provider_contract_health
+
+    diagnostics = _with_provider_contract_health(
+        {
+            "provider": "openai",
+            "smoke_scope": "mini_task_pipeline",
+            "validated_runtime_execution": {
+                "tool_loop_contract": {
+                    "status": "passed",
+                    "tool_call_support": "native",
+                    "tool_result_support": "normalized",
+                    "fallback": "none",
+                    "recovery_status": "not_required",
+                },
+            },
+            "mini_pipeline": {
+                "status": "passed",
+                "recovery_loop": {
+                    "status": "passed",
+                    "recovery_status": "resolved",
+                },
+            },
+        },
+        success=True,
+    )
+
+    assert diagnostics["provider_reliability"] == {
+        "provider": "openai",
+        "suite": "direct_api_full_autonomy",
+        "status": "partial_coverage",
+        "observed_case_count": 5,
+        "passed_case_count": 5,
+        "required_case_count": 7,
+        "uncovered_cases": [
+            "unsupported_tools",
+            "gateway_model_limitations",
+        ],
+        "cases": [
+            {
+                "case": "text_completion",
+                "status": "passed",
+                "source": "mini_pipeline",
+            },
+            {
+                "case": "generic_edit_tool_loop",
+                "status": "passed",
+                "source": "tool_loop_contract",
+            },
+            {
+                "case": "native_tool_calls",
+                "status": "passed",
+                "source": "tool_loop_contract",
+            },
+            {
+                "case": "tool_results",
+                "status": "passed",
+                "source": "tool_loop_contract",
+            },
+            {
+                "case": "recovery_loop",
+                "status": "passed",
+                "source": "mini_pipeline",
+            },
+            {
+                "case": "unsupported_tools",
+                "status": "not_covered",
+                "source": "provider_e2e_required",
+            },
+            {
+                "case": "gateway_model_limitations",
+                "status": "not_covered",
+                "source": "provider_e2e_required",
+            },
+        ],
+    }
+
+
 @pytest.mark.asyncio
 async def test_run_provider_smoke_check_reports_validation_errors(
     tmp_path: Path,
@@ -1251,6 +1329,16 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
                     "status": "tool_loop_limited",
                     "reason": "native_tool_request_failed",
                 },
+                "provider_reliability": {
+                    "status": "partial_coverage",
+                    "observed_case_count": 4,
+                    "passed_case_count": 3,
+                    "required_case_count": 7,
+                    "uncovered_cases": [
+                        "recovery_loop",
+                        "unsupported_tools",
+                    ],
+                },
                 "validated_runtime_execution": {
                     "loop": "json_actions",
                     "action_count": 2,
@@ -1320,6 +1408,12 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     assert "Provider health" in output
     assert "tool_loop_limited" in output
     assert "Provider health reason" in output
+    assert "Provider reliability" in output
+    assert "partial_coverage" in output
+    assert "Reliability coverage" in output
+    assert "3/7 passed, 4 observed" in output
+    assert "Reliability uncovered" in output
+    assert "recovery_loop, unsupported_tools" in output
     assert "json_actions" in output
     assert "Tool-loop contract" in output
     assert "json_fallback" in output

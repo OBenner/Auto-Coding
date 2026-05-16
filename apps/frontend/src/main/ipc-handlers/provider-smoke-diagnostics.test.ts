@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   mapProviderContractHealth,
+  mapProviderReliability,
   mapProviderRuntimeResumePolicy,
   mapProviderTransactionBatchContract,
   mapProviderToolLoopContract
@@ -130,5 +131,60 @@ describe('mapProviderContractHealth', () => {
 
   it('returns undefined for empty provider contract health payloads', () => {
     expect(mapProviderContractHealth({})).toBeUndefined();
+  });
+});
+
+describe('mapProviderReliability', () => {
+  it('maps safe provider reliability coverage fields', () => {
+    expect(
+      mapProviderReliability({
+        provider: 'openai',
+        suite: 'direct_api_full_autonomy',
+        status: 'partial_coverage',
+        observed_case_count: 5,
+        passed_case_count: 5,
+        required_case_count: 7,
+        uncovered_cases: ['unsupported_tools', 'gateway_model_limitations', null],
+        ignored_private_path: 'workspace-private/provider-state.json',
+        cases: [
+          {
+            case: 'text_completion',
+            status: 'passed',
+            source: 'mini_pipeline',
+          },
+          {
+            case: 'unsupported_tools',
+            status: 'not_covered',
+            source: 'provider_e2e_required',
+            ignored_private_path: 'workspace-private/trace.json',
+          },
+          null,
+        ],
+      })
+    ).toEqual({
+      provider: 'openai',
+      suite: 'direct_api_full_autonomy',
+      status: 'partial_coverage',
+      observedCaseCount: 5,
+      passedCaseCount: 5,
+      requiredCaseCount: 7,
+      uncoveredCases: ['unsupported_tools', 'gateway_model_limitations'],
+      cases: [
+        {
+          case: 'text_completion',
+          status: 'passed',
+          source: 'mini_pipeline',
+        },
+        {
+          case: 'unsupported_tools',
+          status: 'not_covered',
+          source: 'provider_e2e_required',
+        },
+      ],
+    });
+  });
+
+  it('returns undefined for empty provider reliability payloads', () => {
+    expect(mapProviderReliability({})).toBeUndefined();
   });
 });

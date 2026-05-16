@@ -36,6 +36,7 @@ import { getAPIProfileEnv } from '../services/profile';
 import { getCodexProfileManager } from '../codex-profile-manager';
 import {
   mapProviderContractHealth,
+  mapProviderReliability,
   mapProviderRuntimeResumePolicy,
   mapProviderTransactionBatchContract,
   mapProviderToolLoopContract,
@@ -391,6 +392,7 @@ type ProviderSmokeCliResult = {
       reason?: unknown;
       phases?: unknown;
     } | null;
+    provider_reliability?: unknown;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
   } | null;
@@ -570,6 +572,7 @@ function mapProviderRuntimeDiagnostics(
     validatedRuntimeMissingCapabilities: arrayFromUnknown(diagnostics.validated_runtime_missing_capabilities),
     validatedRuntimeExecution: mapValidatedRuntimeExecution(diagnostics.validated_runtime_execution),
     miniPipeline: mapMiniPipelineDiagnostics(diagnostics.mini_pipeline),
+    providerReliability: mapProviderReliability(diagnostics.provider_reliability),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note
   };
