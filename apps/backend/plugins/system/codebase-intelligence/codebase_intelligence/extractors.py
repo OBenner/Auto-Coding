@@ -34,10 +34,14 @@ def extract_python_file(
     except (OSError, SyntaxError, UnicodeDecodeError):
         return [], [], []
 
-    symbols: list[CodeSymbol] = []
-    dependencies: list[CodeDependency] = []
+    symbols = _extract_python_symbols(tree, rel_path)
+    dependencies = _extract_python_dependencies(tree, rel_path)
     references = _extract_python_references(tree, rel_path)
+    return symbols, dependencies, references
 
+
+def _extract_python_symbols(tree: ast.AST, rel_path: str) -> list[CodeSymbol]:
+    symbols: list[CodeSymbol] = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             symbols.append(_python_class_symbol(node, rel_path))
@@ -46,36 +50,49 @@ def extract_python_file(
                     symbols.append(_python_function_symbol(child, rel_path, node.name))
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             symbols.append(_python_function_symbol(node, rel_path, None))
+    return symbols
 
+
+def _extract_python_dependencies(tree: ast.AST, rel_path: str) -> list[CodeDependency]:
+    dependencies: list[CodeDependency] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                dependencies.append(
-                    CodeDependency(
-                        source_path=rel_path,
-                        target=alias.name,
-                        kind="python_import",
-                        line=node.lineno,
-                        imported_names=[],
-                    )
-                )
+            dependencies.extend(_python_import_dependencies(node, rel_path))
         elif isinstance(node, ast.ImportFrom):
-            names = [alias.name for alias in node.names]
-            dependencies.append(
-                CodeDependency(
-                    source_path=rel_path,
-                    target=node.module or "",
-                    kind="python_import",
-                    line=node.lineno,
-                    imported_names=names,
-                    metadata={
-                        "is_relative": node.level > 0,
-                        "level": node.level,
-                    },
-                )
-            )
+            dependencies.append(_python_import_from_dependency(node, rel_path))
+    return dependencies
 
-    return symbols, dependencies, references
+
+def _python_import_dependencies(
+    node: ast.Import, rel_path: str
+) -> list[CodeDependency]:
+    return [
+        CodeDependency(
+            source_path=rel_path,
+            target=alias.name,
+            kind="python_import",
+            line=node.lineno,
+            imported_names=[],
+        )
+        for alias in node.names
+    ]
+
+
+def _python_import_from_dependency(
+    node: ast.ImportFrom, rel_path: str
+) -> CodeDependency:
+    names = [alias.name for alias in node.names]
+    return CodeDependency(
+        source_path=rel_path,
+        target=node.module or "",
+        kind="python_import",
+        line=node.lineno,
+        imported_names=names,
+        metadata={
+            "is_relative": node.level > 0,
+            "level": node.level,
+        },
+    )
 
 
 def extract_typescript_file(
@@ -140,9 +157,7 @@ class _PythonReferenceVisitor(ast.NodeVisitor):
         self.references: list[CodeReference] = []
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        self.container_stack.append(node.name)
-        self.generic_visit(node)
-        self.container_stack.pop()
+        self._visit_container(node.name, node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._visit_function(node)
@@ -165,7 +180,10 @@ class _PythonReferenceVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        self.container_stack.append(node.name)
+        self._visit_container(node.name, node)
+
+    def _visit_container(self, name: str, node: ast.AST) -> None:
+        self.container_stack.append(name)
         self.generic_visit(node)
         self.container_stack.pop()
 

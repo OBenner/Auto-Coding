@@ -15,7 +15,7 @@ import { InstallPluginDialog } from './InstallPluginDialog';
 import type { PluginInfo } from '../../../main/plugins/types';
 
 interface PluginManagerProps {
-  projectPath: string;
+  readonly projectPath: string;
 }
 
 export function PluginManager({ projectPath }: PluginManagerProps) {
@@ -35,7 +35,7 @@ export function PluginManager({ projectPath }: PluginManagerProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await window.electronAPI.listPlugins({ projectPath });
+      const result = await globalThis.electronAPI.listPlugins({ projectPath });
 
       if (result.success && result.data) {
         setPlugins(result.data);
@@ -71,7 +71,7 @@ export function PluginManager({ projectPath }: PluginManagerProps) {
   const handleEnable = async (pluginName: string) => {
     setOperatingPluginName(pluginName);
     try {
-      const result = await window.electronAPI.enablePlugin(pluginName, projectPath);
+      const result = await globalThis.electronAPI.enablePlugin(pluginName, projectPath);
 
       if (result.success) {
         toast({
@@ -103,7 +103,7 @@ export function PluginManager({ projectPath }: PluginManagerProps) {
   const handleDisable = async (pluginName: string) => {
     setOperatingPluginName(pluginName);
     try {
-      const result = await window.electronAPI.disablePlugin(pluginName, projectPath);
+      const result = await globalThis.electronAPI.disablePlugin(pluginName, projectPath);
 
       if (result.success) {
         toast({
@@ -135,7 +135,7 @@ export function PluginManager({ projectPath }: PluginManagerProps) {
   const handleUninstall = async (pluginName: string) => {
     setOperatingPluginName(pluginName);
     try {
-      const result = await window.electronAPI.uninstallPlugin(pluginName, projectPath);
+      const result = await globalThis.electronAPI.uninstallPlugin(pluginName, projectPath);
 
       if (result.success) {
         toast({

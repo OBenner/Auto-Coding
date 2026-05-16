@@ -153,7 +153,7 @@ export function InstallPluginDialog({
       };
 
       // Call IPC to install plugin
-      const result = await window.electronAPI.installPlugin(source, projectPath);
+      const result = await globalThis.electronAPI.installPlugin(source, projectPath);
 
       if (result.success && result.data?.plugin) {
         toast({

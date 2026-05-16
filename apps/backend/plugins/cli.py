@@ -520,6 +520,143 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 1
 
 
+def _resolve_plugin_source(source_path: str) -> Path | None:
+    """Resolve and validate the local plugin source directory."""
+    source_dir = Path(source_path).resolve()
+    if not source_dir.exists():
+        logger.error(f"Source path not found: {source_path}")
+        return None
+    if not source_dir.is_dir():
+        logger.error(f"Source path is not a directory: {source_path}")
+        return None
+    return source_dir
+
+
+def _load_plugin_metadata(loader: PluginLoader, source_dir: Path):
+    """Load plugin metadata and emit a user-facing validation error on failure."""
+    try:
+        metadata = loader._load_metadata(source_dir)
+    except PluginValidationError as e:
+        logger.error(f"Invalid plugin: {e}")
+        return None
+
+    logger.info(f"Found plugin: {metadata.name} v{metadata.version}")
+    return metadata
+
+
+def _print_security_warnings(warnings: list[str], json_output: bool) -> None:
+    """Show local security warnings for human CLI callers."""
+    if not warnings or json_output:
+        return
+
+    print("\n⚠️  Security warnings detected:")
+    print("=" * 60)
+    for warning in warnings:
+        print(f"  • {warning}")
+    print("=" * 60)
+    print("\nNote: Plugin has security warnings but is not blocked.")
+    print("Review the warnings above before enabling this plugin.\n")
+
+
+def _log_blocking_security_failure(warnings: list[str]) -> None:
+    logger.error(
+        "\n❌ Plugin failed security validation and cannot be installed.\n"
+        "Security issues detected:\n" + "\n".join(f"  - {w}" for w in warnings)
+    )
+
+
+def _emit_install_dry_run(
+    metadata,
+    source_dir: Path,
+    target_dir: Path,
+    warnings: list[str],
+    json_output: bool,
+) -> int:
+    if json_output:
+        _emit_json(
+            {
+                "success": True,
+                "dry_run": True,
+                "plugin": metadata.to_dict(),
+                "target": str(target_dir),
+                "warnings": warnings,
+            }
+        )
+        return 0
+
+    print(f"[DRY RUN] Would install plugin: {metadata.name} v{metadata.version}")
+    print(f"  Source: {source_dir}")
+    print(f"  Target: {target_dir}")
+    print(f"  Description: {metadata.description}")
+    return 0
+
+
+def _prepare_plugin_target(target_dir: Path, plugin_name: str, force: bool) -> bool:
+    if not target_dir.exists():
+        return True
+    if not force:
+        logger.error(
+            f"Plugin '{plugin_name}' already installed at {target_dir}. "
+            "Use --force to overwrite."
+        )
+        return False
+
+    logger.warning(f"Removing existing plugin: {target_dir}")
+    shutil.rmtree(target_dir)
+    return True
+
+
+def _copy_plugin_files(source_dir: Path, target_dir: Path) -> bool:
+    logger.info(f"Installing to: {target_dir}")
+    try:
+        shutil.copytree(source_dir, target_dir)
+    except Exception:
+        logger.exception("Failed to copy plugin")
+        return False
+
+    logger.info(f"Copied plugin files to: {target_dir}")
+    return True
+
+
+def _validate_installed_plugin(
+    loader: PluginLoader, target_dir: Path, expected_name: str
+) -> bool:
+    try:
+        installed_metadata = loader._load_metadata(target_dir)
+    except PluginValidationError as e:
+        logger.error(f"Validation failed after installation: {e}")
+        shutil.rmtree(target_dir)
+        return False
+
+    if installed_metadata.name == expected_name:
+        return True
+
+    logger.error("Plugin name mismatch after installation")
+    shutil.rmtree(target_dir)
+    return False
+
+
+def _emit_install_success(
+    metadata, target_dir: Path, warnings: list[str], json_output: bool
+) -> int:
+    if json_output:
+        _emit_json(
+            {
+                "success": True,
+                "plugin": metadata.to_dict(),
+                "target": str(target_dir),
+                "warnings": warnings,
+            }
+        )
+        return 0
+
+    print(f"✓ Plugin '{metadata.name}' v{metadata.version} installed successfully")
+    print(f"  Location: {target_dir}")
+    print(f"  Description: {metadata.description}")
+    print(f"\nEnable the plugin with: python plugins/cli.py enable {metadata.name}")
+    return 0
+
+
 def _install_from_path(
     source_path: str,
     force: bool,
@@ -540,139 +677,47 @@ def _install_from_path(
         0 on success, 1 on error
     """
     try:
-        # Resolve source path
-        source_dir = Path(source_path).resolve()
-
-        # Verify source directory exists
-        if not source_dir.exists():
-            logger.error(f"Source path not found: {source_path}")
-            return 1
-
-        if not source_dir.is_dir():
-            logger.error(f"Source path is not a directory: {source_path}")
+        source_dir = _resolve_plugin_source(source_path)
+        if source_dir is None:
             return 1
 
         logger.info(f"Installing plugin from: {source_dir}")
-
-        # Create loader to validate plugin and get user plugins directory
         loader = PluginLoader()
-
-        # Validate plugin by loading metadata
-        try:
-            metadata = loader._load_metadata(source_dir)
-            logger.info(f"Found plugin: {metadata.name} v{metadata.version}")
-        except PluginValidationError as e:
-            logger.error(f"Invalid plugin: {e}")
+        metadata = _load_plugin_metadata(loader, source_dir)
+        if metadata is None:
             return 1
 
-        # Perform security validation
         logger.info("Performing security validation...")
         is_safe, warnings = loader.validate_plugin_security(source_dir)
+        _print_security_warnings(warnings, json_output)
 
-        # Display security warnings
-        if warnings:
-            if not json_output:
-                print("\n⚠️  Security warnings detected:")
-                print("=" * 60)
-                for warning in warnings:
-                    print(f"  • {warning}")
-                print("=" * 60)
-
-        # Block installation if plugin is not safe
         if not is_safe:
-            logger.error(
-                "\n❌ Plugin failed security validation and cannot be installed.\n"
-                "Security issues detected:\n" + "\n".join(f"  - {w}" for w in warnings)
-            )
+            _log_blocking_security_failure(warnings)
             return 1
 
-        # If there are warnings but plugin is safe (e.g., suspicious imports)
-        # show them but allow installation
-        if warnings:
-            if not json_output:
-                print("\nNote: Plugin has security warnings but is not blocked.")
-                print("Review the warnings above before enabling this plugin.\n")
-
-        # Determine target directory
         target_dir = loader.user_plugins_dir / metadata.name
 
-        # Dry run mode - stop here
         if dry_run:
-            if json_output:
-                _emit_json(
-                    {
-                        "success": True,
-                        "dry_run": True,
-                        "plugin": metadata.to_dict(),
-                        "target": str(target_dir),
-                        "warnings": warnings,
-                    }
-                )
-                return 0
-            print(
-                f"[DRY RUN] Would install plugin: {metadata.name} v{metadata.version}"
+            return _emit_install_dry_run(
+                metadata, source_dir, target_dir, warnings, json_output
             )
-            print(f"  Source: {source_dir}")
-            print(f"  Target: {target_dir}")
-            print(f"  Description: {metadata.description}")
-            return 0
 
-        # Check if plugin already exists
-        if target_dir.exists():
-            if not force:
-                logger.error(
-                    f"Plugin '{metadata.name}' already installed at {target_dir}. "
-                    "Use --force to overwrite."
-                )
-                return 1
-            logger.warning(f"Removing existing plugin: {target_dir}")
-            shutil.rmtree(target_dir)
-
-        # Copy plugin to user plugins directory
-        logger.info(f"Installing to: {target_dir}")
-        try:
-            shutil.copytree(source_dir, target_dir)
-            logger.info(f"Copied plugin files to: {target_dir}")
-        except Exception as e:
-            logger.error(f"Failed to copy plugin: {e}")
+        if not _prepare_plugin_target(target_dir, metadata.name, force):
             return 1
 
-        # Validate the installed plugin
-        try:
-            installed_metadata = loader._load_metadata(target_dir)
-            if installed_metadata.name != metadata.name:
-                logger.error("Plugin name mismatch after installation")
-                shutil.rmtree(target_dir)
-                return 1
-        except PluginValidationError as e:
-            logger.error(f"Validation failed after installation: {e}")
-            shutil.rmtree(target_dir)
+        if not _copy_plugin_files(source_dir, target_dir):
             return 1
 
-        # Success
-        if json_output:
-            _emit_json(
-                {
-                    "success": True,
-                    "plugin": metadata.to_dict(),
-                    "target": str(target_dir),
-                    "warnings": warnings,
-                }
-            )
-            return 0
+        if not _validate_installed_plugin(loader, target_dir, metadata.name):
+            return 1
 
-        print(f"✓ Plugin '{metadata.name}' v{metadata.version} installed successfully")
-        print(f"  Location: {target_dir}")
-        print(f"  Description: {metadata.description}")
-        print(f"\nEnable the plugin with: python plugins/cli.py enable {metadata.name}")
-
-        return 0
+        return _emit_install_success(metadata, target_dir, warnings, json_output)
 
     except PluginLoadError as e:
         logger.error(f"Failed to load plugin: {e}")
         return 1
-    except Exception as e:
-        logger.error(f"Installation failed: {e}")
+    except Exception:
+        logger.exception("Installation failed")
         return 1
 
 
@@ -717,8 +762,8 @@ def _install_from_url(
         # Install from the cloned directory
         return _install_from_path(str(temp_dir), force, dry_run, json_output)
 
-    except Exception as e:
-        logger.error(f"Installation from URL failed: {e}")
+    except Exception:
+        logger.exception("Installation from URL failed")
         return 1
     finally:
         # Clean up temporary directory
@@ -753,8 +798,8 @@ def cmd_info(args: argparse.Namespace) -> int:
             print(f"Status: {payload['status']}")
             print(f"Description: {metadata['description']}")
         return 0
-    except Exception as e:
-        logger.error(f"Failed to show plugin '{args.plugin_name}': {e}")
+    except Exception:
+        logger.exception("Failed to show plugin '%s'", args.plugin_name)
         return 1
 
 
@@ -785,8 +830,8 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         else:
             print(f"Plugin '{args.plugin_name}' uninstalled successfully")
         return 0
-    except Exception as e:
-        logger.error(f"Failed to uninstall plugin '{args.plugin_name}': {e}")
+    except Exception:
+        logger.exception("Failed to uninstall plugin '%s'", args.plugin_name)
         return 1
 
 

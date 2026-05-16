@@ -1,10 +1,11 @@
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import path from 'path';
 
 type IpcHandler = (_event: unknown, payload?: unknown) => Promise<unknown>;
 
 const registeredHandlers = new Map<string, IpcHandler>();
 const pluginCliPath = path.join('/app/source', 'apps', 'backend', 'plugins', 'cli.py');
+const samplePluginPath = path.join('/repo', 'plugins', 'sample-plugin');
 
 const { mockExecFileSync } = vi.hoisted(() => ({
   mockExecFileSync: vi.fn()
@@ -47,7 +48,7 @@ describe('plugin IPC handlers', () => {
 
   it('lists plugins using project-scoped JSON CLI output', async () => {
     const { registerPluginHandlers } = await import('./loader');
-    (registerPluginHandlers as unknown as () => void)();
+    registerPluginHandlers();
 
     mockExecFileSync.mockReturnValue(
       JSON.stringify({
@@ -107,7 +108,7 @@ describe('plugin IPC handlers', () => {
 
   it('installs directory plugins using backend CLI flags that exist', async () => {
     const { registerPluginHandlers } = await import('./loader');
-    (registerPluginHandlers as unknown as () => void)();
+    registerPluginHandlers();
 
     mockExecFileSync.mockReturnValue(
       JSON.stringify({
@@ -131,7 +132,7 @@ describe('plugin IPC handlers', () => {
       {},
       {
         projectPath: '/repo',
-        source: { type: 'directory', path: '/tmp/sample-plugin' }
+        source: { type: 'directory', path: samplePluginPath }
       }
     );
 
@@ -149,7 +150,7 @@ describe('plugin IPC handlers', () => {
         'install',
         '--json',
         '--path',
-        '/tmp/sample-plugin'
+        samplePluginPath
       ],
       expect.objectContaining({ cwd: '/repo' })
     );
