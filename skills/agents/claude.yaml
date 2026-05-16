@@ -1,0 +1,26 @@
+interface:
+  display_name: Auto Code Reviewer Agents
+  short_description: Focused reviewer agents for Auto Code
+  default_prompt: Use the reviewer agents in skills/agents for a focused Auto Code
+    review.
+claude:
+  usage: Dispatch these prompt files as Claude Code subagents or paste them as focused
+    review roles.
+  agents:
+  - name: provider-runtime-reviewer
+    display_name: Provider Runtime Reviewer
+    short_description: Review provider and runtime adapter changes
+    prompt_file: ./provider-runtime-reviewer.md
+    default_prompt: Use provider-runtime-reviewer to review this Auto Code provider
+      or runtime adapter change.
+  - name: electron-frontend-reviewer
+    display_name: Electron Frontend Reviewer
+    short_description: Review Electron UI, i18n, IPC, and platform safety
+    prompt_file: ./electron-frontend-reviewer.md
+    default_prompt: Use electron-frontend-reviewer to review this Auto Code Electron
+      frontend change.
+  - name: plugin-contract-reviewer
+    display_name: Plugin Contract Reviewer
+    short_description: Review plugin manifests, permissions, and isolation
+    prompt_file: ./plugin-contract-reviewer.md
+    default_prompt: Use plugin-contract-reviewer to review this Auto Code plugin change.

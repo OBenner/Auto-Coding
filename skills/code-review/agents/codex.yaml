@@ -1,0 +1,12 @@
+interface:
+  display_name: Code Review
+  short_description: Review Auto Code changes in two stages
+  default_prompt: Use $code-review to review this Auto Code change against requirements
+    and quality risks.
+codex:
+  skill: $code-review
+  skill_file: ../SKILL.md
+  invocation: Load this skill when its description matches the user request or when
+    invoked explicitly.
+  default_prompt: Use $code-review to review this Auto Code change against requirements
+    and quality risks.

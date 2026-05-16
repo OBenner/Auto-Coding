@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plugin Building"
+  short_description: "Build optional Auto Code plugins safely"
+  default_prompt: "Use $plugin-building to create or update an optional Auto Code plugin."

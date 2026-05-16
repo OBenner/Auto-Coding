@@ -1,0 +1,9 @@
+interface:
+  display_name: Verification
+  short_description: Prove Auto Code work before calling it done
+  default_prompt: Use $verification to verify this Auto Code change before completion.
+gemini:
+  skill: verification
+  skill_file: ../SKILL.md
+  activation: activate_skill
+  default_prompt: Use $verification to verify this Auto Code change before completion.

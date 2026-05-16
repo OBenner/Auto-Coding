@@ -1,0 +1,4 @@
+interface:
+  display_name: "Auto Code Workflow"
+  short_description: "Route Auto Code work to the right workflow"
+  default_prompt: "Use $auto-code-workflow to choose the right Auto Code workflow for this task."

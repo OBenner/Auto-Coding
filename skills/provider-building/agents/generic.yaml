@@ -1,0 +1,18 @@
+interface:
+  display_name: Provider Building
+  short_description: Add providers with runtime readiness checks
+  default_prompt: Use $provider-building to design and implement an Auto Code provider
+    or runtime adapter.
+generic:
+  standard: Agent Skills compatible metadata
+  skill: provider-building
+  skill_file: ../SKILL.md
+  works_with:
+  - Codex
+  - Claude Code
+  - Gemini CLI
+  - Cursor
+  - Copilot
+  - Windsurf
+  default_prompt: Use $provider-building to design and implement an Auto Code provider
+    or runtime adapter.

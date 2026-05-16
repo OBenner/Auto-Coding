@@ -1,0 +1,4 @@
+interface:
+  display_name: "Provider Building"
+  short_description: "Add providers with runtime readiness checks"
+  default_prompt: "Use $provider-building to design and implement an Auto Code provider or runtime adapter."

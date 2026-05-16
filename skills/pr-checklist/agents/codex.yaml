@@ -1,0 +1,10 @@
+interface:
+  display_name: PR Checklist
+  short_description: Prepare Auto Code pull requests with evidence
+  default_prompt: Use $pr-checklist to prepare this Auto Code branch for a pull request.
+codex:
+  skill: $pr-checklist
+  skill_file: ../SKILL.md
+  invocation: Load this skill when its description matches the user request or when
+    invoked explicitly.
+  default_prompt: Use $pr-checklist to prepare this Auto Code branch for a pull request.
