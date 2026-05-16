@@ -519,8 +519,39 @@ class GenericEditRuntimeSession:
             checkpoint=checkpoint,
             trace=trace,
         )
+        session_state_path = checkpoint_path.parent / "generic_edit_session_state.json"
+        session_state = (
+            load_generic_edit_session_state(
+                session_state_path,
+                expected_checkpoint_path=checkpoint_path,
+            )
+            if session_state_path.exists()
+            else None
+        )
+        artifact_manifest_path = generic_edit_artifact_manifest_path_for_checkpoint(
+            checkpoint_path,
+        )
+        artifact_manifest = (
+            load_generic_edit_artifact_manifest(artifact_manifest_path)
+            if artifact_manifest_path.exists()
+            else None
+        )
+        mutation_snapshot_path = generic_edit_mutation_snapshot_path_for_checkpoint(
+            checkpoint_path
+        )
         self._mutation_snapshots = load_generic_edit_mutation_snapshots(
-            generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path)
+            mutation_snapshot_path
+        )
+        validate_generic_edit_resume_artifact_consistency(
+            checkpoint=checkpoint,
+            checkpoint_path=checkpoint_path,
+            trace=trace,
+            session_state=session_state,
+            session_state_path=session_state_path,
+            artifact_manifest=artifact_manifest,
+            artifact_manifest_path=artifact_manifest_path,
+            mutation_snapshots=self._mutation_snapshots,
+            mutation_snapshot_path=mutation_snapshot_path,
         )
         self._active_batch_id = generic_edit_resume_open_batch_id(
             checkpoint=checkpoint,
@@ -5623,6 +5654,285 @@ def validate_generic_edit_manifest_trace_counts(
     )
 
 
+def generic_edit_transaction_batch_ids_from_summary(
+    summary: dict[str, Any],
+) -> list[str]:
+    """Return transaction batch ids from either full or compact summaries."""
+    ids = normalize_string_list(summary.get("transaction_batch_ids"))
+    if ids:
+        return ids
+    batches = summary.get("transaction_batches")
+    if not isinstance(batches, list):
+        return []
+    return list(
+        dict.fromkeys(
+            str(batch.get("id") or "")
+            for batch in batches
+            if isinstance(batch, dict) and str(batch.get("id") or "")
+        )
+    )
+
+
+def generic_edit_transaction_batch_status_by_id(
+    summary: dict[str, Any],
+) -> dict[str, str]:
+    """Return batch status keyed by batch id when batch entries expose status."""
+    batches = summary.get("transaction_batches")
+    if not isinstance(batches, list):
+        return {}
+    statuses: dict[str, str] = {}
+    for batch in batches:
+        if not isinstance(batch, dict):
+            continue
+        batch_id = str(batch.get("id") or "")
+        if not batch_id:
+            continue
+        statuses[batch_id] = str(batch.get("status") or "unknown")
+    return statuses
+
+
+def generic_edit_transaction_batch_count(summary: dict[str, Any]) -> int | None:
+    """Return a batch count when the summary exposes one."""
+    count = summary.get("transaction_batch_count")
+    if isinstance(count, int):
+        return count
+    ids = generic_edit_transaction_batch_ids_from_summary(summary)
+    if ids:
+        return len(ids)
+    batches = summary.get("transaction_batches")
+    if isinstance(batches, list):
+        return len([batch for batch in batches if isinstance(batch, dict)])
+    return None
+
+
+def generic_edit_transaction_batch_status_counts(
+    value: Any,
+) -> dict[str, int]:
+    """Return normalized batch status counters."""
+    if not isinstance(value, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for status, count in value.items():
+        if isinstance(count, int):
+            counts[str(status)] = count
+    return counts
+
+
+def generic_edit_raise_transaction_batch_mismatch(
+    message: str,
+    *,
+    artifact: str,
+    path: Path,
+    **details: Any,
+) -> None:
+    """Raise a structured transaction-batch consistency error."""
+    raise generic_edit_resume_artifact_error(
+        message,
+        artifact=artifact,
+        reason="checkpoint_mismatch",
+        path=path,
+        **details,
+    )
+
+
+def validate_generic_edit_summary_transaction_batches(
+    *,
+    expected_summary: dict[str, Any],
+    actual_summary: dict[str, Any],
+    artifact: str,
+    path: Path,
+) -> None:
+    """Reject transaction-batch metadata that diverges from trace-derived state."""
+    expected_count = generic_edit_transaction_batch_count(expected_summary)
+    actual_count = generic_edit_transaction_batch_count(actual_summary)
+    if actual_count is not None and expected_count != actual_count:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit transaction batch count does not match checkpoint trace.",
+            artifact=artifact,
+            path=path,
+            expected_transaction_batch_count=expected_count,
+            actual_transaction_batch_count=actual_count,
+        )
+
+    expected_ids = generic_edit_transaction_batch_ids_from_summary(expected_summary)
+    actual_ids = generic_edit_transaction_batch_ids_from_summary(actual_summary)
+    if actual_ids and actual_ids != expected_ids:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit transaction batch ids do not match checkpoint trace.",
+            artifact=artifact,
+            path=path,
+            expected_transaction_batch_ids=expected_ids,
+            actual_transaction_batch_ids=actual_ids,
+        )
+
+    actual_open_ids = normalize_string_list(
+        actual_summary.get("open_transaction_batch_ids")
+    )
+    expected_open_ids = normalize_string_list(
+        expected_summary.get("open_transaction_batch_ids")
+    )
+    if actual_open_ids and actual_open_ids != expected_open_ids:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit open transaction batches do not match checkpoint trace.",
+            artifact=artifact,
+            path=path,
+            expected_open_transaction_batch_ids=expected_open_ids,
+            actual_open_transaction_batch_ids=actual_open_ids,
+        )
+
+    actual_status_counts = generic_edit_transaction_batch_status_counts(
+        actual_summary.get("transaction_batch_status_counts")
+    )
+    expected_status_counts = generic_edit_transaction_batch_status_counts(
+        expected_summary.get("transaction_batch_status_counts")
+    )
+    if actual_status_counts and actual_status_counts != expected_status_counts:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit transaction batch status counts do not match checkpoint trace.",
+            artifact=artifact,
+            path=path,
+            expected_transaction_batch_status_counts=expected_status_counts,
+            actual_transaction_batch_status_counts=actual_status_counts,
+        )
+
+    actual_statuses = generic_edit_transaction_batch_status_by_id(actual_summary)
+    expected_statuses = generic_edit_transaction_batch_status_by_id(expected_summary)
+    if actual_statuses:
+        for batch_id, actual_status in actual_statuses.items():
+            expected_status = expected_statuses.get(batch_id)
+            if expected_status is not None and actual_status != expected_status:
+                generic_edit_raise_transaction_batch_mismatch(
+                    "Generic edit transaction batch status does not match checkpoint trace.",
+                    artifact=artifact,
+                    path=path,
+                    batch_id=batch_id,
+                    expected_transaction_batch_status=expected_status,
+                    actual_transaction_batch_status=actual_status,
+                )
+
+
+def validate_generic_edit_manifest_transaction_batches(
+    *,
+    manifest: dict[str, Any],
+    transaction_summary: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    """Reject compact manifest transaction-batch state that drifts from trace."""
+    actual_summary: dict[str, Any] = {}
+    counts = manifest.get("counts")
+    if isinstance(counts, dict) and "transaction_batch_count" in counts:
+        actual_summary["transaction_batch_count"] = counts["transaction_batch_count"]
+    if "transaction_batches" in manifest:
+        actual_summary["transaction_batches"] = manifest.get("transaction_batches")
+    if not actual_summary:
+        return
+    validate_generic_edit_summary_transaction_batches(
+        expected_summary=transaction_summary,
+        actual_summary=actual_summary,
+        artifact="artifact_manifest",
+        path=manifest_path,
+    )
+
+
+def validate_generic_edit_resume_artifact_consistency(
+    *,
+    checkpoint: dict[str, Any],
+    checkpoint_path: Path,
+    trace: list[dict[str, Any]],
+    session_state: dict[str, Any] | None = None,
+    session_state_path: Path | None = None,
+    artifact_manifest: dict[str, Any] | None = None,
+    artifact_manifest_path: Path | None = None,
+    mutation_snapshots: list[dict[str, Any]] | None = None,
+    mutation_snapshot_path: Path | None = None,
+) -> None:
+    """Validate one canonical resume state across all generic_edit artifacts."""
+    validate_generic_edit_checkpoint_trace_consistency(
+        checkpoint=checkpoint,
+        trace=trace,
+    )
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    checkpoint_transaction_summary = checkpoint.get("transaction_summary")
+    if isinstance(checkpoint_transaction_summary, dict):
+        validate_generic_edit_summary_transaction_batches(
+            expected_summary=transaction_summary,
+            actual_summary=checkpoint_transaction_summary,
+            artifact="recovery_checkpoint",
+            path=checkpoint_path,
+        )
+
+    checkpoint_open_ids = normalize_string_list(
+        checkpoint.get("open_transaction_batch_ids")
+    )
+    expected_open_ids = normalize_string_list(
+        transaction_summary.get("open_transaction_batch_ids")
+    )
+    if checkpoint_open_ids and checkpoint_open_ids != expected_open_ids:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit checkpoint open batches do not match checkpoint trace.",
+            artifact="recovery_checkpoint",
+            path=checkpoint_path,
+            expected_open_transaction_batch_ids=expected_open_ids,
+            actual_open_transaction_batch_ids=checkpoint_open_ids,
+        )
+
+    if session_state is not None and session_state_path is not None:
+        validate_generic_edit_session_state_checkpoint_consistency(
+            session_state=session_state,
+            checkpoint=checkpoint,
+            session_state_path=session_state_path,
+        )
+        validate_generic_edit_session_state_trace_counts(
+            session_state=session_state,
+            checkpoint=checkpoint,
+            trace=trace,
+            session_state_path=session_state_path,
+        )
+        session_open_ids = normalize_string_list(
+            session_state.get("open_transaction_batch_ids")
+        )
+        if session_open_ids and session_open_ids != expected_open_ids:
+            generic_edit_raise_transaction_batch_mismatch(
+                "Generic edit session state open batches do not match checkpoint trace.",
+                artifact="session_state",
+                path=session_state_path,
+                expected_open_transaction_batch_ids=expected_open_ids,
+                actual_open_transaction_batch_ids=session_open_ids,
+            )
+
+    if artifact_manifest is not None and artifact_manifest_path is not None:
+        validate_generic_edit_artifact_manifest_checkpoint_consistency(
+            manifest=artifact_manifest,
+            checkpoint=checkpoint,
+            checkpoint_path=checkpoint_path,
+            session_state_path=(
+                session_state_path
+                if session_state_path is not None
+                else checkpoint_path.parent / "generic_edit_session_state.json"
+            ),
+            trace_path=generic_edit_trace_path_for_checkpoint(checkpoint_path),
+            manifest_path=artifact_manifest_path,
+        )
+        validate_generic_edit_manifest_trace_counts(
+            manifest=artifact_manifest,
+            checkpoint=checkpoint,
+            trace=trace,
+            manifest_path=artifact_manifest_path,
+        )
+        validate_generic_edit_manifest_transaction_batches(
+            manifest=artifact_manifest,
+            transaction_summary=transaction_summary,
+            manifest_path=artifact_manifest_path,
+        )
+
+    if mutation_snapshots is not None and mutation_snapshot_path is not None:
+        validate_generic_edit_checkpoint_mutation_snapshots(
+            checkpoint=checkpoint,
+            mutation_snapshots=mutation_snapshots,
+            mutation_snapshot_path=mutation_snapshot_path,
+        )
+
+
 def validate_generic_edit_manifest_resume_action(
     *,
     manifest: dict[str, Any],
@@ -6057,6 +6367,30 @@ def inspect_generic_edit_resume_artifacts(
                 e,
                 artifact="mutation_snapshots",
                 path=mutation_snapshot_path,
+            ),
+            artifacts=artifacts,
+        )
+
+    try:
+        validate_generic_edit_resume_artifact_consistency(
+            checkpoint=checkpoint,
+            checkpoint_path=resolved_checkpoint_path,
+            trace=trace,
+            session_state=session_state,
+            session_state_path=session_state_path,
+            artifact_manifest=artifact_manifest,
+            artifact_manifest_path=artifact_manifest_path,
+            mutation_snapshots=mutation_snapshots,
+            mutation_snapshot_path=mutation_snapshot_path,
+        )
+    except GenericEditRuntimeError as e:
+        return generic_edit_resume_blocked_preflight(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            artifact_health=generic_edit_resume_error_health(
+                e,
+                artifact="resume_artifact_consistency",
             ),
             artifacts=artifacts,
         )

@@ -7382,6 +7382,51 @@ def write_minimal_generic_edit_artifact_manifest(
     return manifest_path
 
 
+def write_generic_edit_manifest_batch_state_mismatch_artifacts(
+    tmp_path: Path,
+) -> tuple[Path, Path]:
+    transaction = {
+        "id": "json_actions-1",
+        "loop": "json_actions",
+        "iteration": 1,
+        "status": "partial_failure",
+        "batch_ids": ["batch-1"],
+        "batch_id": "batch-1",
+        "batch_status": "open",
+        "batch_actions": ["begin_batch"],
+        "mutation_snapshot_ids": ["mutation-1"],
+        "recovery_required": True,
+    }
+    trace = [{"iteration": 1, "actions": [], "transaction": transaction}]
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+            transaction_summary=transaction_summary,
+            mutation_snapshots=[{"id": "mutation-1", "postimages": []}],
+        )
+    )
+    trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["counts"]["transaction_batch_count"] = 1
+    manifest["transaction_batches"] = [
+        {
+            "id": "batch-other",
+            "status": "open",
+            "transaction_ids": ["json_actions-1"],
+        }
+    ]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return checkpoint_path, manifest_path
+
+
 def update_generic_edit_session_state(
     session_state_path: Path,
     **updates: Any,
@@ -7649,6 +7694,74 @@ def test_generic_edit_resume_preflight_blocks_manifest_count_mismatch(
         "expected_iteration_count": 1,
         "actual_iteration_count": 99,
     }
+
+
+def test_generic_edit_resume_preflight_blocks_manifest_batch_state_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    checkpoint_path, manifest_path = (
+        write_generic_edit_manifest_batch_state_mismatch_artifacts(tmp_path)
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "artifact_manifest",
+        "reason": "checkpoint_mismatch",
+        "path": str(manifest_path),
+        "expected_transaction_batch_ids": ["batch-1"],
+        "actual_transaction_batch_ids": ["batch-other"],
+    }
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_resume_blocks_manifest_batch_state_mismatch(
+    tmp_path: Path,
+):
+    checkpoint_path, _manifest_path = (
+        write_generic_edit_manifest_batch_state_mismatch_artifacts(tmp_path)
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "should not be reached",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Should not resume with stale manifest batch state",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    with pytest.raises(GenericEditRuntimeError, match="transaction batch"):
+        await runtime_session.resume(
+            checkpoint_path=checkpoint_path,
+            spec_dir=tmp_path,
+            verbose=False,
+            phase=None,
+        )
+
+    assert session.responses
 
 
 def test_generic_edit_recovery_checkpoint_requires_existing_policy_artifacts(
