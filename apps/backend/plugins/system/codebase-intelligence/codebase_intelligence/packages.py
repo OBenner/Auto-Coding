@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +34,9 @@ SKIP_DIRS = {
     "venv",
 }
 
-_REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$")
+_REQUIREMENT_NAME_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-"
+)
 
 
 def discover_package_dependencies(project_dir: Path) -> list[PackageDependency]:
@@ -207,11 +208,10 @@ def _parse_python_requirement(
     rel_path: str,
     dependency_type: str,
 ) -> PackageDependency | None:
-    match = _REQUIREMENT_NAME_RE.match(requirement)
-    if not match:
+    parsed = _split_python_requirement(requirement)
+    if parsed is None:
         return None
-    name = match.group(1)
-    specifier = match.group(2).strip()
+    name, specifier = parsed
     return PackageDependency(
         name=name,
         ecosystem="python",
@@ -219,6 +219,28 @@ def _parse_python_requirement(
         dependency_type=dependency_type,
         specifier=specifier,
     )
+
+
+def _split_python_requirement(requirement: str) -> tuple[str, str] | None:
+    stripped = requirement.strip()
+    name_end = 0
+    for char in stripped:
+        if char not in _REQUIREMENT_NAME_CHARS:
+            break
+        name_end += 1
+
+    if name_end == 0:
+        return None
+
+    name = stripped[:name_end]
+    specifier = stripped[name_end:].lstrip()
+    if specifier.startswith("["):
+        extras_end = specifier.find("]")
+        if extras_end == -1:
+            return None
+        specifier = specifier[extras_end + 1 :].lstrip()
+
+    return name, specifier
 
 
 def _poetry_specifier(value: Any) -> str:

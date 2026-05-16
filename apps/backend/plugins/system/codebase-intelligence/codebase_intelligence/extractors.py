@@ -204,9 +204,6 @@ def _python_call_name(node: ast.AST) -> str:
     return ""
 
 
-_TS_DEPENDENCY_RE = re.compile(
-    r"\b(?:import|export)\s+(?:type\s+)?(?:[\w*{}\s,]+?\s+from\s+)?[\"']([^\"']+)[\"']"
-)
 _TS_REQUIRE_RE = re.compile(r"\brequire\(\s*[\"']([^\"']+)[\"']\s*\)")
 _TS_NAMED_DECL_RE = re.compile(
     r"^\s*(?:export\s+)?(?:default\s+)?(?:(async)\s+)?"
@@ -234,11 +231,12 @@ def _extract_typescript_dependencies(
 ) -> list[CodeDependency]:
     dependencies: list[CodeDependency] = []
     for line_no, line in enumerate(source.splitlines(), 1):
-        for match in _TS_DEPENDENCY_RE.finditer(line):
+        import_target = _typescript_import_target(line)
+        if import_target:
             dependencies.append(
                 CodeDependency(
                     source_path=rel_path,
-                    target=match.group(1),
+                    target=import_target,
                     kind="typescript_import",
                     line=line_no,
                 )
@@ -253,6 +251,32 @@ def _extract_typescript_dependencies(
                 )
             )
     return dependencies
+
+
+def _typescript_import_target(line: str) -> str | None:
+    stripped = line.strip()
+    if stripped.startswith("import"):
+        return _quoted_module_after_import(stripped)
+    if stripped.startswith("export") and " from " in stripped:
+        return _quoted_module(stripped.rsplit(" from ", 1)[1].strip())
+    return None
+
+
+def _quoted_module_after_import(statement: str) -> str | None:
+    remainder = statement.removeprefix("import").strip()
+    if " from " in remainder:
+        remainder = remainder.rsplit(" from ", 1)[1].strip()
+    return _quoted_module(remainder)
+
+
+def _quoted_module(text: str) -> str | None:
+    if not text or text[0] not in {"'", '"'}:
+        return None
+    quote = text[0]
+    end_index = text.find(quote, 1)
+    if end_index <= 1:
+        return None
+    return text[1:end_index]
 
 
 def _extract_typescript_symbols(source: str, rel_path: str) -> list[CodeSymbol]:
