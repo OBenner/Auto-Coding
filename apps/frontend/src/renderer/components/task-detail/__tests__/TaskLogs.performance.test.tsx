@@ -141,6 +141,15 @@ function calculateStats(measurements: number[]) {
   return { min, max, avg, median };
 }
 
+function medianMeasurement(measurements: number[]): number {
+  const sorted = [...measurements].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
 describe('TaskLogs Performance Benchmarks', () => {
   beforeEach(() => {
     // Mock console methods to avoid cluttering test output
@@ -503,16 +512,21 @@ describe('TaskLogs Performance Benchmarks', () => {
       const measurements: Array<{ size: number; duration: number }> = [];
 
       for (const size of sizes) {
-        const logs = generateTestTaskLogs({ entryCount: size });
+        const sizeDurations: number[] = [];
 
-        const startTime = performance.now();
-        const renderResult = renderTaskLogs({ phaseLogs: logs });
-        const endTime = performance.now();
-        const duration = endTime - startTime;
+        for (let sample = 0; sample < 3; sample += 1) {
+          const logs = generateTestTaskLogs({ entryCount: size });
 
-        measurements.push({ size, duration });
+          const startTime = performance.now();
+          const renderResult = renderTaskLogs({ phaseLogs: logs });
+          const endTime = performance.now();
+          const duration = endTime - startTime;
 
-        renderResult.unmount();
+          sizeDurations.push(duration);
+          renderResult.unmount();
+        }
+
+        measurements.push({ size, duration: medianMeasurement(sizeDurations) });
       }
 
       // Verify performance scales roughly linearly (not exponentially)
