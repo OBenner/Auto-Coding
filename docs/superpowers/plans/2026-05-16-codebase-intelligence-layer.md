@@ -186,3 +186,27 @@ manifests. Older sidecars can fall back to code-file hashes.
 
 `_load_or_build_index` performs a cheap fingerprint comparison before loading.
 When files changed, it writes a fresh index before answering the tool call.
+
+### Task 8: Runtime MCP Wiring
+
+**Files:**
+- Modify: `apps/backend/core/client.py`
+- Modify: `tests/test_client.py`
+- Modify: `apps/backend/plugins/system/codebase-intelligence/README.md`
+
+- [x] **Step 1: Add RED test for client session visibility**
+
+The test verifies `create_client(..., agent_type="coder")` includes
+`codebase-intelligence-integration` in SDK `mcp_servers` and allows plugin tool
+names such as `mcp__codebase-intelligence-integration__build_codebase_index`.
+
+- [x] **Step 2: Wire enabled integration plugins into SDK options**
+
+`core.client` now loads enabled integration plugins for agents that already use
+the `auto-claude` MCP server, creates SDK MCP servers for their tools, and adds
+their prefixed tool names to `allowed_tools`.
+
+- [x] **Step 3: Preserve compatibility wrapper**
+
+`load_plugin_mcp_servers()` remains available as a server-only wrapper, while
+`load_plugin_mcp_integrations()` returns both servers and allowed tool names.

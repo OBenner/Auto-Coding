@@ -4,6 +4,10 @@ System integration plugin that builds a deterministic local graph of a project's
 Python and TypeScript/JavaScript code. The plugin is intentionally self-contained:
 core project analysis does not import or run it directly.
 
+When enabled, Auto Code exposes the plugin to build agents as the
+`codebase-intelligence-integration` MCP server through the normal client
+configuration path.
+
 ## Tools
 
 The plugin exposes these MCP tools to agent sessions:

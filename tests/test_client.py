@@ -9,7 +9,11 @@ Tests the client.py and simple_client.py module functionality including:
 - Client creation with valid tokens
 """
 
+import importlib
 import os
+import sys
+import types
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,12 +25,27 @@ AUTH_TOKEN_ENV_VARS = [
 ]
 
 
+def _stub_project_context(monkeypatch):
+    """Avoid importing heavyweight project-context dependencies in client tests."""
+    fake_prompts_pkg = types.ModuleType("prompts_pkg")
+    fake_project_context = types.ModuleType("prompts_pkg.project_context")
+    fake_project_context.load_project_index = lambda _project_dir: {}
+    fake_project_context.detect_project_capabilities = lambda _index: {}
+    monkeypatch.setitem(sys.modules, "prompts_pkg", fake_prompts_pkg)
+    monkeypatch.setitem(
+        sys.modules,
+        "prompts_pkg.project_context",
+        fake_project_context,
+    )
+
+
 class TestClientTokenValidation:
     """Tests for client token validation."""
 
     @pytest.fixture(autouse=True)
-    def clear_env(self):
+    def clear_env(self, monkeypatch):
         """Clear auth environment variables before and after each test."""
+        _stub_project_context(monkeypatch)
         for var in AUTH_TOKEN_ENV_VARS:
             os.environ.pop(var, None)
         yield
@@ -133,3 +152,82 @@ class TestClientTokenValidation:
 
             # Verify validation was called with the token
             mock_validate.assert_called_once_with(valid_token)
+
+
+class TestClientPluginMCPWiring:
+    """Tests for wiring enabled integration plugin MCP tools into agent sessions."""
+
+    def test_create_client_adds_enabled_integration_plugin_mcp_tools(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Enabled integration plugins should be available to agent SDK sessions."""
+        valid_token = "sk-ant-oat01-valid-token"
+        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", valid_token)
+        monkeypatch.setattr("core.auth.get_token_from_keychain", lambda: None)
+        _stub_project_context(monkeypatch)
+
+        sdk_module = sys.modules["claude_agent_sdk"]
+        monkeypatch.setattr(
+            sdk_module,
+            "create_sdk_mcp_server",
+            lambda name, version, tools: {
+                "name": name,
+                "version": version,
+                "tools": tools,
+            },
+            raising=False,
+        )
+
+        from plugins.registry import PluginRegistry
+
+        PluginRegistry.reset_instance()
+        PluginRegistry.get_instance(
+            user_plugins_dir=tmp_path / ".auto-claude" / "plugins" / "user",
+            system_plugins_dir=Path("apps/backend/plugins/system").resolve(),
+            project_dir=tmp_path,
+        )
+
+        captured_options = {}
+
+        def fake_options(**kwargs):
+            captured_options.update(kwargs)
+            return kwargs
+
+        client_module = importlib.import_module("core.client")
+        mock_sdk_client = MagicMock()
+        with (
+            patch.object(
+                client_module,
+                "ClaudeAgentOptions",
+                side_effect=fake_options,
+            ),
+            patch.object(
+                client_module,
+                "ClaudeSDKClient",
+                return_value=mock_sdk_client,
+            ),
+        ):
+            client = client_module.create_client(
+                tmp_path,
+                tmp_path,
+                "claude-sonnet-4",
+                "coder",
+            )
+
+        assert client is mock_sdk_client
+        mcp_servers = captured_options["mcp_servers"]
+        allowed_tools = captured_options["allowed_tools"]
+
+        assert "codebase-intelligence-integration" in mcp_servers
+        assert (
+            "mcp__codebase-intelligence-integration__build_codebase_index"
+            in allowed_tools
+        )
+        assert (
+            "mcp__codebase-intelligence-integration__trace_file_impact"
+            in allowed_tools
+        )
+
+        PluginRegistry.reset_instance()

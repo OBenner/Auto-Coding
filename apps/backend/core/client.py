@@ -607,9 +607,12 @@ def load_claude_md(project_dir: Path) -> str | None:
     return None
 
 
-def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]:
+def load_plugin_mcp_integrations(
+    project_dir: Path,
+    spec_dir: Path,
+) -> tuple[dict[str, Any], list[str]]:
     """
-    Load MCP servers from enabled integration plugins.
+    Load MCP servers and allowed tool names from enabled integration plugins.
 
     Queries the PluginRegistry for enabled integration plugins and creates
     MCP servers from their tools. This allows third-party plugins to extend
@@ -620,22 +623,28 @@ def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]
         spec_dir: Directory containing the current spec
 
     Returns:
-        Dictionary mapping plugin IDs to MCP server instances
-        Example: {"my-plugin": <MCP server instance>}
+        Tuple of:
+        - Dictionary mapping integration server IDs to MCP server instances
+        - Allowed tool names for those server tools
+        Example: ({"my-plugin-integration": <server>}, ["mcp__..."])
     """
     try:
         from plugins.base import PluginType
         from plugins.registry import PluginRegistry
         from plugins.sdk.integration import IntegrationContext, IntegrationPlugin
+        from claude_agent_sdk import create_sdk_mcp_server
     except ImportError:
         logger.debug("Plugin system not available")
-        return {}
+        return {}, []
 
     plugin_servers = {}
+    allowed_tools = []
 
     try:
         # Get singleton registry instance
         registry = PluginRegistry.get_instance()
+        if not registry.list_plugins():
+            registry.load_all_plugins()
 
         # Get all enabled integration plugins
         integration_plugins = registry.list_plugins(
@@ -668,9 +677,22 @@ def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]
 
             # Create MCP server from plugin
             try:
-                mcp_server = plugin.create_mcp_server(context)
+                tools = plugin.create_mcp_tools(context)
+                if not tools:
+                    logger.debug(f"Plugin {plugin.name} returned no MCP tools")
+                    continue
+
+                server_name = f"{plugin.name}-integration"
+                mcp_server = create_sdk_mcp_server(
+                    name=server_name,
+                    version=plugin.version,
+                    tools=tools,
+                )
                 if mcp_server:
-                    plugin_servers[plugin.name] = mcp_server
+                    plugin_servers[server_name] = mcp_server
+                    allowed_tools.extend(
+                        f"mcp__{server_name}__{tool.__name__}" for tool in tools
+                    )
                     logger.info(f"Loaded MCP server from plugin: {plugin.name}")
                 else:
                     logger.debug(f"Plugin {plugin.name} returned no MCP server")
@@ -683,6 +705,20 @@ def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]
     except Exception as e:
         logger.error(f"Error loading plugin MCP servers: {e}")
 
+    return plugin_servers, sorted(set(allowed_tools))
+
+
+def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]:
+    """
+    Load MCP servers from enabled integration plugins.
+
+    Kept as the server-only compatibility wrapper for callers that do not need
+    explicit allowed tool names.
+    """
+    plugin_servers, _allowed_tools = load_plugin_mcp_integrations(
+        project_dir,
+        spec_dir,
+    )
     return plugin_servers
 
 
@@ -1229,6 +1265,14 @@ def create_client(
         auto_claude_mcp_server = create_auto_claude_mcp_server(spec_dir, project_dir)
         if auto_claude_mcp_server:
             mcp_servers["auto-claude"] = auto_claude_mcp_server
+
+        plugin_mcp_servers, plugin_allowed_tools = load_plugin_mcp_integrations(
+            project_dir,
+            spec_dir,
+        )
+        if plugin_mcp_servers:
+            mcp_servers.update(plugin_mcp_servers)
+            allowed_tools_list.extend(plugin_allowed_tools)
 
     # Add custom MCP servers from project config
     custom_servers = mcp_config.get("CUSTOM_MCP_SERVERS", [])
