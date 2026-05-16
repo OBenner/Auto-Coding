@@ -106,6 +106,18 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
                 sort_keys=True,
             )
 
+        def get_index_status() -> str:
+            """
+            Report whether the codebase sidecar is missing, fresh, or stale.
+
+            Does not rewrite the sidecar.
+            """
+            return json.dumps(
+                self._index_status(context.project_dir, sidecar_path),
+                indent=2,
+                sort_keys=True,
+            )
+
         def find_file_dependents(file_path: str) -> str:
             """
             Find files that depend on a project file.
@@ -301,6 +313,7 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
             find_symbol_references,
             get_dependency_inventory,
             get_graph_neighbors,
+            get_index_status,
             get_module_graph,
             get_codebase_summary,
             search_symbols,
@@ -311,9 +324,43 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
         return self.is_enabled
 
     def _load_or_build_index(self, project_dir: Path, sidecar_path: Path) -> CodebaseIndex:
-        if sidecar_path.exists():
+        status = self._index_status(project_dir, sidecar_path)
+        if status["fresh"]:
             return CodebaseIndex.load(sidecar_path)
         return CodebaseIndexer(project_dir).write_index(sidecar_path)
+
+    def _index_status(self, project_dir: Path, sidecar_path: Path) -> dict:
+        current_fingerprints = CodebaseIndexer(project_dir).build_source_fingerprints()
+        if not sidecar_path.exists():
+            return {
+                "status": "missing",
+                "fresh": False,
+                "index_path": self._relative_sidecar_path(project_dir),
+                "changed_files": [],
+                "added_files": sorted(current_fingerprints),
+                "removed_files": [],
+            }
+
+        stored_index = CodebaseIndex.load(sidecar_path)
+        stored_fingerprints = stored_index.current_source_fingerprints()
+        current_paths = set(current_fingerprints)
+        stored_paths = set(stored_fingerprints)
+        changed_files = sorted(
+            path
+            for path in current_paths & stored_paths
+            if current_fingerprints[path] != stored_fingerprints[path]
+        )
+        added_files = sorted(current_paths - stored_paths)
+        removed_files = sorted(stored_paths - current_paths)
+        fresh = not changed_files and not added_files and not removed_files
+        return {
+            "status": "fresh" if fresh else "stale",
+            "fresh": fresh,
+            "index_path": self._relative_sidecar_path(project_dir),
+            "changed_files": changed_files,
+            "added_files": added_files,
+            "removed_files": removed_files,
+        }
 
     def _sidecar_path(self, project_dir: Path) -> Path:
         return project_dir / ".auto-claude" / "codebase_intelligence" / "index.json"

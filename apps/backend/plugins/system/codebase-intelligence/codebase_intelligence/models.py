@@ -208,6 +208,7 @@ class CodebaseIndex:
     files: dict[str, CodeFile] = field(default_factory=dict)
     reverse_dependencies: dict[str, list[str]] = field(default_factory=dict)
     package_dependencies: list[PackageDependency] = field(default_factory=list)
+    source_fingerprints: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CodebaseIndex:
@@ -226,6 +227,7 @@ class CodebaseIndex:
                 PackageDependency.from_dict(dep)
                 for dep in data.get("package_dependencies", [])
             ],
+            source_fingerprints=dict(data.get("source_fingerprints", {})),
         )
 
     @classmethod
@@ -403,6 +405,9 @@ class CodebaseIndex:
             "project_root": self.project_root,
             "generated_at": self.generated_at,
             "summary": self.summary(),
+            "source_fingerprints": dict(
+                sorted(self.current_source_fingerprints().items())
+            ),
             "files": {
                 path: self.files[path].to_dict() for path in sorted(self.files.keys())
             },
@@ -432,3 +437,11 @@ class CodebaseIndex:
             or ".test." in file_name
             or ".spec." in file_name
         )
+
+    def current_source_fingerprints(self) -> dict[str, str]:
+        """Return stored source fingerprints with fallback for older indexes."""
+        if self.source_fingerprints:
+            return dict(self.source_fingerprints)
+        return {
+            path: code_file.sha256 for path, code_file in self.files.items()
+        }

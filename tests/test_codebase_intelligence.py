@@ -147,6 +147,7 @@ def test_codebase_intelligence_plugin_loads_and_exposes_tools(temp_dir: Path):
         "find_symbol_references",
         "get_dependency_inventory",
         "get_graph_neighbors",
+        "get_index_status",
         "get_module_graph",
         "get_codebase_summary",
         "search_symbols",
@@ -295,6 +296,56 @@ def test_codebase_intelligence_tools_export_graph_dataset_and_neighbors(
             },
         }
     ]
+
+
+def test_codebase_intelligence_detects_and_rebuilds_stale_sidecar(temp_dir: Path):
+    """Queries rebuild the sidecar when source hashes changed after indexing."""
+    project = _make_sample_project(temp_dir)
+    plugin = _load_codebase_intelligence_plugin(project)
+    tools = {tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))}
+
+    json.loads(tools["build_codebase_index"]())
+    fresh_status = json.loads(tools["get_index_status"]())
+
+    assert fresh_status["status"] == "fresh"
+    assert fresh_status["fresh"] is True
+
+    _write(
+        project / "apps" / "backend" / "core" / "client.py",
+        '''
+"""Client factory."""
+
+class Client:
+    """Runtime client."""
+
+    def run(self):
+        return "ok"
+
+
+def create_client():
+    """Create a client."""
+    return Client()
+
+
+def create_special_client():
+    """Create a special client."""
+    return Client()
+''',
+    )
+
+    stale_status = json.loads(tools["get_index_status"]())
+    assert stale_status["status"] == "stale"
+    assert stale_status["fresh"] is False
+    assert stale_status["changed_files"] == ["apps/backend/core/client.py"]
+
+    symbols = json.loads(tools["search_symbols"]("create_special_client"))
+    assert [symbol["name"] for symbol in symbols["matches"]] == [
+        "create_special_client"
+    ]
+
+    rebuilt_status = json.loads(tools["get_index_status"]())
+    assert rebuilt_status["status"] == "fresh"
+    assert rebuilt_status["fresh"] is True
 
 
 def test_project_analysis_does_not_run_plugin_directly(temp_dir: Path):

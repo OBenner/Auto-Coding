@@ -161,3 +161,28 @@ minimal `schema.cypher` under `.auto-claude/codebase_intelligence/graph/kuzu/`.
 
 `get_graph_neighbors` lets agents ask for incoming, outgoing, or bidirectional
 neighbors without requiring an embedded database process.
+
+### Task 7: Sidecar Freshness
+
+**Files:**
+- Modify: `tests/test_codebase_intelligence.py`
+- Modify: `apps/backend/plugins/system/codebase-intelligence/plugin.py`
+- Modify: `apps/backend/plugins/system/codebase-intelligence/codebase_intelligence/models.py`
+- Modify: `apps/backend/plugins/system/codebase-intelligence/codebase_intelligence/indexer.py`
+- Modify: `apps/backend/plugins/system/codebase-intelligence/codebase_intelligence/packages.py`
+
+- [x] **Step 1: Add RED tests for stale sidecar detection**
+
+The test builds an index, changes a source file, expects `get_index_status` to
+report `stale`, then verifies a normal symbol query rebuilds the sidecar and
+finds the new symbol.
+
+- [x] **Step 2: Store source fingerprints in the sidecar**
+
+The index now stores sha256 fingerprints for supported source files and package
+manifests. Older sidecars can fall back to code-file hashes.
+
+- [x] **Step 3: Rebuild before answering stale queries**
+
+`_load_or_build_index` performs a cheap fingerprint comparison before loading.
+When files changed, it writes a fresh index before answering the tool call.

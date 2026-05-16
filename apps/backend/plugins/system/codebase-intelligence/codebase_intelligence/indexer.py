@@ -17,7 +17,7 @@ from .extractors import (
     extract_typescript_file,
 )
 from .models import CodeDependency, CodeFile, CodebaseIndex
-from .packages import discover_package_dependencies
+from .packages import discover_package_dependencies, discover_package_manifests
 
 SKIP_DIRS = {
     ".auto-claude",
@@ -83,7 +83,20 @@ class CodebaseIndexer:
             files=code_files,
             reverse_dependencies=reverse_dependencies,
             package_dependencies=discover_package_dependencies(self.project_dir),
+            source_fingerprints=self.build_source_fingerprints(files),
         )
+
+    def build_source_fingerprints(
+        self,
+        files: Iterable[Path] | None = None,
+    ) -> dict[str, str]:
+        """Build cheap file fingerprints for source and package manifests."""
+        source_files = list(files) if files is not None else self._discover_files()
+        manifest_files = discover_package_manifests(self.project_dir)
+        fingerprints: dict[str, str] = {}
+        for path in [*source_files, *manifest_files]:
+            fingerprints[self._relative(path)] = self._sha256(path)
+        return dict(sorted(fingerprints.items()))
 
     def write_index(self, output_file: str | Path) -> CodebaseIndex:
         """Build and write the index to a stable JSON artifact."""

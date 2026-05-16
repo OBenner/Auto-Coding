@@ -18,6 +18,7 @@ The plugin exposes these MCP tools to agent sessions:
 - `get_module_graph` - Return directory-level module nodes and dependency edges.
 - `export_graph_dataset` - Export deterministic graph nodes/edges as JSON or CSV.
 - `get_graph_neighbors` - Query incoming/outgoing neighbors for a graph node id.
+- `get_index_status` - Report whether the sidecar is missing, fresh, or stale.
 - `search_symbols` - Search symbols by name, path, signature, or docstring.
 
 ## Current Slice
@@ -33,6 +34,8 @@ This first version uses only Python stdlib parsing:
   through resolved reverse dependencies.
 - Graph export: project/file/module/symbol/package nodes plus contains, defines,
   imports, references, and declares-dependency edges.
+- Freshness: source and package manifest fingerprints detect stale sidecars;
+  query tools rebuild before answering when indexed sources changed.
 
 This intentionally stays approximate for TypeScript and call graph facts. Future
 versions can add Tree-sitter, SCIP/LSP, Semgrep, CodeQL, or a Kuzu graph backend

@@ -42,14 +42,9 @@ _REQUIREMENT_NAME_RE = re.compile(
 def discover_package_dependencies(project_dir: Path) -> list[PackageDependency]:
     """Read supported package manifests under a project."""
     dependencies: list[PackageDependency] = []
-    for root, dirs, files in os.walk(project_dir):
-        dirs[:] = [name for name in dirs if not _should_skip_dir(name)]
-        for file_name in sorted(files):
-            path = Path(root) / file_name
-            if not _is_supported_manifest(path):
-                continue
-            rel_path = path.relative_to(project_dir).as_posix()
-            dependencies.extend(_read_manifest(path, rel_path))
+    for path in discover_package_manifests(project_dir):
+        rel_path = path.relative_to(project_dir).as_posix()
+        dependencies.extend(_read_manifest(path, rel_path))
     return sorted(
         dependencies,
         key=lambda dep: (
@@ -59,6 +54,19 @@ def discover_package_dependencies(project_dir: Path) -> list[PackageDependency]:
             dep.name,
         ),
     )
+
+
+def discover_package_manifests(project_dir: Path) -> list[Path]:
+    """Return supported package manifest files under a project."""
+    manifests: list[Path] = []
+    for root, dirs, files in os.walk(project_dir):
+        dirs[:] = [name for name in dirs if not _should_skip_dir(name)]
+        for file_name in sorted(files):
+            path = Path(root) / file_name
+            if not _is_supported_manifest(path):
+                continue
+            manifests.append(path)
+    return sorted(manifests, key=lambda path: path.relative_to(project_dir).as_posix())
 
 
 def _is_supported_manifest(path: Path) -> bool:
