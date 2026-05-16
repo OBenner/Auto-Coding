@@ -27,4 +27,9 @@ describe('resolveProviderSmokeRuntime', () => {
       })
     ).toBe('generic_edit');
   });
+
+  it('uses an explicit smoke runtime request for the mini pipeline check', () => {
+    expect(resolveProviderSmokeRuntime({}, 'mini_pipeline')).toBe('mini_pipeline');
+    expect(resolveProviderSmokeRuntime({}, 'mini-pipeline')).toBe('mini_pipeline');
+  });
 });

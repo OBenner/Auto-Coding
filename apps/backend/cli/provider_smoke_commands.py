@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -36,8 +37,56 @@ DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_PROMPT = (
     f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}, then finish with a short "
     "summary. Do not edit any other file."
 )
+DEFAULT_PROVIDER_MINI_PIPELINE_TASK = (
+    "Implement slugify(value: str) in string_tools.py."
+)
+DEFAULT_PROVIDER_MINI_PIPELINE_TEST_COMMAND = "python -m unittest -q"
+DEFAULT_PROVIDER_MINI_PIPELINE_PLANNER_PROMPT = (
+    "Plan a tiny Auto Code readiness task for a provider pipeline smoke check.\n\n"
+    "Task: {task}\n\n"
+    "Reply with a concise implementation plan. Do not edit files."
+)
+DEFAULT_PROVIDER_MINI_PIPELINE_CODER_PROMPT = (
+    "Mini coding readiness task.\n\n"
+    "Project files:\n"
+    "- string_tools.py currently has normalize_space(value: str).\n"
+    "- test_string_tools.py already contains unittest coverage for slugify.\n\n"
+    "Task: {task}\n\n"
+    "Acceptance criteria:\n"
+    "- Add slugify(value: str) to string_tools.py.\n"
+    "- It lowercases text, trims surrounding whitespace, replaces every run of "
+    "non-alphanumeric characters with one hyphen, and trims leading/trailing "
+    "hyphens.\n"
+    f"- {DEFAULT_PROVIDER_MINI_PIPELINE_TEST_COMMAND} passes.\n\n"
+    "Planner notes:\n{planner_response}\n\n"
+    "Use the available local tools to edit the temporary project, then finish "
+    "with a short summary and tests run."
+)
+DEFAULT_PROVIDER_MINI_PIPELINE_REVIEW_PROMPT = (
+    "Review this completed mini Auto Code readiness task.\n\n"
+    "Task: {task}\n"
+    f"Verification command: {DEFAULT_PROVIDER_MINI_PIPELINE_TEST_COMMAND}\n"
+    "Verification exit code: {test_exit_code}\n"
+    "Verification output:\n{test_output}\n\n"
+    "Final string_tools.py:\n{implementation}\n\n"
+    "Reply with one short sentence stating whether the mini task is ready."
+)
+MINI_PIPELINE_INITIAL_STRING_TOOLS = (
+    'def normalize_space(value: str) -> str:\n    return " ".join(value.split())\n'
+)
+MINI_PIPELINE_TEST_FILE = (
+    "import unittest\n\n"
+    "from string_tools import slugify\n\n\n"
+    "class SlugifyTests(unittest.TestCase):\n"
+    "    def test_slugifies_mixed_text(self):\n"
+    '        self.assertEqual(slugify("  Hello, Auto Code!  "), "hello-auto-code")\n\n'
+    "    def test_trims_repeated_separators(self):\n"
+    '        self.assertEqual(slugify("---Already  Sluggy---"), "already-sluggy")\n\n\n'
+    'if __name__ == "__main__":\n'
+    "    unittest.main()\n"
+)
 DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS = 30.0
-PROVIDER_SMOKE_RUNTIME_MODES = ("analysis_only", "generic_edit")
+PROVIDER_SMOKE_RUNTIME_MODES = ("analysis_only", "generic_edit", "mini_pipeline")
 
 
 @dataclass(frozen=True)
@@ -326,6 +375,16 @@ def _provider_contract_health(
 ) -> dict[str, Any]:
     """Return a compact provider health classification for UI/automation."""
     smoke_scope = str(runtime_diagnostics.get("smoke_scope") or "unknown")
+    mini_pipeline = runtime_diagnostics.get("mini_pipeline")
+    if isinstance(mini_pipeline, dict):
+        health = _provider_health_from_mini_pipeline(
+            mini_pipeline,
+            runtime_diagnostics=runtime_diagnostics,
+            smoke_scope=smoke_scope,
+        )
+        if health:
+            return health
+
     if error_details:
         issue = _provider_issue_from_error(error_details)
         return {
@@ -412,6 +471,43 @@ def _provider_health_from_tool_loop_contract(
     return health
 
 
+def _provider_health_from_mini_pipeline(
+    mini_pipeline: dict[str, Any],
+    *,
+    runtime_diagnostics: dict[str, Any],
+    smoke_scope: str,
+) -> dict[str, Any] | None:
+    """Return provider health for the end-to-end mini pipeline smoke."""
+    status = str(mini_pipeline.get("status") or "unknown")
+    if status not in {"passed", "failed"}:
+        return None
+
+    health: dict[str, Any] = {
+        "status": "mini_pipeline_ready"
+        if status == "passed"
+        else "mini_pipeline_blocked",
+        "smoke_scope": smoke_scope,
+    }
+    execution = runtime_diagnostics.get("validated_runtime_execution")
+    contract = (
+        execution.get("tool_loop_contract") if isinstance(execution, dict) else None
+    )
+    if isinstance(contract, dict):
+        for source_key, target_key in (
+            ("tool_call_support", "tool_call_support"),
+            ("tool_result_support", "tool_result_support"),
+            ("fallback", "fallback"),
+            ("fallback_reason", "fallback_reason"),
+            ("recovery_status", "recovery_status"),
+        ):
+            value = contract.get(source_key)
+            if isinstance(value, str) and value:
+                health[target_key] = value
+    if status == "failed":
+        health["reason"] = str(mini_pipeline.get("reason") or "mini_pipeline_failed")
+    return health
+
+
 def _provider_issue_from_error(error_details: str) -> dict[str, str]:
     error_text = error_details.lower()
     if any(
@@ -492,7 +588,7 @@ def normalize_provider_smoke_runtime_mode(value: str | None) -> str:
     """Normalize the runtime surface that the provider smoke command validates."""
     if value is None:
         return "analysis_only"
-    mode = normalize_runtime_mode(value)
+    mode = value.strip().lower().replace("-", "_")
     if mode not in PROVIDER_SMOKE_RUNTIME_MODES:
         allowed = ", ".join(PROVIDER_SMOKE_RUNTIME_MODES)
         raise ValueError(
@@ -502,18 +598,31 @@ def normalize_provider_smoke_runtime_mode(value: str | None) -> str:
 
 
 def _provider_smoke_requirements(runtime_mode: str) -> RuntimeRequirements:
+    if runtime_mode == "mini_pipeline":
+        return RuntimeRequirements(
+            mode="mini_pipeline",
+            required=RuntimeRequirements.generic_edit().required,
+        )
     if runtime_mode == "generic_edit":
         return RuntimeRequirements.generic_edit()
     return RuntimeRequirements.text_only(mode="analysis_only")
 
 
 def _provider_smoke_scope(runtime_mode: str) -> str:
+    if runtime_mode == "mini_pipeline":
+        return "mini_task_pipeline"
     if runtime_mode == "generic_edit":
         return "generic_edit_tool_loop"
     return "text_completion_only"
 
 
 def _provider_smoke_note(runtime_mode: str) -> str:
+    if runtime_mode == "mini_pipeline":
+        return (
+            "Provider smoke runs a temporary planner/coder/reviewer mini task. "
+            "It validates the local edit loop and one unit-test command, but it "
+            "does not prove full production autonomy for arbitrary repositories."
+        )
     if runtime_mode == "generic_edit":
         return (
             "Provider smoke validates a temporary generic_edit tool loop; full "
@@ -523,6 +632,21 @@ def _provider_smoke_note(runtime_mode: str) -> str:
     return (
         "Provider smoke validates text completion only; run runtime-specific "
         "tests before treating a provider as autonomous."
+    )
+
+
+def _provider_smoke_capability_mode(runtime_mode: str) -> str:
+    """Map smoke-only scopes to the runtime mode that supplies capabilities."""
+    if runtime_mode == "mini_pipeline":
+        return "generic_edit"
+    return runtime_mode
+
+
+def _provider_smoke_capabilities(provider_name: str, runtime_mode: str):
+    """Return runtime capabilities for a smoke validation mode."""
+    return capabilities_for_runtime_mode(
+        provider_name,
+        normalize_runtime_mode(_provider_smoke_capability_mode(runtime_mode)),
     )
 
 
@@ -536,11 +660,13 @@ def build_provider_smoke_runtime_diagnostics(
     requested_mode = requested_runtime_mode or get_runtime_mode("analysis")
     validated_mode = normalize_provider_smoke_runtime_mode(validated_runtime_mode)
     smoke_requirements = _provider_smoke_requirements(validated_mode)
-    requested_capabilities = capabilities_for_runtime_mode(
+    requested_capabilities = _provider_smoke_capabilities(
         provider_name,
-        requested_mode,
+        requested_mode
+        if requested_mode in PROVIDER_SMOKE_RUNTIME_MODES
+        else normalize_runtime_mode(requested_mode),
     )
-    validated_capabilities = capabilities_for_runtime_mode(
+    validated_capabilities = _provider_smoke_capabilities(
         provider_name,
         validated_mode,
     )
@@ -631,6 +757,16 @@ async def run_provider_smoke_check(
     )
 
     try:
+        if validated_runtime_mode == "mini_pipeline":
+            return await _complete_provider_mini_pipeline_smoke(
+                provider=provider,
+                session_config=session_config,
+                prompt=prompt,
+                timeout_seconds=timeout_seconds,
+                model=resolved_model,
+                runtime_diagnostics=runtime_diagnostics,
+            )
+
         if validated_runtime_mode == "generic_edit":
             return await _complete_provider_generic_edit_smoke(
                 provider=provider,
@@ -861,6 +997,265 @@ async def _complete_provider_generic_edit_smoke(
         runtime_diagnostics=_with_provider_contract_health(
             runtime_diagnostics,
             success=True,
+        ),
+    )
+
+
+async def _complete_provider_mini_pipeline_smoke(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    prompt: str | None,
+    timeout_seconds: float,
+    model: str | None,
+    runtime_diagnostics: dict[str, Any],
+) -> ProviderSmokeResult:
+    """Run a tiny planner/coder/tests/reviewer pipeline in a temp project."""
+    task = prompt or DEFAULT_PROVIDER_MINI_PIPELINE_TASK
+    phases: list[dict[str, str]] = []
+
+    with tempfile.TemporaryDirectory(prefix="auto-code-provider-pipeline-") as temp_dir:
+        temp_root = Path(temp_dir)
+        smoke_project_dir = temp_root / "project"
+        smoke_spec_dir = temp_root / "spec"
+        smoke_project_dir.mkdir(parents=True, exist_ok=True)
+        smoke_spec_dir.mkdir(parents=True, exist_ok=True)
+        string_tools_path = smoke_project_dir / "string_tools.py"
+        string_tools_path.write_text(
+            MINI_PIPELINE_INITIAL_STRING_TOOLS,
+            encoding="utf-8",
+        )
+        (smoke_project_dir / "test_string_tools.py").write_text(
+            MINI_PIPELINE_TEST_FILE,
+            encoding="utf-8",
+        )
+
+        planner_response = await _complete_provider_text_phase(
+            provider=provider,
+            message=DEFAULT_PROVIDER_MINI_PIPELINE_PLANNER_PROMPT.format(task=task),
+            spec_dir=smoke_spec_dir,
+            timeout_seconds=timeout_seconds,
+            mode="mini_pipeline_planner",
+        )
+        phases.append({"name": "planner", "status": "passed"})
+
+        session = _create_provider_session(
+            provider=provider,
+            session_config=session_config,
+            project_dir=smoke_project_dir,
+            spec_dir=smoke_spec_dir,
+            agent_type="coder",
+        )
+        runtime_session = create_runtime_session(
+            provider_name=provider.name,
+            agent_session=session,
+            runtime_mode="generic_edit",
+            project_dir=smoke_project_dir,
+            agent_type="coder",
+        )
+        coder_result = await asyncio.wait_for(
+            run_runtime_session(
+                runtime_session,
+                DEFAULT_PROVIDER_MINI_PIPELINE_CODER_PROMPT.format(
+                    task=task,
+                    planner_response=planner_response.strip(),
+                ),
+                smoke_spec_dir,
+                verbose=False,
+                phase=LogPhase.PLANNING,
+                requirements=RuntimeRequirements.generic_edit(),
+            ),
+            timeout=timeout_seconds,
+        )
+        del coder_result
+        phases.append({"name": "coder", "status": "passed"})
+
+        execution_diagnostics = _generic_edit_execution_diagnostics(
+            smoke_spec_dir / "artifacts",
+        )
+        if execution_diagnostics is not None:
+            runtime_diagnostics = {
+                **runtime_diagnostics,
+                "validated_runtime_execution": execution_diagnostics,
+            }
+
+        test_exit_code, test_output = await _run_mini_pipeline_tests(
+            smoke_project_dir,
+            timeout_seconds=timeout_seconds,
+        )
+        if test_exit_code != 0:
+            phases.append({"name": "tests", "status": "failed"})
+            return _mini_pipeline_result(
+                provider=provider,
+                model=model,
+                runtime_diagnostics=runtime_diagnostics,
+                task=task,
+                phases=phases,
+                changed_files=_mini_pipeline_changed_files(string_tools_path),
+                success=False,
+                message="Provider mini pipeline failed unit tests",
+                response_excerpt=None,
+                error_details=test_output,
+                test_exit_code=test_exit_code,
+                reason="unit_tests_failed",
+            )
+        phases.append({"name": "tests", "status": "passed"})
+
+        implementation = string_tools_path.read_text(encoding="utf-8")
+        reviewer_response = await _complete_provider_text_phase(
+            provider=provider,
+            message=DEFAULT_PROVIDER_MINI_PIPELINE_REVIEW_PROMPT.format(
+                task=task,
+                test_exit_code=test_exit_code,
+                test_output=test_output or "(no output)",
+                implementation=implementation,
+            ),
+            spec_dir=smoke_spec_dir,
+            timeout_seconds=timeout_seconds,
+            mode="mini_pipeline_reviewer",
+        )
+        if not reviewer_response.strip():
+            phases.append({"name": "reviewer", "status": "failed"})
+            return _mini_pipeline_result(
+                provider=provider,
+                model=model,
+                runtime_diagnostics=runtime_diagnostics,
+                task=task,
+                phases=phases,
+                changed_files=_mini_pipeline_changed_files(string_tools_path),
+                success=False,
+                message="Provider mini pipeline reviewer returned an empty response",
+                response_excerpt=None,
+                error_details="Provider mini pipeline reviewer returned an empty response",
+                test_exit_code=test_exit_code,
+                reason="reviewer_empty_response",
+            )
+        phases.append({"name": "reviewer", "status": "passed"})
+
+        return _mini_pipeline_result(
+            provider=provider,
+            model=model,
+            runtime_diagnostics=runtime_diagnostics,
+            task=task,
+            phases=phases,
+            changed_files=_mini_pipeline_changed_files(string_tools_path),
+            success=True,
+            message="Provider mini pipeline smoke passed",
+            response_excerpt=_response_excerpt(reviewer_response),
+            error_details=None,
+            test_exit_code=test_exit_code,
+        )
+
+
+async def _complete_provider_text_phase(
+    *,
+    provider: Any,
+    message: str,
+    spec_dir: Path,
+    timeout_seconds: float,
+    mode: str,
+) -> str:
+    """Run one text-only provider phase and return its response."""
+    runtime_session = CompletionRuntimeSession(
+        provider_name=provider.name,
+        agent_session=ProviderSendMessageSession(provider),
+    )
+    result = await asyncio.wait_for(
+        run_runtime_session(
+            runtime_session,
+            message,
+            spec_dir,
+            verbose=False,
+            phase=LogPhase.PLANNING,
+            requirements=RuntimeRequirements.text_only(mode=mode),
+        ),
+        timeout=timeout_seconds,
+    )
+    return result.response_text.strip()
+
+
+async def _run_mini_pipeline_tests(
+    project_dir: Path,
+    *,
+    timeout_seconds: float,
+) -> tuple[int, str]:
+    """Run the mini pipeline unittest command in the temporary project."""
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "unittest",
+        "-q",
+        cwd=project_dir,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=max(1.0, min(timeout_seconds, 15.0)),
+        )
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        return 124, "Mini pipeline unit tests timed out."
+
+    output = "\n".join(
+        part.decode("utf-8", errors="replace").strip()
+        for part in (stdout, stderr)
+        if part
+    ).strip()
+    return process.returncode or 0, output
+
+
+def _mini_pipeline_changed_files(string_tools_path: Path) -> list[str]:
+    if (
+        string_tools_path.read_text(encoding="utf-8")
+        == MINI_PIPELINE_INITIAL_STRING_TOOLS
+    ):
+        return []
+    return ["string_tools.py"]
+
+
+def _mini_pipeline_result(
+    *,
+    provider: Any,
+    model: str | None,
+    runtime_diagnostics: dict[str, Any],
+    task: str,
+    phases: list[dict[str, str]],
+    changed_files: list[str],
+    success: bool,
+    message: str,
+    response_excerpt: str | None,
+    error_details: str | None,
+    test_exit_code: int,
+    reason: str | None = None,
+) -> ProviderSmokeResult:
+    mini_pipeline: dict[str, Any] = {
+        "status": "passed" if success else "failed",
+        "task": task,
+        "test_command": DEFAULT_PROVIDER_MINI_PIPELINE_TEST_COMMAND,
+        "test_exit_code": test_exit_code,
+        "changed_files": changed_files,
+        "phases": phases,
+    }
+    if reason:
+        mini_pipeline["reason"] = reason
+    next_diagnostics = {
+        **runtime_diagnostics,
+        "mini_pipeline": mini_pipeline,
+    }
+    return ProviderSmokeResult(
+        success=success,
+        provider=provider.name,
+        model=model,
+        runtime_mode="mini_pipeline",
+        message=message,
+        response_excerpt=response_excerpt,
+        error_details=error_details,
+        runtime_diagnostics=_with_provider_contract_health(
+            next_diagnostics,
+            success=success,
         ),
     )
 

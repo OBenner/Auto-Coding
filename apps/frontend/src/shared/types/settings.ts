@@ -487,6 +487,7 @@ export interface ProviderRuntimeDiagnostics {
   validatedRuntimeCapabilities?: string[];
   validatedRuntimeMissingCapabilities?: string[];
   validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
+  miniPipeline?: ProviderMiniPipelineDiagnostics | null;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
 }
@@ -546,6 +547,21 @@ export interface ProviderValidatedToolLoopContract {
   fallbackReason?: string;
   recoveryStatus?: string;
   blockingReason?: string;
+}
+
+export interface ProviderMiniPipelineDiagnostics {
+  status?: string;
+  task?: string;
+  testCommand?: string;
+  testExitCode?: number;
+  changedFiles?: string[];
+  reason?: string;
+  phases?: ProviderMiniPipelinePhase[];
+}
+
+export interface ProviderMiniPipelinePhase {
+  name?: string;
+  status?: string;
 }
 
 export interface ProviderConnectionTestResult {

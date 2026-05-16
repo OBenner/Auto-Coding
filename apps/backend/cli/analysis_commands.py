@@ -14,7 +14,6 @@ from agents.runtime import (
     run_runtime_session,
 )
 from agents.runtime.artifacts import save_analysis_only_artifact
-from agents.session import run_agent_session
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.factory import create_engine_provider
@@ -110,6 +109,8 @@ async def run_analysis_only_session(
         )
 
         if provider.name == "claude":
+            from agents.session import run_agent_session
+
             session = provider.create_session(
                 session_config,
                 project_dir=project_dir,
