@@ -1,0 +1,12 @@
+interface:
+  display_name: Plugin Review
+  short_description: Review plugin manifests, permissions, and isolation
+  default_prompt: Use $plugin-review to review this Auto Code plugin before merging
+    or enabling it.
+codex:
+  skill: $plugin-review
+  skill_file: ../SKILL.md
+  invocation: Load this skill when its description matches the user request or when
+    invoked explicitly.
+  default_prompt: Use $plugin-review to review this Auto Code plugin before merging
+    or enabling it.

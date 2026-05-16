@@ -1,0 +1,22 @@
+{
+  "name": "auto-code-skills",
+  "version": "0.1.0",
+  "description": "Repo-specific Auto Code development skills for workflow routing, verification, test enforcement, PR prep, provider/runtime work, and plugin safety review.",
+  "author": {
+    "name": "Auto Code contributors"
+  },
+  "repository": "https://github.com/OBenner/Auto-Coding",
+  "license": "AGPL-3.0",
+  "keywords": [
+    "auto-code",
+    "verification",
+    "code-review",
+    "providers",
+    "runtime",
+    "plugins",
+    "electron",
+    "python",
+    "typescript"
+  ],
+  "hooks": "./hooks/hooks.json"
+}

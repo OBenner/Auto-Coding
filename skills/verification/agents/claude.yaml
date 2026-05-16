@@ -1,0 +1,10 @@
+interface:
+  display_name: Verification
+  short_description: Prove Auto Code work before calling it done
+  default_prompt: Use $verification to verify this Auto Code change before completion.
+claude:
+  skill: $verification
+  skill_file: ../SKILL.md
+  invocation: Use the Skill tool or the installed Claude Code plugin skill with this
+    name.
+  default_prompt: Use $verification to verify this Auto Code change before completion.

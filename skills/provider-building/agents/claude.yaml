@@ -1,0 +1,12 @@
+interface:
+  display_name: Provider Building
+  short_description: Add providers with runtime readiness checks
+  default_prompt: Use $provider-building to design and implement an Auto Code provider
+    or runtime adapter.
+claude:
+  skill: $provider-building
+  skill_file: ../SKILL.md
+  invocation: Use the Skill tool or the installed Claude Code plugin skill with this
+    name.
+  default_prompt: Use $provider-building to design and implement an Auto Code provider
+    or runtime adapter.

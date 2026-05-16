@@ -1,0 +1,10 @@
+interface:
+  display_name: Plugin Building
+  short_description: Build optional Auto Code plugins safely
+  default_prompt: Use $plugin-building to create or update an optional Auto Code plugin.
+codex:
+  skill: $plugin-building
+  skill_file: ../SKILL.md
+  invocation: Load this skill when its description matches the user request or when
+    invoked explicitly.
+  default_prompt: Use $plugin-building to create or update an optional Auto Code plugin.

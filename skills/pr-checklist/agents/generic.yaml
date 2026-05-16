@@ -1,0 +1,16 @@
+interface:
+  display_name: PR Checklist
+  short_description: Prepare Auto Code pull requests with evidence
+  default_prompt: Use $pr-checklist to prepare this Auto Code branch for a pull request.
+generic:
+  standard: Agent Skills compatible metadata
+  skill: pr-checklist
+  skill_file: ../SKILL.md
+  works_with:
+  - Codex
+  - Claude Code
+  - Gemini CLI
+  - Cursor
+  - Copilot
+  - Windsurf
+  default_prompt: Use $pr-checklist to prepare this Auto Code branch for a pull request.
