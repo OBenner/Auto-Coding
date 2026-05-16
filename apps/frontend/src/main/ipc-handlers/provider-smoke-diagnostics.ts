@@ -95,6 +95,15 @@ export function mapProviderTransactionBatchContract(
     openTransactionBatchIds: arrayFromUnknown(payload.open_transaction_batch_ids),
     boundaryErrorCount: numberFromUnknown(payload.boundary_error_count),
     boundaryErrorReasons: arrayFromUnknown(payload.boundary_error_reasons),
+    boundaryPreferredStrategy: stringFromUnknown(
+      payload.boundary_preferred_strategy
+    ),
+    boundaryRequiredActionKinds: arrayFromUnknown(
+      payload.boundary_required_action_kinds
+    ),
+    boundaryResolutionStrategies: arrayFromUnknown(
+      payload.boundary_resolution_strategies
+    ),
   };
 
   return Object.values(contract).some((field) =>

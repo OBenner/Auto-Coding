@@ -354,8 +354,11 @@ Auto Code validates and executes these actions locally:
   a batch is open because they cannot produce staged mutation snapshots,
   `finish` is rejected while a batch is still open, and open-batch state plus
   batch-boundary guard status, boundary reasons, and suggested recovery actions
-  are preserved in the recovery checkpoint, artifact manifest timeline, and
-  provider smoke diagnostics;
+  are preserved in the recovery checkpoint, artifact manifest timeline, provider
+  smoke diagnostics, and the frontend runtime diagnostics rows. Provider smoke
+  now reports the boundary preferred strategy, required action kinds, and
+  resolution strategies from the manifest recovery timeline instead of only
+  exposing the raw boundary reason;
 - interrupted or partial runs persist `generic_edit_session_state.json`,
   `generic_edit_recovery_checkpoint.json`, `generic_edit_mutation_snapshots.json`,
   and `generic_edit_transaction_groups.json`. The read-only resume preflight

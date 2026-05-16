@@ -459,12 +459,12 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
                                 "content": (
                                     "import re\n\n\n"
                                     "def normalize_space(value: str) -> str:\n"
-                                    "    return \" \".join(value.split())\n\n\n"
+                                    '    return " ".join(value.split())\n\n\n'
                                     "def slugify(value: str) -> str:\n"
                                     "    slug = re.sub(\n"
-                                    "        r\"[^a-z0-9]+\", \"-\", value.strip().lower()\n"
+                                    '        r"[^a-z0-9]+", "-", value.strip().lower()\n'
                                     "    )\n"
-                                    "    return slug.strip(\"-\")\n"
+                                    '    return slug.strip("-")\n'
                                 ),
                             },
                         ),
@@ -561,9 +561,9 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
             {"name": "reviewer", "status": "passed"},
         ],
     }
-    assert result.runtime_diagnostics["validated_runtime_execution"][
-        "tool_counts"
-    ] == {"write_file": 1}
+    assert result.runtime_diagnostics["validated_runtime_execution"]["tool_counts"] == {
+        "write_file": 1
+    }
     assert fake_provider.messages[0].startswith("Plan a tiny Auto Code readiness task")
     assert fake_provider.session.tool_results[0] == ("call_write_slugify", "write_file")
 
@@ -712,6 +712,84 @@ def test_generic_edit_execution_diagnostics_reports_batch_runtime_boundary_error
         "open_transaction_batch_ids": [],
         "boundary_error_count": 1,
         "boundary_error_reasons": ["unresolved_batch_recovery"],
+    }
+
+
+def test_generic_edit_execution_diagnostics_reports_batch_recovery_actions(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    manifest_path = tmp_path / "generic_edit_artifact_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_artifact_manifest",
+                "recovery_timeline": [
+                    {
+                        "event_type": "action_result",
+                        "tool": "run_command",
+                        "timeline_stage": "batch_boundary_blocked",
+                        "batch_boundary_error_reason": "opaque_batch_mutation",
+                        "preferred_strategy": "abort_batch",
+                        "required_next_action_kinds": [
+                            "abort_batch",
+                            "repair_mutation",
+                        ],
+                        "resolution_strategies": [
+                            "abort_batch",
+                            "repair_mutation",
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "stop_reason": "finish",
+                "loop": "json_actions",
+                "action_count": 4,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 0,
+                "tool_counts": {
+                    "begin_batch": 1,
+                    "write_file": 1,
+                    "run_command": 1,
+                    "abort_batch": 1,
+                },
+                "transaction_batch_count": 1,
+                "open_transaction_batch_ids": [],
+                "artifact_manifest_artifact": str(manifest_path),
+                "transaction_batches": [
+                    {
+                        "id": "batch-1",
+                        "status": "aborted",
+                        "boundary_errors": [{"reason": "opaque_batch_mutation"}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["transaction_batch_contract"] == {
+        "status": "boundary_guarded",
+        "batch_boundary_guard": "runtime_blocked",
+        "transaction_batch_count": 1,
+        "open_transaction_batch_ids": [],
+        "boundary_error_count": 1,
+        "boundary_error_reasons": ["opaque_batch_mutation"],
+        "boundary_preferred_strategy": "abort_batch",
+        "boundary_required_action_kinds": ["abort_batch", "repair_mutation"],
+        "boundary_resolution_strategies": ["abort_batch", "repair_mutation"],
     }
 
 
@@ -1080,6 +1158,20 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
                         "unresolved_transaction_group_ids": ["transaction-group-1"],
                         "open_transaction_batch_ids": ["batch-1"],
                     },
+                    "transaction_batch_contract": {
+                        "status": "boundary_guarded",
+                        "batch_boundary_guard": "runtime_blocked",
+                        "boundary_error_reasons": ["opaque_batch_mutation"],
+                        "boundary_preferred_strategy": "abort_batch",
+                        "boundary_required_action_kinds": [
+                            "abort_batch",
+                            "repair_mutation",
+                        ],
+                        "boundary_resolution_strategies": [
+                            "abort_batch",
+                            "repair_mutation",
+                        ],
+                    },
                 },
             },
         )
@@ -1121,3 +1213,12 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     assert "transaction-group-1" in output
     assert "Resume open batches" in output
     assert "batch-1" in output
+    assert "Batch contract" in output
+    assert "boundary_guarded, runtime_blocked" in output
+    assert "Batch boundary reasons" in output
+    assert "opaque_batch_mutation" in output
+    assert "Batch preferred strategy" in output
+    assert "abort_batch" in output
+    assert "Batch required actions" in output
+    assert "abort_batch, repair_mutation" in output
+    assert "Batch resolution strategies" in output

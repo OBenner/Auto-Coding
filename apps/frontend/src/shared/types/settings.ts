@@ -557,6 +557,9 @@ export interface ProviderValidatedTransactionBatchContract {
   openTransactionBatchIds?: string[];
   boundaryErrorCount?: number;
   boundaryErrorReasons?: string[];
+  boundaryPreferredStrategy?: string;
+  boundaryRequiredActionKinds?: string[];
+  boundaryResolutionStrategies?: string[];
 }
 
 export interface ProviderMiniPipelineDiagnostics {

@@ -164,8 +164,12 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
     resume_policy = _resume_policy_payload(payload.get("resume_policy"))
     if resume_policy is not None:
         diagnostics["resume_policy"] = resume_policy
+    artifact_manifest = _generic_edit_artifact_manifest_payload(artifact_dir)
     diagnostics["transaction_batch_contract"] = (
-        _generic_edit_transaction_batch_contract(payload)
+        _generic_edit_transaction_batch_contract(
+            payload,
+            artifact_manifest=artifact_manifest,
+        )
     )
     diagnostics["tool_loop_contract"] = _generic_edit_tool_loop_contract(
         payload=payload,
@@ -173,6 +177,20 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
         resume_policy=resume_policy,
     )
     return diagnostics
+
+
+def _generic_edit_artifact_manifest_payload(
+    artifact_dir: Path,
+) -> dict[str, Any] | None:
+    """Return the adjacent generic_edit artifact manifest when it is readable."""
+    manifest_path = artifact_dir / "generic_edit_artifact_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _generic_edit_tool_loop_contract(
@@ -283,7 +301,11 @@ def _generic_edit_recovery_status(
     return "not_required"
 
 
-def _generic_edit_transaction_batch_contract(payload: dict[str, Any]) -> dict[str, Any]:
+def _generic_edit_transaction_batch_contract(
+    payload: dict[str, Any],
+    *,
+    artifact_manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Return safe batch-boundary diagnostics for provider smoke results."""
     stop_reason = str(payload.get("stop_reason") or "unknown")
     transaction_batch_count = _int_payload_value(payload, "transaction_batch_count")
@@ -297,6 +319,9 @@ def _generic_edit_transaction_batch_contract(payload: dict[str, Any]) -> dict[st
     open_batches = _string_list_payload(payload.get("open_transaction_batch_ids"))
     boundary_error_count = 0
     boundary_error_reasons: list[str] = []
+    boundary_required_action_kinds: list[str] = []
+    boundary_resolution_strategies: list[str] = []
+    boundary_preferred_strategy: str | None = None
     if isinstance(transaction_batches, list):
         for batch in transaction_batches:
             if not isinstance(batch, dict):
@@ -318,12 +343,45 @@ def _generic_edit_transaction_batch_contract(payload: dict[str, Any]) -> dict[st
                     and isinstance(error.get("reason"), str)
                     and error.get("reason")
                 )
+                for error in boundary_errors:
+                    if not isinstance(error, dict):
+                        continue
+                    boundary_preferred_strategy = (
+                        boundary_preferred_strategy
+                        or _string_payload_value(error.get("preferred_strategy"))
+                    )
+                    boundary_required_action_kinds.extend(
+                        _string_list_payload(error.get("required_next_action_kinds"))
+                    )
+                    boundary_resolution_strategies.extend(
+                        _string_list_payload(error.get("resolution_strategies"))
+                    )
             if not (
                 isinstance(batch_error_count, int)
                 and not isinstance(batch_error_count, bool)
             ):
                 boundary_error_count += len(batch_error_reasons)
             boundary_error_reasons.extend(batch_error_reasons)
+
+    for event in _generic_edit_batch_boundary_manifest_events(artifact_manifest):
+        reason = _string_payload_value(event.get("batch_boundary_error_reason"))
+        if reason:
+            boundary_error_reasons.append(reason)
+        boundary_preferred_strategy = (
+            boundary_preferred_strategy
+            or _string_payload_value(event.get("preferred_strategy"))
+        )
+        boundary_required_action_kinds.extend(
+            _string_list_payload(event.get("required_next_action_kinds"))
+        )
+        boundary_resolution_strategies.extend(
+            _string_list_payload(event.get("resolution_strategies"))
+        )
+    if boundary_error_reasons:
+        boundary_error_count = max(
+            boundary_error_count,
+            len(set(boundary_error_reasons)),
+        )
 
     if stop_reason == "batch_boundary_violation":
         boundary_error_count = max(boundary_error_count, 1)
@@ -354,7 +412,44 @@ def _generic_edit_transaction_batch_contract(payload: dict[str, Any]) -> dict[st
         contract["boundary_error_reasons"] = sorted(
             dict.fromkeys(boundary_error_reasons)
         )
+    if boundary_preferred_strategy:
+        contract["boundary_preferred_strategy"] = boundary_preferred_strategy
+    if boundary_required_action_kinds:
+        contract["boundary_required_action_kinds"] = list(
+            dict.fromkeys(boundary_required_action_kinds)
+        )
+    if boundary_resolution_strategies:
+        contract["boundary_resolution_strategies"] = list(
+            dict.fromkeys(boundary_resolution_strategies)
+        )
     return contract
+
+
+def _generic_edit_batch_boundary_manifest_events(
+    artifact_manifest: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return manifest timeline events that describe batch-boundary recovery."""
+    if not isinstance(artifact_manifest, dict):
+        return []
+    recovery_timeline = artifact_manifest.get("recovery_timeline")
+    if not isinstance(recovery_timeline, list):
+        return []
+    events: list[dict[str, Any]] = []
+    for event in recovery_timeline:
+        if not isinstance(event, dict):
+            continue
+        has_boundary_reason = bool(
+            _string_payload_value(event.get("batch_boundary_error_reason"))
+        )
+        has_boundary_stage = event.get("timeline_stage") == "batch_boundary_blocked"
+        if has_boundary_reason or has_boundary_stage:
+            events.append(event)
+    return events
+
+
+def _string_payload_value(value: Any) -> str | None:
+    """Return a non-empty string payload value."""
+    return value if isinstance(value, str) and value else None
 
 
 def _native_tool_fallbacks_payload(value: Any) -> list[dict[str, Any]]:
@@ -1481,6 +1576,17 @@ def _print_transaction_batch_contract(contract: Any) -> None:
     _print_string_list_line(
         "Batch boundary reasons",
         contract.get("boundary_error_reasons"),
+    )
+    preferred_strategy = contract.get("boundary_preferred_strategy")
+    if isinstance(preferred_strategy, str) and preferred_strategy:
+        print_key_value("Batch preferred strategy", preferred_strategy)
+    _print_string_list_line(
+        "Batch required actions",
+        contract.get("boundary_required_action_kinds"),
+    )
+    _print_string_list_line(
+        "Batch resolution strategies",
+        contract.get("boundary_resolution_strategies"),
     )
     _print_string_list_line(
         "Open transaction batches",

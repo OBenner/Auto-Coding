@@ -969,6 +969,7 @@
       }
     },
     "runtimeDiagnosticValues": {
+      "abortBatch": "Abort batch",
       "amp": "Amp",
       "adapterMissing": "Adapter missing",
       "adapterToolMissingOnServer": "Adapter tool missing on server",
@@ -1033,6 +1034,7 @@
       "ok": "OK",
       "openBatch": "Open batch",
       "opencode": "OpenCode",
+      "opaqueBatchMutation": "Opaque batch mutation",
       "orchestrated": "Orchestrated",
       "partial": "Partial",
       "partialFailure": "Partial failure",
@@ -1049,6 +1051,7 @@
       "readyToConnect": "Ready to connect",
       "recoverPartialFailure": "Recover partial failure",
       "recovered": "Recovered",
+      "repairMutation": "Repair mutation",
       "requiresResolution": "Requires resolution",
       "registerExternalMcpAdapter": "Register external MCP adapter",
       "registerOrRemoveUnsupportedServers": "Register or remove unsupported servers",
@@ -1215,6 +1218,9 @@
       "batchCount": "Transaction batches",
       "batchBoundaryErrors": "Batch boundary errors",
       "batchOpenBatches": "Open batches",
+      "batchPreferredStrategy": "Batch preferred strategy",
+      "batchRequiredActions": "Batch required actions",
+      "batchResolutionStrategies": "Batch resolution strategies",
       "noneMissing": "None",
       "diagnosticsNote": "Provider smoke checks the API call only; autonomous coding still depends on runtime tools, MCP, subagents, and filesystem support.",
       "defaultModel": "Default model",

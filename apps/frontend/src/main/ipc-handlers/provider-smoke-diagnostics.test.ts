@@ -77,6 +77,9 @@ describe('mapProviderTransactionBatchContract', () => {
         open_transaction_batch_ids: ['batch-1', 42],
         boundary_error_count: 1,
         boundary_error_reasons: ['batch_boundary_violation', null],
+        boundary_preferred_strategy: 'abort_batch',
+        boundary_required_action_kinds: ['abort_batch', 'repair_mutation', null],
+        boundary_resolution_strategies: ['abort_batch', 'repair_mutation', 7],
         ignored_private_path: 'workspace-private/checkpoint.json',
       })
     ).toEqual({
@@ -86,6 +89,9 @@ describe('mapProviderTransactionBatchContract', () => {
       openTransactionBatchIds: ['batch-1'],
       boundaryErrorCount: 1,
       boundaryErrorReasons: ['batch_boundary_violation'],
+      boundaryPreferredStrategy: 'abort_batch',
+      boundaryRequiredActionKinds: ['abort_batch', 'repair_mutation'],
+      boundaryResolutionStrategies: ['abort_batch', 'repair_mutation'],
     });
   });
 

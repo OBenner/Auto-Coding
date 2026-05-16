@@ -917,6 +917,7 @@
       }
     },
     "runtimeDiagnosticValues": {
+      "abortBatch": "Abandonner le lot",
       "amp": "Amp",
       "adapterMissing": "Adaptateur manquant",
       "adapterToolMissingOnServer": "Outil adaptateur absent du serveur",
@@ -981,6 +982,7 @@
       "ok": "OK",
       "openBatch": "Lot ouvert",
       "opencode": "OpenCode",
+      "opaqueBatchMutation": "Mutation de lot opaque",
       "orchestrated": "Orchestré",
       "partial": "Partiel",
       "partialFailure": "Échec partiel",
@@ -997,6 +999,7 @@
       "readyToConnect": "Prêt à connecter",
       "recoverPartialFailure": "Récupérer l'échec partiel",
       "recovered": "Récupéré",
+      "repairMutation": "Réparer la mutation",
       "requiresResolution": "Résolution requise",
       "registerExternalMcpAdapter": "Enregistrer l'adaptateur MCP externe",
       "registerOrRemoveUnsupportedServers": "Enregistrer ou retirer les serveurs non supportés",
@@ -1163,6 +1166,9 @@
       "batchCount": "Lots de transaction",
       "batchBoundaryErrors": "Erreurs de frontière de lot",
       "batchOpenBatches": "Lots ouverts",
+      "batchPreferredStrategy": "Stratégie préférée du lot",
+      "batchRequiredActions": "Actions requises du lot",
+      "batchResolutionStrategies": "Stratégies de résolution du lot",
       "noneMissing": "Aucun",
       "diagnosticsNote": "Le smoke test fournisseur vérifie uniquement l'appel API ; le codage autonome dépend encore des outils runtime, MCP, subagents et du support du système de fichiers.",
       "defaultModel": "Modèle par défaut",

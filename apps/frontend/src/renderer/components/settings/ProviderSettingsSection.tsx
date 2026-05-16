@@ -193,6 +193,7 @@ const RUNTIME_MODE_OPTIONS: Array<{
 ];
 
 const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
+  abort_batch: 'settings:aiProvider.runtimeDiagnosticValues.abortBatch',
   amp: 'settings:aiProvider.runtimeDiagnosticValues.amp',
   adapter_missing: 'settings:aiProvider.runtimeDiagnosticValues.adapterMissing',
   adapter_tool_missing_on_server: 'settings:aiProvider.runtimeDiagnosticValues.adapterToolMissingOnServer',
@@ -257,6 +258,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   ok: 'settings:aiProvider.runtimeDiagnosticValues.ok',
   open_batch: 'settings:aiProvider.runtimeDiagnosticValues.openBatch',
   opencode: 'settings:aiProvider.runtimeDiagnosticValues.opencode',
+  opaque_batch_mutation: 'settings:aiProvider.runtimeDiagnosticValues.opaqueBatchMutation',
   orchestrated: 'settings:aiProvider.runtimeDiagnosticValues.orchestrated',
   partial: 'settings:aiProvider.runtimeDiagnosticValues.partial',
   partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.partialFailure',
@@ -273,6 +275,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   ready_to_connect: 'settings:aiProvider.runtimeDiagnosticValues.readyToConnect',
   recover_partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure',
   recovered: 'settings:aiProvider.runtimeDiagnosticValues.recovered',
+  repair_mutation: 'settings:aiProvider.runtimeDiagnosticValues.repairMutation',
   requires_resolution: 'settings:aiProvider.runtimeDiagnosticValues.requiresResolution',
   register_external_mcp_adapter: 'settings:aiProvider.runtimeDiagnosticValues.registerExternalMcpAdapter',
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
@@ -637,6 +640,27 @@ export function buildProviderTransactionBatchDiagnosticRows(
       value: formatRuntimeDiagnosticList(
         translate,
         transactionBatchContract.openTransactionBatchIds
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchPreferredStrategy',
+      value: formatRuntimeDiagnosticValue(
+        translate,
+        transactionBatchContract.boundaryPreferredStrategy
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchRequiredActions',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.boundaryRequiredActionKinds
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchResolutionStrategies',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.boundaryResolutionStrategies
       ),
     },
   ].filter((row) => row.value);

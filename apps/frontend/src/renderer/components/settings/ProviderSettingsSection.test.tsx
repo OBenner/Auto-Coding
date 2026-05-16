@@ -25,11 +25,16 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.batchCount': 'Transaction batches',
     'settings:aiProvider.connectionTest.batchBoundaryErrors': 'Batch boundary errors',
     'settings:aiProvider.connectionTest.batchOpenBatches': 'Open batches',
+    'settings:aiProvider.connectionTest.batchPreferredStrategy': 'Batch preferred strategy',
+    'settings:aiProvider.connectionTest.batchRequiredActions': 'Batch required actions',
+    'settings:aiProvider.connectionTest.batchResolutionStrategies': 'Batch resolution strategies',
+    'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
     'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked': 'Pre-execution blocked',
     'settings:aiProvider.runtimeDiagnosticValues.ready': 'Ready',
+    'settings:aiProvider.runtimeDiagnosticValues.repairMutation': 'Repair mutation',
     'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure': 'Recover partial failure',
     'settings:aiProvider.runtimeDiagnosticValues.yes': 'Yes',
   })[key] ?? key;
@@ -92,6 +97,9 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
         openTransactionBatchIds: ['batch-1'],
         boundaryErrorCount: 1,
         boundaryErrorReasons: ['batch_boundary_violation'],
+        boundaryPreferredStrategy: 'abort_batch',
+        boundaryRequiredActionKinds: ['abort_batch', 'repair_mutation'],
+        boundaryResolutionStrategies: ['abort_batch', 'repair_mutation'],
       })
     ).toEqual([
       {
@@ -113,6 +121,18 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.batchOpenBatches',
         value: 'batch-1',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchPreferredStrategy',
+        value: 'Abort batch',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchRequiredActions',
+        value: 'Abort batch, Repair mutation',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchResolutionStrategies',
+        value: 'Abort batch, Repair mutation',
       },
     ]);
   });
