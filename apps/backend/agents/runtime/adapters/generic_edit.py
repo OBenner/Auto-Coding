@@ -331,6 +331,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
     }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
+GENERIC_EDIT_EVENTS_FILENAME = "generic_edit_events.jsonl"
 GENERIC_EDIT_SESSION_STATE_FILENAME = "generic_edit_session_state.json"
 GENERIC_EDIT_RECOVERY_PLAN_FILENAME = "generic_edit_recovery_plan.json"
 GENERIC_EDIT_TRANSACTION_GROUPS_FILENAME = "generic_edit_transaction_groups.json"
@@ -3988,7 +3989,7 @@ def save_generic_edit_artifacts(
 def generic_edit_artifact_paths(artifact_dir: Path) -> dict[str, Path]:
     return {
         "trace": artifact_dir / "generic_edit_trace.json",
-        "events": artifact_dir / "generic_edit_events.jsonl",
+        "events": artifact_dir / GENERIC_EDIT_EVENTS_FILENAME,
         "session_state": artifact_dir / GENERIC_EDIT_SESSION_STATE_FILENAME,
         "timeline": artifact_dir / "generic_edit_timeline.json",
         "transactions": artifact_dir / "generic_edit_transactions.jsonl",
@@ -5459,6 +5460,11 @@ def generic_edit_trace_path_for_checkpoint(checkpoint_path: Path) -> Path:
     return checkpoint_path.parent / "generic_edit_trace.json"
 
 
+def generic_edit_event_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted event stream path colocated with a checkpoint."""
+    return checkpoint_path.parent / GENERIC_EDIT_EVENTS_FILENAME
+
+
 def generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path: Path) -> Path:
     """Return the trusted mutation snapshot path colocated with a checkpoint."""
     return checkpoint_path.parent / "generic_edit_mutation_snapshots.json"
@@ -5490,6 +5496,19 @@ def generic_edit_recovery_plan_path_from_checkpoint(
     if not isinstance(recovery_plan_path, str) or not recovery_plan_path:
         return None
     return Path(recovery_plan_path)
+
+
+def generic_edit_event_path_from_checkpoint(
+    checkpoint: dict[str, Any],
+) -> Path | None:
+    """Return the event stream path requested by checkpoint metadata."""
+    resume_inputs = checkpoint.get("resume_inputs")
+    if not isinstance(resume_inputs, dict):
+        return None
+    event_path = resume_inputs.get("event_artifact")
+    if not isinstance(event_path, str) or not event_path:
+        return None
+    return Path(event_path)
 
 
 def generic_edit_transaction_group_path_from_checkpoint(
@@ -5564,6 +5583,56 @@ def load_generic_edit_recovery_plan(
             actual_path=artifact_path,
         )
     return payload
+
+
+def load_generic_edit_events_artifact(
+    event_path: Path,
+    *,
+    expected_event_path: Path,
+) -> list[dict[str, Any]]:
+    """Load and validate the generic_edit event JSONL artifact."""
+    if event_path.resolve() != expected_event_path.resolve():
+        raise generic_edit_resume_artifact_error(
+            "Generic edit event artifact path is not canonical.",
+            artifact="events",
+            reason="checkpoint_mismatch",
+            path=event_path,
+            expected_path=str(expected_event_path),
+        )
+    try:
+        lines = event_path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit event artifact not found: {event_path}",
+            artifact="events",
+            reason="missing",
+            path=event_path,
+        ) from e
+
+    events: list[dict[str, Any]] = []
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as e:
+            raise generic_edit_resume_artifact_error(
+                f"Generic edit event artifact is not valid JSONL: {e}",
+                artifact="events",
+                reason="corrupt_json",
+                path=event_path,
+                line_number=line_number,
+            ) from e
+        if not isinstance(event, dict):
+            raise generic_edit_resume_artifact_error(
+                "Generic edit event artifact lines must be JSON objects.",
+                artifact="events",
+                reason="invalid_schema",
+                path=event_path,
+                line_number=line_number,
+            )
+        events.append(event)
+    return events
 
 
 def validate_generic_edit_transaction_group_payload(
@@ -6688,6 +6757,43 @@ def inspect_generic_edit_resume_artifacts(
         artifacts["transaction_groups"] = {
             "status": "missing_optional",
             "path": str(expected_transaction_group_path),
+        }
+
+    expected_event_path = generic_edit_event_path_for_checkpoint(
+        resolved_checkpoint_path,
+    )
+    event_path = generic_edit_event_path_from_checkpoint(checkpoint)
+    if event_path is not None:
+        artifacts["events"] = {
+            "status": "pending",
+            "path": str(event_path),
+        }
+        try:
+            events = load_generic_edit_events_artifact(
+                event_path,
+                expected_event_path=expected_event_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="events",
+                    path=event_path,
+                ),
+                artifacts=artifacts,
+            )
+        artifacts["events"] = {
+            "status": "ready",
+            "path": str(event_path),
+            "event_count": len(events),
+        }
+    else:
+        artifacts["events"] = {
+            "status": "missing_optional",
+            "path": str(expected_event_path),
         }
 
     trace_path = generic_edit_trace_path_for_checkpoint(resolved_checkpoint_path)

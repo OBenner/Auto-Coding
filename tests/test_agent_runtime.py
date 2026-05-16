@@ -7881,6 +7881,45 @@ def test_generic_edit_resume_preflight_blocks_transaction_group_count_mismatch(
     assert health["actual_count"] == 2
 
 
+def test_generic_edit_resume_preflight_blocks_corrupt_event_artifact(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    event_path = artifact_dir / "generic_edit_events.jsonl"
+    event_path.write_text("{", encoding="utf-8")
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["event_artifact"] = str(event_path)
+    checkpoint["resume_inputs"]["event_artifact"] = str(event_path)
+    checkpoint["resume_policy"]["required_artifacts"].append("event_artifact")
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "events"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(event_path)
+
+
 def test_generic_edit_resume_preflight_blocks_manifest_checkpoint_mismatch(
     tmp_path: Path,
 ):

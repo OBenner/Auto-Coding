@@ -366,11 +366,11 @@ Auto Code validates and executes these actions locally:
   mismatched session/checkpoint/manifest policies, stale trace/session/manifest
   counters, missing checkpoint snapshot references, trace mismatches, transaction
   batch drift between trace, checkpoint, session state, manifest, and mutation
-  snapshots, corrupt or non-canonical required recovery-plan and transaction
-  group artifacts, transaction-group count/unresolved-id drift against the
-  checkpoint, manifest recovery-timeline boundary blockers whose required
-  actions are absent from the checkpoint resume policy, and workspace drift
-  before a resumed run mutates files;
+  snapshots, corrupt or non-canonical required event streams, recovery-plan
+  artifacts, and transaction-group artifacts, transaction-group
+  count/unresolved-id drift against the checkpoint, manifest recovery-timeline
+  boundary blockers whose required actions are absent from the checkpoint resume
+  policy, and workspace drift before a resumed run mutates files;
 - `finish` is rejected when a previous partial-failure transaction remains
   unresolved, so limited runtimes cannot report success after a partially
   applied mutating batch.
