@@ -416,7 +416,7 @@ export interface ElectronAPI {
   getProviderConfig: () => Promise<IPCResult<AIProviderConfig>>;
   updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
   validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
-  testProviderConfig: () => Promise<IPCResult<ProviderConnectionTestResult>>;
+  testProviderConfig: (runtimeMode?: string) => Promise<IPCResult<ProviderConnectionTestResult>>;
   getProviderRuntimeDiagnostics: () => Promise<IPCResult<RuntimeControlPlaneDiagnostics>>;
   testExternalMcpContracts: () => Promise<IPCResult<RuntimeExternalMcpSmokeResult>>;
 

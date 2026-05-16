@@ -43,7 +43,7 @@ export interface SettingsAPI {
   getProviderConfig: () => Promise<IPCResult<AIProviderConfig>>;
   updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
   validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
-  testProviderConfig: () => Promise<IPCResult<ProviderConnectionTestResult>>;
+  testProviderConfig: (runtimeMode?: string) => Promise<IPCResult<ProviderConnectionTestResult>>;
   getProviderRuntimeDiagnostics: () => Promise<IPCResult<RuntimeControlPlaneDiagnostics>>;
   testExternalMcpContracts: () => Promise<IPCResult<RuntimeExternalMcpSmokeResult>>;
 }
@@ -101,8 +101,8 @@ export const createSettingsAPI = (): SettingsAPI => ({
   validateProviderConfig: (): Promise<IPCResult<ProviderConfigValidation>> =>
     ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_VALIDATE),
 
-  testProviderConfig: (): Promise<IPCResult<ProviderConnectionTestResult>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_TEST),
+  testProviderConfig: (runtimeMode?: string): Promise<IPCResult<ProviderConnectionTestResult>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_TEST, runtimeMode),
 
   getProviderRuntimeDiagnostics: (): Promise<IPCResult<RuntimeControlPlaneDiagnostics>> =>
     ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_RUNTIME_DIAGNOSTICS),

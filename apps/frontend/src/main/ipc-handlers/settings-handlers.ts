@@ -380,6 +380,15 @@ type ProviderSmokeCliResult = {
       resume_policy?: unknown;
       tool_loop_contract?: unknown;
     } | null;
+    mini_pipeline?: {
+      status?: unknown;
+      task?: unknown;
+      test_command?: unknown;
+      test_exit_code?: unknown;
+      changed_files?: unknown;
+      reason?: unknown;
+      phases?: unknown;
+    } | null;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
   } | null;
@@ -503,6 +512,41 @@ function mapValidatedRuntimeExecution(
   };
 }
 
+function mapMiniPipelinePhases(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const phases = value
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+    )
+    .map((item) => ({
+      name: stringFromUnknown(item.name),
+      status: stringFromUnknown(item.status),
+    }));
+  return phases.length ? phases : undefined;
+}
+
+function mapMiniPipelineDiagnostics(
+  value: unknown
+): ProviderRuntimeDiagnostics['miniPipeline'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const payload = value as Record<string, unknown>;
+  return {
+    status: stringFromUnknown(payload.status),
+    task: stringFromUnknown(payload.task),
+    testCommand: stringFromUnknown(payload.test_command),
+    testExitCode: numberFromUnknown(payload.test_exit_code),
+    changedFiles: arrayFromUnknown(payload.changed_files),
+    reason: stringFromUnknown(payload.reason),
+    phases: mapMiniPipelinePhases(payload.phases),
+  };
+}
+
 function mapProviderRuntimeDiagnostics(
   diagnostics: ProviderSmokeCliResult['runtime_diagnostics']
 ): ProviderRuntimeDiagnostics | null {
@@ -520,6 +564,7 @@ function mapProviderRuntimeDiagnostics(
     validatedRuntimeCapabilities: arrayFromUnknown(diagnostics.validated_runtime_capabilities),
     validatedRuntimeMissingCapabilities: arrayFromUnknown(diagnostics.validated_runtime_missing_capabilities),
     validatedRuntimeExecution: mapValidatedRuntimeExecution(diagnostics.validated_runtime_execution),
+    miniPipeline: mapMiniPipelineDiagnostics(diagnostics.mini_pipeline),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note
   };
@@ -623,7 +668,8 @@ function readExternalMcpSmokeResult(
 
 async function runProviderConnectionTest(
   sourcePath: string,
-  envPath: string
+  envPath: string,
+  requestedRuntime?: string
 ): Promise<IPCResult<ProviderConnectionTestResult>> {
   const pythonPath = getToolPath('python');
   if (!pythonPath) {
@@ -655,7 +701,7 @@ async function runProviderConnectionTest(
     ...codexProfileEnv,
     PYTHONIOENCODING: 'utf-8'
   };
-  const providerSmokeRuntime = resolveProviderSmokeRuntime(commandEnv);
+  const providerSmokeRuntime = resolveProviderSmokeRuntime(commandEnv, requestedRuntime);
 
   try {
     const { stdout, stderr } = await execFileAsync(
@@ -1922,7 +1968,7 @@ export function registerSettingsHandlers(
    */
   ipcMain.handle(
     IPC_CHANNELS.PROVIDER_CONFIG_TEST,
-    async (): Promise<IPCResult<ProviderConnectionTestResult>> => {
+    async (_event, requestedRuntime?: string): Promise<IPCResult<ProviderConnectionTestResult>> => {
       try {
         const { sourcePath, envPath } = getSourceEnvPath();
 
@@ -1933,7 +1979,7 @@ export function registerSettingsHandlers(
           };
         }
 
-        return await runProviderConnectionTest(sourcePath, envPath);
+        return await runProviderConnectionTest(sourcePath, envPath, requestedRuntime);
       } catch (error) {
         console.error('[PROVIDER_CONFIG_TEST] Error:', error);
         return {
