@@ -612,7 +612,7 @@ export function buildProviderTransactionBatchDiagnosticRows(
       translate,
       transactionBatchContract.boundaryErrorReasons
     ),
-  ].filter((value) => value).join(' - ');
+  ].filter(Boolean).join(' - ');
   return [
     {
       labelKey: 'settings:aiProvider.connectionTest.batchContract',

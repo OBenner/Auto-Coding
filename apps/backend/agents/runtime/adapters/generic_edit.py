@@ -331,6 +331,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
     }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
+GENERIC_EDIT_SESSION_STATE_FILENAME = "generic_edit_session_state.json"
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT = 5
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_LIMIT = 20
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIMIT = 10
@@ -534,7 +535,9 @@ class GenericEditRuntimeSession:
             checkpoint=checkpoint,
             trace=trace,
         )
-        session_state_path = checkpoint_path.parent / "generic_edit_session_state.json"
+        session_state_path = (
+            checkpoint_path.parent / GENERIC_EDIT_SESSION_STATE_FILENAME
+        )
         session_state = (
             load_generic_edit_session_state(
                 session_state_path,
@@ -3984,7 +3987,7 @@ def generic_edit_artifact_paths(artifact_dir: Path) -> dict[str, Path]:
     return {
         "trace": artifact_dir / "generic_edit_trace.json",
         "events": artifact_dir / "generic_edit_events.jsonl",
-        "session_state": artifact_dir / "generic_edit_session_state.json",
+        "session_state": artifact_dir / GENERIC_EDIT_SESSION_STATE_FILENAME,
         "timeline": artifact_dir / "generic_edit_timeline.json",
         "transactions": artifact_dir / "generic_edit_transactions.jsonl",
         "transaction_groups": artifact_dir / "generic_edit_transaction_groups.json",
@@ -5432,7 +5435,7 @@ def resolve_generic_edit_resume_checkpoint_path(
         spec_dir / "artifacts" / "generic_edit_recovery_checkpoint.json"
     ).resolve()
     expected_session_state_path = (
-        spec_dir / "artifacts" / "generic_edit_session_state.json"
+        spec_dir / "artifacts" / GENERIC_EDIT_SESSION_STATE_FILENAME
     ).resolve()
     requested_path = checkpoint_path.resolve()
     if requested_path == expected_path:
@@ -5961,7 +5964,7 @@ def validate_generic_edit_resume_artifact_consistency(
             session_state_path=(
                 session_state_path
                 if session_state_path is not None
-                else checkpoint_path.parent / "generic_edit_session_state.json"
+                else checkpoint_path.parent / GENERIC_EDIT_SESSION_STATE_FILENAME
             ),
             trace_path=generic_edit_trace_path_for_checkpoint(checkpoint_path),
             manifest_path=artifact_manifest_path,
@@ -6046,42 +6049,57 @@ def validate_generic_edit_manifest_entrypoints(
             )
 
 
+def generic_edit_manifest_boundary_event_action_kinds(event: Any) -> list[str]:
+    """Return required action kinds from one boundary-blocked timeline event."""
+    if not isinstance(event, dict):
+        return []
+    timeline_stage = str(event.get("timeline_stage") or "")
+    if timeline_stage != "batch_boundary_blocked" and not event.get(
+        "batch_boundary_error_reason"
+    ):
+        return []
+    return normalize_string_list(event.get("required_next_action_kinds"))
+
+
+def generic_edit_manifest_boundary_batch_action_kinds(batch: Any) -> list[str]:
+    """Return required action kinds from one boundary-error batch summary."""
+    if not isinstance(batch, dict):
+        return []
+    has_boundary_error = bool(batch.get("boundary_error_count")) or bool(
+        normalize_string_list(batch.get("boundary_error_reasons"))
+    )
+    if not has_boundary_error:
+        return []
+    return normalize_string_list(batch.get("required_next_action_kinds"))
+
+
+def deduplicate_generic_edit_action_kinds(action_kinds: list[str]) -> list[str]:
+    """Return required action kinds in first-seen order."""
+    return list(dict.fromkeys(action_kinds))
+
+
 def generic_edit_manifest_boundary_required_action_kinds(
     manifest: dict[str, Any],
 ) -> list[str]:
     """Return action kinds required by manifest batch-boundary blockers."""
-    required_action_kinds: list[str] = []
-
-    def append_action_kinds(value: Any) -> None:
-        for action_kind in normalize_string_list(value):
-            if action_kind not in required_action_kinds:
-                required_action_kinds.append(action_kind)
-
+    required_action_kinds = []
     recovery_timeline = manifest.get("recovery_timeline")
     if isinstance(recovery_timeline, list):
-        for event in recovery_timeline:
-            if not isinstance(event, dict):
-                continue
-            is_boundary_blocker = str(
-                event.get("timeline_stage") or ""
-            ) == "batch_boundary_blocked" or bool(
-                event.get("batch_boundary_error_reason")
-            )
-            if is_boundary_blocker:
-                append_action_kinds(event.get("required_next_action_kinds"))
+        required_action_kinds.extend(
+            action_kind
+            for event in recovery_timeline
+            for action_kind in generic_edit_manifest_boundary_event_action_kinds(event)
+        )
 
     transaction_batches = manifest.get("transaction_batches")
     if isinstance(transaction_batches, list):
-        for batch in transaction_batches:
-            if not isinstance(batch, dict):
-                continue
-            has_boundary_error = bool(batch.get("boundary_error_count")) or bool(
-                normalize_string_list(batch.get("boundary_error_reasons"))
-            )
-            if has_boundary_error:
-                append_action_kinds(batch.get("required_next_action_kinds"))
+        required_action_kinds.extend(
+            action_kind
+            for batch in transaction_batches
+            for action_kind in generic_edit_manifest_boundary_batch_action_kinds(batch)
+        )
 
-    return required_action_kinds
+    return deduplicate_generic_edit_action_kinds(required_action_kinds)
 
 
 def validate_generic_edit_manifest_boundary_policy_consistency(
@@ -6281,7 +6299,7 @@ def inspect_generic_edit_resume_artifacts(
         "path": str(resolved_checkpoint_path),
     }
     session_state_path = (
-        spec_dir / "artifacts" / "generic_edit_session_state.json"
+        spec_dir / "artifacts" / GENERIC_EDIT_SESSION_STATE_FILENAME
     ).resolve()
     session_state: dict[str, Any] | None = None
     if session_state_path.exists():
@@ -7335,6 +7353,55 @@ def build_generic_edit_resume_policy_event(
     return event
 
 
+def build_generic_edit_batch_boundary_event_fields(
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Return normalized action-event fields for a batch boundary blocker."""
+    if not data.get("batch_boundary_error"):
+        return {}
+    fields: dict[str, Any] = {
+        "batch_boundary_error": True,
+        "batch_boundary_error_reason": str(
+            data.get("batch_boundary_error_reason") or ""
+        ),
+        "blocked_transaction_group_ids": normalize_string_list(
+            data.get("blocked_transaction_group_ids")
+        ),
+        "required_next_action_kinds": normalize_string_list(
+            data.get("required_next_action_kinds")
+        ),
+        "resolution_strategies": normalize_string_list(
+            data.get("resolution_strategies")
+        ),
+    }
+    if data.get("blocked_tool"):
+        fields["blocked_tool"] = str(data["blocked_tool"])
+    if data.get("preferred_strategy"):
+        fields["preferred_strategy"] = str(data["preferred_strategy"])
+    return fields
+
+
+def build_generic_edit_action_event_extra_fields(
+    *,
+    request: dict[str, Any],
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Return optional action-event fields from request/result metadata."""
+    fields: dict[str, Any] = {}
+    path = request.get("path") or data.get("path")
+    if path:
+        fields["path"] = str(path)
+    for field_name in ("mutation_snapshot_id", "batch_id", "batch_status"):
+        if data.get(field_name):
+            fields[field_name] = str(data[field_name])
+    fields.update(build_generic_edit_batch_boundary_event_fields(data))
+    if data.get("rollback_available") is not None:
+        fields["rollback_available"] = bool(data["rollback_available"])
+    if data.get("exit_code") is not None:
+        fields["exit_code"] = data["exit_code"]
+    return fields
+
+
 def build_generic_edit_action_event(
     *,
     action_entry: dict[str, Any],
@@ -7365,37 +7432,12 @@ def build_generic_edit_action_event(
         "ok": result.get("ok") is not False,
         "message": str(result.get("message") or "")[:300],
     }
-    path = request.get("path") or data.get("path")
-    if path:
-        event["path"] = str(path)
-    if data.get("mutation_snapshot_id"):
-        event["mutation_snapshot_id"] = str(data["mutation_snapshot_id"])
-    if data.get("batch_id"):
-        event["batch_id"] = str(data["batch_id"])
-    if data.get("batch_status"):
-        event["batch_status"] = str(data["batch_status"])
-    if data.get("batch_boundary_error"):
-        event["batch_boundary_error"] = True
-        event["batch_boundary_error_reason"] = str(
-            data.get("batch_boundary_error_reason") or ""
+    event.update(
+        build_generic_edit_action_event_extra_fields(
+            request=request,
+            data=data,
         )
-        event["blocked_transaction_group_ids"] = normalize_string_list(
-            data.get("blocked_transaction_group_ids")
-        )
-        if data.get("blocked_tool"):
-            event["blocked_tool"] = str(data["blocked_tool"])
-        if data.get("preferred_strategy"):
-            event["preferred_strategy"] = str(data["preferred_strategy"])
-        event["required_next_action_kinds"] = normalize_string_list(
-            data.get("required_next_action_kinds")
-        )
-        event["resolution_strategies"] = normalize_string_list(
-            data.get("resolution_strategies")
-        )
-    if data.get("rollback_available") is not None:
-        event["rollback_available"] = bool(data["rollback_available"])
-    if data.get("exit_code") is not None:
-        event["exit_code"] = data["exit_code"]
+    )
     return event
 
 

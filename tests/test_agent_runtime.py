@@ -7568,7 +7568,10 @@ def write_generic_edit_manifest_batch_state_mismatch_artifacts(
             "transaction_ids": ["json_actions-1"],
         }
     ]
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
     return checkpoint_path, manifest_path
 
 
@@ -7909,7 +7912,10 @@ def test_generic_edit_resume_preflight_blocks_manifest_boundary_policy_drift(
             ],
         }
     ]
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
 
     preflight = inspect_generic_edit_resume_artifacts(
         checkpoint_path=checkpoint_path,
