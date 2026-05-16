@@ -7734,6 +7734,45 @@ def test_generic_edit_resume_preflight_blocks_corrupt_artifact_manifest(
     assert health["path"] == str(manifest_path)
 
 
+def test_generic_edit_resume_preflight_blocks_corrupt_recovery_plan(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    recovery_plan_path = artifact_dir / "generic_edit_recovery_plan.json"
+    recovery_plan_path.write_text("{", encoding="utf-8")
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["recovery_plan_artifact"] = str(recovery_plan_path)
+    checkpoint["resume_inputs"]["recovery_plan_artifact"] = str(recovery_plan_path)
+    checkpoint["resume_policy"]["required_artifacts"].append("recovery_plan_artifact")
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "recovery_plan"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(recovery_plan_path)
+
+
 def test_generic_edit_resume_preflight_blocks_manifest_checkpoint_mismatch(
     tmp_path: Path,
 ):

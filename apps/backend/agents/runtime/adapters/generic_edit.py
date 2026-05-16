@@ -332,6 +332,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
 GENERIC_EDIT_SESSION_STATE_FILENAME = "generic_edit_session_state.json"
+GENERIC_EDIT_RECOVERY_PLAN_FILENAME = "generic_edit_recovery_plan.json"
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT = 5
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_LIMIT = 20
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIMIT = 10
@@ -5462,9 +5463,88 @@ def generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path: Path) ->
     return checkpoint_path.parent / "generic_edit_mutation_snapshots.json"
 
 
+def generic_edit_recovery_plan_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted recovery-plan path colocated with a checkpoint."""
+    return checkpoint_path.parent / GENERIC_EDIT_RECOVERY_PLAN_FILENAME
+
+
 def generic_edit_artifact_manifest_path_for_checkpoint(checkpoint_path: Path) -> Path:
     """Return the trusted artifact manifest path colocated with a checkpoint."""
     return checkpoint_path.parent / "generic_edit_artifact_manifest.json"
+
+
+def generic_edit_recovery_plan_path_from_checkpoint(
+    checkpoint: dict[str, Any],
+) -> Path | None:
+    """Return the recovery-plan path requested by checkpoint metadata."""
+    resume_inputs = checkpoint.get("resume_inputs")
+    if not isinstance(resume_inputs, dict):
+        return None
+    recovery_plan_path = resume_inputs.get("recovery_plan_artifact")
+    if not isinstance(recovery_plan_path, str) or not recovery_plan_path:
+        return None
+    return Path(recovery_plan_path)
+
+
+def load_generic_edit_recovery_plan(
+    recovery_plan_path: Path,
+    *,
+    expected_recovery_plan_path: Path,
+) -> dict[str, Any]:
+    """Load and validate a required generic_edit recovery plan artifact."""
+    if recovery_plan_path.resolve() != expected_recovery_plan_path.resolve():
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery plan artifact path is not canonical.",
+            artifact="recovery_plan",
+            reason="checkpoint_mismatch",
+            path=recovery_plan_path,
+            expected_path=str(expected_recovery_plan_path),
+        )
+    try:
+        payload = json.loads(recovery_plan_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit recovery plan not found: {recovery_plan_path}",
+            artifact="recovery_plan",
+            reason="missing",
+            path=recovery_plan_path,
+        ) from e
+    except json.JSONDecodeError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit recovery plan is not valid JSON: {e}",
+            artifact="recovery_plan",
+            reason="corrupt_json",
+            path=recovery_plan_path,
+        ) from e
+
+    if not isinstance(payload, dict):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery plan must be a JSON object.",
+            artifact="recovery_plan",
+            reason="invalid_schema",
+            path=recovery_plan_path,
+        )
+    if not isinstance(payload.get("strategy"), str) or not payload.get("strategy"):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery plan is missing strategy metadata.",
+            artifact="recovery_plan",
+            reason="invalid_schema",
+            path=recovery_plan_path,
+        )
+    artifact_path = payload.get("artifact_path")
+    if (
+        not isinstance(artifact_path, str)
+        or Path(artifact_path).resolve() != expected_recovery_plan_path.resolve()
+    ):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery plan artifact path does not match its file path.",
+            artifact="recovery_plan",
+            reason="checkpoint_mismatch",
+            path=recovery_plan_path,
+            expected_path=str(expected_recovery_plan_path),
+            actual_path=artifact_path,
+        )
+    return payload
 
 
 def load_generic_edit_artifact_manifest(manifest_path: Path) -> dict[str, Any]:
@@ -6364,6 +6444,47 @@ def inspect_generic_edit_resume_artifacts(
                 ),
                 artifacts=artifacts,
             )
+
+    expected_recovery_plan_path = generic_edit_recovery_plan_path_for_checkpoint(
+        resolved_checkpoint_path,
+    )
+    recovery_plan_path = generic_edit_recovery_plan_path_from_checkpoint(checkpoint)
+    if recovery_plan_path is not None:
+        artifacts["recovery_plan"] = {
+            "status": "pending",
+            "path": str(recovery_plan_path),
+        }
+        try:
+            recovery_plan = load_generic_edit_recovery_plan(
+                recovery_plan_path,
+                expected_recovery_plan_path=expected_recovery_plan_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="recovery_plan",
+                    path=recovery_plan_path,
+                ),
+                artifacts=artifacts,
+            )
+        next_actions = recovery_plan.get("next_actions")
+        artifacts["recovery_plan"] = {
+            "status": "ready",
+            "path": str(recovery_plan_path),
+            "strategy": recovery_plan.get("strategy"),
+            "next_action_count": len(next_actions)
+            if isinstance(next_actions, list)
+            else 0,
+        }
+    else:
+        artifacts["recovery_plan"] = {
+            "status": "missing_optional",
+            "path": str(expected_recovery_plan_path),
+        }
 
     trace_path = generic_edit_trace_path_for_checkpoint(resolved_checkpoint_path)
     artifact_manifest_path = generic_edit_artifact_manifest_path_for_checkpoint(
