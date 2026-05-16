@@ -5126,6 +5126,128 @@ async def test_generic_edit_runtime_rejects_mutation_after_batch_commit_in_same_
 
 
 @pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_opaque_mutation_inside_open_batch(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    marker = tmp_path / "opaque-marker.txt"
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "try to run an opaque command inside a staged batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "run_command",
+                        "command": "touch opaque-marker.txt",
+                    },
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Rollback command drift",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Should not run opaque batch mutation",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+            {
+                "thought": "abort after the isolation guard blocks the command",
+                "actions": [
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Rollback isolated batch",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Opaque mutation was blocked and rolled back",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "reject opaque batch mutation",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert not marker.exists()
+    assert [
+        transaction["status"] for transaction in result_artifact["transactions"]
+    ] == [
+        "partial_failure",
+        "complete",
+    ]
+    blocked_transaction = result_artifact["transactions"][0]
+    assert blocked_transaction["failed_tool"] == "run_command"
+    assert blocked_transaction["batch_boundary_errors"] == [
+        {
+            "tool": "run_command",
+            "batch_id": "batch-1",
+            "reason": "opaque_batch_mutation",
+            "blocked_transaction_group_ids": [],
+        }
+    ]
+    batch = result_artifact["transaction_batches"][0]
+    assert batch["status"] == "aborted"
+    assert batch["boundary_error_reasons"] == ["opaque_batch_mutation"]
+    assert batch["boundary_errors"] == [
+        {
+            "tool": "run_command",
+            "batch_id": "batch-1",
+            "reason": "opaque_batch_mutation",
+            "blocked_transaction_group_ids": [],
+        }
+    ]
+    assert any(
+        event["event_type"] == "action_result"
+        and event["tool"] == "run_command"
+        and event["ok"] is False
+        and event["timeline_stage"] == "batch_boundary_blocked"
+        and event["batch_boundary_error_reason"] == "opaque_batch_mutation"
+        and event["requires_user_action"] is True
+        for event in events
+    )
+
+
+@pytest.mark.asyncio
 async def test_generic_edit_runtime_aborts_open_batch_with_snapshot_rollback(
     tmp_path: Path,
 ):

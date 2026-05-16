@@ -310,6 +310,15 @@ MAX_MUTATION_PREIMAGE_BYTES = 20000
 SNAPSHOT_MUTATING_ACTIONS = frozenset(
     {"write_file", "replace_text", "delete_file", "move_file", "apply_patch"}
 )
+OPAQUE_BATCH_MUTATING_ACTIONS = (
+    MUTATING_LOCAL_ACTIONS
+    - SNAPSHOT_MUTATING_ACTIONS
+    - {
+        ROLLBACK_TRANSACTION_TOOL,
+        REPAIR_MUTATION_TOOL,
+        ABORT_BATCH_TOOL,
+    }
+)
 RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
     {
         "cancelled",
@@ -1560,6 +1569,10 @@ class GenericEditRuntimeSession:
         phase: Any,
         subtask_id: str | None,
     ) -> ToolActionResult:
+        isolation_error = self._opaque_batch_mutation_result(action)
+        if isolation_error is not None:
+            return isolation_error
+
         mutation_snapshot = self._build_mutation_snapshot(
             action,
             loop=loop,
@@ -1589,6 +1602,31 @@ class GenericEditRuntimeSession:
             result = await self._executor.execute(action)
         self._record_mutation_snapshot_result(mutation_snapshot, result)
         return result
+
+    def _opaque_batch_mutation_result(
+        self,
+        action: dict[str, Any],
+    ) -> ToolActionResult | None:
+        """Reject open-batch mutations that cannot produce staged snapshots."""
+        tool = action_tool(action)
+        if self._active_batch_id is None or tool not in OPAQUE_BATCH_MUTATING_ACTIONS:
+            return None
+        return ToolActionResult(
+            tool=tool,
+            ok=False,
+            message=(
+                f"Cannot run {tool} inside open batch {self._active_batch_id}: "
+                "this action cannot be staged with mutation snapshots. Commit or "
+                "abort the batch before running opaque workspace commands."
+            ),
+            data={
+                "batch_id": self._active_batch_id,
+                "batch_boundary_error": True,
+                "batch_boundary_error_reason": "opaque_batch_mutation",
+                "batch_isolation_error": True,
+                "blocked_tool": tool,
+            },
+        )
 
     def _batch_control_action(self, action: dict[str, Any]) -> ToolActionResult:
         """Open, commit, or abort one runtime-managed transaction batch."""
