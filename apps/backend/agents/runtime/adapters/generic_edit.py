@@ -6046,6 +6046,81 @@ def validate_generic_edit_manifest_entrypoints(
             )
 
 
+def generic_edit_manifest_boundary_required_action_kinds(
+    manifest: dict[str, Any],
+) -> list[str]:
+    """Return action kinds required by manifest batch-boundary blockers."""
+    required_action_kinds: list[str] = []
+
+    def append_action_kinds(value: Any) -> None:
+        for action_kind in normalize_string_list(value):
+            if action_kind not in required_action_kinds:
+                required_action_kinds.append(action_kind)
+
+    recovery_timeline = manifest.get("recovery_timeline")
+    if isinstance(recovery_timeline, list):
+        for event in recovery_timeline:
+            if not isinstance(event, dict):
+                continue
+            is_boundary_blocker = str(
+                event.get("timeline_stage") or ""
+            ) == "batch_boundary_blocked" or bool(
+                event.get("batch_boundary_error_reason")
+            )
+            if is_boundary_blocker:
+                append_action_kinds(event.get("required_next_action_kinds"))
+
+    transaction_batches = manifest.get("transaction_batches")
+    if isinstance(transaction_batches, list):
+        for batch in transaction_batches:
+            if not isinstance(batch, dict):
+                continue
+            has_boundary_error = bool(batch.get("boundary_error_count")) or bool(
+                normalize_string_list(batch.get("boundary_error_reasons"))
+            )
+            if has_boundary_error:
+                append_action_kinds(batch.get("required_next_action_kinds"))
+
+    return required_action_kinds
+
+
+def validate_generic_edit_manifest_boundary_policy_consistency(
+    *,
+    manifest: dict[str, Any],
+    checkpoint: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    """Reject manifests whose boundary blockers are absent from resume policy."""
+    expected_action_kinds = generic_edit_manifest_boundary_required_action_kinds(
+        manifest,
+    )
+    if not expected_action_kinds:
+        return
+
+    resume_policy = checkpoint.get("resume_policy")
+    actual_action_kinds = (
+        normalize_string_list(resume_policy.get("required_resolution_action_kinds"))
+        if isinstance(resume_policy, dict)
+        else []
+    )
+    missing_action_kinds = [
+        action_kind
+        for action_kind in expected_action_kinds
+        if action_kind not in actual_action_kinds
+    ]
+    if missing_action_kinds:
+        raise generic_edit_resume_artifact_error(
+            "Generic edit artifact manifest recovery timeline requires resolution "
+            "action(s) absent from checkpoint resume policy.",
+            artifact="artifact_manifest",
+            reason="checkpoint_mismatch",
+            path=manifest_path,
+            expected_required_resolution_action_kinds=expected_action_kinds,
+            actual_required_resolution_action_kinds=actual_action_kinds,
+            missing_required_resolution_action_kinds=missing_action_kinds,
+        )
+
+
 def validate_generic_edit_artifact_manifest_checkpoint_consistency(
     *,
     manifest: dict[str, Any],
@@ -6072,6 +6147,11 @@ def validate_generic_edit_artifact_manifest_checkpoint_consistency(
             "Generic edit artifact manifest resume inputs do not match checkpoint.",
             manifest_path,
         )
+    validate_generic_edit_manifest_boundary_policy_consistency(
+        manifest=manifest,
+        checkpoint=checkpoint,
+        manifest_path=manifest_path,
+    )
     validate_generic_edit_manifest_resume_action(
         manifest=manifest,
         checkpoint=checkpoint,

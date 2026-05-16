@@ -7869,6 +7869,70 @@ def test_generic_edit_resume_preflight_blocks_manifest_batch_state_mismatch(
     }
 
 
+def test_generic_edit_resume_preflight_blocks_manifest_boundary_policy_drift(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["recovery_timeline"] = [
+        {
+            "event_type": "action_result",
+            "tool": "run_command",
+            "ok": False,
+            "timeline_stage": "batch_boundary_blocked",
+            "batch_id": "batch-1",
+            "batch_boundary_error_reason": "opaque_batch_mutation",
+            "requires_user_action": True,
+            "preferred_strategy": "abort_batch",
+            "required_next_action_kinds": [
+                "abort_batch",
+                "repair_mutation",
+            ],
+            "resolution_strategies": [
+                "abort_batch",
+                "repair_mutation",
+            ],
+        }
+    ]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "artifact_manifest"
+    assert health["reason"] == "checkpoint_mismatch"
+    assert health["path"] == str(manifest_path)
+    assert health["expected_required_resolution_action_kinds"] == [
+        "abort_batch",
+        "repair_mutation",
+    ]
+    assert health["actual_required_resolution_action_kinds"] == []
+    assert health["missing_required_resolution_action_kinds"] == [
+        "abort_batch",
+        "repair_mutation",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_resume_blocks_manifest_batch_state_mismatch(
     tmp_path: Path,
