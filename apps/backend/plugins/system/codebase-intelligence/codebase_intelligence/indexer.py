@@ -61,7 +61,9 @@ class CodebaseIndexer:
             if language == "python":
                 symbols, dependencies, references = extract_python_file(path, rel_path)
             else:
-                symbols, dependencies, references = extract_typescript_file(path, rel_path)
+                symbols, dependencies, references = extract_typescript_file(
+                    path, rel_path
+                )
 
             resolved_dependencies = [
                 self._resolve_dependency(dep, path, python_module_map)

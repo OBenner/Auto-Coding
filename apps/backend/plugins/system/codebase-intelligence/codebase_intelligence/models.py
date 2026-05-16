@@ -179,12 +179,10 @@ class CodeFile:
                 CodeSymbol.from_dict(symbol) for symbol in data.get("symbols", [])
             ],
             dependencies=[
-                CodeDependency.from_dict(dep)
-                for dep in data.get("dependencies", [])
+                CodeDependency.from_dict(dep) for dep in data.get("dependencies", [])
             ],
             references=[
-                CodeReference.from_dict(ref)
-                for ref in data.get("references", [])
+                CodeReference.from_dict(ref) for ref in data.get("references", [])
             ],
         )
 
@@ -344,9 +342,7 @@ class CodebaseIndex:
     ) -> list[PackageDependency]:
         dependencies = self.package_dependencies
         if ecosystem:
-            dependencies = [
-                dep for dep in dependencies if dep.ecosystem == ecosystem
-            ]
+            dependencies = [dep for dep in dependencies if dep.ecosystem == ecosystem]
         return sorted(
             dependencies,
             key=lambda dep: (
@@ -442,6 +438,4 @@ class CodebaseIndex:
         """Return stored source fingerprints with fallback for older indexes."""
         if self.source_fingerprints:
             return dict(self.source_fingerprints)
-        return {
-            path: code_file.sha256 for path, code_file in self.files.items()
-        }
+        return {path: code_file.sha256 for path, code_file in self.files.items()}

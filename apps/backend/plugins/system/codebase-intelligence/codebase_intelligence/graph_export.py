@@ -309,7 +309,9 @@ class GraphDataset:
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         node_lookup = {node.id: node for node in self.nodes}
-        normalized_direction = direction if direction in {"in", "out", "both"} else "both"
+        normalized_direction = (
+            direction if direction in {"in", "out", "both"} else "both"
+        )
         matches: list[dict[str, Any]] = []
 
         for edge in self.edges:
@@ -363,9 +365,7 @@ def _build_symbol_lookup(index: CodebaseIndex) -> dict[str, list[str]]:
             for name in {symbol.name, symbol.name.rsplit(".", 1)[-1]}:
                 key = name.casefold()
                 lookup.setdefault(key, []).append(symbol_id)
-    return {
-        name: sorted(symbol_ids) for name, symbol_ids in lookup.items()
-    }
+    return {name: sorted(symbol_ids) for name, symbol_ids in lookup.items()}
 
 
 def _resolve_reference_target(

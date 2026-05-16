@@ -211,7 +211,9 @@ _TS_CALL_KEYWORDS = {
 }
 
 
-def _extract_typescript_dependencies(source: str, rel_path: str) -> list[CodeDependency]:
+def _extract_typescript_dependencies(
+    source: str, rel_path: str
+) -> list[CodeDependency]:
     dependencies: list[CodeDependency] = []
     for line_no, line in enumerate(source.splitlines(), 1):
         for match in _TS_DEPENDENCY_RE.finditer(line):
@@ -245,7 +247,9 @@ def _extract_typescript_symbols(source: str, rel_path: str) -> list[CodeSymbol]:
             symbols.append(
                 CodeSymbol(
                     name=symbol_name,
-                    kind="function" if declaration_kind == "function" else declaration_kind,
+                    kind="function"
+                    if declaration_kind == "function"
+                    else declaration_kind,
                     file_path=rel_path,
                     line=line_no,
                     language="typescript",

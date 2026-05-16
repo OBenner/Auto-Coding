@@ -323,7 +323,9 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
     def is_available(self) -> bool:
         return self.is_enabled
 
-    def _load_or_build_index(self, project_dir: Path, sidecar_path: Path) -> CodebaseIndex:
+    def _load_or_build_index(
+        self, project_dir: Path, sidecar_path: Path
+    ) -> CodebaseIndex:
         status = self._index_status(project_dir, sidecar_path)
         if status["fresh"]:
             return CodebaseIndex.load(sidecar_path)

@@ -35,9 +35,7 @@ SKIP_DIRS = {
     "venv",
 }
 
-_REQUIREMENT_NAME_RE = re.compile(
-    r"^\s*([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$"
-)
+_REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$")
 
 
 def discover_package_dependencies(project_dir: Path) -> list[PackageDependency]:
@@ -81,8 +79,7 @@ def _should_skip_dir(name: str) -> bool:
     if name in SKIP_DIRS:
         return True
     return any(
-        pattern.endswith("*") and name.startswith(pattern[:-1])
-        for pattern in SKIP_DIRS
+        pattern.endswith("*") and name.startswith(pattern[:-1]) for pattern in SKIP_DIRS
     )
 
 
@@ -152,11 +149,7 @@ def _read_pyproject(path: Path, rel_path: str) -> list[PackageDependency]:
                 )
             )
 
-    poetry_dependencies = (
-        data.get("tool", {})
-        .get("poetry", {})
-        .get("dependencies", {})
-    )
+    poetry_dependencies = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
     if isinstance(poetry_dependencies, dict):
         for name, specifier in sorted(poetry_dependencies.items()):
             if name.lower() == "python":
