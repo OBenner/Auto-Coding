@@ -16,9 +16,11 @@ from agents.runtime import (
     create_runtime_session,
     get_runtime_mode,
     normalize_runtime_mode,
+    resume_runtime_session,
     run_runtime_session,
 )
 from agents.runtime.adapters.completion import CompletionRuntimeSession
+from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_artifacts
 from agents.runtime.fallback import capabilities_for_runtime_mode
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
@@ -70,6 +72,19 @@ DEFAULT_PROVIDER_MINI_PIPELINE_REVIEW_PROMPT = (
     "Verification output:\n{test_output}\n\n"
     "Final string_tools.py:\n{implementation}\n\n"
     "Reply with one short sentence stating whether the mini task is ready."
+)
+DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT = "provider recovery ok\n"
+DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_INITIAL_CONTENT = "pending recovery\n"
+DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_PROMPT = (
+    "Generic Edit recovery readiness exercise.\n\n"
+    "Use the available local tools to create an intentional recoverable partial "
+    "failure:\n"
+    "- Overwrite recovery-target.txt with exactly "
+    f"{DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT!r}.\n"
+    "- Then try to read missing-recovery.txt so the transaction records a "
+    "partial failure.\n"
+    "- After the observation reports the missing file, attempt to finish. The "
+    "runtime should block finish and create a recovery checkpoint.\n"
 )
 MINI_PIPELINE_INITIAL_STRING_TOOLS = (
     'def normalize_space(value: str) -> str:\n    return " ".join(value.split())\n'
@@ -675,8 +690,23 @@ def _provider_health_from_mini_pipeline(
             value = contract.get(source_key)
             if isinstance(value, str) and value:
                 health[target_key] = value
+    recovery_loop = mini_pipeline.get("recovery_loop")
+    if isinstance(recovery_loop, dict):
+        recovery_loop_status = recovery_loop.get("status")
+        if isinstance(recovery_loop_status, str) and recovery_loop_status:
+            health["recovery_loop_status"] = recovery_loop_status
+        recovery_status = recovery_loop.get("recovery_status")
+        if isinstance(recovery_status, str) and recovery_status:
+            health["recovery_status"] = recovery_status
+        if status == "failed":
+            reason = recovery_loop.get("reason")
+            if isinstance(reason, str) and reason:
+                health["reason"] = reason
     if status == "failed":
-        health["reason"] = str(mini_pipeline.get("reason") or "mini_pipeline_failed")
+        health.setdefault(
+            "reason",
+            str(mini_pipeline.get("reason") or "mini_pipeline_failed"),
+        )
     return health
 
 
@@ -792,8 +822,9 @@ def _provider_smoke_note(runtime_mode: str) -> str:
     if runtime_mode == "mini_pipeline":
         return (
             "Provider smoke runs a temporary planner/coder/reviewer mini task. "
-            "It validates the local edit loop and one unit-test command, but it "
-            "does not prove full production autonomy for arbitrary repositories."
+            "It validates the local edit loop, one unit-test command, and a "
+            "generic_edit recovery/resume loop, but it does not prove full "
+            "production autonomy for arbitrary repositories."
         )
     if runtime_mode == "generic_edit":
         return (
@@ -1273,6 +1304,42 @@ async def _complete_provider_mini_pipeline_smoke(
             )
         phases.append({"name": "tests", "status": "passed"})
 
+        recovery_spec_dir = smoke_spec_dir / "recovery"
+        recovery_spec_dir.mkdir(parents=True, exist_ok=True)
+        (
+            recovery_loop,
+            recovery_execution,
+        ) = await _complete_provider_mini_pipeline_recovery_loop(
+            provider=provider,
+            session_config=session_config,
+            project_dir=smoke_project_dir,
+            spec_dir=recovery_spec_dir,
+            timeout_seconds=timeout_seconds,
+        )
+        if recovery_execution is not None:
+            runtime_diagnostics = {
+                **runtime_diagnostics,
+                "validated_recovery_execution": recovery_execution,
+            }
+        if recovery_loop.get("status") != "passed":
+            phases.append({"name": "recovery", "status": "failed"})
+            return _mini_pipeline_result(
+                provider=provider,
+                model=model,
+                runtime_diagnostics=runtime_diagnostics,
+                task=task,
+                phases=phases,
+                changed_files=_mini_pipeline_changed_files(string_tools_path),
+                success=False,
+                message="Provider mini pipeline recovery loop failed",
+                response_excerpt=None,
+                error_details=str(recovery_loop.get("reason") or "recovery_failed"),
+                test_exit_code=test_exit_code,
+                reason="recovery_loop_failed",
+                recovery_loop=recovery_loop,
+            )
+        phases.append({"name": "recovery", "status": "passed"})
+
         implementation = string_tools_path.read_text(encoding="utf-8")
         reviewer_response = await _complete_provider_text_phase(
             provider=provider,
@@ -1301,6 +1368,7 @@ async def _complete_provider_mini_pipeline_smoke(
                 error_details="Provider mini pipeline reviewer returned an empty response",
                 test_exit_code=test_exit_code,
                 reason="reviewer_empty_response",
+                recovery_loop=recovery_loop,
             )
         phases.append({"name": "reviewer", "status": "passed"})
 
@@ -1316,7 +1384,201 @@ async def _complete_provider_mini_pipeline_smoke(
             response_excerpt=_response_excerpt(reviewer_response),
             error_details=None,
             test_exit_code=test_exit_code,
+            recovery_loop=recovery_loop,
         )
+
+
+async def _complete_provider_mini_pipeline_recovery_loop(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    project_dir: Path,
+    spec_dir: Path,
+    timeout_seconds: float,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Run a recoverable generic_edit failure and resume it to completion."""
+    target_path = project_dir / "recovery-target.txt"
+    target_path.write_text(
+        DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_INITIAL_CONTENT,
+        encoding="utf-8",
+    )
+    checkpoint_path = spec_dir / "artifacts" / "generic_edit_recovery_checkpoint.json"
+
+    try:
+        initial_session = _create_provider_session(
+            provider=provider,
+            session_config=session_config,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="coder",
+        )
+        initial_runtime = create_runtime_session(
+            provider_name=provider.name,
+            agent_session=initial_session,
+            runtime_mode="generic_edit",
+            project_dir=project_dir,
+            agent_type="coder",
+        )
+        first_result = await asyncio.wait_for(
+            run_runtime_session(
+                initial_runtime,
+                DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_PROMPT,
+                spec_dir,
+                verbose=False,
+                phase=LogPhase.PLANNING,
+                requirements=RuntimeRequirements.generic_edit(),
+            ),
+            timeout=timeout_seconds,
+        )
+        if first_result.status != "error" or not checkpoint_path.exists():
+            return (
+                {
+                    "status": "failed",
+                    "reason": "recovery_checkpoint_not_created",
+                    "initial_result_status": first_result.status,
+                },
+                _generic_edit_execution_diagnostics(spec_dir / "artifacts"),
+            )
+
+        preflight = inspect_generic_edit_resume_artifacts(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+        )
+        if preflight.get("status") != "ready":
+            return (
+                _mini_pipeline_recovery_loop_failure(
+                    reason="resume_preflight_blocked",
+                    preflight=preflight,
+                ),
+                _generic_edit_execution_diagnostics(spec_dir / "artifacts"),
+            )
+
+        resume_session = _create_provider_session(
+            provider=provider,
+            session_config=session_config,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="coder",
+        )
+        resume_runtime = create_runtime_session(
+            provider_name=provider.name,
+            agent_session=resume_session,
+            runtime_mode="generic_edit",
+            project_dir=project_dir,
+            agent_type="coder",
+        )
+        resumed = await asyncio.wait_for(
+            resume_runtime_session(
+                resume_runtime,
+                checkpoint_path,
+                spec_dir,
+                verbose=False,
+                phase=LogPhase.PLANNING,
+                requirements=RuntimeRequirements.generic_edit(),
+            ),
+            timeout=timeout_seconds,
+        )
+
+        artifact_dir = spec_dir / "artifacts"
+        execution_diagnostics = _generic_edit_execution_diagnostics(artifact_dir)
+        result_payload = _load_json_file(artifact_dir / "generic_edit_result.json")
+        if not isinstance(result_payload, dict):
+            return (
+                {
+                    "status": "failed",
+                    "reason": "result_artifact_unreadable",
+                    "resume_result_status": resumed.status,
+                },
+                execution_diagnostics,
+            )
+
+        final_content = target_path.read_text(encoding="utf-8")
+        workspace_guard = (
+            result_payload.get("resume", {}).get("workspace_guard")
+            if isinstance(result_payload.get("resume"), dict)
+            else {}
+        )
+        workspace_guard_status = (
+            workspace_guard.get("status")
+            if isinstance(workspace_guard, dict)
+            else "unknown"
+        )
+        recovery_resolved = result_payload.get("recovery_resolved") is True
+        if (
+            resumed.status != "continue"
+            or final_content != DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT
+            or not recovery_resolved
+            or workspace_guard_status != "clean"
+        ):
+            return (
+                {
+                    "status": "failed",
+                    "reason": "resume_recovery_not_clean",
+                    "resume_result_status": resumed.status,
+                    "recovery_status": "resolved"
+                    if recovery_resolved
+                    else "requires_resolution",
+                    "workspace_guard_status": str(workspace_guard_status),
+                },
+                execution_diagnostics,
+            )
+
+        resume_policy = preflight.get("resume_policy")
+        if not isinstance(resume_policy, dict):
+            resume_policy = {}
+        return (
+            {
+                "status": "passed",
+                "preflight_status": str(preflight.get("status") or "unknown"),
+                "resume_policy_status": str(resume_policy.get("status") or "unknown"),
+                "required_resolution_action_kinds": _string_list_payload(
+                    resume_policy.get("required_resolution_action_kinds")
+                ),
+                "resume_result_status": resumed.status,
+                "recovery_status": "resolved",
+                "workspace_guard_status": str(workspace_guard_status),
+                "changed_files": ["recovery-target.txt"],
+            },
+            execution_diagnostics,
+        )
+    except Exception as e:
+        logger.debug("Provider mini pipeline recovery loop failed", exc_info=True)
+        return (
+            {
+                "status": "failed",
+                "reason": "recovery_loop_exception",
+                "message": _response_excerpt(str(e), max_chars=240),
+            },
+            _generic_edit_execution_diagnostics(spec_dir / "artifacts"),
+        )
+
+
+def _mini_pipeline_recovery_loop_failure(
+    *,
+    reason: str,
+    preflight: dict[str, Any],
+) -> dict[str, Any]:
+    resume_policy = preflight.get("resume_policy")
+    if not isinstance(resume_policy, dict):
+        resume_policy = {}
+    return {
+        "status": "failed",
+        "reason": reason,
+        "preflight_status": str(preflight.get("status") or "unknown"),
+        "resume_policy_status": str(resume_policy.get("status") or "unknown"),
+        "required_resolution_action_kinds": _string_list_payload(
+            resume_policy.get("required_resolution_action_kinds")
+        ),
+        "blockers": preflight.get("blockers", []),
+    }
+
+
+def _load_json_file(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 
 async def _complete_provider_text_phase(
@@ -1402,6 +1664,7 @@ def _mini_pipeline_result(
     error_details: str | None,
     test_exit_code: int,
     reason: str | None = None,
+    recovery_loop: dict[str, Any] | None = None,
 ) -> ProviderSmokeResult:
     mini_pipeline: dict[str, Any] = {
         "status": "passed" if success else "failed",
@@ -1413,6 +1676,8 @@ def _mini_pipeline_result(
     }
     if reason:
         mini_pipeline["reason"] = reason
+    if recovery_loop is not None:
+        mini_pipeline["recovery_loop"] = recovery_loop
     next_diagnostics = {
         **runtime_diagnostics,
         "mini_pipeline": mini_pipeline,

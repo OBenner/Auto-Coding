@@ -439,14 +439,51 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
     class FakeMiniPipelineGenericEditSession:
         provider_name = "openai"
 
-        def __init__(self):
+        def __init__(self, scenario: str):
+            self.scenario = scenario
             self.calls = 0
             self.tool_results: list[tuple[str, str]] = []
 
         async def complete_with_tool_calls(self, message, tools):
             self.calls += 1
-            assert "slugify" in message
             assert any(tool["name"] == "write_file" for tool in tools)
+            if self.scenario == "coder":
+                return self._complete_coder(message)
+            if self.scenario == "recovery_initial":
+                return self._complete_recovery_initial(message)
+            if self.scenario == "recovery_resume":
+                return self._complete_recovery_resume(message)
+            raise AssertionError(f"unknown scenario: {self.scenario}")
+
+        async def complete(self, message: str, stream: bool = True):
+            assert stream is True
+            self.calls += 1
+            if self.scenario != "recovery_resume":
+                raise AssertionError(
+                    f"json resume should only use recovery_resume, got {self.scenario}"
+                )
+            assert "Required recovery actions" in message
+            yield json.dumps(
+                {
+                    "actions": [
+                        {
+                            "tool": "repair_mutation",
+                            "transaction_id": "native_tool_calls-1",
+                            "paths": ["recovery-target.txt"],
+                            "summary": "Accepted provider recovery target.",
+                        },
+                        {
+                            "tool": "finish",
+                            "summary": "Recovered the mini pipeline partial edit.",
+                            "tests": ["python -m unittest -q"],
+                            "risks": [],
+                        },
+                    ]
+                }
+            )
+
+        def _complete_coder(self, message):
+            assert "slugify" in message
             if self.calls == 1:
                 return ProviderToolCallResponse(
                     content="",
@@ -485,6 +522,68 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
                 ),
             )
 
+        def _complete_recovery_initial(self, message):
+            assert "recovery-target.txt" in message
+            if self.calls == 1:
+                return ProviderToolCallResponse(
+                    content="",
+                    tool_calls=(
+                        ProviderToolCall(
+                            id="call_recovery_write",
+                            name="write_file",
+                            arguments={
+                                "path": "recovery-target.txt",
+                                "content": "provider recovery ok\n",
+                            },
+                        ),
+                        ProviderToolCall(
+                            id="call_recovery_missing_read",
+                            name="read_file",
+                            arguments={"path": "missing-recovery.txt"},
+                        ),
+                    ),
+                )
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="call_recovery_blocked_finish",
+                        name="finish",
+                        arguments={
+                            "summary": "Tried to finish before recovery",
+                            "tests": [],
+                            "risks": [],
+                        },
+                    ),
+                ),
+            )
+
+        def _complete_recovery_resume(self, message):
+            assert "Required recovery actions" in message
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="call_repair_recovery",
+                        name="repair_mutation",
+                        arguments={
+                            "transaction_id": "native_tool_calls-1",
+                            "paths": ["recovery-target.txt"],
+                            "summary": "Accepted provider recovery target.",
+                        },
+                    ),
+                    ProviderToolCall(
+                        id="call_finish_recovery",
+                        name="finish",
+                        arguments={
+                            "summary": "Recovered the mini pipeline partial edit.",
+                            "tests": ["python -m unittest -q"],
+                            "risks": [],
+                        },
+                    ),
+                ),
+            )
+
         def add_tool_result(self, tool_call_id, name, result):
             self.tool_results.append((tool_call_id, name))
 
@@ -492,7 +591,11 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
         name = "openai"
 
         def __init__(self):
-            self.session = FakeMiniPipelineGenericEditSession()
+            self.sessions = [
+                FakeMiniPipelineGenericEditSession("coder"),
+                FakeMiniPipelineGenericEditSession("recovery_initial"),
+                FakeMiniPipelineGenericEditSession("recovery_resume"),
+            ]
             self.messages: list[str] = []
 
         def validate_config(self):
@@ -500,7 +603,7 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
 
         def create_session(self, session_config):
             assert session_config.model == "gpt-4o"
-            return self.session
+            return self.sessions.pop(0)
 
         async def send_message(self, message: str):
             self.messages.append(message)
@@ -522,6 +625,14 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
     monkeypatch.setattr(
         "cli.provider_smoke_commands.create_engine_provider",
         lambda _config: fake_provider,
+    )
+
+    async def fake_run_mini_pipeline_tests(_project_dir, *, timeout_seconds):
+        return 0, "OK"
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands._run_mini_pipeline_tests",
+        fake_run_mini_pipeline_tests,
     )
 
     result = await run_provider_smoke_check(
@@ -546,7 +657,8 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
         "tool_call_support": "native",
         "tool_result_support": "normalized",
         "fallback": "none",
-        "recovery_status": "not_required",
+        "recovery_status": "resolved",
+        "recovery_loop_status": "passed",
     }
     assert result.runtime_diagnostics["mini_pipeline"] == {
         "status": "passed",
@@ -558,14 +670,28 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
             {"name": "planner", "status": "passed"},
             {"name": "coder", "status": "passed"},
             {"name": "tests", "status": "passed"},
+            {"name": "recovery", "status": "passed"},
             {"name": "reviewer", "status": "passed"},
         ],
+        "recovery_loop": {
+            "status": "passed",
+            "preflight_status": "ready",
+            "resume_policy_status": "requires_resolution",
+            "required_resolution_action_kinds": [
+                "inspect_diff",
+                "rollback_transaction",
+            ],
+            "resume_result_status": "continue",
+            "recovery_status": "resolved",
+            "workspace_guard_status": "clean",
+            "changed_files": ["recovery-target.txt"],
+        },
     }
     assert result.runtime_diagnostics["validated_runtime_execution"]["tool_counts"] == {
         "write_file": 1
     }
     assert fake_provider.messages[0].startswith("Plan a tiny Auto Code readiness task")
-    assert fake_provider.session.tool_results[0] == ("call_write_slugify", "write_file")
+    assert fake_provider.sessions == []
 
 
 def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
