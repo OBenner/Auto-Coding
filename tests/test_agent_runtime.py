@@ -7773,6 +7773,114 @@ def test_generic_edit_resume_preflight_blocks_corrupt_recovery_plan(
     assert health["path"] == str(recovery_plan_path)
 
 
+def test_generic_edit_resume_preflight_blocks_corrupt_transaction_groups(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    transaction_group_path = artifact_dir / "generic_edit_transaction_groups.json"
+    transaction_group_path.write_text("{", encoding="utf-8")
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["transaction_group_artifact"] = str(transaction_group_path)
+    checkpoint["transaction_group_count"] = 1
+    checkpoint["resume_inputs"]["transaction_group_artifact"] = str(
+        transaction_group_path
+    )
+    checkpoint["resume_policy"]["required_artifacts"].append(
+        "transaction_group_artifact"
+    )
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "transaction_groups"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(transaction_group_path)
+
+
+def test_generic_edit_resume_preflight_blocks_transaction_group_count_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    transaction_group_path = artifact_dir / "generic_edit_transaction_groups.json"
+    transaction_group_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_transaction_groups",
+                "group_count": 2,
+                "status_counts": {"resolved": 2},
+                "unresolved_group_count": 0,
+                "unresolved_group_ids": [],
+                "recovery_attempt_count": 0,
+                "failed_recovery_attempt_count": 0,
+                "recovery_outcome_count": 0,
+                "recovery_outcomes": [],
+                "transaction_groups": [
+                    {"id": "transaction-group-1", "status": "resolved"},
+                    {"id": "transaction-group-2", "status": "resolved"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["transaction_group_artifact"] = str(transaction_group_path)
+    checkpoint["transaction_group_count"] = 1
+    checkpoint["resume_inputs"]["transaction_group_artifact"] = str(
+        transaction_group_path
+    )
+    checkpoint["resume_policy"]["required_artifacts"].append(
+        "transaction_group_artifact"
+    )
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "transaction_groups"
+    assert health["reason"] == "checkpoint_mismatch"
+    assert health["expected_count"] == 1
+    assert health["actual_count"] == 2
+
+
 def test_generic_edit_resume_preflight_blocks_manifest_checkpoint_mismatch(
     tmp_path: Path,
 ):

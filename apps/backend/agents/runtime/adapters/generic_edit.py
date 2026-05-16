@@ -333,6 +333,7 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
 GENERIC_EDIT_SESSION_STATE_FILENAME = "generic_edit_session_state.json"
 GENERIC_EDIT_RECOVERY_PLAN_FILENAME = "generic_edit_recovery_plan.json"
+GENERIC_EDIT_TRANSACTION_GROUPS_FILENAME = "generic_edit_transaction_groups.json"
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT = 5
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_LIMIT = 20
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIMIT = 10
@@ -3991,7 +3992,7 @@ def generic_edit_artifact_paths(artifact_dir: Path) -> dict[str, Path]:
         "session_state": artifact_dir / GENERIC_EDIT_SESSION_STATE_FILENAME,
         "timeline": artifact_dir / "generic_edit_timeline.json",
         "transactions": artifact_dir / "generic_edit_transactions.jsonl",
-        "transaction_groups": artifact_dir / "generic_edit_transaction_groups.json",
+        "transaction_groups": artifact_dir / GENERIC_EDIT_TRANSACTION_GROUPS_FILENAME,
         "recovery_checkpoint": artifact_dir / "generic_edit_recovery_checkpoint.json",
         "recovery_plan": artifact_dir / "generic_edit_recovery_plan.json",
         "mutation_snapshots": artifact_dir / "generic_edit_mutation_snapshots.json",
@@ -5468,6 +5469,11 @@ def generic_edit_recovery_plan_path_for_checkpoint(checkpoint_path: Path) -> Pat
     return checkpoint_path.parent / GENERIC_EDIT_RECOVERY_PLAN_FILENAME
 
 
+def generic_edit_transaction_group_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted transaction-group path colocated with a checkpoint."""
+    return checkpoint_path.parent / GENERIC_EDIT_TRANSACTION_GROUPS_FILENAME
+
+
 def generic_edit_artifact_manifest_path_for_checkpoint(checkpoint_path: Path) -> Path:
     """Return the trusted artifact manifest path colocated with a checkpoint."""
     return checkpoint_path.parent / "generic_edit_artifact_manifest.json"
@@ -5484,6 +5490,19 @@ def generic_edit_recovery_plan_path_from_checkpoint(
     if not isinstance(recovery_plan_path, str) or not recovery_plan_path:
         return None
     return Path(recovery_plan_path)
+
+
+def generic_edit_transaction_group_path_from_checkpoint(
+    checkpoint: dict[str, Any],
+) -> Path | None:
+    """Return the transaction-group path requested by checkpoint metadata."""
+    resume_inputs = checkpoint.get("resume_inputs")
+    if not isinstance(resume_inputs, dict):
+        return None
+    transaction_group_path = resume_inputs.get("transaction_group_artifact")
+    if not isinstance(transaction_group_path, str) or not transaction_group_path:
+        return None
+    return Path(transaction_group_path)
 
 
 def load_generic_edit_recovery_plan(
@@ -5545,6 +5564,144 @@ def load_generic_edit_recovery_plan(
             actual_path=artifact_path,
         )
     return payload
+
+
+def validate_generic_edit_transaction_group_payload(
+    payload: Any,
+    *,
+    transaction_group_path: Path,
+) -> dict[str, Any]:
+    """Validate persisted transaction-group artifact shape and counters."""
+    if not isinstance(payload, dict):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction groups must be a JSON object.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    if payload.get("artifact_type") != "generic_edit_transaction_groups":
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction groups artifact has unexpected type.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    groups = payload.get("transaction_groups")
+    if not isinstance(groups, list):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction groups artifact is missing groups.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    group_count = payload.get("group_count")
+    if type(group_count) is not int or group_count != len(groups):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction group count does not match groups.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    unresolved_group_ids = normalize_string_list(payload.get("unresolved_group_ids"))
+    unresolved_group_count = payload.get("unresolved_group_count")
+    if type(unresolved_group_count) is not int or unresolved_group_count != len(
+        unresolved_group_ids
+    ):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit unresolved transaction group count does not match ids.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get("id"), str):
+            raise generic_edit_resume_artifact_error(
+                "Generic edit transaction group entry is missing an id.",
+                artifact="transaction_groups",
+                reason="invalid_schema",
+                path=transaction_group_path,
+            )
+        if not isinstance(group.get("status"), str):
+            raise generic_edit_resume_artifact_error(
+                "Generic edit transaction group entry is missing status.",
+                artifact="transaction_groups",
+                reason="invalid_schema",
+                path=transaction_group_path,
+            )
+    return payload
+
+
+def load_generic_edit_transaction_groups(
+    transaction_group_path: Path,
+    *,
+    expected_transaction_group_path: Path,
+) -> dict[str, Any]:
+    """Load and validate a required generic_edit transaction-group artifact."""
+    if transaction_group_path.resolve() != expected_transaction_group_path.resolve():
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction group artifact path is not canonical.",
+            artifact="transaction_groups",
+            reason="checkpoint_mismatch",
+            path=transaction_group_path,
+            expected_path=str(expected_transaction_group_path),
+        )
+    try:
+        payload = json.loads(transaction_group_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit transaction groups not found: {transaction_group_path}",
+            artifact="transaction_groups",
+            reason="missing",
+            path=transaction_group_path,
+        ) from e
+    except json.JSONDecodeError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit transaction groups are not valid JSON: {e}",
+            artifact="transaction_groups",
+            reason="corrupt_json",
+            path=transaction_group_path,
+        ) from e
+    return validate_generic_edit_transaction_group_payload(
+        payload,
+        transaction_group_path=transaction_group_path,
+    )
+
+
+def validate_generic_edit_checkpoint_transaction_groups(
+    *,
+    checkpoint: dict[str, Any],
+    transaction_groups: dict[str, Any],
+    transaction_group_path: Path,
+) -> None:
+    """Reject transaction-group artifacts that drifted from checkpoint metadata."""
+    checkpoint_group_count = checkpoint.get("transaction_group_count")
+    if (
+        checkpoint_group_count is not None
+        and checkpoint_group_count != transaction_groups["group_count"]
+    ):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction group artifact count does not match checkpoint.",
+            artifact="transaction_groups",
+            reason="checkpoint_mismatch",
+            path=transaction_group_path,
+            expected_count=checkpoint_group_count,
+            actual_count=transaction_groups["group_count"],
+        )
+    checkpoint_unresolved_ids = normalize_string_list(
+        checkpoint.get("unresolved_transaction_group_ids")
+    )
+    artifact_unresolved_ids = normalize_string_list(
+        transaction_groups.get("unresolved_group_ids")
+    )
+    if checkpoint_unresolved_ids != artifact_unresolved_ids:
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction group artifact unresolved ids do not match checkpoint.",
+            artifact="transaction_groups",
+            reason="checkpoint_mismatch",
+            path=transaction_group_path,
+            expected_unresolved_group_ids=checkpoint_unresolved_ids,
+            actual_unresolved_group_ids=artifact_unresolved_ids,
+        )
 
 
 def load_generic_edit_artifact_manifest(manifest_path: Path) -> dict[str, Any]:
@@ -6484,6 +6641,53 @@ def inspect_generic_edit_resume_artifacts(
         artifacts["recovery_plan"] = {
             "status": "missing_optional",
             "path": str(expected_recovery_plan_path),
+        }
+
+    expected_transaction_group_path = (
+        generic_edit_transaction_group_path_for_checkpoint(
+            resolved_checkpoint_path,
+        )
+    )
+    transaction_group_path = generic_edit_transaction_group_path_from_checkpoint(
+        checkpoint,
+    )
+    if transaction_group_path is not None:
+        artifacts["transaction_groups"] = {
+            "status": "pending",
+            "path": str(transaction_group_path),
+        }
+        try:
+            transaction_groups = load_generic_edit_transaction_groups(
+                transaction_group_path,
+                expected_transaction_group_path=expected_transaction_group_path,
+            )
+            validate_generic_edit_checkpoint_transaction_groups(
+                checkpoint=checkpoint,
+                transaction_groups=transaction_groups,
+                transaction_group_path=transaction_group_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="transaction_groups",
+                    path=transaction_group_path,
+                ),
+                artifacts=artifacts,
+            )
+        artifacts["transaction_groups"] = {
+            "status": "ready",
+            "path": str(transaction_group_path),
+            "group_count": transaction_groups["group_count"],
+            "unresolved_group_count": transaction_groups["unresolved_group_count"],
+        }
+    else:
+        artifacts["transaction_groups"] = {
+            "status": "missing_optional",
+            "path": str(expected_transaction_group_path),
         }
 
     trace_path = generic_edit_trace_path_for_checkpoint(resolved_checkpoint_path)
