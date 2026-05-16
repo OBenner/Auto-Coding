@@ -1,0 +1,12 @@
+interface:
+  display_name: Plugin Review
+  short_description: Review plugin manifests, permissions, and isolation
+  default_prompt: Use $plugin-review to review this Auto Code plugin before merging
+    or enabling it.
+claude:
+  skill: $plugin-review
+  skill_file: ../SKILL.md
+  invocation: Use the Skill tool or the installed Claude Code plugin skill with this
+    name.
+  default_prompt: Use $plugin-review to review this Auto Code plugin before merging
+    or enabling it.

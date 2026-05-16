@@ -1,0 +1,11 @@
+interface:
+  display_name: Plugin Review
+  short_description: Review plugin manifests, permissions, and isolation
+  default_prompt: Use $plugin-review to review this Auto Code plugin before merging
+    or enabling it.
+gemini:
+  skill: plugin-review
+  skill_file: ../SKILL.md
+  activation: activate_skill
+  default_prompt: Use $plugin-review to review this Auto Code plugin before merging
+    or enabling it.

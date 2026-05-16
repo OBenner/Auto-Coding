@@ -1,0 +1,18 @@
+interface:
+  display_name: Provider Review
+  short_description: Audit provider runtime capability and safety
+  default_prompt: Use $provider-review to evaluate this Auto Code provider or runtime
+    adapter.
+generic:
+  standard: Agent Skills compatible metadata
+  skill: provider-review
+  skill_file: ../SKILL.md
+  works_with:
+  - Codex
+  - Claude Code
+  - Gemini CLI
+  - Cursor
+  - Copilot
+  - Windsurf
+  default_prompt: Use $provider-review to evaluate this Auto Code provider or runtime
+    adapter.

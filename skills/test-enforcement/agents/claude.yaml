@@ -1,0 +1,12 @@
+interface:
+  display_name: Test Enforcement
+  short_description: Map changed files to required Auto Code checks
+  default_prompt: Use $test-enforcement to choose and run the required checks for
+    this Auto Code change.
+claude:
+  skill: $test-enforcement
+  skill_file: ../SKILL.md
+  invocation: Use the Skill tool or the installed Claude Code plugin skill with this
+    name.
+  default_prompt: Use $test-enforcement to choose and run the required checks for
+    this Auto Code change.

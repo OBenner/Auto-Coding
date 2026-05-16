@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review Auto Code changes in two stages"
+  default_prompt: "Use $code-review to review this Auto Code change against requirements and quality risks."

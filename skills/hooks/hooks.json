@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -q -- '--no-verify'; then echo '{\"decision\":\"block\",\"reason\":\"Do not skip verification hooks. Fix the underlying issue or document the blocker.\"}'; exit 2; fi"
+          }
+        ],
+        "description": "Block --no-verify on git commands"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(echo \"$CLAUDE_TOOL_INPUT\" | jq -r '.file_path // empty' 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE 'apps/frontend/src/.*\\.(ts|tsx)$'; then echo 'Reminder: frontend user-facing text must use i18n keys in en/fr locale files.'; fi"
+          }
+        ],
+        "description": "Remind about frontend i18n"
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(echo \"$CLAUDE_TOOL_INPUT\" | jq -r '.file_path // empty' 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE 'providers|runtime|provider_smoke'; then echo 'Reminder: provider changes need capability-level tests or provider smoke evidence.'; fi"
+          }
+        ],
+        "description": "Remind about provider smoke validation"
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(echo \"$CLAUDE_TOOL_INPUT\" | jq -r '.file_path // empty' 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE 'plugins|plugin\\.json'; then echo 'Reminder: plugin changes need manifest, permission, and isolation checks.'; fi"
+          }
+        ],
+        "description": "Remind about plugin contract validation"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+interface:
+  display_name: Test Enforcement
+  short_description: Map changed files to required Auto Code checks
+  default_prompt: Use $test-enforcement to choose and run the required checks for
+    this Auto Code change.
+generic:
+  standard: Agent Skills compatible metadata
+  skill: test-enforcement
+  skill_file: ../SKILL.md
+  works_with:
+  - Codex
+  - Claude Code
+  - Gemini CLI
+  - Cursor
+  - Copilot
+  - Windsurf
+  default_prompt: Use $test-enforcement to choose and run the required checks for
+    this Auto Code change.
