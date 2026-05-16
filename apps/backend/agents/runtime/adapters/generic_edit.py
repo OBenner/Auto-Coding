@@ -379,6 +379,7 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_STAGES = frozenset(
         "resume_clean",
         "resume_policy",
         "batch_open",
+        "batch_boundary_blocked",
     }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_STRING_FIELDS = (
@@ -828,6 +829,15 @@ class GenericEditRuntimeSession:
             if self._cancel_requested:
                 execution.cancelled = True
                 return execution
+            self._refresh_batch_recovery_guards_before_action(
+                action=action,
+                trace=trace,
+                iteration_entry=iteration_entry,
+                loop="json_actions",
+                iteration=iteration,
+                actions=execution.executed_actions,
+                results=execution.action_results,
+            )
             result = await self._execute_action(
                 action,
                 loop="json_actions",
@@ -1030,6 +1040,7 @@ class GenericEditRuntimeSession:
             verbose=verbose,
             phase=phase,
             subtask_id=subtask_id,
+            trace=trace,
         )
         if execution.cancelled:
             return None, generic_edit_cancelled_result()
@@ -1290,6 +1301,7 @@ class GenericEditRuntimeSession:
         verbose: bool,
         phase: Any,
         subtask_id: str | None,
+        trace: list[dict[str, Any]],
     ) -> NativeToolExecutionResult:
         """Execute provider-native tool calls through local action handlers."""
         execution = NativeToolExecutionResult(
@@ -1300,6 +1312,15 @@ class GenericEditRuntimeSession:
             if self._cancel_requested:
                 execution.cancelled = True
                 return execution
+            self._refresh_batch_recovery_guards_before_action(
+                action=action,
+                trace=trace,
+                iteration_entry=iteration_entry,
+                loop="native_tool_calls",
+                iteration=iteration,
+                actions=execution.executed_actions,
+                results=execution.action_results,
+            )
             result = await self._execute_action(
                 action,
                 loop="native_tool_calls",
@@ -1646,6 +1667,32 @@ class GenericEditRuntimeSession:
             if batch_id and unresolved:
                 blockers[batch_id] = unresolved
         self._batch_recovery_blockers = blockers
+
+    def _refresh_batch_recovery_guards_before_action(
+        self,
+        *,
+        action: dict[str, Any],
+        trace: list[dict[str, Any]],
+        iteration_entry: dict[str, Any],
+        loop: str,
+        iteration: int,
+        actions: list[dict[str, Any]],
+        results: list[ToolActionResult],
+    ) -> None:
+        """Include same-turn recovery actions before evaluating batch commits."""
+        if action_tool(action) != COMMIT_BATCH_TOOL:
+            return
+        if not actions or not results:
+            self._refresh_batch_recovery_guards(trace)
+            return
+        pending_iteration = dict(iteration_entry)
+        pending_iteration["transaction"] = build_generic_edit_transaction(
+            loop=loop,
+            iteration=iteration,
+            actions=actions,
+            results=results,
+        )
+        self._refresh_batch_recovery_guards([*trace, pending_iteration])
 
     def _rollback_transaction_action(self, action: dict[str, Any]) -> ToolActionResult:
         """Restore workspace files from captured mutation snapshots."""
@@ -4194,6 +4241,29 @@ def compact_generic_edit_native_tool_fallbacks(value: Any) -> list[dict[str, Any
     return fallbacks[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]
 
 
+def compact_generic_edit_batch_boundary_errors(
+    value: Any,
+) -> list[dict[str, Any]]:
+    """Return bounded batch-boundary errors without dropping blocker IDs."""
+    if not isinstance(value, list):
+        return []
+    compact_errors: list[dict[str, Any]] = []
+    for error in value[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]:
+        if not isinstance(error, dict):
+            continue
+        compact_errors.append(
+            {
+                "tool": str(error.get("tool") or "")[:120],
+                "batch_id": str(error.get("batch_id") or "")[:120],
+                "reason": str(error.get("reason") or "")[:120],
+                "blocked_transaction_group_ids": normalize_string_list(
+                    error.get("blocked_transaction_group_ids")
+                ),
+            }
+        )
+    return compact_errors
+
+
 def compact_generic_edit_manifest_transaction_batches(
     transaction_summary: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -4229,6 +4299,9 @@ def compact_generic_edit_manifest_transaction_batches(
             "staged_mutation_count": int(batch.get("staged_mutation_count") or 0),
             "staged_path_count": int(batch.get("staged_path_count") or 0),
             "boundary_error_count": int(batch.get("boundary_error_count") or 0),
+            "boundary_errors": compact_generic_edit_batch_boundary_errors(
+                batch.get("boundary_errors")
+            ),
             "boundary_error_reasons": normalize_string_list(
                 batch.get("boundary_error_reasons")
             ),

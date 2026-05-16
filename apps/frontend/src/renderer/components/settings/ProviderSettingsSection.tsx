@@ -593,6 +593,15 @@ export function buildProviderTransactionBatchDiagnosticRows(
   if (!transactionBatchContract) {
     return [];
   }
+  const boundaryErrorValue = [
+    typeof transactionBatchContract.boundaryErrorCount === 'number'
+      ? String(transactionBatchContract.boundaryErrorCount)
+      : '',
+    formatRuntimeDiagnosticList(
+      translate,
+      transactionBatchContract.boundaryErrorReasons
+    ),
+  ].filter((value) => value).join(' - ');
   return [
     {
       labelKey: 'settings:aiProvider.connectionTest.batchContract',
@@ -613,10 +622,7 @@ export function buildProviderTransactionBatchDiagnosticRows(
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.batchBoundaryErrors',
-      value: formatRuntimeDiagnosticList(
-        translate,
-        transactionBatchContract.boundaryErrorReasons
-      ),
+      value: boundaryErrorValue,
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.batchOpenBatches',

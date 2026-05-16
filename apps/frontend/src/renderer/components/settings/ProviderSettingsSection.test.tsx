@@ -108,12 +108,28 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.batchBoundaryErrors',
-        value: 'Batch boundary violation',
+        value: '1 - Batch boundary violation',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.batchOpenBatches',
         value: 'batch-1',
       },
     ]);
+  });
+
+  it('keeps boundary error counts visible when reasons are unavailable', () => {
+    expect(
+      buildProviderTransactionBatchDiagnosticRows(translate, {
+        status: 'boundary_guarded',
+        batchBoundaryGuard: 'pre_execution_blocked',
+        transactionBatchCount: 0,
+        openTransactionBatchIds: [],
+        boundaryErrorCount: 2,
+        boundaryErrorReasons: [],
+      })
+    ).toContainEqual({
+      labelKey: 'settings:aiProvider.connectionTest.batchBoundaryErrors',
+      value: '2',
+    });
   });
 });

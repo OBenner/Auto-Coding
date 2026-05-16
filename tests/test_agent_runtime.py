@@ -5314,6 +5314,19 @@ async def test_generic_edit_runtime_blocks_batch_commit_with_unresolved_recovery
     assert manifest["transaction_batches"][0]["boundary_error_reasons"] == [
         "unresolved_batch_recovery"
     ]
+    assert manifest["transaction_batches"][0]["boundary_errors"] == [
+        {
+            "tool": "commit_batch",
+            "batch_id": "batch-1",
+            "reason": "unresolved_batch_recovery",
+            "blocked_transaction_group_ids": ["transaction-group-1"],
+        }
+    ]
+    assert any(
+        event["timeline_stage"] == "batch_boundary_blocked"
+        and event["requires_user_action"] is True
+        for event in manifest["recovery_timeline"]
+    )
     assert any(
         event["event_type"] == "action_result"
         and event["tool"] == "commit_batch"
@@ -5323,6 +5336,91 @@ async def test_generic_edit_runtime_blocks_batch_commit_with_unresolved_recovery
         and event["requires_user_action"] is True
         for event in events
     )
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_commits_batch_after_same_turn_recovery(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "partially mutate an open batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "read_file",
+                        "path": "missing.txt",
+                    },
+                ],
+            },
+            {
+                "thought": "recover the failed transaction then close the batch",
+                "actions": [
+                    {
+                        "tool": "rollback_transaction",
+                        "transaction_id": "json_actions-1",
+                    },
+                    {
+                        "tool": "commit_batch",
+                        "batch_id": "batch-1",
+                        "summary": "Commit recovered batch",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Recovered batch committed",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "recover then commit batch",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert result_artifact["recovery_resolved"] is True
+    assert [
+        transaction["status"] for transaction in result_artifact["transactions"]
+    ] == [
+        "partial_failure",
+        "complete",
+    ]
+    batch = result_artifact["transaction_batches"][0]
+    assert batch["id"] == "batch-1"
+    assert batch["status"] == "committed"
+    assert batch["boundary_error_count"] == 0
+    assert batch.get("unresolved_transaction_group_ids", []) == []
+    assert batch["recovery_outcome_count"] == 1
 
 
 @pytest.mark.asyncio
