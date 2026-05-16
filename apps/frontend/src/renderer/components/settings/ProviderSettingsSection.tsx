@@ -27,6 +27,7 @@ import type {
   ProviderConnectionTestResult,
   ProviderRuntimeDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
+  ProviderValidatedTransactionBatchContract,
   RuntimeControlPlaneDiagnostics,
   RuntimeExternalMcpSmokeResult,
   RuntimeExternalMcpHealthRow,
@@ -197,6 +198,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   adapter_tool_missing_on_server: 'settings:aiProvider.runtimeDiagnosticValues.adapterToolMissingOnServer',
   analysis_only: 'settings:aiProvider.runtimeDiagnosticValues.analysisOnly',
   apply_patch: 'settings:aiProvider.runtimeDiagnosticValues.applyPatch',
+  batch_boundary_violation: 'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation',
+  boundary_guarded: 'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded',
   blocked: 'settings:aiProvider.runtimeDiagnosticValues.blocked',
   choose_concrete_server: 'settings:aiProvider.runtimeDiagnosticValues.chooseConcreteServer',
   claude_code: 'settings:aiProvider.runtimeDiagnosticValues.claudeCode',
@@ -245,7 +248,9 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   not_required: 'settings:aiProvider.runtimeDiagnosticValues.notRequired',
   not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
   not_requested: 'settings:aiProvider.runtimeDiagnosticValues.notRequested',
+  observed: 'settings:aiProvider.runtimeDiagnosticValues.observed',
   ok: 'settings:aiProvider.runtimeDiagnosticValues.ok',
+  open_batch: 'settings:aiProvider.runtimeDiagnosticValues.openBatch',
   opencode: 'settings:aiProvider.runtimeDiagnosticValues.opencode',
   orchestrated: 'settings:aiProvider.runtimeDiagnosticValues.orchestrated',
   partial: 'settings:aiProvider.runtimeDiagnosticValues.partial',
@@ -255,6 +260,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_error: 'settings:aiProvider.runtimeDiagnosticValues.providerError',
   provider_smoke_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeBlocked',
   provider_smoke_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeReady',
+  pre_execution_blocked: 'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked',
   qwen_code: 'settings:aiProvider.runtimeDiagnosticValues.qwenCode',
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
   ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
@@ -266,6 +272,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
   sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
+  runtime_blocked: 'settings:aiProvider.runtimeDiagnosticValues.runtimeBlocked',
   server_disabled: 'settings:aiProvider.runtimeDiagnosticValues.serverDisabled',
   shell: 'settings:aiProvider.runtimeDiagnosticValues.shell',
   server_has_extra_tools: 'settings:aiProvider.runtimeDiagnosticValues.serverHasExtraTools',
@@ -287,6 +294,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
   unknown: 'settings:aiProvider.runtimeDiagnosticValues.unknown',
   unresolved: 'settings:aiProvider.runtimeDiagnosticValues.unresolved',
+  unresolved_batch_recovery: 'settings:aiProvider.runtimeDiagnosticValues.unresolvedBatchRecovery',
   unresolved_partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.unresolvedPartialFailure',
   unsupported: 'settings:aiProvider.runtimeDiagnosticValues.unsupported',
   unsupported_local_tool: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedLocalTool',
@@ -573,6 +581,48 @@ export function buildProviderResumePolicyDiagnosticRows(
       value: formatRuntimeDiagnosticList(
         translate,
         resumePolicy.openTransactionBatchIds
+      ),
+    },
+  ].filter((row) => row.value);
+}
+
+export function buildProviderTransactionBatchDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  transactionBatchContract?: ProviderValidatedTransactionBatchContract | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!transactionBatchContract) {
+    return [];
+  }
+  return [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchContract',
+      value: formatRuntimeDiagnosticValue(translate, transactionBatchContract.status),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchBoundaryGuard',
+      value: formatRuntimeDiagnosticValue(
+        translate,
+        transactionBatchContract.batchBoundaryGuard
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchCount',
+      value: typeof transactionBatchContract.transactionBatchCount === 'number'
+        ? String(transactionBatchContract.transactionBatchCount)
+        : '',
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchBoundaryErrors',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.boundaryErrorReasons
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchOpenBatches',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.openTransactionBatchIds
       ),
     },
   ].filter((row) => row.value);
@@ -1439,6 +1489,11 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     const toolLoopBlockingReason = formatRuntimeDiagnosticValue(t, toolLoopContract?.blockingReason);
     const resumePolicy = validatedExecution?.resumePolicy;
     const resumePolicyRows = buildProviderResumePolicyDiagnosticRows(t, resumePolicy);
+    const transactionBatchContract = validatedExecution?.transactionBatchContract;
+    const transactionBatchRows = buildProviderTransactionBatchDiagnosticRows(
+      t,
+      transactionBatchContract
+    );
     const validatedNativeFallback = validatedExecution?.nativeToolFallbacks?.[0];
     const validatedNativeFallbackReason = formatRuntimeDiagnosticValue(
       t,
@@ -1613,6 +1668,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                     value={validatedExecutionToolCounts}
                   />
                   {resumePolicyRows.map((row) => (
+                    <RuntimeDiagnosticRow
+                      key={row.labelKey}
+                      label={t(row.labelKey)}
+                      value={row.value}
+                    />
+                  ))}
+                  {transactionBatchRows.map((row) => (
                     <RuntimeDiagnosticRow
                       key={row.labelKey}
                       label={t(row.labelKey)}

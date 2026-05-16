@@ -37,6 +37,7 @@ import { getCodexProfileManager } from '../codex-profile-manager';
 import {
   mapProviderContractHealth,
   mapProviderRuntimeResumePolicy,
+  mapProviderTransactionBatchContract,
   mapProviderToolLoopContract,
 } from './provider-smoke-diagnostics';
 import { resolveProviderSmokeRuntime } from './provider-smoke-runtime';
@@ -379,6 +380,7 @@ type ProviderSmokeCliResult = {
       tool_counts?: unknown;
       resume_policy?: unknown;
       tool_loop_contract?: unknown;
+      transaction_batch_contract?: unknown;
     } | null;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
@@ -500,6 +502,9 @@ function mapValidatedRuntimeExecution(
     toolCounts: numberRecordFromUnknown(payload.tool_counts),
     resumePolicy: mapProviderRuntimeResumePolicy(payload.resume_policy),
     toolLoopContract: mapProviderToolLoopContract(payload.tool_loop_contract),
+    transactionBatchContract: mapProviderTransactionBatchContract(
+      payload.transaction_batch_contract
+    ),
   };
 }
 

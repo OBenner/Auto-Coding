@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   mapProviderContractHealth,
   mapProviderRuntimeResumePolicy,
+  mapProviderTransactionBatchContract,
   mapProviderToolLoopContract
 } from './provider-smoke-diagnostics';
 
@@ -63,6 +64,33 @@ describe('mapProviderToolLoopContract', () => {
 
   it('returns undefined for empty tool-loop contract payloads', () => {
     expect(mapProviderToolLoopContract({})).toBeUndefined();
+  });
+});
+
+describe('mapProviderTransactionBatchContract', () => {
+  it('maps safe generic edit batch-boundary contract fields', () => {
+    expect(
+      mapProviderTransactionBatchContract({
+        status: 'boundary_guarded',
+        batch_boundary_guard: 'pre_execution_blocked',
+        transaction_batch_count: 0,
+        open_transaction_batch_ids: ['batch-1', 42],
+        boundary_error_count: 1,
+        boundary_error_reasons: ['batch_boundary_violation', null],
+        ignored_private_path: 'workspace-private/checkpoint.json',
+      })
+    ).toEqual({
+      status: 'boundary_guarded',
+      batchBoundaryGuard: 'pre_execution_blocked',
+      transactionBatchCount: 0,
+      openTransactionBatchIds: ['batch-1'],
+      boundaryErrorCount: 1,
+      boundaryErrorReasons: ['batch_boundary_violation'],
+    });
+  });
+
+  it('returns undefined for empty transaction batch contract payloads', () => {
+    expect(mapProviderTransactionBatchContract({})).toBeUndefined();
   });
 });
 

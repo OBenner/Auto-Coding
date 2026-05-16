@@ -514,6 +514,7 @@ export interface ProviderValidatedRuntimeExecution {
   toolCounts?: Record<string, number>;
   resumePolicy?: ProviderValidatedRuntimeResumePolicy;
   toolLoopContract?: ProviderValidatedToolLoopContract;
+  transactionBatchContract?: ProviderValidatedTransactionBatchContract;
 }
 
 export interface ProviderValidatedRuntimeFallback {
@@ -546,6 +547,15 @@ export interface ProviderValidatedToolLoopContract {
   fallbackReason?: string;
   recoveryStatus?: string;
   blockingReason?: string;
+}
+
+export interface ProviderValidatedTransactionBatchContract {
+  status?: string;
+  batchBoundaryGuard?: string;
+  transactionBatchCount?: number;
+  openTransactionBatchIds?: string[];
+  boundaryErrorCount?: number;
+  boundaryErrorReasons?: string[];
 }
 
 export interface ProviderConnectionTestResult {

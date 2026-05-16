@@ -245,6 +245,12 @@ async def test_run_provider_smoke_check_generic_edit_runtime(
         "native_tool_fallback_count": 0,
         "native_tool_fallbacks": [],
         "tool_counts": {"finish": 1, "write_file": 1},
+        "transaction_batch_contract": {
+            "status": "not_observed",
+            "batch_boundary_guard": "not_observed",
+            "transaction_batch_count": 0,
+            "open_transaction_batch_ids": [],
+        },
         "tool_loop_contract": {
             "status": "passed",
             "tool_call_support": "native",
@@ -338,6 +344,12 @@ async def test_run_provider_smoke_check_generic_edit_reports_native_tool_fallbac
             }
         ],
         "tool_counts": {"finish": 1, "write_file": 1},
+        "transaction_batch_contract": {
+            "status": "not_observed",
+            "batch_boundary_guard": "not_observed",
+            "transaction_batch_count": 0,
+            "open_transaction_batch_ids": [],
+        },
         "tool_loop_contract": {
             "status": "passed",
             "tool_call_support": "json_fallback",
@@ -420,6 +432,90 @@ def test_generic_edit_execution_diagnostics_includes_safe_resume_policy(
         "unresolved_partial_failure_ids": ["partial-failure-1"],
         "unresolved_transaction_group_ids": ["transaction-group-1"],
         "open_transaction_batch_ids": ["batch-1"],
+    }
+
+
+def test_generic_edit_execution_diagnostics_reports_batch_boundary_guard(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "error",
+                "stop_reason": "batch_boundary_violation",
+                "loop": "json_actions",
+                "action_count": 0,
+                "failed_action_count": 0,
+                "native_tool_fallback_count": 0,
+                "tool_counts": {},
+                "transaction_batch_count": 0,
+                "open_transaction_batch_ids": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["transaction_batch_contract"] == {
+        "status": "boundary_guarded",
+        "batch_boundary_guard": "pre_execution_blocked",
+        "transaction_batch_count": 0,
+        "open_transaction_batch_ids": [],
+        "boundary_error_count": 1,
+        "boundary_error_reasons": ["batch_boundary_violation"],
+    }
+
+
+def test_generic_edit_execution_diagnostics_reports_batch_runtime_boundary_errors(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "stop_reason": "finish",
+                "loop": "json_actions",
+                "action_count": 4,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 0,
+                "tool_counts": {
+                    "begin_batch": 1,
+                    "write_file": 1,
+                    "commit_batch": 1,
+                    "abort_batch": 1,
+                },
+                "transaction_batch_count": 1,
+                "open_transaction_batch_ids": [],
+                "transaction_batches": [
+                    {
+                        "id": "batch-1",
+                        "status": "aborted",
+                        "boundary_errors": [{"reason": "unresolved_batch_recovery"}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["transaction_batch_contract"] == {
+        "status": "boundary_guarded",
+        "batch_boundary_guard": "runtime_blocked",
+        "transaction_batch_count": 1,
+        "open_transaction_batch_ids": [],
+        "boundary_error_count": 1,
+        "boundary_error_reasons": ["unresolved_batch_recovery"],
     }
 
 

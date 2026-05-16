@@ -115,6 +115,9 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
     resume_policy = _resume_policy_payload(payload.get("resume_policy"))
     if resume_policy is not None:
         diagnostics["resume_policy"] = resume_policy
+    diagnostics["transaction_batch_contract"] = (
+        _generic_edit_transaction_batch_contract(payload)
+    )
     diagnostics["tool_loop_contract"] = _generic_edit_tool_loop_contract(
         payload=payload,
         native_tool_fallbacks=native_tool_fallbacks,
@@ -229,6 +232,80 @@ def _generic_edit_recovery_status(
     if failed_action_count > 0:
         return "unresolved"
     return "not_required"
+
+
+def _generic_edit_transaction_batch_contract(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return safe batch-boundary diagnostics for provider smoke results."""
+    stop_reason = str(payload.get("stop_reason") or "unknown")
+    transaction_batch_count = _int_payload_value(payload, "transaction_batch_count")
+    transaction_batches = payload.get("transaction_batches")
+    if isinstance(transaction_batches, list):
+        transaction_batch_count = max(
+            transaction_batch_count,
+            len([batch for batch in transaction_batches if isinstance(batch, dict)]),
+        )
+
+    open_batches = _string_list_payload(payload.get("open_transaction_batch_ids"))
+    boundary_error_count = 0
+    boundary_error_reasons: list[str] = []
+    if isinstance(transaction_batches, list):
+        for batch in transaction_batches:
+            if not isinstance(batch, dict):
+                continue
+            batch_error_reasons = _string_list_payload(
+                batch.get("boundary_error_reasons")
+            )
+            batch_error_count = batch.get("boundary_error_count")
+            if isinstance(batch_error_count, int) and not isinstance(
+                batch_error_count, bool
+            ):
+                boundary_error_count += batch_error_count
+            boundary_errors = batch.get("boundary_errors")
+            if isinstance(boundary_errors, list):
+                batch_error_reasons.extend(
+                    str(error.get("reason"))
+                    for error in boundary_errors
+                    if isinstance(error, dict)
+                    and isinstance(error.get("reason"), str)
+                    and error.get("reason")
+                )
+            if not (
+                isinstance(batch_error_count, int)
+                and not isinstance(batch_error_count, bool)
+            ):
+                boundary_error_count += len(batch_error_reasons)
+            boundary_error_reasons.extend(batch_error_reasons)
+
+    if stop_reason == "batch_boundary_violation":
+        boundary_error_count = max(boundary_error_count, 1)
+        boundary_error_reasons.append("batch_boundary_violation")
+        status = "boundary_guarded"
+        boundary_guard = "pre_execution_blocked"
+    elif boundary_error_count > 0:
+        status = "boundary_guarded"
+        boundary_guard = "runtime_blocked"
+    elif open_batches:
+        status = "requires_resolution"
+        boundary_guard = "open_batch"
+    elif transaction_batch_count > 0:
+        status = "observed"
+        boundary_guard = "observed"
+    else:
+        status = "not_observed"
+        boundary_guard = "not_observed"
+
+    contract: dict[str, Any] = {
+        "status": status,
+        "batch_boundary_guard": boundary_guard,
+        "transaction_batch_count": transaction_batch_count,
+        "open_transaction_batch_ids": open_batches,
+    }
+    if boundary_error_count > 0:
+        contract["boundary_error_count"] = boundary_error_count
+        contract["boundary_error_reasons"] = sorted(
+            dict.fromkeys(boundary_error_reasons)
+        )
+    return contract
 
 
 def _native_tool_fallbacks_payload(value: Any) -> list[dict[str, Any]]:
@@ -926,6 +1003,7 @@ def _print_provider_execution_diagnostics(execution: Any) -> None:
     )
     _print_first_native_tool_fallback(execution.get("native_tool_fallbacks"))
     _print_provider_resume_policy(execution.get("resume_policy"))
+    _print_transaction_batch_contract(execution.get("transaction_batch_contract"))
 
 
 def _print_tool_loop_contract(contract: Any) -> None:
@@ -988,6 +1066,30 @@ def _print_provider_resume_policy(resume_policy: Any) -> None:
     _print_string_list_line(
         "Resume open batches",
         resume_policy.get("open_transaction_batch_ids"),
+    )
+
+
+def _print_transaction_batch_contract(contract: Any) -> None:
+    """Print batch-boundary diagnostics for provider smoke output."""
+    if not isinstance(contract, dict):
+        return
+    contract_parts = [
+        str(contract[field])
+        for field in ("status", "batch_boundary_guard")
+        if isinstance(contract.get(field), str) and str(contract[field])
+    ]
+    if contract_parts:
+        print_key_value(
+            "Batch contract",
+            ", ".join(contract_parts),
+        )
+    _print_string_list_line(
+        "Batch boundary reasons",
+        contract.get("boundary_error_reasons"),
+    )
+    _print_string_list_line(
+        "Open transaction batches",
+        contract.get("open_transaction_batch_ids"),
     )
 
 

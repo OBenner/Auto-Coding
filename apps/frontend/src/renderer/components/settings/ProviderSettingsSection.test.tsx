@@ -3,7 +3,10 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { buildProviderResumePolicyDiagnosticRows } from './ProviderSettingsSection';
+import {
+  buildProviderResumePolicyDiagnosticRows,
+  buildProviderTransactionBatchDiagnosticRows
+} from './ProviderSettingsSection';
 
 const translate = (key: string) =>
   ({
@@ -17,7 +20,15 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.resumeUnresolvedFailures': 'Unresolved partial failures',
     'settings:aiProvider.connectionTest.resumeUnresolvedGroups': 'Unresolved transaction groups',
     'settings:aiProvider.connectionTest.resumeOpenBatches': 'Open transaction batches',
+    'settings:aiProvider.connectionTest.batchContract': 'Batch contract',
+    'settings:aiProvider.connectionTest.batchBoundaryGuard': 'Batch boundary guard',
+    'settings:aiProvider.connectionTest.batchCount': 'Transaction batches',
+    'settings:aiProvider.connectionTest.batchBoundaryErrors': 'Batch boundary errors',
+    'settings:aiProvider.connectionTest.batchOpenBatches': 'Open batches',
+    'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
+    'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
+    'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked': 'Pre-execution blocked',
     'settings:aiProvider.runtimeDiagnosticValues.ready': 'Ready',
     'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure': 'Recover partial failure',
     'settings:aiProvider.runtimeDiagnosticValues.yes': 'Yes',
@@ -65,6 +76,42 @@ describe('buildProviderResumePolicyDiagnosticRows', () => {
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.resumeOpenBatches',
+        value: 'batch-1',
+      },
+    ]);
+  });
+});
+
+describe('buildProviderTransactionBatchDiagnosticRows', () => {
+  it('includes batch-boundary guard and reason metadata from provider diagnostics', () => {
+    expect(
+      buildProviderTransactionBatchDiagnosticRows(translate, {
+        status: 'boundary_guarded',
+        batchBoundaryGuard: 'pre_execution_blocked',
+        transactionBatchCount: 0,
+        openTransactionBatchIds: ['batch-1'],
+        boundaryErrorCount: 1,
+        boundaryErrorReasons: ['batch_boundary_violation'],
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchContract',
+        value: 'Boundary guarded',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchBoundaryGuard',
+        value: 'Pre-execution blocked',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchCount',
+        value: '0',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchBoundaryErrors',
+        value: 'Batch boundary violation',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchOpenBatches',
         value: 'batch-1',
       },
     ]);

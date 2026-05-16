@@ -1,6 +1,7 @@
 import type {
   ProviderContractHealth,
   ProviderValidatedRuntimeResumePolicy,
+  ProviderValidatedTransactionBatchContract,
   ProviderValidatedToolLoopContract
 } from '../../shared/types';
 
@@ -75,6 +76,30 @@ export function mapProviderToolLoopContract(
   };
 
   return Object.values(contract).some((field) => field !== undefined)
+    ? contract
+    : undefined;
+}
+
+export function mapProviderTransactionBatchContract(
+  value: unknown
+): ProviderValidatedTransactionBatchContract | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const contract: ProviderValidatedTransactionBatchContract = {
+    status: stringFromUnknown(payload.status),
+    batchBoundaryGuard: stringFromUnknown(payload.batch_boundary_guard),
+    transactionBatchCount: numberFromUnknown(payload.transaction_batch_count),
+    openTransactionBatchIds: arrayFromUnknown(payload.open_transaction_batch_ids),
+    boundaryErrorCount: numberFromUnknown(payload.boundary_error_count),
+    boundaryErrorReasons: arrayFromUnknown(payload.boundary_error_reasons),
+  };
+
+  return Object.values(contract).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
     ? contract
     : undefined;
 }
