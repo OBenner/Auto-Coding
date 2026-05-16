@@ -5199,6 +5199,11 @@ async def test_generic_edit_runtime_rejects_opaque_mutation_inside_open_batch(
     result_artifact = json.loads(
         (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
     )
+    manifest = json.loads(
+        (artifact_dir / "generic_edit_artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
     events = [
         json.loads(line)
         for line in (artifact_dir / "generic_edit_events.jsonl")
@@ -5245,6 +5250,24 @@ async def test_generic_edit_runtime_rejects_opaque_mutation_inside_open_batch(
         and event["requires_user_action"] is True
         for event in events
     )
+    manifest_boundary_event = next(
+        event
+        for event in manifest["recovery_timeline"]
+        if event.get("tool") == "run_command"
+        and event.get("timeline_stage") == "batch_boundary_blocked"
+    )
+    assert manifest_boundary_event["batch_boundary_error_reason"] == (
+        "opaque_batch_mutation"
+    )
+    assert manifest_boundary_event["preferred_strategy"] == "abort_batch"
+    assert manifest_boundary_event["required_next_action_kinds"] == [
+        "abort_batch",
+        "repair_mutation",
+    ]
+    assert manifest_boundary_event["resolution_strategies"] == [
+        "abort_batch",
+        "repair_mutation",
+    ]
 
 
 @pytest.mark.asyncio

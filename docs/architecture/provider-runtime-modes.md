@@ -353,7 +353,8 @@ Auto Code validates and executes these actions locally:
   workspace, opaque workspace commands such as `run_command` are rejected while
   a batch is open because they cannot produce staged mutation snapshots,
   `finish` is rejected while a batch is still open, and open-batch state plus
-  batch-boundary guard status are preserved in the recovery checkpoint and
+  batch-boundary guard status, boundary reasons, and suggested recovery actions
+  are preserved in the recovery checkpoint, artifact manifest timeline, and
   provider smoke diagnostics;
 - interrupted or partial runs persist `generic_edit_session_state.json`,
   `generic_edit_recovery_checkpoint.json`, `generic_edit_mutation_snapshots.json`,

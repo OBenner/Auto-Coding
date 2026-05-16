@@ -377,6 +377,12 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "previous_stop_reason",
     "preferred_strategy",
     "next_action_count",
+    "batch_boundary_error",
+    "batch_boundary_error_reason",
+    "blocked_tool",
+    "blocked_transaction_group_ids",
+    "required_next_action_kinds",
+    "resolution_strategies",
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_STAGES = frozenset(
     {
@@ -1625,6 +1631,15 @@ class GenericEditRuntimeSession:
                 "batch_boundary_error_reason": "opaque_batch_mutation",
                 "batch_isolation_error": True,
                 "blocked_tool": tool,
+                "preferred_strategy": ABORT_BATCH_TOOL,
+                "required_next_action_kinds": [
+                    ABORT_BATCH_TOOL,
+                    REPAIR_MUTATION_TOOL,
+                ],
+                "resolution_strategies": [
+                    ABORT_BATCH_TOOL,
+                    REPAIR_MUTATION_TOOL,
+                ],
             },
         )
 
@@ -7286,6 +7301,16 @@ def build_generic_edit_action_event(
         )
         event["blocked_transaction_group_ids"] = normalize_string_list(
             data.get("blocked_transaction_group_ids")
+        )
+        if data.get("blocked_tool"):
+            event["blocked_tool"] = str(data["blocked_tool"])
+        if data.get("preferred_strategy"):
+            event["preferred_strategy"] = str(data["preferred_strategy"])
+        event["required_next_action_kinds"] = normalize_string_list(
+            data.get("required_next_action_kinds")
+        )
+        event["resolution_strategies"] = normalize_string_list(
+            data.get("resolution_strategies")
         )
     if data.get("rollback_available") is not None:
         event["rollback_available"] = bool(data["rollback_available"])
