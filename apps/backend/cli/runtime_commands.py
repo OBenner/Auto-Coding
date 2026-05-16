@@ -626,9 +626,20 @@ def format_generic_edit_resume_preflight_text(payload: dict[str, Any]) -> str:
                 f"  reason: {blocker.get('reason', 'unknown')}",
             ]
         )
-        for key in ("artifact_name", "path", "owner_artifact", "owner_path"):
+        for key in (
+            "artifact_name",
+            "path",
+            "owner_artifact",
+            "owner_path",
+            "expected_path",
+            "actual_path",
+        ):
             value = blocker.get(key)
             if isinstance(value, str) and value:
+                sections.append(f"  {key}: {value}")
+        for key in ("line_number", "expected_count", "actual_count"):
+            value = blocker.get(key)
+            if isinstance(value, int):
                 sections.append(f"  {key}: {value}")
         for key in (
             "missing_snapshot_ids",

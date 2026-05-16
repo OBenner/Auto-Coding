@@ -413,6 +413,32 @@ def test_generic_edit_resume_preflight_command_formats_blocker_details():
     assert "missing_snapshot_ids: mutation-missing" in text
 
 
+def test_generic_edit_resume_preflight_command_formats_numeric_blocker_details():
+    from cli.runtime_commands import format_generic_edit_resume_preflight_text
+
+    text = format_generic_edit_resume_preflight_text(
+        {
+            "runtime": "generic_edit",
+            "status": "blocked",
+            "requested_path": "/workspace/spec/artifacts/generic_edit_recovery_checkpoint.json",
+            "resume_artifact_health": {
+                "status": "blocked",
+                "artifact": "events",
+                "reason": "corrupt_json",
+                "path": "/workspace/spec/artifacts/generic_edit_events.jsonl",
+                "line_number": 7,
+                "expected_count": 1,
+                "actual_count": 2,
+            },
+            "artifacts": {},
+        }
+    )
+
+    assert "line_number: 7" in text
+    assert "expected_count: 1" in text
+    assert "actual_count: 2" in text
+
+
 def test_external_mcp_smoke_command_outputs_json(
     capsys,
     monkeypatch,
