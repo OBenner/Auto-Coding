@@ -571,7 +571,7 @@ def _emit_install_dry_run(
     target_dir: Path,
     warnings: list[str],
     json_output: bool,
-) -> int:
+) -> None:
     if json_output:
         _emit_json(
             {
@@ -582,13 +582,12 @@ def _emit_install_dry_run(
                 "warnings": warnings,
             }
         )
-        return 0
+        return
 
     print(f"[DRY RUN] Would install plugin: {metadata.name} v{metadata.version}")
     print(f"  Source: {source_dir}")
     print(f"  Target: {target_dir}")
     print(f"  Description: {metadata.description}")
-    return 0
 
 
 def _prepare_plugin_target(target_dir: Path, plugin_name: str, force: bool) -> bool:
@@ -638,7 +637,7 @@ def _validate_installed_plugin(
 
 def _emit_install_success(
     metadata, target_dir: Path, warnings: list[str], json_output: bool
-) -> int:
+) -> None:
     if json_output:
         _emit_json(
             {
@@ -648,13 +647,12 @@ def _emit_install_success(
                 "warnings": warnings,
             }
         )
-        return 0
+        return
 
     print(f"✓ Plugin '{metadata.name}' v{metadata.version} installed successfully")
     print(f"  Location: {target_dir}")
     print(f"  Description: {metadata.description}")
     print(f"\nEnable the plugin with: python plugins/cli.py enable {metadata.name}")
-    return 0
 
 
 def _install_from_path(
@@ -698,9 +696,10 @@ def _install_from_path(
         target_dir = loader.user_plugins_dir / metadata.name
 
         if dry_run:
-            return _emit_install_dry_run(
+            _emit_install_dry_run(
                 metadata, source_dir, target_dir, warnings, json_output
             )
+            return 0
 
         if not _prepare_plugin_target(target_dir, metadata.name, force):
             return 1
@@ -711,7 +710,8 @@ def _install_from_path(
         if not _validate_installed_plugin(loader, target_dir, metadata.name):
             return 1
 
-        return _emit_install_success(metadata, target_dir, warnings, json_output)
+        _emit_install_success(metadata, target_dir, warnings, json_output)
+        return 0
 
     except PluginLoadError as e:
         logger.error(f"Failed to load plugin: {e}")
