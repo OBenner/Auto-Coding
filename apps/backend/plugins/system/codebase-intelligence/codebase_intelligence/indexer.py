@@ -6,9 +6,9 @@ import hashlib
 import json
 import os
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 from .extractors import (
     SUPPORTED_EXTENSIONS,
@@ -16,7 +16,7 @@ from .extractors import (
     extract_python_file,
     extract_typescript_file,
 )
-from .models import CodeDependency, CodeFile, CodebaseIndex
+from .models import CodebaseIndex, CodeDependency, CodeFile
 from .packages import discover_package_dependencies, discover_package_manifests
 
 SKIP_DIRS = {

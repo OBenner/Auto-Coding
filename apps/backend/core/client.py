@@ -629,10 +629,10 @@ def load_plugin_mcp_integrations(
         Example: ({"my-plugin-integration": <server>}, ["mcp__..."])
     """
     try:
+        from claude_agent_sdk import create_sdk_mcp_server
         from plugins.base import PluginType
         from plugins.registry import PluginRegistry
         from plugins.sdk.integration import IntegrationContext, IntegrationPlugin
-        from claude_agent_sdk import create_sdk_mcp_server
     except ImportError:
         logger.debug("Plugin system not available")
         return {}, []

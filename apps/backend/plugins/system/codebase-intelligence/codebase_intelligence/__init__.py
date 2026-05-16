@@ -3,11 +3,11 @@
 from .graph_export import GraphDataset
 from .indexer import CodebaseIndexer
 from .models import (
+    CodebaseIndex,
     CodeDependency,
     CodeFile,
     CodeReference,
     CodeSymbol,
-    CodebaseIndex,
     PackageDependency,
 )
 
