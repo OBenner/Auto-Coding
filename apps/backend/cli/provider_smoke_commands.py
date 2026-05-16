@@ -37,7 +37,9 @@ DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_PROMPT = (
     f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}, then finish with a short "
     "summary. Do not edit any other file."
 )
-DEFAULT_PROVIDER_MINI_PIPELINE_TASK = "Implement slugify(value: str) in string_tools.py."
+DEFAULT_PROVIDER_MINI_PIPELINE_TASK = (
+    "Implement slugify(value: str) in string_tools.py."
+)
 DEFAULT_PROVIDER_MINI_PIPELINE_TEST_COMMAND = "python -m unittest -q"
 DEFAULT_PROVIDER_MINI_PIPELINE_PLANNER_PROMPT = (
     "Plan a tiny Auto Code readiness task for a provider pipeline smoke check.\n\n"
@@ -70,18 +72,17 @@ DEFAULT_PROVIDER_MINI_PIPELINE_REVIEW_PROMPT = (
     "Reply with one short sentence stating whether the mini task is ready."
 )
 MINI_PIPELINE_INITIAL_STRING_TOOLS = (
-    "def normalize_space(value: str) -> str:\n"
-    "    return \" \".join(value.split())\n"
+    'def normalize_space(value: str) -> str:\n    return " ".join(value.split())\n'
 )
 MINI_PIPELINE_TEST_FILE = (
     "import unittest\n\n"
     "from string_tools import slugify\n\n\n"
     "class SlugifyTests(unittest.TestCase):\n"
     "    def test_slugifies_mixed_text(self):\n"
-    "        self.assertEqual(slugify(\"  Hello, Auto Code!  \"), \"hello-auto-code\")\n\n"
+    '        self.assertEqual(slugify("  Hello, Auto Code!  "), "hello-auto-code")\n\n'
     "    def test_trims_repeated_separators(self):\n"
-    "        self.assertEqual(slugify(\"---Already  Sluggy---\"), \"already-sluggy\")\n\n\n"
-    "if __name__ == \"__main__\":\n"
+    '        self.assertEqual(slugify("---Already  Sluggy---"), "already-sluggy")\n\n\n'
+    'if __name__ == "__main__":\n'
     "    unittest.main()\n"
 )
 DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS = 30.0
@@ -489,9 +490,7 @@ def _provider_health_from_mini_pipeline(
     }
     execution = runtime_diagnostics.get("validated_runtime_execution")
     contract = (
-        execution.get("tool_loop_contract")
-        if isinstance(execution, dict)
-        else None
+        execution.get("tool_loop_contract") if isinstance(execution, dict) else None
     )
     if isinstance(contract, dict):
         for source_key, target_key in (
@@ -1195,7 +1194,7 @@ async def _run_mini_pipeline_tests(
             process.communicate(),
             timeout=max(1.0, min(timeout_seconds, 15.0)),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         process.kill()
         await process.wait()
         return 124, "Mini pipeline unit tests timed out."
@@ -1209,7 +1208,10 @@ async def _run_mini_pipeline_tests(
 
 
 def _mini_pipeline_changed_files(string_tools_path: Path) -> list[str]:
-    if string_tools_path.read_text(encoding="utf-8") == MINI_PIPELINE_INITIAL_STRING_TOOLS:
+    if (
+        string_tools_path.read_text(encoding="utf-8")
+        == MINI_PIPELINE_INITIAL_STRING_TOOLS
+    ):
         return []
     return ["string_tools.py"]
 
