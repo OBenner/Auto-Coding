@@ -10,6 +10,8 @@ from plugins.base import PluginType
 from plugins.registry import PluginRegistry
 from plugins.sdk.integration import IntegrationContext
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
 
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -115,7 +117,7 @@ def _load_codebase_intelligence_plugin(project: Path):
     PluginRegistry.reset_instance()
     registry = PluginRegistry.get_instance(
         user_plugins_dir=project / ".auto-claude" / "plugins" / "user",
-        system_plugins_dir=Path("apps/backend/plugins/system").resolve(),
+        system_plugins_dir=REPO_ROOT / "apps" / "backend" / "plugins" / "system",
         project_dir=project,
     )
     registry.load_all_plugins()

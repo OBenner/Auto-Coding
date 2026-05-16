@@ -24,6 +24,8 @@ AUTH_TOKEN_ENV_VARS = [
     "ANTHROPIC_AUTH_TOKEN",
 ]
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
 
 def _stub_project_context(monkeypatch):
     """Avoid importing heavyweight project-context dependencies in client tests."""
@@ -185,7 +187,7 @@ class TestClientPluginMCPWiring:
         PluginRegistry.reset_instance()
         PluginRegistry.get_instance(
             user_plugins_dir=tmp_path / ".auto-claude" / "plugins" / "user",
-            system_plugins_dir=Path("apps/backend/plugins/system").resolve(),
+            system_plugins_dir=REPO_ROOT / "apps" / "backend" / "plugins" / "system",
             project_dir=tmp_path,
         )
 
