@@ -1,6 +1,7 @@
 import type {
   ProviderContractHealth,
   ProviderE2eSuiteDiagnostics,
+  ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
@@ -208,5 +209,27 @@ export function mapProviderE2eSuite(
     Array.isArray(field) ? field.length > 0 : field !== undefined
   )
     ? suite
+    : undefined;
+}
+
+export function mapProviderNegativeFixtures(
+  value: unknown
+): ProviderNegativeFixtureDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const fixtures: ProviderNegativeFixtureDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    provider: stringFromUnknown(payload.provider),
+    source: stringFromUnknown(payload.source),
+    coveredCases: arrayFromUnknown(payload.covered_cases),
+  };
+
+  return Object.values(fixtures).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? fixtures
     : undefined;
 }

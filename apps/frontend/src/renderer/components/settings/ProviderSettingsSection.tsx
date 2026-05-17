@@ -26,6 +26,7 @@ import type {
   ProviderConfigValidation,
   ProviderConnectionTestResult,
   ProviderE2eSuiteDiagnostics,
+  ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderRuntimeDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
@@ -33,8 +34,10 @@ import type {
   RuntimeControlPlaneDiagnostics,
   RuntimeExternalMcpSmokeResult,
   RuntimeExternalMcpHealthRow,
+  RuntimeEvalMatrixRow,
   RuntimeFallbackMatrixRow,
   RuntimeMcpBridgePlanRow,
+  RuntimePolicyMatrixRow,
   RuntimeSubagentMatrixRow
 } from '../../../shared/types/settings';
 
@@ -240,6 +243,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
   model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
+  must_use_full_runtime: 'settings:aiProvider.runtimeDiagnosticValues.mustUseFullRuntime',
   mini_pipeline: 'settings:aiProvider.runtimeDiagnosticValues.miniPipeline',
   mini_pipeline_blocked: 'settings:aiProvider.runtimeDiagnosticValues.miniPipelineBlocked',
   mini_pipeline_ready: 'settings:aiProvider.runtimeDiagnosticValues.miniPipelineReady',
@@ -271,12 +275,17 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
   provider_error: 'settings:aiProvider.runtimeDiagnosticValues.providerError',
   provider_e2e: 'settings:aiProvider.runtimeDiagnosticValues.providerE2e',
+  provider_e2e_suite: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eSuite',
+  provider_adapter_negative_fixture:
+    'settings:aiProvider.runtimeDiagnosticValues.providerAdapterNegativeFixture',
   provider_e2e_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eBlocked',
   provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired',
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
   provider_smoke_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeBlocked',
   provider_smoke_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeReady',
   pre_execution_blocked: 'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked',
+  prefer_analysis_only: 'settings:aiProvider.runtimeDiagnosticValues.preferAnalysisOnly',
+  prefer_generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.preferGenericEdit',
   planner: 'settings:aiProvider.runtimeDiagnosticValues.planner',
   qwen_code: 'settings:aiProvider.runtimeDiagnosticValues.qwenCode',
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
@@ -694,6 +703,76 @@ export function buildProviderE2eSuiteDiagnosticRows(
     },
   ];
   return rows.filter((row) => row.value);
+}
+
+export function buildProviderNegativeFixtureDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  fixtures?: ProviderNegativeFixtureDiagnostics | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!fixtures) {
+    return [];
+  }
+  const status = formatRuntimeDiagnosticValue(translate, fixtures.status);
+  const source = formatRuntimeDiagnosticValue(translate, fixtures.source);
+  const summaryValue = [status, fixtures.provider, source].filter(Boolean).join(' - ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerNegativeFixtures',
+      value: summaryValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerNegativeFixtureCases',
+      value: formatRuntimeDiagnosticList(translate, fixtures.coveredCases),
+    },
+  ].filter((row) => row.value);
+}
+
+export function buildRuntimePolicyDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  rows?: RuntimePolicyMatrixRow[] | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!rows?.length) {
+    return [];
+  }
+  const value = rows
+    .map((row) => {
+      const phase = formatRuntimeDiagnosticValue(translate, row.phase);
+      const selected = formatRuntimeDiagnosticValue(translate, row.selected_runtime_mode);
+      const policy = formatRuntimeDiagnosticValue(translate, row.policy);
+      const runners = formatRuntimeDiagnosticList(translate, row.runner_candidates);
+      const suffix = [policy, runners].filter(Boolean).join(', ');
+      return `${phase}: ${selected}${suffix ? ` (${suffix})` : ''}`;
+    })
+    .join('; ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.controlPlane.runtimePolicy',
+      value,
+    },
+  ];
+}
+
+export function buildRuntimeEvalDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  rows?: RuntimeEvalMatrixRow[] | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!rows?.length) {
+    return [];
+  }
+  const value = rows
+    .map((row) => {
+      const caseId = formatRuntimeDiagnosticValue(translate, row.case_id);
+      const runtime = formatRuntimeDiagnosticValue(translate, row.runtime_mode);
+      const artifacts = formatRuntimeDiagnosticList(translate, row.required_artifacts);
+      return `${caseId}: ${runtime}${artifacts ? ` (${artifacts})` : ''}`;
+    })
+    .join('; ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.controlPlane.runtimeEval',
+      value,
+    },
+  ];
 }
 
 export function buildProviderTransactionBatchDiagnosticRows(
@@ -1278,6 +1357,16 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
     const subagentMergePolicy = subagentRow
       ? formatControlPlaneValue(subagentRow.merge_policy)
       : noneLabel;
+    const runtimePolicyRows = buildRuntimePolicyDiagnosticRows(
+      t,
+      runtimeControlPlaneDiagnostics?.runtime_policy_matrix?.filter(
+        (row) => row.provider === config.provider
+      )
+    );
+    const runtimeEvalRows = buildRuntimeEvalDiagnosticRows(
+      t,
+      runtimeControlPlaneDiagnostics?.runtime_eval_matrix
+    );
 
     let controlPlaneContent: ReactNode;
     if (runtimeControlPlaneLoading && !runtimeControlPlaneDiagnostics) {
@@ -1444,6 +1533,26 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   {formatControlPlaneList(subagentRow?.required_capabilities)}
                 </dd>
               </div>
+            </dl>
+          </div>
+
+          <div className="rounded-md border border-border bg-background p-3 xl:col-span-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              {t('settings:aiProvider.controlPlane.policyTitle')}
+            </h4>
+            <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              {runtimePolicyRows.map((row) => (
+                <div key={row.labelKey}>
+                  <dt>{t(row.labelKey)}</dt>
+                  <dd className="font-medium text-foreground">{row.value}</dd>
+                </div>
+              ))}
+              {runtimeEvalRows.map((row) => (
+                <div key={row.labelKey}>
+                  <dt>{t(row.labelKey)}</dt>
+                  <dd className="font-medium text-foreground">{row.value}</dd>
+                </div>
+              ))}
             </dl>
           </div>
         </div>
@@ -1657,6 +1766,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeDiagnostics?.providerE2eSuite
     );
+    const providerNegativeFixtureRows = buildProviderNegativeFixtureDiagnosticRows(
+      t,
+      runtimeDiagnostics?.providerNegativeFixtures
+    );
     const reliabilityRows = buildProviderReliabilityDiagnosticRows(
       t,
       runtimeDiagnostics?.providerReliability
@@ -1768,6 +1881,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 value={missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
               />
               {providerE2eRows.map((row) => (
+                <RuntimeDiagnosticRow
+                  key={row.labelKey}
+                  label={t(row.labelKey)}
+                  value={row.value}
+                />
+              ))}
+              {providerNegativeFixtureRows.map((row) => (
                 <RuntimeDiagnosticRow
                   key={row.labelKey}
                   label={t(row.labelKey)}

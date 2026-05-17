@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   mapProviderContractHealth,
   mapProviderE2eSuite,
+  mapProviderNegativeFixtures,
   mapProviderReliability,
   mapProviderRuntimeResumePolicy,
   mapProviderTransactionBatchContract,
@@ -232,5 +233,28 @@ describe('mapProviderE2eSuite', () => {
 
   it('returns undefined for empty provider e2e suite payloads', () => {
     expect(mapProviderE2eSuite({})).toBeUndefined();
+  });
+});
+
+describe('mapProviderNegativeFixtures', () => {
+  it('maps safe provider negative fixture coverage fields', () => {
+    expect(
+      mapProviderNegativeFixtures({
+        status: 'passed',
+        provider: 'openai',
+        source: 'provider_adapter_negative_fixture',
+        covered_cases: ['unsupported_tools', 'gateway_model_limitations', null],
+        ignored_private_path: 'workspace-private/provider-fixture.json',
+      })
+    ).toEqual({
+      status: 'passed',
+      provider: 'openai',
+      source: 'provider_adapter_negative_fixture',
+      coveredCases: ['unsupported_tools', 'gateway_model_limitations'],
+    });
+  });
+
+  it('returns undefined for empty provider negative fixture payloads', () => {
+    expect(mapProviderNegativeFixtures({})).toBeUndefined();
   });
 });

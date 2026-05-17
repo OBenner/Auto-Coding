@@ -384,14 +384,24 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
     assert result.runtime_diagnostics["provider_e2e_negative_probes"] == {
         "unsupported_tools": {
             "status": "passed",
-            "source": "provider_e2e_negative_probe",
+            "source": "provider_adapter_negative_fixture",
             "reason": "unsupported_tools",
+            "fixture_provider": "openai",
+            "fixture_surface": "openai_compat",
         },
         "gateway_model_limitations": {
             "status": "passed",
-            "source": "provider_e2e_negative_probe",
+            "source": "provider_adapter_negative_fixture",
             "reason": "gateway_error",
+            "fixture_provider": "openai",
+            "fixture_surface": "openai_compat",
         },
+    }
+    assert result.runtime_diagnostics["provider_e2e_negative_fixtures"] == {
+        "status": "passed",
+        "provider": "openai",
+        "source": "provider_adapter_negative_fixture",
+        "covered_cases": ["unsupported_tools", "gateway_model_limitations"],
     }
     reliability = result.runtime_diagnostics["provider_reliability"]
     assert reliability["status"] == "complete"
@@ -403,35 +413,29 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         {
             "case": "unsupported_tools",
             "status": "passed",
-            "source": "provider_e2e_negative_probe",
+            "source": "provider_adapter_negative_fixture",
         },
         {
             "case": "gateway_model_limitations",
             "status": "passed",
-            "source": "provider_e2e_negative_probe",
+            "source": "provider_adapter_negative_fixture",
         },
     ]
 
 
-def test_provider_reliability_diagnostics_marks_negative_probes_covered():
-    from cli.provider_smoke_commands import _with_provider_contract_health
+def test_provider_reliability_diagnostics_marks_negative_fixtures_covered():
+    from cli.provider_smoke_commands import (
+        _provider_e2e_negative_fixture_payload,
+        _with_provider_contract_health,
+    )
 
     diagnostics = _with_provider_contract_health(
         {
             "provider": "openai",
             "smoke_scope": "direct_api_full_autonomy_e2e",
-            "provider_e2e_negative_probes": {
-                "unsupported_tools": {
-                    "status": "passed",
-                    "source": "provider_e2e_negative_probe",
-                    "reason": "unsupported_tools",
-                },
-                "gateway_model_limitations": {
-                    "status": "passed",
-                    "source": "provider_e2e_negative_probe",
-                    "reason": "gateway_error",
-                },
-            },
+            "provider_e2e_negative_probes": _provider_e2e_negative_fixture_payload(
+                "openai"
+            ),
         },
         success=True,
     )
@@ -441,14 +445,43 @@ def test_provider_reliability_diagnostics_marks_negative_probes_covered():
         {
             "case": "unsupported_tools",
             "status": "passed",
-            "source": "provider_e2e_negative_probe",
+            "source": "provider_adapter_negative_fixture",
         },
         {
             "case": "gateway_model_limitations",
             "status": "passed",
-            "source": "provider_e2e_negative_probe",
+            "source": "provider_adapter_negative_fixture",
         },
     ]
+
+
+def test_provider_e2e_negative_fixtures_cover_all_direct_api_providers():
+    from cli.provider_smoke_commands import (
+        PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
+        _provider_e2e_negative_fixture_payload,
+    )
+
+    for provider_name in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        probes = _provider_e2e_negative_fixture_payload(provider_name)
+
+        assert probes == {
+            "unsupported_tools": {
+                "status": "passed",
+                "source": "provider_adapter_negative_fixture",
+                "reason": "unsupported_tools",
+                "fixture_provider": provider_name,
+                "fixture_surface": probes["unsupported_tools"]["fixture_surface"],
+            },
+            "gateway_model_limitations": {
+                "status": "passed",
+                "source": "provider_adapter_negative_fixture",
+                "reason": "gateway_error",
+                "fixture_provider": provider_name,
+                "fixture_surface": probes["gateway_model_limitations"][
+                    "fixture_surface"
+                ],
+            },
+        }
 
 
 @pytest.mark.asyncio

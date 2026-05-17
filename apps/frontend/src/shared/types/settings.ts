@@ -489,6 +489,7 @@ export interface ProviderRuntimeDiagnostics {
   validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
   miniPipeline?: ProviderMiniPipelineDiagnostics | null;
   providerE2eSuite?: ProviderE2eSuiteDiagnostics;
+  providerNegativeFixtures?: ProviderNegativeFixtureDiagnostics;
   providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
@@ -608,6 +609,13 @@ export interface ProviderE2eSuiteRun {
   reason?: string;
 }
 
+export interface ProviderNegativeFixtureDiagnostics {
+  status?: string;
+  provider?: string;
+  source?: string;
+  coveredCases?: string[];
+}
+
 export interface ProviderConnectionTestResult {
   success: boolean;
   provider: AIEngineProvider | string;
@@ -723,10 +731,34 @@ export interface RuntimeSubagentMatrixRow {
   artifact_support: boolean;
 }
 
+export interface RuntimePolicyMatrixRow {
+  phase: string;
+  provider: string;
+  required_runtime_mode: string;
+  selected_runtime_mode: string;
+  fallback_allowed: boolean;
+  fallback_modes: string[];
+  requires_full_autonomous: boolean;
+  requires_cli_runner: boolean;
+  runner_candidates: string[];
+  policy: string;
+  reason: string;
+}
+
+export interface RuntimeEvalMatrixRow {
+  case_id: string;
+  runtime_mode: string;
+  required_for_full_autonomous: boolean;
+  providers: string[];
+  required_artifacts: string[];
+}
+
 export interface RuntimeControlPlaneDiagnostics {
   runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
   mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
   external_mcp_server_health?: RuntimeExternalMcpHealthRow[];
   runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
+  runtime_policy_matrix?: RuntimePolicyMatrixRow[];
+  runtime_eval_matrix?: RuntimeEvalMatrixRow[];
   recommendations?: Record<string, string>;
 }

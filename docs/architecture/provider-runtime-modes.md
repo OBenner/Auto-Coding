@@ -160,17 +160,20 @@ and now adds a recovery exercise: it creates a recoverable partial edit, checks
 the resume preflight, resumes from the generated checkpoint, and requires the
 recovery result to resolve cleanly before reporting `mini_pipeline_ready`.
 `provider_e2e` runs the direct-provider e2e suite: the `generic_edit` smoke,
-the mini pipeline smoke, and deterministic negative classification probes for
-unsupported tools plus gateway/model limitations are executed for the configured
-provider, then merged into one `provider_e2e_suite` and `provider_reliability`
-payload.
+the mini pipeline smoke, and provider-specific negative fixtures for unsupported
+tools plus gateway/model limitations are executed for the configured provider,
+then merged into one `provider_e2e_suite`, `provider_e2e_negative_fixtures`, and
+`provider_reliability` payload.
 The JSON diagnostics also include `provider_reliability`: a direct-provider
 coverage matrix for the full-autonomy e2e cases. It marks observed cases such
 as text completion, generic edit tool loop, native tool calls, tool results, and
 recovery loop. In `provider_e2e`, the unsupported-tool and gateway/model cases
-are covered by classifier probes; they prove the runtime surfaces the right
-fallback reason, but they are not a substitute for intentionally exercising
-real provider/gateway failures.
+are covered by provider adapter/gateway fixtures for OpenAI, Google/Gemini,
+OpenRouter, LiteLLM, ZhipuAI, and Ollama; they prove the configured direct
+provider surfaces the right fallback reason at the adapter boundary. Live
+external fault-injection against real provider accounts remains optional because
+it depends on credentials, model availability, and gateway behavior outside the
+repository.
 
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
@@ -202,6 +205,17 @@ CLI runner; that remains a separate runner-router decision.
 The `--runtime-modes` command also exposes a `runtime_fallback_matrix` payload.
 It shows the fail-fast selected mode, opt-in fallback selected mode, compatible
 degraded modes, and runner candidates for each provider/runtime pair.
+
+The same payload now includes two policy/eval contracts:
+
+- `runtime_policy_matrix` states which runtime each provider may use for
+  planner, coder, QA reviewer, and QA fixer phases, whether fallback is allowed,
+  and which CLI full-runtime candidates are required when a direct provider
+  cannot satisfy a full-autonomous phase.
+- `runtime_eval_matrix` lists the smoke/eval cases that must stay green before a
+  runtime/provider path can be treated as full autonomous: provider e2e,
+  generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts,
+  and CLI full-runtime artifacts.
 
 The Electron provider settings screen consumes the same JSON payload through
 the `provider:runtime:diagnostics` IPC channel. Its runtime control plane panel
@@ -257,12 +271,12 @@ Last updated: 2026-05-17.
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
 | Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, batch boundary guards, pre-execution staged isolation guards for opaque open-batch mutations, mutation snapshots, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing artifact preflight blockers, recovery-plan artifact health checks, artifact manifest transaction batches, manifest/checkpoint consistency checks, manifest recovery-timeline/resume-policy drift guards, trace/session/manifest counter drift checks, unified resume artifact consistency across trace, checkpoint, session state, manifest, mutation snapshots, and transaction batch state, and rich runtime events are implemented. | Harden non-happy-path recovery further for true staged apply isolation and UI-driven repair/rollback workflows. |
-| Provider reliability | Partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, transaction batch contract, boundary guards, and open transaction batches. `--provider-smoke --provider-smoke-runtime mini_pipeline` runs a planner/coder/test/reviewer flow plus a checkpoint preflight/resume recovery loop and reports `recovery_loop_status`. `--provider-smoke --provider-smoke-runtime provider_e2e` now runs the direct-provider e2e suite, adds deterministic unsupported-tool and gateway/model classifier probes, and merges child results into `provider_e2e_suite` and `provider_reliability`; the settings UI surfaces both. | Add real provider/gateway negative fixtures for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama so unsupported tools and gateway/model limitations are exercised against actual adapters, not only classifier probes. |
+| Provider reliability | Strong partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, transaction batch contract, boundary guards, and open transaction batches. `--provider-smoke --provider-smoke-runtime mini_pipeline` runs a planner/coder/test/reviewer flow plus a checkpoint preflight/resume recovery loop and reports `recovery_loop_status`. `--provider-smoke --provider-smoke-runtime provider_e2e` now runs the direct-provider e2e suite, adds provider-specific unsupported-tool and gateway/model negative fixtures for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama, and merges child results into `provider_e2e_suite`, `provider_e2e_negative_fixtures`, and `provider_reliability`; the settings UI surfaces all three. | Add optional live fault-injection fixtures for real external accounts/gateways when credentials are available, then persist provider-specific run history so regressions are visible across sessions. |
 | MCP Bridge v1 | Partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, permission/audit metadata, unavailable-tool observations, and readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers are represented. | Generalize execution beyond Context7, enforce permissions at every bridge boundary, normalize arbitrary live schemas/results, reuse external sessions safely, and make custom MCP server lifecycle failures first-class. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, and read-only merge plans. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, and policy gates before enabling mutable subagents. |
 | CLI runtimes as full runtime class | Partial | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners. | Wire Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs to the same `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata contract. |
 | Frontend runtime control plane | Partial | Provider settings show runtime diagnostics, MCP bridge status, provider smoke results, tool-loop contract, transaction batch contract, resume policy, transaction batches in Generic Edit artifacts, recovery timeline, and open-batch resume state. | Consolidate live capability matrix, runtime health, MCP availability, executable tools, warnings for incompatible settings, cost estimates, provider test controls, and artifact viewers into one operator-grade surface. |
-| Policy and evals | Early | Runtime recommendations and compatibility diagnostics exist. | Add policy rules for planner/coder/QA runtime selection, allowed fallback cases, when Claude/Codex full autonomy is required, comparative evals across Claude/Codex/OpenAI/Gemini/Ollama, and cost/quality/safety reporting. |
+| Policy and evals | Partial | Runtime recommendations, compatibility diagnostics, `runtime_policy_matrix` for planner/coder/QA phase selection, and `runtime_eval_matrix` for provider e2e, generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts, and CLI full-runtime artifacts are implemented. | Add persisted comparative eval results across Claude/Codex/OpenAI/Gemini/Ollama and cost/quality/safety reporting from real runs. |
 
 The practical rule remains: a direct API provider is not `full_autonomous` until
 it can reliably run the whole tool loop, preserve transactional recovery state,

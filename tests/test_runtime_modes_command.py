@@ -93,6 +93,8 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "MCP Bridge Plan Matrix" in output
     assert "External MCP Client Health" in output
     assert "Subagent Orchestrator Matrix" in output
+    assert "Runtime Policy Matrix" in output
+    assert "Runtime Eval Matrix" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
     assert "opencode" in output
@@ -154,6 +156,49 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert "external_mcp_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+    assert policy_rows[("planner", "openai")] == {
+        "phase": "planner",
+        "provider": "openai",
+        "required_runtime_mode": "full_autonomous",
+        "selected_runtime_mode": "blocked",
+        "fallback_allowed": False,
+        "fallback_modes": [],
+        "requires_full_autonomous": True,
+        "requires_cli_runner": True,
+        "runner_candidates": [
+            "codex_cli",
+            "claude_code",
+            "zai_claude_code",
+        ],
+        "policy": "must_use_full_runtime",
+        "reason": "planner_requires_workspace_tools",
+    }
+    assert policy_rows[("coder", "openai")]["selected_runtime_mode"] == "generic_edit"
+    assert (
+        policy_rows[("qa_reviewer", "openai")]["selected_runtime_mode"]
+        == "analysis_only"
+    )
+    assert (
+        policy_rows[("qa_fixer", "openai")]["selected_runtime_mode"] == "generic_edit"
+    )
+    eval_rows = {row["case_id"]: row for row in payload["runtime_eval_matrix"]}
+    assert eval_rows["provider_e2e"]["runtime_mode"] == "provider_e2e"
+    assert eval_rows["provider_e2e"]["required_for_full_autonomous"] is True
+    assert eval_rows["provider_e2e"]["providers"] == [
+        "openai",
+        "google",
+        "openrouter",
+        "litellm",
+        "zhipuai",
+        "ollama",
+    ]
+    assert eval_rows["subagent_orchestrator"]["required_artifacts"] == [
+        "runtime_subagents.json",
+        "runtime_subagents__<child>.json",
+    ]
     external_health = {
         row["server"]: row for row in payload["external_mcp_server_health"]
     }

@@ -5,9 +5,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildProviderE2eSuiteDiagnosticRows,
+  buildProviderNegativeFixtureDiagnosticRows,
   buildProviderReliabilityDiagnosticRows,
   buildProviderResumePolicyDiagnosticRows,
-  buildProviderTransactionBatchDiagnosticRows
+  buildProviderTransactionBatchDiagnosticRows,
+  buildRuntimeEvalDiagnosticRows,
+  buildRuntimePolicyDiagnosticRows
 } from './ProviderSettingsSection';
 
 const translate = (key: string) =>
@@ -37,9 +40,15 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.reliabilityCases': 'Reliability cases',
     'settings:aiProvider.connectionTest.providerE2eSuite': 'Provider e2e suite',
     'settings:aiProvider.connectionTest.providerE2eRuns': 'Provider e2e runs',
+    'settings:aiProvider.connectionTest.providerNegativeFixtures': 'Provider negative fixtures',
+    'settings:aiProvider.connectionTest.providerNegativeFixtureCases': 'Negative fixture cases',
+    'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
+    'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
+    'settings:aiProvider.runtimeDiagnosticValues.blocked': 'Blocked',
+    'settings:aiProvider.runtimeDiagnosticValues.coder': 'Coder',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
     'settings:aiProvider.runtimeDiagnosticValues.failed': 'Failed',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
@@ -56,6 +65,13 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.miniPipeline': 'Mini pipeline',
     'settings:aiProvider.runtimeDiagnosticValues.passed': 'Passed',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2e': 'Provider e2e',
+    'settings:aiProvider.runtimeDiagnosticValues.providerAdapterNegativeFixture':
+      'Provider adapter negative fixture',
+    'settings:aiProvider.runtimeDiagnosticValues.codexCli': 'Codex CLI',
+    'settings:aiProvider.runtimeDiagnosticValues.mustUseFullRuntime': 'Must use full runtime',
+    'settings:aiProvider.runtimeDiagnosticValues.preferGenericEdit': 'Prefer generic edit',
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2eSuite': 'Provider e2e suite',
+    'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedTools': 'Unsupported tools',
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedToolsProbe': 'Unsupported tools probe',
@@ -105,6 +121,70 @@ describe('buildProviderResumePolicyDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.resumeOpenBatches',
         value: 'batch-1',
+      },
+    ]);
+  });
+});
+
+describe('buildRuntimePolicyDiagnosticRows', () => {
+  it('summarizes runtime policy by phase for the selected provider', () => {
+    expect(
+      buildRuntimePolicyDiagnosticRows(translate, [
+        {
+          phase: 'planner',
+          provider: 'openai',
+          required_runtime_mode: 'full_autonomous',
+          selected_runtime_mode: 'blocked',
+          fallback_allowed: false,
+          fallback_modes: [],
+          requires_full_autonomous: true,
+          requires_cli_runner: true,
+          runner_candidates: ['codex_cli'],
+          policy: 'must_use_full_runtime',
+          reason: 'planner_requires_workspace_tools',
+        },
+        {
+          phase: 'coder',
+          provider: 'openai',
+          required_runtime_mode: 'generic_edit',
+          selected_runtime_mode: 'generic_edit',
+          fallback_allowed: true,
+          fallback_modes: ['patch_proposal', 'analysis_only'],
+          requires_full_autonomous: false,
+          requires_cli_runner: false,
+          runner_candidates: [],
+          policy: 'prefer_generic_edit',
+          reason: 'coder_can_use_generic_edit_transactions',
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.runtimePolicy',
+        value: (
+          'Planner: Blocked (Must use full runtime, Codex CLI); '
+          + 'Coder: Generic edit (Prefer generic edit)'
+        ),
+      },
+    ]);
+  });
+});
+
+describe('buildRuntimeEvalDiagnosticRows', () => {
+  it('summarizes required runtime eval artifacts', () => {
+    expect(
+      buildRuntimeEvalDiagnosticRows(translate, [
+        {
+          case_id: 'provider_e2e',
+          runtime_mode: 'provider_e2e',
+          required_for_full_autonomous: true,
+          providers: ['openai', 'google'],
+          required_artifacts: ['provider_e2e_suite', 'provider_reliability'],
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.runtimeEval',
+        value: 'Provider e2e: Provider e2e (Provider e2e suite, provider reliability)',
       },
     ]);
   });
@@ -204,6 +284,28 @@ describe('buildProviderE2eSuiteDiagnosticRows', () => {
           + ', Unsupported tools probe: Passed - unsupported tools classification covered'
           + ', Gateway/model probe: Passed - gateway/model classification covered'
         ),
+      },
+    ]);
+  });
+});
+
+describe('buildProviderNegativeFixtureDiagnosticRows', () => {
+  it('includes provider fixture coverage for negative provider cases', () => {
+    expect(
+      buildProviderNegativeFixtureDiagnosticRows(translate, {
+        status: 'passed',
+        provider: 'openai',
+        source: 'provider_adapter_negative_fixture',
+        coveredCases: ['unsupported_tools', 'gateway_model_limitations'],
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerNegativeFixtures',
+        value: 'Passed - openai - Provider adapter negative fixture',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerNegativeFixtureCases',
+        value: 'Unsupported tools, Gateway model limitations',
       },
     ]);
   });

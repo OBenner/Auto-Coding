@@ -124,6 +124,70 @@ PROVIDER_RELIABILITY_CASE_ORDER = (
     "unsupported_tools",
     "gateway_model_limitations",
 )
+PROVIDER_RELIABILITY_NEGATIVE_FIXTURES = {
+    "openai": {
+        "surface": "openai_compat",
+        "unsupported_tools_error": (
+            "OpenAI tool-call completion failed: Error code: 400 - "
+            "This model does not support tools."
+        ),
+        "gateway_model_error": (
+            "OpenAI tool-call completion failed: Error code: 502 - "
+            "Bad gateway from upstream model provider."
+        ),
+    },
+    "google": {
+        "surface": "google_gemini",
+        "unsupported_tools_error": (
+            "Google tool-call completion failed: 400 function calling is not "
+            "supported for this model."
+        ),
+        "gateway_model_error": (
+            "Google tool-call completion failed: 503 upstream gateway timeout."
+        ),
+    },
+    "openrouter": {
+        "surface": "openrouter_openai_compat",
+        "unsupported_tools_error": (
+            "OpenRouter tool-call completion failed: Provider returned 400 "
+            "unsupported tool_choice for selected model."
+        ),
+        "gateway_model_error": (
+            "OpenRouter tool-call completion failed: 502 bad gateway from "
+            "upstream provider."
+        ),
+    },
+    "litellm": {
+        "surface": "litellm_gateway",
+        "unsupported_tools_error": (
+            "LiteLLM tool-call completion failed: UnsupportedParamsError: "
+            "function calling tools are not supported for this model."
+        ),
+        "gateway_model_error": (
+            "LiteLLM tool-call completion failed: upstream gateway 504 timeout."
+        ),
+    },
+    "zhipuai": {
+        "surface": "zhipuai_glm",
+        "unsupported_tools_error": (
+            "ZhipuAI tool-call completion failed: function calling is not "
+            "supported by this model."
+        ),
+        "gateway_model_error": (
+            "ZhipuAI tool-call completion failed: 503 upstream connection timeout."
+        ),
+    },
+    "ollama": {
+        "surface": "ollama_openai_compat",
+        "unsupported_tools_error": (
+            "Ollama tool-call completion failed: local model does not support tools."
+        ),
+        "gateway_model_error": (
+            "Ollama tool-call completion failed: connection refused by local "
+            "Ollama gateway."
+        ),
+    },
+}
 PROVIDER_RELIABILITY_STATUS_RANK = {
     "not_covered": 0,
     "blocked": 1,
@@ -1578,6 +1642,69 @@ def _provider_e2e_negative_probe_payload() -> dict[str, dict[str, str]]:
     }
 
 
+def _provider_e2e_negative_fixture_payload(provider: str) -> dict[str, dict[str, str]]:
+    """Return provider-specific negative fixtures for direct-provider e2e."""
+    normalized_provider = provider.lower()
+    fixture = PROVIDER_RELIABILITY_NEGATIVE_FIXTURES.get(normalized_provider)
+    if fixture is None:
+        return _provider_e2e_negative_probe_payload()
+
+    surface = str(fixture["surface"])
+    unsupported_issue = _provider_issue_from_error(
+        str(fixture["unsupported_tools_error"])
+    )
+    gateway_issue = _provider_issue_from_error(str(fixture["gateway_model_error"]))
+    return {
+        "unsupported_tools": {
+            "status": "passed"
+            if unsupported_issue["status"] == "unsupported_tools"
+            else "failed",
+            "source": "provider_adapter_negative_fixture",
+            "reason": unsupported_issue["reason"],
+            "fixture_provider": normalized_provider,
+            "fixture_surface": surface,
+        },
+        "gateway_model_limitations": {
+            "status": "passed"
+            if gateway_issue["status"] == "gateway_blocked"
+            else "failed",
+            "source": "provider_adapter_negative_fixture",
+            "reason": gateway_issue["reason"],
+            "fixture_provider": normalized_provider,
+            "fixture_surface": surface,
+        },
+    }
+
+
+def _provider_e2e_negative_fixture_summary(
+    *,
+    provider: str,
+    probes: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    """Return provider e2e fixture coverage summary for diagnostics/UI."""
+    covered_cases = [
+        case_name
+        for case_name, probe in probes.items()
+        if isinstance(probe, dict) and probe.get("status") == "passed"
+    ]
+    source = next(
+        (
+            str(probe.get("source"))
+            for probe in probes.values()
+            if isinstance(probe, dict) and probe.get("source")
+        ),
+        "provider_e2e_negative_probe",
+    )
+    return {
+        "status": "passed"
+        if len(covered_cases) == len(probes) and bool(probes)
+        else "failed",
+        "provider": provider.lower(),
+        "source": source,
+        "covered_cases": covered_cases,
+    }
+
+
 def _provider_e2e_negative_probe_runs(
     probes: dict[str, dict[str, str]],
 ) -> list[dict[str, str]]:
@@ -1690,7 +1817,11 @@ async def _complete_provider_e2e_smoke_suite(
             )
         suite_runs.append(run_payload)
 
-    negative_probes = _provider_e2e_negative_probe_payload()
+    negative_probes = _provider_e2e_negative_fixture_payload(provider.name)
+    negative_fixture_summary = _provider_e2e_negative_fixture_summary(
+        provider=provider.name,
+        probes=negative_probes,
+    )
     negative_probe_runs = _provider_e2e_negative_probe_runs(negative_probes)
     suite_runs.extend(negative_probe_runs)
     negative_probe_success = all(
@@ -1713,6 +1844,7 @@ async def _complete_provider_e2e_smoke_suite(
             "runs": suite_runs,
         },
         "provider_e2e_negative_probes": negative_probes,
+        "provider_e2e_negative_fixtures": negative_fixture_summary,
     }
     if reliability is not None:
         next_diagnostics["provider_reliability"] = reliability

@@ -37,6 +37,7 @@ import { getCodexProfileManager } from '../codex-profile-manager';
 import {
   mapProviderContractHealth,
   mapProviderE2eSuite,
+  mapProviderNegativeFixtures,
   mapProviderReliability,
   mapProviderRuntimeResumePolicy,
   mapProviderTransactionBatchContract,
@@ -394,6 +395,7 @@ type ProviderSmokeCliResult = {
       phases?: unknown;
     } | null;
     provider_e2e_suite?: unknown;
+    provider_e2e_negative_fixtures?: unknown;
     provider_reliability?: unknown;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
@@ -405,6 +407,8 @@ type RuntimeModesCliPayload = {
   mcp_bridge_plan_matrix?: RuntimeControlPlaneDiagnostics['mcp_bridge_plan_matrix'];
   external_mcp_server_health?: RuntimeControlPlaneDiagnostics['external_mcp_server_health'];
   runtime_subagent_matrix?: RuntimeControlPlaneDiagnostics['runtime_subagent_matrix'];
+  runtime_policy_matrix?: RuntimeControlPlaneDiagnostics['runtime_policy_matrix'];
+  runtime_eval_matrix?: RuntimeControlPlaneDiagnostics['runtime_eval_matrix'];
   recommendations?: Record<string, string>;
 };
 
@@ -575,6 +579,9 @@ function mapProviderRuntimeDiagnostics(
     validatedRuntimeExecution: mapValidatedRuntimeExecution(diagnostics.validated_runtime_execution),
     miniPipeline: mapMiniPipelineDiagnostics(diagnostics.mini_pipeline),
     providerE2eSuite: mapProviderE2eSuite(diagnostics.provider_e2e_suite),
+    providerNegativeFixtures: mapProviderNegativeFixtures(
+      diagnostics.provider_e2e_negative_fixtures
+    ),
     providerReliability: mapProviderReliability(diagnostics.provider_reliability),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note
@@ -621,6 +628,12 @@ function mapRuntimeControlPlaneDiagnostics(
       : [],
     runtime_subagent_matrix: Array.isArray(payload.runtime_subagent_matrix)
       ? payload.runtime_subagent_matrix
+      : [],
+    runtime_policy_matrix: Array.isArray(payload.runtime_policy_matrix)
+      ? payload.runtime_policy_matrix
+      : [],
+    runtime_eval_matrix: Array.isArray(payload.runtime_eval_matrix)
+      ? payload.runtime_eval_matrix
       : [],
     recommendations: payload.recommendations && typeof payload.recommendations === 'object'
       ? payload.recommendations

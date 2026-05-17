@@ -46,10 +46,50 @@ from agents.runtime.subagents import (
     DEFAULT_SUBAGENT_MERGE_POLICY,
     resolve_runtime_subagent_support,
 )
+from cli.provider_smoke_commands import PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS
 
 DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
 DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS = registered_external_mcp_servers()
 logger = logging.getLogger(__name__)
+
+RUNTIME_POLICY_PHASES = (
+    {
+        "phase": "planner",
+        "direct_provider_mode": "blocked",
+        "fallback_modes": (),
+        "requires_full_autonomous": True,
+        "fallback_allowed": False,
+        "policy": "must_use_full_runtime",
+        "reason": "planner_requires_workspace_tools",
+    },
+    {
+        "phase": "coder",
+        "direct_provider_mode": "generic_edit",
+        "fallback_modes": ("patch_proposal", "analysis_only"),
+        "requires_full_autonomous": False,
+        "fallback_allowed": True,
+        "policy": "prefer_generic_edit",
+        "reason": "coder_can_use_generic_edit_transactions",
+    },
+    {
+        "phase": "qa_reviewer",
+        "direct_provider_mode": "analysis_only",
+        "fallback_modes": (),
+        "requires_full_autonomous": False,
+        "fallback_allowed": True,
+        "policy": "prefer_analysis_only",
+        "reason": "qa_review_can_run_without_mutation",
+    },
+    {
+        "phase": "qa_fixer",
+        "direct_provider_mode": "generic_edit",
+        "fallback_modes": ("patch_proposal", "analysis_only"),
+        "requires_full_autonomous": False,
+        "fallback_allowed": True,
+        "policy": "prefer_generic_edit",
+        "reason": "qa_fix_needs_transactional_mutations",
+    },
+)
 
 
 def _format_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -232,6 +272,109 @@ def build_runtime_subagent_matrix() -> list[dict[str, Any]]:
     return matrix
 
 
+def build_runtime_policy_matrix() -> list[dict[str, Any]]:
+    """Build phase/provider runtime policy diagnostics."""
+    full_runtime_runner_candidates = list(
+        select_cli_runner_profiles(
+            runtime_mode="full_autonomous",
+        ).selected_runner_ids
+    )
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        has_full_runtime = provider_row.full_autonomous == "yes"
+        for phase_policy in RUNTIME_POLICY_PHASES:
+            phase = str(phase_policy["phase"])
+            selected_mode = (
+                "full_autonomous"
+                if has_full_runtime
+                else str(phase_policy["direct_provider_mode"])
+            )
+            requires_full_autonomous = bool(phase_policy["requires_full_autonomous"])
+            requires_cli_runner = requires_full_autonomous and not has_full_runtime
+            matrix.append(
+                {
+                    "phase": phase,
+                    "provider": provider_row.provider,
+                    "required_runtime_mode": "full_autonomous"
+                    if requires_full_autonomous
+                    else selected_mode,
+                    "selected_runtime_mode": selected_mode,
+                    "fallback_allowed": bool(phase_policy["fallback_allowed"])
+                    and selected_mode != "blocked",
+                    "fallback_modes": list(phase_policy["fallback_modes"])
+                    if selected_mode != "blocked"
+                    else [],
+                    "requires_full_autonomous": requires_full_autonomous,
+                    "requires_cli_runner": requires_cli_runner,
+                    "runner_candidates": full_runtime_runner_candidates
+                    if requires_cli_runner
+                    else [],
+                    "policy": str(phase_policy["policy"])
+                    if not has_full_runtime
+                    else "use_full_runtime",
+                    "reason": str(phase_policy["reason"])
+                    if not has_full_runtime
+                    else "provider_has_full_runtime",
+                }
+            )
+    return matrix
+
+
+def build_runtime_eval_matrix() -> list[dict[str, Any]]:
+    """Build runtime eval/smoke cases required before declaring full autonomy."""
+    return [
+        {
+            "case_id": "provider_e2e",
+            "runtime_mode": "provider_e2e",
+            "required_for_full_autonomous": True,
+            "providers": list(PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS),
+            "required_artifacts": [
+                "provider_e2e_suite",
+                "provider_e2e_negative_fixtures",
+                "provider_reliability",
+            ],
+        },
+        {
+            "case_id": "generic_edit_recovery",
+            "runtime_mode": "generic_edit",
+            "required_for_full_autonomous": True,
+            "providers": list(PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS),
+            "required_artifacts": [
+                "generic_edit_recovery_checkpoint.json",
+                "generic_edit_session_state.json",
+                "generic_edit_transaction_groups.json",
+            ],
+        },
+        {
+            "case_id": "mcp_bridge_contract",
+            "runtime_mode": "generic_edit",
+            "required_for_full_autonomous": True,
+            "providers": list(PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS),
+            "required_artifacts": ["external_mcp_contract_checks"],
+        },
+        {
+            "case_id": "subagent_orchestrator",
+            "runtime_mode": "generic_edit",
+            "required_for_full_autonomous": True,
+            "providers": list(PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS),
+            "required_artifacts": [
+                "runtime_subagents.json",
+                "runtime_subagents__<child>.json",
+            ],
+        },
+        {
+            "case_id": "cli_full_runtime",
+            "runtime_mode": "full_autonomous",
+            "required_for_full_autonomous": True,
+            "providers": ["codex"],
+            "required_artifacts": [
+                "codex_cli_result.json",
+                "codex_cli_timeline.json",
+            ],
+        },
+    ]
+
+
 def build_runtime_modes_payload() -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
     cli_runner_selection = {
@@ -253,6 +396,8 @@ def build_runtime_modes_payload() -> dict[str, Any]:
             requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
         ),
         "runtime_subagent_matrix": build_runtime_subagent_matrix(),
+        "runtime_policy_matrix": build_runtime_policy_matrix(),
+        "runtime_eval_matrix": build_runtime_eval_matrix(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -785,6 +930,30 @@ def format_runtime_modes_text() -> str:
         for row in build_runtime_subagent_matrix()
         if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
     ]
+    runtime_policy_rows = [
+        [
+            row["phase"],
+            row["provider"],
+            row["required_runtime_mode"],
+            row["selected_runtime_mode"],
+            "yes" if row["fallback_allowed"] else "no",
+            row["policy"],
+            row["reason"],
+            ", ".join(row["runner_candidates"]) or "none",
+        ]
+        for row in build_runtime_policy_matrix()
+        if row["provider"] in {"claude", "codex", "openai", "google", "ollama"}
+    ]
+    runtime_eval_rows = [
+        [
+            row["case_id"],
+            row["runtime_mode"],
+            "yes" if row["required_for_full_autonomous"] else "no",
+            ", ".join(row["providers"]),
+            ", ".join(row["required_artifacts"]),
+        ]
+        for row in build_runtime_eval_matrix()
+    ]
 
     return "\n\n".join(
         [
@@ -875,6 +1044,31 @@ def format_runtime_modes_text() -> str:
                     "Max attempts",
                 ],
                 subagent_rows,
+            ),
+            "Runtime Policy Matrix",
+            _format_table(
+                [
+                    "Phase",
+                    "Provider",
+                    "Required",
+                    "Selected",
+                    "Fallback",
+                    "Policy",
+                    "Reason",
+                    "Runner candidates",
+                ],
+                runtime_policy_rows,
+            ),
+            "Runtime Eval Matrix",
+            _format_table(
+                [
+                    "Case",
+                    "Runtime",
+                    "Full required",
+                    "Providers",
+                    "Required artifacts",
+                ],
+                runtime_eval_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",
