@@ -18,7 +18,6 @@ from typing import Any
 from .base import (
     PluginBase,
     PluginCapability,
-    PluginType,
     default_capabilities_for_type,
 )
 from .registry import PluginRegistry
@@ -60,10 +59,8 @@ def _capability_values(plugin: PluginBase) -> list[str]:
 
 
 def _can_use_tool_hooks(plugin: PluginBase) -> bool:
-    return (
-        isinstance(plugin, AgentPlugin)
-        and plugin.is_enabled
-        and bool(set(plugin_capabilities(plugin)) & TOOL_HOOK_CAPABILITIES)
+    return plugin.is_enabled and bool(
+        set(plugin_capabilities(plugin)) & TOOL_HOOK_CAPABILITIES
     )
 
 
@@ -96,25 +93,27 @@ def get_runtime_registry(project_dir: Path) -> PluginRegistry:
 
 def load_enabled_agent_plugins(project_dir: Path) -> list[AgentPlugin]:
     """Load and return enabled agent plugins for runtime pipeline hooks."""
-    registry = get_runtime_registry(project_dir)
-    if not registry.list_plugins():
-        registry.load_all_plugins()
-
     return [
         plugin
-        for plugin in registry.list_plugins(
-            plugin_type=PluginType.AGENT,
-            enabled_only=True,
-        )
+        for plugin in load_enabled_runtime_plugins(project_dir)
         if isinstance(plugin, AgentPlugin)
     ]
 
 
+def load_enabled_runtime_plugins(project_dir: Path) -> list[PluginBase]:
+    """Load and return enabled plugins that can participate in runtime hooks."""
+    registry = get_runtime_registry(project_dir)
+    if not registry.list_plugins():
+        registry.load_all_plugins()
+
+    return registry.list_plugins(enabled_only=True)
+
+
 def collect_prompt_augmentations(
-    plugins: list[AgentPlugin],
+    plugins: list[PluginBase],
     context: AgentContext,
 ) -> list[PromptContribution]:
-    """Collect prompt augmentation blocks from enabled agent plugins."""
+    """Collect prompt augmentation blocks from enabled runtime-aware plugins."""
     contributions: list[PromptContribution] = []
     for plugin in plugins:
         if not plugin.is_enabled:
@@ -170,8 +169,8 @@ def apply_plugin_prompt_augmentations(
     spec_dir: Path,
     agent_type: str,
 ) -> str:
-    """Load enabled agent plugins and append their prompt contributions."""
-    plugins = load_enabled_agent_plugins(project_dir)
+    """Load enabled runtime-aware plugins and append their prompt contributions."""
+    plugins = load_enabled_runtime_plugins(project_dir)
     context = build_agent_context(project_dir, spec_dir, agent_type)
     contributions = collect_prompt_augmentations(plugins, context)
     return append_prompt_augmentations(base_prompt, contributions)
@@ -207,13 +206,13 @@ def _normalize_hook_response(plugin_name: str, response: Any) -> dict[str, Any]:
 
 
 async def run_plugin_pre_tool_hooks(
-    plugins: list[AgentPlugin],
+    plugins: list[PluginBase],
     context: AgentContext,
     input_data: dict[str, Any],
     tool_use_id: str | None = None,
     sdk_context: Any | None = None,
 ) -> dict[str, Any]:
-    """Run enabled edit/runtime agent plugin hooks before a tool executes."""
+    """Run enabled edit/runtime plugin hooks before a tool executes."""
     tool_name = str(input_data.get("tool_name") or "")
     tool_input = input_data.get("tool_input")
     if not isinstance(tool_input, dict):
@@ -238,13 +237,13 @@ async def run_plugin_pre_tool_hooks(
 
 
 async def run_plugin_post_tool_hooks(
-    plugins: list[AgentPlugin],
+    plugins: list[PluginBase],
     context: AgentContext,
     input_data: dict[str, Any],
     tool_use_id: str | None = None,
     sdk_context: Any | None = None,
 ) -> dict[str, Any]:
-    """Run enabled edit/runtime agent plugin hooks after a tool executes."""
+    """Run enabled edit/runtime plugin hooks after a tool executes."""
     tool_name = str(input_data.get("tool_name") or "")
     tool_input = input_data.get("tool_input")
     if not isinstance(tool_input, dict):
@@ -278,7 +277,7 @@ def build_plugin_tool_hook_matchers(
     """Build Claude SDK hook matcher objects for enabled runtime-capable plugins."""
     plugins = [
         plugin
-        for plugin in load_enabled_agent_plugins(project_dir)
+        for plugin in load_enabled_runtime_plugins(project_dir)
         if _can_use_tool_hooks(plugin)
     ]
     if not plugins:
