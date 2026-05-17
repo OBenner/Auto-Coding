@@ -12,7 +12,6 @@
 
 import { ipcMain } from 'electron';
 import { execFileSync } from 'child_process';
-import path from 'path';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult } from '../../shared/types';
 import {
@@ -30,6 +29,7 @@ import {
   PluginContextPreview
 } from './types';
 import { getConfiguredPythonPath } from '../python-env-manager';
+import { joinPaths, normalizePath } from '../platform';
 import { getEffectiveSourcePath } from '../updater/path-resolver';
 import { logger } from '../app-logger';
 
@@ -84,7 +84,7 @@ interface PluginPreviewContextPayload {
  * @param args - Command arguments
  * @returns Command output as JSON
  */
-function executePluginCommand(
+function runPluginCliCommand(
   projectPath: string,
   command: string,
   args: string[] = []
@@ -92,7 +92,7 @@ function executePluginCommand(
   try {
     const pythonPath = getConfiguredPythonPath();
     const sourcePath = getEffectiveSourcePath();
-    const pluginCliPath = path.join(sourcePath, 'apps', 'backend', 'plugins', 'cli.py');
+    const pluginCliPath = joinPaths(sourcePath, 'apps', 'backend', 'plugins', 'cli.py');
 
     const fullArgs = [pluginCliPath, command, ...args];
 
@@ -124,11 +124,11 @@ function executePluginCommand(
   }
 }
 
-function requireProjectPath(projectPath?: string): string {
+function resolvePluginProjectPath(projectPath?: string): string {
   if (!projectPath) {
     throw new Error('Project path is required for plugin operations');
   }
-  return projectPath;
+  return normalizePath(projectPath);
 }
 
 function normalizePluginName(payload: string | PluginNamePayload): string {
@@ -193,7 +193,7 @@ export function registerPluginHandlers(): void {
       payload: PluginListPayload = {}
     ): Promise<IPCResult<PluginInfo[]>> => {
       try {
-        const projectPath = requireProjectPath(payload.projectPath);
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
         const filter = payload.filter || {};
         const pluginType = filter.pluginType || filter.type;
         const enabledOnly = Boolean(filter.enabledOnly || filter.enabled);
@@ -208,7 +208,7 @@ export function registerPluginHandlers(): void {
           args.push('--enabled-only');
         }
 
-        const result = executePluginCommand(projectPath, 'list', args);
+        const result = runPluginCliCommand(projectPath, 'list', args);
         const plugins = (result as { plugins: Record<string, unknown>[] }).plugins;
 
         const pluginInfos = plugins.map(parsePluginInfo);
@@ -237,10 +237,10 @@ export function registerPluginHandlers(): void {
       payload: PluginHealthPayload = {}
     ): Promise<IPCResult<PluginHealthDiagnostics>> => {
       try {
-        const projectPath = requireProjectPath(payload.projectPath);
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
         logger.info('[Plugin] Inspecting plugin health');
 
-        const result = executePluginCommand(projectPath, 'health', ['--json']);
+        const result = runPluginCliCommand(projectPath, 'health', ['--json']);
         const diagnostics = (result as { diagnostics: PluginHealthDiagnostics }).diagnostics;
 
         logger.info('[Plugin] Plugin health inspection completed');
@@ -267,11 +267,11 @@ export function registerPluginHandlers(): void {
       payload: PluginNamePayload
     ): Promise<IPCResult<PluginPermissionDiff>> => {
       try {
-        const projectPath = requireProjectPath(payload.projectPath);
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
         const pluginName = normalizePluginName(payload);
         logger.info('[Plugin] Inspecting permission diff:', pluginName);
 
-        const result = executePluginCommand(projectPath, 'permission-diff', [
+        const result = runPluginCliCommand(projectPath, 'permission-diff', [
           '--json',
           pluginName
         ]) as { permission_diff: PluginPermissionDiff };
@@ -299,7 +299,7 @@ export function registerPluginHandlers(): void {
       payload: PluginTracePayload = {}
     ): Promise<IPCResult<PluginTraceResult>> => {
       try {
-        const projectPath = requireProjectPath(payload.projectPath);
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
         const pluginName = normalizeOptionalPluginName(payload);
         const args: string[] = ['--json'];
         if (pluginName) {
@@ -310,7 +310,7 @@ export function registerPluginHandlers(): void {
         }
 
         logger.info('[Plugin] Reading plugin traces', { pluginName, limit: payload.limit });
-        const result = executePluginCommand(projectPath, 'traces', args) as PluginTraceResult;
+        const result = runPluginCliCommand(projectPath, 'traces', args) as PluginTraceResult;
 
         return {
           success: true,
@@ -342,7 +342,7 @@ export function registerPluginHandlers(): void {
       payload: PluginPreviewContextPayload = {}
     ): Promise<IPCResult<PluginContextPreview>> => {
       try {
-        const projectPath = requireProjectPath(payload.projectPath);
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
         const agentType = payload.agentType || payload.agent_type || 'coder';
         const specDir = payload.specDir || payload.spec_dir;
         const rawFiles = payload.files || payload.file || [];
@@ -362,7 +362,7 @@ export function registerPluginHandlers(): void {
         }
 
         logger.info('[Plugin] Previewing plugin context', { agentType });
-        const result = executePluginCommand(
+        const result = runPluginCliCommand(
           projectPath,
           'preview-context',
           args
@@ -401,13 +401,13 @@ export function registerPluginHandlers(): void {
       payload: string | PluginNamePayload
     ): Promise<IPCResult<PluginOperationResult>> => {
       try {
-        const projectPath = requireProjectPath(
+        const projectPath = resolvePluginProjectPath(
           typeof payload === 'string' ? undefined : payload.projectPath
         );
         const pluginName = normalizePluginName(payload);
         logger.info('[Plugin] Enabling plugin:', pluginName);
 
-        const result = executePluginCommand(projectPath, 'enable', [
+        const result = runPluginCliCommand(projectPath, 'enable', [
           '--json',
           pluginName
         ]) as PluginOperationResult;
@@ -449,13 +449,13 @@ export function registerPluginHandlers(): void {
       payload: string | PluginNamePayload
     ): Promise<IPCResult<PluginOperationResult>> => {
       try {
-        const projectPath = requireProjectPath(
+        const projectPath = resolvePluginProjectPath(
           typeof payload === 'string' ? undefined : payload.projectPath
         );
         const pluginName = normalizePluginName(payload);
         logger.info('[Plugin] Disabling plugin:', pluginName);
 
-        executePluginCommand(projectPath, 'disable', ['--json', pluginName]);
+        runPluginCliCommand(projectPath, 'disable', ['--json', pluginName]);
 
         logger.info('[Plugin] Plugin disabled successfully:', pluginName);
         return { success: true, data: { success: true } };
@@ -487,7 +487,7 @@ export function registerPluginHandlers(): void {
       payload: PluginInstallSource | PluginInstallPayload
     ): Promise<IPCResult<PluginInstallResult>> => {
       try {
-        const projectPath = requireProjectPath(
+        const projectPath = resolvePluginProjectPath(
           'source' in payload ? payload.projectPath : undefined
         );
         const source = ('source' in payload ? payload.source : payload) as
@@ -508,7 +508,7 @@ export function registerPluginHandlers(): void {
           throw new Error('Invalid plugin installation source');
         }
 
-        const result = executePluginCommand(projectPath, 'install', args);
+        const result = runPluginCliCommand(projectPath, 'install', args);
         const data = result as { success: boolean; plugin?: Record<string, unknown>; error?: string };
 
         if (data.success && data.plugin) {
@@ -549,13 +549,13 @@ export function registerPluginHandlers(): void {
       payload: string | PluginNamePayload
     ): Promise<IPCResult<PluginOperationResult>> => {
       try {
-        const projectPath = requireProjectPath(
+        const projectPath = resolvePluginProjectPath(
           typeof payload === 'string' ? undefined : payload.projectPath
         );
         const pluginName = normalizePluginName(payload);
         logger.info('[Plugin] Uninstalling plugin:', pluginName);
 
-        executePluginCommand(projectPath, 'uninstall', ['--json', pluginName]);
+        runPluginCliCommand(projectPath, 'uninstall', ['--json', pluginName]);
 
         logger.info('[Plugin] Plugin uninstalled successfully:', pluginName);
         return { success: true, data: { success: true } };

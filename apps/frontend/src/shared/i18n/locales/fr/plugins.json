@@ -96,8 +96,10 @@
   },
   "toast": {
     "enableSuccess": "Extension activée avec succès",
+    "enableStatusMessage": "{{plugin}} activée",
     "enableError": "Échec de l'activation de l'extension",
     "disableSuccess": "Extension désactivée avec succès",
+    "disableStatusMessage": "{{plugin}} désactivée",
     "disableError": "Échec de la désactivation de l'extension",
     "uninstallSuccess": "Extension désinstallée avec succès",
     "uninstallError": "Échec de la désinstallation de l'extension",

@@ -174,7 +174,7 @@ export function PluginManager({ projectPath }: PluginManagerProps) {
       if (result.success) {
         toast({
           title: t('plugins:toast.enableSuccess'),
-          description: `${review.pluginName} ${t('plugins:status.enabled').toLowerCase()}`,
+          description: t('plugins:toast.enableStatusMessage', { plugin: review.pluginName }),
         });
         await loadPlugins(); // Reload to get updated status
       } else {
@@ -206,7 +206,7 @@ export function PluginManager({ projectPath }: PluginManagerProps) {
       if (result.success) {
         toast({
           title: t('plugins:toast.disableSuccess'),
-          description: `${pluginName} ${t('plugins:status.disabled').toLowerCase()}`,
+          description: t('plugins:toast.disableStatusMessage', { plugin: pluginName }),
         });
         await loadPlugins(); // Reload to get updated status
       } else {

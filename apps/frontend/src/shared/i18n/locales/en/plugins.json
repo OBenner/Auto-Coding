@@ -96,8 +96,10 @@
   },
   "toast": {
     "enableSuccess": "Plugin enabled successfully",
+    "enableStatusMessage": "{{plugin}} enabled",
     "enableError": "Failed to enable plugin",
     "disableSuccess": "Plugin disabled successfully",
+    "disableStatusMessage": "{{plugin}} disabled",
     "disableError": "Failed to disable plugin",
     "uninstallSuccess": "Plugin uninstalled successfully",
     "uninstallError": "Failed to uninstall plugin",

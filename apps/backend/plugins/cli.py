@@ -27,6 +27,8 @@ import logging
 import shutil
 import sys
 import tempfile
+from collections import deque
+from collections.abc import Iterator
 from pathlib import Path
 
 # Add parent directories to path for direct execution (must be before imports)
@@ -1185,14 +1187,26 @@ def _parse_trace_line(line: str, source: str) -> dict | None:
     return event
 
 
-def _iter_trace_file_events(path: Path) -> list[dict]:
-    """Read trace events from one JSONL file."""
-    events: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        event = _parse_trace_line(line, path.name)
-        if event is not None:
-            events.append(event)
-    return events
+def _iter_trace_file_events(
+    path: Path,
+    *,
+    plugin_name: str | None = None,
+    limit: int | None = None,
+) -> Iterator[dict]:
+    """Yield recent trace events from one JSONL file, newest first."""
+    maxlen = limit if limit is not None and limit > 0 else None
+    recent_events: deque[dict] = deque(maxlen=maxlen)
+    with path.open(encoding="utf-8") as trace_file:
+        for line in trace_file:
+            event = _parse_trace_line(line, path.name)
+            if event is None:
+                continue
+            if plugin_name is not None and event.get("plugin") != plugin_name:
+                continue
+            recent_events.append(event)
+
+    while recent_events:
+        yield recent_events.pop()
 
 
 def _trace_events(trace_dir: Path, plugin_name: str | None, limit: int) -> list[dict]:
@@ -1200,14 +1214,25 @@ def _trace_events(trace_dir: Path, plugin_name: str | None, limit: int) -> list[
     if not trace_dir.exists():
         return []
 
-    events = [
-        event
-        for path in sorted(trace_dir.glob("*.jsonl"))
-        for event in _iter_trace_file_events(path)
-        if plugin_name is None or event.get("plugin") == plugin_name
-    ]
-    safe_limit = max(1, min(int(limit), 500))
-    return events[-safe_limit:]
+    safe_limit = max(0, min(int(limit), 500))
+    if safe_limit == 0:
+        return []
+
+    events: list[dict] = []
+    for path in sorted(trace_dir.glob("*.jsonl"), reverse=True):
+        remaining = safe_limit - len(events)
+        if remaining <= 0:
+            break
+        for event in _iter_trace_file_events(
+            path,
+            plugin_name=plugin_name,
+            limit=remaining,
+        ):
+            events.append(event)
+            if len(events) >= safe_limit:
+                return list(reversed(events))
+
+    return list(reversed(events))
 
 
 def cmd_traces(args: argparse.Namespace) -> int:

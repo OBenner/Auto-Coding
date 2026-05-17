@@ -5,16 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
-import pytest
-
-# Ensure apps/backend is in path for imports.
-REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "apps" / "backend"))
-
 import plugins.cli as plugin_cli
+import pytest
 from plugins.base import PluginCapability, PluginPermission
 from plugins.registry import PluginRegistry
 
@@ -184,6 +178,26 @@ def test_traces_command_reads_project_plugin_trace_events(
     ]
 
 
+def test_traces_command_honors_zero_limit(tmp_path, capsys, monkeypatch):
+    """A zero trace limit returns no events instead of slicing with -0."""
+    monkeypatch.chdir(tmp_path)
+    trace_dir = tmp_path / ".auto-claude" / "plugin_traces"
+    trace_dir.mkdir(parents=True)
+    (trace_dir / "skill-pack-runtime.jsonl").write_text(
+        json.dumps({"plugin": "skill-pack-runtime", "event": "new"}) + "\n",
+        encoding="utf-8",
+    )
+
+    result = plugin_cli.cmd_traces(
+        argparse.Namespace(plugin="skill-pack-runtime", limit=0, json=True)
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["success"] is True
+    assert payload["traces"] == []
+
+
 def test_preview_context_command_returns_agent_prompt_contributions(tmp_path, capsys):
     """CLI previews enabled agent plugin prompt augmentation without an agent run."""
     system_plugins = tmp_path / "system"
@@ -227,9 +241,10 @@ def test_preview_context_command_returns_agent_prompt_contributions(tmp_path, ca
 
 def test_system_plugins_smoke_load_together(tmp_path):
     """The merged system plugins can be loaded together by the control plane."""
+    project_root = Path(__file__).resolve().parent.parent
     registry = PluginRegistry.get_instance(
         user_plugins_dir=tmp_path / ".auto-claude" / "plugins" / "user",
-        system_plugins_dir=REPO_ROOT / "apps" / "backend" / "plugins" / "system",
+        system_plugins_dir=project_root / "apps" / "backend" / "plugins" / "system",
         project_dir=tmp_path,
     )
     registry.load_all_plugins()

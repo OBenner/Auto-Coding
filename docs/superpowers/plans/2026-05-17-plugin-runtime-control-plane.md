@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Persistent Enablement and Backend Control Commands
+## Task 1: Persistent Enablement and Backend Control Commands
 
 **Files:**
 - Modify: `apps/backend/plugins/registry.py`
@@ -24,7 +24,7 @@ Cover persistent disable/enable state, `permission-diff --json`, `traces --json`
 
 - [x] **Step 2: Verify RED**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_plugin_control_plane.py tests/test_plugin_cli.py -q`
+Run: `./.venv/bin/python -m pytest tests/test_plugin_control_plane.py tests/test_plugin_cli.py -q`
 
 Expected: FAIL because control-plane commands and persistent state do not exist yet.
 
@@ -34,11 +34,11 @@ Add `.auto-claude/plugins/state.json` read/write helpers. Default valid plugins 
 
 - [x] **Step 4: Verify GREEN**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_plugin_control_plane.py tests/test_plugin_cli.py -q`
+Run: `./.venv/bin/python -m pytest tests/test_plugin_control_plane.py tests/test_plugin_cli.py -q`
 
 Expected: PASS.
 
-### Task 2: Electron IPC and Preload Surface
+## Task 2: Electron IPC and Preload Surface
 
 **Files:**
 - Modify: `apps/frontend/src/main/plugins/types.ts`
@@ -63,7 +63,7 @@ Run: `npm --prefix apps/frontend test -- src/main/plugins/loader.test.ts`
 
 Expected: PASS.
 
-### Task 3: Plugin Manager UI
+## Task 3: Plugin Manager UI
 
 **Files:**
 - Modify: `apps/frontend/src/renderer/components/plugins/PluginManager.tsx`
@@ -81,16 +81,16 @@ Run: `npm --prefix apps/frontend run typecheck`
 
 Expected: PASS.
 
-### Task 4: Final Verification
+## Task 4: Final Verification
 
 **Files:**
 - No extra production files.
 
-- [x] **Step 1: Run backend focused tests**
+- [x] **Step 1: Run backend-focused tests**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_plugin_control_plane.py tests/test_plugin_cli.py tests/test_plugin_runtime.py -q`
+Run: `./.venv/bin/python -m pytest tests/test_plugin_control_plane.py tests/test_plugin_cli.py tests/test_plugin_runtime.py -q`
 
-- [x] **Step 2: Run frontend focused tests**
+- [x] **Step 2: Run frontend-focused tests**
 
 Run: `npm --prefix apps/frontend test -- src/main/plugins/loader.test.ts`
 

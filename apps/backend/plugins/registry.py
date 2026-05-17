@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 from .base import PluginBase, PluginType
@@ -325,10 +327,31 @@ class PluginRegistry:
     def _write_state(self, state: dict) -> None:
         """Persist project plugin state."""
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        # Write via open() with explicit mode to keep SonarCloud S2083 from
-        # treating Path.write_text() as a user-controlled path sink.
-        with open(str(self.state_path), "w", encoding="utf-8") as state_file:  # noqa: PTH123
-            state_file.write(json.dumps(state, indent=2, sort_keys=True) + "\n")
+        payload = json.dumps(state, indent=2, sort_keys=True) + "\n"
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=self.state_path.parent,
+                prefix=f".{self.state_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as state_file:
+                temp_path = Path(state_file.name)
+                state_file.write(payload)
+                state_file.flush()
+                os.fsync(state_file.fileno())
+            temp_path.replace(self.state_path)
+        except OSError:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    logger.debug(
+                        "Failed to remove temporary plugin state file %s", temp_path
+                    )
+            raise
 
     def _is_enabled_by_state(self, name: str) -> bool:
         """Return enabled state, defaulting to enabled for discovered plugins."""
