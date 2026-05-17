@@ -1,0 +1,18 @@
+{
+  "name": "skill-pack-runtime",
+  "version": "0.1.0",
+  "author": "Auto-Coding Team",
+  "description": "Loads portable SKILL.md packs with lazy activation, script permission guards, and activation traces",
+  "plugin_type": "agent",
+  "auto_claude_version": ">=3.0.0",
+  "required_permissions": [
+    "read_files"
+  ],
+  "capabilities": [
+    "analysis_only",
+    "generic_edit"
+  ],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/develop/apps/backend/plugins/system/skill-pack-runtime",
+  "license": "AGPL-3.0"
+}
