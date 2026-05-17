@@ -665,6 +665,27 @@ export interface RuntimeMcpBridgePlanRow {
   executable_external_tools: string[];
 }
 
+export interface RuntimeMcpBridgePermissionRow {
+  server: string;
+  display_name: string;
+  bridge_path: string;
+  status: string;
+  permission_enforced: boolean;
+  strict_allowlist_configured: boolean;
+  allowlist_source: string;
+  allowed_permissions?: string[];
+  audit_required: boolean;
+  audit_artifact: string;
+  tool_count?: number | null;
+  tool_policy_coverage: string;
+  permissions: string[];
+  mutating_permissions: string[];
+  required_gates: string[];
+  satisfied_gates: string[];
+  missing_gates: string[];
+  reason: string;
+}
+
 export interface RuntimeExternalMcpHealthRow {
   server: string;
   display_name: string;
@@ -823,6 +844,7 @@ export interface RuntimeControlPlaneDiagnostics {
   cli_runner_contract_matrix?: CliRunnerContractMatrixRow[];
   runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
   mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
+  mcp_bridge_permission_matrix?: RuntimeMcpBridgePermissionRow[];
   external_mcp_server_health?: RuntimeExternalMcpHealthRow[];
   runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
   runtime_subagent_mutation_policy?: RuntimeSubagentMutationPolicyRow[];

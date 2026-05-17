@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ from agents.runtime.mcp_bridge import (
     CUSTOM_MCP_SERVERS_CONFIG_KEY,
     EXTERNAL_MCP_CLIENT_ENV,
     LOCAL_BRIDGE_SERVER,
+    MCP_ALLOWED_PERMISSIONS_ENV,
     MCP_SERVER_CATALOG,
     build_external_mcp_health_matrix,
     check_external_mcp_contracts,
@@ -37,6 +39,9 @@ from agents.runtime.mcp_bridge import (
     discover_external_mcp_tools,
     executable_external_mcp_servers,
     executable_external_mcp_tools,
+    external_mcp_adapter_for,
+    mcp_server_catalog_entry,
+    normalize_mcp_allowed_permissions,
     normalize_mcp_input_schema,
     registered_external_mcp_servers,
     resolve_runtime_mcp_support,
@@ -82,6 +87,13 @@ MUTATING_SUBAGENT_REQUIRED_GATES = (
 MUTATING_SUBAGENT_SATISFIED_GATES = (
     "isolated_child_contexts",
     "child_artifacts",
+)
+MCP_PERMISSION_REQUIRED_GATES = (
+    "tool_policy_metadata",
+    "permission_allowlist_check",
+    "deny_before_execution",
+    "audit_artifact",
+    "mutating_tool_classification",
 )
 
 RUNTIME_POLICY_PHASES = (
@@ -305,6 +317,129 @@ def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
                     else [],
                 }
             )
+    return matrix
+
+
+def _unique_sorted(values: list[str]) -> list[str]:
+    """Return deterministic unique values for diagnostic payloads."""
+    return sorted({value for value in values if value})
+
+
+def _mcp_allowlist_fields() -> dict[str, Any]:
+    """Return the effective MCP permission allowlist diagnostic fields."""
+    allowed_permissions = normalize_mcp_allowed_permissions(None)
+    fields: dict[str, Any] = {
+        "strict_allowlist_configured": allowed_permissions is not None,
+        "allowlist_source": (
+            MCP_ALLOWED_PERMISSIONS_ENV
+            if allowed_permissions is not None
+            else "allow_all_default"
+        ),
+    }
+    if allowed_permissions is not None:
+        fields["allowed_permissions"] = sorted(allowed_permissions)
+    return fields
+
+
+def build_mcp_bridge_permission_matrix(
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Build server-level MCP bridge permission/audit enforcement diagnostics."""
+    allowlist_fields = _mcp_allowlist_fields()
+    required_gates = list(MCP_PERMISSION_REQUIRED_GATES)
+    audit_artifact = ".auto-Codex/specs/<spec>/artifacts/mcp_bridge_audit.jsonl"
+    matrix: list[dict[str, Any]] = [
+        {
+            "server": LOCAL_BRIDGE_SERVER,
+            "display_name": str(
+                MCP_SERVER_CATALOG[LOCAL_BRIDGE_SERVER]["display_name"]
+            ),
+            "bridge_path": "local_bridge",
+            "status": "enforced",
+            "permission_enforced": True,
+            **allowlist_fields,
+            "audit_required": True,
+            "audit_artifact": audit_artifact,
+            "tool_count": None,
+            "tool_policy_coverage": "dynamic",
+            "permissions": ["dynamic_auto_claude_tool_policy"],
+            "mutating_permissions": ["dynamic_mutating_tool_policy"],
+            "required_gates": required_gates,
+            "satisfied_gates": required_gates,
+            "missing_gates": [],
+            "reason": "local_tools_receive_runtime_policy_before_execution",
+        }
+    ]
+
+    for server in registered_external_mcp_servers(
+        project_mcp_config=project_mcp_config,
+    ):
+        adapter = external_mcp_adapter_for(
+            server,
+            project_mcp_config=project_mcp_config,
+        )
+        catalog_entry = mcp_server_catalog_entry(
+            server,
+            project_mcp_config=project_mcp_config,
+        )
+        if adapter is None or not adapter.tool_definitions:
+            matrix.append(
+                {
+                    "server": server,
+                    "display_name": str(catalog_entry.get("display_name", server)),
+                    "bridge_path": "external_bridge",
+                    "status": "missing_policy",
+                    "permission_enforced": False,
+                    **allowlist_fields,
+                    "audit_required": False,
+                    "audit_artifact": audit_artifact,
+                    "tool_count": 0,
+                    "tool_policy_coverage": "missing",
+                    "permissions": [],
+                    "mutating_permissions": [],
+                    "required_gates": required_gates,
+                    "satisfied_gates": [],
+                    "missing_gates": required_gates,
+                    "reason": "external_adapter_has_no_tool_policy_metadata",
+                }
+            )
+            continue
+
+        tool_definitions = adapter.tool_definitions
+        missing_gates: list[str] = []
+        if not all(definition.policy.audit_required for definition in tool_definitions):
+            missing_gates.append("audit_artifact")
+        satisfied_gates = [gate for gate in required_gates if gate not in missing_gates]
+        matrix.append(
+            {
+                "server": server,
+                "display_name": str(catalog_entry.get("display_name", server)),
+                "bridge_path": "external_bridge",
+                "status": "enforced" if not missing_gates else "partial",
+                "permission_enforced": True,
+                **allowlist_fields,
+                "audit_required": not missing_gates,
+                "audit_artifact": audit_artifact,
+                "tool_count": len(tool_definitions),
+                "tool_policy_coverage": "static",
+                "permissions": _unique_sorted(
+                    [definition.policy.permission for definition in tool_definitions]
+                ),
+                "mutating_permissions": _unique_sorted(
+                    [
+                        definition.policy.permission
+                        for definition in tool_definitions
+                        if definition.policy.mutating
+                    ]
+                ),
+                "required_gates": required_gates,
+                "satisfied_gates": satisfied_gates,
+                "missing_gates": missing_gates,
+                "reason": "external_tools_receive_runtime_policy_before_execution",
+            }
+        )
+
     return matrix
 
 
@@ -591,6 +726,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         "cli_runner_contract_matrix": build_cli_runner_contract_matrix(),
         "runtime_fallback_matrix": build_runtime_fallback_matrix(),
         "mcp_bridge_plan_matrix": build_mcp_bridge_plan_matrix(),
+        "mcp_bridge_permission_matrix": build_mcp_bridge_permission_matrix(),
         "external_mcp_server_health": build_external_mcp_health_matrix(
             requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
         ),
@@ -1128,6 +1264,18 @@ def format_runtime_modes_text() -> str:
         )
         if row["bridgeable"]
     ]
+    mcp_permission_rows = [
+        [
+            row["server"],
+            row["bridge_path"],
+            row["status"],
+            "yes" if row["strict_allowlist_configured"] else "no",
+            ", ".join(row["permissions"]) or "none",
+            ", ".join(row["mutating_permissions"]) or "none",
+            ", ".join(row["missing_gates"]) or "none",
+        ]
+        for row in build_mcp_bridge_permission_matrix()
+    ]
     subagent_rows = [
         [
             row["provider"],
@@ -1265,6 +1413,19 @@ def format_runtime_modes_text() -> str:
                     "External required",
                 ],
                 mcp_bridge_rows,
+            ),
+            "MCP Bridge Permission Matrix",
+            _format_table(
+                [
+                    "Server",
+                    "Path",
+                    "Status",
+                    "Strict allowlist",
+                    "Permissions",
+                    "Mutating",
+                    "Missing gates",
+                ],
+                mcp_permission_rows,
             ),
             "External MCP Client Health",
             _format_table(

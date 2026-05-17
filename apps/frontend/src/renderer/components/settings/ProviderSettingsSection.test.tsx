@@ -11,6 +11,7 @@ import {
   buildProviderRunHistoryDiagnosticRows,
   buildProviderTransactionBatchDiagnosticRows,
   buildCliRunnerContractDiagnosticRows,
+  buildMcpBridgePermissionDiagnosticRows,
   buildMutatingSubagentPolicyDiagnosticRows,
   buildRuntimeEvalHistoryDiagnosticRows,
   buildRuntimeEvalDiagnosticRows,
@@ -54,14 +55,22 @@ const translate = (key: string) =>
     'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
     'settings:aiProvider.controlPlane.runtimeEvalHistory': 'Runtime eval history',
     'settings:aiProvider.controlPlane.cliRunnerContracts': 'CLI runner contracts',
+    'settings:aiProvider.controlPlane.mcpPermissions': 'MCP permissions',
     'settings:aiProvider.controlPlane.mutatingSubagentPolicy': 'Mutating subagent policy',
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
     'settings:aiProvider.runtimeDiagnosticValues.blocked': 'Blocked',
+    'settings:aiProvider.runtimeDiagnosticValues.callCustomMcp': 'Call custom MCP',
     'settings:aiProvider.runtimeDiagnosticValues.coder': 'Coder',
     'settings:aiProvider.runtimeDiagnosticValues.complete': 'Complete',
+    'settings:aiProvider.runtimeDiagnosticValues.denyBeforeExecution': 'Deny before execution',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
+    'settings:aiProvider.runtimeDiagnosticValues.dynamicAutoClaudeToolPolicy':
+      'Dynamic Auto Code tool policy',
+    'settings:aiProvider.runtimeDiagnosticValues.dynamicMutatingToolPolicy':
+      'Dynamic mutating tool policy',
+    'settings:aiProvider.runtimeDiagnosticValues.enforced': 'Enforced',
     'settings:aiProvider.runtimeDiagnosticValues.failed': 'Failed',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
     'settings:aiProvider.runtimeDiagnosticValues.notCovered': 'Not covered',
@@ -82,6 +91,8 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.genericEdit': 'Generic edit',
     'settings:aiProvider.runtimeDiagnosticValues.miniPipeline': 'Mini pipeline',
     'settings:aiProvider.runtimeDiagnosticValues.passed': 'Passed',
+    'settings:aiProvider.runtimeDiagnosticValues.permissionAllowlistCheck':
+      'Permission allowlist check',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2e': 'Provider e2e',
     'settings:aiProvider.runtimeDiagnosticValues.providerAdapterNegativeFixture':
       'Provider adapter negative fixture',
@@ -92,8 +103,12 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
+    'settings:aiProvider.runtimeDiagnosticValues.toolPolicyMetadata': 'Tool policy metadata',
+    'settings:aiProvider.runtimeDiagnosticValues.mutatingToolClassification':
+      'Mutating tool classification',
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedTools': 'Unsupported tools',
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedToolsProbe': 'Unsupported tools probe',
+    'settings:aiProvider.runtimeDiagnosticValues.no': 'No',
     'settings:aiProvider.runtimeDiagnosticValues.yes': 'Yes',
   })[key] ?? key;
 
@@ -299,6 +314,64 @@ describe('buildMutatingSubagentPolicyDiagnosticRows', () => {
         value: (
           'Generic edit: Blocked (transaction boundaries; '
           + 'Mutating subagents require transactional merge)'
+        ),
+      },
+    ]);
+  });
+});
+
+describe('buildMcpBridgePermissionDiagnosticRows', () => {
+  it('summarizes permission enforcement and missing gates', () => {
+    expect(
+      buildMcpBridgePermissionDiagnosticRows(translate, [
+        {
+          server: 'auto-claude',
+          display_name: 'Auto Code local tools',
+          bridge_path: 'local_bridge',
+          status: 'enforced',
+          permission_enforced: true,
+          strict_allowlist_configured: false,
+          allowlist_source: 'allow_all_default',
+          audit_required: true,
+          audit_artifact: '.auto-Codex/specs/<spec>/artifacts/mcp_bridge_audit.jsonl',
+          tool_count: null,
+          tool_policy_coverage: 'dynamic',
+          permissions: ['dynamic_auto_claude_tool_policy'],
+          mutating_permissions: ['dynamic_mutating_tool_policy'],
+          required_gates: ['tool_policy_metadata'],
+          satisfied_gates: ['tool_policy_metadata'],
+          missing_gates: [],
+          reason: 'local_tools_receive_runtime_policy_before_execution',
+        },
+        {
+          server: 'linear',
+          display_name: 'Linear',
+          bridge_path: 'external_bridge',
+          status: 'partial',
+          permission_enforced: true,
+          strict_allowlist_configured: true,
+          allowlist_source: 'AUTO_CODE_MCP_ALLOWED_PERMISSIONS',
+          allowed_permissions: ['read_linear'],
+          audit_required: false,
+          audit_artifact: '.auto-Codex/specs/<spec>/artifacts/mcp_bridge_audit.jsonl',
+          tool_count: 2,
+          tool_policy_coverage: 'static',
+          permissions: ['read_linear', 'write_linear'],
+          mutating_permissions: ['write_linear'],
+          required_gates: ['audit_artifact'],
+          satisfied_gates: [],
+          missing_gates: ['audit_artifact'],
+          reason: 'external_tools_receive_runtime_policy_before_execution',
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.mcpPermissions',
+        value: (
+          'Auto Code local tools: Enforced (Dynamic Auto Code tool policy; '
+          + 'mutating Dynamic mutating tool policy; strict No); '
+          + 'Linear: Partial (read linear, write linear; mutating write linear; '
+          + 'strict Yes; missing audit artifact)'
         ),
       },
     ]);

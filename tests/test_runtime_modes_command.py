@@ -93,6 +93,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "CLI Runner Contract Matrix" in output
     assert "Runtime Fallback Matrix" in output
     assert "MCP Bridge Plan Matrix" in output
+    assert "MCP Bridge Permission Matrix" in output
     assert "External MCP Client Health" in output
     assert "Subagent Orchestrator Matrix" in output
     assert "Mutating Subagent Policy" in output
@@ -293,6 +294,52 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert openai_generic_mcp["external_bridge_adapter_missing_servers"] == []
     assert openai_generic_mcp["external_bridge_unsupported_transport_servers"] == []
     assert openai_generic_mcp["action_required"] == "configure_external_mcp_client"
+    permission_rows = {
+        row["server"]: row for row in payload["mcp_bridge_permission_matrix"]
+    }
+    assert permission_rows["auto-claude"] == {
+        "server": "auto-claude",
+        "display_name": "Auto Code local tools",
+        "bridge_path": "local_bridge",
+        "status": "enforced",
+        "permission_enforced": True,
+        "strict_allowlist_configured": False,
+        "allowlist_source": "allow_all_default",
+        "audit_required": True,
+        "audit_artifact": ".auto-Codex/specs/<spec>/artifacts/mcp_bridge_audit.jsonl",
+        "tool_count": None,
+        "tool_policy_coverage": "dynamic",
+        "permissions": ["dynamic_auto_claude_tool_policy"],
+        "mutating_permissions": ["dynamic_mutating_tool_policy"],
+        "required_gates": [
+            "tool_policy_metadata",
+            "permission_allowlist_check",
+            "deny_before_execution",
+            "audit_artifact",
+            "mutating_tool_classification",
+        ],
+        "satisfied_gates": [
+            "tool_policy_metadata",
+            "permission_allowlist_check",
+            "deny_before_execution",
+            "audit_artifact",
+            "mutating_tool_classification",
+        ],
+        "missing_gates": [],
+        "reason": "local_tools_receive_runtime_policy_before_execution",
+    }
+    assert permission_rows["context7"]["status"] == "enforced"
+    assert permission_rows["context7"]["permission_enforced"] is True
+    assert permission_rows["context7"]["strict_allowlist_configured"] is False
+    assert permission_rows["context7"]["allowlist_source"] == "allow_all_default"
+    assert permission_rows["context7"]["permissions"] == ["read_external_docs"]
+    assert permission_rows["context7"]["mutating_permissions"] == []
+    assert permission_rows["graphiti"]["permissions"] == [
+        "read_memory",
+        "write_memory",
+    ]
+    assert permission_rows["graphiti"]["mutating_permissions"] == ["write_memory"]
+    assert permission_rows["linear"]["mutating_permissions"] == ["write_linear"]
     fallback_rows = {
         (row["provider"], row["requested_mode"]): row
         for row in payload["runtime_fallback_matrix"]
@@ -426,6 +473,58 @@ def test_runtime_modes_command_marks_context7_available_when_external_client_ena
         "mcp__context7__resolve-library-id",
         "mcp__context7__get-library-docs",
     ]
+
+
+def test_mcp_bridge_permission_matrix_reports_strict_allowlist_and_custom_server(
+    monkeypatch,
+):
+    from agents.runtime import MCP_ALLOWED_PERMISSIONS_ENV
+    from cli.runtime_commands import build_mcp_bridge_permission_matrix
+
+    monkeypatch.setenv(MCP_ALLOWED_PERMISSIONS_ENV, "read_memory,call_custom_mcp")
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "http://localhost:8765/mcp",
+                "tools": [
+                    {
+                        "name": "search",
+                        "description": "Search custom docs.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                            "required": ["query"],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+    rows = {
+        row["server"]: row
+        for row in build_mcp_bridge_permission_matrix(
+            project_mcp_config=project_mcp_config,
+        )
+    }
+
+    assert rows["graphiti"]["strict_allowlist_configured"] is True
+    assert rows["graphiti"]["allowlist_source"] == MCP_ALLOWED_PERMISSIONS_ENV
+    assert rows["graphiti"]["allowed_permissions"] == [
+        "call_custom_mcp",
+        "read_memory",
+    ]
+    assert rows["my-docs"]["display_name"] == "My Docs"
+    assert rows["my-docs"]["bridge_path"] == "external_bridge"
+    assert rows["my-docs"]["tool_count"] == 2
+    assert rows["my-docs"]["tool_policy_coverage"] == "static"
+    assert rows["my-docs"]["permissions"] == ["call_custom_mcp"]
+    assert rows["my-docs"]["mutating_permissions"] == ["call_custom_mcp"]
+    assert rows["my-docs"]["missing_gates"] == []
+    assert rows["my-docs"]["status"] == "enforced"
 
 
 def test_runtime_modes_command_marks_browser_mcp_available_when_enabled(

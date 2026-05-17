@@ -39,6 +39,7 @@ import type {
   RuntimeExternalMcpHealthRow,
   RuntimeEvalMatrixRow,
   RuntimeFallbackMatrixRow,
+  RuntimeMcpBridgePermissionRow,
   RuntimeMcpBridgePlanRow,
   RuntimePolicyMatrixRow,
   RuntimeSubagentMutationPolicyRow,
@@ -211,6 +212,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   batch_boundary_violation: 'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation',
   boundary_guarded: 'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded',
   blocked: 'settings:aiProvider.runtimeDiagnosticValues.blocked',
+  call_custom_mcp: 'settings:aiProvider.runtimeDiagnosticValues.callCustomMcp',
   choose_concrete_server: 'settings:aiProvider.runtimeDiagnosticValues.chooseConcreteServer',
   claude_code: 'settings:aiProvider.runtimeDiagnosticValues.claudeCode',
   client_disabled: 'settings:aiProvider.runtimeDiagnosticValues.clientDisabled',
@@ -222,6 +224,12 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   configure_local_bridge_tools: 'settings:aiProvider.runtimeDiagnosticValues.configureLocalBridgeTools',
   cursor_cli: 'settings:aiProvider.runtimeDiagnosticValues.cursorCli',
   deepv_code: 'settings:aiProvider.runtimeDiagnosticValues.deepvCode',
+  deny_before_execution: 'settings:aiProvider.runtimeDiagnosticValues.denyBeforeExecution',
+  dynamic_auto_claude_tool_policy:
+    'settings:aiProvider.runtimeDiagnosticValues.dynamicAutoClaudeToolPolicy',
+  dynamic_mutating_tool_policy:
+    'settings:aiProvider.runtimeDiagnosticValues.dynamicMutatingToolPolicy',
+  enforced: 'settings:aiProvider.runtimeDiagnosticValues.enforced',
   error: 'settings:aiProvider.runtimeDiagnosticValues.error',
   external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
   failed: 'settings:aiProvider.runtimeDiagnosticValues.failed',
@@ -284,6 +292,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   partial_coverage: 'settings:aiProvider.runtimeDiagnosticValues.partialCoverage',
   passed: 'settings:aiProvider.runtimeDiagnosticValues.passed',
   patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
+  permission_allowlist_check: 'settings:aiProvider.runtimeDiagnosticValues.permissionAllowlistCheck',
   planned: 'settings:aiProvider.runtimeDiagnosticValues.planned',
   provider_error: 'settings:aiProvider.runtimeDiagnosticValues.providerError',
   provider_e2e: 'settings:aiProvider.runtimeDiagnosticValues.providerE2e',
@@ -326,6 +335,9 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   skipped: 'settings:aiProvider.runtimeDiagnosticValues.skipped',
   smoke_not_completed: 'settings:aiProvider.runtimeDiagnosticValues.smokeNotCompleted',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
+  tool_policy_metadata: 'settings:aiProvider.runtimeDiagnosticValues.toolPolicyMetadata',
+  mutating_tool_classification:
+    'settings:aiProvider.runtimeDiagnosticValues.mutatingToolClassification',
   text_completion_ready: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionReady',
   text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
   tests: 'settings:aiProvider.runtimeDiagnosticValues.tests',
@@ -919,6 +931,44 @@ export function buildMutatingSubagentPolicyDiagnosticRows(
   ];
 }
 
+export function buildMcpBridgePermissionDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  rows?: RuntimeMcpBridgePermissionRow[] | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!rows?.length) {
+    return [];
+  }
+  const value = rows
+    .map((row) => {
+      const label = row.display_name || row.server;
+      const status = formatRuntimeDiagnosticValue(translate, row.status);
+      const strict = formatRuntimeDiagnosticBoolean(
+        translate,
+        row.strict_allowlist_configured
+      );
+      const permissions = formatRuntimeDiagnosticList(translate, row.permissions);
+      const mutating = formatRuntimeDiagnosticList(
+        translate,
+        row.mutating_permissions
+      );
+      const missing = formatRuntimeDiagnosticList(translate, row.missing_gates);
+      const parts = [
+        permissions,
+        mutating ? `mutating ${mutating}` : '',
+        strict ? `strict ${strict}` : '',
+        missing ? `missing ${missing}` : '',
+      ].filter(Boolean);
+      return `${label}: ${status}${parts.length ? ` (${parts.join('; ')})` : ''}`;
+    })
+    .join('; ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.controlPlane.mcpPermissions',
+      value,
+    },
+  ];
+}
+
 export function buildProviderTransactionBatchDiagnosticRows(
   translate: RuntimeDiagnosticTranslate,
   transactionBatchContract?: ProviderValidatedTransactionBatchContract | null
@@ -1036,6 +1086,25 @@ function findRelevantExternalMcpHealthRows(
   return diagnostics?.external_mcp_server_health?.filter(
     (row) =>
       row.bridgeable && (externalServers.has(row.server) || row.execution_supported)
+  ) ?? [];
+}
+
+function findRelevantMcpPermissionRows(
+  diagnostics: RuntimeControlPlaneDiagnostics | null,
+  mcpPlan: RuntimeMcpBridgePlanRow | null
+): RuntimeMcpBridgePermissionRow[] {
+  if (!mcpPlan || mcpPlan.strategy === 'native') {
+    return [];
+  }
+  const relevantServers = new Set([
+    ...(mcpPlan.available_servers ?? []),
+    ...(mcpPlan.local_bridge_required_servers ?? []),
+    ...(mcpPlan.external_bridge_required_servers ?? []),
+    ...(mcpPlan.external_bridge_ready_servers ?? []),
+    ...(mcpPlan.external_bridged_servers ?? [])
+  ]);
+  return diagnostics?.mcp_bridge_permission_matrix?.filter((row) =>
+    relevantServers.has(row.server)
   ) ?? [];
 }
 
@@ -1455,6 +1524,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       runtimeControlPlaneDiagnostics,
       mcpPlan
     );
+    const mcpPermissionRows = buildMcpBridgePermissionDiagnosticRows(
+      t,
+      findRelevantMcpPermissionRows(runtimeControlPlaneDiagnostics, mcpPlan)
+    );
     const noneLabel = t('settings:aiProvider.controlPlane.none');
     const formatControlPlaneValue = (value?: string | null) => {
       const formatted = formatRuntimeDiagnosticValue(t, value);
@@ -1603,6 +1676,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   {externalMcpSmokeLabel}
                 </dd>
               </div>
+              {mcpPermissionRows.map((row) => (
+                <div key={row.labelKey} className="sm:col-span-2">
+                  <dt>{t(row.labelKey)}</dt>
+                  <dd className="break-words font-medium text-foreground">{row.value}</dd>
+                </div>
+              ))}
             </dl>
             {externalMcpSmokeError && (
               <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
