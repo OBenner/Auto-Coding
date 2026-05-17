@@ -5,6 +5,7 @@ type IpcHandler = (_event: unknown, payload?: unknown) => Promise<unknown>;
 
 const registeredHandlers = new Map<string, IpcHandler>();
 const pluginCliPath = path.join('/app/source', 'apps', 'backend', 'plugins', 'cli.py');
+const expectedProjectCwd = path.normalize('/repo');
 const samplePluginPath = path.join('/repo', 'plugins', 'sample-plugin');
 
 const { mockExecFileSync } = vi.hoisted(() => ({
@@ -103,7 +104,7 @@ describe('plugin IPC handlers', () => {
         'integration',
         '--enabled-only'
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 
@@ -153,7 +154,7 @@ describe('plugin IPC handlers', () => {
         '--path',
         samplePluginPath
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 
@@ -220,7 +221,7 @@ describe('plugin IPC handlers', () => {
         'health',
         '--json'
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 
@@ -268,7 +269,7 @@ describe('plugin IPC handlers', () => {
         '--json',
         'guarded-agent'
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 
@@ -323,7 +324,7 @@ describe('plugin IPC handlers', () => {
         '--limit',
         '5'
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 
@@ -381,7 +382,7 @@ describe('plugin IPC handlers', () => {
         '--file',
         'apps/backend/plugins/cli.py'
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 });
