@@ -8,6 +8,18 @@ When enabled, Auto Code exposes the plugin to build agents as the
 `codebase-intelligence-integration` MCP server through the normal client
 configuration path.
 
+The plugin also participates in the plugin runtime as an `analysis_only`
+integration. At agent startup it writes or refreshes the local sidecar, appends
+a compact graph summary and MCP usage guidance to the agent prompt, and records
+activation diagnostics in
+`.auto-claude/plugin_traces/codebase-intelligence.jsonl`.
+
+When the agent runtime provides task metadata such as `files`, `changed_files`,
+or `target_files`, the prompt contribution includes a bounded task briefing for
+those files: direct dependencies, dependents, impacted files, and test
+candidates. This keeps planner, coder, and QA sessions grounded in graph facts
+before they call deeper MCP tools.
+
 ## Tools
 
 The plugin exposes these MCP tools to agent sessions:
@@ -42,6 +54,8 @@ This first version uses only Python stdlib parsing:
   imports, references, calls, and declares-dependency edges.
 - Freshness: source and package manifest fingerprints detect stale sidecars;
   query tools rebuild before answering when indexed sources changed.
+- Runtime context: enabled agents receive compact index status, summary counts,
+  and phase-specific guidance for using impact, symbol, and module graph tools.
 
 This intentionally stays approximate for TypeScript and call graph facts. Future
 versions can add Tree-sitter, SCIP/LSP, Semgrep, CodeQL, or a Kuzu graph backend

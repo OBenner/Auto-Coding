@@ -823,6 +823,7 @@ def create_client(
     agents: dict | None = None,
     session_config: Any | None = None,
     custom_template: AgentTemplate | None = None,
+    runtime_metadata: dict | None = None,
 ) -> ClaudeSDKClient:
     """
     Create a Claude Agent SDK client with multi-layered security.
@@ -859,6 +860,8 @@ def create_client(
         custom_template: Optional custom agent template with user-defined prompts,
                         tools, and MCP server configuration. When provided, overrides
                         default agent_type configuration from AGENT_CONFIGS.
+        runtime_metadata: Optional task/file metadata made available to plugin runtime
+                          prompt and tool hooks.
 
     Returns:
         Configured ClaudeSDKClient
@@ -874,6 +877,9 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
+    if runtime_metadata is not None and not isinstance(runtime_metadata, dict):
+        raise TypeError("runtime_metadata must be a dict when provided")
+
     # Check configured AI provider and log it
     provider_config = get_provider_config()
     configured_provider = provider_config.provider
@@ -1385,12 +1391,14 @@ def create_client(
             project_dir,
             spec_dir,
             agent_type,
+            metadata=runtime_metadata,
         )
         plugin_runtime_hooks = build_plugin_tool_hook_matchers(
             project_dir,
             spec_dir,
             agent_type,
             HookMatcher,
+            metadata=runtime_metadata,
         )
     except Exception as e:
         logger.warning("Failed to apply plugin runtime hooks: %s", e)

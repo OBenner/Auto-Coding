@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from analysis.analyzers import analyze_project
 from plugins.base import PluginType
 from plugins.registry import PluginRegistry
+from plugins.sdk.agent import AgentContext
 from plugins.sdk.integration import IntegrationContext
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -443,3 +445,107 @@ def test_project_analysis_does_not_run_plugin_directly(temp_dir: Path):
 
     assert "codebase_intelligence" not in project_index
     assert not (project / ".auto-claude" / "codebase_intelligence").exists()
+
+
+def test_codebase_intelligence_prompt_augmentation_builds_summary_and_trace(
+    temp_dir: Path,
+):
+    """The integration plugin contributes compact runtime context and trace."""
+    project = _make_sample_project(temp_dir)
+    plugin = _load_codebase_intelligence_plugin(project)
+    integration_context = _make_context(project)
+    agent_context = AgentContext(
+        project_dir=project,
+        spec_dir=integration_context.spec_dir,
+        phase="coder",
+        metadata={
+            "agent_type": "coder",
+            "task": "Refactor create_client usage",
+            "files": ["apps/backend/agents/coder.py"],
+        },
+    )
+
+    prompt = plugin.augment_prompt(agent_context)
+
+    assert "Codebase Intelligence Runtime Context" in prompt
+    assert "codebase-intelligence-integration" in prompt
+    assert ".auto-claude/codebase_intelligence/index.json" in prompt
+    assert "total_files: 5" in prompt
+    assert "total_symbols:" in prompt
+    assert "find_file_dependencies" in prompt
+    assert "trace_file_impact" in prompt
+    assert "trace_symbol_impact" in prompt
+    assert (project / ".auto-claude" / "codebase_intelligence" / "index.json").exists()
+
+    trace_path = (
+        project / ".auto-claude" / "plugin_traces" / "codebase-intelligence.jsonl"
+    )
+    trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert trace["plugin"] == "codebase-intelligence"
+    assert trace["phase"] == "coder"
+    assert trace["reason"] == "attached compact graph summary to agent prompt"
+    assert trace["index_path"] == ".auto-claude/codebase_intelligence/index.json"
+    assert trace["summary"]["total_files"] == 5
+
+
+def test_codebase_intelligence_task_briefing_uses_runtime_metadata_files(
+    temp_dir: Path,
+):
+    """Runtime file metadata produces a targeted graph briefing."""
+    project = _make_sample_project(temp_dir)
+    plugin = _load_codebase_intelligence_plugin(project)
+    integration_context = _make_context(project)
+    agent_context = AgentContext(
+        project_dir=project,
+        spec_dir=integration_context.spec_dir,
+        phase="coder",
+        metadata={
+            "agent_type": "coder",
+            "task": "Refactor create_client",
+            "files": ["apps/backend/core/client.py"],
+        },
+    )
+
+    prompt = plugin.augment_prompt(agent_context)
+
+    assert "## Task Briefing" in prompt
+    assert "task: Refactor create_client" in prompt
+    assert "### apps/backend/core/client.py" in prompt
+    assert "dependents: apps/backend/agents/coder.py" in prompt
+    assert "impacted_files: apps/backend/agents/coder.py, tests/test_coder.py" in prompt
+    assert "test_candidates: tests/test_coder.py" in prompt
+    assert "find_symbol_callers" in prompt
+
+    trace_path = (
+        project / ".auto-claude" / "plugin_traces" / "codebase-intelligence.jsonl"
+    )
+    trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert trace["briefing_files"] == ["apps/backend/core/client.py"]
+
+
+def test_codebase_intelligence_trace_failure_keeps_prompt_context(
+    temp_dir: Path,
+    monkeypatch,
+    caplog,
+):
+    """Trace persistence failures are logged without disabling prompt context."""
+    project = _make_sample_project(temp_dir)
+    plugin = _load_codebase_intelligence_plugin(project)
+    integration_context = _make_context(project)
+    agent_context = AgentContext(
+        project_dir=project,
+        spec_dir=integration_context.spec_dir,
+        phase="coder",
+        metadata={"agent_type": "coder"},
+    )
+
+    def fail_trace(**_kwargs):
+        raise OSError("trace path unavailable")
+
+    monkeypatch.setattr(plugin, "_write_runtime_trace", fail_trace)
+
+    with caplog.at_level(logging.WARNING):
+        prompt = plugin.augment_prompt(agent_context)
+
+    assert "Codebase Intelligence Runtime Context" in prompt
+    assert "failed to persist runtime trace" in caplog.text

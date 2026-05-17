@@ -465,6 +465,45 @@ class PluginBase(ABC):
         """
         pass
 
+    def augment_prompt(self, context: Any) -> str | None:
+        """
+        Return optional scoped instructions for an agent runtime session.
+
+        Plugin types can override this to contribute analysis-only context
+        without changing their primary role. The runtime adapter labels and
+        capability-scopes the contribution before appending it to prompts.
+        """
+        return None
+
+    def pre_tool(
+        self,
+        context: Any,
+        tool_name: str,
+        tool_input: dict[str, Any],
+    ) -> Any | None:
+        """
+        Inspect a tool call before execution.
+
+        The runtime adapter only calls this for enabled plugins with
+        ``generic_edit`` or ``full_agent_runtime`` capability.
+        """
+        return None
+
+    def post_tool(
+        self,
+        context: Any,
+        tool_name: str,
+        tool_input: dict[str, Any],
+        tool_result: Any,
+    ) -> Any | None:
+        """
+        Inspect a tool result after execution.
+
+        The runtime adapter only calls this for enabled plugins with
+        ``generic_edit`` or ``full_agent_runtime`` capability.
+        """
+        return None
+
     def _mark_loaded(self) -> None:
         """Internal: Mark plugin as loaded."""
         self._loaded = True

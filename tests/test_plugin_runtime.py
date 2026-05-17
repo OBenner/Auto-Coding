@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from plugins.base import PluginCapability, PluginMetadata, PluginType
+from plugins.registry import PluginRegistry
 from plugins.runtime import (
     append_prompt_augmentations,
     collect_prompt_augmentations,
@@ -132,6 +133,49 @@ def _context(tmp_path: Path) -> AgentContext:
     )
 
 
+def _write_runtime_integration_plugin(project_dir: Path) -> None:
+    plugin_dir = (
+        project_dir / ".auto-claude" / "plugins" / "user" / "runtime-integration"
+    )
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    (plugin_dir / "plugin.json").write_text(
+        """{
+  "name": "runtime-integration",
+  "version": "1.0.0",
+  "author": "Tests",
+  "description": "Runtime-aware integration fixture",
+  "plugin_type": "integration",
+  "required_permissions": ["read_files"],
+  "capabilities": ["analysis_only"]
+}
+""",
+        encoding="utf-8",
+    )
+    (plugin_dir / "plugin.py").write_text(
+        '''"""Runtime-aware integration fixture."""
+import plugins.sdk.integration as integration_sdk
+
+
+class RuntimeAwareIntegrationPlugin(integration_sdk.IntegrationPlugin):
+    def on_load(self) -> None:
+        pass
+
+    def on_unload(self) -> None:
+        pass
+
+    def on_enable(self) -> None:
+        pass
+
+    def on_disable(self) -> None:
+        pass
+
+    def augment_prompt(self, context):
+        return f"Integration context for {context.phase}."
+''',
+        encoding="utf-8",
+    )
+
+
 def test_plugin_metadata_defaults_capabilities_by_plugin_type():
     """Plugin manifests get conservative runtime capability defaults."""
     assert _metadata("agent", "agent").capabilities == [
@@ -156,6 +200,30 @@ def test_plugin_metadata_accepts_explicit_capabilities():
         PluginCapability.GENERIC_EDIT,
     ]
     assert metadata.to_dict()["capabilities"] == ["analysis_only", "generic_edit"]
+
+
+def test_build_agent_context_preserves_runtime_metadata(tmp_path):
+    """Runtime context includes task and file metadata for prompt hooks."""
+    from plugins.runtime import build_agent_context
+
+    context = build_agent_context(
+        project_dir=tmp_path,
+        spec_dir=tmp_path / ".auto-claude" / "specs" / "001-test",
+        agent_type="coder",
+        metadata={
+            "task": "Refactor runtime metadata",
+            "files": ["apps/backend/core/client.py"],
+            "subtask_id": "task-1",
+        },
+    )
+
+    assert context.phase == "coder"
+    assert context.metadata == {
+        "agent_type": "coder",
+        "task": "Refactor runtime metadata",
+        "files": ["apps/backend/core/client.py"],
+        "subtask_id": "task-1",
+    }
 
 
 def test_smoke_contracts_for_each_plugin_type(tmp_path):
@@ -188,6 +256,34 @@ def test_prompt_augmentation_collects_enabled_agent_plugin_blocks(tmp_path):
     assert "Use runtime guidance for coder." in prompt
     assert "runtime-agent" in prompt
     assert "full_agent_runtime" in prompt
+
+
+def test_prompt_augmentation_accepts_analysis_only_integration_plugins(tmp_path):
+    """Runtime prompt context can come from enabled analysis-only integrations."""
+    from plugins.runtime import load_enabled_runtime_plugins
+
+    PluginRegistry.reset_instance()
+    try:
+        _write_runtime_integration_plugin(tmp_path)
+
+        plugins = load_enabled_runtime_plugins(tmp_path)
+        context = _context(tmp_path)
+        contributions = collect_prompt_augmentations(plugins, context)
+        prompt = append_prompt_augmentations("Base prompt", contributions)
+        hook_result = asyncio.run(
+            run_plugin_pre_tool_hooks(
+                plugins,
+                context,
+                {"tool_name": "Bash", "tool_input": {"command": "blocked"}},
+            )
+        )
+
+        assert "runtime-integration" in {plugin.name for plugin in plugins}
+        assert "Integration context for coder." in prompt
+        assert "runtime-integration (capabilities: analysis_only)" in prompt
+        assert hook_result == {}
+    finally:
+        PluginRegistry.reset_instance()
 
 
 def test_pre_and_post_tool_hooks_respect_capability_gates(tmp_path):
