@@ -1,5 +1,6 @@
 import type {
   ProviderContractHealth,
+  ProviderE2eSuiteDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
@@ -174,5 +175,38 @@ export function mapProviderReliability(
     Array.isArray(field) ? field.length > 0 : field !== undefined
   )
     ? reliability
+    : undefined;
+}
+
+export function mapProviderE2eSuite(
+  value: unknown
+): ProviderE2eSuiteDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const runs = Array.isArray(payload.runs)
+    ? payload.runs
+      .filter((item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+      )
+      .map((item) => ({
+        runtimeMode: stringFromUnknown(item.runtime_mode),
+        status: stringFromUnknown(item.status),
+        message: stringFromUnknown(item.message),
+        reason: stringFromUnknown(item.reason),
+      }))
+      .filter((item) => Object.values(item).some((field) => field !== undefined))
+    : undefined;
+  const suite: ProviderE2eSuiteDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    runs: runs?.length ? runs : undefined,
+  };
+
+  return Object.values(suite).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? suite
     : undefined;
 }

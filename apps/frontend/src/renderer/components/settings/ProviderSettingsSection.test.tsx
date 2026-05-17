@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildProviderE2eSuiteDiagnosticRows,
   buildProviderReliabilityDiagnosticRows,
   buildProviderResumePolicyDiagnosticRows,
   buildProviderTransactionBatchDiagnosticRows
@@ -34,10 +35,13 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.reliabilityCoverage': 'Reliability coverage',
     'settings:aiProvider.connectionTest.reliabilityUncovered': 'Reliability uncovered',
     'settings:aiProvider.connectionTest.reliabilityCases': 'Reliability cases',
+    'settings:aiProvider.connectionTest.providerE2eSuite': 'Provider e2e suite',
+    'settings:aiProvider.connectionTest.providerE2eRuns': 'Provider e2e runs',
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
+    'settings:aiProvider.runtimeDiagnosticValues.failed': 'Failed',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
     'settings:aiProvider.runtimeDiagnosticValues.notCovered': 'Not covered',
     'settings:aiProvider.runtimeDiagnosticValues.partialCoverage': 'Partial coverage',
@@ -47,8 +51,10 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.repairMutation': 'Repair mutation',
     'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure': 'Recover partial failure',
     'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations': 'Gateway model limitations',
+    'settings:aiProvider.runtimeDiagnosticValues.genericEdit': 'Generic edit',
     'settings:aiProvider.runtimeDiagnosticValues.miniPipeline': 'Mini pipeline',
     'settings:aiProvider.runtimeDiagnosticValues.passed': 'Passed',
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2e': 'Provider e2e',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedTools': 'Unsupported tools',
     'settings:aiProvider.runtimeDiagnosticValues.yes': 'Yes',
@@ -148,6 +154,41 @@ describe('buildProviderReliabilityDiagnosticRows', () => {
         value: (
           'Text completion: Passed (Mini pipeline), Unsupported tools: '
           + 'Not covered (Provider e2e required)'
+        ),
+      },
+    ]);
+  });
+});
+
+describe('buildProviderE2eSuiteDiagnosticRows', () => {
+  it('includes provider e2e suite status and child run outcomes', () => {
+    expect(
+      buildProviderE2eSuiteDiagnosticRows(translate, {
+        status: 'passed',
+        runs: [
+          {
+            runtimeMode: 'generic_edit',
+            status: 'passed',
+            message: 'generic_edit passed',
+          },
+          {
+            runtimeMode: 'mini_pipeline',
+            status: 'failed',
+            message: 'mini_pipeline failed',
+            reason: 'unit_tests_failed',
+          },
+        ],
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerE2eSuite',
+        value: 'Passed',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerE2eRuns',
+        value: (
+          'Generic edit: Passed - generic_edit passed, '
+          + 'Mini pipeline: Failed - mini_pipeline failed - unit_tests_failed'
         ),
       },
     ]);

@@ -153,6 +153,28 @@ def test_parse_args_with_provider_smoke_mini_pipeline_runtime():
     assert args.provider_smoke_runtime == "mini_pipeline"
 
 
+def test_parse_args_with_provider_smoke_provider_e2e_runtime():
+    from cli.main import parse_args
+
+    original_argv = sys.argv
+    sys.argv = [
+        "run.py",
+        "--provider",
+        "openai",
+        "--provider-smoke",
+        "--provider-smoke-runtime",
+        "provider_e2e",
+    ]
+    try:
+        args = parse_args()
+    finally:
+        sys.argv = original_argv
+
+    assert args.provider == "openai"
+    assert args.provider_smoke is True
+    assert args.provider_smoke_runtime == "provider_e2e"
+
+
 @pytest.mark.asyncio
 async def test_run_provider_smoke_check_success(
     tmp_path: Path,
@@ -217,6 +239,147 @@ async def test_run_provider_smoke_check_success(
         "native_tool_loop"
         in result.runtime_diagnostics["full_autonomous_missing_capabilities"]
     )
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_contract_health,
+        run_provider_smoke_check,
+    )
+
+    observed_runtime_modes: list[str] = []
+
+    class FakeProvider:
+        name = "openai"
+
+        def validate_config(self):
+            return True
+
+        def create_session(self, session_config):
+            return object()
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.ProviderConfig.from_env",
+        lambda agent_type=None: ProviderConfig(
+            provider="openai",
+            openai_api_key="sk-test",
+            openai_model="gpt-4o",
+        ),
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands.create_engine_provider",
+        lambda _config: FakeProvider(),
+    )
+
+    async def fake_generic_edit_smoke(**kwargs):
+        provider = kwargs["provider"]
+        observed_runtime_modes.append("generic_edit")
+        return ProviderSmokeResult(
+            success=True,
+            provider=provider.name,
+            model=kwargs["model"],
+            runtime_mode="generic_edit",
+            message="generic_edit passed",
+            runtime_diagnostics=_with_provider_contract_health(
+                {
+                    "provider": provider.name,
+                    "smoke_scope": "generic_edit_tool_loop",
+                    "validated_runtime_execution": {
+                        "tool_loop_contract": {
+                            "status": "passed",
+                            "tool_call_support": "native",
+                            "tool_result_support": "normalized",
+                            "fallback": "none",
+                            "recovery_status": "not_required",
+                        },
+                    },
+                },
+                success=True,
+            ),
+        )
+
+    async def fake_mini_pipeline_smoke(**kwargs):
+        provider = kwargs["provider"]
+        observed_runtime_modes.append("mini_pipeline")
+        return ProviderSmokeResult(
+            success=True,
+            provider=provider.name,
+            model=kwargs["model"],
+            runtime_mode="mini_pipeline",
+            message="mini_pipeline passed",
+            runtime_diagnostics=_with_provider_contract_health(
+                {
+                    "provider": provider.name,
+                    "smoke_scope": "mini_task_pipeline",
+                    "validated_runtime_execution": {
+                        "tool_loop_contract": {
+                            "status": "passed",
+                            "tool_call_support": "native",
+                            "tool_result_support": "normalized",
+                            "fallback": "none",
+                            "recovery_status": "not_required",
+                        },
+                    },
+                    "mini_pipeline": {
+                        "status": "passed",
+                        "recovery_loop": {
+                            "status": "passed",
+                            "recovery_status": "resolved",
+                        },
+                    },
+                },
+                success=True,
+            ),
+        )
+
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands._complete_provider_generic_edit_smoke",
+        fake_generic_edit_smoke,
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands._complete_provider_mini_pipeline_smoke",
+        fake_mini_pipeline_smoke,
+    )
+
+    result = await run_provider_smoke_check(
+        project_dir=tmp_path,
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+    )
+
+    assert result.success is True
+    assert result.runtime_mode == "provider_e2e"
+    assert observed_runtime_modes == ["generic_edit", "mini_pipeline"]
+    assert result.runtime_diagnostics["smoke_scope"] == "direct_api_full_autonomy_e2e"
+    assert result.runtime_diagnostics["provider_e2e_suite"] == {
+        "status": "passed",
+        "runs": [
+            {
+                "runtime_mode": "generic_edit",
+                "status": "passed",
+                "message": "generic_edit passed",
+            },
+            {
+                "runtime_mode": "mini_pipeline",
+                "status": "passed",
+                "message": "mini_pipeline passed",
+            },
+        ],
+    }
+    reliability = result.runtime_diagnostics["provider_reliability"]
+    assert reliability["status"] == "partial_coverage"
+    assert reliability["observed_case_count"] == 5
+    assert reliability["passed_case_count"] == 5
+    assert reliability["required_case_count"] == 7
+    assert reliability["uncovered_cases"] == [
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
 
 
 @pytest.mark.asyncio

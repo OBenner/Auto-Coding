@@ -488,6 +488,7 @@ export interface ProviderRuntimeDiagnostics {
   validatedRuntimeMissingCapabilities?: string[];
   validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
   miniPipeline?: ProviderMiniPipelineDiagnostics | null;
+  providerE2eSuite?: ProviderE2eSuiteDiagnostics;
   providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
@@ -593,6 +594,18 @@ export interface ProviderReliabilityCase {
   case?: string;
   status?: string;
   source?: string;
+}
+
+export interface ProviderE2eSuiteDiagnostics {
+  status?: string;
+  runs?: ProviderE2eSuiteRun[];
+}
+
+export interface ProviderE2eSuiteRun {
+  runtimeMode?: string;
+  status?: string;
+  message?: string;
+  reason?: string;
 }
 
 export interface ProviderConnectionTestResult {

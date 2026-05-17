@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   mapProviderContractHealth,
+  mapProviderE2eSuite,
   mapProviderReliability,
   mapProviderRuntimeResumePolicy,
   mapProviderTransactionBatchContract,
@@ -186,5 +187,50 @@ describe('mapProviderReliability', () => {
 
   it('returns undefined for empty provider reliability payloads', () => {
     expect(mapProviderReliability({})).toBeUndefined();
+  });
+});
+
+describe('mapProviderE2eSuite', () => {
+  it('maps safe provider e2e suite run fields', () => {
+    expect(
+      mapProviderE2eSuite({
+        status: 'passed',
+        ignored_private_path: 'workspace-private/provider-e2e.json',
+        runs: [
+          {
+            runtime_mode: 'generic_edit',
+            status: 'passed',
+            message: 'generic_edit passed',
+          },
+          {
+            runtime_mode: 'mini_pipeline',
+            status: 'failed',
+            message: 'mini_pipeline failed',
+            reason: 'unit_tests_failed',
+            ignored_private_path: 'workspace-private/trace.json',
+          },
+          null,
+        ],
+      })
+    ).toEqual({
+      status: 'passed',
+      runs: [
+        {
+          runtimeMode: 'generic_edit',
+          status: 'passed',
+          message: 'generic_edit passed',
+        },
+        {
+          runtimeMode: 'mini_pipeline',
+          status: 'failed',
+          message: 'mini_pipeline failed',
+          reason: 'unit_tests_failed',
+        },
+      ],
+    });
+  });
+
+  it('returns undefined for empty provider e2e suite payloads', () => {
+    expect(mapProviderE2eSuite({})).toBeUndefined();
   });
 });

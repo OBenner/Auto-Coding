@@ -101,7 +101,12 @@ MINI_PIPELINE_TEST_FILE = (
     "    unittest.main()\n"
 )
 DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS = 30.0
-PROVIDER_SMOKE_RUNTIME_MODES = ("analysis_only", "generic_edit", "mini_pipeline")
+PROVIDER_SMOKE_RUNTIME_MODES = (
+    "analysis_only",
+    "generic_edit",
+    "mini_pipeline",
+    "provider_e2e",
+)
 PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = (
     "openai",
     "google",
@@ -110,6 +115,21 @@ PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = (
     "zhipuai",
     "ollama",
 )
+PROVIDER_RELIABILITY_CASE_ORDER = (
+    "text_completion",
+    "generic_edit_tool_loop",
+    "native_tool_calls",
+    "tool_results",
+    "recovery_loop",
+    "unsupported_tools",
+    "gateway_model_limitations",
+)
+PROVIDER_RELIABILITY_STATUS_RANK = {
+    "not_covered": 0,
+    "blocked": 1,
+    "limited": 2,
+    "passed": 3,
+}
 
 
 @dataclass(frozen=True)
@@ -580,6 +600,15 @@ def _provider_contract_health(
         if health:
             return health
 
+    provider_e2e_suite = runtime_diagnostics.get("provider_e2e_suite")
+    if isinstance(provider_e2e_suite, dict):
+        health = _provider_health_from_e2e_suite(
+            provider_e2e_suite,
+            smoke_scope=smoke_scope,
+        )
+        if health:
+            return health
+
     if error_details:
         issue = _provider_issue_from_error(error_details)
         return {
@@ -633,10 +662,15 @@ def _with_provider_contract_health(
         **runtime_diagnostics,
         "provider_contract_health": provider_contract_health,
     }
-    provider_reliability = _provider_reliability_diagnostics(
-        diagnostics,
-        provider_contract_health=provider_contract_health,
-        success=success,
+    existing_reliability = runtime_diagnostics.get("provider_reliability")
+    provider_reliability = (
+        existing_reliability
+        if isinstance(existing_reliability, dict)
+        else _provider_reliability_diagnostics(
+            diagnostics,
+            provider_contract_health=provider_contract_health,
+            success=success,
+        )
     )
     if provider_reliability is not None:
         diagnostics["provider_reliability"] = provider_reliability
@@ -666,6 +700,14 @@ def _provider_reliability_diagnostics(
         ),
         _provider_gateway_model_case(provider_contract_health),
     ]
+    return _provider_reliability_payload(provider, cases)
+
+
+def _provider_reliability_payload(
+    provider: str,
+    cases: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Return direct-provider reliability counters for ordered case results."""
     observed_cases = [case for case in cases if case.get("status") != "not_covered"]
     passed_cases = [case for case in cases if case.get("status") == "passed"]
     uncovered_cases = [
@@ -681,6 +723,58 @@ def _provider_reliability_diagnostics(
         "uncovered_cases": uncovered_cases,
         "cases": cases,
     }
+
+
+def _merge_provider_reliability_diagnostics(
+    provider: str,
+    reliabilities: list[Any],
+) -> dict[str, Any] | None:
+    """Merge per-smoke reliability payloads into one provider e2e suite view."""
+    normalized_provider = provider.lower()
+    if normalized_provider not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return None
+
+    cases_by_name: dict[str, dict[str, str]] = {
+        case_name: {
+            "case": case_name,
+            "status": "not_covered",
+            "source": "provider_e2e_required",
+        }
+        for case_name in PROVIDER_RELIABILITY_CASE_ORDER
+    }
+    observed = False
+    for reliability in reliabilities:
+        if not isinstance(reliability, dict):
+            continue
+        cases = reliability.get("cases")
+        if not isinstance(cases, list):
+            continue
+        for candidate in cases:
+            if not isinstance(candidate, dict):
+                continue
+            case_name = str(candidate.get("case") or "")
+            if case_name not in cases_by_name:
+                continue
+            status = str(candidate.get("status") or "not_covered")
+            current_status = cases_by_name[case_name]["status"]
+            if PROVIDER_RELIABILITY_STATUS_RANK.get(
+                status,
+                0,
+            ) > PROVIDER_RELIABILITY_STATUS_RANK.get(current_status, 0):
+                source = str(candidate.get("source") or "provider_e2e_suite")
+                cases_by_name[case_name] = {
+                    "case": case_name,
+                    "status": status,
+                    "source": source,
+                }
+                observed = True
+
+    if not observed:
+        return None
+    return _provider_reliability_payload(
+        normalized_provider,
+        [cases_by_name[case_name] for case_name in PROVIDER_RELIABILITY_CASE_ORDER],
+    )
 
 
 def _provider_text_completion_case(
@@ -958,6 +1052,39 @@ def _provider_health_from_mini_pipeline(
     return health
 
 
+def _provider_health_from_e2e_suite(
+    provider_e2e_suite: dict[str, Any],
+    *,
+    smoke_scope: str,
+) -> dict[str, Any] | None:
+    """Return provider health for the direct-provider e2e suite."""
+    status = str(provider_e2e_suite.get("status") or "unknown")
+    if status not in {"passed", "failed"}:
+        return None
+
+    runs = provider_e2e_suite.get("runs")
+    run_payloads = (
+        [run for run in runs if isinstance(run, dict)] if isinstance(runs, list) else []
+    )
+    failed_runs = [
+        str(run.get("runtime_mode") or "unknown")
+        for run in run_payloads
+        if str(run.get("status") or "") != "passed"
+    ]
+    health: dict[str, Any] = {
+        "status": "provider_e2e_ready"
+        if status == "passed"
+        else "provider_e2e_blocked",
+        "smoke_scope": smoke_scope,
+        "passed_run_count": len(run_payloads) - len(failed_runs),
+        "required_run_count": len(run_payloads),
+    }
+    if failed_runs:
+        health["reason"] = "provider_e2e_failed"
+        health["failed_runs"] = failed_runs
+    return health
+
+
 def _provider_issue_from_error(error_details: str) -> dict[str, str]:
     error_text = error_details.lower()
     if any(
@@ -1048,6 +1175,11 @@ def normalize_provider_smoke_runtime_mode(value: str | None) -> str:
 
 
 def _provider_smoke_requirements(runtime_mode: str) -> RuntimeRequirements:
+    if runtime_mode == "provider_e2e":
+        return RuntimeRequirements(
+            mode="provider_e2e",
+            required=RuntimeRequirements.generic_edit().required,
+        )
     if runtime_mode == "mini_pipeline":
         return RuntimeRequirements(
             mode="mini_pipeline",
@@ -1059,6 +1191,8 @@ def _provider_smoke_requirements(runtime_mode: str) -> RuntimeRequirements:
 
 
 def _provider_smoke_scope(runtime_mode: str) -> str:
+    if runtime_mode == "provider_e2e":
+        return "direct_api_full_autonomy_e2e"
     if runtime_mode == "mini_pipeline":
         return "mini_task_pipeline"
     if runtime_mode == "generic_edit":
@@ -1067,6 +1201,14 @@ def _provider_smoke_scope(runtime_mode: str) -> str:
 
 
 def _provider_smoke_note(runtime_mode: str) -> str:
+    if runtime_mode == "provider_e2e":
+        return (
+            "Provider e2e smoke runs the direct-provider generic_edit tool-loop "
+            "check and the mini planner/coder/tests/reviewer pipeline. It "
+            "aggregates full-autonomy coverage cases, but unsupported-tool and "
+            "gateway/model limitation probes still require explicit negative "
+            "provider runs."
+        )
     if runtime_mode == "mini_pipeline":
         return (
             "Provider smoke runs a temporary planner/coder/reviewer mini task. "
@@ -1088,6 +1230,8 @@ def _provider_smoke_note(runtime_mode: str) -> str:
 
 def _provider_smoke_capability_mode(runtime_mode: str) -> str:
     """Map smoke-only scopes to the runtime mode that supplies capabilities."""
+    if runtime_mode == "provider_e2e":
+        return "generic_edit"
     if runtime_mode == "mini_pipeline":
         return "generic_edit"
     return runtime_mode
@@ -1209,6 +1353,16 @@ async def run_provider_smoke_check(
     )
 
     try:
+        if validated_runtime_mode == "provider_e2e":
+            return await _complete_provider_e2e_smoke_suite(
+                provider=provider,
+                session_config=session_config,
+                prompt=prompt,
+                timeout_seconds=timeout_seconds,
+                model=resolved_model,
+                runtime_diagnostics=runtime_diagnostics,
+            )
+
         if validated_runtime_mode == "mini_pipeline":
             return await _complete_provider_mini_pipeline_smoke(
                 provider=provider,
@@ -1348,6 +1502,121 @@ async def _complete_provider_smoke(
         runtime_diagnostics=_with_provider_contract_health(
             runtime_diagnostics,
             success=True,
+        ),
+    )
+
+
+async def _complete_provider_e2e_smoke_suite(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    prompt: str | None,
+    timeout_seconds: float,
+    model: str | None,
+    runtime_diagnostics: dict[str, Any],
+) -> ProviderSmokeResult:
+    """Run the provider-specific e2e suite over live direct-provider surfaces."""
+    child_results: list[ProviderSmokeResult] = []
+    suite_runs: list[dict[str, str]] = []
+    for child_runtime_mode, runner, child_prompt in (
+        ("generic_edit", _complete_provider_generic_edit_smoke, None),
+        ("mini_pipeline", _complete_provider_mini_pipeline_smoke, prompt),
+    ):
+        child_diagnostics = build_provider_smoke_runtime_diagnostics(
+            provider_name=provider.name,
+            requested_runtime_mode=child_runtime_mode,
+            validated_runtime_mode=child_runtime_mode,
+        )
+        try:
+            child_result = await runner(
+                provider=provider,
+                session_config=session_config,
+                prompt=child_prompt,
+                timeout_seconds=timeout_seconds,
+                model=model,
+                runtime_diagnostics=child_diagnostics,
+            )
+        except Exception as e:
+            logger.debug(
+                "Provider e2e smoke child run failed",
+                exc_info=True,
+                extra={"runtime_mode": child_runtime_mode},
+            )
+            child_result = ProviderSmokeResult(
+                success=False,
+                provider=provider.name,
+                model=model,
+                runtime_mode=child_runtime_mode,
+                message=f"Provider {child_runtime_mode} smoke failed: {e}",
+                error_details=str(e),
+                runtime_diagnostics=_with_provider_contract_health(
+                    child_diagnostics,
+                    error_details=str(e),
+                ),
+            )
+        child_results.append(child_result)
+        run_payload = {
+            "runtime_mode": child_result.runtime_mode,
+            "status": "passed" if child_result.success else "failed",
+            "message": child_result.message,
+        }
+        if child_result.error_details:
+            run_payload["reason"] = _response_excerpt(
+                child_result.error_details,
+                max_chars=160,
+            )
+        suite_runs.append(run_payload)
+
+    success = all(child.success for child in child_results)
+    suite_status = "passed" if success else "failed"
+    reliability = _merge_provider_reliability_diagnostics(
+        provider.name,
+        [
+            child.runtime_diagnostics.get("provider_reliability")
+            for child in child_results
+        ],
+    )
+    next_diagnostics: dict[str, Any] = {
+        **runtime_diagnostics,
+        "provider_e2e_suite": {
+            "status": suite_status,
+            "runs": suite_runs,
+        },
+    }
+    if reliability is not None:
+        next_diagnostics["provider_reliability"] = reliability
+
+    response_excerpt = _response_excerpt(
+        "; ".join(
+            child.response_excerpt or child.message
+            for child in child_results
+            if child.response_excerpt or child.message
+        )
+    )
+    error_details = (
+        "; ".join(
+            child.error_details or child.message
+            for child in child_results
+            if not child.success
+        )
+        or None
+    )
+    return ProviderSmokeResult(
+        success=success,
+        provider=provider.name,
+        model=model,
+        runtime_mode="provider_e2e",
+        message=(
+            "Provider e2e smoke suite passed"
+            if success
+            else "Provider e2e smoke suite failed"
+        ),
+        response_excerpt=response_excerpt if success else None,
+        error_details=error_details,
+        runtime_diagnostics=_with_provider_contract_health(
+            next_diagnostics,
+            success=success,
+            error_details=error_details,
         ),
     )
 
@@ -1974,6 +2243,7 @@ def _print_provider_runtime_diagnostics(
     )
     _print_provider_contract_health(runtime_diagnostics.get("provider_contract_health"))
     _print_provider_reliability(runtime_diagnostics.get("provider_reliability"))
+    _print_provider_e2e_suite(runtime_diagnostics.get("provider_e2e_suite"))
     _print_provider_execution_diagnostics(
         runtime_diagnostics.get("validated_runtime_execution")
     )
@@ -2018,6 +2288,25 @@ def _print_provider_reliability(reliability: Any) -> None:
     if coverage:
         print_key_value("Reliability coverage", coverage)
     _print_string_list_line("Reliability uncovered", reliability.get("uncovered_cases"))
+
+
+def _print_provider_e2e_suite(provider_e2e_suite: Any) -> None:
+    """Print provider e2e suite run diagnostics."""
+    if not isinstance(provider_e2e_suite, dict):
+        return
+    status = provider_e2e_suite.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Provider e2e suite", status)
+    runs = provider_e2e_suite.get("runs")
+    if not isinstance(runs, list):
+        return
+    run_parts = [
+        f"{run.get('runtime_mode', 'unknown')}={run.get('status', 'unknown')}"
+        for run in runs
+        if isinstance(run, dict)
+    ]
+    if run_parts:
+        print_key_value("Provider e2e runs", ", ".join(run_parts))
 
 
 def _print_provider_execution_diagnostics(execution: Any) -> None:

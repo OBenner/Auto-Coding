@@ -150,6 +150,7 @@ For a deeper provider-readiness signal, select a runtime smoke scope:
 ```bash
 python run.py --provider openai --provider-smoke --provider-smoke-runtime generic_edit --json
 python run.py --provider openai --provider-smoke --provider-smoke-runtime mini_pipeline --json
+python run.py --provider openai --provider-smoke --provider-smoke-runtime provider_e2e --json
 ```
 
 `generic_edit` validates one local tool loop and reports native tool support,
@@ -158,6 +159,9 @@ diagnostics. `mini_pipeline` runs a temporary planner/coder/test/reviewer task
 and now adds a recovery exercise: it creates a recoverable partial edit, checks
 the resume preflight, resumes from the generated checkpoint, and requires the
 recovery result to resolve cleanly before reporting `mini_pipeline_ready`.
+`provider_e2e` runs the direct-provider e2e suite: the `generic_edit` smoke and
+the mini pipeline smoke are executed back-to-back for the configured provider,
+then merged into one `provider_e2e_suite` and `provider_reliability` payload.
 The JSON diagnostics also include `provider_reliability`: a direct-provider
 coverage matrix for the full-autonomy e2e cases. It marks observed cases such
 as text completion, generic edit tool loop, native tool calls, tool results, and
@@ -242,14 +246,14 @@ what is already implemented from what still blocks OpenAI, Gemini, OpenRouter,
 LiteLLM, ZhipuAI, and Ollama from being treated as full autonomous coding
 providers.
 
-Last updated: 2026-05-16.
+Last updated: 2026-05-17.
 
 | Area | Current status | Done | Remaining |
 |------|----------------|------|-----------|
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
 | Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, batch boundary guards, pre-execution staged isolation guards for opaque open-batch mutations, mutation snapshots, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing artifact preflight blockers, recovery-plan artifact health checks, artifact manifest transaction batches, manifest/checkpoint consistency checks, manifest recovery-timeline/resume-policy drift guards, trace/session/manifest counter drift checks, unified resume artifact consistency across trace, checkpoint, session state, manifest, mutation snapshots, and transaction batch state, and rich runtime events are implemented. | Harden non-happy-path recovery further for true staged apply isolation and UI-driven repair/rollback workflows. |
-| Provider reliability | Partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, transaction batch contract, boundary guards, and open transaction batches. `--provider-smoke --provider-smoke-runtime mini_pipeline` now also runs a planner/coder/test/reviewer flow plus a checkpoint preflight/resume recovery loop and reports `recovery_loop_status`. Provider smoke JSON and the settings UI now include `provider_reliability`, an explicit coverage matrix for direct-provider full-autonomy e2e cases. | Add provider-specific e2e suites for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama covering native tool calls, normalized tool results, unsupported tools, fallback reasons, and recovery loops against real models/gateways. |
+| Provider reliability | Partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, transaction batch contract, boundary guards, and open transaction batches. `--provider-smoke --provider-smoke-runtime mini_pipeline` runs a planner/coder/test/reviewer flow plus a checkpoint preflight/resume recovery loop and reports `recovery_loop_status`. `--provider-smoke --provider-smoke-runtime provider_e2e` now runs the direct-provider e2e suite and merges child results into `provider_e2e_suite` and `provider_reliability`; the settings UI surfaces both. | Add explicit negative provider probes for unsupported tools and gateway/model limitations against OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama real models/gateways. |
 | MCP Bridge v1 | Partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, permission/audit metadata, unavailable-tool observations, and readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers are represented. | Generalize execution beyond Context7, enforce permissions at every bridge boundary, normalize arbitrary live schemas/results, reuse external sessions safely, and make custom MCP server lifecycle failures first-class. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, and read-only merge plans. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, and policy gates before enabling mutable subagents. |
 | CLI runtimes as full runtime class | Partial | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners. | Wire Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs to the same `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata contract. |

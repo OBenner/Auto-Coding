@@ -25,6 +25,7 @@ import type {
   AIProviderConfig,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
+  ProviderE2eSuiteDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderRuntimeDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
@@ -268,7 +269,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   passed: 'settings:aiProvider.runtimeDiagnosticValues.passed',
   patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
   provider_error: 'settings:aiProvider.runtimeDiagnosticValues.providerError',
+  provider_e2e: 'settings:aiProvider.runtimeDiagnosticValues.providerE2e',
+  provider_e2e_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eBlocked',
   provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired',
+  provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
   provider_smoke_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeBlocked',
   provider_smoke_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeReady',
   pre_execution_blocked: 'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked',
@@ -306,6 +310,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   tool_loop_ready: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopReady',
   complete: 'settings:aiProvider.runtimeDiagnosticValues.complete',
   direct_api_full_autonomy: 'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy',
+  direct_api_full_autonomy_e2e: 'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomyE2e',
   finish: 'settings:aiProvider.runtimeDiagnosticValues.finish',
   gateway_model_limitations: 'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
@@ -651,6 +656,39 @@ export function buildProviderReliabilityDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.reliabilityCases',
       value: caseValue || '',
+    },
+  ];
+  return rows.filter((row) => row.value);
+}
+
+export function buildProviderE2eSuiteDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  providerE2eSuite?: ProviderE2eSuiteDiagnostics | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!providerE2eSuite) {
+    return [];
+  }
+  const runsValue = providerE2eSuite.runs
+    ?.map((run) => {
+      const runtime = formatRuntimeDiagnosticValue(translate, run.runtimeMode);
+      const status = formatRuntimeDiagnosticValue(translate, run.status);
+      if (!runtime || !status) {
+        return '';
+      }
+      return [runtime, status].join(': ')
+        + (run.message ? ` - ${run.message}` : '')
+        + (run.reason ? ` - ${run.reason}` : '');
+    })
+    .filter(Boolean)
+    .join(', ');
+  const rows: ProviderResumePolicyDiagnosticRow[] = [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerE2eSuite',
+      value: formatRuntimeDiagnosticValue(translate, providerE2eSuite.status) || '',
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerE2eRuns',
+      value: runsValue || '',
     },
   ];
   return rows.filter((row) => row.value);
@@ -1613,6 +1651,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       .filter(Boolean)
       .join(', ');
     const miniPipelineChangedFiles = miniPipeline?.changedFiles?.join(', ');
+    const providerE2eRows = buildProviderE2eSuiteDiagnosticRows(
+      t,
+      runtimeDiagnostics?.providerE2eSuite
+    );
     const reliabilityRows = buildProviderReliabilityDiagnosticRows(
       t,
       runtimeDiagnostics?.providerReliability
@@ -1723,6 +1765,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 label={t('settings:aiProvider.connectionTest.missingFullAutonomous')}
                 value={missingFullAutonomous || t('settings:aiProvider.connectionTest.noneMissing')}
               />
+              {providerE2eRows.map((row) => (
+                <RuntimeDiagnosticRow
+                  key={row.labelKey}
+                  label={t(row.labelKey)}
+                  value={row.value}
+                />
+              ))}
               {reliabilityRows.map((row) => (
                 <RuntimeDiagnosticRow
                   key={row.labelKey}
