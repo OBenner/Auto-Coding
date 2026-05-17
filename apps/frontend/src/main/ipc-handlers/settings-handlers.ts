@@ -405,6 +405,7 @@ type ProviderSmokeCliResult = {
 };
 
 type RuntimeModesCliPayload = {
+  cli_runner_contract_matrix?: RuntimeControlPlaneDiagnostics['cli_runner_contract_matrix'];
   runtime_fallback_matrix?: RuntimeControlPlaneDiagnostics['runtime_fallback_matrix'];
   mcp_bridge_plan_matrix?: RuntimeControlPlaneDiagnostics['mcp_bridge_plan_matrix'];
   external_mcp_server_health?: RuntimeControlPlaneDiagnostics['external_mcp_server_health'];
@@ -621,6 +622,9 @@ function mapRuntimeControlPlaneDiagnostics(
   payload: RuntimeModesCliPayload
 ): RuntimeControlPlaneDiagnostics {
   return {
+    cli_runner_contract_matrix: Array.isArray(payload.cli_runner_contract_matrix)
+      ? payload.cli_runner_contract_matrix
+      : [],
     runtime_fallback_matrix: Array.isArray(payload.runtime_fallback_matrix)
       ? payload.runtime_fallback_matrix
       : [],

@@ -10,6 +10,7 @@ import {
   buildProviderResumePolicyDiagnosticRows,
   buildProviderRunHistoryDiagnosticRows,
   buildProviderTransactionBatchDiagnosticRows,
+  buildCliRunnerContractDiagnosticRows,
   buildRuntimeEvalHistoryDiagnosticRows,
   buildRuntimeEvalDiagnosticRows,
   buildRuntimePolicyDiagnosticRows
@@ -51,6 +52,7 @@ const translate = (key: string) =>
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
     'settings:aiProvider.controlPlane.runtimeEvalHistory': 'Runtime eval history',
+    'settings:aiProvider.controlPlane.cliRunnerContracts': 'CLI runner contracts',
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
@@ -63,6 +65,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.notCovered': 'Not covered',
     'settings:aiProvider.runtimeDiagnosticValues.litellm': 'LiteLLM',
     'settings:aiProvider.runtimeDiagnosticValues.openrouter': 'OpenRouter',
+    'settings:aiProvider.runtimeDiagnosticValues.planned': 'Planned',
     'settings:aiProvider.runtimeDiagnosticValues.partial': 'Partial',
     'settings:aiProvider.runtimeDiagnosticValues.partialCoverage': 'Partial coverage',
     'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked': 'Pre-execution blocked',
@@ -225,6 +228,44 @@ describe('buildRuntimeEvalHistoryDiagnosticRows', () => {
           'Provider e2e: Partial (3 total, 2 passed, 1 failed; '
           + 'missing OpenRouter, LiteLLM; .auto-Codex/provider-smoke-history.json)'
         ),
+      },
+    ]);
+  });
+});
+
+describe('buildCliRunnerContractDiagnosticRows', () => {
+  it('summarizes CLI runner contract readiness', () => {
+    expect(
+      buildCliRunnerContractDiagnosticRows(translate, [
+        {
+          runner_id: 'codex_cli',
+          display_name: 'Codex CLI',
+          runner_status: 'wired',
+          contract_status: 'ready',
+          required_facets: ['run', 'cancel'],
+          missing_contract_facets: [],
+          facets: { run: 'wired', cancel: 'wired' },
+          adapter_required: false,
+          supported_runtime_modes: ['full_autonomous'],
+          artifact_contract: 'codex_cli_result.json, codex_cli_timeline.json',
+        },
+        {
+          runner_id: 'opencode',
+          display_name: 'OpenCode',
+          runner_status: 'planned',
+          contract_status: 'planned',
+          required_facets: ['run', 'cancel'],
+          missing_contract_facets: ['run', 'cancel'],
+          facets: { run: 'missing_adapter', cancel: 'missing_adapter' },
+          adapter_required: true,
+          supported_runtime_modes: ['generic_edit'],
+          artifact_contract: 'opencode_result.json, opencode_timeline.json',
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.cliRunnerContracts',
+        value: 'Codex CLI: Ready; OpenCode: Planned (run, cancel)',
       },
     ]);
   });

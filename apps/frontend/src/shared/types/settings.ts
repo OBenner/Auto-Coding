@@ -792,7 +792,21 @@ export interface RuntimeEvalHistoryRow {
   providers: RuntimeEvalHistoryProviderRow[];
 }
 
+export interface CliRunnerContractMatrixRow {
+  runner_id: string;
+  display_name: string;
+  runner_status: string;
+  contract_status: string;
+  required_facets: string[];
+  missing_contract_facets: string[];
+  facets: Record<string, string>;
+  adapter_required: boolean;
+  supported_runtime_modes: string[];
+  artifact_contract: string;
+}
+
 export interface RuntimeControlPlaneDiagnostics {
+  cli_runner_contract_matrix?: CliRunnerContractMatrixRow[];
   runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
   mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
   external_mcp_server_health?: RuntimeExternalMcpHealthRow[];

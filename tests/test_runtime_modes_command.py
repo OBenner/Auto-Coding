@@ -90,6 +90,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "patch_proposal" in output
     assert "CLI Runner Profiles" in output
     assert "CLI Runner Selection" in output
+    assert "CLI Runner Contract Matrix" in output
     assert "Runtime Fallback Matrix" in output
     assert "MCP Bridge Plan Matrix" in output
     assert "External MCP Client Health" in output
@@ -144,6 +145,29 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert runner_rows["goose"]["role"] == "fallback"
     assert "mcp" in runner_rows["goose"]["capability_tags"]
     assert runner_rows["qwen_code"]["runner_status"] == "planned"
+    contract_rows = {
+        row["runner_id"]: row for row in payload["cli_runner_contract_matrix"]
+    }
+    assert contract_rows["codex_cli"]["contract_status"] == "ready"
+    assert contract_rows["codex_cli"]["missing_contract_facets"] == []
+    assert contract_rows["codex_cli"]["facets"] == {
+        "run": "wired",
+        "cancel": "wired",
+        "resume": "wired",
+        "artifacts": "wired",
+        "event_parser": "wired",
+        "cost_account": "wired",
+    }
+    assert contract_rows["opencode"]["contract_status"] == "planned"
+    assert contract_rows["opencode"]["missing_contract_facets"] == [
+        "run",
+        "cancel",
+        "resume",
+        "artifacts",
+        "event_parser",
+        "cost_account",
+    ]
+    assert contract_rows["opencode"]["adapter_required"] is True
     selection_rows = payload["cli_runner_selection"]
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
         "codex_cli",

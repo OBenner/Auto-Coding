@@ -54,6 +54,24 @@ from cli.provider_smoke_commands import (
 DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
 DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS = registered_external_mcp_servers()
 logger = logging.getLogger(__name__)
+CLI_RUNNER_CONTRACT_FACETS = (
+    "run",
+    "cancel",
+    "resume",
+    "artifacts",
+    "event_parser",
+    "cost_account",
+)
+CLI_RUNNER_WIRED_CONTRACTS = {
+    "codex_cli": {
+        "run": "wired",
+        "cancel": "wired",
+        "resume": "wired",
+        "artifacts": "wired",
+        "event_parser": "wired",
+        "cost_account": "wired",
+    },
+}
 
 RUNTIME_POLICY_PHASES = (
     {
@@ -167,6 +185,44 @@ def build_runtime_fallback_matrix(
                     ),
                 }
             )
+    return matrix
+
+
+def build_cli_runner_contract_matrix() -> list[dict[str, Any]]:
+    """Build the shared full-runtime CLI runner contract matrix."""
+    matrix: list[dict[str, Any]] = []
+    for profile in CLI_RUNNER_PROFILES:
+        wired_facets = CLI_RUNNER_WIRED_CONTRACTS.get(profile.runner_id, {})
+        facets = {
+            facet: wired_facets.get(facet, "missing_adapter")
+            for facet in CLI_RUNNER_CONTRACT_FACETS
+        }
+        missing_facets = [
+            facet for facet, status in facets.items() if status != "wired"
+        ]
+        if not missing_facets:
+            contract_status = "ready"
+        elif profile.runner_status == "wired":
+            contract_status = "partial"
+        else:
+            contract_status = "planned"
+        matrix.append(
+            {
+                "runner_id": profile.runner_id,
+                "display_name": profile.display_name,
+                "runner_status": profile.runner_status,
+                "contract_status": contract_status,
+                "required_facets": list(CLI_RUNNER_CONTRACT_FACETS),
+                "missing_contract_facets": missing_facets,
+                "facets": facets,
+                "adapter_required": bool(missing_facets),
+                "supported_runtime_modes": list(profile.supported_runtime_modes),
+                "artifact_contract": (
+                    f"{profile.runner_id}_result.json, "
+                    f"{profile.runner_id}_timeline.json"
+                ),
+            }
+        )
     return matrix
 
 
@@ -491,6 +547,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
             include_detection=True,
         ),
         "cli_runner_selection": cli_runner_selection,
+        "cli_runner_contract_matrix": build_cli_runner_contract_matrix(),
         "runtime_fallback_matrix": build_runtime_fallback_matrix(),
         "mcp_bridge_plan_matrix": build_mcp_bridge_plan_matrix(),
         "external_mcp_server_health": build_external_mcp_health_matrix(
@@ -979,6 +1036,16 @@ def format_runtime_modes_text() -> str:
         ]
         for mode in RUNTIME_MODE_INFO
     ]
+    cli_runner_contract_rows = [
+        [
+            row["runner_id"],
+            row["runner_status"],
+            row["contract_status"],
+            ", ".join(row["missing_contract_facets"]) or "none",
+            row["artifact_contract"],
+        ]
+        for row in build_cli_runner_contract_matrix()
+    ]
     runtime_fallback_rows = [
         [
             row["provider"],
@@ -1107,6 +1174,17 @@ def format_runtime_modes_text() -> str:
             _format_table(
                 ["Runtime mode", "Eligible runners"],
                 cli_runner_selection_rows,
+            ),
+            "CLI Runner Contract Matrix",
+            _format_table(
+                [
+                    "Runner",
+                    "Runner status",
+                    "Contract status",
+                    "Missing facets",
+                    "Artifact contract",
+                ],
+                cli_runner_contract_rows,
             ),
             "Runtime Fallback Matrix (coding)",
             _format_table(

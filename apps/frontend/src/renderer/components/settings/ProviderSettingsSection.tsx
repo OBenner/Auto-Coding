@@ -23,6 +23,7 @@ import type {
   AgentRuntimeMode,
   AIEngineProvider,
   AIProviderConfig,
+  CliRunnerContractMatrixRow,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
   ProviderE2eSuiteDiagnostics,
@@ -280,6 +281,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   partial_coverage: 'settings:aiProvider.runtimeDiagnosticValues.partialCoverage',
   passed: 'settings:aiProvider.runtimeDiagnosticValues.passed',
   patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
+  planned: 'settings:aiProvider.runtimeDiagnosticValues.planned',
   provider_error: 'settings:aiProvider.runtimeDiagnosticValues.providerError',
   provider_e2e: 'settings:aiProvider.runtimeDiagnosticValues.providerE2e',
   provider_e2e_suite: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eSuite',
@@ -862,6 +864,31 @@ export function buildRuntimeEvalHistoryDiagnosticRows(
       value,
     },
   ];
+}
+
+export function buildCliRunnerContractDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  rows?: CliRunnerContractMatrixRow[] | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!rows?.length) {
+    return [];
+  }
+  const value = rows
+    .filter((row) => row.contract_status === 'ready' || row.adapter_required)
+    .map((row) => {
+      const status = formatRuntimeDiagnosticValue(translate, row.contract_status);
+      const missing = row.missing_contract_facets.join(', ');
+      return `${row.display_name}: ${status}${missing ? ` (${missing})` : ''}`;
+    })
+    .join('; ');
+  return value
+    ? [
+      {
+        labelKey: 'settings:aiProvider.controlPlane.cliRunnerContracts',
+        value,
+      },
+    ]
+    : [];
 }
 
 export function buildProviderTransactionBatchDiagnosticRows(
@@ -1460,6 +1487,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeControlPlaneDiagnostics?.runtime_eval_history
     );
+    const cliRunnerContractRows = buildCliRunnerContractDiagnosticRows(
+      t,
+      runtimeControlPlaneDiagnostics?.cli_runner_contract_matrix
+    );
 
     let controlPlaneContent: ReactNode;
     if (runtimeControlPlaneLoading && !runtimeControlPlaneDiagnostics) {
@@ -1648,6 +1679,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
               ))}
               {runtimeEvalHistoryRows.map((row) => (
                 <div key={row.labelKey}>
+                  <dt>{t(row.labelKey)}</dt>
+                  <dd className="break-words font-medium text-foreground">{row.value}</dd>
+                </div>
+              ))}
+              {cliRunnerContractRows.map((row) => (
+                <div key={row.labelKey} className="sm:col-span-2">
                   <dt>{t(row.labelKey)}</dt>
                   <dd className="break-words font-medium text-foreground">{row.value}</dd>
                 </div>
