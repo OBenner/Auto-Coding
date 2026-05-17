@@ -274,7 +274,7 @@ describe('mapProviderRunHistory', () => {
         last_reliability_status: 'complete',
         last_provider_e2e_status: 'passed',
         path: '.auto-Codex/provider-smoke-history.json',
-        ignored_private_path: '/tmp/provider-history.json',
+        ignored_private_path: 'workspace-private/provider-history.json',
       })
     ).toEqual({
       status: 'recorded',
