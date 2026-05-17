@@ -36,6 +36,7 @@ from agents.runtime import (
     local_action_tool_schemas,
     local_action_tool_specs,
     mcp_bridge_audit_path,
+    normalize_mcp_tool_result,
     normalize_runtime_mode,
     registered_external_mcp_servers,
     render_local_action_prompt,
@@ -3088,6 +3089,86 @@ async def test_runtime_mcp_bridge_allows_external_tool_from_permission_env(
     assert audit_lines[0]["permission_allowed"] is True
     assert audit_lines[0]["permission_decision_reason"] == "permission_allowed"
     assert audit_lines[0]["allowed_permissions"] == ["read_external_docs"]
+
+
+def test_normalize_mcp_tool_result_preserves_structured_content_and_errors():
+    normalized = normalize_mcp_tool_result(
+        {
+            "content": [
+                {"type": "text", "text": "created"},
+                {"type": "image", "mimeType": "image/png", "data": "abc"},
+            ],
+            "structuredContent": {"issue": "ENG-1"},
+            "isError": True,
+        }
+    )
+
+    assert normalized == {
+        "text": "created",
+        "content": [
+            {"type": "text", "text": "created"},
+            {"type": "image", "mimeType": "image/png", "data": "abc"},
+        ],
+        "structured_content": {"issue": "ENG-1"},
+        "is_error": True,
+        "raw_result_type": "dict",
+    }
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_records_normalized_external_tool_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_call_external_mcp_tool(**_kwargs):
+        await asyncio.sleep(0)
+        return {
+            "content": [{"type": "text", "text": "created"}],
+            "structuredContent": {"issue": "ENG-1"},
+        }
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv(MCP_ALLOWED_PERMISSIONS_ENV, "write_linear")
+    monkeypatch.setenv("LINEAR_API_KEY", "linear-secret")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(mcp_servers=("linear",))
+
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    result = await bridge.execute(
+        {
+            "tool": "mcp__linear-server__create_issue",
+            "team": "ENG",
+            "title": "Bridge issue",
+        }
+    )
+
+    assert result.ok is True
+    assert result.message == "created"
+    assert result.data["normalized_result"] == {
+        "text": "created",
+        "content": [{"type": "text", "text": "created"}],
+        "structured_content": {"issue": "ENG-1"},
+        "is_error": False,
+        "raw_result_type": "dict",
+    }
+    audit_lines = [
+        json.loads(line)
+        for line in Path(result.data["audit_artifact"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert audit_lines[0]["normalized_result"]["structured_content"] == {
+        "issue": "ENG-1"
+    }
 
 
 @pytest.mark.asyncio

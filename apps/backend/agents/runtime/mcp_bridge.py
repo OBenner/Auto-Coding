@@ -2226,14 +2226,16 @@ class RuntimeMcpBridge:
                 },
             )
 
-        text = extract_mcp_text(result)
-        ok = not text.startswith("Error:")
+        normalized_result = normalize_mcp_tool_result(result)
+        text = str(normalized_result["text"])
+        ok = not bool(normalized_result["is_error"]) and not text.startswith("Error:")
         audit_artifact = write_mcp_bridge_audit_event(
             self.spec_dir,
             {
                 **audit_base,
                 "status": "ok" if ok else "error",
                 "message": text[:1000],
+                "normalized_result": normalized_result,
             },
         )
         return ToolActionResult(
@@ -2246,6 +2248,7 @@ class RuntimeMcpBridge:
                 **spec.policy.to_dict(),
                 **permission_decision.to_audit_dict(),
                 "audit_artifact": audit_artifact,
+                "normalized_result": normalized_result,
                 "result": result,
             },
         )
@@ -3673,6 +3676,73 @@ def example_value(schema: dict[str, Any]) -> Any:
     if schema_type == "object":
         return {}
     return "value"
+
+
+def _json_text(value: Any) -> str:
+    """Return stable JSON text for structured MCP payloads."""
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except TypeError:
+        return str(value)
+
+
+def normalize_mcp_tool_result(result: Any) -> dict[str, Any]:
+    """Normalize common MCP tool result shapes for observations and UI artifacts."""
+    raw_result_type = type(result).__name__
+    if not isinstance(result, Mapping):
+        text = str(result)
+        return {
+            "text": text,
+            "content": [{"type": "text", "text": text}],
+            "structured_content": None,
+            "is_error": False,
+            "raw_result_type": raw_result_type,
+        }
+
+    structured_content = (
+        result.get("structuredContent")
+        if "structuredContent" in result
+        else result.get("structured_content")
+    )
+    is_error = bool(result.get("isError") or result.get("is_error"))
+    content = result.get("content")
+    normalized_content: list[dict[str, Any]] = []
+    text_parts: list[str] = []
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, Mapping):
+                normalized_item = {str(key): value for key, value in item.items()}
+                normalized_item.setdefault("type", "unknown")
+                if normalized_item.get("type") == "text":
+                    normalized_item["text"] = str(normalized_item.get("text", ""))
+                    if normalized_item["text"]:
+                        text_parts.append(normalized_item["text"])
+                normalized_content.append(normalized_item)
+                continue
+            text_item = str(item)
+            normalized_content.append({"type": "text", "text": text_item})
+            if text_item:
+                text_parts.append(text_item)
+
+    text = "\n".join(text_parts)
+    if not text and isinstance(result.get("text"), str):
+        text = str(result["text"])
+        if not normalized_content:
+            normalized_content.append({"type": "text", "text": text})
+    if not text and structured_content is not None:
+        text = _json_text(structured_content)
+    if not text:
+        text = _json_text(dict(result))
+    if not normalized_content and text:
+        normalized_content.append({"type": "text", "text": text})
+
+    return {
+        "text": text,
+        "content": normalized_content,
+        "structured_content": structured_content,
+        "is_error": is_error,
+        "raw_result_type": raw_result_type,
+    }
 
 
 def extract_mcp_text(result: Any) -> str:
