@@ -5930,15 +5930,24 @@ async def test_generic_edit_runtime_blocks_batch_commit_when_staged_file_drifted
     assert manifest["transaction_batches"][0]["boundary_error_reasons"] == [
         "staged_batch_drift"
     ]
-    assert any(
-        event["event_type"] == "action_result"
-        and event["tool"] == "commit_batch"
-        and event["ok"] is False
-        and event["timeline_stage"] == "batch_boundary_blocked"
-        and event["batch_boundary_error_reason"] == "staged_batch_drift"
-        and event["requires_user_action"] is True
+    commit_event = next(
+        event
         for event in events
+        if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
     )
+    assert commit_event["ok"] is False
+    assert commit_event["timeline_stage"] == "batch_boundary_blocked"
+    assert commit_event["batch_boundary_error_reason"] == "staged_batch_drift"
+    assert commit_event["requires_user_action"] is True
+    assert commit_event["staged_workspace_guard_status"] == "drifted"
+    assert commit_event["drift_paths"] == ["batched.txt"]
+    manifest_commit_event = next(
+        event
+        for event in manifest["recovery_timeline"]
+        if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
+    )
+    assert manifest_commit_event["staged_workspace_guard_status"] == "drifted"
+    assert manifest_commit_event["drift_paths"] == ["batched.txt"]
 
 
 @pytest.mark.asyncio

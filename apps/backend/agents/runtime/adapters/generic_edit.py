@@ -383,6 +383,9 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "next_action_count",
     "batch_boundary_error",
     "batch_boundary_error_reason",
+    "staged_workspace_guard_status",
+    "staged_workspace_guard_drift_count",
+    "drift_paths",
     "blocked_tool",
     "blocked_transaction_group_ids",
     "required_next_action_kinds",
@@ -7936,6 +7939,17 @@ def build_generic_edit_action_event_extra_fields(
         if data.get(field_name):
             fields[field_name] = str(data[field_name])
     fields.update(build_generic_edit_batch_boundary_event_fields(data))
+    staged_guard = data.get("staged_workspace_guard")
+    if isinstance(staged_guard, dict):
+        fields["staged_workspace_guard_status"] = str(
+            staged_guard.get("status") or "unknown"
+        )
+        fields["staged_workspace_guard_drift_count"] = int(
+            staged_guard.get("drift_count") or 0
+        )
+    drift_paths = normalize_string_list(data.get("drift_paths"))
+    if drift_paths:
+        fields["drift_paths"] = drift_paths
     if data.get("rollback_available") is not None:
         fields["rollback_available"] = bool(data["rollback_available"])
     if data.get("exit_code") is not None:
