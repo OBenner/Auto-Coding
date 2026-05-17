@@ -67,7 +67,7 @@ export function PluginCard({
   onViewTraces,
   onPreviewContext,
   isLoading
-}: PluginCardProps) {
+}: Readonly<PluginCardProps>) {
   const { t } = useTranslation(['plugins', 'common']);
   const { metadata, status, error } = plugin;
 

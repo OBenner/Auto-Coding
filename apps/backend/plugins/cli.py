@@ -1169,27 +1169,43 @@ def cmd_permission_diff(args: argparse.Namespace) -> int:
         return 1
 
 
+def _parse_trace_line(line: str, source: str) -> dict | None:
+    """Parse one plugin trace JSONL record."""
+    stripped = line.strip()
+    if not stripped:
+        return None
+
+    try:
+        event = json.loads(stripped)
+    except json.JSONDecodeError:
+        event = {"raw": stripped}
+    if not isinstance(event, dict):
+        event = {"value": event}
+    event.setdefault("source", source)
+    return event
+
+
+def _iter_trace_file_events(path: Path) -> list[dict]:
+    """Read trace events from one JSONL file."""
+    events: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        event = _parse_trace_line(line, path.name)
+        if event is not None:
+            events.append(event)
+    return events
+
+
 def _trace_events(trace_dir: Path, plugin_name: str | None, limit: int) -> list[dict]:
     """Read JSONL trace events from project plugin trace files."""
     if not trace_dir.exists():
         return []
 
-    events: list[dict] = []
-    for path in sorted(trace_dir.glob("*.jsonl")):
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                event = {"raw": line}
-            if not isinstance(event, dict):
-                event = {"value": event}
-            event.setdefault("source", path.name)
-            if plugin_name and event.get("plugin") != plugin_name:
-                continue
-            events.append(event)
-
+    events = [
+        event
+        for path in sorted(trace_dir.glob("*.jsonl"))
+        for event in _iter_trace_file_events(path)
+        if plugin_name is None or event.get("plugin") == plugin_name
+    ]
     safe_limit = max(1, min(int(limit), 500))
     return events[-safe_limit:]
 
