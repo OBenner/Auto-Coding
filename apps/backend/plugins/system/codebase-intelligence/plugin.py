@@ -222,6 +222,28 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
                 sort_keys=True,
             )
 
+        def find_symbol_callers(
+            symbol_name: str,
+            kind: str | None = None,
+            limit: int = 50,
+        ) -> str:
+            """
+            Find resolved callers for a symbol definition.
+
+            Args:
+                symbol_name: Symbol or method name to inspect.
+                kind: Optional symbol kind filter.
+                limit: Maximum number of caller records to return.
+            """
+            index = self._load_or_build_index(context.project_dir, sidecar_path)
+            safe_limit = self._safe_int(limit, default=50, minimum=1, maximum=500)
+            callers = index.find_symbol_callers(
+                symbol_name=symbol_name,
+                kind=kind,
+                limit=safe_limit,
+            )
+            return json.dumps(callers, indent=2, sort_keys=True)
+
         def trace_file_impact(file_path: str, depth: int = 2) -> str:
             """
             Trace files impacted by changes to a project file.
@@ -233,6 +255,28 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
             index = self._load_or_build_index(context.project_dir, sidecar_path)
             safe_depth = self._safe_int(depth, default=2, minimum=1, maximum=10)
             impact = index.trace_file_impact(file_path=file_path, depth=safe_depth)
+            return json.dumps(impact, indent=2, sort_keys=True)
+
+        def trace_symbol_impact(
+            symbol_name: str,
+            depth: int = 2,
+            kind: str | None = None,
+        ) -> str:
+            """
+            Trace direct callers and impacted files for a symbol definition.
+
+            Args:
+                symbol_name: Symbol or method name to inspect.
+                depth: Reverse dependency traversal depth.
+                kind: Optional symbol kind filter.
+            """
+            index = self._load_or_build_index(context.project_dir, sidecar_path)
+            safe_depth = self._safe_int(depth, default=2, minimum=1, maximum=10)
+            impact = index.trace_symbol_impact(
+                symbol_name=symbol_name,
+                depth=safe_depth,
+                kind=kind,
+            )
             return json.dumps(impact, indent=2, sort_keys=True)
 
         def get_dependency_inventory(ecosystem: str | None = None) -> str:
@@ -310,6 +354,7 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
             export_graph_dataset,
             find_file_dependencies,
             find_file_dependents,
+            find_symbol_callers,
             find_symbol_references,
             get_dependency_inventory,
             get_graph_neighbors,
@@ -318,6 +363,7 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
             get_codebase_summary,
             search_symbols,
             trace_file_impact,
+            trace_symbol_impact,
         ]
 
     def is_available(self) -> bool:

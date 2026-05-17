@@ -72,7 +72,7 @@ class GraphDataset:
     def from_index(cls, index: CodebaseIndex) -> GraphDataset:
         nodes: dict[str, GraphNode] = {}
         edges: dict[tuple[str, str, str], GraphEdge] = {}
-        symbol_lookup = _build_symbol_lookup(index)
+        symbol_lookup = index.build_symbol_lookup()
 
         def add_node(node: GraphNode) -> None:
             nodes.setdefault(node.id, node)
@@ -154,16 +154,15 @@ class GraphDataset:
             add_edge(GraphEdge(source=module_id, target=file_id, kind="contains"))
 
             for symbol in code_file.symbols:
-                symbol_id = _symbol_id(symbol.file_path, symbol.name)
                 add_node(
                     GraphNode(
-                        id=symbol_id,
+                        id=symbol.id,
                         kind="symbol",
                         label=symbol.name,
                         properties=symbol.to_dict(),
                     )
                 )
-                add_edge(GraphEdge(source=file_id, target=symbol_id, kind="defines"))
+                add_edge(GraphEdge(source=file_id, target=symbol.id, kind="defines"))
 
             for dependency in code_file.dependencies:
                 if not dependency.resolved_path:
@@ -181,19 +180,29 @@ class GraphDataset:
                 )
 
             for reference in code_file.references:
-                reference_target = _resolve_reference_target(
-                    symbol_lookup,
-                    reference.name,
+                target_symbol = index.resolve_reference_target_symbol(
+                    reference,
+                    symbol_lookup=symbol_lookup,
                 )
-                if reference_target:
+                if target_symbol:
                     add_edge(
                         GraphEdge(
                             source=file_id,
-                            target=reference_target,
+                            target=target_symbol.id,
                             kind="references",
                             properties=reference.to_dict(),
                         )
                     )
+                    caller_symbol = index.find_reference_caller_symbol(reference)
+                    if caller_symbol:
+                        add_edge(
+                            GraphEdge(
+                                source=caller_symbol.id,
+                                target=target_symbol.id,
+                                kind="calls",
+                                properties=reference.to_dict(),
+                            )
+                        )
 
         return cls(
             nodes=sorted(nodes.values(), key=lambda node: node.id),
@@ -345,40 +354,12 @@ def _file_id(path: str) -> str:
     return f"file:{path}"
 
 
-def _symbol_id(file_path: str, name: str) -> str:
-    return f"symbol:{file_path}:{name}"
-
-
 def _module_id(path: str) -> str:
     return f"module:{path}"
 
 
 def _package_id(ecosystem: str, name: str) -> str:
     return f"package:{ecosystem}:{name}"
-
-
-def _build_symbol_lookup(index: CodebaseIndex) -> dict[str, list[str]]:
-    lookup: dict[str, list[str]] = {}
-    for code_file in index.files.values():
-        for symbol in code_file.symbols:
-            symbol_id = _symbol_id(symbol.file_path, symbol.name)
-            for name in {symbol.name, symbol.name.rsplit(".", 1)[-1]}:
-                key = name.casefold()
-                lookup.setdefault(key, []).append(symbol_id)
-    return {name: sorted(symbol_ids) for name, symbol_ids in lookup.items()}
-
-
-def _resolve_reference_target(
-    symbol_lookup: dict[str, list[str]],
-    reference_name: str,
-) -> str:
-    short_name = reference_name.rsplit(".", 1)[-1]
-    candidates = symbol_lookup.get(reference_name.casefold(), [])
-    if not candidates:
-        candidates = symbol_lookup.get(short_name.casefold(), [])
-    if len(candidates) == 1:
-        return candidates[0]
-    return ""
 
 
 def _module_for_file(file_path: str, depth: int) -> str:

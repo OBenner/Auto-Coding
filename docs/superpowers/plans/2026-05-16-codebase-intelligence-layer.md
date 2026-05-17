@@ -318,3 +318,37 @@ Run:
 `apps/backend/.venv/bin/python -m pytest tests/test_plugin_runtime.py tests/test_plugin_cli.py tests/test_client.py -v`
 `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff check apps/backend/plugins/base.py apps/backend/plugins/sdk/agent.py apps/backend/plugins/runtime.py apps/backend/plugins/cli.py apps/backend/core/client.py tests/test_plugin_runtime.py tests/test_plugin_cli.py tests/test_client.py`
 `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff format apps/backend/plugins/base.py apps/backend/plugins/sdk/agent.py apps/backend/plugins/runtime.py apps/backend/plugins/cli.py apps/backend/core/client.py tests/test_plugin_runtime.py tests/test_plugin_cli.py tests/test_client.py --check --diff`
+
+### Task 11: Symbol-Level Codebase Intelligence
+
+**Files:**
+- Modify: `apps/backend/plugins/system/codebase-intelligence/codebase_intelligence/models.py`
+- Modify: `apps/backend/plugins/system/codebase-intelligence/codebase_intelligence/graph_export.py`
+- Modify: `apps/backend/plugins/system/codebase-intelligence/plugin.py`
+- Modify: `apps/backend/plugins/system/codebase-intelligence/README.md`
+- Modify: `tests/test_codebase_intelligence.py`
+
+- [x] **Step 1: Add RED tests for symbol call graph behavior**
+
+Add tests proving the analyzer exposes `find_symbol_callers`,
+`trace_symbol_impact`, and graph export `calls` edges between caller symbols
+and callee symbols.
+
+- [x] **Step 2: Implement symbol ids and call resolution**
+
+Add stable symbol ids, compact symbol summaries, reference-to-symbol
+resolution, caller-symbol lookup, and symbol impact aggregation on the
+`CodebaseIndex` model.
+
+- [x] **Step 3: Expose symbol-level tools and graph edges**
+
+Expose MCP tools for symbol callers and symbol impact, and export symbol
+`calls` edges alongside existing file-level `references` edges.
+
+- [x] **Step 4: Verify**
+
+Run:
+`apps/backend/.venv/bin/python -m pytest tests/test_codebase_intelligence.py -q`
+`apps/backend/.venv/bin/python -m pytest tests/test_plugin_integration.py tests/test_plugin_mcp_integration.py tests/test_codebase_intelligence.py -q`
+`/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff check apps/backend/plugins/system/codebase-intelligence apps/backend/plugins/system/codebase-intelligence/plugin.py tests/test_codebase_intelligence.py`
+`/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff format --check apps/backend/plugins/system/codebase-intelligence apps/backend/plugins/system/codebase-intelligence/plugin.py tests/test_codebase_intelligence.py`

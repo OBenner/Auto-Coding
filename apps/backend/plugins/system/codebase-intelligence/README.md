@@ -16,8 +16,10 @@ The plugin exposes these MCP tools to agent sessions:
 - `get_codebase_summary` - Return compact file, symbol, dependency, and language counts.
 - `find_file_dependents` - Return files that depend on a project-relative file.
 - `find_file_dependencies` - Return resolved imports for a project-relative file.
+- `find_symbol_callers` - Return resolved caller symbols and call sites for a symbol.
 - `find_symbol_references` - Return lightweight call references for a symbol name.
 - `trace_file_impact` - Traverse reverse dependencies and identify test candidates.
+- `trace_symbol_impact` - Combine symbol callers with file impact and test candidates.
 - `get_dependency_inventory` - Return npm and Python package manifest dependencies.
 - `get_module_graph` - Return directory-level module nodes and dependency edges.
 - `export_graph_dataset` - Export deterministic graph nodes/edges as JSON or CSV.
@@ -37,7 +39,7 @@ This first version uses only Python stdlib parsing:
 - Architecture: module graph grouping by directory depth and impact tracing
   through resolved reverse dependencies.
 - Graph export: project/file/module/symbol/package nodes plus contains, defines,
-  imports, references, and declares-dependency edges.
+  imports, references, calls, and declares-dependency edges.
 - Freshness: source and package manifest fingerprints detect stale sidecars;
   query tools rebuild before answering when indexed sources changed.
 

@@ -38,24 +38,24 @@ def create_client():
     )
     _write(
         root / "apps" / "backend" / "agents" / "coder.py",
-        '''
+        """
 from core.client import create_client
 
 
 async def run_coder():
     client = create_client()
     return client.run()
-''',
+""",
     )
     _write(
         root / "tests" / "test_coder.py",
-        '''
+        """
 from apps.backend.agents.coder import run_coder
 
 
 def test_run_coder_symbol():
     assert run_coder
-''',
+""",
     )
     _write(
         root / "apps" / "frontend" / "src" / "components" / "Button.tsx",
@@ -139,13 +139,16 @@ def test_codebase_intelligence_plugin_loads_and_exposes_tools(temp_dir: Path):
     project = _make_sample_project(temp_dir)
 
     plugin = _load_codebase_intelligence_plugin(project)
-    tools = {tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))}
+    tools = {
+        tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))
+    }
 
     assert set(tools) == {
         "build_codebase_index",
         "export_graph_dataset",
         "find_file_dependencies",
         "find_file_dependents",
+        "find_symbol_callers",
         "find_symbol_references",
         "get_dependency_inventory",
         "get_graph_neighbors",
@@ -154,6 +157,7 @@ def test_codebase_intelligence_plugin_loads_and_exposes_tools(temp_dir: Path):
         "get_codebase_summary",
         "search_symbols",
         "trace_file_impact",
+        "trace_symbol_impact",
     }
 
 
@@ -161,7 +165,9 @@ def test_codebase_intelligence_tools_build_sidecar_and_query_graph(temp_dir: Pat
     """Plugin tools build the graph sidecar and answer dependency/symbol queries."""
     project = _make_sample_project(temp_dir)
     plugin = _load_codebase_intelligence_plugin(project)
-    tools = {tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))}
+    tools = {
+        tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))
+    }
 
     build_result = json.loads(tools["build_codebase_index"]())
 
@@ -198,7 +204,9 @@ def test_codebase_intelligence_tools_explain_packages_modules_references_and_imp
     """Plugin tools expose richer graph facts needed by agents."""
     project = _make_sample_project(temp_dir)
     plugin = _load_codebase_intelligence_plugin(project)
-    tools = {tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))}
+    tools = {
+        tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))
+    }
 
     json.loads(tools["build_codebase_index"]())
 
@@ -212,7 +220,9 @@ def test_codebase_intelligence_tools_explain_packages_modules_references_and_imp
         "name": "create_client",
     } in references["references"]
 
-    impact = json.loads(tools["trace_file_impact"]("apps/backend/core/client.py", depth=2))
+    impact = json.loads(
+        tools["trace_file_impact"]("apps/backend/core/client.py", depth=2)
+    )
     assert impact["file_path"] == "apps/backend/core/client.py"
     assert impact["impacted_files"] == [
         {
@@ -230,7 +240,14 @@ def test_codebase_intelligence_tools_explain_packages_modules_references_and_imp
 
     inventory = json.loads(tools["get_dependency_inventory"]())
     package_names = {dependency["name"] for dependency in inventory["dependencies"]}
-    assert {"react", "vitest", "pytest", "requests", "fastapi", "uvicorn"} <= package_names
+    assert {
+        "react",
+        "vitest",
+        "pytest",
+        "requests",
+        "fastapi",
+        "uvicorn",
+    } <= package_names
 
     module_graph = json.loads(tools["get_module_graph"](depth=3))
     module_paths = {module["path"] for module in module_graph["modules"]}
@@ -242,13 +259,74 @@ def test_codebase_intelligence_tools_explain_packages_modules_references_and_imp
     } in module_graph["edges"]
 
 
+def test_codebase_intelligence_resolves_symbol_callers_and_symbol_impact(
+    temp_dir: Path,
+):
+    """Analyzer resolves symbol-level call graph facts for agent impact analysis."""
+    project = _make_sample_project(temp_dir)
+    plugin = _load_codebase_intelligence_plugin(project)
+    tools = {
+        tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))
+    }
+
+    json.loads(tools["build_codebase_index"]())
+
+    callers = json.loads(tools["find_symbol_callers"]("create_client"))
+    assert callers["symbol_name"] == "create_client"
+    assert callers["target_symbols"] == [
+        {
+            "file_path": "apps/backend/core/client.py",
+            "id": "symbol:apps/backend/core/client.py:create_client",
+            "kind": "function",
+            "line": 11,
+            "name": "create_client",
+        }
+    ]
+    assert callers["callers"] == [
+        {
+            "caller_symbol": {
+                "file_path": "apps/backend/agents/coder.py",
+                "id": "symbol:apps/backend/agents/coder.py:run_coder",
+                "kind": "function",
+                "line": 5,
+                "name": "run_coder",
+            },
+            "file_path": "apps/backend/agents/coder.py",
+            "line": 6,
+            "reference_name": "create_client",
+            "target_symbol_id": "symbol:apps/backend/core/client.py:create_client",
+        }
+    ]
+
+    impact = json.loads(tools["trace_symbol_impact"]("create_client", depth=2))
+    assert impact["symbol_name"] == "create_client"
+    assert impact["direct_caller_files"] == ["apps/backend/agents/coder.py"]
+    assert impact["test_candidates"] == ["tests/test_coder.py"]
+    assert impact["impacted_files"] == [
+        {
+            "distance": 1,
+            "file_path": "apps/backend/agents/coder.py",
+            "is_test": False,
+            "via_symbol": "symbol:apps/backend/core/client.py:create_client",
+        },
+        {
+            "distance": 2,
+            "file_path": "tests/test_coder.py",
+            "is_test": True,
+            "via_symbol": "symbol:apps/backend/core/client.py:create_client",
+        },
+    ]
+
+
 def test_codebase_intelligence_tools_export_graph_dataset_and_neighbors(
     temp_dir: Path,
 ):
     """Plugin tools export graph datasets and query graph neighbors."""
     project = _make_sample_project(temp_dir)
     plugin = _load_codebase_intelligence_plugin(project)
-    tools = {tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))}
+    tools = {
+        tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))
+    }
 
     json.loads(tools["build_codebase_index"]())
 
@@ -259,8 +337,7 @@ def test_codebase_intelligence_tools_export_graph_dataset_and_neighbors(
     graph = json.loads(graph_path.read_text(encoding="utf-8"))
     node_ids = {node["id"] for node in graph["nodes"]}
     edge_keys = {
-        (edge["source"], edge["target"], edge["kind"])
-        for edge in graph["edges"]
+        (edge["source"], edge["target"], edge["kind"]) for edge in graph["edges"]
     }
     assert "file:apps/backend/core/client.py" in node_ids
     assert "symbol:apps/backend/core/client.py:create_client" in node_ids
@@ -269,6 +346,11 @@ def test_codebase_intelligence_tools_export_graph_dataset_and_neighbors(
         "file:apps/backend/agents/coder.py",
         "file:apps/backend/core/client.py",
         "imports",
+    ) in edge_keys
+    assert (
+        "symbol:apps/backend/agents/coder.py:run_coder",
+        "symbol:apps/backend/core/client.py:create_client",
+        "calls",
     ) in edge_keys
 
     csv_result = json.loads(tools["export_graph_dataset"]("kuzu_csv"))
@@ -304,7 +386,9 @@ def test_codebase_intelligence_detects_and_rebuilds_stale_sidecar(temp_dir: Path
     """Queries rebuild the sidecar when source hashes changed after indexing."""
     project = _make_sample_project(temp_dir)
     plugin = _load_codebase_intelligence_plugin(project)
-    tools = {tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))}
+    tools = {
+        tool.__name__: tool for tool in plugin.create_mcp_tools(_make_context(project))
+    }
 
     json.loads(tools["build_codebase_index"]())
     fresh_status = json.loads(tools["get_index_status"]())

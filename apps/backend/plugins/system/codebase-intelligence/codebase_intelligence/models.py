@@ -22,6 +22,11 @@ class CodeSymbol:
     signature: str = ""
     docstring: str | None = None
 
+    @property
+    def id(self) -> str:
+        """Stable graph id for this symbol."""
+        return f"symbol:{self.file_path}:{self.name}"
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CodeSymbol:
         return cls(
@@ -52,7 +57,18 @@ class CodeSymbol:
             data["signature"] = self.signature
         if self.docstring:
             data["docstring"] = self.docstring
+        data["id"] = self.id
         return data
+
+    def to_summary_dict(self) -> dict[str, Any]:
+        """Return a compact symbol payload for graph query responses."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "kind": self.kind,
+            "file_path": self.file_path,
+            "line": self.line,
+        }
 
 
 @dataclass
@@ -299,6 +315,147 @@ class CodebaseIndex:
             :limit
         ]
 
+    def find_symbol_callers(
+        self,
+        symbol_name: str,
+        kind: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Find resolved call sites for symbols matching a name."""
+        target_symbols = self._match_symbols(symbol_name, kind=kind)
+        target_symbol_ids = {symbol.id for symbol in target_symbols}
+        callers: list[dict[str, Any]] = []
+        symbol_lookup = self._symbol_lookup()
+
+        for code_file in self.files.values():
+            for reference in code_file.references:
+                target_symbol = self.resolve_reference_target_symbol(
+                    reference,
+                    symbol_lookup=symbol_lookup,
+                )
+                if target_symbol is None or target_symbol.id not in target_symbol_ids:
+                    continue
+
+                caller_symbol = self.find_reference_caller_symbol(reference)
+                callers.append(
+                    {
+                        "file_path": reference.file_path,
+                        "line": reference.line,
+                        "reference_name": reference.name,
+                        "target_symbol_id": target_symbol.id,
+                        "caller_symbol": caller_symbol.to_summary_dict()
+                        if caller_symbol
+                        else None,
+                    }
+                )
+
+        callers = sorted(
+            callers,
+            key=lambda item: (
+                item["file_path"],
+                item["line"],
+                item["reference_name"],
+                item["target_symbol_id"],
+            ),
+        )[:limit]
+        return {
+            "symbol_name": symbol_name,
+            "kind": kind,
+            "target_symbols": [symbol.to_summary_dict() for symbol in target_symbols],
+            "callers": callers,
+        }
+
+    def trace_symbol_impact(
+        self,
+        symbol_name: str,
+        depth: int = 2,
+        kind: str | None = None,
+    ) -> dict[str, Any]:
+        """Trace file impact and direct call sites for symbols matching a name."""
+        callers_result = self.find_symbol_callers(
+            symbol_name=symbol_name,
+            kind=kind,
+            limit=500,
+        )
+        target_symbols = self._match_symbols(symbol_name, kind=kind)
+        impacted_by_path: dict[str, dict[str, Any]] = {}
+
+        for symbol in target_symbols:
+            file_impact = self.trace_file_impact(symbol.file_path, depth=depth)
+            for item in file_impact["impacted_files"]:
+                current = impacted_by_path.get(item["file_path"])
+                candidate = {
+                    **item,
+                    "via_symbol": symbol.id,
+                }
+                if current is None or candidate["distance"] < current["distance"]:
+                    impacted_by_path[item["file_path"]] = candidate
+
+        impacted_files = sorted(
+            impacted_by_path.values(),
+            key=lambda item: (item["distance"], item["file_path"], item["via_symbol"]),
+        )
+        direct_caller_files = sorted(
+            {
+                caller["file_path"]
+                for caller in callers_result["callers"]
+                if caller["file_path"]
+            }
+        )
+        test_candidates = sorted(
+            {
+                item["file_path"]
+                for item in impacted_files
+                if item.get("is_test") is True
+            }
+        )
+
+        return {
+            "symbol_name": symbol_name,
+            "kind": kind,
+            "depth": depth,
+            "target_symbols": callers_result["target_symbols"],
+            "direct_callers": callers_result["callers"],
+            "direct_caller_files": direct_caller_files,
+            "impacted_files": impacted_files,
+            "test_candidates": test_candidates,
+        }
+
+    def resolve_reference_target_symbol(
+        self,
+        reference: CodeReference,
+        symbol_lookup: dict[str, list[CodeSymbol]] | None = None,
+    ) -> CodeSymbol | None:
+        """Resolve a lightweight reference to a unique symbol definition."""
+        lookup = symbol_lookup or self._symbol_lookup()
+        names = [
+            reference.name.casefold(),
+            reference.name.rsplit(".", 1)[-1].casefold(),
+        ]
+        for name in names:
+            candidates = lookup.get(name, [])
+            if len(candidates) == 1:
+                return candidates[0]
+        return None
+
+    def find_reference_caller_symbol(
+        self,
+        reference: CodeReference,
+    ) -> CodeSymbol | None:
+        """Find the enclosing symbol for a reference when the extractor knows it."""
+        if not reference.container:
+            return None
+        code_file = self.files.get(reference.file_path)
+        if code_file is None:
+            return None
+
+        container = reference.container.casefold()
+        for symbol in code_file.symbols:
+            names = {symbol.name.casefold(), symbol.name.rsplit(".", 1)[-1].casefold()}
+            if container in names:
+                return symbol
+        return None
+
     def trace_file_impact(self, file_path: str, depth: int = 2) -> dict[str, Any]:
         normalized = file_path.replace("\\", "/").lstrip("./")
         visited = {normalized}
@@ -421,6 +578,42 @@ class CodebaseIndex:
         if not parent_parts:
             return "."
         return "/".join(parent_parts[: max(depth, 1)])
+
+    def _match_symbols(
+        self,
+        symbol_name: str,
+        kind: str | None = None,
+    ) -> list[CodeSymbol]:
+        needle = symbol_name.casefold()
+        matches: list[CodeSymbol] = []
+        for code_file in self.files.values():
+            for symbol in code_file.symbols:
+                if kind and symbol.kind != kind:
+                    continue
+                names = {
+                    symbol.name.casefold(),
+                    symbol.name.rsplit(".", 1)[-1].casefold(),
+                }
+                if needle in names:
+                    matches.append(symbol)
+        return sorted(
+            matches, key=lambda symbol: (symbol.file_path, symbol.line, symbol.name)
+        )
+
+    def build_symbol_lookup(self) -> dict[str, list[CodeSymbol]]:
+        """Return symbol lookup keys used by reference resolution."""
+        lookup: dict[str, list[CodeSymbol]] = {}
+        for code_file in self.files.values():
+            for symbol in code_file.symbols:
+                for name in {symbol.name, symbol.name.rsplit(".", 1)[-1]}:
+                    lookup.setdefault(name.casefold(), []).append(symbol)
+        return {
+            name: sorted(symbols, key=lambda symbol: symbol.id)
+            for name, symbols in lookup.items()
+        }
+
+    def _symbol_lookup(self) -> dict[str, list[CodeSymbol]]:
+        return self.build_symbol_lookup()
 
     def _is_test_file(self, file_path: str) -> bool:
         path = file_path.replace("\\", "/").casefold()
