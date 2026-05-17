@@ -10,6 +10,7 @@ import {
   buildProviderResumePolicyDiagnosticRows,
   buildProviderRunHistoryDiagnosticRows,
   buildProviderTransactionBatchDiagnosticRows,
+  buildRuntimeEvalHistoryDiagnosticRows,
   buildRuntimeEvalDiagnosticRows,
   buildRuntimePolicyDiagnosticRows
 } from './ProviderSettingsSection';
@@ -49,6 +50,7 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
+    'settings:aiProvider.controlPlane.runtimeEvalHistory': 'Runtime eval history',
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
@@ -59,6 +61,9 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.failed': 'Failed',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
     'settings:aiProvider.runtimeDiagnosticValues.notCovered': 'Not covered',
+    'settings:aiProvider.runtimeDiagnosticValues.litellm': 'LiteLLM',
+    'settings:aiProvider.runtimeDiagnosticValues.openrouter': 'OpenRouter',
+    'settings:aiProvider.runtimeDiagnosticValues.partial': 'Partial',
     'settings:aiProvider.runtimeDiagnosticValues.partialCoverage': 'Partial coverage',
     'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked': 'Pre-execution blocked',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired': 'Provider e2e required',
@@ -192,6 +197,34 @@ describe('buildRuntimeEvalDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.controlPlane.runtimeEval',
         value: 'Provider e2e: Provider e2e (Provider e2e suite, provider reliability)',
+      },
+    ]);
+  });
+});
+
+describe('buildRuntimeEvalHistoryDiagnosticRows', () => {
+  it('summarizes persisted runtime eval history', () => {
+    expect(
+      buildRuntimeEvalHistoryDiagnosticRows(translate, [
+        {
+          case_id: 'provider_e2e',
+          runtime_mode: 'provider_e2e',
+          history_path: '.auto-Codex/provider-smoke-history.json',
+          status: 'partial',
+          total_runs: 3,
+          passed_runs: 2,
+          failed_runs: 1,
+          missing_providers: ['openrouter', 'litellm'],
+          providers: [],
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.runtimeEvalHistory',
+        value: (
+          'Provider e2e: Partial (3 total, 2 passed, 1 failed; '
+          + 'missing OpenRouter, LiteLLM; .auto-Codex/provider-smoke-history.json)'
+        ),
       },
     ]);
   });

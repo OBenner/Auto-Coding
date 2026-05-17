@@ -2,6 +2,7 @@ import builtins
 import json
 import logging
 import sys
+from pathlib import Path
 
 
 def test_parse_args_with_runtime_modes():
@@ -95,6 +96,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "Subagent Orchestrator Matrix" in output
     assert "Runtime Policy Matrix" in output
     assert "Runtime Eval Matrix" in output
+    assert "Runtime Eval History" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
     assert "opencode" in output
@@ -218,6 +220,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert external_health["graphiti"]["adapter_transport"] == "http"
     assert external_health["graphiti"]["adapter_exposed_server"] == "graphiti-memory"
     assert external_health["graphiti"]["transport_supported"] is True
+
     assert external_health["electron"]["status"] == "server_disabled"
     assert external_health["electron"]["adapter_registered"] is True
     assert external_health["electron"]["execution_supported"] is True
@@ -283,6 +286,69 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     openai_generic_subagents = subagent_rows[("openai", "generic_edit")]
     assert openai_generic_subagents["strategy"] == "orchestrated"
     assert openai_generic_subagents["available"] is True
+
+
+def test_runtime_modes_command_reports_provider_eval_history(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    from cli.runtime_commands import handle_runtime_modes_command
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {
+                    "openai": {
+                        "total_runs": 2,
+                        "passed_runs": 2,
+                        "failed_runs": 0,
+                        "last_status": "passed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-17T00:00:00Z",
+                        "last_reliability_status": "complete",
+                        "last_provider_e2e_status": "passed",
+                    },
+                    "google": {
+                        "total_runs": 1,
+                        "passed_runs": 0,
+                        "failed_runs": 1,
+                        "last_status": "failed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-17T00:01:00Z",
+                        "last_reliability_status": "partial_coverage",
+                        "last_provider_e2e_status": "failed",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    handle_runtime_modes_command(output_json=True)
+    payload = json.loads(capsys.readouterr().out)
+    history_rows = {row["case_id"]: row for row in payload["runtime_eval_history"]}
+    provider_e2e = history_rows["provider_e2e"]
+
+    assert provider_e2e["status"] == "partial"
+    assert provider_e2e["history_path"] == ".auto-Codex/provider-smoke-history.json"
+    assert provider_e2e["total_runs"] == 3
+    assert provider_e2e["passed_runs"] == 2
+    assert provider_e2e["failed_runs"] == 1
+    assert provider_e2e["missing_providers"] == [
+        "openrouter",
+        "litellm",
+        "zhipuai",
+        "ollama",
+    ]
+    provider_rows = {row["provider"]: row for row in provider_e2e["providers"]}
+    assert provider_rows["openai"]["status"] == "passed"
+    assert provider_rows["google"]["status"] == "failed"
+    assert provider_rows["openrouter"]["status"] == "not_observed"
 
 
 def test_runtime_modes_command_marks_context7_available_when_external_client_enabled(

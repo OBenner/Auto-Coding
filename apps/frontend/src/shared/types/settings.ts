@@ -768,6 +768,30 @@ export interface RuntimeEvalMatrixRow {
   required_artifacts: string[];
 }
 
+export interface RuntimeEvalHistoryProviderRow {
+  provider: string;
+  status: string;
+  total_runs: number;
+  passed_runs: number;
+  failed_runs: number;
+  last_status?: string | null;
+  last_reliability_status?: string | null;
+  last_provider_e2e_status?: string | null;
+  last_run_at?: string | null;
+}
+
+export interface RuntimeEvalHistoryRow {
+  case_id: string;
+  runtime_mode: string;
+  history_path: string;
+  status: string;
+  total_runs: number;
+  passed_runs: number;
+  failed_runs: number;
+  missing_providers: string[];
+  providers: RuntimeEvalHistoryProviderRow[];
+}
+
 export interface RuntimeControlPlaneDiagnostics {
   runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
   mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
@@ -775,5 +799,6 @@ export interface RuntimeControlPlaneDiagnostics {
   runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
   runtime_policy_matrix?: RuntimePolicyMatrixRow[];
   runtime_eval_matrix?: RuntimeEvalMatrixRow[];
+  runtime_eval_history?: RuntimeEvalHistoryRow[];
   recommendations?: Record<string, string>;
 }

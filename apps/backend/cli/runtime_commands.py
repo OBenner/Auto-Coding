@@ -46,7 +46,10 @@ from agents.runtime.subagents import (
     DEFAULT_SUBAGENT_MERGE_POLICY,
     resolve_runtime_subagent_support,
 )
-from cli.provider_smoke_commands import PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS
+from cli.provider_smoke_commands import (
+    PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
+    PROVIDER_SMOKE_HISTORY_RELATIVE_PATH,
+)
 
 DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
 DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS = registered_external_mcp_servers()
@@ -375,6 +378,104 @@ def build_runtime_eval_matrix() -> list[dict[str, Any]]:
     ]
 
 
+def _runtime_eval_provider_history_status(provider_stats: dict[str, Any]) -> str:
+    """Classify a provider's latest persisted e2e eval evidence."""
+    if not provider_stats:
+        return "not_observed"
+    if (
+        provider_stats.get("last_status") == "passed"
+        and provider_stats.get("last_reliability_status") == "complete"
+        and provider_stats.get("last_provider_e2e_status") == "passed"
+    ):
+        return "passed"
+    return "failed"
+
+
+def _runtime_eval_history_status(provider_rows: list[dict[str, Any]]) -> str:
+    """Classify aggregate provider e2e history coverage."""
+    statuses = {row["status"] for row in provider_rows}
+    if statuses == {"passed"}:
+        return "complete"
+    if statuses == {"not_observed"}:
+        return "not_observed"
+    return "partial"
+
+
+def _runtime_eval_int_stat(value: Any) -> int:
+    """Return a safe integer stat from persisted history payloads."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def build_runtime_eval_history(
+    *,
+    project_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Build persisted runtime eval evidence from provider smoke history."""
+    history_path = (project_dir or Path.cwd()) / PROVIDER_SMOKE_HISTORY_RELATIVE_PATH
+    provider_stats_by_name: dict[str, Any] = {}
+    history_status = "not_observed"
+    if history_path.exists():
+        try:
+            payload = json.loads(history_path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and isinstance(payload.get("providers"), dict):
+                provider_stats_by_name = payload["providers"]
+            else:
+                history_status = "unreadable"
+        except Exception:
+            history_status = "unreadable"
+
+    provider_rows: list[dict[str, Any]] = []
+    total_runs = 0
+    passed_runs = 0
+    failed_runs = 0
+    missing_providers: list[str] = []
+    for provider in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        provider_stats = provider_stats_by_name.get(provider)
+        provider_stats = provider_stats if isinstance(provider_stats, dict) else {}
+        status = _runtime_eval_provider_history_status(provider_stats)
+        if status == "not_observed":
+            missing_providers.append(provider)
+        provider_total_runs = _runtime_eval_int_stat(provider_stats.get("total_runs"))
+        provider_passed_runs = _runtime_eval_int_stat(provider_stats.get("passed_runs"))
+        provider_failed_runs = _runtime_eval_int_stat(provider_stats.get("failed_runs"))
+        total_runs += provider_total_runs
+        passed_runs += provider_passed_runs
+        failed_runs += provider_failed_runs
+        provider_rows.append(
+            {
+                "provider": provider,
+                "status": status,
+                "total_runs": provider_total_runs,
+                "passed_runs": provider_passed_runs,
+                "failed_runs": provider_failed_runs,
+                "last_status": provider_stats.get("last_status"),
+                "last_reliability_status": provider_stats.get(
+                    "last_reliability_status",
+                ),
+                "last_provider_e2e_status": provider_stats.get(
+                    "last_provider_e2e_status",
+                ),
+                "last_run_at": provider_stats.get("last_run_at"),
+            }
+        )
+
+    if history_status != "unreadable":
+        history_status = _runtime_eval_history_status(provider_rows)
+    return [
+        {
+            "case_id": "provider_e2e",
+            "runtime_mode": "provider_e2e",
+            "history_path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
+            "status": history_status,
+            "total_runs": total_runs,
+            "passed_runs": passed_runs,
+            "failed_runs": failed_runs,
+            "missing_providers": missing_providers,
+            "providers": provider_rows,
+        }
+    ]
+
+
 def build_runtime_modes_payload() -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
     cli_runner_selection = {
@@ -398,6 +499,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         "runtime_subagent_matrix": build_runtime_subagent_matrix(),
         "runtime_policy_matrix": build_runtime_policy_matrix(),
         "runtime_eval_matrix": build_runtime_eval_matrix(),
+        "runtime_eval_history": build_runtime_eval_history(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -954,6 +1056,18 @@ def format_runtime_modes_text() -> str:
         ]
         for row in build_runtime_eval_matrix()
     ]
+    runtime_eval_history_rows = [
+        [
+            row["case_id"],
+            row["status"],
+            str(row["total_runs"]),
+            str(row["passed_runs"]),
+            str(row["failed_runs"]),
+            ", ".join(row["missing_providers"]) or "none",
+            row["history_path"],
+        ]
+        for row in build_runtime_eval_history()
+    ]
 
     return "\n\n".join(
         [
@@ -1069,6 +1183,19 @@ def format_runtime_modes_text() -> str:
                     "Required artifacts",
                 ],
                 runtime_eval_rows,
+            ),
+            "Runtime Eval History",
+            _format_table(
+                [
+                    "Case",
+                    "Status",
+                    "Runs",
+                    "Passed",
+                    "Failed",
+                    "Missing providers",
+                    "Artifact",
+                ],
+                runtime_eval_history_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",

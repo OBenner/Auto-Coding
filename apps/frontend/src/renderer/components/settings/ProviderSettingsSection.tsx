@@ -33,6 +33,7 @@ import type {
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
   RuntimeControlPlaneDiagnostics,
+  RuntimeEvalHistoryRow,
   RuntimeExternalMcpSmokeResult,
   RuntimeExternalMcpHealthRow,
   RuntimeEvalMatrixRow,
@@ -230,6 +231,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   generic_cli_pool: 'settings:aiProvider.runtimeDiagnosticValues.genericCliPool',
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
   generic_edit_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.genericEditToolLoop',
+  google: 'settings:aiProvider.runtimeDiagnosticValues.google',
   goose: 'settings:aiProvider.runtimeDiagnosticValues.goose',
   gateway_blocked: 'settings:aiProvider.runtimeDiagnosticValues.gatewayBlocked',
   gateway_error: 'settings:aiProvider.runtimeDiagnosticValues.gatewayError',
@@ -240,6 +242,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   json_fallback: 'settings:aiProvider.runtimeDiagnosticValues.jsonFallback',
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
   implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
+  litellm: 'settings:aiProvider.runtimeDiagnosticValues.litellm',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
   model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
@@ -266,7 +269,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   observed: 'settings:aiProvider.runtimeDiagnosticValues.observed',
   ok: 'settings:aiProvider.runtimeDiagnosticValues.ok',
   open_batch: 'settings:aiProvider.runtimeDiagnosticValues.openBatch',
+  openai: 'settings:aiProvider.runtimeDiagnosticValues.openai',
   opencode: 'settings:aiProvider.runtimeDiagnosticValues.opencode',
+  openrouter: 'settings:aiProvider.runtimeDiagnosticValues.openrouter',
+  ollama: 'settings:aiProvider.runtimeDiagnosticValues.ollama',
   opaque_batch_mutation: 'settings:aiProvider.runtimeDiagnosticValues.opaqueBatchMutation',
   orchestrated: 'settings:aiProvider.runtimeDiagnosticValues.orchestrated',
   partial: 'settings:aiProvider.runtimeDiagnosticValues.partial',
@@ -339,7 +345,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   unsupported_transport: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTransport',
   use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
   wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution',
-  yes: 'settings:aiProvider.runtimeDiagnosticValues.yes'
+  yes: 'settings:aiProvider.runtimeDiagnosticValues.yes',
+  zhipuai: 'settings:aiProvider.runtimeDiagnosticValues.zhipuai',
 };
 
 type RuntimeDiagnosticTranslate = (key: string) => string;
@@ -816,6 +823,42 @@ export function buildRuntimeEvalDiagnosticRows(
   return [
     {
       labelKey: 'settings:aiProvider.controlPlane.runtimeEval',
+      value,
+    },
+  ];
+}
+
+export function buildRuntimeEvalHistoryDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  rows?: RuntimeEvalHistoryRow[] | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!rows?.length) {
+    return [];
+  }
+  const value = rows
+    .map((row) => {
+      const caseId = formatRuntimeDiagnosticValue(translate, row.case_id);
+      const status = formatRuntimeDiagnosticValue(translate, row.status);
+      const runSummary = [
+        `${row.total_runs} total`,
+        `${row.passed_runs} passed`,
+        `${row.failed_runs} failed`,
+      ].join(', ');
+      const missing = formatRuntimeDiagnosticList(
+        translate,
+        row.missing_providers
+      );
+      const details = [
+        runSummary,
+        missing ? `missing ${missing}` : '',
+        row.history_path,
+      ].filter(Boolean).join('; ');
+      return `${caseId}: ${status}${details ? ` (${details})` : ''}`;
+    })
+    .join('; ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.controlPlane.runtimeEvalHistory',
       value,
     },
   ];
@@ -1413,6 +1456,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeControlPlaneDiagnostics?.runtime_eval_matrix
     );
+    const runtimeEvalHistoryRows = buildRuntimeEvalHistoryDiagnosticRows(
+      t,
+      runtimeControlPlaneDiagnostics?.runtime_eval_history
+    );
 
     let controlPlaneContent: ReactNode;
     if (runtimeControlPlaneLoading && !runtimeControlPlaneDiagnostics) {
@@ -1597,6 +1644,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 <div key={row.labelKey}>
                   <dt>{t(row.labelKey)}</dt>
                   <dd className="font-medium text-foreground">{row.value}</dd>
+                </div>
+              ))}
+              {runtimeEvalHistoryRows.map((row) => (
+                <div key={row.labelKey}>
+                  <dt>{t(row.labelKey)}</dt>
+                  <dd className="break-words font-medium text-foreground">{row.value}</dd>
                 </div>
               ))}
             </dl>
