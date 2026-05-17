@@ -160,15 +160,18 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
         "event_parser": "wired",
         "cost_account": "wired",
     }
-    assert contract_rows["opencode"]["contract_status"] == "planned"
+    assert contract_rows["opencode"]["contract_status"] == "partial"
     assert contract_rows["opencode"]["missing_contract_facets"] == [
-        "run",
-        "cancel",
         "resume",
-        "artifacts",
-        "event_parser",
-        "cost_account",
     ]
+    assert contract_rows["opencode"]["facets"] == {
+        "run": "generic_core_configurable",
+        "cancel": "generic_core_configurable",
+        "resume": "missing_runner_resume",
+        "artifacts": "generic_core_configurable",
+        "event_parser": "generic_jsonl_core",
+        "cost_account": "generic_jsonl_core",
+    }
     assert contract_rows["opencode"]["adapter_required"] is True
     selection_rows = payload["cli_runner_selection"]
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [

@@ -77,6 +77,19 @@ CLI_RUNNER_WIRED_CONTRACTS = {
         "cost_account": "wired",
     },
 }
+CLI_RUNNER_CONTRACT_READY_STATUSES = {
+    "wired",
+    "generic_core_configurable",
+    "generic_jsonl_core",
+}
+CLI_RUNNER_GENERIC_CORE_FACETS = {
+    "run": "generic_core_configurable",
+    "cancel": "generic_core_configurable",
+    "resume": "missing_runner_resume",
+    "artifacts": "generic_core_configurable",
+    "event_parser": "generic_jsonl_core",
+    "cost_account": "generic_jsonl_core",
+}
 MUTATING_SUBAGENT_REQUIRED_GATES = (
     "isolated_child_contexts",
     "transaction_boundaries",
@@ -215,17 +228,24 @@ def build_cli_runner_contract_matrix() -> list[dict[str, Any]]:
     """Build the shared full-runtime CLI runner contract matrix."""
     matrix: list[dict[str, Any]] = []
     for profile in CLI_RUNNER_PROFILES:
-        wired_facets = CLI_RUNNER_WIRED_CONTRACTS.get(profile.runner_id, {})
+        wired_facets = CLI_RUNNER_WIRED_CONTRACTS.get(
+            profile.runner_id,
+            CLI_RUNNER_GENERIC_CORE_FACETS,
+        )
         facets = {
             facet: wired_facets.get(facet, "missing_adapter")
             for facet in CLI_RUNNER_CONTRACT_FACETS
         }
         missing_facets = [
-            facet for facet, status in facets.items() if status != "wired"
+            facet
+            for facet, status in facets.items()
+            if status not in CLI_RUNNER_CONTRACT_READY_STATUSES
         ]
         if not missing_facets:
             contract_status = "ready"
-        elif profile.runner_status == "wired":
+        elif any(
+            status in CLI_RUNNER_CONTRACT_READY_STATUSES for status in facets.values()
+        ):
             contract_status = "partial"
         else:
             contract_status = "planned"

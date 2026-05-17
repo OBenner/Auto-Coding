@@ -247,6 +247,17 @@ Codex CLI runs capture JSONL events and a normalized
 exceeds the capture limit, Auto Code terminates it and records
 `output_truncated` in the Codex CLI result artifact.
 
+The shared CLI runner core now also exists independently of Codex CLI. It can
+wrap a configured runner command, pass prompts through stdin or configured
+prompt args, cancel the active process, parse Codex/OpenAI-style JSONL events,
+and persist runner-specific `<runner>_events.jsonl`,
+`<runner>_timeline.json`, `<runner>_stdout.txt`, and `<runner>_result.json`
+artifacts. `cli_runner_contract_matrix` therefore distinguishes runners with a
+configurable generic core (`generic_core_configurable` and
+`generic_jsonl_core`) from runners that are fully wired. Runner-specific resume
+and command specialization are still tracked separately, so generic core
+availability does not yet make every planned CLI a production route.
+
 ### Subagent Support Matrix
 
 The `--runtime-modes --json` payload also includes
@@ -274,7 +285,7 @@ Last updated: 2026-05-17.
 | Provider reliability | Strong partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, transaction batch contract, boundary guards, and open transaction batches. `--provider-smoke --provider-smoke-runtime mini_pipeline` runs a planner/coder/test/reviewer flow plus a checkpoint preflight/resume recovery loop and reports `recovery_loop_status`. `--provider-smoke --provider-smoke-runtime provider_e2e` now runs the direct-provider e2e suite, adds provider-specific unsupported-tool and gateway/model negative fixtures for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama, merges child results into `provider_e2e_suite`, `provider_e2e_negative_fixtures`, and `provider_reliability`, and persists compact provider run history in `.auto-Codex/provider-smoke-history.json`; the settings UI surfaces suite, fixtures, reliability, and history evidence. | Add optional live fault-injection fixtures for real external accounts/gateways when credentials are available, plus richer provider history trend views from accumulated runs. |
 | MCP Bridge v1 | Strong partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, unavailable-tool observations, readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers, and `mcp_bridge_permission_matrix` for local/external/custom permission gates are represented. The runtime enforces `RuntimeMcpToolPolicy` before execution, writes audit artifacts, classifies mutating tools, normalizes MCP tool results into `text`, `content`, `structured_content`, and `is_error`, classifies live `tools/list` lifecycle failures by stage/kind, and exposes whether strict `AUTO_CODE_MCP_ALLOWED_PERMISSIONS` allowlists are configured. | Generalize live execution coverage across all registered external servers, normalize arbitrary live schemas continuously, reuse external sessions safely, and expand lifecycle classification to every custom server execution path. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, read-only merge plans, and `runtime_subagent_mutation_policy` now exposes the gates blocking mutating children until transactional merge is ready. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, then move the mutation policy from blocked to enabled. |
-| CLI runtimes as full runtime class | Partial | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners, and `cli_runner_contract_matrix` now tracks the shared `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata contract for every candidate. | Wire Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs to satisfy the shared contract instead of staying in `missing_adapter` status. |
+| CLI runtimes as full runtime class | Partial, stronger core | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners, `cli_runner_contract_matrix` tracks `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata for every candidate, and the generic CLI core now supplies configurable run/cancel/artifact/event parsing for planned runners. | Add runner-specific command builders, resume semantics, and live smoke/e2e coverage for Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs so they can move from generic-core partial to ready. |
 | Frontend runtime control plane | Partial | Provider settings show runtime diagnostics, MCP bridge status, MCP permission gates, provider smoke results, tool-loop contract, transaction batch contract, resume policy, transaction batches in Generic Edit artifacts, recovery timeline, open-batch resume state, provider e2e negative fixtures, provider run history, runtime policy/eval rows, runtime eval history, CLI runner contract status, and mutating-subagent gates. | Consolidate live capability matrix, runtime health, MCP availability, executable tools, warnings for incompatible settings, cost estimates, provider test controls, trend views, and richer artifact viewers into one operator-grade surface. |
 | Policy and evals | Partial | Runtime recommendations, compatibility diagnostics, `runtime_policy_matrix` for planner/coder/QA phase selection, `runtime_eval_matrix` for provider e2e, generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts, CLI full-runtime artifacts, and `runtime_eval_history` from persisted provider smoke evidence are implemented. | Add broader persisted comparative eval results across Claude/Codex/OpenAI/Gemini/Ollama and cost/quality/safety reporting from real runs. |
 
@@ -534,8 +545,11 @@ the explicitly enabled Context7 stdio bridge.
 CLI runner profiles for Claude Code, Z.AI via Claude Code, Gemini CLI, Aider,
 Cursor, CodeRabbit CLI, GitHub Copilot CLI, OpenCode, Goose, Amp, Qwen Code,
 DeepV Code, and a generic CLI pool are exposed for diagnostics and routing
-planning. Runtime routing only applies to wired runners, so profile visibility
-does not imply that every listed CLI already has a production execution adapter.
+planning. Planned runners can use the shared generic CLI process/artifact core
+when a command is explicitly configured, but runtime routing only applies to
+wired runners. Profile visibility and generic-core availability do not imply
+that every listed CLI already has production command mapping, resume support, or
+provider-specific smoke coverage.
 
 Non-Claude subagents are represented as orchestrated read-only child runtime
 sessions, not Claude SDK Task tool parity. Their artifacts include aggregate

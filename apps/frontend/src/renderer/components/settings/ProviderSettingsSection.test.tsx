@@ -272,10 +272,14 @@ describe('buildCliRunnerContractDiagnosticRows', () => {
           runner_id: 'opencode',
           display_name: 'OpenCode',
           runner_status: 'planned',
-          contract_status: 'planned',
-          required_facets: ['run', 'cancel'],
-          missing_contract_facets: ['run', 'cancel'],
-          facets: { run: 'missing_adapter', cancel: 'missing_adapter' },
+          contract_status: 'partial',
+          required_facets: ['run', 'cancel', 'resume'],
+          missing_contract_facets: ['resume'],
+          facets: {
+            run: 'generic_core_configurable',
+            cancel: 'generic_core_configurable',
+            resume: 'missing_runner_resume',
+          },
           adapter_required: true,
           supported_runtime_modes: ['generic_edit'],
           artifact_contract: 'opencode_result.json, opencode_timeline.json',
@@ -284,7 +288,7 @@ describe('buildCliRunnerContractDiagnosticRows', () => {
     ).toEqual([
       {
         labelKey: 'settings:aiProvider.controlPlane.cliRunnerContracts',
-        value: 'Codex CLI: Ready; OpenCode: Planned (run, cancel)',
+        value: 'Codex CLI: Ready; OpenCode: Partial (resume)',
       },
     ]);
   });

@@ -202,6 +202,14 @@ The current Codex CLI adapter persists `codex_cli_events.jsonl` and
 sanitized account summary, and resume metadata into stable top-level fields for
 settings and cost UI consumers.
 
+The shared generic CLI core now gives planned runners a common execution shape
+before each runner gets a specialized adapter. It can invoke a configured
+runner command, cancel the active process, parse Codex/OpenAI-style JSONL
+events, and persist `<runner>_events.jsonl`, `<runner>_timeline.json`,
+`<runner>_stdout.txt`, and `<runner>_result.json` artifacts. This moves planned
+runners from "missing process adapter" to "generic core available, runner
+resume/specialization pending" in the contract matrix.
+
 ### Tier 2: Strategic Integrations
 
 These should be supported after the runner interface is stable.
@@ -257,8 +265,8 @@ Recommended abstractions:
 - `AgentRunner`: executes implementation or analysis work.
 - `ReviewRunner`: reviews diffs and produces findings.
 - `RunnerCapabilities`: declares supported actions and constraints.
-- `RunnerPolicy`: defines allowed commands, file scopes, network access, and
-  approval requirements.
+- `RunnerPolicy`: defines allowed commands, file scopes, network access,
+  approval requirements, and runner-specific resume behavior.
 - `RunnerResult`: normalizes final message, changed files, commands, errors,
   usage, artifacts, and review findings.
 - `RunnerRegistry`: discovers configured runners and selects candidates.

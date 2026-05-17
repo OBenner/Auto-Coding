@@ -7,6 +7,7 @@ inside an Auto Code workspace.
 """
 
 from .adapters import create_runtime_session
+from .adapters.generic_cli import GenericCliRuntimeSession
 from .artifacts import (
     save_runtime_fallback_artifact,
     save_runtime_runner_route_artifact,
@@ -116,6 +117,7 @@ __all__ = [
     "CliRunnerProfile",
     "CliRunnerRejection",
     "CliRunnerSelection",
+    "GenericCliRuntimeSession",
     "RuntimeMode",
     "RuntimeExternalMcpClient",
     "RuntimeExternalMcpContractCheck",

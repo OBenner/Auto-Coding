@@ -63,6 +63,7 @@ from agents.runtime.adapters.codex_cli import (
     summarize_codex_account,
     summarize_codex_events,
 )
+from agents.runtime.adapters.generic_cli import GenericCliRuntimeSession
 from agents.runtime.adapters.generic_edit import (
     MAX_MUTATION_PREIMAGE_BYTES,
     GenericEditRuntimeError,
@@ -541,6 +542,145 @@ async def test_cli_runtime_process_truncates_large_output(tmp_path: Path):
     assert result.truncated is True
     assert len(result.stdout_text) == 128
     assert result.stderr_text == ""
+
+
+@pytest.mark.asyncio
+async def test_generic_cli_runtime_writes_portable_artifacts(tmp_path: Path):
+    fake_cli_script = tmp_path / "generic_cli.py"
+    fake_cli_script.write_text(
+        textwrap.dedent(
+            """\
+            #!/usr/bin/env python3
+            import json
+            import sys
+
+            message = sys.stdin.read().strip()
+            print(json.dumps({
+                "type": "session.started",
+                "session_id": "generic-cli-session",
+                "account": {"email": "dev@example.com", "api_key": "secret"},
+            }))
+            print(json.dumps({
+                "type": "usage",
+                "usage": {
+                    "input_tokens": 2,
+                    "output_tokens": 4,
+                    "total_tokens": 6,
+                },
+                "cost_usd": 0.02,
+            }))
+            print(json.dumps({
+                "type": "assistant.message",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "reasoning", "text": "private"},
+                        {"type": "output_text", "text": f"generic final: {message}"},
+                    ],
+                },
+            }))
+            """
+        ),
+        encoding="utf-8",
+    )
+    if sys.platform == "win32":
+        fake_cli = tmp_path / "generic-cli.cmd"
+        fake_cli.write_text(
+            f'@echo off\r\n"{sys.executable}" "{fake_cli_script}" %*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        fake_cli = tmp_path / "generic-cli"
+        fake_cli.write_text(
+            fake_cli_script.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        fake_cli.chmod(0o755)
+
+    session = SimpleNamespace(cli_runner_command=str(fake_cli), cli_runner_args=[])
+    runtime_session = GenericCliRuntimeSession(
+        runner_id="gemini_cli",
+        agent_session=session,
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "do generic cli work",
+        tmp_path,
+        requirements=RuntimeRequirements.text_only(),
+    )
+
+    assert result.status == "complete"
+    assert result.response_text == "generic final: do generic cli work"
+    assert result.usage_metadata == {
+        "input_tokens": 2,
+        "output_tokens": 4,
+        "total_tokens": 6,
+        "cost_usd": pytest.approx(0.02),
+    }
+    assert result.artifacts
+    assert result.artifacts["gemini_cli_events"].endswith("gemini_cli_events.jsonl")
+    assert result.artifacts["gemini_cli_timeline"].endswith("gemini_cli_timeline.json")
+    assert result.artifacts["gemini_cli_result"].endswith("gemini_cli_result.json")
+    result_payload = json.loads(
+        (tmp_path / "artifacts" / "gemini_cli_result.json").read_text(encoding="utf-8")
+    )
+    assert result_payload["runtime"] == "gemini_cli"
+    assert result_payload["session_id"] == "generic-cli-session"
+    assert result_payload["account_summary"] == {"email": "dev@example.com"}
+    assert "secret" not in json.dumps(result_payload)
+    assert result_payload["final_message_excerpt"] == (
+        "generic final: do generic cli work"
+    )
+    timeline_payload = json.loads(
+        (tmp_path / "artifacts" / "gemini_cli_timeline.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert timeline_payload["runtime"] == "gemini_cli"
+    assert timeline_payload["event_count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_runtime_factory_can_create_generic_cli_runner(tmp_path: Path):
+    fake_cli_script = tmp_path / "factory_cli.py"
+    fake_cli_script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "print('factory final: ' + sys.stdin.read().strip())\n",
+        encoding="utf-8",
+    )
+    if sys.platform == "win32":
+        fake_cli = tmp_path / "factory-cli.cmd"
+        fake_cli.write_text(
+            f'@echo off\r\n"{sys.executable}" "{fake_cli_script}" %*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        fake_cli = tmp_path / "factory-cli"
+        fake_cli.write_text(
+            fake_cli_script.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        fake_cli.chmod(0o755)
+
+    runtime_session = create_runtime_session(
+        provider_name="opencode",
+        agent_session=SimpleNamespace(cli_runner_command=str(fake_cli)),
+        runtime_mode="full_autonomous",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "from factory",
+        tmp_path,
+        requirements=RuntimeRequirements.full_coder(),
+    )
+
+    assert runtime_session.name == "opencode"
+    assert result.status == "complete"
+    assert result.response_text == "factory final: from factory"
+    assert (tmp_path / "artifacts" / "opencode_result.json").exists()
 
 
 def test_provider_tool_call_parser_handles_responses_output_blocks():
