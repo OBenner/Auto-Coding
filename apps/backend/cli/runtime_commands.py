@@ -72,6 +72,17 @@ CLI_RUNNER_WIRED_CONTRACTS = {
         "cost_account": "wired",
     },
 }
+MUTATING_SUBAGENT_REQUIRED_GATES = (
+    "isolated_child_contexts",
+    "transaction_boundaries",
+    "conflict_aware_merge",
+    "parent_approved_apply_abort",
+    "child_artifacts",
+)
+MUTATING_SUBAGENT_SATISFIED_GATES = (
+    "isolated_child_contexts",
+    "child_artifacts",
+)
 
 RUNTIME_POLICY_PHASES = (
     {
@@ -331,6 +342,36 @@ def build_runtime_subagent_matrix() -> list[dict[str, Any]]:
     return matrix
 
 
+def build_runtime_subagent_mutation_policy() -> list[dict[str, Any]]:
+    """Build explicit policy gates for future mutating subagent support."""
+    missing_gates = [
+        gate
+        for gate in MUTATING_SUBAGENT_REQUIRED_GATES
+        if gate not in MUTATING_SUBAGENT_SATISFIED_GATES
+    ]
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        for mode in RUNTIME_MODE_INFO:
+            if mode.mode not in {"full_autonomous", "generic_edit"}:
+                continue
+            matrix.append(
+                {
+                    "provider": provider_row.provider,
+                    "runtime_mode": mode.mode,
+                    "mutating_subagents_enabled": False,
+                    "status": "blocked",
+                    "transaction_boundary_required": True,
+                    "parent_approval_required": True,
+                    "merge_protocol": "read_only_until_transactional_merge",
+                    "required_gates": list(MUTATING_SUBAGENT_REQUIRED_GATES),
+                    "satisfied_gates": list(MUTATING_SUBAGENT_SATISFIED_GATES),
+                    "missing_gates": missing_gates,
+                    "reason": "mutating_subagents_require_transactional_merge",
+                }
+            )
+    return matrix
+
+
 def build_runtime_policy_matrix() -> list[dict[str, Any]]:
     """Build phase/provider runtime policy diagnostics."""
     full_runtime_runner_candidates = list(
@@ -554,6 +595,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
             requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
         ),
         "runtime_subagent_matrix": build_runtime_subagent_matrix(),
+        "runtime_subagent_mutation_policy": build_runtime_subagent_mutation_policy(),
         "runtime_policy_matrix": build_runtime_policy_matrix(),
         "runtime_eval_matrix": build_runtime_eval_matrix(),
         "runtime_eval_history": build_runtime_eval_history(),
@@ -1099,6 +1141,18 @@ def format_runtime_modes_text() -> str:
         for row in build_runtime_subagent_matrix()
         if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
     ]
+    mutating_subagent_rows = [
+        [
+            row["provider"],
+            row["runtime_mode"],
+            row["status"],
+            "yes" if row["mutating_subagents_enabled"] else "no",
+            ", ".join(row["missing_gates"]) or "none",
+            row["merge_protocol"],
+        ]
+        for row in build_runtime_subagent_mutation_policy()
+        if row["provider"] in {"claude", "codex", "openai", "google", "ollama"}
+    ]
     runtime_policy_rows = [
         [
             row["phase"],
@@ -1236,6 +1290,18 @@ def format_runtime_modes_text() -> str:
                     "Max attempts",
                 ],
                 subagent_rows,
+            ),
+            "Mutating Subagent Policy",
+            _format_table(
+                [
+                    "Provider",
+                    "Runtime",
+                    "Status",
+                    "Enabled",
+                    "Missing gates",
+                    "Merge protocol",
+                ],
+                mutating_subagent_rows,
             ),
             "Runtime Policy Matrix",
             _format_table(

@@ -95,6 +95,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "MCP Bridge Plan Matrix" in output
     assert "External MCP Client Health" in output
     assert "Subagent Orchestrator Matrix" in output
+    assert "Mutating Subagent Policy" in output
     assert "Runtime Policy Matrix" in output
     assert "Runtime Eval Matrix" in output
     assert "Runtime Eval History" in output
@@ -210,6 +211,33 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert (
         policy_rows[("qa_fixer", "openai")]["selected_runtime_mode"] == "generic_edit"
     )
+    mutation_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["runtime_subagent_mutation_policy"]
+    }
+    assert mutation_rows[("openai", "generic_edit")] == {
+        "provider": "openai",
+        "runtime_mode": "generic_edit",
+        "mutating_subagents_enabled": False,
+        "status": "blocked",
+        "transaction_boundary_required": True,
+        "parent_approval_required": True,
+        "merge_protocol": "read_only_until_transactional_merge",
+        "required_gates": [
+            "isolated_child_contexts",
+            "transaction_boundaries",
+            "conflict_aware_merge",
+            "parent_approved_apply_abort",
+            "child_artifacts",
+        ],
+        "satisfied_gates": ["isolated_child_contexts", "child_artifacts"],
+        "missing_gates": [
+            "transaction_boundaries",
+            "conflict_aware_merge",
+            "parent_approved_apply_abort",
+        ],
+        "reason": "mutating_subagents_require_transactional_merge",
+    }
     eval_rows = {row["case_id"]: row for row in payload["runtime_eval_matrix"]}
     assert eval_rows["provider_e2e"]["runtime_mode"] == "provider_e2e"
     assert eval_rows["provider_e2e"]["required_for_full_autonomous"] is True

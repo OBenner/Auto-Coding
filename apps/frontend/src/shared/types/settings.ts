@@ -746,6 +746,20 @@ export interface RuntimeSubagentMatrixRow {
   artifact_support: boolean;
 }
 
+export interface RuntimeSubagentMutationPolicyRow {
+  provider: string;
+  runtime_mode: string;
+  mutating_subagents_enabled: boolean;
+  status: string;
+  transaction_boundary_required: boolean;
+  parent_approval_required: boolean;
+  merge_protocol: string;
+  required_gates: string[];
+  satisfied_gates: string[];
+  missing_gates: string[];
+  reason: string;
+}
+
 export interface RuntimePolicyMatrixRow {
   phase: string;
   provider: string;
@@ -811,6 +825,7 @@ export interface RuntimeControlPlaneDiagnostics {
   mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
   external_mcp_server_health?: RuntimeExternalMcpHealthRow[];
   runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
+  runtime_subagent_mutation_policy?: RuntimeSubagentMutationPolicyRow[];
   runtime_policy_matrix?: RuntimePolicyMatrixRow[];
   runtime_eval_matrix?: RuntimeEvalMatrixRow[];
   runtime_eval_history?: RuntimeEvalHistoryRow[];

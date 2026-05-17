@@ -41,6 +41,7 @@ import type {
   RuntimeFallbackMatrixRow,
   RuntimeMcpBridgePlanRow,
   RuntimePolicyMatrixRow,
+  RuntimeSubagentMutationPolicyRow,
   RuntimeSubagentMatrixRow
 } from '../../../shared/types/settings';
 
@@ -253,6 +254,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   mini_pipeline_blocked: 'settings:aiProvider.runtimeDiagnosticValues.miniPipelineBlocked',
   mini_pipeline_ready: 'settings:aiProvider.runtimeDiagnosticValues.miniPipelineReady',
   mini_task_pipeline: 'settings:aiProvider.runtimeDiagnosticValues.miniTaskPipeline',
+  mutating_subagents_require_transactional_merge:
+    'settings:aiProvider.runtimeDiagnosticValues.mutatingSubagentsRequireTransactionalMerge',
   native: 'settings:aiProvider.runtimeDiagnosticValues.native',
   native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.nativeMcpRuntime',
   native_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolLoop',
@@ -891,6 +894,31 @@ export function buildCliRunnerContractDiagnosticRows(
     : [];
 }
 
+export function buildMutatingSubagentPolicyDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  rows?: RuntimeSubagentMutationPolicyRow[] | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!rows?.length) {
+    return [];
+  }
+  const value = rows
+    .map((row) => {
+      const runtime = formatRuntimeDiagnosticValue(translate, row.runtime_mode);
+      const status = formatRuntimeDiagnosticValue(translate, row.status);
+      const missing = formatRuntimeDiagnosticList(translate, row.missing_gates);
+      const reason = formatRuntimeDiagnosticValue(translate, row.reason);
+      const suffix = [missing, reason].filter(Boolean).join('; ');
+      return `${runtime}: ${status}${suffix ? ` (${suffix})` : ''}`;
+    })
+    .join('; ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.controlPlane.mutatingSubagentPolicy',
+      value,
+    },
+  ];
+}
+
 export function buildProviderTransactionBatchDiagnosticRows(
   translate: RuntimeDiagnosticTranslate,
   transactionBatchContract?: ProviderValidatedTransactionBatchContract | null
@@ -1491,6 +1519,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeControlPlaneDiagnostics?.cli_runner_contract_matrix
     );
+    const mutatingSubagentPolicyRows = buildMutatingSubagentPolicyDiagnosticRows(
+      t,
+      runtimeControlPlaneDiagnostics?.runtime_subagent_mutation_policy?.filter(
+        (row) => row.provider === config.provider && row.runtime_mode === activeRuntimeMode
+      )
+    );
 
     let controlPlaneContent: ReactNode;
     if (runtimeControlPlaneLoading && !runtimeControlPlaneDiagnostics) {
@@ -1657,6 +1691,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   {formatControlPlaneList(subagentRow?.required_capabilities)}
                 </dd>
               </div>
+              {mutatingSubagentPolicyRows.map((row) => (
+                <div key={row.labelKey} className="sm:col-span-2">
+                  <dt>{t(row.labelKey)}</dt>
+                  <dd className="font-medium text-foreground">{row.value}</dd>
+                </div>
+              ))}
             </dl>
           </div>
 

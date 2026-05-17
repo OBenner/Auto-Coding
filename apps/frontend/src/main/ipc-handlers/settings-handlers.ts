@@ -410,6 +410,7 @@ type RuntimeModesCliPayload = {
   mcp_bridge_plan_matrix?: RuntimeControlPlaneDiagnostics['mcp_bridge_plan_matrix'];
   external_mcp_server_health?: RuntimeControlPlaneDiagnostics['external_mcp_server_health'];
   runtime_subagent_matrix?: RuntimeControlPlaneDiagnostics['runtime_subagent_matrix'];
+  runtime_subagent_mutation_policy?: RuntimeControlPlaneDiagnostics['runtime_subagent_mutation_policy'];
   runtime_policy_matrix?: RuntimeControlPlaneDiagnostics['runtime_policy_matrix'];
   runtime_eval_matrix?: RuntimeControlPlaneDiagnostics['runtime_eval_matrix'];
   runtime_eval_history?: RuntimeControlPlaneDiagnostics['runtime_eval_history'];
@@ -636,6 +637,9 @@ function mapRuntimeControlPlaneDiagnostics(
       : [],
     runtime_subagent_matrix: Array.isArray(payload.runtime_subagent_matrix)
       ? payload.runtime_subagent_matrix
+      : [],
+    runtime_subagent_mutation_policy: Array.isArray(payload.runtime_subagent_mutation_policy)
+      ? payload.runtime_subagent_mutation_policy
       : [],
     runtime_policy_matrix: Array.isArray(payload.runtime_policy_matrix)
       ? payload.runtime_policy_matrix

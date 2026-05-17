@@ -11,6 +11,7 @@ import {
   buildProviderRunHistoryDiagnosticRows,
   buildProviderTransactionBatchDiagnosticRows,
   buildCliRunnerContractDiagnosticRows,
+  buildMutatingSubagentPolicyDiagnosticRows,
   buildRuntimeEvalHistoryDiagnosticRows,
   buildRuntimeEvalDiagnosticRows,
   buildRuntimePolicyDiagnosticRows
@@ -53,6 +54,7 @@ const translate = (key: string) =>
     'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
     'settings:aiProvider.controlPlane.runtimeEvalHistory': 'Runtime eval history',
     'settings:aiProvider.controlPlane.cliRunnerContracts': 'CLI runner contracts',
+    'settings:aiProvider.controlPlane.mutatingSubagentPolicy': 'Mutating subagent policy',
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
@@ -66,6 +68,8 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.litellm': 'LiteLLM',
     'settings:aiProvider.runtimeDiagnosticValues.openrouter': 'OpenRouter',
     'settings:aiProvider.runtimeDiagnosticValues.planned': 'Planned',
+    'settings:aiProvider.runtimeDiagnosticValues.mutatingSubagentsRequireTransactionalMerge':
+      'Mutating subagents require transactional merge',
     'settings:aiProvider.runtimeDiagnosticValues.partial': 'Partial',
     'settings:aiProvider.runtimeDiagnosticValues.partialCoverage': 'Partial coverage',
     'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked': 'Pre-execution blocked',
@@ -266,6 +270,36 @@ describe('buildCliRunnerContractDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.controlPlane.cliRunnerContracts',
         value: 'Codex CLI: Ready; OpenCode: Planned (run, cancel)',
+      },
+    ]);
+  });
+});
+
+describe('buildMutatingSubagentPolicyDiagnosticRows', () => {
+  it('summarizes mutating subagent gates for the selected runtime', () => {
+    expect(
+      buildMutatingSubagentPolicyDiagnosticRows(translate, [
+        {
+          provider: 'openai',
+          runtime_mode: 'generic_edit',
+          mutating_subagents_enabled: false,
+          status: 'blocked',
+          transaction_boundary_required: true,
+          parent_approval_required: true,
+          merge_protocol: 'read_only_until_transactional_merge',
+          required_gates: ['isolated_child_contexts', 'transaction_boundaries'],
+          satisfied_gates: ['isolated_child_contexts'],
+          missing_gates: ['transaction_boundaries'],
+          reason: 'mutating_subagents_require_transactional_merge',
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.mutatingSubagentPolicy',
+        value: (
+          'Generic edit: Blocked (transaction boundaries; '
+          + 'Mutating subagents require transactional merge)'
+        ),
       },
     ]);
   });
