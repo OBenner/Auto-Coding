@@ -92,6 +92,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "CLI Runner Selection" in output
     assert "CLI Runner Contract Matrix" in output
     assert "Runtime Fallback Matrix" in output
+    assert "Runtime Capability Matrix" in output
     assert "MCP Bridge Plan Matrix" in output
     assert "MCP Bridge Permission Matrix" in output
     assert "External MCP Client Health" in output
@@ -173,6 +174,20 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
         "cost_account": "generic_jsonl_core",
     }
     assert contract_rows["opencode"]["adapter_required"] is True
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    assert capability_rows["claude"]["readiness"] == "ready"
+    assert capability_rows["claude"]["blockers"] == []
+    assert capability_rows["openai"]["readiness"] == "limited"
+    assert capability_rows["openai"]["recommended_runtime_mode"] == "generic_edit"
+    assert "codex_cli" in capability_rows["openai"]["cli_runner_candidates"]
+    assert capability_rows["openai"]["blockers"] == [
+        "missing_full_autonomous_runtime",
+        "live_provider_e2e_required",
+        "transactional_recovery_required",
+    ]
+    assert "direct_full_autonomous_blocked" in capability_rows["openai"]["warnings"]
     selection_rows = payload["cli_runner_selection"]
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
         "codex_cli",

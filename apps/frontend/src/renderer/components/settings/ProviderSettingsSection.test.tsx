@@ -13,6 +13,7 @@ import {
   buildCliRunnerContractDiagnosticRows,
   buildMcpBridgePermissionDiagnosticRows,
   buildMutatingSubagentPolicyDiagnosticRows,
+  buildRuntimeCapabilityDiagnosticRows,
   buildRuntimeEvalHistoryDiagnosticRows,
   buildRuntimeEvalDiagnosticRows,
   buildRuntimePolicyDiagnosticRows
@@ -52,6 +53,7 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryLast': 'Provider history latest',
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
+    'settings:aiProvider.controlPlane.runtimeCapability': 'Runtime capability',
     'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
     'settings:aiProvider.controlPlane.runtimeEvalHistory': 'Runtime eval history',
     'settings:aiProvider.controlPlane.cliRunnerContracts': 'CLI runner contracts',
@@ -66,6 +68,8 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.complete': 'Complete',
     'settings:aiProvider.runtimeDiagnosticValues.denyBeforeExecution': 'Deny before execution',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
+    'settings:aiProvider.runtimeDiagnosticValues.directFullAutonomousBlocked':
+      'Direct full autonomous blocked',
     'settings:aiProvider.runtimeDiagnosticValues.dynamicAutoClaudeToolPolicy':
       'Dynamic Auto Code tool policy',
     'settings:aiProvider.runtimeDiagnosticValues.dynamicMutatingToolPolicy':
@@ -89,6 +93,14 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations': 'Gateway model limitations',
     'settings:aiProvider.runtimeDiagnosticValues.gatewayModelProbe': 'Gateway/model probe',
     'settings:aiProvider.runtimeDiagnosticValues.genericEdit': 'Generic edit',
+    'settings:aiProvider.runtimeDiagnosticValues.liveProviderE2eRequired':
+      'Live provider e2e required',
+    'settings:aiProvider.runtimeDiagnosticValues.localModelQualityVaries':
+      'Local model quality varies',
+    'settings:aiProvider.runtimeDiagnosticValues.limited': 'Limited',
+    'settings:aiProvider.runtimeDiagnosticValues.missingFullAutonomousRuntime':
+      'Missing full autonomous runtime',
+    'settings:aiProvider.runtimeDiagnosticValues.openai': 'OpenAI',
     'settings:aiProvider.runtimeDiagnosticValues.miniPipeline': 'Mini pipeline',
     'settings:aiProvider.runtimeDiagnosticValues.passed': 'Passed',
     'settings:aiProvider.runtimeDiagnosticValues.permissionAllowlistCheck':
@@ -103,6 +115,8 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
+    'settings:aiProvider.runtimeDiagnosticValues.transactionalRecoveryRequired':
+      'Transactional recovery required',
     'settings:aiProvider.runtimeDiagnosticValues.toolPolicyMetadata': 'Tool policy metadata',
     'settings:aiProvider.runtimeDiagnosticValues.mutatingToolClassification':
       'Mutating tool classification',
@@ -197,6 +211,44 @@ describe('buildRuntimePolicyDiagnosticRows', () => {
         value: (
           'Planner: Blocked (Must use full runtime, Codex CLI); '
           + 'Coder: Generic edit (Prefer generic edit)'
+        ),
+      },
+    ]);
+  });
+});
+
+describe('buildRuntimeCapabilityDiagnosticRows', () => {
+  it('summarizes selected provider readiness blockers and warnings', () => {
+    expect(
+      buildRuntimeCapabilityDiagnosticRows(translate, [
+        {
+          provider: 'openai',
+          readiness: 'limited',
+          full_autonomous_ready: false,
+          direct_full_autonomous: 'no',
+          recommended_runtime_mode: 'generic_edit',
+          generic_edit: 'experimental',
+          analysis_only: 'yes',
+          patch_proposal: 'limited',
+          mcp_tools: 'local_bridge',
+          subagents: 'orchestrated',
+          cli_runner_candidates: ['codex_cli'],
+          blockers: [
+            'missing_full_autonomous_runtime',
+            'live_provider_e2e_required',
+            'transactional_recovery_required',
+          ],
+          warnings: ['direct_full_autonomous_blocked'],
+          notes: 'Direct SDK sessions use native tools when available.',
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.runtimeCapability',
+        value: (
+          'OpenAI: Limited -> Generic edit '
+          + '(Missing full autonomous runtime, Live provider e2e required, '
+          + 'Transactional recovery required; Direct full autonomous blocked; Codex CLI)'
         ),
       },
     ]);

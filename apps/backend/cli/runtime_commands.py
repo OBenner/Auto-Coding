@@ -575,6 +575,58 @@ def build_runtime_policy_matrix() -> list[dict[str, Any]]:
     return matrix
 
 
+def build_runtime_capability_matrix() -> list[dict[str, Any]]:
+    """Build consolidated provider readiness diagnostics for the control plane."""
+    full_runtime_runner_candidates = list(
+        select_cli_runner_profiles(
+            runtime_mode="full_autonomous",
+        ).selected_runner_ids
+    )
+    gateway_providers = {"litellm", "openrouter"}
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        has_full_runtime = provider_row.full_autonomous == "yes"
+        blockers: list[str] = []
+        warnings: list[str] = []
+        if not has_full_runtime:
+            blockers.extend(
+                [
+                    "missing_full_autonomous_runtime",
+                    "live_provider_e2e_required",
+                    "transactional_recovery_required",
+                ]
+            )
+            warnings.append("direct_full_autonomous_blocked")
+        if provider_row.provider in gateway_providers:
+            warnings.append("gateway_model_limitations")
+        if provider_row.provider == "ollama":
+            warnings.append("local_model_quality_varies")
+
+        matrix.append(
+            {
+                "provider": provider_row.provider,
+                "readiness": "ready" if has_full_runtime else "limited",
+                "full_autonomous_ready": has_full_runtime,
+                "direct_full_autonomous": provider_row.full_autonomous,
+                "recommended_runtime_mode": (
+                    "full_autonomous" if has_full_runtime else "generic_edit"
+                ),
+                "generic_edit": provider_row.generic_edit,
+                "analysis_only": provider_row.analysis_only,
+                "patch_proposal": provider_row.patch_proposal,
+                "mcp_tools": provider_row.mcp_tools,
+                "subagents": provider_row.subagents,
+                "cli_runner_candidates": []
+                if has_full_runtime
+                else full_runtime_runner_candidates,
+                "blockers": blockers,
+                "warnings": warnings,
+                "notes": provider_row.notes,
+            }
+        )
+    return matrix
+
+
 def build_runtime_eval_matrix() -> list[dict[str, Any]]:
     """Build runtime eval/smoke cases required before declaring full autonomy."""
     return [
@@ -753,6 +805,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         "runtime_subagent_matrix": build_runtime_subagent_matrix(),
         "runtime_subagent_mutation_policy": build_runtime_subagent_mutation_policy(),
         "runtime_policy_matrix": build_runtime_policy_matrix(),
+        "runtime_capability_matrix": build_runtime_capability_matrix(),
         "runtime_eval_matrix": build_runtime_eval_matrix(),
         "runtime_eval_history": build_runtime_eval_history(),
         "recommendations": {
@@ -1335,6 +1388,17 @@ def format_runtime_modes_text() -> str:
         for row in build_runtime_policy_matrix()
         if row["provider"] in {"claude", "codex", "openai", "google", "ollama"}
     ]
+    runtime_capability_rows = [
+        [
+            row["provider"],
+            row["readiness"],
+            row["recommended_runtime_mode"],
+            ", ".join(row["blockers"]) or "none",
+            ", ".join(row["warnings"]) or "none",
+            ", ".join(row["cli_runner_candidates"]) or "none",
+        ]
+        for row in build_runtime_capability_matrix()
+    ]
     runtime_eval_rows = [
         [
             row["case_id"],
@@ -1497,6 +1561,18 @@ def format_runtime_modes_text() -> str:
                     "Runner candidates",
                 ],
                 runtime_policy_rows,
+            ),
+            "Runtime Capability Matrix",
+            _format_table(
+                [
+                    "Provider",
+                    "Readiness",
+                    "Recommended runtime",
+                    "Blockers",
+                    "Warnings",
+                    "CLI candidates",
+                ],
+                runtime_capability_rows,
             ),
             "Runtime Eval Matrix",
             _format_table(

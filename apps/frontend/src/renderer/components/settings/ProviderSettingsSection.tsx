@@ -33,6 +33,7 @@ import type {
   ProviderRuntimeDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
+  RuntimeCapabilityMatrixRow,
   RuntimeControlPlaneDiagnostics,
   RuntimeEvalHistoryRow,
   RuntimeExternalMcpSmokeResult,
@@ -257,10 +258,14 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
   implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
   litellm: 'settings:aiProvider.runtimeDiagnosticValues.litellm',
+  live_provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.liveProviderE2eRequired',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
+  local_model_quality_varies: 'settings:aiProvider.runtimeDiagnosticValues.localModelQualityVaries',
+  limited: 'settings:aiProvider.runtimeDiagnosticValues.limited',
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
   model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
+  missing_full_autonomous_runtime: 'settings:aiProvider.runtimeDiagnosticValues.missingFullAutonomousRuntime',
   missing_runner_resume: 'settings:aiProvider.runtimeDiagnosticValues.missingRunnerResume',
   must_use_full_runtime: 'settings:aiProvider.runtimeDiagnosticValues.mustUseFullRuntime',
   mini_pipeline: 'settings:aiProvider.runtimeDiagnosticValues.miniPipeline',
@@ -349,6 +354,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   text_completion_ready: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionReady',
   text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
   tests: 'settings:aiProvider.runtimeDiagnosticValues.tests',
+  transactional_recovery_required: 'settings:aiProvider.runtimeDiagnosticValues.transactionalRecoveryRequired',
   tool_loop_blocked: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopBlocked',
   tool_loop_limited: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopLimited',
   tool_loop_needs_recovery: 'settings:aiProvider.runtimeDiagnosticValues.toolLoopNeedsRecovery',
@@ -356,6 +362,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   complete: 'settings:aiProvider.runtimeDiagnosticValues.complete',
   direct_api_full_autonomy: 'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy',
   direct_api_full_autonomy_e2e: 'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomyE2e',
+  direct_full_autonomous_blocked: 'settings:aiProvider.runtimeDiagnosticValues.directFullAutonomousBlocked',
   finish: 'settings:aiProvider.runtimeDiagnosticValues.finish',
   gateway_model_limitations: 'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
@@ -827,6 +834,39 @@ export function buildRuntimePolicyDiagnosticRows(
   return [
     {
       labelKey: 'settings:aiProvider.controlPlane.runtimePolicy',
+      value,
+    },
+  ];
+}
+
+export function buildRuntimeCapabilityDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  rows?: RuntimeCapabilityMatrixRow[] | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!rows?.length) {
+    return [];
+  }
+  const value = rows
+    .map((row) => {
+      const provider = formatRuntimeDiagnosticValue(translate, row.provider);
+      const readiness = formatRuntimeDiagnosticValue(translate, row.readiness);
+      const recommended = formatRuntimeDiagnosticValue(
+        translate,
+        row.recommended_runtime_mode
+      );
+      const blockers = formatRuntimeDiagnosticList(translate, row.blockers);
+      const warnings = formatRuntimeDiagnosticList(translate, row.warnings);
+      const runners = formatRuntimeDiagnosticList(
+        translate,
+        row.cli_runner_candidates
+      );
+      const suffix = [blockers, warnings, runners].filter(Boolean).join('; ');
+      return `${provider}: ${readiness} -> ${recommended}${suffix ? ` (${suffix})` : ''}`;
+    })
+    .join('; ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.controlPlane.runtimeCapability',
       value,
     },
   ];
@@ -1590,6 +1630,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
         (row) => row.provider === config.provider
       )
     );
+    const runtimeCapabilityRows = buildRuntimeCapabilityDiagnosticRows(
+      t,
+      runtimeControlPlaneDiagnostics?.runtime_capability_matrix?.filter(
+        (row) => row.provider === config.provider
+      )
+    );
     const runtimeEvalRows = buildRuntimeEvalDiagnosticRows(
       t,
       runtimeControlPlaneDiagnostics?.runtime_eval_matrix
@@ -1802,6 +1848,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 <div key={row.labelKey}>
                   <dt>{t(row.labelKey)}</dt>
                   <dd className="font-medium text-foreground">{row.value}</dd>
+                </div>
+              ))}
+              {runtimeCapabilityRows.map((row) => (
+                <div key={row.labelKey} className="sm:col-span-2">
+                  <dt>{t(row.labelKey)}</dt>
+                  <dd className="break-words font-medium text-foreground">{row.value}</dd>
                 </div>
               ))}
               {runtimeEvalRows.map((row) => (

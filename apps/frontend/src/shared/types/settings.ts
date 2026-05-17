@@ -797,6 +797,23 @@ export interface RuntimePolicyMatrixRow {
   reason: string;
 }
 
+export interface RuntimeCapabilityMatrixRow {
+  provider: string;
+  readiness: string;
+  full_autonomous_ready: boolean;
+  direct_full_autonomous: string;
+  recommended_runtime_mode: string;
+  generic_edit: string;
+  analysis_only: string;
+  patch_proposal: string;
+  mcp_tools: string;
+  subagents: string;
+  cli_runner_candidates: string[];
+  blockers: string[];
+  warnings: string[];
+  notes: string;
+}
+
 export interface RuntimeEvalMatrixRow {
   case_id: string;
   runtime_mode: string;
@@ -851,6 +868,7 @@ export interface RuntimeControlPlaneDiagnostics {
   runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
   runtime_subagent_mutation_policy?: RuntimeSubagentMutationPolicyRow[];
   runtime_policy_matrix?: RuntimePolicyMatrixRow[];
+  runtime_capability_matrix?: RuntimeCapabilityMatrixRow[];
   runtime_eval_matrix?: RuntimeEvalMatrixRow[];
   runtime_eval_history?: RuntimeEvalHistoryRow[];
   recommendations?: Record<string, string>;

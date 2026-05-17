@@ -413,6 +413,7 @@ type RuntimeModesCliPayload = {
   runtime_subagent_matrix?: RuntimeControlPlaneDiagnostics['runtime_subagent_matrix'];
   runtime_subagent_mutation_policy?: RuntimeControlPlaneDiagnostics['runtime_subagent_mutation_policy'];
   runtime_policy_matrix?: RuntimeControlPlaneDiagnostics['runtime_policy_matrix'];
+  runtime_capability_matrix?: RuntimeControlPlaneDiagnostics['runtime_capability_matrix'];
   runtime_eval_matrix?: RuntimeControlPlaneDiagnostics['runtime_eval_matrix'];
   runtime_eval_history?: RuntimeControlPlaneDiagnostics['runtime_eval_history'];
   recommendations?: Record<string, string>;
@@ -647,6 +648,9 @@ function mapRuntimeControlPlaneDiagnostics(
       : [],
     runtime_policy_matrix: Array.isArray(payload.runtime_policy_matrix)
       ? payload.runtime_policy_matrix
+      : [],
+    runtime_capability_matrix: Array.isArray(payload.runtime_capability_matrix)
+      ? payload.runtime_capability_matrix
       : [],
     runtime_eval_matrix: Array.isArray(payload.runtime_eval_matrix)
       ? payload.runtime_eval_matrix
