@@ -711,6 +711,9 @@ export const IPC_CHANNELS = {
   PLUGIN_INSTALL: 'plugin:install',
   PLUGIN_UNINSTALL: 'plugin:uninstall',
   PLUGIN_HEALTH: 'plugin:health',
+  PLUGIN_PERMISSION_DIFF: 'plugin:permissionDiff',
+  PLUGIN_TRACES: 'plugin:traces',
+  PLUGIN_PREVIEW_CONTEXT: 'plugin:previewContext',
 
   // Template operations
   TEMPLATE_LIST: 'template:list',

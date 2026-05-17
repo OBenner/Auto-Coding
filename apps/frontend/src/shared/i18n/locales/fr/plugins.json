@@ -26,19 +26,52 @@
     "access_secrets": "Accès aux Secrets",
     "create_mcp_tools": "Créer des Outils MCP"
   },
+  "capabilities": {
+    "analysis_only": "Analyse Uniquement",
+    "generic_edit": "Modification Générique",
+    "full_agent_runtime": "Runtime Agent Complet"
+  },
   "actions": {
     "enable": "Activer",
     "disable": "Désactiver",
     "uninstall": "Désinstaller",
     "install": "Installer une Extension",
-    "viewDocs": "Voir la Documentation"
+    "viewDocs": "Voir la Documentation",
+    "permissionDiff": "Diff des Permissions",
+    "traces": "Traces de l'Extension",
+    "previewContext": "Aperçu du Prompt",
+    "confirmEnable": "Activer l'Extension"
   },
   "info": {
     "version": "Version",
     "author": "Auteur",
     "license": "Licence",
+    "dependencies": "Dépendances",
     "loadedAt": "Chargée à",
     "enabledAt": "Activée à"
+  },
+  "permissionReview": {
+    "title": "Revue des Permissions",
+    "description": "{{plugin}} modifiera les permissions du runtime d'extensions pour ce projet.",
+    "requiredPermissions": "Permissions requises",
+    "addedPermissions": "Nouvelles permissions",
+    "addedCapabilities": "Nouvelles capacités",
+    "none": "Aucune",
+    "noNewPermissions": "Aucune nouvelle permission",
+    "noNewCapabilities": "Aucune nouvelle capacité"
+  },
+  "traces": {
+    "title": "Traces de l'Extension",
+    "description": "Événements runtime récents pour {{plugin}}.",
+    "source": "Source : {{source}}",
+    "empty": "Aucun événement de trace trouvé."
+  },
+  "contextPreview": {
+    "title": "Aperçu du Prompt",
+    "description": "Contexte des extensions activées pour {{agent}} lors de l'inspection de {{plugin}}.",
+    "contributions": "Contributions",
+    "noContributions": "Aucune contribution d'extension activée.",
+    "empty": "Aucun aperçu de prompt disponible."
   },
   "install": {
     "title": "Installer une Extension",
@@ -70,6 +103,9 @@
     "uninstallError": "Échec de la désinstallation de l'extension",
     "installSuccess": "Extension installée avec succès",
     "installError": "Échec de l'installation de l'extension",
-    "loadError": "Échec du chargement des extensions"
+    "loadError": "Échec du chargement des extensions",
+    "permissionDiffError": "Échec de l'inspection des permissions de l'extension",
+    "tracesError": "Échec du chargement des traces de l'extension",
+    "previewError": "Échec de l'aperçu du contexte de l'extension"
   }
 }

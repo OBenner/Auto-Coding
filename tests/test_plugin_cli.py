@@ -397,6 +397,7 @@ class TestEnableCommand:
                 PluginPermission.WRITE_FILES,
             ]
             mock_plugin.metadata.capabilities = [PluginCapability.GENERIC_EDIT]
+            mock_plugin.is_enabled = True
 
             mock_registry = MagicMock()
             mock_registry.list_plugins.return_value = [mock_plugin]
@@ -414,8 +415,10 @@ class TestEnableCommand:
                     "plugin_name": "test-plugin",
                     "required_permissions": ["read_files", "write_files"],
                     "capabilities": ["generic_edit"],
-                    "added_permissions": ["read_files", "write_files"],
-                    "added_capabilities": ["generic_edit"],
+                    "added_permissions": [],
+                    "added_capabilities": [],
+                    "currently_enabled": True,
+                    "would_enable": False,
                 },
             }
 

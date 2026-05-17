@@ -24,7 +24,10 @@ import {
   PluginInstallResult,
   PluginOperationResult,
   PluginInstallSource,
-  PluginHealthDiagnostics
+  PluginHealthDiagnostics,
+  PluginPermissionDiff,
+  PluginTraceResult,
+  PluginContextPreview
 } from './types';
 import { getConfiguredPythonPath } from '../python-env-manager';
 import { getEffectiveSourcePath } from '../updater/path-resolver';
@@ -53,6 +56,24 @@ interface PluginInstallPayload {
 
 interface PluginHealthPayload {
   projectPath?: string;
+}
+
+interface PluginTracePayload {
+  projectPath?: string;
+  pluginName?: string;
+  plugin_name?: string;
+  limit?: number;
+}
+
+interface PluginPreviewContextPayload {
+  projectPath?: string;
+  agentType?: string;
+  agent_type?: string;
+  specDir?: string;
+  spec_dir?: string;
+  task?: string;
+  files?: string[];
+  file?: string | string[];
 }
 
 /**
@@ -119,6 +140,10 @@ function normalizePluginName(payload: string | PluginNamePayload): string {
     throw new Error('Plugin name is required');
   }
   return pluginName;
+}
+
+function normalizeOptionalPluginName(payload: PluginTracePayload): string | undefined {
+  return payload.pluginName || payload.plugin_name;
 }
 
 /**
@@ -229,6 +254,138 @@ export function registerPluginHandlers(): void {
   );
 
   // ============================================
+  // Plugin Permission Diff
+  // ============================================
+
+  /**
+   * Preview permission and capability changes before enabling a plugin
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PLUGIN_PERMISSION_DIFF,
+    async (
+      _,
+      payload: PluginNamePayload
+    ): Promise<IPCResult<PluginPermissionDiff>> => {
+      try {
+        const projectPath = requireProjectPath(payload.projectPath);
+        const pluginName = normalizePluginName(payload);
+        logger.info('[Plugin] Inspecting permission diff:', pluginName);
+
+        const result = executePluginCommand(projectPath, 'permission-diff', [
+          '--json',
+          pluginName
+        ]) as { permission_diff: PluginPermissionDiff };
+
+        return { success: true, data: result.permission_diff };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('[Plugin] Permission diff failed:', error);
+        return { success: false, error: errorMessage };
+      }
+    }
+  );
+
+  // ============================================
+  // Plugin Traces
+  // ============================================
+
+  /**
+   * Read recent project plugin trace events
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PLUGIN_TRACES,
+    async (
+      _,
+      payload: PluginTracePayload = {}
+    ): Promise<IPCResult<PluginTraceResult>> => {
+      try {
+        const projectPath = requireProjectPath(payload.projectPath);
+        const pluginName = normalizeOptionalPluginName(payload);
+        const args: string[] = ['--json'];
+        if (pluginName) {
+          args.push('--plugin', pluginName);
+        }
+        if (payload.limit !== undefined) {
+          args.push('--limit', String(payload.limit));
+        }
+
+        logger.info('[Plugin] Reading plugin traces', { pluginName, limit: payload.limit });
+        const result = executePluginCommand(projectPath, 'traces', args) as PluginTraceResult;
+
+        return {
+          success: true,
+          data: {
+            trace_dir: result.trace_dir,
+            plugin: result.plugin,
+            traces: result.traces || []
+          }
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('[Plugin] Trace read failed:', error);
+        return { success: false, error: errorMessage };
+      }
+    }
+  );
+
+  // ============================================
+  // Plugin Prompt Preview
+  // ============================================
+
+  /**
+   * Preview enabled plugin prompt augmentations for an agent phase
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PLUGIN_PREVIEW_CONTEXT,
+    async (
+      _,
+      payload: PluginPreviewContextPayload = {}
+    ): Promise<IPCResult<PluginContextPreview>> => {
+      try {
+        const projectPath = requireProjectPath(payload.projectPath);
+        const agentType = payload.agentType || payload.agent_type || 'coder';
+        const specDir = payload.specDir || payload.spec_dir;
+        const rawFiles = payload.files || payload.file || [];
+        const files = Array.isArray(rawFiles) ? rawFiles : [rawFiles];
+
+        const args: string[] = ['--json', '--agent-type', agentType];
+        if (specDir) {
+          args.push('--spec-dir', specDir);
+        }
+        if (payload.task) {
+          args.push('--task', payload.task);
+        }
+        for (const file of files) {
+          if (file) {
+            args.push('--file', file);
+          }
+        }
+
+        logger.info('[Plugin] Previewing plugin context', { agentType });
+        const result = executePluginCommand(
+          projectPath,
+          'preview-context',
+          args
+        ) as PluginContextPreview;
+
+        return {
+          success: true,
+          data: {
+            agent_type: result.agent_type,
+            spec_dir: result.spec_dir,
+            contributions: result.contributions || [],
+            preview: result.preview || ''
+          }
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('[Plugin] Context preview failed:', error);
+        return { success: false, error: errorMessage };
+      }
+    }
+  );
+
+  // ============================================
   // Plugin Enable
   // ============================================
 
@@ -250,10 +407,20 @@ export function registerPluginHandlers(): void {
         const pluginName = normalizePluginName(payload);
         logger.info('[Plugin] Enabling plugin:', pluginName);
 
-        executePluginCommand(projectPath, 'enable', ['--json', pluginName]);
+        const result = executePluginCommand(projectPath, 'enable', [
+          '--json',
+          pluginName
+        ]) as PluginOperationResult;
 
         logger.info('[Plugin] Plugin enabled successfully:', pluginName);
-        return { success: true, data: { success: true } };
+        return {
+          success: true,
+          data: {
+            success: true,
+            plugin_name: result.plugin_name || pluginName,
+            permission_diff: result.permission_diff
+          }
+        };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.error('[Plugin] Enable failed:', error);

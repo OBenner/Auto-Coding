@@ -8,7 +8,10 @@ import type {
   PluginOperationResult,
   PluginInstallResult,
   PluginInstallSource,
-  PluginHealthDiagnostics
+  PluginHealthDiagnostics,
+  PluginPermissionDiff,
+  PluginTraceResult,
+  PluginContextPreview
 } from '../../main/plugins/types';
 
 export interface PluginAPI {
@@ -34,6 +37,53 @@ export interface PluginAPI {
   getPluginHealth: (projectPath: string) => Promise<{
     success: boolean;
     data?: PluginHealthDiagnostics;
+    error?: string;
+  }>;
+
+  /**
+   * Preview permission and capability changes before enabling a plugin
+   * @param pluginName - Name of the plugin to inspect
+   * @param projectPath - Project directory path
+   * @returns Promise with permission diff
+   */
+  getPluginPermissionDiff: (pluginName: string, projectPath: string) => Promise<{
+    success: boolean;
+    data?: PluginPermissionDiff;
+    error?: string;
+  }>;
+
+  /**
+   * Read recent plugin runtime trace events
+   * @param projectPath - Project directory path
+   * @param options - Optional plugin filter and trace limit
+   * @returns Promise with trace events
+   */
+  getPluginTraces: (
+    projectPath: string,
+    options?: { pluginName?: string; limit?: number }
+  ) => Promise<{
+    success: boolean;
+    data?: PluginTraceResult;
+    error?: string;
+  }>;
+
+  /**
+   * Preview enabled plugin prompt augmentation for an agent phase
+   * @param projectPath - Project directory path
+   * @param options - Preview context options
+   * @returns Promise with prompt contribution preview
+   */
+  previewPluginContext: (
+    projectPath: string,
+    options?: {
+      agentType?: string;
+      specDir?: string;
+      task?: string;
+      files?: string[];
+    }
+  ) => Promise<{
+    success: boolean;
+    data?: PluginContextPreview;
     error?: string;
   }>;
 
@@ -75,6 +125,15 @@ export const createPluginAPI = (): PluginAPI => ({
 
   getPluginHealth: (projectPath) =>
     invokeIpc(IPC_CHANNELS.PLUGIN_HEALTH, { projectPath }),
+
+  getPluginPermissionDiff: (pluginName, projectPath) =>
+    invokeIpc(IPC_CHANNELS.PLUGIN_PERMISSION_DIFF, { projectPath, pluginName }),
+
+  getPluginTraces: (projectPath, options = {}) =>
+    invokeIpc(IPC_CHANNELS.PLUGIN_TRACES, { projectPath, ...options }),
+
+  previewPluginContext: (projectPath, options = {}) =>
+    invokeIpc(IPC_CHANNELS.PLUGIN_PREVIEW_CONTEXT, { projectPath, ...options }),
 
   enablePlugin: (pluginName, projectPath) =>
     invokeIpc(IPC_CHANNELS.PLUGIN_ENABLE, { projectPath, pluginName }),
