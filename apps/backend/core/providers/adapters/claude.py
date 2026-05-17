@@ -167,6 +167,7 @@ class ClaudeAgentProvider(AIEngineProvider):
         max_thinking_tokens: int | None = None,
         output_format: dict | None = None,
         agents: dict | None = None,
+        runtime_metadata: dict | None = None,
     ) -> ClaudeAgentSession:
         """Create a new Claude agent session.
 
@@ -182,6 +183,7 @@ class ClaudeAgentProvider(AIEngineProvider):
             max_thinking_tokens: Token budget for extended thinking
             output_format: Optional structured output format for JSON responses
             agents: Optional dict of subagent definitions for parallel execution
+            runtime_metadata: Optional task/file metadata for plugin runtime hooks
 
         Returns:
             ClaudeAgentSession wrapping the SDK client
@@ -228,6 +230,9 @@ class ClaudeAgentProvider(AIEngineProvider):
         if config.extra and "agent_type" in config.extra:
             agent_type = config.extra["agent_type"]
 
+        if runtime_metadata is None and config.extra:
+            runtime_metadata = config.extra.get("runtime_metadata")
+
         try:
             # Import here to avoid circular imports
             from core.client import create_client
@@ -241,6 +246,7 @@ class ClaudeAgentProvider(AIEngineProvider):
                 max_thinking_tokens=max_thinking_tokens,
                 output_format=output_format,
                 agents=agents,
+                runtime_metadata=runtime_metadata,
             )
 
             # Generate session ID

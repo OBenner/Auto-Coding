@@ -14,6 +14,12 @@ a compact graph summary and MCP usage guidance to the agent prompt, and records
 activation diagnostics in
 `.auto-claude/plugin_traces/codebase-intelligence.jsonl`.
 
+When the agent runtime provides task metadata such as `files`, `changed_files`,
+or `target_files`, the prompt contribution includes a bounded task briefing for
+those files: direct dependencies, dependents, impacted files, and test
+candidates. This keeps planner, coder, and QA sessions grounded in graph facts
+before they call deeper MCP tools.
+
 ## Tools
 
 The plugin exposes these MCP tools to agent sessions:

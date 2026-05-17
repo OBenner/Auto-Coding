@@ -202,6 +202,30 @@ def test_plugin_metadata_accepts_explicit_capabilities():
     assert metadata.to_dict()["capabilities"] == ["analysis_only", "generic_edit"]
 
 
+def test_build_agent_context_preserves_runtime_metadata(tmp_path):
+    """Runtime context includes task and file metadata for prompt hooks."""
+    from plugins.runtime import build_agent_context
+
+    context = build_agent_context(
+        project_dir=tmp_path,
+        spec_dir=tmp_path / ".auto-claude" / "specs" / "001-test",
+        agent_type="coder",
+        metadata={
+            "task": "Refactor runtime metadata",
+            "files": ["apps/backend/core/client.py"],
+            "subtask_id": "task-1",
+        },
+    )
+
+    assert context.phase == "coder"
+    assert context.metadata == {
+        "agent_type": "coder",
+        "task": "Refactor runtime metadata",
+        "files": ["apps/backend/core/client.py"],
+        "subtask_id": "task-1",
+    }
+
+
 def test_smoke_contracts_for_each_plugin_type(tmp_path):
     """Agent, integration, and UI plugin classes keep distinct runtime roles."""
     agent = RuntimeAgentPlugin(_metadata("agent-smoke", "agent"))

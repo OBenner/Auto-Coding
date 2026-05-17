@@ -168,10 +168,11 @@ def apply_plugin_prompt_augmentations(
     project_dir: Path,
     spec_dir: Path,
     agent_type: str,
+    metadata: dict[str, Any] | None = None,
 ) -> str:
     """Load enabled runtime-aware plugins and append their prompt contributions."""
     plugins = load_enabled_runtime_plugins(project_dir)
-    context = build_agent_context(project_dir, spec_dir, agent_type)
+    context = build_agent_context(project_dir, spec_dir, agent_type, metadata=metadata)
     contributions = collect_prompt_augmentations(plugins, context)
     return append_prompt_augmentations(base_prompt, contributions)
 
@@ -273,6 +274,7 @@ def build_plugin_tool_hook_matchers(
     spec_dir: Path,
     agent_type: str,
     hook_matcher_factory: Callable[..., Any],
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, list[Any]]:
     """Build Claude SDK hook matcher objects for enabled runtime-capable plugins."""
     plugins = [
@@ -283,7 +285,12 @@ def build_plugin_tool_hook_matchers(
     if not plugins:
         return {"PreToolUse": [], "PostToolUse": []}
 
-    context_obj = build_agent_context(project_dir, spec_dir, agent_type)
+    context_obj = build_agent_context(
+        project_dir,
+        spec_dir,
+        agent_type,
+        metadata=metadata,
+    )
 
     async def pre_tool_hook(
         input_data: dict[str, Any],

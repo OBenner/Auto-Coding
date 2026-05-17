@@ -485,3 +485,38 @@ def test_codebase_intelligence_prompt_augmentation_builds_summary_and_trace(
     assert trace["reason"] == "attached compact graph summary to agent prompt"
     assert trace["index_path"] == ".auto-claude/codebase_intelligence/index.json"
     assert trace["summary"]["total_files"] == 5
+
+
+def test_codebase_intelligence_task_briefing_uses_runtime_metadata_files(
+    temp_dir: Path,
+):
+    """Runtime file metadata produces a targeted graph briefing."""
+    project = _make_sample_project(temp_dir)
+    plugin = _load_codebase_intelligence_plugin(project)
+    integration_context = _make_context(project)
+    agent_context = AgentContext(
+        project_dir=project,
+        spec_dir=integration_context.spec_dir,
+        phase="coder",
+        metadata={
+            "agent_type": "coder",
+            "task": "Refactor create_client",
+            "files": ["apps/backend/core/client.py"],
+        },
+    )
+
+    prompt = plugin.augment_prompt(agent_context)
+
+    assert "## Task Briefing" in prompt
+    assert "task: Refactor create_client" in prompt
+    assert "### apps/backend/core/client.py" in prompt
+    assert "dependents: apps/backend/agents/coder.py" in prompt
+    assert "impacted_files: apps/backend/agents/coder.py, tests/test_coder.py" in prompt
+    assert "test_candidates: tests/test_coder.py" in prompt
+    assert "find_symbol_callers" in prompt
+
+    trace_path = (
+        project / ".auto-claude" / "plugin_traces" / "codebase-intelligence.jsonl"
+    )
+    trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert trace["briefing_files"] == ["apps/backend/core/client.py"]

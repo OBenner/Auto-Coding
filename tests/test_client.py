@@ -77,7 +77,9 @@ class RuntimeAgentPlugin(agent_sdk.AgentPlugin):
         pass
 
     def augment_prompt(self, context):
-        return f"Runtime plugin instructions for {context.phase}."
+        task = context.metadata.get("task", "no-task")
+        files = ", ".join(context.metadata.get("files", [])) or "no-files"
+        return f"Runtime plugin instructions for {context.phase}: {task} [{files}]."
 
     def pre_tool(self, context, tool_name, tool_input):
         if tool_input.get("command") == "blocked":
@@ -343,7 +345,7 @@ class TestClientPluginMCPWiring:
 
         assert client is mock_sdk_client
         assert (
-            "Runtime plugin instructions for coder."
+            "Runtime plugin instructions for coder: no-task [no-files]."
             in captured_options["system_prompt"]
         )
 
@@ -365,5 +367,67 @@ class TestClientPluginMCPWiring:
             "decision": "block",
             "reason": "Plugin runtime-agent blocked tool use: fixture blocked command",
         }
+
+        PluginRegistry.reset_instance()
+
+    def test_create_client_passes_runtime_metadata_to_plugin_prompt(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        """create_client forwards task/file metadata into plugin prompt hooks."""
+        valid_token = "sk-ant-oat01-valid-token"
+        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", valid_token)
+        monkeypatch.setattr("core.auth.get_token_from_keychain", lambda: None)
+        _stub_project_context(monkeypatch)
+
+        from plugins.registry import PluginRegistry
+
+        user_plugins_dir = tmp_path / ".auto-claude" / "plugins" / "user"
+        _write_runtime_agent_plugin(user_plugins_dir)
+
+        PluginRegistry.reset_instance()
+        PluginRegistry.get_instance(
+            user_plugins_dir=user_plugins_dir,
+            system_plugins_dir=tmp_path / "empty-system-plugins",
+            project_dir=tmp_path,
+        )
+
+        captured_options = {}
+
+        def fake_options(**kwargs):
+            captured_options.update(kwargs)
+            return kwargs
+
+        client_module = importlib.import_module("core.client")
+        mock_sdk_client = MagicMock()
+        with (
+            patch.object(
+                client_module,
+                "ClaudeAgentOptions",
+                side_effect=fake_options,
+            ),
+            patch.object(
+                client_module,
+                "ClaudeSDKClient",
+                return_value=mock_sdk_client,
+            ),
+        ):
+            client = client_module.create_client(
+                tmp_path,
+                tmp_path,
+                "claude-sonnet-4",
+                "coder",
+                runtime_metadata={
+                    "task": "Refactor runtime metadata",
+                    "files": ["apps/backend/core/client.py"],
+                },
+            )
+
+        assert client is mock_sdk_client
+        assert (
+            "Runtime plugin instructions for coder: Refactor runtime metadata "
+            "[apps/backend/core/client.py]."
+        ) in captured_options["system_prompt"]
 
         PluginRegistry.reset_instance()

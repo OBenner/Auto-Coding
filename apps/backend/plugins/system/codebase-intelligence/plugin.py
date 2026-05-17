@@ -38,6 +38,7 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
         status_after = self._index_status(project_dir, sidecar_path)
         summary = index.summary()
         phase = self._phase_name(context)
+        briefing_files = self._metadata_files(context)
         reason = "attached compact graph summary to agent prompt"
         self._write_runtime_trace(
             context=context,
@@ -45,22 +46,28 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
             status=status_after,
             reason=reason,
             rebuilt=not bool(status_before.get("fresh")),
+            briefing_files=briefing_files,
         )
 
-        return "\n".join(
+        lines = [
+            "# Codebase Intelligence Runtime Context",
+            f"index_path: {self._relative_sidecar_path(project_dir)}",
+            f"index_status: {status_after['status']}",
+            f"mcp_server: {self.name}-integration",
+            f"phase: {phase}",
+            "summary:",
+            f"- total_files: {summary['total_files']}",
+            f"- total_symbols: {summary['total_symbols']}",
+            f"- total_dependencies: {summary['total_dependencies']}",
+            f"- total_references: {summary['total_references']}",
+            f"- total_package_dependencies: {summary['total_package_dependencies']}",
+            f"- languages: {', '.join(summary['languages']) or 'none'}",
+        ]
+        briefing = self._task_briefing(context, index, briefing_files)
+        if briefing:
+            lines.extend(["", briefing])
+        lines.extend(
             [
-                "# Codebase Intelligence Runtime Context",
-                f"index_path: {self._relative_sidecar_path(project_dir)}",
-                f"index_status: {status_after['status']}",
-                f"mcp_server: {self.name}-integration",
-                f"phase: {phase}",
-                "summary:",
-                f"- total_files: {summary['total_files']}",
-                f"- total_symbols: {summary['total_symbols']}",
-                f"- total_dependencies: {summary['total_dependencies']}",
-                f"- total_references: {summary['total_references']}",
-                f"- total_package_dependencies: {summary['total_package_dependencies']}",
-                f"- languages: {', '.join(summary['languages']) or 'none'}",
                 "",
                 "Use the codebase-intelligence MCP tools when planning, editing, "
                 "or reviewing changes that touch imports, shared symbols, modules, "
@@ -72,6 +79,7 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
                 self._phase_guidance(phase),
             ]
         )
+        return "\n".join(lines)
 
     def create_mcp_tools(self, context: integration_sdk.IntegrationContext) -> list:
         """Create codebase graph tools for agent sessions."""
@@ -522,6 +530,7 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
         status: dict[str, Any],
         reason: str,
         rebuilt: bool,
+        briefing_files: list[str],
     ) -> None:
         project_dir = Path(context.project_dir)
         trace_dir = project_dir / ".auto-claude" / "plugin_traces"
@@ -534,6 +543,7 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
             "index_path": self._relative_sidecar_path(project_dir),
             "index_status": status.get("status"),
             "rebuilt_index": rebuilt,
+            "briefing_files": briefing_files,
             "summary": summary,
         }
         with (trace_dir / "codebase-intelligence.jsonl").open(
@@ -541,3 +551,66 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
             encoding="utf-8",
         ) as handle:
             handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+    def _metadata_files(self, context: Any) -> list[str]:
+        metadata = getattr(context, "metadata", {}) or {}
+        seen: set[str] = set()
+        files: list[str] = []
+        for key in ("files", "changed_files", "target_files"):
+            value = metadata.get(key)
+            if isinstance(value, str):
+                candidates = [value]
+            elif isinstance(value, (list, tuple, set)):
+                candidates = [str(item) for item in value]
+            else:
+                candidates = []
+            for candidate in candidates:
+                normalized = self._normalize_project_path(candidate)
+                if normalized and normalized not in seen:
+                    seen.add(normalized)
+                    files.append(normalized)
+        return files[:5]
+
+    def _task_briefing(
+        self,
+        context: Any,
+        index: CodebaseIndex,
+        files: list[str],
+    ) -> str:
+        if not files:
+            return ""
+
+        metadata = getattr(context, "metadata", {}) or {}
+        lines = ["## Task Briefing"]
+        task = str(metadata.get("task") or "").strip()
+        if task:
+            lines.append(f"task: {task[:240]}")
+
+        for file_path in files:
+            code_file = index.files.get(file_path)
+            lines.append(f"### {file_path}")
+            if code_file is None:
+                lines.append("- status: not indexed")
+                continue
+
+            dependencies = [
+                dep.resolved_path for dep in code_file.dependencies if dep.resolved_path
+            ][:5]
+            dependents = index.reverse_dependencies.get(file_path, [])[:5]
+            impact = index.trace_file_impact(file_path=file_path, depth=2)
+            impacted_files = [
+                item["file_path"]
+                for item in impact.get("impacted_files", [])
+                if isinstance(item, dict) and item.get("file_path") != file_path
+            ][:8]
+            tests = [str(path) for path in impact.get("test_candidates", [])][:5]
+
+            lines.append(f"- dependencies: {_join_or_none(dependencies)}")
+            lines.append(f"- dependents: {_join_or_none(dependents)}")
+            lines.append(f"- impacted_files: {_join_or_none(impacted_files)}")
+            lines.append(f"- test_candidates: {_join_or_none(tests)}")
+        return "\n".join(lines)
+
+
+def _join_or_none(values: list[str]) -> str:
+    return ", ".join(values) if values else "none"
