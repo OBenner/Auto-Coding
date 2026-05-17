@@ -877,6 +877,9 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
+    if runtime_metadata is not None and not isinstance(runtime_metadata, dict):
+        raise TypeError("runtime_metadata must be a dict when provided")
+
     # Check configured AI provider and log it
     provider_config = get_provider_config()
     configured_provider = provider_config.provider

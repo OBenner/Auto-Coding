@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Runtime Adapter Contract
+## Task 1: Runtime Adapter Contract
 
 **Files:**
 - Modify: `tests/test_plugin_runtime.py`
@@ -23,7 +23,7 @@ Add a test proving an enabled integration plugin with `augment_prompt()` can con
 
 - [x] **Step 2: Run focused RED test**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_plugin_runtime.py::test_prompt_augmentation_accepts_analysis_only_integration_plugins -q`
+Run: `python -m pytest tests/test_plugin_runtime.py::test_prompt_augmentation_accepts_analysis_only_integration_plugins -q`
 
 Expected: FAIL because `load_enabled_runtime_plugins()` does not exist yet and
 runtime collection only loads `AgentPlugin` instances.
@@ -34,11 +34,11 @@ Add inert `augment_prompt`, `pre_tool`, and `post_tool` methods to `PluginBase`.
 
 - [x] **Step 4: Run focused GREEN test**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_plugin_runtime.py::test_prompt_augmentation_accepts_analysis_only_integration_plugins tests/test_plugin_runtime.py::test_pre_and_post_tool_hooks_respect_capability_gates -q`
+Run: `python -m pytest tests/test_plugin_runtime.py::test_prompt_augmentation_accepts_analysis_only_integration_plugins tests/test_plugin_runtime.py::test_pre_and_post_tool_hooks_respect_capability_gates -q`
 
 Expected: PASS.
 
-### Task 2: Codebase Intelligence Prompt Context
+## Task 2: Codebase Intelligence Prompt Context
 
 **Files:**
 - Modify: `tests/test_codebase_intelligence.py`
@@ -55,7 +55,7 @@ Extend the same test to assert `.auto-claude/plugin_traces/codebase-intelligence
 
 - [x] **Step 3: Run focused RED test**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_codebase_intelligence.py::test_codebase_intelligence_prompt_augmentation_builds_summary_and_trace -q`
+Run: `python -m pytest tests/test_codebase_intelligence.py::test_codebase_intelligence_prompt_augmentation_builds_summary_and_trace -q`
 
 Expected: FAIL because the integration plugin has no prompt augmentation hook.
 
@@ -65,32 +65,32 @@ Implement `augment_prompt()` on `CodebaseIntelligencePlugin`. It should build or
 
 - [x] **Step 5: Run focused GREEN test**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_codebase_intelligence.py::test_codebase_intelligence_prompt_augmentation_builds_summary_and_trace -q`
+Run: `python -m pytest tests/test_codebase_intelligence.py::test_codebase_intelligence_prompt_augmentation_builds_summary_and_trace -q`
 
 Expected: PASS.
 
-### Task 3: Integration Verification
+## Task 3: Integration Verification
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-17-codebase-intelligence-runtime.md`
 
 - [x] **Step 1: Run codebase/plugin runtime tests**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_codebase_intelligence.py tests/test_plugin_runtime.py -q`
+Run: `python -m pytest tests/test_codebase_intelligence.py tests/test_plugin_runtime.py -q`
 
 Expected: PASS.
 
 - [x] **Step 2: Run client regression smoke**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/python -m pytest tests/test_client.py::TestClientPluginMCPWiring::test_create_client_applies_agent_plugin_prompt_and_tool_hooks tests/test_client.py::TestClientPluginMCPWiring::test_create_client_adds_enabled_integration_plugin_mcp_tools -q`
+Run: `python -m pytest tests/test_client.py::TestClientPluginMCPWiring::test_create_client_applies_agent_plugin_prompt_and_tool_hooks tests/test_client.py::TestClientPluginMCPWiring::test_create_client_adds_enabled_integration_plugin_mcp_tools -q`
 
 Expected: PASS.
 
 - [x] **Step 3: Run lint and format checks**
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff check apps/backend/plugins/base.py apps/backend/plugins/runtime.py apps/backend/plugins/system/codebase-intelligence/plugin.py tests/test_plugin_runtime.py tests/test_codebase_intelligence.py`
+Run: `ruff check apps/backend/plugins/base.py apps/backend/plugins/runtime.py apps/backend/plugins/system/codebase-intelligence/plugin.py tests/test_plugin_runtime.py tests/test_codebase_intelligence.py`
 
-Run: `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff format --check apps/backend/plugins/base.py apps/backend/plugins/runtime.py apps/backend/plugins/system/codebase-intelligence/plugin.py tests/test_plugin_runtime.py tests/test_codebase_intelligence.py`
+Run: `ruff format --check apps/backend/plugins/base.py apps/backend/plugins/runtime.py apps/backend/plugins/system/codebase-intelligence/plugin.py tests/test_plugin_runtime.py tests/test_codebase_intelligence.py`
 
 Expected: PASS.
 

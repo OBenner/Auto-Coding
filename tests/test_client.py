@@ -431,3 +431,19 @@ class TestClientPluginMCPWiring:
         ) in captured_options["system_prompt"]
 
         PluginRegistry.reset_instance()
+
+    def test_create_client_rejects_non_dict_runtime_metadata(
+        self,
+        tmp_path,
+    ):
+        """Invalid runtime metadata fails before plugin wiring is suppressed."""
+        client_module = importlib.import_module("core.client")
+
+        with pytest.raises(TypeError, match="runtime_metadata must be a dict"):
+            client_module.create_client(
+                tmp_path,
+                tmp_path,
+                "claude-sonnet-4",
+                "coder",
+                runtime_metadata=["apps/backend/core/client.py"],
+            )

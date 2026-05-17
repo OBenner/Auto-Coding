@@ -263,26 +263,27 @@ def test_prompt_augmentation_accepts_analysis_only_integration_plugins(tmp_path)
     from plugins.runtime import load_enabled_runtime_plugins
 
     PluginRegistry.reset_instance()
-    _write_runtime_integration_plugin(tmp_path)
+    try:
+        _write_runtime_integration_plugin(tmp_path)
 
-    plugins = load_enabled_runtime_plugins(tmp_path)
-    context = _context(tmp_path)
-    contributions = collect_prompt_augmentations(plugins, context)
-    prompt = append_prompt_augmentations("Base prompt", contributions)
-    hook_result = asyncio.run(
-        run_plugin_pre_tool_hooks(
-            plugins,
-            context,
-            {"tool_name": "Bash", "tool_input": {"command": "blocked"}},
+        plugins = load_enabled_runtime_plugins(tmp_path)
+        context = _context(tmp_path)
+        contributions = collect_prompt_augmentations(plugins, context)
+        prompt = append_prompt_augmentations("Base prompt", contributions)
+        hook_result = asyncio.run(
+            run_plugin_pre_tool_hooks(
+                plugins,
+                context,
+                {"tool_name": "Bash", "tool_input": {"command": "blocked"}},
+            )
         )
-    )
 
-    assert "runtime-integration" in {plugin.name for plugin in plugins}
-    assert "Integration context for coder." in prompt
-    assert "runtime-integration (capabilities: analysis_only)" in prompt
-    assert hook_result == {}
-
-    PluginRegistry.reset_instance()
+        assert "runtime-integration" in {plugin.name for plugin in plugins}
+        assert "Integration context for coder." in prompt
+        assert "runtime-integration (capabilities: analysis_only)" in prompt
+        assert hook_result == {}
+    finally:
+        PluginRegistry.reset_instance()
 
 
 def test_pre_and_post_tool_hooks_respect_capability_gates(tmp_path):

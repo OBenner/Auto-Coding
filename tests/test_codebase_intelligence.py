@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from analysis.analyzers import analyze_project
@@ -520,3 +521,31 @@ def test_codebase_intelligence_task_briefing_uses_runtime_metadata_files(
     )
     trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
     assert trace["briefing_files"] == ["apps/backend/core/client.py"]
+
+
+def test_codebase_intelligence_trace_failure_keeps_prompt_context(
+    temp_dir: Path,
+    monkeypatch,
+    caplog,
+):
+    """Trace persistence failures are logged without disabling prompt context."""
+    project = _make_sample_project(temp_dir)
+    plugin = _load_codebase_intelligence_plugin(project)
+    integration_context = _make_context(project)
+    agent_context = AgentContext(
+        project_dir=project,
+        spec_dir=integration_context.spec_dir,
+        phase="coder",
+        metadata={"agent_type": "coder"},
+    )
+
+    def fail_trace(**_kwargs):
+        raise OSError("trace path unavailable")
+
+    monkeypatch.setattr(plugin, "_write_runtime_trace", fail_trace)
+
+    with caplog.at_level(logging.WARNING):
+        prompt = plugin.augment_prompt(agent_context)
+
+    assert "Codebase Intelligence Runtime Context" in prompt
+    assert "failed to persist runtime trace" in caplog.text

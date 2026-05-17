@@ -34,21 +34,37 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
         project_dir = Path(context.project_dir)
         sidecar_path = self._sidecar_path(project_dir)
         status_before = self._index_status(project_dir, sidecar_path)
-        index = self._load_or_build_index(project_dir, sidecar_path)
-        status_after = self._index_status(project_dir, sidecar_path)
+        rebuilt = not bool(status_before.get("fresh"))
+        if status_before["fresh"]:
+            index = CodebaseIndex.load(sidecar_path)
+            status_after = status_before
+        else:
+            index = CodebaseIndexer(project_dir).write_index(sidecar_path)
+            status_after = self._index_status(project_dir, sidecar_path)
         summary = index.summary()
         phase = self._phase_name(context)
         briefing_files = self._metadata_files(context)
         reason = "attached compact graph summary to agent prompt"
-        self._write_runtime_trace(
-            context=context,
-            summary=summary,
-            status=status_after,
-            reason=reason,
-            rebuilt=not bool(status_before.get("fresh")),
-            briefing_files=briefing_files,
-        )
+        try:
+            self._write_runtime_trace(
+                context=context,
+                summary=summary,
+                status=status_after,
+                reason=reason,
+                rebuilt=rebuilt,
+                briefing_files=briefing_files,
+            )
+        except Exception as exc:
+            logger.warning(
+                "codebase-intelligence: failed to persist runtime trace: %s",
+                exc,
+            )
 
+        tool_guidance = (
+            "Use the codebase-intelligence MCP tools when planning, editing, "
+            + "or reviewing changes that touch imports, shared symbols, modules, "
+            + "or tests:"
+        )
         lines = [
             "# Codebase Intelligence Runtime Context",
             f"index_path: {self._relative_sidecar_path(project_dir)}",
@@ -69,9 +85,7 @@ class CodebaseIntelligencePlugin(integration_sdk.IntegrationPlugin):
         lines.extend(
             [
                 "",
-                "Use the codebase-intelligence MCP tools when planning, editing, "
-                "or reviewing changes that touch imports, shared symbols, modules, "
-                "or tests:",
+                tool_guidance,
                 "- get_codebase_summary and get_module_graph for orientation.",
                 "- find_file_dependencies and find_file_dependents before edits.",
                 "- find_symbol_callers and trace_symbol_impact for shared APIs.",
