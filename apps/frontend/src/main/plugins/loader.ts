@@ -12,7 +12,6 @@
 
 import { ipcMain } from 'electron';
 import { execFileSync } from 'child_process';
-import path from 'path';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult } from '../../shared/types';
 import {
@@ -23,11 +22,59 @@ import {
   PluginType,
   PluginInstallResult,
   PluginOperationResult,
-  PluginInstallSource
+  PluginInstallSource,
+  PluginHealthDiagnostics,
+  PluginPermissionDiff,
+  PluginTraceResult,
+  PluginContextPreview
 } from './types';
 import { getConfiguredPythonPath } from '../python-env-manager';
+import { joinPaths, normalizePath } from '../platform';
 import { getEffectiveSourcePath } from '../updater/path-resolver';
 import { logger } from '../app-logger';
+
+interface PluginListPayload {
+  projectPath?: string;
+  filter?: {
+    pluginType?: PluginType;
+    type?: PluginType;
+    enabledOnly?: boolean;
+    enabled?: boolean;
+  };
+}
+
+interface PluginNamePayload {
+  projectPath?: string;
+  pluginName?: string;
+  plugin_name?: string;
+}
+
+interface PluginInstallPayload {
+  projectPath?: string;
+  source?: PluginInstallSource;
+}
+
+interface PluginHealthPayload {
+  projectPath?: string;
+}
+
+interface PluginTracePayload {
+  projectPath?: string;
+  pluginName?: string;
+  plugin_name?: string;
+  limit?: number;
+}
+
+interface PluginPreviewContextPayload {
+  projectPath?: string;
+  agentType?: string;
+  agent_type?: string;
+  specDir?: string;
+  spec_dir?: string;
+  task?: string;
+  files?: string[];
+  file?: string | string[];
+}
 
 /**
  * Execute a Python plugin management command
@@ -37,7 +84,7 @@ import { logger } from '../app-logger';
  * @param args - Command arguments
  * @returns Command output as JSON
  */
-function executePluginCommand(
+function runPluginCliCommand(
   projectPath: string,
   command: string,
   args: string[] = []
@@ -45,7 +92,7 @@ function executePluginCommand(
   try {
     const pythonPath = getConfiguredPythonPath();
     const sourcePath = getEffectiveSourcePath();
-    const pluginCliPath = path.join(sourcePath, 'apps', 'backend', 'plugins', 'cli.py');
+    const pluginCliPath = joinPaths(sourcePath, 'apps', 'backend', 'plugins', 'cli.py');
 
     const fullArgs = [pluginCliPath, command, ...args];
 
@@ -77,6 +124,28 @@ function executePluginCommand(
   }
 }
 
+function resolvePluginProjectPath(projectPath?: string): string {
+  if (!projectPath) {
+    throw new Error('Project path is required for plugin operations');
+  }
+  return normalizePath(projectPath);
+}
+
+function normalizePluginName(payload: string | PluginNamePayload): string {
+  if (typeof payload === 'string') {
+    return payload;
+  }
+  const pluginName = payload.pluginName || payload.plugin_name;
+  if (!pluginName) {
+    throw new Error('Plugin name is required');
+  }
+  return pluginName;
+}
+
+function normalizeOptionalPluginName(payload: PluginTracePayload): string | undefined {
+  return payload.pluginName || payload.plugin_name;
+}
+
 /**
  * Convert backend plugin data to frontend PluginInfo format
  */
@@ -106,7 +175,7 @@ function parsePluginInfo(data: Record<string, unknown>): PluginInfo {
 /**
  * Register all plugin-related IPC handlers
  */
-export function registerPluginHandlers(projectId: string): void {
+export function registerPluginHandlers(): void {
   // ============================================
   // Plugin List
   // ============================================
@@ -121,13 +190,17 @@ export function registerPluginHandlers(projectId: string): void {
     IPC_CHANNELS.PLUGIN_LIST,
     async (
       _,
-      pluginType?: PluginType,
-      enabledOnly = false
+      payload: PluginListPayload = {}
     ): Promise<IPCResult<PluginInfo[]>> => {
       try {
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
+        const filter = payload.filter || {};
+        const pluginType = filter.pluginType || filter.type;
+        const enabledOnly = Boolean(filter.enabledOnly || filter.enabled);
+
         logger.info('[Plugin] Listing plugins', { pluginType, enabledOnly });
 
-        const args: string[] = [];
+        const args: string[] = ['--json'];
         if (pluginType) {
           args.push('--type', pluginType);
         }
@@ -135,7 +208,7 @@ export function registerPluginHandlers(projectId: string): void {
           args.push('--enabled-only');
         }
 
-        const result = executePluginCommand(projectId, 'list', args);
+        const result = runPluginCliCommand(projectPath, 'list', args);
         const plugins = (result as { plugins: Record<string, unknown>[] }).plugins;
 
         const pluginInfos = plugins.map(parsePluginInfo);
@@ -145,6 +218,168 @@ export function registerPluginHandlers(projectId: string): void {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.error('[Plugin] List failed:', error);
+        return { success: false, error: errorMessage };
+      }
+    }
+  );
+
+  // ============================================
+  // Plugin Health
+  // ============================================
+
+  /**
+   * Inspect plugin directories, manifests, and static diagnostics
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PLUGIN_HEALTH,
+    async (
+      _,
+      payload: PluginHealthPayload = {}
+    ): Promise<IPCResult<PluginHealthDiagnostics>> => {
+      try {
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
+        logger.info('[Plugin] Inspecting plugin health');
+
+        const result = runPluginCliCommand(projectPath, 'health', ['--json']);
+        const diagnostics = (result as { diagnostics: PluginHealthDiagnostics }).diagnostics;
+
+        logger.info('[Plugin] Plugin health inspection completed');
+        return { success: true, data: diagnostics };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('[Plugin] Health inspection failed:', error);
+        return { success: false, error: errorMessage };
+      }
+    }
+  );
+
+  // ============================================
+  // Plugin Permission Diff
+  // ============================================
+
+  /**
+   * Preview permission and capability changes before enabling a plugin
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PLUGIN_PERMISSION_DIFF,
+    async (
+      _,
+      payload: PluginNamePayload
+    ): Promise<IPCResult<PluginPermissionDiff>> => {
+      try {
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
+        const pluginName = normalizePluginName(payload);
+        logger.info('[Plugin] Inspecting permission diff:', pluginName);
+
+        const result = runPluginCliCommand(projectPath, 'permission-diff', [
+          '--json',
+          pluginName
+        ]) as { permission_diff: PluginPermissionDiff };
+
+        return { success: true, data: result.permission_diff };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('[Plugin] Permission diff failed:', error);
+        return { success: false, error: errorMessage };
+      }
+    }
+  );
+
+  // ============================================
+  // Plugin Traces
+  // ============================================
+
+  /**
+   * Read recent project plugin trace events
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PLUGIN_TRACES,
+    async (
+      _,
+      payload: PluginTracePayload = {}
+    ): Promise<IPCResult<PluginTraceResult>> => {
+      try {
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
+        const pluginName = normalizeOptionalPluginName(payload);
+        const args: string[] = ['--json'];
+        if (pluginName) {
+          args.push('--plugin', pluginName);
+        }
+        if (payload.limit !== undefined) {
+          args.push('--limit', String(payload.limit));
+        }
+
+        logger.info('[Plugin] Reading plugin traces', { pluginName, limit: payload.limit });
+        const result = runPluginCliCommand(projectPath, 'traces', args) as PluginTraceResult;
+
+        return {
+          success: true,
+          data: {
+            trace_dir: result.trace_dir,
+            plugin: result.plugin,
+            traces: result.traces || []
+          }
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('[Plugin] Trace read failed:', error);
+        return { success: false, error: errorMessage };
+      }
+    }
+  );
+
+  // ============================================
+  // Plugin Prompt Preview
+  // ============================================
+
+  /**
+   * Preview enabled plugin prompt augmentations for an agent phase
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PLUGIN_PREVIEW_CONTEXT,
+    async (
+      _,
+      payload: PluginPreviewContextPayload = {}
+    ): Promise<IPCResult<PluginContextPreview>> => {
+      try {
+        const projectPath = resolvePluginProjectPath(payload.projectPath);
+        const agentType = payload.agentType || payload.agent_type || 'coder';
+        const specDir = payload.specDir || payload.spec_dir;
+        const rawFiles = payload.files || payload.file || [];
+        const files = Array.isArray(rawFiles) ? rawFiles : [rawFiles];
+
+        const args: string[] = ['--json', '--agent-type', agentType];
+        if (specDir) {
+          args.push('--spec-dir', specDir);
+        }
+        if (payload.task) {
+          args.push('--task', payload.task);
+        }
+        for (const file of files) {
+          if (file) {
+            args.push('--file', file);
+          }
+        }
+
+        logger.info('[Plugin] Previewing plugin context', { agentType });
+        const result = runPluginCliCommand(
+          projectPath,
+          'preview-context',
+          args
+        ) as PluginContextPreview;
+
+        return {
+          success: true,
+          data: {
+            agent_type: result.agent_type,
+            spec_dir: result.spec_dir,
+            contributions: result.contributions || [],
+            preview: result.preview || ''
+          }
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('[Plugin] Context preview failed:', error);
         return { success: false, error: errorMessage };
       }
     }
@@ -161,14 +396,31 @@ export function registerPluginHandlers(projectId: string): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.PLUGIN_ENABLE,
-    async (_, pluginName: string): Promise<IPCResult<PluginOperationResult>> => {
+    async (
+      _,
+      payload: string | PluginNamePayload
+    ): Promise<IPCResult<PluginOperationResult>> => {
       try {
+        const projectPath = resolvePluginProjectPath(
+          typeof payload === 'string' ? undefined : payload.projectPath
+        );
+        const pluginName = normalizePluginName(payload);
         logger.info('[Plugin] Enabling plugin:', pluginName);
 
-        executePluginCommand(projectId, 'enable', [pluginName]);
+        const result = runPluginCliCommand(projectPath, 'enable', [
+          '--json',
+          pluginName
+        ]) as PluginOperationResult;
 
         logger.info('[Plugin] Plugin enabled successfully:', pluginName);
-        return { success: true, data: { success: true } };
+        return {
+          success: true,
+          data: {
+            success: true,
+            plugin_name: result.plugin_name || pluginName,
+            permission_diff: result.permission_diff
+          }
+        };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.error('[Plugin] Enable failed:', error);
@@ -192,11 +444,18 @@ export function registerPluginHandlers(projectId: string): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.PLUGIN_DISABLE,
-    async (_, pluginName: string): Promise<IPCResult<PluginOperationResult>> => {
+    async (
+      _,
+      payload: string | PluginNamePayload
+    ): Promise<IPCResult<PluginOperationResult>> => {
       try {
+        const projectPath = resolvePluginProjectPath(
+          typeof payload === 'string' ? undefined : payload.projectPath
+        );
+        const pluginName = normalizePluginName(payload);
         logger.info('[Plugin] Disabling plugin:', pluginName);
 
-        executePluginCommand(projectId, 'disable', [pluginName]);
+        runPluginCliCommand(projectPath, 'disable', ['--json', pluginName]);
 
         logger.info('[Plugin] Plugin disabled successfully:', pluginName);
         return { success: true, data: { success: true } };
@@ -223,23 +482,33 @@ export function registerPluginHandlers(projectId: string): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.PLUGIN_INSTALL,
-    async (_, source: PluginInstallSource): Promise<IPCResult<PluginInstallResult>> => {
+    async (
+      _,
+      payload: PluginInstallSource | PluginInstallPayload
+    ): Promise<IPCResult<PluginInstallResult>> => {
       try {
+        const projectPath = resolvePluginProjectPath(
+          'source' in payload ? payload.projectPath : undefined
+        );
+        const source = ('source' in payload ? payload.source : payload) as
+          | PluginInstallSource
+          | undefined;
+        if (!source) {
+          throw new Error('Invalid plugin installation source');
+        }
         logger.info('[Plugin] Installing plugin:', source);
 
-        const args: string[] = [];
+        const args: string[] = ['--json'];
 
         if (source.type === 'directory' && source.path) {
-          args.push('--from-directory', source.path);
-        } else if (source.type === 'zip' && source.path) {
-          args.push('--from-zip', source.path);
-        } else if (source.type === 'marketplace' && source.marketplace_id) {
-          args.push('--from-marketplace', source.marketplace_id);
+          args.push('--path', source.path);
+        } else if (source.type === 'remote' && source.url) {
+          args.push('--url', source.url);
         } else {
           throw new Error('Invalid plugin installation source');
         }
 
-        const result = executePluginCommand(projectId, 'install', args);
+        const result = runPluginCliCommand(projectPath, 'install', args);
         const data = result as { success: boolean; plugin?: Record<string, unknown>; error?: string };
 
         if (data.success && data.plugin) {
@@ -275,11 +544,18 @@ export function registerPluginHandlers(projectId: string): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.PLUGIN_UNINSTALL,
-    async (_, pluginName: string): Promise<IPCResult<PluginOperationResult>> => {
+    async (
+      _,
+      payload: string | PluginNamePayload
+    ): Promise<IPCResult<PluginOperationResult>> => {
       try {
+        const projectPath = resolvePluginProjectPath(
+          typeof payload === 'string' ? undefined : payload.projectPath
+        );
+        const pluginName = normalizePluginName(payload);
         logger.info('[Plugin] Uninstalling plugin:', pluginName);
 
-        executePluginCommand(projectId, 'uninstall', [pluginName]);
+        runPluginCliCommand(projectPath, 'uninstall', ['--json', pluginName]);
 
         logger.info('[Plugin] Plugin uninstalled successfully:', pluginName);
         return { success: true, data: { success: true } };
@@ -295,5 +571,5 @@ export function registerPluginHandlers(projectId: string): void {
     }
   );
 
-  logger.info('[Plugin] Plugin IPC handlers registered for project:', projectId);
+  logger.info('[Plugin] Plugin IPC handlers registered');
 }

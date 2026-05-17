@@ -5,7 +5,7 @@
  * for enabling/disabling/uninstalling plugins.
  */
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, Shield, Power, Trash2 } from 'lucide-react';
+import { Activity, ExternalLink, FileText, Shield, ShieldCheck, Power, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -18,6 +18,9 @@ interface PluginCardProps {
   onEnable: (pluginName: string) => void;
   onDisable: (pluginName: string) => void;
   onUninstall: (pluginName: string) => void;
+  onInspectPermissions: (pluginName: string) => void;
+  onViewTraces: (pluginName: string) => void;
+  onPreviewContext: (pluginName: string) => void;
   isLoading?: boolean;
 }
 
@@ -55,7 +58,16 @@ function getPluginStatusColor(status: PluginStatus): string {
   }
 }
 
-export function PluginCard({ plugin, onEnable, onDisable, onUninstall, isLoading }: PluginCardProps) {
+export function PluginCard({
+  plugin,
+  onEnable,
+  onDisable,
+  onUninstall,
+  onInspectPermissions,
+  onViewTraces,
+  onPreviewContext,
+  isLoading
+}: Readonly<PluginCardProps>) {
   const { t } = useTranslation(['plugins', 'common']);
   const { metadata, status, error } = plugin;
 
@@ -151,7 +163,9 @@ export function PluginCard({ plugin, onEnable, onDisable, onUninstall, isLoading
         {/* Dependencies */}
         {metadata.dependencies.length > 0 && (
           <div>
-            <span className="text-sm text-muted-foreground">Dependencies:</span>
+            <span className="text-sm text-muted-foreground">
+              {t('plugins:info.dependencies')}:
+            </span>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {metadata.dependencies.map((dep) => (
                 <Badge key={dep} variant="outline" className="text-xs font-mono">
@@ -163,7 +177,7 @@ export function PluginCard({ plugin, onEnable, onDisable, onUninstall, isLoading
         )}
       </CardContent>
 
-      <CardFooter className="flex gap-2">
+      <CardFooter className="flex flex-wrap gap-2">
         {isDisabled && (
           <Button
             onClick={() => onEnable(metadata.name)}
@@ -187,6 +201,51 @@ export function PluginCard({ plugin, onEnable, onDisable, onUninstall, isLoading
             {t('plugins:actions.disable')}
           </Button>
         )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={() => onInspectPermissions(metadata.name)}
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              aria-label={t('plugins:actions.permissionDiff')}
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('plugins:actions.permissionDiff')}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={() => onViewTraces(metadata.name)}
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              aria-label={t('plugins:actions.traces')}
+            >
+              <Activity className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('plugins:actions.traces')}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={() => onPreviewContext(metadata.name)}
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              aria-label={t('plugins:actions.previewContext')}
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('plugins:actions.previewContext')}</TooltipContent>
+        </Tooltip>
         <Button
           onClick={() => onUninstall(metadata.name)}
           disabled={isLoading || isEnabled}

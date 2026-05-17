@@ -1017,6 +1017,12 @@ async def run_autonomous_agent(
         # Filled after provider/runtime resolution so plugin hooks can see the
         # runtime context client before the session starts.
         client = None
+        runtime_metadata: dict[str, object] = {
+            "task": "Create implementation plan from the current spec"
+            if first_run
+            else "",
+            "phase_name": current_phase,
+        }
 
         # Generate appropriate prompt
         if first_run:
@@ -1173,6 +1179,17 @@ async def run_autonomous_agent(
                 recovery_hints=recovery_hints,
                 pattern_suggestions=pattern_suggestions,
             )
+            runtime_metadata = {
+                "task": subtask_description,
+                "files": [
+                    str(file_path)
+                    for file_path in next_subtask.get("files_to_modify", [])
+                    if file_path
+                ],
+                "subtask_id": subtask_id,
+                "phase_name": phase.get("name") or next_subtask.get("phase_name"),
+                "attempt": attempt_count,
+            }
 
             # Add recovery strategy guidance if available
             if recovery_guidance:
@@ -1268,6 +1285,7 @@ async def run_autonomous_agent(
                 extra={
                     "agent_type": agent_type_for_session,
                     "max_thinking_tokens": phase_thinking_budget,
+                    "runtime_metadata": runtime_metadata,
                 },
             )
 
@@ -1301,6 +1319,10 @@ async def run_autonomous_agent(
                             "agent_type": child_agent_type,
                             "parent_subtask_id": child_subtask_id,
                             "runtime_subagent_id": task.id,
+                            "runtime_metadata": {
+                                "task": getattr(task, "description", str(task.id)),
+                                "subtask_id": child_subtask_id,
+                            },
                         },
                     )
                     if child_provider.name == "claude":

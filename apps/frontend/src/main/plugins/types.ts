@@ -124,6 +124,160 @@ export interface PluginOperationResult {
   success: boolean;
   /** Error message if operation failed */
   error?: string;
+  /** Plugin affected by the operation */
+  plugin_name?: string;
+  /** Permission delta emitted by backend when enabling a plugin */
+  permission_diff?: PluginPermissionDiff;
+}
+
+/**
+ * Permission and capability delta before enabling a plugin
+ */
+export interface PluginPermissionDiff {
+  /** Plugin name */
+  plugin_name: string;
+  /** Full permissions required by the plugin */
+  required_permissions: PluginPermission[];
+  /** Full capability declarations from the plugin manifest */
+  capabilities: string[];
+  /** Permissions newly introduced if this plugin is enabled */
+  added_permissions: PluginPermission[];
+  /** Capabilities newly introduced if this plugin is enabled */
+  added_capabilities: string[];
+  /** Whether the plugin is already enabled */
+  currently_enabled: boolean;
+  /** Whether the inspected action would enable the plugin */
+  would_enable: boolean;
+}
+
+/**
+ * Runtime trace event emitted by plugin hooks
+ */
+export interface PluginTraceEvent {
+  /** Plugin that emitted the trace, when present */
+  plugin?: string;
+  /** Event name, when present */
+  event?: string;
+  /** Trace JSONL source file */
+  source?: string;
+  /** Plugin-specific trace details */
+  [key: string]: unknown;
+}
+
+/**
+ * Recent project plugin trace events
+ */
+export interface PluginTraceResult {
+  /** Project trace directory inspected by backend */
+  trace_dir: string;
+  /** Optional plugin filter used by the request */
+  plugin?: string | null;
+  /** Recent trace events */
+  traces: PluginTraceEvent[];
+}
+
+/**
+ * Prompt contribution from an enabled agent plugin
+ */
+export interface PluginContextPreviewContribution {
+  /** Plugin that contributed prompt text */
+  plugin_name: string;
+  /** Capabilities declared by the plugin */
+  capabilities: string[];
+  /** Prompt augmentation text */
+  text: string;
+}
+
+/**
+ * Preview of enabled plugin prompt augmentations for an agent phase
+ */
+export interface PluginContextPreview {
+  /** Agent phase/type used for preview */
+  agent_type: string;
+  /** Spec directory used to build the context */
+  spec_dir: string;
+  /** Individual plugin contributions */
+  contributions: PluginContextPreviewContribution[];
+  /** Final appended prompt preview */
+  preview: string;
+}
+
+/**
+ * Static security diagnostics for a plugin directory
+ */
+export interface PluginSecurityDiagnostics {
+  /** Whether static security checks passed */
+  safe: boolean;
+  /** Security warnings from backend scanner */
+  warnings: string[];
+}
+
+/**
+ * Plugin health issue emitted by backend diagnostics
+ */
+export interface PluginHealthIssue {
+  /** Severity level for display and automation */
+  severity: 'error' | 'warning';
+  /** Stable machine-readable issue code */
+  code: string;
+  /** Human-readable issue message */
+  message: string;
+  /** Plugin installation directory, when issue is plugin-specific */
+  plugin_dir?: string;
+  /** Plugin name, when known */
+  plugin_name?: string;
+  /** Source plugin root */
+  source?: 'user' | 'system';
+  /** Additional issue-specific data */
+  details?: Record<string, unknown>;
+}
+
+/**
+ * Manifest and static diagnostics for one plugin directory
+ */
+export interface PluginHealthEntry {
+  /** Plugin name from manifest */
+  name: string;
+  /** Plugin version from manifest */
+  version: string;
+  /** Plugin type from manifest */
+  plugin_type: PluginType;
+  /** Whether the manifest came from the user or system plugin directory */
+  source: 'user' | 'system';
+  /** Plugin installation directory */
+  plugin_dir: string;
+  /** Manifest validation status */
+  manifest_status: 'valid';
+  /** Full manifest metadata */
+  metadata: PluginMetadata;
+  /** Static security scan result */
+  security: PluginSecurityDiagnostics;
+  /** Issues associated with this plugin */
+  issues: PluginHealthIssue[];
+}
+
+/**
+ * Summary counts for plugin diagnostics
+ */
+export interface PluginHealthSummary {
+  total_entries: number;
+  valid_plugins: number;
+  invalid_plugins: number;
+  security_warnings: number;
+  duplicate_names: number;
+}
+
+/**
+ * Project-scoped plugin diagnostics payload
+ */
+export interface PluginHealthDiagnostics {
+  directories: {
+    user_plugins_dir: string;
+    system_plugins_dir: string;
+  };
+  summary: PluginHealthSummary;
+  plugins: PluginHealthEntry[];
+  issues: PluginHealthIssue[];
 }
 
 /**

@@ -575,7 +575,7 @@ class PluginLoader:
         dangerous_patterns = [
             (r"\beval\s*\(", "Uses eval() - arbitrary code execution risk"),
             (r"\bexec\s*\(", "Uses exec() - arbitrary code execution risk"),
-            (r"\bcompile\s*\(", "Uses compile() - code compilation risk"),
+            (r"(?<!\.)\bcompile\s*\(", "Uses compile() - code compilation risk"),
             (r"\b__import__\s*\(", "Uses __import__() - dynamic import risk"),
             (r"os\.system\s*\(", "Uses os.system() - shell command execution"),
             (r"os\.popen\s*\(", "Uses os.popen() - shell command execution"),

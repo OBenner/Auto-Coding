@@ -980,11 +980,15 @@ export interface ElectronAPI {
   getQAEscalation: (taskId: string) => Promise<IPCResult<import('./task').QAEscalation | null>>;
 
   // Plugin management
-  listPlugins: (options?: { pluginType?: string; enabledOnly?: boolean }) => Promise<IPCResult<import('../../main/plugins/types').PluginInfo[]>>;
-  enablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
-  disablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
-  installPlugin: (source: { type: string; path?: string; marketplace_id?: string }) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
-  uninstallPlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
+  listPlugins: (options: { projectPath: string; filter?: { pluginType?: string; enabledOnly?: boolean } }) => Promise<IPCResult<import('../../main/plugins/types').PluginInfo[]>>;
+  getPluginHealth: (projectPath: string) => Promise<IPCResult<import('../../main/plugins/types').PluginHealthDiagnostics>>;
+  getPluginPermissionDiff: (pluginName: string, projectPath: string) => Promise<IPCResult<import('../../main/plugins/types').PluginPermissionDiff>>;
+  getPluginTraces: (projectPath: string, options?: { pluginName?: string; limit?: number }) => Promise<IPCResult<import('../../main/plugins/types').PluginTraceResult>>;
+  previewPluginContext: (projectPath: string, options?: { agentType?: string; specDir?: string; task?: string; files?: string[] }) => Promise<IPCResult<import('../../main/plugins/types').PluginContextPreview>>;
+  enablePlugin: (pluginName: string, projectPath: string) => Promise<IPCResult<import('../../main/plugins/types').PluginOperationResult>>;
+  disablePlugin: (pluginName: string, projectPath: string) => Promise<IPCResult<{ success: boolean }>>;
+  installPlugin: (source: { type: string; path?: string; marketplace_id?: string; url?: string }, projectPath: string) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
+  uninstallPlugin: (pluginName: string, projectPath: string) => Promise<IPCResult<{ success: boolean }>>;
 
   // Context Viewer API
   getContextStats: (projectId: string, specId?: string) => Promise<IPCResult<any>>;

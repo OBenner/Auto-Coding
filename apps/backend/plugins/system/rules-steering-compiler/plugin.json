@@ -1,0 +1,17 @@
+{
+  "name": "rules-steering-compiler",
+  "version": "0.1.0",
+  "author": "Auto-Coding Team",
+  "description": "Compiles AGENTS.md, Cursor, Copilot, Windsurf, and Kiro steering rules into scoped agent context",
+  "plugin_type": "agent",
+  "auto_claude_version": ">=3.0.0",
+  "required_permissions": [
+    "read_files"
+  ],
+  "capabilities": [
+    "analysis_only"
+  ],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/develop/apps/backend/plugins/system/rules-steering-compiler",
+  "license": "AGPL-3.0"
+}

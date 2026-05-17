@@ -48,6 +48,8 @@ interface InstallPluginDialogProps {
   open: boolean;
   /** Callback when the dialog open state changes */
   onOpenChange: (open: boolean) => void;
+  /** Project path used as the plugin CLI working directory */
+  projectPath: string;
   /** Optional callback when plugin is successfully installed */
   onPluginInstalled?: () => void;
 }
@@ -55,6 +57,7 @@ interface InstallPluginDialogProps {
 export function InstallPluginDialog({
   open,
   onOpenChange,
+  projectPath,
   onPluginInstalled
 }: InstallPluginDialogProps) {
   const { t } = useTranslation(['plugins', 'common']);
@@ -150,7 +153,7 @@ export function InstallPluginDialog({
       };
 
       // Call IPC to install plugin
-      const result = await window.electronAPI.installPlugin(source);
+      const result = await globalThis.electronAPI.installPlugin(source, projectPath);
 
       if (result.success && result.data?.plugin) {
         toast({

@@ -66,6 +66,30 @@ class AgentContext:
         return self.project_dir.name
 
 
+@dataclass(frozen=True)
+class ToolHookDecision:
+    """Decision returned by an agent plugin tool hook."""
+
+    decision: str = "allow"
+    reason: str = ""
+
+    @classmethod
+    def allow(cls) -> ToolHookDecision:
+        """Allow the tool call to continue."""
+        return cls(decision="allow")
+
+    @classmethod
+    def block(cls, reason: str) -> ToolHookDecision:
+        """Block the tool call with a user-facing reason."""
+        return cls(decision="block", reason=reason)
+
+    def to_sdk_response(self) -> dict[str, str]:
+        """Convert the plugin decision to a Claude SDK hook response."""
+        if self.decision == "block":
+            return {"decision": "block", "reason": self.reason}
+        return {}
+
+
 class AgentPlugin(PluginBase):
     """
     Base class for agent plugins.
@@ -177,3 +201,44 @@ class AgentPlugin(PluginBase):
             done asynchronously or in a background thread.
         """
         pass
+
+    def augment_prompt(self, context: AgentContext) -> str | None:
+        """
+        Return additional scoped instructions for the current agent session.
+
+        Plugins should keep contributions short and specific to their capability.
+        The runtime substrate labels each contribution with the plugin name and
+        declared capabilities before appending it to the system prompt.
+        """
+        return None
+
+    def pre_tool(
+        self,
+        context: AgentContext,
+        tool_name: str,
+        tool_input: dict[str, Any],
+    ) -> ToolHookDecision | dict[str, Any] | None:
+        """
+        Inspect a tool call before it executes.
+
+        Return ``ToolHookDecision.block(reason)`` or an equivalent SDK response
+        dict to block the call. Returning ``None`` or ``allow`` lets execution
+        continue.
+        """
+        return None
+
+    def post_tool(
+        self,
+        context: AgentContext,
+        tool_name: str,
+        tool_input: dict[str, Any],
+        tool_result: Any,
+    ) -> ToolHookDecision | dict[str, Any] | None:
+        """
+        Inspect a tool result after execution.
+
+        This hook is intended for audit, telemetry, and workflow state updates.
+        It returns the same response shapes as ``pre_tool`` for future SDK
+        compatibility, though most plugins should return ``None``.
+        """
+        return None

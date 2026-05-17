@@ -7,6 +7,7 @@ approval or max iterations.
 """
 
 import asyncio
+import json
 import os
 import time as time_module
 from datetime import UTC, datetime
@@ -69,6 +70,53 @@ MINIMUM_COVERAGE_THRESHOLD = 80.0  # Minimum coverage percentage required
 
 # Auto-generated marker for QA_FIX_REQUEST.md
 QA_FIX_REQUEST_MARKER = "<!-- AUTO_GENERATED_BY_QA_AGENT -->"
+
+
+def _qa_runtime_metadata(
+    spec_dir: Path,
+    task: str,
+    *,
+    qa_iteration: int | None = None,
+    issues: list[dict] | None = None,
+) -> dict[str, Any]:
+    """Build compact task/file metadata for plugin runtime hooks."""
+    files: list[str] = []
+    plan_path = spec_dir / "implementation_plan.json"
+    if plan_path.exists():
+        try:
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            plan = {}
+        for phase in plan.get("phases", []):
+            if not isinstance(phase, dict):
+                continue
+            for subtask in phase.get("subtasks", []):
+                if not isinstance(subtask, dict):
+                    continue
+                for file_path in subtask.get("files_to_modify", []):
+                    if file_path and file_path not in files:
+                        files.append(str(file_path))
+                    if len(files) >= 12:
+                        break
+                if len(files) >= 12:
+                    break
+            if len(files) >= 12:
+                break
+
+    metadata: dict[str, Any] = {
+        "task": task,
+        "files": files,
+        "phase_name": "qa",
+    }
+    if qa_iteration is not None:
+        metadata["qa_iteration"] = qa_iteration
+    if issues:
+        metadata["issues"] = [
+            str(issue.get("title") or issue.get("description") or "")[:160]
+            for issue in issues[:5]
+            if isinstance(issue, dict)
+        ]
+    return metadata
 
 
 # =============================================================================
@@ -378,6 +426,11 @@ async def run_qa_validation_loop(
             qa_model,
             agent_type="qa_fixer",
             max_thinking_tokens=fixer_thinking_budget,
+            runtime_metadata=_qa_runtime_metadata(
+                spec_dir,
+                "Apply human QA feedback",
+                qa_iteration=0,
+            ),
         )
 
         async with fix_client:
@@ -933,6 +986,11 @@ Focus on files with the lowest coverage first for maximum impact.
             qa_model,
             agent_type="qa_reviewer",
             max_thinking_tokens=qa_thinking_budget,
+            runtime_metadata=_qa_runtime_metadata(
+                spec_dir,
+                "Review implementation against acceptance criteria",
+                qa_iteration=qa_iteration,
+            ),
         )
 
         async with client:
@@ -1272,6 +1330,12 @@ Focus on files with the lowest coverage first for maximum impact.
                 qa_model,
                 agent_type="qa_fixer",
                 max_thinking_tokens=fixer_thinking_budget,
+                runtime_metadata=_qa_runtime_metadata(
+                    spec_dir,
+                    "Fix QA rejection issues",
+                    qa_iteration=qa_iteration,
+                    issues=current_issues,
+                ),
             )
 
             async with fix_client:
