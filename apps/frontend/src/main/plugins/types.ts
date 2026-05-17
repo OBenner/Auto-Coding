@@ -127,6 +127,84 @@ export interface PluginOperationResult {
 }
 
 /**
+ * Static security diagnostics for a plugin directory
+ */
+export interface PluginSecurityDiagnostics {
+  /** Whether static security checks passed */
+  safe: boolean;
+  /** Security warnings from backend scanner */
+  warnings: string[];
+}
+
+/**
+ * Plugin health issue emitted by backend diagnostics
+ */
+export interface PluginHealthIssue {
+  /** Severity level for display and automation */
+  severity: 'error' | 'warning';
+  /** Stable machine-readable issue code */
+  code: string;
+  /** Human-readable issue message */
+  message: string;
+  /** Plugin installation directory, when issue is plugin-specific */
+  plugin_dir?: string;
+  /** Plugin name, when known */
+  plugin_name?: string;
+  /** Source plugin root */
+  source?: 'user' | 'system';
+  /** Additional issue-specific data */
+  details?: Record<string, unknown>;
+}
+
+/**
+ * Manifest and static diagnostics for one plugin directory
+ */
+export interface PluginHealthEntry {
+  /** Plugin name from manifest */
+  name: string;
+  /** Plugin version from manifest */
+  version: string;
+  /** Plugin type from manifest */
+  plugin_type: PluginType;
+  /** Whether the manifest came from the user or system plugin directory */
+  source: 'user' | 'system';
+  /** Plugin installation directory */
+  plugin_dir: string;
+  /** Manifest validation status */
+  manifest_status: 'valid';
+  /** Full manifest metadata */
+  metadata: PluginMetadata;
+  /** Static security scan result */
+  security: PluginSecurityDiagnostics;
+  /** Issues associated with this plugin */
+  issues: PluginHealthIssue[];
+}
+
+/**
+ * Summary counts for plugin diagnostics
+ */
+export interface PluginHealthSummary {
+  total_entries: number;
+  valid_plugins: number;
+  invalid_plugins: number;
+  security_warnings: number;
+  duplicate_names: number;
+}
+
+/**
+ * Project-scoped plugin diagnostics payload
+ */
+export interface PluginHealthDiagnostics {
+  directories: {
+    user_plugins_dir: string;
+    system_plugins_dir: string;
+  };
+  summary: PluginHealthSummary;
+  plugins: PluginHealthEntry[];
+  issues: PluginHealthIssue[];
+}
+
+/**
  * Plugin installation source
  */
 export interface PluginInstallSource {

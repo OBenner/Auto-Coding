@@ -41,6 +41,7 @@ Example usage:
 
 from .base import (
     PluginBase,
+    PluginCapability,
     PluginMetadata,
     PluginPermission,
     PluginType,
@@ -48,6 +49,7 @@ from .base import (
 
 __all__ = [
     "PluginBase",
+    "PluginCapability",
     "PluginMetadata",
     "PluginPermission",
     "PluginType",

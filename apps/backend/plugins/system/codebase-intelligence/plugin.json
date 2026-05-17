@@ -1,0 +1,16 @@
+{
+  "name": "codebase-intelligence",
+  "version": "0.1.0",
+  "author": "Auto-Coding Team",
+  "description": "Builds and queries a deterministic local codebase graph for agent context and impact analysis",
+  "plugin_type": "integration",
+  "auto_claude_version": ">=3.0.0",
+  "required_permissions": [
+    "read_files",
+    "write_files",
+    "create_mcp_tools"
+  ],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/main/apps/backend/plugins/system/codebase-intelligence",
+  "license": "AGPL-3.0"
+}

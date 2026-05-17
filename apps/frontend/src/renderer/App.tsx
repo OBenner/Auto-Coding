@@ -50,6 +50,7 @@ import { Worktrees } from './components/Worktrees';
 import { SessionList } from './components/session-replay/SessionList';
 import { ThoughtInspector } from './components/agent-inspector/ThoughtInspector';
 import { AgentTools } from './components/AgentTools';
+import { PluginManager } from './components/plugins';
 import { WebhooksPage } from './components/WebhooksPage';
 import { PatternsPage } from './pages/PatternsPage';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
@@ -1102,6 +1103,9 @@ export function App() {
                   <PatternsPage projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
+                {activeView === 'plugins' && selectedProject?.path && (
+                  <PluginManager projectPath={selectedProject.path} />
+                )}
                 {activeView === 'sessions' && (
                   <SessionList
                     projectId={activeProjectId || selectedProjectId!}
