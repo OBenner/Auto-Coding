@@ -6733,6 +6733,7 @@ def generic_edit_text_snapshot(
     return {
         "id": snapshot_id,
         "transaction_id": transaction_id,
+        "paths": [path],
         "rollback": {"restorable": True},
         "preimages": [
             {
@@ -6744,6 +6745,18 @@ def generic_edit_text_snapshot(
                 "content": content,
             }
         ],
+        "postimages": [
+            {
+                "path": path,
+                "restorable": True,
+                "exists": True,
+                "type": "file",
+                "content_encoding": "utf-8",
+                "content_truncated": False,
+                "content_sha256": "test-snapshot",
+            }
+        ],
+        "workspace_guard": {"status": "captured"},
     }
 
 
@@ -8016,7 +8029,9 @@ def write_generic_edit_manifest_batch_state_mismatch_artifacts(
             tmp_path,
             checkpoint_next_iteration=2,
             transaction_summary=transaction_summary,
-            mutation_snapshots=[{"id": "mutation-1", "postimages": []}],
+            mutation_snapshots=[
+                generic_edit_text_snapshot("mutation-1", "batched.txt", "old\n")
+            ],
         )
     )
     trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
@@ -8173,6 +8188,48 @@ def test_generic_edit_resume_preflight_blocks_missing_checkpoint_snapshot_ref(
     assert health["artifact"] == "mutation_snapshots"
     assert health["reason"] == "checkpoint_mismatch"
     assert health["missing_snapshot_ids"] == ["mutation-missing"]
+
+
+def test_generic_edit_resume_preflight_blocks_incomplete_mutation_snapshot(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    transaction = {
+        "id": "json_actions-1",
+        "status": "complete",
+        "mutation_snapshot_ids": ["mutation-1"],
+    }
+    trace = [{"iteration": 1, "actions": [], "transaction": transaction}]
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    _, checkpoint_path, _, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+        transaction_summary=transaction_summary,
+        mutation_snapshots=[{"id": "mutation-1"}],
+    )
+    trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "invalid_schema"
+    assert health["snapshot_id"] == "mutation-1"
+    assert health["missing_snapshot_fields"] == [
+        "paths",
+        "preimages",
+        "postimages",
+        "rollback",
+        "transaction_id",
+        "workspace_guard",
+    ]
 
 
 def test_generic_edit_resume_preflight_blocks_corrupt_artifact_manifest(

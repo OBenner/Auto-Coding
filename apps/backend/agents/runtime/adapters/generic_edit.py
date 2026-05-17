@@ -6649,6 +6649,69 @@ def validate_generic_edit_checkpoint_mutation_snapshots(
             expected_snapshot_ids=expected_snapshot_ids,
             actual_snapshot_ids=sorted(actual_snapshot_ids),
         )
+    validate_generic_edit_checkpoint_mutation_snapshot_integrity(
+        expected_snapshot_ids=expected_snapshot_ids,
+        mutation_snapshots=mutation_snapshots,
+        mutation_snapshot_path=mutation_snapshot_path,
+    )
+
+
+def validate_generic_edit_checkpoint_mutation_snapshot_integrity(
+    *,
+    expected_snapshot_ids: list[str],
+    mutation_snapshots: list[dict[str, Any]],
+    mutation_snapshot_path: Path,
+) -> None:
+    """Reject resume when referenced mutation snapshots are structurally incomplete."""
+    snapshots_by_id = {
+        str(snapshot.get("id")): snapshot
+        for snapshot in mutation_snapshots
+        if isinstance(snapshot.get("id"), str) and snapshot.get("id")
+    }
+    required_fields = (
+        "paths",
+        "preimages",
+        "postimages",
+        "rollback",
+        "transaction_id",
+        "workspace_guard",
+    )
+    for snapshot_id in expected_snapshot_ids:
+        snapshot = snapshots_by_id.get(snapshot_id)
+        if snapshot is None:
+            continue
+        missing_fields = [
+            field_name for field_name in required_fields if field_name not in snapshot
+        ]
+        invalid_fields = [
+            field_name
+            for field_name in ("paths", "preimages", "postimages")
+            if field_name in snapshot and not isinstance(snapshot[field_name], list)
+        ]
+        for field_name in ("rollback", "workspace_guard"):
+            if field_name in snapshot and not isinstance(snapshot[field_name], dict):
+                invalid_fields.append(field_name)
+        if (
+            isinstance(snapshot.get("transaction_id"), str)
+            and snapshot["transaction_id"]
+        ):
+            transaction_id_missing = False
+        else:
+            transaction_id_missing = "transaction_id" in snapshot
+        if transaction_id_missing:
+            invalid_fields.append("transaction_id")
+        if not missing_fields and not invalid_fields:
+            continue
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact contains an incomplete "
+            f"checkpoint snapshot reference: {snapshot_id}.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=mutation_snapshot_path,
+            snapshot_id=snapshot_id,
+            missing_snapshot_fields=missing_fields,
+            invalid_snapshot_fields=sorted(dict.fromkeys(invalid_fields)),
+        )
 
 
 def checkpoint_next_iteration(
