@@ -1707,6 +1707,45 @@ class GenericEditRuntimeSession:
                         "blocked_transaction_group_ids": blockers,
                     },
                 )
+            staged_guard = build_generic_edit_staged_batch_guard(
+                project_dir=self._executor.project_dir,
+                batch_id=batch_id,
+                mutation_snapshots=self._mutation_snapshots,
+            )
+            if staged_guard["status"] in {"drifted", "unavailable", "unverified"}:
+                reason = "staged_batch_drift"
+                if staged_guard["status"] != "drifted":
+                    reason = f"staged_batch_{staged_guard['status']}"
+                return ToolActionResult(
+                    tool=tool,
+                    ok=False,
+                    message=(
+                        f"Cannot commit batch {batch_id}: staged workspace guard "
+                        f"reported {staged_guard['status']}."
+                    ),
+                    data={
+                        "batch_id": batch_id,
+                        "batch_action": COMMIT_BATCH_TOOL,
+                        "batch_boundary_error": True,
+                        "batch_boundary_error_reason": reason,
+                        "batch_isolation_error": True,
+                        "staged_workspace_guard": staged_guard,
+                        "drift_paths": [
+                            str(drift.get("path"))
+                            for drift in staged_guard.get("drifts", [])
+                            if isinstance(drift, dict) and drift.get("path")
+                        ],
+                        "preferred_strategy": ABORT_BATCH_TOOL,
+                        "required_next_action_kinds": [
+                            ABORT_BATCH_TOOL,
+                            REPAIR_MUTATION_TOOL,
+                        ],
+                        "resolution_strategies": [
+                            ABORT_BATCH_TOOL,
+                            REPAIR_MUTATION_TOOL,
+                        ],
+                    },
+                )
             self._active_batch_id = None
             return ToolActionResult(
                 tool=tool,
@@ -1787,7 +1826,7 @@ class GenericEditRuntimeSession:
     def _rollback_transaction_action(self, action: dict[str, Any]) -> ToolActionResult:
         """Restore workspace files from captured mutation snapshots."""
         try:
-            return execute_generic_edit_transaction_rollback(
+            result = execute_generic_edit_transaction_rollback(
                 action=action,
                 project_dir=self._executor.project_dir,
                 mutation_snapshots=self._mutation_snapshots,
@@ -1799,6 +1838,14 @@ class GenericEditRuntimeSession:
                 message=str(e),
                 data=dict(e.data),
             )
+        mark_generic_edit_mutation_snapshots_rolled_back(
+            mutation_snapshots=self._mutation_snapshots,
+            snapshot_ids=normalize_string_list(
+                result.data.get("mutation_snapshot_ids")
+            ),
+            rollback_operation_id=str(result.data.get("rollback_operation_id") or ""),
+        )
+        return result
 
     def _build_mutation_snapshot(
         self,
@@ -3245,6 +3292,43 @@ def build_generic_edit_resume_workspace_guard(
     }
 
 
+def build_generic_edit_staged_batch_guard(
+    *,
+    project_dir: Path,
+    batch_id: str,
+    mutation_snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate that staged batch files still match captured mutation postimages."""
+    staged_snapshots = [
+        snapshot
+        for snapshot in mutation_snapshots
+        if str(snapshot.get("batch_id") or "") == batch_id
+        and str(snapshot.get("staged_status") or "") != "rolled_back"
+    ]
+    guard = build_generic_edit_resume_workspace_guard(
+        project_dir=project_dir,
+        mutation_snapshots=staged_snapshots,
+    )
+    snapshot_ids = [
+        str(snapshot.get("id"))
+        for snapshot in staged_snapshots
+        if isinstance(snapshot.get("id"), str) and snapshot.get("id")
+    ]
+    guard.update(
+        {
+            "batch_id": batch_id,
+            "staged_snapshot_ids": snapshot_ids,
+            "staged_snapshot_count": len(staged_snapshots),
+        }
+    )
+    if not staged_snapshots:
+        guard["status"] = "empty"
+        return guard
+    if guard["status"] == "clean" and guard["unverified_path_count"]:
+        guard["status"] = "unverified"
+    return guard
+
+
 def compare_generic_edit_file_state(
     *,
     expected: dict[str, Any],
@@ -3436,6 +3520,13 @@ def execute_generic_edit_batch_abort(
             project_dir=project_dir,
             mutation_snapshots=mutation_snapshots,
         )
+        mark_generic_edit_mutation_snapshots_rolled_back(
+            mutation_snapshots=mutation_snapshots,
+            snapshot_ids=normalize_string_list(
+                result.data.get("mutation_snapshot_ids")
+            ),
+            rollback_operation_id=str(result.data.get("rollback_operation_id") or ""),
+        )
         rollback_transaction_ids.append(transaction_id)
         mutation_snapshot_ids.extend(
             str(item) for item in result.data.get("mutation_snapshot_ids") or []
@@ -3468,6 +3559,25 @@ def execute_generic_edit_batch_abort(
             "recovery_strategy": ABORT_BATCH_TOOL,
         },
     )
+
+
+def mark_generic_edit_mutation_snapshots_rolled_back(
+    *,
+    mutation_snapshots: list[dict[str, Any]],
+    snapshot_ids: list[str],
+    rollback_operation_id: str,
+) -> None:
+    """Mark staged mutation snapshots already restored by rollback/abort."""
+    selected_ids = {str(snapshot_id) for snapshot_id in snapshot_ids if snapshot_id}
+    if not selected_ids:
+        return
+    for snapshot in mutation_snapshots:
+        snapshot_id = str(snapshot.get("id") or "")
+        if snapshot_id not in selected_ids:
+            continue
+        snapshot["staged_status"] = "rolled_back"
+        if rollback_operation_id:
+            snapshot["rollback_operation_id"] = rollback_operation_id
 
 
 def validate_generic_edit_rollback_steps(
