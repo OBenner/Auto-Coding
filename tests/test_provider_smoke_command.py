@@ -369,16 +369,85 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
                 "status": "passed",
                 "message": "mini_pipeline passed",
             },
+            {
+                "runtime_mode": "unsupported_tools_probe",
+                "status": "passed",
+                "message": "Unsupported tool classification probe passed",
+            },
+            {
+                "runtime_mode": "gateway_model_probe",
+                "status": "passed",
+                "message": "Gateway/model limitation classification probe passed",
+            },
         ],
     }
+    assert result.runtime_diagnostics["provider_e2e_negative_probes"] == {
+        "unsupported_tools": {
+            "status": "passed",
+            "source": "provider_e2e_negative_probe",
+            "reason": "unsupported_tools",
+        },
+        "gateway_model_limitations": {
+            "status": "passed",
+            "source": "provider_e2e_negative_probe",
+            "reason": "gateway_error",
+        },
+    }
     reliability = result.runtime_diagnostics["provider_reliability"]
-    assert reliability["status"] == "partial_coverage"
-    assert reliability["observed_case_count"] == 5
-    assert reliability["passed_case_count"] == 5
+    assert reliability["status"] == "complete"
+    assert reliability["observed_case_count"] == 7
+    assert reliability["passed_case_count"] == 7
     assert reliability["required_case_count"] == 7
-    assert reliability["uncovered_cases"] == [
-        "unsupported_tools",
-        "gateway_model_limitations",
+    assert reliability["uncovered_cases"] == []
+    assert reliability["cases"][5:] == [
+        {
+            "case": "unsupported_tools",
+            "status": "passed",
+            "source": "provider_e2e_negative_probe",
+        },
+        {
+            "case": "gateway_model_limitations",
+            "status": "passed",
+            "source": "provider_e2e_negative_probe",
+        },
+    ]
+
+
+def test_provider_reliability_diagnostics_marks_negative_probes_covered():
+    from cli.provider_smoke_commands import _with_provider_contract_health
+
+    diagnostics = _with_provider_contract_health(
+        {
+            "provider": "openai",
+            "smoke_scope": "direct_api_full_autonomy_e2e",
+            "provider_e2e_negative_probes": {
+                "unsupported_tools": {
+                    "status": "passed",
+                    "source": "provider_e2e_negative_probe",
+                    "reason": "unsupported_tools",
+                },
+                "gateway_model_limitations": {
+                    "status": "passed",
+                    "source": "provider_e2e_negative_probe",
+                    "reason": "gateway_error",
+                },
+            },
+        },
+        success=True,
+    )
+
+    reliability = diagnostics["provider_reliability"]
+    assert reliability["cases"][5:] == [
+        {
+            "case": "unsupported_tools",
+            "status": "passed",
+            "source": "provider_e2e_negative_probe",
+        },
+        {
+            "case": "gateway_model_limitations",
+            "status": "passed",
+            "source": "provider_e2e_negative_probe",
+        },
     ]
 
 

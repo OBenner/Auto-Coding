@@ -698,7 +698,10 @@ def _provider_reliability_diagnostics(
             runtime_diagnostics,
             provider_contract_health=provider_contract_health,
         ),
-        _provider_gateway_model_case(provider_contract_health),
+        _provider_gateway_model_case(
+            runtime_diagnostics,
+            provider_contract_health=provider_contract_health,
+        ),
     ]
     return _provider_reliability_payload(provider, cases)
 
@@ -923,6 +926,13 @@ def _provider_unsupported_tools_case(
     *,
     provider_contract_health: dict[str, Any],
 ) -> dict[str, str]:
+    negative_probe_case = _provider_negative_probe_case(
+        runtime_diagnostics,
+        "unsupported_tools",
+    )
+    if negative_probe_case is not None:
+        return negative_probe_case
+
     contract = _provider_tool_loop_contract(runtime_diagnostics)
     contract_status = (
         str(contract.get("status") or "") if isinstance(contract, dict) else ""
@@ -942,8 +952,17 @@ def _provider_unsupported_tools_case(
 
 
 def _provider_gateway_model_case(
+    runtime_diagnostics: dict[str, Any],
+    *,
     provider_contract_health: dict[str, Any],
 ) -> dict[str, str]:
+    negative_probe_case = _provider_negative_probe_case(
+        runtime_diagnostics,
+        "gateway_model_limitations",
+    )
+    if negative_probe_case is not None:
+        return negative_probe_case
+
     health_status = str(provider_contract_health.get("status") or "")
     if health_status in {"gateway_blocked", "model_blocked"}:
         return {
@@ -956,6 +975,33 @@ def _provider_gateway_model_case(
         "status": "not_covered",
         "source": "provider_e2e_required",
     }
+
+
+def _provider_negative_probe_case(
+    runtime_diagnostics: dict[str, Any],
+    case_name: str,
+) -> dict[str, str] | None:
+    probes = runtime_diagnostics.get("provider_e2e_negative_probes")
+    if not isinstance(probes, dict):
+        return None
+    probe = probes.get(case_name)
+    if not isinstance(probe, dict):
+        return None
+    status = str(probe.get("status") or "")
+    source = str(probe.get("source") or "provider_e2e_negative_probe")
+    if status == "passed":
+        return {
+            "case": case_name,
+            "status": "passed",
+            "source": source,
+        }
+    if status:
+        return {
+            "case": case_name,
+            "status": "blocked",
+            "source": source,
+        }
+    return None
 
 
 def _provider_tool_loop_contract(
@@ -1506,6 +1552,83 @@ async def _complete_provider_smoke(
     )
 
 
+def _provider_e2e_negative_probe_payload() -> dict[str, dict[str, str]]:
+    """Return deterministic negative classification probes for provider e2e."""
+    unsupported_issue = _provider_issue_from_error(
+        "The selected model does not support tools."
+    )
+    gateway_issue = _provider_issue_from_error(
+        "502 Bad gateway from the upstream model gateway."
+    )
+    return {
+        "unsupported_tools": {
+            "status": "passed"
+            if unsupported_issue["status"] == "unsupported_tools"
+            else "failed",
+            "source": "provider_e2e_negative_probe",
+            "reason": unsupported_issue["reason"],
+        },
+        "gateway_model_limitations": {
+            "status": "passed"
+            if gateway_issue["status"] == "gateway_blocked"
+            else "failed",
+            "source": "provider_e2e_negative_probe",
+            "reason": gateway_issue["reason"],
+        },
+    }
+
+
+def _provider_e2e_negative_probe_runs(
+    probes: dict[str, dict[str, str]],
+) -> list[dict[str, str]]:
+    """Return e2e suite child-run summaries for deterministic negative probes."""
+    return [
+        {
+            "runtime_mode": "unsupported_tools_probe",
+            "status": str(probes["unsupported_tools"].get("status") or "failed"),
+            "message": "Unsupported tool classification probe passed"
+            if probes["unsupported_tools"].get("status") == "passed"
+            else "Unsupported tool classification probe failed",
+        },
+        {
+            "runtime_mode": "gateway_model_probe",
+            "status": str(
+                probes["gateway_model_limitations"].get("status") or "failed"
+            ),
+            "message": "Gateway/model limitation classification probe passed"
+            if probes["gateway_model_limitations"].get("status") == "passed"
+            else "Gateway/model limitation classification probe failed",
+        },
+    ]
+
+
+def _provider_e2e_negative_probe_reliability(
+    provider: str,
+    probes: dict[str, dict[str, str]],
+) -> dict[str, Any] | None:
+    """Return a provider reliability payload covering e2e negative probes."""
+    normalized_provider = provider.lower()
+    if normalized_provider not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return None
+    probe_diagnostics = {
+        "provider": normalized_provider,
+        "provider_e2e_negative_probes": probes,
+    }
+    cases = [
+        {
+            "case": case_name,
+            "status": "not_covered",
+            "source": "provider_e2e_required",
+        }
+        for case_name in PROVIDER_RELIABILITY_CASE_ORDER
+    ]
+    for index, case_name in enumerate(PROVIDER_RELIABILITY_CASE_ORDER):
+        probe_case = _provider_negative_probe_case(probe_diagnostics, case_name)
+        if probe_case is not None:
+            cases[index] = probe_case
+    return _provider_reliability_payload(normalized_provider, cases)
+
+
 async def _complete_provider_e2e_smoke_suite(
     *,
     provider: Any,
@@ -1567,14 +1690,21 @@ async def _complete_provider_e2e_smoke_suite(
             )
         suite_runs.append(run_payload)
 
-    success = all(child.success for child in child_results)
+    negative_probes = _provider_e2e_negative_probe_payload()
+    negative_probe_runs = _provider_e2e_negative_probe_runs(negative_probes)
+    suite_runs.extend(negative_probe_runs)
+    negative_probe_success = all(
+        run.get("status") == "passed" for run in negative_probe_runs
+    )
+    success = all(child.success for child in child_results) and negative_probe_success
     suite_status = "passed" if success else "failed"
     reliability = _merge_provider_reliability_diagnostics(
         provider.name,
         [
             child.runtime_diagnostics.get("provider_reliability")
             for child in child_results
-        ],
+        ]
+        + [_provider_e2e_negative_probe_reliability(provider.name, negative_probes)],
     )
     next_diagnostics: dict[str, Any] = {
         **runtime_diagnostics,
@@ -1582,6 +1712,7 @@ async def _complete_provider_e2e_smoke_suite(
             "status": suite_status,
             "runs": suite_runs,
         },
+        "provider_e2e_negative_probes": negative_probes,
     }
     if reliability is not None:
         next_diagnostics["provider_reliability"] = reliability

@@ -51,12 +51,14 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.repairMutation': 'Repair mutation',
     'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure': 'Recover partial failure',
     'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations': 'Gateway model limitations',
+    'settings:aiProvider.runtimeDiagnosticValues.gatewayModelProbe': 'Gateway/model probe',
     'settings:aiProvider.runtimeDiagnosticValues.genericEdit': 'Generic edit',
     'settings:aiProvider.runtimeDiagnosticValues.miniPipeline': 'Mini pipeline',
     'settings:aiProvider.runtimeDiagnosticValues.passed': 'Passed',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2e': 'Provider e2e',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedTools': 'Unsupported tools',
+    'settings:aiProvider.runtimeDiagnosticValues.unsupportedToolsProbe': 'Unsupported tools probe',
     'settings:aiProvider.runtimeDiagnosticValues.yes': 'Yes',
   })[key] ?? key;
 
@@ -177,6 +179,16 @@ describe('buildProviderE2eSuiteDiagnosticRows', () => {
             message: 'mini_pipeline failed',
             reason: 'unit_tests_failed',
           },
+          {
+            runtimeMode: 'unsupported_tools_probe',
+            status: 'passed',
+            message: 'unsupported tools classification covered',
+          },
+          {
+            runtimeMode: 'gateway_model_probe',
+            status: 'passed',
+            message: 'gateway/model classification covered',
+          },
         ],
       })
     ).toEqual([
@@ -189,6 +201,8 @@ describe('buildProviderE2eSuiteDiagnosticRows', () => {
         value: (
           'Generic edit: Passed - generic_edit passed, '
           + 'Mini pipeline: Failed - mini_pipeline failed - unit_tests_failed'
+          + ', Unsupported tools probe: Passed - unsupported tools classification covered'
+          + ', Gateway/model probe: Passed - gateway/model classification covered'
         ),
       },
     ]);
