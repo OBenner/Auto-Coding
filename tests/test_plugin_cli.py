@@ -21,6 +21,7 @@ import pytest
 # Ensure apps/backend is in path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
+import plugins.cli as plugin_cli
 from plugins.base import PluginType
 from plugins.cli import (
     cmd_disable,
@@ -32,7 +33,7 @@ from plugins.cli import (
     create_parser,
     main,
 )
-from plugins.loader import PluginValidationError
+from plugins.loader import PluginLoader, PluginValidationError
 from plugins.registry import PluginRegistry
 
 
@@ -63,6 +64,7 @@ class TestPluginCLIParser:
             "install",
             "info",
             "uninstall",
+            "health",
         ]
         for cmd in expected_commands:
             assert cmd in choices, f"Command '{cmd}' should be in parser"
@@ -189,6 +191,14 @@ class TestPluginCLIParser:
 
         args = parser.parse_args(["uninstall", "my-plugin", "--force"])
         assert args.force is True
+
+    def test_health_command_parses_json_flag(self):
+        """Test that health command supports machine-readable diagnostics."""
+        parser = create_parser()
+
+        args = parser.parse_args(["health", "--json"])
+        assert args.command == "health"
+        assert args.json is True
 
 
 class TestListCommand:
@@ -934,6 +944,116 @@ class TestUninstallCommand:
         assert "Plugin 'test-plugin' uninstalled successfully" in captured.out
 
 
+class TestHealthCommand:
+    """Tests for plugin diagnostics."""
+
+    @staticmethod
+    def _write_plugin(
+        plugin_dir: Path,
+        name: str,
+        plugin_type: str = "integration",
+        plugin_code: str = "# manifest-only diagnostics must not import this file\n",
+    ) -> None:
+        plugin_dir.mkdir(parents=True)
+        manifest = {
+            "name": name,
+            "version": "1.0.0",
+            "author": "Test Author",
+            "description": f"Diagnostics fixture for {name}",
+            "plugin_type": plugin_type,
+            "required_permissions": [],
+            "dependencies": [],
+        }
+        (plugin_dir / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (plugin_dir / "plugin.py").write_text(plugin_code, encoding="utf-8")
+
+    def test_health_json_reports_manifest_security_and_duplicate_diagnostics(
+        self, temp_dir, capsys
+    ):
+        """Test health diagnostics without importing plugin implementation code."""
+        user_plugins_dir = temp_dir / "user_plugins"
+        system_plugins_dir = temp_dir / "system_plugins"
+
+        self._write_plugin(
+            system_plugins_dir / "duplicate-system",
+            "duplicate-plugin",
+            plugin_code="raise RuntimeError('plugin implementation was imported')\n",
+        )
+        self._write_plugin(
+            user_plugins_dir / "duplicate-user",
+            "duplicate-plugin",
+        )
+        self._write_plugin(
+            user_plugins_dir / "unsafe-plugin",
+            "unsafe-plugin",
+            plugin_code="def run():\n    return eval('1 + 1')\n",
+        )
+        self._write_plugin(
+            user_plugins_dir / "regex-plugin",
+            "regex-plugin",
+            plugin_code="import re\nPATTERN = re.compile(r'abc')\n",
+        )
+
+        invalid_plugin_dir = user_plugins_dir / "invalid-plugin"
+        invalid_plugin_dir.mkdir(parents=True)
+        (invalid_plugin_dir / "plugin.json").write_text(
+            json.dumps({"name": "invalid-plugin"}),
+            encoding="utf-8",
+        )
+        (invalid_plugin_dir / "plugin.py").write_text("# invalid fixture\n")
+
+        loader = PluginLoader(
+            user_plugins_dir=user_plugins_dir,
+            system_plugins_dir=system_plugins_dir,
+        )
+
+        with patch("plugins.cli.PluginLoader", return_value=loader):
+            result = plugin_cli.cmd_health(MagicMock(json=True))
+
+        assert result == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["success"] is True
+
+        diagnostics = payload["diagnostics"]
+        assert diagnostics["directories"] == {
+            "user_plugins_dir": str(user_plugins_dir),
+            "system_plugins_dir": str(system_plugins_dir),
+        }
+        assert diagnostics["summary"] == {
+            "total_entries": 5,
+            "valid_plugins": 4,
+            "invalid_plugins": 1,
+            "security_warnings": 1,
+            "duplicate_names": 1,
+        }
+
+        plugin_names = [plugin["name"] for plugin in diagnostics["plugins"]]
+        assert plugin_names.count("duplicate-plugin") == 2
+        assert "unsafe-plugin" in plugin_names
+        assert "regex-plugin" in plugin_names
+
+        unsafe_plugin = next(
+            plugin
+            for plugin in diagnostics["plugins"]
+            if plugin["name"] == "unsafe-plugin"
+        )
+        assert unsafe_plugin["security"]["safe"] is False
+        assert any(
+            "eval()" in warning for warning in unsafe_plugin["security"]["warnings"]
+        )
+
+        regex_plugin = next(
+            plugin
+            for plugin in diagnostics["plugins"]
+            if plugin["name"] == "regex-plugin"
+        )
+        assert regex_plugin["security"] == {"safe": True, "warnings": []}
+
+        issue_codes = [issue["code"] for issue in diagnostics["issues"]]
+        assert "invalid_manifest" in issue_codes
+        assert "duplicate_plugin_name" in issue_codes
+
+
 class TestMainFunction:
     """Tests for the main entry point."""
 
@@ -1014,6 +1134,19 @@ class TestMainFunction:
 
             assert result == 0
             mock_cmd_uninstall.assert_called_once()
+
+    def test_main_dispatches_health_command(self):
+        """Test that main function dispatches to health command."""
+        with (
+            patch("plugins.cli.cmd_health") as mock_cmd_health,
+            patch("sys.argv", ["cli.py", "health", "--json"]),
+        ):
+            mock_cmd_health.return_value = 0
+
+            result = main()
+
+            assert result == 0
+            mock_cmd_health.assert_called_once()
 
 
 if __name__ == "__main__":

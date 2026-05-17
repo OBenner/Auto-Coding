@@ -203,6 +203,7 @@ Examples:
   %(prog)s install --path .        Install from local path
   %(prog)s install --url https://github.com/user/plugin.git
   %(prog)s info my-plugin          Show plugin details
+  %(prog)s health --json           Inspect plugin manifests and directories
         """,
     )
 
@@ -315,6 +316,14 @@ Examples:
         help="Skip confirmation prompt",
     )
     _add_json_flag(uninstall_parser)
+
+    # Health command
+    health_parser = subparsers.add_parser(
+        "health",
+        help="Inspect plugin directories and manifests",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    _add_json_flag(health_parser)
 
     return parser
 
@@ -835,6 +844,178 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         return 1
 
 
+def _iter_plugin_candidate_dirs(loader: PluginLoader):
+    """Yield plugin candidate directories without importing plugin code."""
+    roots = [
+        ("system", loader.system_plugins_dir),
+        ("user", loader.user_plugins_dir),
+    ]
+    for source, root_dir in roots:
+        if not root_dir.exists():
+            continue
+        for plugin_dir in sorted(root_dir.iterdir(), key=lambda path: path.name):
+            if plugin_dir.is_dir():
+                yield source, plugin_dir
+
+
+def _diagnostic_issue(
+    severity: str,
+    code: str,
+    message: str,
+    plugin_dir: Path | None = None,
+    plugin_name: str | None = None,
+    source: str | None = None,
+    details: dict | None = None,
+) -> dict:
+    """Create a stable machine-readable diagnostic issue."""
+    issue = {
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    if plugin_dir is not None:
+        issue["plugin_dir"] = str(plugin_dir)
+    if plugin_name is not None:
+        issue["plugin_name"] = plugin_name
+    if source is not None:
+        issue["source"] = source
+    if details:
+        issue["details"] = details
+    return issue
+
+
+def _inspect_plugin_dir(
+    loader: PluginLoader,
+    source: str,
+    plugin_dir: Path,
+) -> tuple[dict | None, list[dict]]:
+    """Inspect one plugin directory through manifest and static security checks."""
+    try:
+        metadata = loader._load_metadata(plugin_dir)
+    except PluginValidationError as e:
+        return None, [
+            _diagnostic_issue(
+                "error",
+                "invalid_manifest",
+                str(e),
+                plugin_dir=plugin_dir,
+                source=source,
+            )
+        ]
+
+    is_safe, warnings = loader.validate_plugin_security(plugin_dir)
+    security_issues = [
+        _diagnostic_issue(
+            "error" if not is_safe else "warning",
+            "security_warning",
+            warning,
+            plugin_dir=plugin_dir,
+            plugin_name=metadata.name,
+            source=source,
+        )
+        for warning in warnings
+    ]
+    entry = {
+        "name": metadata.name,
+        "version": metadata.version,
+        "plugin_type": metadata.plugin_type.value,
+        "source": source,
+        "plugin_dir": str(plugin_dir),
+        "manifest_status": "valid",
+        "metadata": metadata.to_dict(),
+        "security": {
+            "safe": is_safe,
+            "warnings": warnings,
+        },
+        "issues": security_issues,
+    }
+    return entry, security_issues
+
+
+def _duplicate_plugin_issues(plugins: list[dict]) -> list[dict]:
+    """Return duplicate-name diagnostics for discovered plugin manifests."""
+    by_name: dict[str, list[dict]] = {}
+    for plugin in plugins:
+        by_name.setdefault(plugin["name"], []).append(plugin)
+
+    issues = []
+    for name, matches in sorted(by_name.items()):
+        if len(matches) < 2:
+            continue
+        issues.append(
+            _diagnostic_issue(
+                "warning",
+                "duplicate_plugin_name",
+                f"Multiple plugin manifests declare '{name}'",
+                plugin_name=name,
+                details={
+                    "plugin_dirs": [plugin["plugin_dir"] for plugin in matches],
+                    "sources": [plugin["source"] for plugin in matches],
+                },
+            )
+        )
+    return issues
+
+
+def _build_plugin_diagnostics(loader: PluginLoader) -> dict:
+    """Build plugin diagnostics without executing plugin implementation modules."""
+    plugins: list[dict] = []
+    issues: list[dict] = []
+    invalid_plugins = 0
+
+    for source, plugin_dir in _iter_plugin_candidate_dirs(loader):
+        plugin, plugin_issues = _inspect_plugin_dir(loader, source, plugin_dir)
+        if plugin is None:
+            invalid_plugins += 1
+            issues.extend(plugin_issues)
+            continue
+        plugins.append(plugin)
+        issues.extend(plugin_issues)
+
+    duplicate_issues = _duplicate_plugin_issues(plugins)
+    issues.extend(duplicate_issues)
+
+    return {
+        "directories": {
+            "user_plugins_dir": str(loader.user_plugins_dir),
+            "system_plugins_dir": str(loader.system_plugins_dir),
+        },
+        "summary": {
+            "total_entries": len(plugins) + invalid_plugins,
+            "valid_plugins": len(plugins),
+            "invalid_plugins": invalid_plugins,
+            "security_warnings": sum(
+                1 for plugin in plugins if plugin["security"]["warnings"]
+            ),
+            "duplicate_names": len(duplicate_issues),
+        },
+        "plugins": plugins,
+        "issues": issues,
+    }
+
+
+def cmd_health(args: argparse.Namespace) -> int:
+    """Inspect plugin directories, manifests, and static security diagnostics."""
+    try:
+        loader = PluginLoader()
+        diagnostics = _build_plugin_diagnostics(loader)
+
+        if _wants_json(args):
+            _emit_json({"success": True, "diagnostics": diagnostics})
+            return 0
+
+        summary = diagnostics["summary"]
+        print("Plugin health")
+        print(f"  Valid plugins: {summary['valid_plugins']}")
+        print(f"  Invalid plugins: {summary['invalid_plugins']}")
+        print(f"  Security warnings: {summary['security_warnings']}")
+        print(f"  Duplicate names: {summary['duplicate_names']}")
+        return 0
+    except Exception:
+        logger.exception("Failed to inspect plugin health")
+        return 1
+
+
 def main() -> int:
     """Main entry point for plugin CLI."""
     parser = create_parser()
@@ -848,6 +1029,7 @@ def main() -> int:
         "install": cmd_install,
         "info": cmd_info,
         "uninstall": cmd_uninstall,
+        "health": cmd_health,
     }
 
     # Execute command

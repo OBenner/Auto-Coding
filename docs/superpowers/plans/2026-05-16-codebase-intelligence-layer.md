@@ -210,3 +210,53 @@ their prefixed tool names to `allowed_tools`.
 
 `load_plugin_mcp_servers()` remains available as a server-only wrapper, while
 `load_plugin_mcp_integrations()` returns both servers and allowed tool names.
+
+### Task 9: Plugin Diagnostics Contract
+
+**Files:**
+- Modify: `tests/test_plugin_cli.py`
+- Modify: `apps/backend/plugins/cli.py`
+- Modify: `apps/backend/plugins/loader.py`
+- Modify: `apps/frontend/src/main/plugins/types.ts`
+- Modify: `apps/frontend/src/main/plugins/loader.ts`
+- Modify: `apps/frontend/src/main/plugins/loader.test.ts`
+- Modify: `apps/frontend/src/preload/api/plugin-api.ts`
+- Modify: `apps/frontend/src/shared/constants/ipc.ts`
+- Modify: `apps/frontend/src/shared/types/ipc.ts`
+- Modify: `apps/frontend/src/renderer/lib/browser-mock.ts`
+
+- [x] **Step 1: Add RED backend CLI diagnostics tests**
+
+Add parser, dispatch, and JSON command tests for `health --json`. The command
+must inspect plugin directories and manifests without importing plugin modules.
+The regression also covers `re.compile(...)` so regex compilation does not get
+misclassified as builtin `compile(...)` code execution.
+
+- [x] **Step 2: Implement backend diagnostics**
+
+Add a `health` command that reports plugin directories, manifest entries,
+security warnings, duplicate plugin names, invalid manifests, and summary counts.
+The implementation must use `PluginLoader._load_metadata()` and
+`validate_plugin_security()`, not `PluginRegistry.load_all_plugins()`.
+Narrow the dangerous-call scanner so builtin `compile(...)` remains blocked
+while `re.compile(...)` stays allowed.
+
+- [x] **Step 3: Add RED frontend IPC diagnostics tests**
+
+Add an IPC handler test proving `plugin:health` invokes
+`plugins/cli.py health --json` with the selected project cwd and returns the
+diagnostic payload.
+
+- [x] **Step 4: Implement frontend IPC/preload/types contract**
+
+Expose `getPluginHealth(projectPath)` through the preload API and shared types.
+Keep renderer UI changes for a later task.
+
+- [x] **Step 5: Verify**
+
+Run:
+`apps/backend/.venv/bin/python -m pytest tests/test_plugin_cli.py -v`
+`npm --prefix apps/frontend test -- src/main/plugins/loader.test.ts`
+`npm --prefix apps/frontend run typecheck`
+`/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff check apps/backend/plugins/cli.py apps/backend/plugins/loader.py tests/test_plugin_cli.py`
+`/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff format apps/backend/plugins/cli.py apps/backend/plugins/loader.py tests/test_plugin_cli.py --check --diff`

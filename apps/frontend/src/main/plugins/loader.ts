@@ -23,7 +23,8 @@ import {
   PluginType,
   PluginInstallResult,
   PluginOperationResult,
-  PluginInstallSource
+  PluginInstallSource,
+  PluginHealthDiagnostics
 } from './types';
 import { getConfiguredPythonPath } from '../python-env-manager';
 import { getEffectiveSourcePath } from '../updater/path-resolver';
@@ -48,6 +49,10 @@ interface PluginNamePayload {
 interface PluginInstallPayload {
   projectPath?: string;
   source?: PluginInstallSource;
+}
+
+interface PluginHealthPayload {
+  projectPath?: string;
 }
 
 /**
@@ -188,6 +193,36 @@ export function registerPluginHandlers(): void {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.error('[Plugin] List failed:', error);
+        return { success: false, error: errorMessage };
+      }
+    }
+  );
+
+  // ============================================
+  // Plugin Health
+  // ============================================
+
+  /**
+   * Inspect plugin directories, manifests, and static diagnostics
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PLUGIN_HEALTH,
+    async (
+      _,
+      payload: PluginHealthPayload = {}
+    ): Promise<IPCResult<PluginHealthDiagnostics>> => {
+      try {
+        const projectPath = requireProjectPath(payload.projectPath);
+        logger.info('[Plugin] Inspecting plugin health');
+
+        const result = executePluginCommand(projectPath, 'health', ['--json']);
+        const diagnostics = (result as { diagnostics: PluginHealthDiagnostics }).diagnostics;
+
+        logger.info('[Plugin] Plugin health inspection completed');
+        return { success: true, data: diagnostics };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('[Plugin] Health inspection failed:', error);
         return { success: false, error: errorMessage };
       }
     }

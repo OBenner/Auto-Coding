@@ -808,6 +808,21 @@ const browserMockAPI: ElectronAPI = {
 
   // Plugin operations
   listPlugins: async () => ({ success: true, data: [] }),
+  getPluginHealth: async () => ({
+    success: true,
+    data: {
+      directories: { user_plugins_dir: '', system_plugins_dir: '' },
+      summary: {
+        total_entries: 0,
+        valid_plugins: 0,
+        invalid_plugins: 0,
+        security_warnings: 0,
+        duplicate_names: 0
+      },
+      plugins: [],
+      issues: []
+    }
+  }),
   enablePlugin: async () => ({ success: true, data: { success: true } }),
   disablePlugin: async () => ({ success: true, data: { success: true } }),
   installPlugin: async () => ({ success: true, data: { success: true } }),

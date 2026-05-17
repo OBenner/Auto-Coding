@@ -7,7 +7,8 @@ import type {
   PluginInfo,
   PluginOperationResult,
   PluginInstallResult,
-  PluginInstallSource
+  PluginInstallSource,
+  PluginHealthDiagnostics
 } from '../../main/plugins/types';
 
 export interface PluginAPI {
@@ -22,6 +23,17 @@ export interface PluginAPI {
   }) => Promise<{
     success: boolean;
     data?: PluginInfo[];
+    error?: string;
+  }>;
+
+  /**
+   * Inspect plugin directories and manifest health
+   * @param projectPath - Project directory path
+   * @returns Promise with plugin diagnostics
+   */
+  getPluginHealth: (projectPath: string) => Promise<{
+    success: boolean;
+    data?: PluginHealthDiagnostics;
     error?: string;
   }>;
 
@@ -60,6 +72,9 @@ export interface PluginAPI {
 export const createPluginAPI = (): PluginAPI => ({
   listPlugins: ({ projectPath, filter = {} }) =>
     invokeIpc(IPC_CHANNELS.PLUGIN_LIST, { projectPath, filter }),
+
+  getPluginHealth: (projectPath) =>
+    invokeIpc(IPC_CHANNELS.PLUGIN_HEALTH, { projectPath }),
 
   enablePlugin: (pluginName, projectPath) =>
     invokeIpc(IPC_CHANNELS.PLUGIN_ENABLE, { projectPath, pluginName }),
