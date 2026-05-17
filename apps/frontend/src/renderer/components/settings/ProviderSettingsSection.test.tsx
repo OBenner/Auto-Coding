@@ -13,6 +13,7 @@ import {
   buildCliRunnerContractDiagnosticRows,
   buildMcpBridgePermissionDiagnosticRows,
   buildMutatingSubagentPolicyDiagnosticRows,
+  buildRuntimeComparativeEvalDiagnosticRows,
   buildRuntimeCapabilityDiagnosticRows,
   buildRuntimeEvalHistoryDiagnosticRows,
   buildRuntimeEvalDiagnosticRows,
@@ -54,6 +55,7 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeCapability': 'Runtime capability',
+    'settings:aiProvider.controlPlane.runtimeComparativeEval': 'Comparative evals',
     'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
     'settings:aiProvider.controlPlane.runtimeEvalHistory': 'Runtime eval history',
     'settings:aiProvider.controlPlane.cliRunnerContracts': 'CLI runner contracts',
@@ -106,6 +108,12 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.permissionAllowlistCheck':
       'Permission allowlist check',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2e': 'Provider e2e',
+    'settings:aiProvider.runtimeDiagnosticValues.policyGated': 'Policy gated',
+    'settings:aiProvider.runtimeDiagnosticValues.notRecorded': 'Not recorded',
+    'settings:aiProvider.runtimeDiagnosticValues.notObserved': 'Not observed',
+    'settings:aiProvider.runtimeDiagnosticValues.nativeRuntimePolicy': 'Native runtime policy',
+    'settings:aiProvider.runtimeDiagnosticValues.mcpBridgeContract': 'MCP bridge contract',
+    'settings:aiProvider.runtimeDiagnosticValues.genericEditRecovery': 'Generic edit recovery',
     'settings:aiProvider.runtimeDiagnosticValues.providerAdapterNegativeFixture':
       'Provider adapter negative fixture',
     'settings:aiProvider.runtimeDiagnosticValues.codexCli': 'Codex CLI',
@@ -298,6 +306,33 @@ describe('buildRuntimeEvalHistoryDiagnosticRows', () => {
         value: (
           'Provider e2e: Partial (3 total, 2 passed, 1 failed; '
           + 'missing OpenRouter, LiteLLM; .auto-Codex/provider-smoke-history.json)'
+        ),
+      },
+    ]);
+  });
+});
+
+describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
+  it('summarizes quality cost and safety signals', () => {
+    expect(
+      buildRuntimeComparativeEvalDiagnosticRows(translate, [
+        {
+          provider: 'openai',
+          runtime_path: 'generic_edit',
+          quality_status: 'passed',
+          cost_status: 'not_recorded',
+          safety_status: 'policy_gated',
+          evidence_source: '.auto-Codex/provider-smoke-history.json',
+          required_before_full_autonomous: true,
+          blockers: ['provider_e2e', 'generic_edit_recovery', 'mcp_bridge_contract'],
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.runtimeComparativeEval',
+        value: (
+          'OpenAI: Passed / Not recorded / Policy gated '
+          + '(Provider e2e, Generic edit recovery, MCP bridge contract)'
         ),
       },
     ]);

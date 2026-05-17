@@ -101,6 +101,7 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "Runtime Policy Matrix" in output
     assert "Runtime Eval Matrix" in output
     assert "Runtime Eval History" in output
+    assert "Runtime Comparative Eval Matrix" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
     assert "opencode" in output
@@ -466,6 +467,16 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert provider_rows["openai"]["status"] == "passed"
     assert provider_rows["google"]["status"] == "failed"
     assert provider_rows["openrouter"]["status"] == "not_observed"
+    comparative_rows = {
+        row["provider"]: row for row in payload["runtime_comparative_eval_matrix"]
+    }
+    assert comparative_rows["openai"]["quality_status"] == "passed"
+    assert comparative_rows["openai"]["evidence_source"] == (
+        ".auto-Codex/provider-smoke-history.json"
+    )
+    assert comparative_rows["google"]["quality_status"] == "failed"
+    assert comparative_rows["ollama"]["quality_status"] == "not_observed"
+    assert comparative_rows["claude"]["safety_status"] == "native_runtime_policy"
 
 
 def test_runtime_modes_command_marks_context7_available_when_external_client_enabled(

@@ -780,6 +780,65 @@ def build_runtime_eval_history(
     ]
 
 
+def build_runtime_comparative_eval_matrix(
+    *,
+    project_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Build provider comparison rows for quality/cost/safety eval evidence."""
+    eval_history = build_runtime_eval_history(project_dir=project_dir)
+    provider_history = (
+        {
+            row["provider"]: row
+            for row in eval_history[0].get("providers", [])
+            if isinstance(row, dict)
+        }
+        if eval_history
+        else {}
+    )
+    history_path = (
+        eval_history[0].get("history_path")
+        if eval_history
+        else PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix()
+    )
+    compatibility = {row.provider: row for row in PROVIDER_RUNTIME_COMPATIBILITY}
+    comparison_providers = ("claude", "codex", "openai", "google", "ollama")
+    matrix: list[dict[str, Any]] = []
+    for provider in comparison_providers:
+        provider_row = compatibility[provider]
+        has_full_runtime = provider_row.full_autonomous == "yes"
+        provider_stats = provider_history.get(provider, {})
+        quality_status = (
+            "not_recorded"
+            if has_full_runtime
+            else str(provider_stats.get("status") or "not_observed")
+        )
+        matrix.append(
+            {
+                "provider": provider,
+                "runtime_path": "full_autonomous"
+                if has_full_runtime
+                else "generic_edit",
+                "quality_status": quality_status,
+                "cost_status": "not_recorded",
+                "safety_status": "native_runtime_policy"
+                if has_full_runtime
+                else "policy_gated",
+                "evidence_source": "native_runtime"
+                if has_full_runtime
+                else str(history_path),
+                "required_before_full_autonomous": not has_full_runtime,
+                "blockers": []
+                if has_full_runtime
+                else [
+                    "provider_e2e",
+                    "generic_edit_recovery",
+                    "mcp_bridge_contract",
+                ],
+            }
+        )
+    return matrix
+
+
 def build_runtime_modes_payload() -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
     cli_runner_selection = {
@@ -808,6 +867,7 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         "runtime_capability_matrix": build_runtime_capability_matrix(),
         "runtime_eval_matrix": build_runtime_eval_matrix(),
         "runtime_eval_history": build_runtime_eval_history(),
+        "runtime_comparative_eval_matrix": build_runtime_comparative_eval_matrix(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -1421,6 +1481,18 @@ def format_runtime_modes_text() -> str:
         ]
         for row in build_runtime_eval_history()
     ]
+    runtime_comparative_eval_rows = [
+        [
+            row["provider"],
+            row["runtime_path"],
+            row["quality_status"],
+            row["cost_status"],
+            row["safety_status"],
+            ", ".join(row["blockers"]) or "none",
+            row["evidence_source"],
+        ]
+        for row in build_runtime_comparative_eval_matrix()
+    ]
 
     return "\n\n".join(
         [
@@ -1597,6 +1669,19 @@ def format_runtime_modes_text() -> str:
                     "Artifact",
                 ],
                 runtime_eval_history_rows,
+            ),
+            "Runtime Comparative Eval Matrix",
+            _format_table(
+                [
+                    "Provider",
+                    "Runtime path",
+                    "Quality",
+                    "Cost",
+                    "Safety",
+                    "Blockers",
+                    "Evidence",
+                ],
+                runtime_comparative_eval_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",

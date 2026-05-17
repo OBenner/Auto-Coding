@@ -34,6 +34,7 @@ import type {
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
   RuntimeCapabilityMatrixRow,
+  RuntimeComparativeEvalMatrixRow,
   RuntimeControlPlaneDiagnostics,
   RuntimeEvalHistoryRow,
   RuntimeExternalMcpSmokeResult,
@@ -242,6 +243,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   generic_core_configurable: 'settings:aiProvider.runtimeDiagnosticValues.genericCoreConfigurable',
   generic_cli_pool: 'settings:aiProvider.runtimeDiagnosticValues.genericCliPool',
   generic_edit: 'settings:aiProvider.runtimeDiagnosticValues.genericEdit',
+  generic_edit_recovery: 'settings:aiProvider.runtimeDiagnosticValues.genericEditRecovery',
   generic_edit_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.genericEditToolLoop',
   generic_jsonl_core: 'settings:aiProvider.runtimeDiagnosticValues.genericJsonlCore',
   google: 'settings:aiProvider.runtimeDiagnosticValues.google',
@@ -272,10 +274,12 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   mini_pipeline_blocked: 'settings:aiProvider.runtimeDiagnosticValues.miniPipelineBlocked',
   mini_pipeline_ready: 'settings:aiProvider.runtimeDiagnosticValues.miniPipelineReady',
   mini_task_pipeline: 'settings:aiProvider.runtimeDiagnosticValues.miniTaskPipeline',
+  mcp_bridge_contract: 'settings:aiProvider.runtimeDiagnosticValues.mcpBridgeContract',
   mutating_subagents_require_transactional_merge:
     'settings:aiProvider.runtimeDiagnosticValues.mutatingSubagentsRequireTransactionalMerge',
   native: 'settings:aiProvider.runtimeDiagnosticValues.native',
   native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.nativeMcpRuntime',
+  native_runtime_policy: 'settings:aiProvider.runtimeDiagnosticValues.nativeRuntimePolicy',
   native_tool_loop: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolLoop',
   native_tool_calls: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolCalls',
   native_tool_request_failed: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolRequestFailed',
@@ -288,6 +292,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   not_required: 'settings:aiProvider.runtimeDiagnosticValues.notRequired',
   not_bridgeable: 'settings:aiProvider.runtimeDiagnosticValues.notBridgeable',
   not_requested: 'settings:aiProvider.runtimeDiagnosticValues.notRequested',
+  not_recorded: 'settings:aiProvider.runtimeDiagnosticValues.notRecorded',
   observed: 'settings:aiProvider.runtimeDiagnosticValues.observed',
   ok: 'settings:aiProvider.runtimeDiagnosticValues.ok',
   open_batch: 'settings:aiProvider.runtimeDiagnosticValues.openBatch',
@@ -303,6 +308,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   passed: 'settings:aiProvider.runtimeDiagnosticValues.passed',
   patch_proposal: 'settings:aiProvider.runtimeDiagnosticValues.patchProposal',
   permission_allowlist_check: 'settings:aiProvider.runtimeDiagnosticValues.permissionAllowlistCheck',
+  policy_gated: 'settings:aiProvider.runtimeDiagnosticValues.policyGated',
   planned: 'settings:aiProvider.runtimeDiagnosticValues.planned',
   provider_error: 'settings:aiProvider.runtimeDiagnosticValues.providerError',
   provider_e2e: 'settings:aiProvider.runtimeDiagnosticValues.providerE2e',
@@ -926,6 +932,32 @@ export function buildRuntimeEvalHistoryDiagnosticRows(
   return [
     {
       labelKey: 'settings:aiProvider.controlPlane.runtimeEvalHistory',
+      value,
+    },
+  ];
+}
+
+export function buildRuntimeComparativeEvalDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  rows?: RuntimeComparativeEvalMatrixRow[] | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!rows?.length) {
+    return [];
+  }
+  const value = rows
+    .map((row) => {
+      const provider = formatRuntimeDiagnosticValue(translate, row.provider);
+      const quality = formatRuntimeDiagnosticValue(translate, row.quality_status);
+      const cost = formatRuntimeDiagnosticValue(translate, row.cost_status);
+      const safety = formatRuntimeDiagnosticValue(translate, row.safety_status);
+      const blockers = formatRuntimeDiagnosticList(translate, row.blockers);
+      const suffix = blockers ? ` (${blockers})` : '';
+      return `${provider}: ${quality} / ${cost} / ${safety}${suffix}`;
+    })
+    .join('; ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.controlPlane.runtimeComparativeEval',
       value,
     },
   ];
@@ -1644,6 +1676,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeControlPlaneDiagnostics?.runtime_eval_history
     );
+    const runtimeComparativeEvalRows = buildRuntimeComparativeEvalDiagnosticRows(
+      t,
+      runtimeControlPlaneDiagnostics?.runtime_comparative_eval_matrix
+    );
     const cliRunnerContractRows = buildCliRunnerContractDiagnosticRows(
       t,
       runtimeControlPlaneDiagnostics?.cli_runner_contract_matrix
@@ -1864,6 +1900,12 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
               ))}
               {runtimeEvalHistoryRows.map((row) => (
                 <div key={row.labelKey}>
+                  <dt>{t(row.labelKey)}</dt>
+                  <dd className="break-words font-medium text-foreground">{row.value}</dd>
+                </div>
+              ))}
+              {runtimeComparativeEvalRows.map((row) => (
+                <div key={row.labelKey} className="sm:col-span-2">
                   <dt>{t(row.labelKey)}</dt>
                   <dd className="break-words font-medium text-foreground">{row.value}</dd>
                 </div>

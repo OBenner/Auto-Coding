@@ -846,6 +846,17 @@ export interface RuntimeEvalHistoryRow {
   providers: RuntimeEvalHistoryProviderRow[];
 }
 
+export interface RuntimeComparativeEvalMatrixRow {
+  provider: string;
+  runtime_path: string;
+  quality_status: string;
+  cost_status: string;
+  safety_status: string;
+  evidence_source: string;
+  required_before_full_autonomous: boolean;
+  blockers: string[];
+}
+
 export interface CliRunnerContractMatrixRow {
   runner_id: string;
   display_name: string;
@@ -871,5 +882,6 @@ export interface RuntimeControlPlaneDiagnostics {
   runtime_capability_matrix?: RuntimeCapabilityMatrixRow[];
   runtime_eval_matrix?: RuntimeEvalMatrixRow[];
   runtime_eval_history?: RuntimeEvalHistoryRow[];
+  runtime_comparative_eval_matrix?: RuntimeComparativeEvalMatrixRow[];
   recommendations?: Record<string, string>;
 }

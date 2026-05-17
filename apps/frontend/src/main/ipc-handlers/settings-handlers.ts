@@ -416,6 +416,7 @@ type RuntimeModesCliPayload = {
   runtime_capability_matrix?: RuntimeControlPlaneDiagnostics['runtime_capability_matrix'];
   runtime_eval_matrix?: RuntimeControlPlaneDiagnostics['runtime_eval_matrix'];
   runtime_eval_history?: RuntimeControlPlaneDiagnostics['runtime_eval_history'];
+  runtime_comparative_eval_matrix?: RuntimeControlPlaneDiagnostics['runtime_comparative_eval_matrix'];
   recommendations?: Record<string, string>;
 };
 
@@ -657,6 +658,9 @@ function mapRuntimeControlPlaneDiagnostics(
       : [],
     runtime_eval_history: Array.isArray(payload.runtime_eval_history)
       ? payload.runtime_eval_history
+      : [],
+    runtime_comparative_eval_matrix: Array.isArray(payload.runtime_comparative_eval_matrix)
+      ? payload.runtime_comparative_eval_matrix
       : [],
     recommendations: payload.recommendations && typeof payload.recommendations === 'object'
       ? payload.recommendations
