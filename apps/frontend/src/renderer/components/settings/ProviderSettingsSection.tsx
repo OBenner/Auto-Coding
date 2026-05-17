@@ -346,6 +346,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   session_closed: 'settings:aiProvider.runtimeDiagnosticValues.sessionClosed',
   shell: 'settings:aiProvider.runtimeDiagnosticValues.shell',
   server_has_extra_tools: 'settings:aiProvider.runtimeDiagnosticValues.serverHasExtraTools',
+  staged_batch_drift: 'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift',
   streaming_text: 'settings:aiProvider.runtimeDiagnosticValues.streamingText',
   structured_output: 'settings:aiProvider.runtimeDiagnosticValues.structuredOutput',
   subagent: 'settings:aiProvider.runtimeDiagnosticValues.subagent',
@@ -369,6 +370,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   direct_api_full_autonomy: 'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy',
   direct_api_full_autonomy_e2e: 'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomyE2e',
   direct_full_autonomous_blocked: 'settings:aiProvider.runtimeDiagnosticValues.directFullAutonomousBlocked',
+  drifted: 'settings:aiProvider.runtimeDiagnosticValues.drifted',
   finish: 'settings:aiProvider.runtimeDiagnosticValues.finish',
   gateway_model_limitations: 'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations',
   unavailable: 'settings:aiProvider.runtimeDiagnosticValues.unavailable',
@@ -1115,6 +1117,20 @@ export function buildProviderTransactionBatchDiagnosticRows(
       value: formatRuntimeDiagnosticList(
         translate,
         transactionBatchContract.boundaryResolutionStrategies
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchStagedGuardStatuses',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.stagedWorkspaceGuardStatuses
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchStagedDriftPaths',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.stagedDriftPaths
       ),
     },
   ].filter((row) => row.value);

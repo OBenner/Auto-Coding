@@ -108,6 +108,10 @@ export function mapProviderTransactionBatchContract(
     boundaryResolutionStrategies: arrayFromUnknown(
       payload.boundary_resolution_strategies
     ),
+    stagedWorkspaceGuardStatuses: arrayFromUnknown(
+      payload.staged_workspace_guard_statuses
+    ),
+    stagedDriftPaths: arrayFromUnknown(payload.staged_drift_paths),
   };
 
   return Object.values(contract).some((field) =>

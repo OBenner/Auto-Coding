@@ -40,6 +40,8 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.batchPreferredStrategy': 'Batch preferred strategy',
     'settings:aiProvider.connectionTest.batchRequiredActions': 'Batch required actions',
     'settings:aiProvider.connectionTest.batchResolutionStrategies': 'Batch resolution strategies',
+    'settings:aiProvider.connectionTest.batchStagedGuardStatuses': 'Staged guard statuses',
+    'settings:aiProvider.connectionTest.batchStagedDriftPaths': 'Staged drift paths',
     'settings:aiProvider.connectionTest.reliabilityStatus': 'Provider reliability',
     'settings:aiProvider.connectionTest.reliabilitySuite': 'Reliability suite',
     'settings:aiProvider.connectionTest.reliabilityCoverage': 'Reliability coverage',
@@ -72,6 +74,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
     'settings:aiProvider.runtimeDiagnosticValues.directFullAutonomousBlocked':
       'Direct full autonomous blocked',
+    'settings:aiProvider.runtimeDiagnosticValues.drifted': 'Drifted',
     'settings:aiProvider.runtimeDiagnosticValues.dynamicAutoClaudeToolPolicy':
       'Dynamic Auto Code tool policy',
     'settings:aiProvider.runtimeDiagnosticValues.dynamicMutatingToolPolicy':
@@ -122,6 +125,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eSuite': 'Provider e2e suite',
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
+    'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.transactionalRecoveryRequired':
       'Transactional recovery required',
@@ -639,6 +643,8 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
         boundaryPreferredStrategy: 'abort_batch',
         boundaryRequiredActionKinds: ['abort_batch', 'repair_mutation'],
         boundaryResolutionStrategies: ['abort_batch', 'repair_mutation'],
+        stagedWorkspaceGuardStatuses: ['drifted'],
+        stagedDriftPaths: ['batched.txt'],
       })
     ).toEqual([
       {
@@ -672,6 +678,14 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.batchResolutionStrategies',
         value: 'Abort batch, Repair mutation',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchStagedGuardStatuses',
+        value: 'Drifted',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchStagedDriftPaths',
+        value: 'batched.txt',
       },
     ]);
   });
