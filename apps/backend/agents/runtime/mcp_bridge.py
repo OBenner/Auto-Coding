@@ -1419,6 +1419,8 @@ class RuntimeExternalMcpContractCheck:
     adapter_tools_missing_on_server: tuple[str, ...] = ()
     server_tools_missing_in_adapter: tuple[str, ...] = ()
     error: str | None = None
+    failure_stage: str | None = None
+    failure_kind: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the contract check for CLI/UI diagnostics."""
@@ -1437,6 +1439,8 @@ class RuntimeExternalMcpContractCheck:
                 self.server_tools_missing_in_adapter
             ),
             "error": self.error,
+            "failure_stage": self.failure_stage,
+            "failure_kind": self.failure_kind,
         }
 
 
@@ -3193,6 +3197,42 @@ async def discover_external_mcp_tools(
     )
 
 
+def classify_external_mcp_error(
+    error: Exception,
+    *,
+    stage: str,
+) -> dict[str, str]:
+    """Classify external MCP lifecycle failures for diagnostics."""
+    message = str(error).lower()
+    if (
+        isinstance(error, TimeoutError)
+        or "timed out" in message
+        or "timeout" in message
+    ):
+        failure_kind = "timeout"
+    elif "failed to start mcp server" in message:
+        failure_kind = "startup_failed"
+    elif "closed stdout" in message:
+        failure_kind = "session_closed"
+    elif (
+        "invalid json" in message
+        or "invalid sse json" in message
+        or "mismatched json-rpc response id" in message
+        or "returned no json-rpc response" in message
+    ):
+        failure_kind = "invalid_response"
+    elif "returned error" in message:
+        failure_kind = "server_error"
+    elif "http mcp server" in message and "returned " in message:
+        failure_kind = "http_error"
+    else:
+        failure_kind = "unknown"
+    return {
+        "failure_stage": stage,
+        "failure_kind": failure_kind,
+    }
+
+
 async def check_external_mcp_contract(
     *,
     server: str,
@@ -3231,6 +3271,7 @@ async def check_external_mcp_contract(
             environment=environment,
         )
     except Exception as e:
+        failure = classify_external_mcp_error(e, stage="tools_list")
         return RuntimeExternalMcpContractCheck(
             server=server,
             ok=False,
@@ -3239,6 +3280,7 @@ async def check_external_mcp_contract(
             transport=health.transport,
             adapter_tools=adapter_tools,
             error=str(e),
+            **failure,
         )
 
     server_tools = extract_mcp_tool_names(result)

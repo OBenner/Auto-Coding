@@ -246,8 +246,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   gateway_blocked: 'settings:aiProvider.runtimeDiagnosticValues.gatewayBlocked',
   gateway_error: 'settings:aiProvider.runtimeDiagnosticValues.gatewayError',
   gateway_model_probe: 'settings:aiProvider.runtimeDiagnosticValues.gatewayModelProbe',
+  http_error: 'settings:aiProvider.runtimeDiagnosticValues.httpError',
   incomplete: 'settings:aiProvider.runtimeDiagnosticValues.incomplete',
   inspect_diff: 'settings:aiProvider.runtimeDiagnosticValues.inspectDiff',
+  invalid_response: 'settings:aiProvider.runtimeDiagnosticValues.invalidResponse',
   json_actions: 'settings:aiProvider.runtimeDiagnosticValues.jsonActions',
   json_fallback: 'settings:aiProvider.runtimeDiagnosticValues.jsonFallback',
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
@@ -326,6 +328,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
   runtime_blocked: 'settings:aiProvider.runtimeDiagnosticValues.runtimeBlocked',
   server_disabled: 'settings:aiProvider.runtimeDiagnosticValues.serverDisabled',
+  server_error: 'settings:aiProvider.runtimeDiagnosticValues.serverError',
+  session_closed: 'settings:aiProvider.runtimeDiagnosticValues.sessionClosed',
   shell: 'settings:aiProvider.runtimeDiagnosticValues.shell',
   server_has_extra_tools: 'settings:aiProvider.runtimeDiagnosticValues.serverHasExtraTools',
   streaming_text: 'settings:aiProvider.runtimeDiagnosticValues.streamingText',
@@ -338,6 +342,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   tool_policy_metadata: 'settings:aiProvider.runtimeDiagnosticValues.toolPolicyMetadata',
   mutating_tool_classification:
     'settings:aiProvider.runtimeDiagnosticValues.mutatingToolClassification',
+  tools_list: 'settings:aiProvider.runtimeDiagnosticValues.toolsList',
   text_completion_ready: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionReady',
   text_completion_only: 'settings:aiProvider.runtimeDiagnosticValues.textCompletionOnly',
   tests: 'settings:aiProvider.runtimeDiagnosticValues.tests',
@@ -360,6 +365,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   unsupported_tools: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTools',
   unsupported_tools_probe: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedToolsProbe',
   unsupported_transport: 'settings:aiProvider.runtimeDiagnosticValues.unsupportedTransport',
+  startup_failed: 'settings:aiProvider.runtimeDiagnosticValues.startupFailed',
+  timeout: 'settings:aiProvider.runtimeDiagnosticValues.timeout',
   use_native_mcp_runtime: 'settings:aiProvider.runtimeDiagnosticValues.useNativeMcpRuntime',
   wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution',
   yes: 'settings:aiProvider.runtimeDiagnosticValues.yes',
@@ -1701,7 +1708,11 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 <ul className="mt-1 space-y-1">
                   {externalMcpSmokeFailures.map((row) => (
                     <li key={row.server}>
-                      {row.server}: {formatRuntimeDiagnosticValue(t, row.status)}
+                      {row.server}: {[
+                        formatRuntimeDiagnosticValue(t, row.status),
+                        formatRuntimeDiagnosticValue(t, row.failure_stage),
+                        formatRuntimeDiagnosticValue(t, row.failure_kind)
+                      ].filter(Boolean).join(' / ')}
                     </li>
                   ))}
                 </ul>

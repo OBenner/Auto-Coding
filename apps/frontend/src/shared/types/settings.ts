@@ -725,6 +725,8 @@ export interface RuntimeExternalMcpContractCheckRow {
   adapter_tools_missing_on_server: string[];
   server_tools_missing_in_adapter: string[];
   error?: string | null;
+  failure_stage?: string | null;
+  failure_kind?: string | null;
 }
 
 export interface RuntimeExternalMcpSmokeSummary {

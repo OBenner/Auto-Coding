@@ -4860,6 +4860,42 @@ async def test_check_external_mcp_contract_reports_extra_and_missing_live_tools(
 
 
 @pytest.mark.asyncio
+async def test_check_external_mcp_contract_classifies_live_tools_list_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    async def fake_discover_external_mcp_tools(**_kwargs):
+        raise RuntimeExternalMcpClientError(
+            "HTTP MCP server graphiti returned invalid JSON: bad payload"
+        )
+
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "discover_external_mcp_tools",
+        fake_discover_external_mcp_tools,
+    )
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "GRAPHITI_MCP_URL": "https://graphiti.local/mcp/",
+    }
+
+    result = await check_external_mcp_contract(
+        server="graphiti",
+        project_dir=tmp_path,
+        environment=environment,
+    )
+
+    assert result.ok is False
+    assert result.status == "error"
+    assert result.failure_stage == "tools_list"
+    assert result.failure_kind == "invalid_response"
+    assert result.to_dict()["failure_stage"] == "tools_list"
+    assert result.to_dict()["failure_kind"] == "invalid_response"
+
+
+@pytest.mark.asyncio
 async def test_call_external_mcp_tool_dispatches_http_with_linear_auth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
