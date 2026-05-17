@@ -2209,12 +2209,14 @@ class RuntimeMcpBridge:
             if inspect.isawaitable(result):
                 result = await result
         except Exception as e:
+            failure = classify_external_mcp_error(e, stage="tools_call")
             audit_artifact = write_mcp_bridge_audit_event(
                 self.spec_dir,
                 {
                     **audit_base,
                     "status": "error",
                     "message": str(e),
+                    **failure,
                 },
             )
             return ToolActionResult(
@@ -2226,6 +2228,7 @@ class RuntimeMcpBridge:
                     "name": spec.name,
                     **spec.policy.to_dict(),
                     **permission_decision.to_audit_dict(),
+                    **failure,
                     "audit_artifact": audit_artifact,
                 },
             )

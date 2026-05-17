@@ -3504,6 +3504,67 @@ async def test_runtime_mcp_bridge_executes_custom_mcp_generic_call_tool(
 
 
 @pytest.mark.asyncio
+async def test_runtime_mcp_bridge_classifies_external_call_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    async def fake_call_external_mcp_tool(**_kwargs):
+        await asyncio.sleep(0)
+        raise RuntimeExternalMcpClientError(
+            "HTTP MCP server my-docs returned error: access denied"
+        )
+
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "https://docs.example.test/mcp/",
+                "headers": {"Authorization": "Bearer test-token"},
+            }
+        ]
+    }
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(
+        auto_claude_tools=[],
+        mcp_servers=("my-docs",),
+        mcp_config=project_mcp_config,
+        mcp_allowed_permissions=("call_custom_mcp",),
+    )
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    result = await bridge.execute(
+        {
+            "tool": "mcp__my-docs__call_tool",
+            "tool_name": "search",
+            "arguments": {"query": "runtime bridge"},
+        }
+    )
+
+    assert result.ok is False
+    assert result.data["failure_stage"] == "tools_call"
+    assert result.data["failure_kind"] == "server_error"
+    audit_path = Path(result.data["audit_artifact"])
+    audit_event = json.loads(audit_path.read_text(encoding="utf-8").splitlines()[0])
+    assert audit_event["status"] == "error"
+    assert audit_event["failure_stage"] == "tools_call"
+    assert audit_event["failure_kind"] == "server_error"
+
+
+@pytest.mark.asyncio
 async def test_runtime_mcp_bridge_exposes_discovered_custom_mcp_tools(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
