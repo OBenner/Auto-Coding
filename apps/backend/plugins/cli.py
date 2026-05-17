@@ -27,6 +27,8 @@ import logging
 import shutil
 import sys
 import tempfile
+from collections import deque
+from collections.abc import Iterator
 from pathlib import Path
 
 # Add parent directories to path for direct execution (must be before imports)
@@ -45,16 +47,19 @@ if __name__ == "__main__":
     from plugins.base import PluginType
     from plugins.loader import PluginLoader, PluginLoadError, PluginValidationError
     from plugins.registry import PluginRegistry
+    from plugins.sdk.agent import AgentPlugin
 else:
     # Module import - use relative imports
     try:
         from .base import PluginType
         from .loader import PluginLoader, PluginLoadError, PluginValidationError
         from .registry import PluginRegistry
+        from .sdk.agent import AgentPlugin
     except ImportError:
         from plugins.base import PluginType
         from plugins.loader import PluginLoader, PluginLoadError, PluginValidationError
         from plugins.registry import PluginRegistry
+        from plugins.sdk.agent import AgentPlugin
 
 # Import git utilities
 from core.git_executable import run_git
@@ -174,13 +179,16 @@ def _permission_diff_for_plugin(plugin) -> dict:
         for capability in capabilities
         if isinstance(capability, str) or hasattr(capability, "value")
     ]
+    currently_enabled = bool(getattr(plugin, "is_enabled", False))
 
     return {
         "plugin_name": _string_value(getattr(plugin, "name", "")),
         "required_permissions": permission_values,
         "capabilities": capability_values,
-        "added_permissions": permission_values,
-        "added_capabilities": capability_values,
+        "added_permissions": [] if currently_enabled else permission_values,
+        "added_capabilities": [] if currently_enabled else capability_values,
+        "currently_enabled": currently_enabled,
+        "would_enable": not currently_enabled,
     }
 
 
@@ -364,6 +372,65 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     _add_json_flag(health_parser)
+
+    # Permission diff command
+    permission_diff_parser = subparsers.add_parser(
+        "permission-diff",
+        help="Show permissions and capabilities a plugin would enable",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    permission_diff_parser.add_argument(
+        "plugin_name",
+        help="Name of the plugin to inspect",
+    )
+    _add_json_flag(permission_diff_parser)
+
+    # Trace command
+    traces_parser = subparsers.add_parser(
+        "traces",
+        help="Read recent project plugin trace events",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    traces_parser.add_argument(
+        "--plugin",
+        help="Optional plugin name to filter traces",
+    )
+    traces_parser.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Maximum trace events to return (default: 50)",
+    )
+    _add_json_flag(traces_parser)
+
+    # Runtime context preview command
+    preview_parser = subparsers.add_parser(
+        "preview-context",
+        help="Preview enabled agent plugin prompt augmentations",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    preview_parser.add_argument(
+        "--agent-type",
+        default="coder",
+        help="Agent phase/type to preview (default: coder)",
+    )
+    preview_parser.add_argument(
+        "--spec-dir",
+        help="Spec directory to use for preview context",
+    )
+    preview_parser.add_argument(
+        "--task",
+        default="",
+        help="Optional task text for plugin selection",
+    )
+    preview_parser.add_argument(
+        "--file",
+        dest="files",
+        action="append",
+        default=[],
+        help="Project-relative file path to include in preview context",
+    )
+    _add_json_flag(preview_parser)
 
     return parser
 
@@ -1069,6 +1136,191 @@ def cmd_health(args: argparse.Namespace) -> int:
         return 1
 
 
+def _load_registry_with_plugins() -> PluginRegistry:
+    """Return a registry with plugins loaded."""
+    registry = PluginRegistry.get_instance()
+    if not registry.list_plugins():
+        registry.load_all_plugins()
+    return registry
+
+
+def cmd_permission_diff(args: argparse.Namespace) -> int:
+    """Show permission and capability diff for a plugin."""
+    try:
+        registry = _load_registry_with_plugins()
+        plugin = registry.get_plugin(args.plugin_name)
+        if plugin is None:
+            logger.error(f"Plugin not found: {args.plugin_name}")
+            return 1
+
+        permission_diff = _permission_diff_for_plugin(plugin)
+        if _wants_json(args):
+            _emit_json({"success": True, "permission_diff": permission_diff})
+            return 0
+
+        print(f"Plugin: {args.plugin_name}")
+        print(
+            "Permissions: "
+            + (", ".join(permission_diff["required_permissions"]) or "none")
+        )
+        print("Capabilities: " + (", ".join(permission_diff["capabilities"]) or "none"))
+        print(f"Currently enabled: {permission_diff['currently_enabled']}")
+        return 0
+    except Exception:
+        logger.exception("Failed to inspect plugin permission diff")
+        return 1
+
+
+def _parse_trace_line(line: str, source: str) -> dict | None:
+    """Parse one plugin trace JSONL record."""
+    stripped = line.strip()
+    if not stripped:
+        return None
+
+    try:
+        event = json.loads(stripped)
+    except json.JSONDecodeError:
+        event = {"raw": stripped}
+    if not isinstance(event, dict):
+        event = {"value": event}
+    event.setdefault("source", source)
+    return event
+
+
+def _iter_trace_file_events(
+    path: Path,
+    *,
+    plugin_name: str | None = None,
+    limit: int | None = None,
+) -> Iterator[dict]:
+    """Yield recent trace events from one JSONL file, newest first."""
+    maxlen = limit if limit is not None and limit > 0 else None
+    recent_events: deque[dict] = deque(maxlen=maxlen)
+    with path.open(encoding="utf-8") as trace_file:
+        for line in trace_file:
+            event = _parse_trace_line(line, path.name)
+            if event is None:
+                continue
+            if plugin_name is not None and event.get("plugin") != plugin_name:
+                continue
+            recent_events.append(event)
+
+    while recent_events:
+        yield recent_events.pop()
+
+
+def _trace_events(trace_dir: Path, plugin_name: str | None, limit: int) -> list[dict]:
+    """Read JSONL trace events from project plugin trace files."""
+    if not trace_dir.exists():
+        return []
+
+    safe_limit = max(0, min(int(limit), 500))
+    if safe_limit == 0:
+        return []
+
+    events: list[dict] = []
+    for path in sorted(trace_dir.glob("*.jsonl"), reverse=True):
+        remaining = safe_limit - len(events)
+        if remaining <= 0:
+            break
+        for event in _iter_trace_file_events(
+            path,
+            plugin_name=plugin_name,
+            limit=remaining,
+        ):
+            events.append(event)
+            if len(events) >= safe_limit:
+                return list(reversed(events))
+
+    return list(reversed(events))
+
+
+def cmd_traces(args: argparse.Namespace) -> int:
+    """Read recent project plugin trace events."""
+    try:
+        trace_dir = Path.cwd() / ".auto-claude" / "plugin_traces"
+        traces = _trace_events(trace_dir, args.plugin, args.limit)
+        payload = {
+            "success": True,
+            "trace_dir": str(trace_dir),
+            "plugin": args.plugin,
+            "traces": traces,
+        }
+        if _wants_json(args):
+            _emit_json(payload)
+            return 0
+
+        for event in traces:
+            print(json.dumps(event, ensure_ascii=False, sort_keys=True))
+        return 0
+    except Exception:
+        logger.exception("Failed to read plugin traces")
+        return 1
+
+
+def cmd_preview_context(args: argparse.Namespace) -> int:
+    """Preview enabled agent plugin prompt augmentations."""
+    try:
+        from plugins.runtime import (
+            append_prompt_augmentations,
+            build_agent_context,
+            collect_prompt_augmentations,
+        )
+
+        registry = _load_registry_with_plugins()
+        plugins = [
+            plugin
+            for plugin in registry.list_plugins(
+                plugin_type=PluginType.AGENT,
+                enabled_only=True,
+            )
+            if isinstance(plugin, AgentPlugin)
+        ]
+        project_dir = Path.cwd()
+        spec_dir = (
+            Path(args.spec_dir)
+            if args.spec_dir
+            else project_dir / ".auto-claude" / "plugin-preview"
+        )
+        metadata = {
+            "agent_type": args.agent_type,
+            "task": args.task,
+            "files": list(args.files or []),
+        }
+        context = build_agent_context(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type=args.agent_type,
+            metadata=metadata,
+        )
+        contributions = collect_prompt_augmentations(plugins, context)
+        preview = append_prompt_augmentations("", contributions).strip()
+        payload = {
+            "success": True,
+            "agent_type": args.agent_type,
+            "spec_dir": str(spec_dir),
+            "contributions": [
+                {
+                    "plugin_name": contribution.plugin_name,
+                    "capabilities": contribution.capabilities,
+                    "text": contribution.text,
+                }
+                for contribution in contributions
+            ],
+            "preview": preview,
+        }
+
+        if _wants_json(args):
+            _emit_json(payload)
+            return 0
+
+        print(preview)
+        return 0
+    except Exception:
+        logger.exception("Failed to preview plugin runtime context")
+        return 1
+
+
 def main() -> int:
     """Main entry point for plugin CLI."""
     parser = create_parser()
@@ -1083,6 +1335,9 @@ def main() -> int:
         "info": cmd_info,
         "uninstall": cmd_uninstall,
         "health": cmd_health,
+        "permission-diff": cmd_permission_diff,
+        "traces": cmd_traces,
+        "preview-context": cmd_preview_context,
     }
 
     # Execute command

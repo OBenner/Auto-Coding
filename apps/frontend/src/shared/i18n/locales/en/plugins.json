@@ -26,19 +26,52 @@
     "access_secrets": "Access Secrets",
     "create_mcp_tools": "Create MCP Tools"
   },
+  "capabilities": {
+    "analysis_only": "Analysis Only",
+    "generic_edit": "Generic Edit",
+    "full_agent_runtime": "Full Agent Runtime"
+  },
   "actions": {
     "enable": "Enable",
     "disable": "Disable",
     "uninstall": "Uninstall",
     "install": "Install Plugin",
-    "viewDocs": "View Documentation"
+    "viewDocs": "View Documentation",
+    "permissionDiff": "Permission Diff",
+    "traces": "Plugin Traces",
+    "previewContext": "Prompt Preview",
+    "confirmEnable": "Enable Plugin"
   },
   "info": {
     "version": "Version",
     "author": "Author",
     "license": "License",
+    "dependencies": "Dependencies",
     "loadedAt": "Loaded at",
     "enabledAt": "Enabled at"
+  },
+  "permissionReview": {
+    "title": "Permission Review",
+    "description": "{{plugin}} will change this project's plugin runtime permissions.",
+    "requiredPermissions": "Required permissions",
+    "addedPermissions": "New permissions",
+    "addedCapabilities": "New capabilities",
+    "none": "None",
+    "noNewPermissions": "No new permissions",
+    "noNewCapabilities": "No new capabilities"
+  },
+  "traces": {
+    "title": "Plugin Traces",
+    "description": "Recent runtime events for {{plugin}}.",
+    "source": "Source: {{source}}",
+    "empty": "No trace events found."
+  },
+  "contextPreview": {
+    "title": "Prompt Preview",
+    "description": "Enabled plugin context for {{agent}} while inspecting {{plugin}}.",
+    "contributions": "Contributions",
+    "noContributions": "No enabled plugin contributions.",
+    "empty": "No prompt preview available."
   },
   "install": {
     "title": "Install Plugin",
@@ -63,13 +96,18 @@
   },
   "toast": {
     "enableSuccess": "Plugin enabled successfully",
+    "enableStatusMessage": "{{plugin}} enabled",
     "enableError": "Failed to enable plugin",
     "disableSuccess": "Plugin disabled successfully",
+    "disableStatusMessage": "{{plugin}} disabled",
     "disableError": "Failed to disable plugin",
     "uninstallSuccess": "Plugin uninstalled successfully",
     "uninstallError": "Failed to uninstall plugin",
     "installSuccess": "Plugin installed successfully",
     "installError": "Failed to install plugin",
-    "loadError": "Failed to load plugins"
+    "loadError": "Failed to load plugins",
+    "permissionDiffError": "Failed to inspect plugin permissions",
+    "tracesError": "Failed to load plugin traces",
+    "previewError": "Failed to preview plugin context"
   }
 }

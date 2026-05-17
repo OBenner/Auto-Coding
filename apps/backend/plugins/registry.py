@@ -13,7 +13,10 @@ This module provides a singleton registry that:
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 from .base import PluginBase, PluginType
@@ -130,7 +133,7 @@ class PluginRegistry:
             user_plugins_dir=user_plugins_dir,
             system_plugins_dir=system_plugins_dir,
         )
-        self.project_dir = project_dir
+        self.project_dir = Path(project_dir) if project_dir is not None else Path.cwd()
         self._plugins: dict[str, PluginBase] = {}
         logger.debug("PluginRegistry initialized")
 
@@ -217,12 +220,17 @@ class PluginRegistry:
                 self._plugins[plugin.name] = plugin
                 _debug_success(f"Loaded plugin: {plugin.name} v{plugin.version}")
 
-                # Auto-enable plugin (can be made configurable later)
-                try:
-                    self.enable_plugin(plugin.name)
-                except Exception as e:
-                    _debug_warning(f"Failed to auto-enable plugin {plugin.name}: {e}")
-                    logger.warning(f"Failed to auto-enable plugin {plugin.name}: {e}")
+                # Auto-enable unless project state explicitly disables it.
+                if self._is_enabled_by_state(plugin.name):
+                    try:
+                        self.enable_plugin(plugin.name, persist=False)
+                    except Exception as e:
+                        _debug_warning(
+                            f"Failed to auto-enable plugin {plugin.name}: {e}"
+                        )
+                        logger.warning(
+                            f"Failed to auto-enable plugin {plugin.name}: {e}"
+                        )
 
             except Exception as e:
                 _debug_error(f"Failed to load plugin {metadata.name}: {e}")
@@ -295,7 +303,71 @@ class PluginRegistry:
         )
         return plugins
 
-    def enable_plugin(self, name: str) -> None:
+    @property
+    def state_path(self) -> Path:
+        """Project-scoped plugin runtime state file path."""
+        return self.project_dir / ".auto-claude" / "plugins" / "state.json"
+
+    def _load_state(self) -> dict:
+        """Load project plugin state, tolerating missing or malformed files."""
+        if not self.state_path.exists():
+            return {"plugins": {}}
+        try:
+            data = json.loads(self.state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Failed to read plugin state at %s", self.state_path)
+            return {"plugins": {}}
+        if not isinstance(data, dict):
+            return {"plugins": {}}
+        plugins = data.get("plugins")
+        if not isinstance(plugins, dict):
+            data["plugins"] = {}
+        return data
+
+    def _write_state(self, state: dict) -> None:
+        """Persist project plugin state."""
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(state, indent=2, sort_keys=True) + "\n"
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=self.state_path.parent,
+                prefix=f".{self.state_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as state_file:
+                temp_path = Path(state_file.name)
+                state_file.write(payload)
+                state_file.flush()
+                os.fsync(state_file.fileno())
+            temp_path.replace(self.state_path)
+        except OSError:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    logger.debug(
+                        "Failed to remove temporary plugin state file %s", temp_path
+                    )
+            raise
+
+    def _is_enabled_by_state(self, name: str) -> bool:
+        """Return enabled state, defaulting to enabled for discovered plugins."""
+        plugin_state = self._load_state().get("plugins", {}).get(name, {})
+        if isinstance(plugin_state, dict) and plugin_state.get("enabled") is False:
+            return False
+        return True
+
+    def _set_enabled_state(self, name: str, enabled: bool) -> None:
+        """Persist explicit enabled state for a plugin."""
+        state = self._load_state()
+        plugins = state.setdefault("plugins", {})
+        plugins[name] = {"enabled": enabled}
+        self._write_state(state)
+
+    def enable_plugin(self, name: str, persist: bool = True) -> None:
         """
         Enable a plugin.
 
@@ -314,14 +386,18 @@ class PluginRegistry:
 
         if plugin.is_enabled:
             _debug_verbose(f"Plugin already enabled: {name}")
+            if persist:
+                self._set_enabled_state(name, True)
             return
 
         _debug(f"Enabling plugin: {name}")
         plugin.on_enable()
         plugin._mark_enabled()
+        if persist:
+            self._set_enabled_state(name, True)
         _debug_success(f"Enabled plugin: {name}")
 
-    def disable_plugin(self, name: str) -> None:
+    def disable_plugin(self, name: str, persist: bool = True) -> None:
         """
         Disable a plugin.
 
@@ -340,11 +416,15 @@ class PluginRegistry:
 
         if not plugin.is_enabled:
             _debug_verbose(f"Plugin already disabled: {name}")
+            if persist:
+                self._set_enabled_state(name, False)
             return
 
         _debug(f"Disabling plugin: {name}")
         plugin.on_disable()
         plugin._mark_disabled()
+        if persist:
+            self._set_enabled_state(name, False)
         _debug_success(f"Disabled plugin: {name}")
 
     def unload_plugin(self, name: str) -> None:
@@ -368,7 +448,7 @@ class PluginRegistry:
         # Disable first if enabled
         if plugin.is_enabled:
             try:
-                self.disable_plugin(name)
+                self.disable_plugin(name, persist=False)
             except Exception as e:
                 _debug_warning(f"Error disabling plugin {name} before unload: {e}")
                 logger.warning(f"Error disabling plugin {name} before unload: {e}")

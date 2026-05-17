@@ -5,6 +5,7 @@ type IpcHandler = (_event: unknown, payload?: unknown) => Promise<unknown>;
 
 const registeredHandlers = new Map<string, IpcHandler>();
 const pluginCliPath = path.join('/app/source', 'apps', 'backend', 'plugins', 'cli.py');
+const expectedProjectCwd = path.normalize('/repo');
 const samplePluginPath = path.join('/repo', 'plugins', 'sample-plugin');
 
 const { mockExecFileSync } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('child_process', () => ({
+  execFile: vi.fn(),
   execFileSync: mockExecFileSync
 }));
 
@@ -102,7 +104,7 @@ describe('plugin IPC handlers', () => {
         'integration',
         '--enabled-only'
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 
@@ -152,7 +154,7 @@ describe('plugin IPC handlers', () => {
         '--path',
         samplePluginPath
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 
@@ -219,7 +221,168 @@ describe('plugin IPC handlers', () => {
         'health',
         '--json'
       ],
-      expect.objectContaining({ cwd: '/repo' })
+      expect.objectContaining({ cwd: expectedProjectCwd })
+    );
+  });
+
+  it('returns plugin permission diff before activation', async () => {
+    const { registerPluginHandlers } = await import('./loader');
+    registerPluginHandlers();
+
+    const permissionDiff = {
+      plugin_name: 'guarded-agent',
+      required_permissions: ['read_files', 'execute_commands'],
+      capabilities: ['analysis_only', 'generic_edit'],
+      added_permissions: ['execute_commands'],
+      added_capabilities: ['generic_edit'],
+      currently_enabled: false,
+      would_enable: true
+    };
+
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify({
+        success: true,
+        permission_diff: permissionDiff
+      })
+    );
+
+    const handler = registeredHandlers.get(IPC_CHANNELS.PLUGIN_PERMISSION_DIFF);
+    expect(handler).toBeDefined();
+
+    const result = await handler?.(
+      {},
+      {
+        projectPath: '/repo',
+        pluginName: 'guarded-agent'
+      }
+    );
+
+    expect(result).toEqual({
+      success: true,
+      data: permissionDiff
+    });
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      '/usr/bin/python3',
+      [
+        pluginCliPath,
+        'permission-diff',
+        '--json',
+        'guarded-agent'
+      ],
+      expect.objectContaining({ cwd: expectedProjectCwd })
+    );
+  });
+
+  it('returns plugin trace events from project state', async () => {
+    const { registerPluginHandlers } = await import('./loader');
+    registerPluginHandlers();
+
+    const tracePayload = {
+      trace_dir: '/repo/.auto-claude/plugin_traces',
+      plugin: 'skill-pack-runtime',
+      traces: [
+        {
+          plugin: 'skill-pack-runtime',
+          event: 'activated',
+          reason: 'task mentions SKILL.md',
+          source: 'skill-pack-runtime.jsonl'
+        }
+      ]
+    };
+
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify({
+        success: true,
+        ...tracePayload
+      })
+    );
+
+    const handler = registeredHandlers.get(IPC_CHANNELS.PLUGIN_TRACES);
+    expect(handler).toBeDefined();
+
+    const result = await handler?.(
+      {},
+      {
+        projectPath: '/repo',
+        pluginName: 'skill-pack-runtime',
+        limit: 5
+      }
+    );
+
+    expect(result).toEqual({
+      success: true,
+      data: tracePayload
+    });
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      '/usr/bin/python3',
+      [
+        pluginCliPath,
+        'traces',
+        '--json',
+        '--plugin',
+        'skill-pack-runtime',
+        '--limit',
+        '5'
+      ],
+      expect.objectContaining({ cwd: expectedProjectCwd })
+    );
+  });
+
+  it('previews enabled plugin prompt contributions for an agent phase', async () => {
+    const { registerPluginHandlers } = await import('./loader');
+    registerPluginHandlers();
+
+    const previewPayload = {
+      agent_type: 'coder',
+      spec_dir: '/repo/.auto-claude/plugin-preview',
+      contributions: [
+        {
+          plugin_name: 'rules-steering-compiler',
+          capabilities: ['analysis_only'],
+          text: 'Use project steering rules.'
+        }
+      ],
+      preview: 'Use project steering rules.'
+    };
+
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify({
+        success: true,
+        ...previewPayload
+      })
+    );
+
+    const handler = registeredHandlers.get(IPC_CHANNELS.PLUGIN_PREVIEW_CONTEXT);
+    expect(handler).toBeDefined();
+
+    const result = await handler?.(
+      {},
+      {
+        projectPath: '/repo',
+        agentType: 'coder',
+        task: 'Wire plugin controls',
+        files: ['apps/backend/plugins/cli.py']
+      }
+    );
+
+    expect(result).toEqual({
+      success: true,
+      data: previewPayload
+    });
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      '/usr/bin/python3',
+      [
+        pluginCliPath,
+        'preview-context',
+        '--json',
+        '--agent-type',
+        'coder',
+        '--task',
+        'Wire plugin controls',
+        '--file',
+        'apps/backend/plugins/cli.py'
+      ],
+      expect.objectContaining({ cwd: expectedProjectCwd })
     );
   });
 });

@@ -823,6 +823,35 @@ const browserMockAPI: ElectronAPI = {
       issues: []
     }
   }),
+  getPluginPermissionDiff: async (pluginName: string) => ({
+    success: true,
+    data: {
+      plugin_name: pluginName,
+      required_permissions: [],
+      capabilities: [],
+      added_permissions: [],
+      added_capabilities: [],
+      currently_enabled: false,
+      would_enable: true
+    }
+  }),
+  getPluginTraces: async () => ({
+    success: true,
+    data: {
+      trace_dir: '',
+      plugin: null,
+      traces: []
+    }
+  }),
+  previewPluginContext: async () => ({
+    success: true,
+    data: {
+      agent_type: 'coder',
+      spec_dir: '',
+      contributions: [],
+      preview: ''
+    }
+  }),
   enablePlugin: async () => ({ success: true, data: { success: true } }),
   disablePlugin: async () => ({ success: true, data: { success: true } }),
   installPlugin: async () => ({ success: true, data: { success: true } }),
