@@ -10,13 +10,14 @@ This package provides base classes, utilities, and APIs for creating:
 - UI plugins: Frontend extensions and custom UI components
 """
 
-from .agent import AgentContext, AgentPlugin
+from .agent import AgentContext, AgentPlugin, ToolHookDecision
 from .integration import IntegrationContext, IntegrationPlugin
 from .ui import UIComponentDefinition, UIContext, UIExtensionPoint, UIPlugin
 
 __all__ = [
     "AgentContext",
     "AgentPlugin",
+    "ToolHookDecision",
     "IntegrationContext",
     "IntegrationPlugin",
     "UIContext",

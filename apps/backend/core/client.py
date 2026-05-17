@@ -1374,6 +1374,37 @@ def create_client(
     # Load and apply user preferences to adapt agent behavior
     base_prompt = load_preferences(base_prompt, spec_dir, project_dir)
 
+    try:
+        from plugins.runtime import (
+            apply_plugin_prompt_augmentations,
+            build_plugin_tool_hook_matchers,
+        )
+
+        base_prompt = apply_plugin_prompt_augmentations(
+            base_prompt,
+            project_dir,
+            spec_dir,
+            agent_type,
+        )
+        plugin_runtime_hooks = build_plugin_tool_hook_matchers(
+            project_dir,
+            spec_dir,
+            agent_type,
+            HookMatcher,
+        )
+    except Exception as e:
+        logger.warning("Failed to apply plugin runtime hooks: %s", e)
+        plugin_runtime_hooks = {"PreToolUse": [], "PostToolUse": []}
+
+    runtime_hooks = {
+        "PreToolUse": [
+            HookMatcher(matcher="Bash", hooks=[bash_security_hook]),
+            *plugin_runtime_hooks.get("PreToolUse", []),
+        ],
+    }
+    if plugin_runtime_hooks.get("PostToolUse"):
+        runtime_hooks["PostToolUse"] = plugin_runtime_hooks["PostToolUse"]
+
     print()
 
     # Build options dict, conditionally including output_format
@@ -1382,11 +1413,7 @@ def create_client(
         "system_prompt": base_prompt,
         "allowed_tools": allowed_tools_list,
         "mcp_servers": mcp_servers,
-        "hooks": {
-            "PreToolUse": [
-                HookMatcher(matcher="Bash", hooks=[bash_security_hook]),
-            ],
-        },
+        "hooks": runtime_hooks,
         "max_turns": 1000,
         "cwd": str(project_dir.resolve()),
         "settings": str(settings_file.resolve()),

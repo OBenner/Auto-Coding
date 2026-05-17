@@ -44,6 +44,21 @@ class PluginPermission(str, Enum):
     CREATE_MCP_TOOLS = "create_mcp_tools"  # Register MCP tools with Claude SDK
 
 
+class PluginCapability(str, Enum):
+    """Runtime capability tiers supported by the plugin substrate."""
+
+    ANALYSIS_ONLY = "analysis_only"
+    GENERIC_EDIT = "generic_edit"
+    FULL_AGENT_RUNTIME = "full_agent_runtime"
+
+
+def default_capabilities_for_type(plugin_type: PluginType) -> list[PluginCapability]:
+    """Return conservative default runtime capabilities for a plugin type."""
+    if plugin_type == PluginType.AGENT:
+        return [PluginCapability.FULL_AGENT_RUNTIME]
+    return [PluginCapability.ANALYSIS_ONLY]
+
+
 class PermissionDeniedError(Exception):
     """
     Raised when a plugin attempts an action without required permission.
@@ -266,6 +281,7 @@ class PluginMetadata:
         homepage: Optional URL to plugin documentation/repository
         license: Optional license identifier (e.g., "MIT", "Apache-2.0")
         auto_claude_version: Optional Auto Claude version requirement (e.g., ">=2.8.0")
+        capabilities: Runtime capability tiers requested by this plugin
     """
 
     name: str
@@ -278,6 +294,7 @@ class PluginMetadata:
     homepage: str | None = None
     license: str | None = None
     auto_claude_version: str | None = None
+    capabilities: list[PluginCapability] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization."""
@@ -297,17 +314,30 @@ class PluginMetadata:
             "homepage": self.homepage,
             "license": self.license,
             "auto_claude_version": self.auto_claude_version,
+            "capabilities": [
+                capability.value
+                if isinstance(capability, PluginCapability)
+                else capability
+                for capability in self.capabilities
+            ],
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PluginMetadata:
         """Create metadata from dictionary (loaded from plugin.json)."""
+        plugin_type = PluginType(data["plugin_type"])
+        raw_capabilities = data.get("capabilities")
+        capabilities = (
+            [PluginCapability(capability) for capability in raw_capabilities]
+            if raw_capabilities is not None
+            else default_capabilities_for_type(plugin_type)
+        )
         return cls(
             name=data["name"],
             version=data["version"],
             author=data["author"],
             description=data["description"],
-            plugin_type=PluginType(data["plugin_type"]),
+            plugin_type=plugin_type,
             required_permissions=[
                 PluginPermission(p) for p in data.get("required_permissions", [])
             ],
@@ -315,6 +345,7 @@ class PluginMetadata:
             homepage=data.get("homepage"),
             license=data.get("license"),
             auto_claude_version=data.get("auto_claude_version"),
+            capabilities=capabilities,
         )
 
 

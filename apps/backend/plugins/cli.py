@@ -118,6 +118,10 @@ def _metadata_to_dict(plugin) -> dict:
     raw_dependencies = (
         getattr(metadata, "dependencies", []) if metadata is not None else []
     )
+    raw_capabilities = (
+        getattr(metadata, "capabilities", []) if metadata is not None else []
+    )
+    capabilities = raw_capabilities if isinstance(raw_capabilities, list) else []
 
     return {
         "name": _string_value(getattr(plugin, "name", "")),
@@ -135,12 +139,48 @@ def _metadata_to_dict(plugin) -> dict:
             if isinstance(permission, str) or hasattr(permission, "value")
         ],
         "dependencies": raw_dependencies if isinstance(raw_dependencies, list) else [],
+        "capabilities": [
+            _enum_value(capability)
+            for capability in capabilities
+            if isinstance(capability, str) or hasattr(capability, "value")
+        ],
         "homepage": _optional_string_value(getattr(metadata, "homepage", None))
         if metadata is not None
         else None,
         "license": _optional_string_value(getattr(metadata, "license", None))
         if metadata is not None
         else None,
+    }
+
+
+def _permission_diff_for_plugin(plugin) -> dict:
+    """Build the permission/capability diff shown before or after enablement."""
+    metadata = getattr(plugin, "metadata", None)
+    raw_permissions = (
+        getattr(metadata, "required_permissions", []) if metadata is not None else []
+    )
+    raw_capabilities = (
+        getattr(metadata, "capabilities", []) if metadata is not None else []
+    )
+    permissions = raw_permissions if isinstance(raw_permissions, list) else []
+    capabilities = raw_capabilities if isinstance(raw_capabilities, list) else []
+    permission_values = [
+        _enum_value(permission)
+        for permission in permissions
+        if isinstance(permission, str) or hasattr(permission, "value")
+    ]
+    capability_values = [
+        _enum_value(capability)
+        for capability in capabilities
+        if isinstance(capability, str) or hasattr(capability, "value")
+    ]
+
+    return {
+        "plugin_name": _string_value(getattr(plugin, "name", "")),
+        "required_permissions": permission_values,
+        "capabilities": capability_values,
+        "added_permissions": permission_values,
+        "added_capabilities": capability_values,
     }
 
 
@@ -448,10 +488,23 @@ def cmd_enable(args: argparse.Namespace) -> int:
         registry.enable_plugin(args.plugin_name)
 
         # Confirm success
+        permission_diff = _permission_diff_for_plugin(plugin)
         if _wants_json(args):
-            _emit_json({"success": True, "plugin_name": args.plugin_name})
+            _emit_json(
+                {
+                    "success": True,
+                    "plugin_name": args.plugin_name,
+                    "permission_diff": permission_diff,
+                }
+            )
             return 0
         print(f"Plugin '{args.plugin_name}' enabled successfully")
+        if permission_diff["required_permissions"]:
+            print(
+                "  Permissions: " + ", ".join(permission_diff["required_permissions"])
+            )
+        if permission_diff["capabilities"]:
+            print("  Capabilities: " + ", ".join(permission_diff["capabilities"]))
         return 0
 
     except KeyError as e:

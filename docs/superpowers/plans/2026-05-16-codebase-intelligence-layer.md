@@ -260,3 +260,61 @@ Run:
 `npm --prefix apps/frontend run typecheck`
 `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff check apps/backend/plugins/cli.py apps/backend/plugins/loader.py tests/test_plugin_cli.py`
 `/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff format apps/backend/plugins/cli.py apps/backend/plugins/loader.py tests/test_plugin_cli.py --check --diff`
+
+### Task 10: Plugin Runtime Foundation
+
+**Files:**
+- Create: `apps/backend/plugins/runtime.py`
+- Create: `tests/test_plugin_runtime.py`
+- Modify: `apps/backend/plugins/base.py`
+- Modify: `apps/backend/plugins/sdk/agent.py`
+- Modify: `apps/backend/plugins/cli.py`
+- Modify: `apps/backend/plugins/__init__.py`
+- Modify: `apps/backend/core/client.py`
+- Modify: `tests/test_plugin_cli.py`
+- Modify: `tests/test_client.py`
+
+- [x] **Step 1: Add RED tests for runtime capabilities and agent hooks**
+
+Add tests for `PluginCapability` defaults, explicit manifest capabilities,
+agent prompt augmentation, pre-tool blocking, post-tool observation, and smoke
+contracts for `agent`, `integration`, and `ui` plugin types.
+
+- [x] **Step 2: Add RED tests for client wiring and CLI permission diff**
+
+Add a `create_client()` test proving enabled agent plugins append prompt
+instructions and register plugin runtime SDK hooks. Add an `enable --json`
+test proving the response includes `permission_diff` with capabilities and
+required permissions.
+
+- [x] **Step 3: Implement capability model**
+
+Add `PluginCapability` with `analysis_only`, `generic_edit`, and
+`full_agent_runtime`. Parse `capabilities` from `plugin.json`, defaulting
+agent plugins to `full_agent_runtime` and integration/ui plugins to
+`analysis_only`.
+
+- [x] **Step 4: Implement agent runtime hooks**
+
+Extend `AgentPlugin` with optional `augment_prompt`, `pre_tool`, and
+`post_tool` hooks. Keep default implementations inert so existing plugins do
+not need changes.
+
+- [x] **Step 5: Implement runtime adapter**
+
+Create `plugins.runtime` as the only bridge from loaded plugins to agent
+runtime effects. It should collect prompt contributions, enforce capability
+gates for tool hooks, normalize hook decisions, and build SDK hook matchers
+for pre/post tool use.
+
+- [x] **Step 6: Wire runtime adapter into `create_client()`**
+
+Append plugin prompt blocks after base preferences and add plugin pre/post
+tool matchers beside the existing bash security hook.
+
+- [x] **Step 7: Verify**
+
+Run:
+`apps/backend/.venv/bin/python -m pytest tests/test_plugin_runtime.py tests/test_plugin_cli.py tests/test_client.py -v`
+`/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff check apps/backend/plugins/base.py apps/backend/plugins/sdk/agent.py apps/backend/plugins/runtime.py apps/backend/plugins/cli.py apps/backend/core/client.py tests/test_plugin_runtime.py tests/test_plugin_cli.py tests/test_client.py`
+`/Users/om/PycharmProjects/Auto-Coding/.venv/bin/ruff format apps/backend/plugins/base.py apps/backend/plugins/sdk/agent.py apps/backend/plugins/runtime.py apps/backend/plugins/cli.py apps/backend/core/client.py tests/test_plugin_runtime.py tests/test_plugin_cli.py tests/test_client.py --check --diff`

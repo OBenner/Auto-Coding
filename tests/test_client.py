@@ -9,7 +9,9 @@ Tests the client.py and simple_client.py module functionality including:
 - Client creation with valid tokens
 """
 
+import asyncio
 import importlib
+import json
 import os
 import sys
 import types
@@ -38,6 +40,54 @@ def _stub_project_context(monkeypatch):
         sys.modules,
         "prompts_pkg.project_context",
         fake_project_context,
+    )
+
+
+def _write_runtime_agent_plugin(user_plugins_dir: Path) -> None:
+    """Create an enabled agent plugin fixture for client runtime wiring tests."""
+    plugin_dir = user_plugins_dir / "runtime-agent"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "name": "runtime-agent",
+        "version": "1.0.0",
+        "author": "Tests",
+        "description": "Runtime agent plugin fixture",
+        "plugin_type": "agent",
+        "required_permissions": [],
+        "dependencies": [],
+        "capabilities": ["full_agent_runtime"],
+    }
+    (plugin_dir / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (plugin_dir / "plugin.py").write_text(
+        '''"""Runtime agent plugin fixture."""
+import plugins.sdk.agent as agent_sdk
+
+
+class RuntimeAgentPlugin(agent_sdk.AgentPlugin):
+    def on_load(self):
+        pass
+
+    def on_unload(self):
+        pass
+
+    def on_enable(self):
+        pass
+
+    def on_disable(self):
+        pass
+
+    def augment_prompt(self, context):
+        return f"Runtime plugin instructions for {context.phase}."
+
+    def pre_tool(self, context, tool_name, tool_input):
+        if tool_input.get("command") == "blocked":
+            return agent_sdk.ToolHookDecision.block("fixture blocked command")
+        return None
+
+    def post_tool(self, context, tool_name, tool_input, tool_result):
+        return None
+''',
+        encoding="utf-8",
     )
 
 
@@ -228,8 +278,92 @@ class TestClientPluginMCPWiring:
             in allowed_tools
         )
         assert (
-            "mcp__codebase-intelligence-integration__trace_file_impact"
-            in allowed_tools
+            "mcp__codebase-intelligence-integration__trace_file_impact" in allowed_tools
         )
+
+        PluginRegistry.reset_instance()
+
+    def test_create_client_applies_agent_plugin_prompt_and_tool_hooks(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Enabled agent plugins should influence prompts and SDK tool hooks."""
+        valid_token = "sk-ant-oat01-valid-token"
+        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", valid_token)
+        monkeypatch.setattr("core.auth.get_token_from_keychain", lambda: None)
+        _stub_project_context(monkeypatch)
+
+        from plugins.registry import PluginRegistry
+
+        user_plugins_dir = tmp_path / ".auto-claude" / "plugins" / "user"
+        _write_runtime_agent_plugin(user_plugins_dir)
+
+        PluginRegistry.reset_instance()
+        PluginRegistry.get_instance(
+            user_plugins_dir=user_plugins_dir,
+            system_plugins_dir=tmp_path / "empty-system-plugins",
+            project_dir=tmp_path,
+        )
+
+        captured_options = {}
+
+        def fake_options(**kwargs):
+            captured_options.update(kwargs)
+            return kwargs
+
+        def fake_hook_matcher(**kwargs):
+            return kwargs
+
+        client_module = importlib.import_module("core.client")
+        mock_sdk_client = MagicMock()
+        with (
+            patch.object(
+                client_module,
+                "ClaudeAgentOptions",
+                side_effect=fake_options,
+            ),
+            patch.object(
+                client_module,
+                "ClaudeSDKClient",
+                return_value=mock_sdk_client,
+            ),
+            patch.object(
+                client_module,
+                "HookMatcher",
+                side_effect=fake_hook_matcher,
+            ),
+        ):
+            client = client_module.create_client(
+                tmp_path,
+                tmp_path,
+                "claude-sonnet-4",
+                "coder",
+            )
+
+        assert client is mock_sdk_client
+        assert (
+            "Runtime plugin instructions for coder."
+            in captured_options["system_prompt"]
+        )
+
+        hooks = captured_options["hooks"]
+        assert hooks["PreToolUse"][0]["matcher"] == "Bash"
+        assert hooks["PreToolUse"][1]["matcher"] == "*"
+        assert hooks["PostToolUse"][0]["matcher"] == "*"
+
+        plugin_pre_hook = hooks["PreToolUse"][1]["hooks"][0]
+        decision = asyncio.run(
+            plugin_pre_hook(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "blocked"},
+                }
+            )
+        )
+        assert decision == {
+            "decision": "block",
+            "reason": "Plugin runtime-agent blocked tool use: fixture blocked command",
+        }
 
         PluginRegistry.reset_instance()

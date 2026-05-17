@@ -22,7 +22,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 import plugins.cli as plugin_cli
-from plugins.base import PluginType
+from plugins.base import PluginCapability, PluginPermission, PluginType
 from plugins.cli import (
     cmd_disable,
     cmd_enable,
@@ -392,6 +392,11 @@ class TestEnableCommand:
         with patch("plugins.cli.PluginRegistry.get_instance") as mock_get_instance:
             mock_plugin = MagicMock()
             mock_plugin.name = "test-plugin"
+            mock_plugin.metadata.required_permissions = [
+                PluginPermission.READ_FILES,
+                PluginPermission.WRITE_FILES,
+            ]
+            mock_plugin.metadata.capabilities = [PluginCapability.GENERIC_EDIT]
 
             mock_registry = MagicMock()
             mock_registry.list_plugins.return_value = [mock_plugin]
@@ -405,6 +410,13 @@ class TestEnableCommand:
             assert json.loads(capsys.readouterr().out) == {
                 "success": True,
                 "plugin_name": "test-plugin",
+                "permission_diff": {
+                    "plugin_name": "test-plugin",
+                    "required_permissions": ["read_files", "write_files"],
+                    "capabilities": ["generic_edit"],
+                    "added_permissions": ["read_files", "write_files"],
+                    "added_capabilities": ["generic_edit"],
+                },
             }
 
     def test_enable_nonexistent_plugin(self, caplog):
