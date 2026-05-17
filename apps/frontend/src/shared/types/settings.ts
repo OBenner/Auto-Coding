@@ -490,6 +490,7 @@ export interface ProviderRuntimeDiagnostics {
   miniPipeline?: ProviderMiniPipelineDiagnostics | null;
   providerE2eSuite?: ProviderE2eSuiteDiagnostics;
   providerNegativeFixtures?: ProviderNegativeFixtureDiagnostics;
+  providerRunHistory?: ProviderRunHistoryDiagnostics;
   providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
@@ -614,6 +615,20 @@ export interface ProviderNegativeFixtureDiagnostics {
   provider?: string;
   source?: string;
   coveredCases?: string[];
+}
+
+export interface ProviderRunHistoryDiagnostics {
+  status?: string;
+  provider?: string;
+  runtimeMode?: string;
+  totalRuns?: number;
+  passedRuns?: number;
+  failedRuns?: number;
+  lastStatus?: string;
+  lastReliabilityStatus?: string;
+  lastProviderE2eStatus?: string;
+  path?: string;
+  reason?: string;
 }
 
 export interface ProviderConnectionTestResult {

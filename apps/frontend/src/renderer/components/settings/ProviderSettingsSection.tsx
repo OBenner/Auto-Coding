@@ -28,6 +28,7 @@ import type {
   ProviderE2eSuiteDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
+  ProviderRunHistoryDiagnostics,
   ProviderRuntimeDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
@@ -291,6 +292,9 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   read_only: 'settings:aiProvider.runtimeDiagnosticValues.readOnly',
   ready: 'settings:aiProvider.runtimeDiagnosticValues.ready',
   ready_to_connect: 'settings:aiProvider.runtimeDiagnosticValues.readyToConnect',
+  recorded: 'settings:aiProvider.runtimeDiagnosticValues.recorded',
+  recorded_after_repair: 'settings:aiProvider.runtimeDiagnosticValues.recordedAfterRepair',
+  record_failed: 'settings:aiProvider.runtimeDiagnosticValues.recordFailed',
   recover_partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure',
   recovered: 'settings:aiProvider.runtimeDiagnosticValues.recovered',
   repair_mutation: 'settings:aiProvider.runtimeDiagnosticValues.repairMutation',
@@ -723,6 +727,48 @@ export function buildProviderNegativeFixtureDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.providerNegativeFixtureCases',
       value: formatRuntimeDiagnosticList(translate, fixtures.coveredCases),
+    },
+  ].filter((row) => row.value);
+}
+
+export function buildProviderRunHistoryDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  history?: ProviderRunHistoryDiagnostics | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!history) {
+    return [];
+  }
+  const summaryValue = [
+    formatRuntimeDiagnosticValue(translate, history.status),
+    history.provider,
+    formatRuntimeDiagnosticValue(translate, history.runtimeMode),
+  ].filter(Boolean).join(' - ');
+  const runsValue = [
+    typeof history.totalRuns === 'number' ? `${history.totalRuns} total` : '',
+    typeof history.passedRuns === 'number' ? `${history.passedRuns} passed` : '',
+    typeof history.failedRuns === 'number' ? `${history.failedRuns} failed` : '',
+  ].filter(Boolean).join(', ');
+  const lastValue = [
+    formatRuntimeDiagnosticValue(translate, history.lastStatus),
+    formatRuntimeDiagnosticValue(translate, history.lastReliabilityStatus),
+    formatRuntimeDiagnosticValue(translate, history.lastProviderE2eStatus),
+  ].filter(Boolean).join(', ');
+  return [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistory',
+      value: summaryValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRuns',
+      value: runsValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLast',
+      value: lastValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',
+      value: history.path || history.reason || '',
     },
   ].filter((row) => row.value);
 }
@@ -1770,6 +1816,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeDiagnostics?.providerNegativeFixtures
     );
+    const providerRunHistoryRows = buildProviderRunHistoryDiagnosticRows(
+      t,
+      runtimeDiagnostics?.providerRunHistory
+    );
     const reliabilityRows = buildProviderReliabilityDiagnosticRows(
       t,
       runtimeDiagnostics?.providerReliability
@@ -1892,6 +1942,14 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   key={row.labelKey}
                   label={t(row.labelKey)}
                   value={row.value}
+                />
+              ))}
+              {providerRunHistoryRows.map((row) => (
+                <RuntimeDiagnosticRow
+                  key={row.labelKey}
+                  label={t(row.labelKey)}
+                  value={row.value}
+                  breakWords={row.labelKey === 'settings:aiProvider.connectionTest.providerRunHistoryPath'}
                 />
               ))}
               {reliabilityRows.map((row) => (

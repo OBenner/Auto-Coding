@@ -8,6 +8,7 @@ import {
   buildProviderNegativeFixtureDiagnosticRows,
   buildProviderReliabilityDiagnosticRows,
   buildProviderResumePolicyDiagnosticRows,
+  buildProviderRunHistoryDiagnosticRows,
   buildProviderTransactionBatchDiagnosticRows,
   buildRuntimeEvalDiagnosticRows,
   buildRuntimePolicyDiagnosticRows
@@ -42,6 +43,10 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerE2eRuns': 'Provider e2e runs',
     'settings:aiProvider.connectionTest.providerNegativeFixtures': 'Provider negative fixtures',
     'settings:aiProvider.connectionTest.providerNegativeFixtureCases': 'Negative fixture cases',
+    'settings:aiProvider.connectionTest.providerRunHistory': 'Provider run history',
+    'settings:aiProvider.connectionTest.providerRunHistoryRuns': 'Provider history runs',
+    'settings:aiProvider.connectionTest.providerRunHistoryLast': 'Provider history latest',
+    'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
@@ -49,6 +54,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
     'settings:aiProvider.runtimeDiagnosticValues.blocked': 'Blocked',
     'settings:aiProvider.runtimeDiagnosticValues.coder': 'Coder',
+    'settings:aiProvider.runtimeDiagnosticValues.complete': 'Complete',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
     'settings:aiProvider.runtimeDiagnosticValues.failed': 'Failed',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
@@ -72,6 +78,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.preferGenericEdit': 'Prefer generic edit',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eSuite': 'Provider e2e suite',
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
+    'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedTools': 'Unsupported tools',
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedToolsProbe': 'Unsupported tools probe',
@@ -306,6 +313,42 @@ describe('buildProviderNegativeFixtureDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerNegativeFixtureCases',
         value: 'Unsupported tools, Gateway model limitations',
+      },
+    ]);
+  });
+});
+
+describe('buildProviderRunHistoryDiagnosticRows', () => {
+  it('includes persisted provider run history evidence', () => {
+    expect(
+      buildProviderRunHistoryDiagnosticRows(translate, {
+        status: 'recorded',
+        provider: 'openai',
+        runtimeMode: 'provider_e2e',
+        totalRuns: 3,
+        passedRuns: 2,
+        failedRuns: 1,
+        lastStatus: 'passed',
+        lastReliabilityStatus: 'complete',
+        lastProviderE2eStatus: 'passed',
+        path: '.auto-Codex/provider-smoke-history.json',
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerRunHistory',
+        value: 'Recorded - openai - Provider e2e',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRuns',
+        value: '3 total, 2 passed, 1 failed',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLast',
+        value: 'Passed, Complete, Passed',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',
+        value: '.auto-Codex/provider-smoke-history.json',
       },
     ]);
   });

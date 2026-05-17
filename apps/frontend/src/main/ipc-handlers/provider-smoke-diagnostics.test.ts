@@ -5,6 +5,7 @@ import {
   mapProviderE2eSuite,
   mapProviderNegativeFixtures,
   mapProviderReliability,
+  mapProviderRunHistory,
   mapProviderRuntimeResumePolicy,
   mapProviderTransactionBatchContract,
   mapProviderToolLoopContract
@@ -256,5 +257,40 @@ describe('mapProviderNegativeFixtures', () => {
 
   it('returns undefined for empty provider negative fixture payloads', () => {
     expect(mapProviderNegativeFixtures({})).toBeUndefined();
+  });
+});
+
+describe('mapProviderRunHistory', () => {
+  it('maps safe persisted provider run history fields', () => {
+    expect(
+      mapProviderRunHistory({
+        status: 'recorded',
+        provider: 'openai',
+        runtime_mode: 'provider_e2e',
+        total_runs: 3,
+        passed_runs: 2,
+        failed_runs: 1,
+        last_status: 'passed',
+        last_reliability_status: 'complete',
+        last_provider_e2e_status: 'passed',
+        path: '.auto-Codex/provider-smoke-history.json',
+        ignored_private_path: '/tmp/provider-history.json',
+      })
+    ).toEqual({
+      status: 'recorded',
+      provider: 'openai',
+      runtimeMode: 'provider_e2e',
+      totalRuns: 3,
+      passedRuns: 2,
+      failedRuns: 1,
+      lastStatus: 'passed',
+      lastReliabilityStatus: 'complete',
+      lastProviderE2eStatus: 'passed',
+      path: '.auto-Codex/provider-smoke-history.json',
+    });
+  });
+
+  it('returns undefined for empty provider run history payloads', () => {
+    expect(mapProviderRunHistory({})).toBeUndefined();
   });
 });

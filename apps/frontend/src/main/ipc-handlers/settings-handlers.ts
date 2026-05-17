@@ -39,6 +39,7 @@ import {
   mapProviderE2eSuite,
   mapProviderNegativeFixtures,
   mapProviderReliability,
+  mapProviderRunHistory,
   mapProviderRuntimeResumePolicy,
   mapProviderTransactionBatchContract,
   mapProviderToolLoopContract,
@@ -396,6 +397,7 @@ type ProviderSmokeCliResult = {
     } | null;
     provider_e2e_suite?: unknown;
     provider_e2e_negative_fixtures?: unknown;
+    provider_run_history?: unknown;
     provider_reliability?: unknown;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
@@ -582,6 +584,7 @@ function mapProviderRuntimeDiagnostics(
     providerNegativeFixtures: mapProviderNegativeFixtures(
       diagnostics.provider_e2e_negative_fixtures
     ),
+    providerRunHistory: mapProviderRunHistory(diagnostics.provider_run_history),
     providerReliability: mapProviderReliability(diagnostics.provider_reliability),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note

@@ -421,6 +421,29 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
             "source": "provider_adapter_negative_fixture",
         },
     ]
+    assert result.runtime_diagnostics["provider_run_history"] == {
+        "status": "recorded",
+        "provider": "openai",
+        "runtime_mode": "provider_e2e",
+        "total_runs": 1,
+        "passed_runs": 1,
+        "failed_runs": 0,
+        "last_status": "passed",
+        "last_reliability_status": "complete",
+        "last_provider_e2e_status": "passed",
+        "path": ".auto-Codex/provider-smoke-history.json",
+    }
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    assert history["schema_version"] == 1
+    assert len(history["runs"]) == 1
+    assert history["runs"][0]["provider"] == "openai"
+    assert history["runs"][0]["runtime_mode"] == "provider_e2e"
+    assert history["runs"][0]["status"] == "passed"
+    assert history["runs"][0]["reliability_status"] == "complete"
+    assert history["runs"][0]["provider_e2e_status"] == "passed"
+    assert history["providers"]["openai"]["total_runs"] == 1
+    assert history["providers"]["openai"]["last_reliability_status"] == "complete"
 
 
 def test_provider_reliability_diagnostics_marks_negative_fixtures_covered():
@@ -453,6 +476,45 @@ def test_provider_reliability_diagnostics_marks_negative_fixtures_covered():
             "source": "provider_adapter_negative_fixture",
         },
     ]
+
+
+def test_provider_run_history_recovers_corrupt_artifact(tmp_path: Path):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text("{not valid json", encoding="utf-8")
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "smoke_scope": "direct_api_full_autonomy_e2e",
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {
+                    "status": "complete",
+                    "passed_case_count": 7,
+                    "required_case_count": 7,
+                },
+            },
+        ),
+    )
+
+    assert result.runtime_diagnostics["provider_run_history"]["status"] == (
+        "recorded_after_repair"
+    )
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    assert history["schema_version"] == 1
+    assert len(history["runs"]) == 1
+    assert history["runs"][0]["provider"] == "openai"
 
 
 def test_provider_e2e_negative_fixtures_cover_all_direct_api_providers():

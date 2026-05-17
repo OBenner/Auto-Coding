@@ -3,6 +3,7 @@ import type {
   ProviderE2eSuiteDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
+  ProviderRunHistoryDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
   ProviderValidatedToolLoopContract
@@ -231,5 +232,32 @@ export function mapProviderNegativeFixtures(
     Array.isArray(field) ? field.length > 0 : field !== undefined
   )
     ? fixtures
+    : undefined;
+}
+
+export function mapProviderRunHistory(
+  value: unknown
+): ProviderRunHistoryDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const history: ProviderRunHistoryDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    provider: stringFromUnknown(payload.provider),
+    runtimeMode: stringFromUnknown(payload.runtime_mode),
+    totalRuns: numberFromUnknown(payload.total_runs),
+    passedRuns: numberFromUnknown(payload.passed_runs),
+    failedRuns: numberFromUnknown(payload.failed_runs),
+    lastStatus: stringFromUnknown(payload.last_status),
+    lastReliabilityStatus: stringFromUnknown(payload.last_reliability_status),
+    lastProviderE2eStatus: stringFromUnknown(payload.last_provider_e2e_status),
+    path: stringFromUnknown(payload.path),
+    reason: stringFromUnknown(payload.reason),
+  };
+
+  return Object.values(history).some((field) => field !== undefined)
+    ? history
     : undefined;
 }

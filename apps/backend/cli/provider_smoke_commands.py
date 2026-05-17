@@ -7,7 +7,8 @@ import json
 import logging
 import sys
 import tempfile
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -194,6 +195,11 @@ PROVIDER_RELIABILITY_STATUS_RANK = {
     "limited": 2,
     "passed": 3,
 }
+PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = Path(
+    ".auto-Codex",
+    "provider-smoke-history.json",
+)
+PROVIDER_SMOKE_HISTORY_MAX_RUNS = 100
 
 
 @dataclass(frozen=True)
@@ -225,6 +231,172 @@ class ProviderSendMessageSession:
         del stream
         async for chunk in self._provider.send_message(message):
             yield chunk
+
+
+def _utc_timestamp() -> str:
+    """Return a compact UTC timestamp for provider evidence artifacts."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _provider_smoke_history_path(project_dir: Path) -> Path:
+    """Return the project-local provider smoke history path."""
+    return project_dir / PROVIDER_SMOKE_HISTORY_RELATIVE_PATH
+
+
+def _provider_smoke_history_record(
+    result: ProviderSmokeResult,
+    *,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    """Build a compact persisted provider smoke evidence record."""
+    runtime_diagnostics = result.runtime_diagnostics
+    reliability = runtime_diagnostics.get("provider_reliability")
+    reliability = reliability if isinstance(reliability, dict) else {}
+    provider_e2e_suite = runtime_diagnostics.get("provider_e2e_suite")
+    provider_e2e_suite = (
+        provider_e2e_suite if isinstance(provider_e2e_suite, dict) else {}
+    )
+    suite_runs = provider_e2e_suite.get("runs")
+    failed_suite_runs = (
+        [
+            str(run.get("runtime_mode") or "unknown")
+            for run in suite_runs
+            if isinstance(run, dict) and run.get("status") != "passed"
+        ]
+        if isinstance(suite_runs, list)
+        else []
+    )
+    record: dict[str, Any] = {
+        "timestamp": timestamp or _utc_timestamp(),
+        "provider": result.provider,
+        "model": result.model,
+        "runtime_mode": result.runtime_mode,
+        "status": "passed" if result.success else "failed",
+        "message": result.message,
+        "smoke_scope": runtime_diagnostics.get("smoke_scope"),
+        "reliability_status": reliability.get("status"),
+        "passed_case_count": reliability.get("passed_case_count"),
+        "required_case_count": reliability.get("required_case_count"),
+        "provider_e2e_status": provider_e2e_suite.get("status"),
+        "failed_suite_runs": failed_suite_runs,
+    }
+    if result.error_details:
+        record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
+    return record
+
+
+def _load_provider_smoke_history(
+    history_path: Path,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Load provider smoke history records, returning whether repair was needed."""
+    if not history_path.exists():
+        return [], False
+    try:
+        payload = json.loads(history_path.read_text(encoding="utf-8"))
+    except Exception:
+        return [], True
+    if not isinstance(payload, dict):
+        return [], True
+    runs = payload.get("runs")
+    if not isinstance(runs, list):
+        return [], True
+    return [run for run in runs if isinstance(run, dict)], False
+
+
+def _provider_smoke_history_provider_stats(
+    runs: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Return per-provider aggregate history stats from persisted records."""
+    providers: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        provider = str(run.get("provider") or "unknown")
+        status = str(run.get("status") or "unknown")
+        stats = providers.setdefault(
+            provider,
+            {
+                "total_runs": 0,
+                "passed_runs": 0,
+                "failed_runs": 0,
+                "last_status": "unknown",
+                "last_runtime_mode": "unknown",
+                "last_model": None,
+                "last_run_at": None,
+                "last_reliability_status": None,
+                "last_provider_e2e_status": None,
+            },
+        )
+        stats["total_runs"] += 1
+        if status == "passed":
+            stats["passed_runs"] += 1
+        elif status == "failed":
+            stats["failed_runs"] += 1
+        stats["last_status"] = status
+        stats["last_runtime_mode"] = run.get("runtime_mode")
+        stats["last_model"] = run.get("model")
+        stats["last_run_at"] = run.get("timestamp")
+        stats["last_reliability_status"] = run.get("reliability_status")
+        stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
+    return providers
+
+
+def _provider_smoke_history_payload(
+    runs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the persisted provider smoke history artifact payload."""
+    bounded_runs = runs[-PROVIDER_SMOKE_HISTORY_MAX_RUNS:]
+    return {
+        "schema_version": 1,
+        "runs": bounded_runs,
+        "providers": _provider_smoke_history_provider_stats(bounded_runs),
+    }
+
+
+def _with_provider_run_history(
+    project_dir: Path,
+    result: ProviderSmokeResult,
+) -> ProviderSmokeResult:
+    """Persist provider e2e history and attach a compact diagnostics summary."""
+    history_path = _provider_smoke_history_path(project_dir)
+    try:
+        runs, repaired = _load_provider_smoke_history(history_path)
+        record = _provider_smoke_history_record(result)
+        payload = _provider_smoke_history_payload([*runs, record])
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = history_path.with_name(f"{history_path.name}.tmp")
+        temp_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temp_path.replace(history_path)
+        provider_stats = payload["providers"].get(result.provider, {})
+        history_summary = {
+            "status": "recorded_after_repair" if repaired else "recorded",
+            "provider": result.provider,
+            "runtime_mode": result.runtime_mode,
+            "total_runs": provider_stats.get("total_runs", 0),
+            "passed_runs": provider_stats.get("passed_runs", 0),
+            "failed_runs": provider_stats.get("failed_runs", 0),
+            "last_status": provider_stats.get("last_status", "unknown"),
+            "last_reliability_status": provider_stats.get("last_reliability_status"),
+            "last_provider_e2e_status": provider_stats.get("last_provider_e2e_status"),
+            "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
+        }
+    except Exception as e:
+        logger.debug("Provider smoke history persistence failed", exc_info=True)
+        history_summary = {
+            "status": "record_failed",
+            "provider": result.provider,
+            "runtime_mode": result.runtime_mode,
+            "reason": str(e),
+            "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
+        }
+    return replace(
+        result,
+        runtime_diagnostics={
+            **result.runtime_diagnostics,
+            "provider_run_history": history_summary,
+        },
+    )
 
 
 def _response_excerpt(response_text: str, max_chars: int = 500) -> str:
@@ -1421,7 +1593,7 @@ async def run_provider_smoke_check(
         provider = create_engine_provider(provider_config)
     except Exception as e:
         logger.debug("Provider creation failed for smoke check", exc_info=True)
-        return ProviderSmokeResult(
+        result = ProviderSmokeResult(
             success=False,
             provider=provider_name,
             model=resolved_model,
@@ -1433,6 +1605,9 @@ async def run_provider_smoke_check(
                 error_details=str(e),
             ),
         )
+        if validated_runtime_mode == "provider_e2e":
+            return _with_provider_run_history(project_dir, result)
+        return result
 
     runtime_diagnostics = build_provider_smoke_runtime_diagnostics(
         provider_name=provider.name,
@@ -1442,7 +1617,7 @@ async def run_provider_smoke_check(
     validation_errors = _provider_validation_errors(provider)
     if validation_errors:
         error_details = "; ".join(validation_errors)
-        return ProviderSmokeResult(
+        result = ProviderSmokeResult(
             success=False,
             provider=provider.name,
             model=resolved_model,
@@ -1454,6 +1629,9 @@ async def run_provider_smoke_check(
                 error_details=error_details,
             ),
         )
+        if validated_runtime_mode == "provider_e2e":
+            return _with_provider_run_history(project_dir, result)
+        return result
 
     session_config = SessionConfig(
         name="provider-smoke-session",
@@ -1464,7 +1642,7 @@ async def run_provider_smoke_check(
 
     try:
         if validated_runtime_mode == "provider_e2e":
-            return await _complete_provider_e2e_smoke_suite(
+            result = await _complete_provider_e2e_smoke_suite(
                 provider=provider,
                 session_config=session_config,
                 prompt=prompt,
@@ -1472,6 +1650,7 @@ async def run_provider_smoke_check(
                 model=resolved_model,
                 runtime_diagnostics=runtime_diagnostics,
             )
+            return _with_provider_run_history(project_dir, result)
 
         if validated_runtime_mode == "mini_pipeline":
             return await _complete_provider_mini_pipeline_smoke(
@@ -1529,7 +1708,7 @@ async def run_provider_smoke_check(
         )
     except Exception as e:
         logger.debug("Provider smoke check failed", exc_info=True)
-        return ProviderSmokeResult(
+        result = ProviderSmokeResult(
             success=False,
             provider=provider.name,
             model=resolved_model,
@@ -1541,6 +1720,9 @@ async def run_provider_smoke_check(
                 error_details=str(e),
             ),
         )
+        if validated_runtime_mode == "provider_e2e":
+            return _with_provider_run_history(project_dir, result)
+        return result
 
 
 def _create_provider_session(
@@ -2507,6 +2689,7 @@ def _print_provider_runtime_diagnostics(
     _print_provider_contract_health(runtime_diagnostics.get("provider_contract_health"))
     _print_provider_reliability(runtime_diagnostics.get("provider_reliability"))
     _print_provider_e2e_suite(runtime_diagnostics.get("provider_e2e_suite"))
+    _print_provider_run_history(runtime_diagnostics.get("provider_run_history"))
     _print_provider_execution_diagnostics(
         runtime_diagnostics.get("validated_runtime_execution")
     )
@@ -2570,6 +2753,35 @@ def _print_provider_e2e_suite(provider_e2e_suite: Any) -> None:
     ]
     if run_parts:
         print_key_value("Provider e2e runs", ", ".join(run_parts))
+
+
+def _print_provider_run_history(provider_run_history: Any) -> None:
+    """Print persisted provider run history diagnostics."""
+    if not isinstance(provider_run_history, dict):
+        return
+    status = provider_run_history.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Provider run history", status)
+    total_runs = provider_run_history.get("total_runs")
+    passed_runs = provider_run_history.get("passed_runs")
+    failed_runs = provider_run_history.get("failed_runs")
+    run_parts = [
+        f"{total_runs} total"
+        if isinstance(total_runs, int) and not isinstance(total_runs, bool)
+        else "",
+        f"{passed_runs} passed"
+        if isinstance(passed_runs, int) and not isinstance(passed_runs, bool)
+        else "",
+        f"{failed_runs} failed"
+        if isinstance(failed_runs, int) and not isinstance(failed_runs, bool)
+        else "",
+    ]
+    runs = ", ".join(part for part in run_parts if part)
+    if runs:
+        print_key_value("Provider history runs", runs)
+    path = provider_run_history.get("path")
+    if isinstance(path, str) and path:
+        print_key_value("Provider history artifact", path)
 
 
 def _print_provider_execution_diagnostics(execution: Any) -> None:
