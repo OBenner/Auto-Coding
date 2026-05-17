@@ -1246,6 +1246,88 @@ def test_generic_edit_execution_diagnostics_reports_batch_recovery_actions(
     }
 
 
+def test_generic_edit_execution_diagnostics_reports_staged_batch_drift(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    manifest_path = tmp_path / "generic_edit_artifact_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_artifact_manifest",
+                "recovery_timeline": [
+                    {
+                        "event_type": "action_result",
+                        "tool": "commit_batch",
+                        "timeline_stage": "batch_boundary_blocked",
+                        "batch_boundary_error_reason": "staged_batch_drift",
+                        "staged_workspace_guard_status": "drifted",
+                        "drift_paths": ["batched.txt"],
+                        "preferred_strategy": "abort_batch",
+                        "required_next_action_kinds": [
+                            "abort_batch",
+                            "repair_mutation",
+                        ],
+                        "resolution_strategies": [
+                            "abort_batch",
+                            "repair_mutation",
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "stop_reason": "finish",
+                "loop": "json_actions",
+                "action_count": 4,
+                "failed_action_count": 1,
+                "native_tool_fallback_count": 0,
+                "tool_counts": {
+                    "begin_batch": 1,
+                    "write_file": 1,
+                    "commit_batch": 1,
+                    "abort_batch": 1,
+                },
+                "transaction_batch_count": 1,
+                "open_transaction_batch_ids": [],
+                "artifact_manifest_artifact": str(manifest_path),
+                "transaction_batches": [
+                    {
+                        "id": "batch-1",
+                        "status": "aborted",
+                        "boundary_errors": [{"reason": "staged_batch_drift"}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["transaction_batch_contract"] == {
+        "status": "boundary_guarded",
+        "batch_boundary_guard": "runtime_blocked",
+        "transaction_batch_count": 1,
+        "open_transaction_batch_ids": [],
+        "boundary_error_count": 1,
+        "boundary_error_reasons": ["staged_batch_drift"],
+        "boundary_preferred_strategy": "abort_batch",
+        "boundary_required_action_kinds": ["abort_batch", "repair_mutation"],
+        "boundary_resolution_strategies": ["abort_batch", "repair_mutation"],
+        "staged_workspace_guard_statuses": ["drifted"],
+        "staged_drift_paths": ["batched.txt"],
+    }
+
+
 def test_generic_edit_execution_diagnostics_classifies_native_tool_contract(
     tmp_path: Path,
 ):

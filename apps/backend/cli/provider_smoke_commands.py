@@ -601,6 +601,8 @@ def _generic_edit_transaction_batch_contract(
     boundary_required_action_kinds: list[str] = []
     boundary_resolution_strategies: list[str] = []
     boundary_preferred_strategy: str | None = None
+    staged_workspace_guard_statuses: list[str] = []
+    staged_drift_paths: list[str] = []
     if isinstance(transaction_batches, list):
         for batch in transaction_batches:
             if not isinstance(batch, dict):
@@ -646,6 +648,12 @@ def _generic_edit_transaction_batch_contract(
         reason = _string_payload_value(event.get("batch_boundary_error_reason"))
         if reason:
             boundary_error_reasons.append(reason)
+        staged_guard_status = _string_payload_value(
+            event.get("staged_workspace_guard_status")
+        )
+        if staged_guard_status:
+            staged_workspace_guard_statuses.append(staged_guard_status)
+        staged_drift_paths.extend(_string_list_payload(event.get("drift_paths")))
         boundary_preferred_strategy = (
             boundary_preferred_strategy
             or _string_payload_value(event.get("preferred_strategy"))
@@ -701,6 +709,12 @@ def _generic_edit_transaction_batch_contract(
         contract["boundary_resolution_strategies"] = list(
             dict.fromkeys(boundary_resolution_strategies)
         )
+    if staged_workspace_guard_statuses:
+        contract["staged_workspace_guard_statuses"] = list(
+            dict.fromkeys(staged_workspace_guard_statuses)
+        )
+    if staged_drift_paths:
+        contract["staged_drift_paths"] = list(dict.fromkeys(staged_drift_paths))
     return contract
 
 
