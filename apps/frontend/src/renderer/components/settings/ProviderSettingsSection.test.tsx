@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildProviderE2eSuiteDiagnosticRows,
+  buildProviderLiveFaultProbeDiagnosticRows,
   buildProviderNegativeFixtureDiagnosticRows,
   buildProviderReliabilityDiagnosticRows,
   buildProviderResumePolicyDiagnosticRows,
@@ -58,6 +59,10 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerE2eRuns': 'Provider e2e runs',
     'settings:aiProvider.connectionTest.providerNegativeFixtures': 'Provider negative fixtures',
     'settings:aiProvider.connectionTest.providerNegativeFixtureCases': 'Negative fixture cases',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbes': 'Provider live fault probes',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbeCases': 'Live fault probe cases',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbeMissingEnv': 'Missing live fault env',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv': 'Required live fault env',
     'settings:aiProvider.connectionTest.providerRunHistory': 'Provider run history',
     'settings:aiProvider.connectionTest.providerRunHistoryRuns': 'Provider history runs',
     'settings:aiProvider.connectionTest.providerRunHistoryLast': 'Provider history latest',
@@ -85,6 +90,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.coder': 'Coder',
     'settings:aiProvider.runtimeDiagnosticValues.commitBatch': 'Commit batch',
     'settings:aiProvider.runtimeDiagnosticValues.complete': 'Complete',
+    'settings:aiProvider.runtimeDiagnosticValues.configurationBlocked': 'Configuration blocked',
     'settings:aiProvider.runtimeDiagnosticValues.denyBeforeExecution': 'Deny before execution',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
     'settings:aiProvider.runtimeDiagnosticValues.directFullAutonomousBlocked':
@@ -138,6 +144,8 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.genericEditRecovery': 'Generic edit recovery',
     'settings:aiProvider.runtimeDiagnosticValues.providerAdapterNegativeFixture':
       'Provider adapter negative fixture',
+    'settings:aiProvider.runtimeDiagnosticValues.providerLiveFaultFixture':
+      'Provider live fault fixture',
     'settings:aiProvider.runtimeDiagnosticValues.codexCli': 'Codex CLI',
     'settings:aiProvider.runtimeDiagnosticValues.mustUseFullRuntime': 'Must use full runtime',
     'settings:aiProvider.runtimeDiagnosticValues.preferGenericEdit': 'Prefer generic edit',
@@ -628,6 +636,42 @@ describe('buildProviderNegativeFixtureDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerNegativeFixtureCases',
         value: 'Unsupported tools, Gateway model limitations',
+      },
+    ]);
+  });
+});
+
+describe('buildProviderLiveFaultProbeDiagnosticRows', () => {
+  it('includes live fault opt-in probe status and env evidence', () => {
+    expect(
+      buildProviderLiveFaultProbeDiagnosticRows(translate, {
+        status: 'configuration_blocked',
+        provider: 'openai',
+        source: 'provider_live_fault_fixture',
+        enabled: true,
+        coveredCases: ['unsupported_tools'],
+        requiredEnv: [
+          'AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES',
+          'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR',
+        ],
+        missingEnv: ['AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR'],
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbes',
+        value: 'Configuration blocked - openai - Provider live fault fixture',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeCases',
+        value: 'Unsupported tools',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeMissingEnv',
+        value: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv',
+        value: 'AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES, AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR',
       },
     ]);
   });

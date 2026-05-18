@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 import tempfile
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -209,6 +211,23 @@ PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = Path(
 )
 PROVIDER_SMOKE_HISTORY_MAX_RUNS = 100
 PROVIDER_SMOKE_HISTORY_TREND_WINDOW = 5
+PROVIDER_E2E_LIVE_FAULT_PROBES_ENV = "AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES"
+PROVIDER_E2E_LIVE_FAULT_CASES = {
+    "unsupported_tools": {
+        "suffix": "UNSUPPORTED_TOOLS_ERROR",
+        "expected_status": "unsupported_tools",
+        "runtime_mode": "live_unsupported_tools_probe",
+        "passed_message": "Live unsupported tool fault probe passed",
+        "failed_message": "Live unsupported tool fault probe failed",
+    },
+    "gateway_model_limitations": {
+        "suffix": "GATEWAY_MODEL_ERROR",
+        "expected_status": "gateway_blocked",
+        "runtime_mode": "live_gateway_model_probe",
+        "passed_message": "Live gateway/model fault probe passed",
+        "failed_message": "Live gateway/model fault probe failed",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -2235,6 +2254,169 @@ def _provider_e2e_negative_probe_reliability(
     return _provider_reliability_payload(normalized_provider, cases)
 
 
+def _provider_live_fault_env_provider(provider: str) -> str:
+    """Return an env-safe provider token for live fault fixtures."""
+    return "".join(
+        character.upper() if character.isalnum() else "_" for character in provider
+    ).strip("_")
+
+
+def _provider_live_fault_required_env(provider: str) -> list[str]:
+    """Return the opt-in env contract for provider live fault fixtures."""
+    provider_token = _provider_live_fault_env_provider(provider)
+    return [
+        PROVIDER_E2E_LIVE_FAULT_PROBES_ENV,
+        (
+            f"AUTO_CODE_PROVIDER_E2E_LIVE_{provider_token}_UNSUPPORTED_TOOLS_ERROR "
+            "or AUTO_CODE_PROVIDER_E2E_LIVE_UNSUPPORTED_TOOLS_ERROR"
+        ),
+        (
+            f"AUTO_CODE_PROVIDER_E2E_LIVE_{provider_token}_GATEWAY_MODEL_ERROR "
+            "or AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR"
+        ),
+    ]
+
+
+def _provider_live_fault_error_env_names(
+    provider: str,
+    suffix: str,
+) -> list[str]:
+    """Return provider-specific then generic live fault env names."""
+    provider_token = _provider_live_fault_env_provider(provider)
+    return [
+        f"AUTO_CODE_PROVIDER_E2E_LIVE_{provider_token}_{suffix}",
+        f"AUTO_CODE_PROVIDER_E2E_LIVE_{suffix}",
+    ]
+
+
+def _provider_live_fault_error_from_env(
+    env: Mapping[str, str],
+    *,
+    provider: str,
+    suffix: str,
+) -> tuple[str | None, str | None, str]:
+    """Return the configured live fault error, source env, and required label."""
+    env_names = _provider_live_fault_error_env_names(provider, suffix)
+    for env_name in env_names:
+        value = env.get(env_name)
+        if isinstance(value, str) and value.strip():
+            return value.strip(), env_name, " or ".join(env_names)
+    return None, None, " or ".join(env_names)
+
+
+def _provider_live_fault_enabled(env: Mapping[str, str]) -> bool:
+    """Return whether live fault fixtures are explicitly enabled."""
+    value = env.get(PROVIDER_E2E_LIVE_FAULT_PROBES_ENV)
+    return isinstance(value, str) and value.strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _provider_e2e_live_fault_probe_payload(
+    provider: str,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Return opt-in live fault probe diagnostics for provider e2e."""
+    normalized_provider = provider.lower()
+    live_env = os.environ if env is None else env
+    required_env = _provider_live_fault_required_env(normalized_provider)
+    if not _provider_live_fault_enabled(live_env):
+        return {
+            "status": "not_configured",
+            "provider": normalized_provider,
+            "source": "provider_live_fault_fixture",
+            "enabled": False,
+            "required_env": required_env,
+            "covered_cases": [],
+        }
+
+    probes: dict[str, dict[str, str]] = {}
+    missing_env: list[str] = []
+    covered_cases: list[str] = []
+    for case_name, case_config in PROVIDER_E2E_LIVE_FAULT_CASES.items():
+        error_text, env_name, required_label = _provider_live_fault_error_from_env(
+            live_env,
+            provider=normalized_provider,
+            suffix=str(case_config["suffix"]),
+        )
+        if error_text is None:
+            missing_env.append(required_label)
+            probes[case_name] = {
+                "status": "skipped",
+                "source": "provider_live_fault_fixture",
+                "reason": "missing_live_fault_fixture",
+                "fixture_provider": normalized_provider,
+            }
+            continue
+
+        issue = _provider_issue_from_error(error_text)
+        passed = issue["status"] == case_config["expected_status"]
+        if passed:
+            covered_cases.append(case_name)
+        probes[case_name] = {
+            "status": "passed" if passed else "failed",
+            "source": "provider_live_fault_fixture",
+            "reason": str(issue["reason"]),
+            "fixture_provider": normalized_provider,
+            "env_name": str(env_name),
+        }
+
+    if missing_env:
+        status = "configuration_blocked"
+    elif len(covered_cases) == len(PROVIDER_E2E_LIVE_FAULT_CASES):
+        status = "passed"
+    else:
+        status = "failed"
+
+    payload: dict[str, Any] = {
+        "status": status,
+        "provider": normalized_provider,
+        "source": "provider_live_fault_fixture",
+        "enabled": True,
+        "required_env": required_env,
+        "covered_cases": covered_cases,
+        "probes": probes,
+    }
+    if missing_env:
+        payload["missing_env"] = missing_env
+    return payload
+
+
+def _provider_e2e_live_fault_probe_runs(
+    live_fault_probes: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Return provider e2e child-run summaries for live fault probes."""
+    if live_fault_probes.get("status") == "not_configured":
+        return []
+    probes = live_fault_probes.get("probes")
+    if not isinstance(probes, dict):
+        return []
+    runs: list[dict[str, str]] = []
+    for case_name, case_config in PROVIDER_E2E_LIVE_FAULT_CASES.items():
+        probe = probes.get(case_name)
+        if not isinstance(probe, dict):
+            continue
+        passed = probe.get("status") == "passed"
+        run_payload = {
+            "runtime_mode": str(case_config["runtime_mode"]),
+            "status": str(probe.get("status") or "failed"),
+            "message": str(
+                case_config["passed_message"]
+                if passed
+                else case_config["failed_message"]
+            ),
+        }
+        reason = probe.get("reason")
+        if not passed and isinstance(reason, str) and reason:
+            run_payload["reason"] = reason
+        runs.append(run_payload)
+    return runs
+
+
 async def _complete_provider_e2e_smoke_suite(
     *,
     provider: Any,
@@ -2307,11 +2489,22 @@ async def _complete_provider_e2e_smoke_suite(
         probes=negative_probes,
     )
     negative_probe_runs = _provider_e2e_negative_probe_runs(negative_probes)
+    live_fault_probes = _provider_e2e_live_fault_probe_payload(provider.name)
+    live_fault_probe_runs = _provider_e2e_live_fault_probe_runs(live_fault_probes)
     suite_runs.extend(negative_probe_runs)
+    suite_runs.extend(live_fault_probe_runs)
     negative_probe_success = all(
         run.get("status") == "passed" for run in negative_probe_runs
     )
-    success = all(child.success for child in child_results) and negative_probe_success
+    live_fault_probe_success = live_fault_probes.get("status") in {
+        "not_configured",
+        "passed",
+    }
+    success = (
+        all(child.success for child in child_results)
+        and negative_probe_success
+        and live_fault_probe_success
+    )
     suite_status = "passed" if success else "failed"
     reliability = _merge_provider_reliability_diagnostics(
         provider.name,
@@ -2329,6 +2522,7 @@ async def _complete_provider_e2e_smoke_suite(
         },
         "provider_e2e_negative_probes": negative_probes,
         "provider_e2e_negative_fixtures": negative_fixture_summary,
+        "provider_e2e_live_fault_probes": live_fault_probes,
     }
     if reliability is not None:
         next_diagnostics["provider_reliability"] = reliability

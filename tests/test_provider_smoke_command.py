@@ -387,6 +387,15 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "cli.provider_smoke_commands._complete_provider_transaction_batch_smoke",
         fake_transaction_batch_smoke,
     )
+    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
+        "OpenAI returned 400 because this model does not support tools.",
+    )
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+        "OpenAI returned 502 bad gateway from the upstream provider.",
+    )
 
     result = await run_provider_smoke_check(
         project_dir=tmp_path,
@@ -430,7 +439,51 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
                 "status": "passed",
                 "message": "Gateway/model limitation classification probe passed",
             },
+            {
+                "runtime_mode": "live_unsupported_tools_probe",
+                "status": "passed",
+                "message": "Live unsupported tool fault probe passed",
+            },
+            {
+                "runtime_mode": "live_gateway_model_probe",
+                "status": "passed",
+                "message": "Live gateway/model fault probe passed",
+            },
         ],
+    }
+    assert result.runtime_diagnostics["provider_e2e_live_fault_probes"] == {
+        "status": "passed",
+        "provider": "openai",
+        "source": "provider_live_fault_fixture",
+        "enabled": True,
+        "required_env": [
+            "AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES",
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_UNSUPPORTED_TOOLS_ERROR"
+            ),
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR"
+            ),
+        ],
+        "covered_cases": ["unsupported_tools", "gateway_model_limitations"],
+        "probes": {
+            "unsupported_tools": {
+                "status": "passed",
+                "source": "provider_live_fault_fixture",
+                "reason": "unsupported_tools",
+                "fixture_provider": "openai",
+                "env_name": "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
+            },
+            "gateway_model_limitations": {
+                "status": "passed",
+                "source": "provider_live_fault_fixture",
+                "reason": "gateway_error",
+                "fixture_provider": "openai",
+                "env_name": "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+            },
+        },
     }
     assert result.runtime_diagnostics["provider_e2e_negative_probes"] == {
         "unsupported_tools": {
@@ -676,6 +729,86 @@ def test_provider_e2e_negative_fixtures_cover_all_direct_api_providers():
                 ],
             },
         }
+
+
+def test_provider_e2e_live_fault_probes_are_opt_in(monkeypatch: pytest.MonkeyPatch):
+    from cli.provider_smoke_commands import _provider_e2e_live_fault_probe_payload
+
+    monkeypatch.delenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", raising=False)
+
+    probes = _provider_e2e_live_fault_probe_payload("openai")
+
+    assert probes == {
+        "status": "not_configured",
+        "provider": "openai",
+        "source": "provider_live_fault_fixture",
+        "enabled": False,
+        "required_env": [
+            "AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES",
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_UNSUPPORTED_TOOLS_ERROR"
+            ),
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR"
+            ),
+        ],
+        "covered_cases": [],
+    }
+
+
+def test_provider_e2e_live_fault_probes_classify_opt_in_errors(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import _provider_e2e_live_fault_probe_payload
+
+    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
+        "OpenAI returned 400 because this model does not support tools.",
+    )
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+        "OpenAI returned 502 bad gateway from the upstream provider.",
+    )
+
+    probes = _provider_e2e_live_fault_probe_payload("openai")
+
+    assert probes == {
+        "status": "passed",
+        "provider": "openai",
+        "source": "provider_live_fault_fixture",
+        "enabled": True,
+        "required_env": [
+            "AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES",
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_UNSUPPORTED_TOOLS_ERROR"
+            ),
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR"
+            ),
+        ],
+        "covered_cases": ["unsupported_tools", "gateway_model_limitations"],
+        "probes": {
+            "unsupported_tools": {
+                "status": "passed",
+                "source": "provider_live_fault_fixture",
+                "reason": "unsupported_tools",
+                "fixture_provider": "openai",
+                "env_name": "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
+            },
+            "gateway_model_limitations": {
+                "status": "passed",
+                "source": "provider_live_fault_fixture",
+                "reason": "gateway_error",
+                "fixture_provider": "openai",
+                "env_name": "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+            },
+        },
+    }
 
 
 @pytest.mark.asyncio

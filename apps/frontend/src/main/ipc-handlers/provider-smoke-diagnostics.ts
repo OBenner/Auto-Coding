@@ -1,6 +1,7 @@
 import type {
   ProviderContractHealth,
   ProviderE2eSuiteDiagnostics,
+  ProviderLiveFaultProbeDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderRunHistoryDiagnostics,
@@ -247,6 +248,48 @@ export function mapProviderNegativeFixtures(
     Array.isArray(field) ? field.length > 0 : field !== undefined
   )
     ? fixtures
+    : undefined;
+}
+
+export function mapProviderLiveFaultProbes(
+  value: unknown
+): ProviderLiveFaultProbeDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const probes =
+    payload.probes && typeof payload.probes === 'object' && !Array.isArray(payload.probes)
+      ? Object.entries(payload.probes)
+        .filter(
+          (entry): entry is [string, Record<string, unknown>] =>
+            Boolean(entry[1]) && typeof entry[1] === 'object' && !Array.isArray(entry[1])
+        )
+        .map(([caseName, probe]) => ({
+          case: caseName,
+          status: stringFromUnknown(probe.status),
+          source: stringFromUnknown(probe.source),
+          reason: stringFromUnknown(probe.reason),
+          envName: stringFromUnknown(probe.env_name),
+        }))
+        .filter((item) => Object.values(item).some((field) => field !== undefined))
+      : undefined;
+  const diagnostics: ProviderLiveFaultProbeDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    provider: stringFromUnknown(payload.provider),
+    source: stringFromUnknown(payload.source),
+    enabled: booleanFromUnknown(payload.enabled),
+    coveredCases: arrayFromUnknown(payload.covered_cases),
+    requiredEnv: arrayFromUnknown(payload.required_env),
+    missingEnv: arrayFromUnknown(payload.missing_env),
+    probes: probes?.length ? probes : undefined,
+  };
+
+  return Object.values(diagnostics).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? diagnostics
     : undefined;
 }
 
