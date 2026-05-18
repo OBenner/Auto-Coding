@@ -756,6 +756,103 @@ function normalizeBatchBoundaryErrors(value: unknown): GenericEditBatchBoundaryE
   return result;
 }
 
+function normalizeOptionalBatchStringList(value: Record<string, unknown>, key: string): string[] | null {
+  const fieldValue = value[key];
+  if (fieldValue === undefined) return [];
+  return normalizeStringList(fieldValue);
+}
+
+function normalizeOptionalBatchCount(value: Record<string, unknown>, key: string): number | null {
+  const fieldValue = value[key];
+  if (fieldValue === undefined) return 0;
+  return typeof fieldValue === 'number' && Number.isFinite(fieldValue) ? fieldValue : null;
+}
+
+function normalizeTransactionBatchStringLists(
+  value: Record<string, unknown>
+): Pick<
+  GenericEditTransactionBatch,
+  | 'transaction_ids'
+  | 'mutation_snapshot_ids'
+  | 'committed_mutation_snapshot_ids'
+  | 'commit_operation_ids'
+  | 'staged_mutation_ids'
+  | 'staged_mutated_paths'
+  | 'staged_restored_paths'
+  | 'staged_deleted_paths'
+  | 'transaction_group_ids'
+  | 'unresolved_transaction_group_ids'
+  | 'boundary_error_reasons'
+  | 'required_next_action_kinds'
+  | 'resolution_strategies'
+> | null {
+  const lists = {
+    transaction_ids: normalizeOptionalBatchStringList(value, 'transaction_ids'),
+    mutation_snapshot_ids: normalizeOptionalBatchStringList(value, 'mutation_snapshot_ids'),
+    committed_mutation_snapshot_ids: normalizeOptionalBatchStringList(
+      value,
+      'committed_mutation_snapshot_ids'
+    ),
+    commit_operation_ids: normalizeOptionalBatchStringList(value, 'commit_operation_ids'),
+    staged_mutation_ids: normalizeOptionalBatchStringList(value, 'staged_mutation_ids'),
+    staged_mutated_paths: normalizeOptionalBatchStringList(value, 'staged_mutated_paths'),
+    staged_restored_paths: normalizeOptionalBatchStringList(value, 'staged_restored_paths'),
+    staged_deleted_paths: normalizeOptionalBatchStringList(value, 'staged_deleted_paths'),
+    transaction_group_ids: normalizeOptionalBatchStringList(value, 'transaction_group_ids'),
+    unresolved_transaction_group_ids: normalizeOptionalBatchStringList(
+      value,
+      'unresolved_transaction_group_ids'
+    ),
+    boundary_error_reasons: normalizeOptionalBatchStringList(value, 'boundary_error_reasons'),
+    required_next_action_kinds: normalizeOptionalBatchStringList(
+      value,
+      'required_next_action_kinds'
+    ),
+    resolution_strategies: normalizeOptionalBatchStringList(value, 'resolution_strategies'),
+  };
+  if (Object.values(lists).some((list) => list === null)) {
+    return null;
+  }
+  return lists as Pick<
+    GenericEditTransactionBatch,
+    | 'transaction_ids'
+    | 'mutation_snapshot_ids'
+    | 'committed_mutation_snapshot_ids'
+    | 'commit_operation_ids'
+    | 'staged_mutation_ids'
+    | 'staged_mutated_paths'
+    | 'staged_restored_paths'
+    | 'staged_deleted_paths'
+    | 'transaction_group_ids'
+    | 'unresolved_transaction_group_ids'
+    | 'boundary_error_reasons'
+    | 'required_next_action_kinds'
+    | 'resolution_strategies'
+  >;
+}
+
+function normalizeTransactionBatchCounts(
+  value: Record<string, unknown>
+): Pick<
+  GenericEditTransactionBatch,
+  'recovery_outcome_count' | 'staged_mutation_count' | 'staged_path_count' | 'lifecycle_event_count' | 'boundary_error_count'
+> | null {
+  const counts = {
+    recovery_outcome_count: normalizeOptionalBatchCount(value, 'recovery_outcome_count'),
+    staged_mutation_count: normalizeOptionalBatchCount(value, 'staged_mutation_count'),
+    staged_path_count: normalizeOptionalBatchCount(value, 'staged_path_count'),
+    lifecycle_event_count: normalizeOptionalBatchCount(value, 'lifecycle_event_count'),
+    boundary_error_count: normalizeOptionalBatchCount(value, 'boundary_error_count'),
+  };
+  if (Object.values(counts).some((count) => count === null)) {
+    return null;
+  }
+  return counts as Pick<
+    GenericEditTransactionBatch,
+    'recovery_outcome_count' | 'staged_mutation_count' | 'staged_path_count' | 'lifecycle_event_count' | 'boundary_error_count'
+  >;
+}
+
 function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch | null {
   if (!isRecord(value)) return null;
 
@@ -764,82 +861,20 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
   const recoveryStatus =
     value.recovery_status === undefined ? 'clean' : readString(value, 'recovery_status');
   const finishBlocked = value.finish_blocked === undefined ? false : value.finish_blocked;
-  const transactionIds =
-    value.transaction_ids === undefined ? [] : normalizeStringList(value.transaction_ids);
-  const mutationSnapshotIds =
-    value.mutation_snapshot_ids === undefined
-      ? []
-      : normalizeStringList(value.mutation_snapshot_ids);
-  const committedMutationSnapshotIds =
-    value.committed_mutation_snapshot_ids === undefined
-      ? []
-      : normalizeStringList(value.committed_mutation_snapshot_ids);
-  const commitOperationIds =
-    value.commit_operation_ids === undefined ? [] : normalizeStringList(value.commit_operation_ids);
-  const stagedMutationIds =
-    value.staged_mutation_ids === undefined ? [] : normalizeStringList(value.staged_mutation_ids);
-  const stagedMutatedPaths =
-    value.staged_mutated_paths === undefined ? [] : normalizeStringList(value.staged_mutated_paths);
-  const stagedRestoredPaths =
-    value.staged_restored_paths === undefined ? [] : normalizeStringList(value.staged_restored_paths);
-  const stagedDeletedPaths =
-    value.staged_deleted_paths === undefined ? [] : normalizeStringList(value.staged_deleted_paths);
-  const transactionGroupIds =
-    value.transaction_group_ids === undefined ? [] : normalizeStringList(value.transaction_group_ids);
-  const unresolvedTransactionGroupIds =
-    value.unresolved_transaction_group_ids === undefined
-      ? []
-      : normalizeStringList(value.unresolved_transaction_group_ids);
-  const recoveryOutcomeCount =
-    value.recovery_outcome_count === undefined ? 0 : value.recovery_outcome_count;
-  const stagedMutationCount =
-    value.staged_mutation_count === undefined ? 0 : value.staged_mutation_count;
-  const stagedPathCount = value.staged_path_count === undefined ? 0 : value.staged_path_count;
-  const lifecycleEventCount =
-    value.lifecycle_event_count === undefined ? 0 : value.lifecycle_event_count;
+  const stringLists = normalizeTransactionBatchStringLists(value);
+  const counts = normalizeTransactionBatchCounts(value);
   const lifecycleEvents = normalizeBatchLifecycleEvents(value.lifecycle_events);
-  const boundaryErrorCount =
-    value.boundary_error_count === undefined ? 0 : value.boundary_error_count;
   const boundaryErrors = normalizeBatchBoundaryErrors(value.boundary_errors);
-  const boundaryErrorReasons =
-    value.boundary_error_reasons === undefined ? [] : normalizeStringList(value.boundary_error_reasons);
-  const requiredNextActionKinds =
-    value.required_next_action_kinds === undefined
-      ? []
-      : normalizeStringList(value.required_next_action_kinds);
-  const resolutionStrategies =
-    value.resolution_strategies === undefined ? [] : normalizeStringList(value.resolution_strategies);
 
   if (
     id === null ||
     status === null ||
     recoveryStatus === null ||
     typeof finishBlocked !== 'boolean' ||
-    transactionIds === null ||
-    mutationSnapshotIds === null ||
-    committedMutationSnapshotIds === null ||
-    commitOperationIds === null ||
-    stagedMutationIds === null ||
-    stagedMutatedPaths === null ||
-    stagedRestoredPaths === null ||
-    stagedDeletedPaths === null ||
-    transactionGroupIds === null ||
-    unresolvedTransactionGroupIds === null ||
+    stringLists === null ||
+    counts === null ||
     lifecycleEvents === null ||
-    boundaryErrors === null ||
-    boundaryErrorReasons === null ||
-    requiredNextActionKinds === null ||
-    resolutionStrategies === null ||
-    typeof recoveryOutcomeCount !== 'number' ||
-    !Number.isFinite(recoveryOutcomeCount) ||
-    typeof stagedMutationCount !== 'number' ||
-    !Number.isFinite(stagedMutationCount) ||
-    typeof stagedPathCount !== 'number' ||
-    !Number.isFinite(stagedPathCount) ||
-    typeof lifecycleEventCount !== 'number' ||
-    !Number.isFinite(lifecycleEventCount) ||
-    typeof boundaryErrorCount !== 'number' ||
-    !Number.isFinite(boundaryErrorCount)
+    boundaryErrors === null
   ) {
     return null;
   }
@@ -849,26 +884,10 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
     status,
     recovery_status: recoveryStatus,
     finish_blocked: finishBlocked,
-    transaction_ids: transactionIds,
-    mutation_snapshot_ids: mutationSnapshotIds,
-    committed_mutation_snapshot_ids: committedMutationSnapshotIds,
-    commit_operation_ids: commitOperationIds,
-    staged_mutation_ids: stagedMutationIds,
-    staged_mutated_paths: stagedMutatedPaths,
-    staged_restored_paths: stagedRestoredPaths,
-    staged_deleted_paths: stagedDeletedPaths,
-    staged_mutation_count: stagedMutationCount,
-    staged_path_count: stagedPathCount,
-    lifecycle_event_count: lifecycleEventCount,
+    ...stringLists,
+    ...counts,
     lifecycle_events: lifecycleEvents,
-    boundary_error_count: boundaryErrorCount,
     boundary_errors: boundaryErrors,
-    boundary_error_reasons: boundaryErrorReasons,
-    required_next_action_kinds: requiredNextActionKinds,
-    resolution_strategies: resolutionStrategies,
-    transaction_group_ids: transactionGroupIds,
-    unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
-    recovery_outcome_count: recoveryOutcomeCount,
   };
 }
 
