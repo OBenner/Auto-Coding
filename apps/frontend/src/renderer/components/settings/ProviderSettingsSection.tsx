@@ -821,6 +821,17 @@ export function buildProviderLiveFaultProbeDiagnosticRows(
   const status = formatRuntimeDiagnosticValue(translate, probes.status);
   const source = formatRuntimeDiagnosticValue(translate, probes.source);
   const summaryValue = [status, probes.provider, source].filter(Boolean).join(' - ');
+  const probeRows = probes.probes?.map((probe) => {
+    const caseName = formatRuntimeDiagnosticValue(translate, probe.case);
+    const probeStatus = formatRuntimeDiagnosticValue(translate, probe.status);
+    const reason = formatRuntimeDiagnosticValue(translate, probe.reason);
+    const details = [reason, probe.envName].filter(Boolean).join(' - ');
+    const value = [caseName, probeStatus].filter(Boolean).join(': ');
+    return {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes',
+      value: value ? `${value}${details ? ` (${details})` : ''}` : '',
+    };
+  }) ?? [];
   return [
     {
       labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbes',
@@ -838,6 +849,7 @@ export function buildProviderLiveFaultProbeDiagnosticRows(
       labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv',
       value: probes.requiredEnv?.join(', ') || '',
     },
+    ...probeRows,
   ].filter((row) => row.value);
 }
 

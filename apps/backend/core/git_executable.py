@@ -39,6 +39,7 @@ WINDOWS_TRANSIENT_GIT_EXIT_CODES = {
     3221225794,  # STATUS_DLL_INIT_FAILED surfaced by Git for Windows.
     -1073741502,  # Same status code when represented as signed int.
 }
+WINDOWS_TRANSIENT_GIT_MAX_ATTEMPTS = 4
 WINDOWS_TRANSIENT_GIT_RETRY_DELAY_SECONDS = 0.1
 
 
@@ -200,7 +201,7 @@ def run_git(
     if env is None and isolate_env:
         env = get_isolated_git_env()
 
-    max_attempts = 2 if os.name == "nt" else 1
+    max_attempts = WINDOWS_TRANSIENT_GIT_MAX_ATTEMPTS if os.name == "nt" else 1
     for attempt in range(max_attempts):
         try:
             result = subprocess.run(

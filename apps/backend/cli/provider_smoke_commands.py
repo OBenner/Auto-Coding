@@ -215,16 +215,18 @@ PROVIDER_E2E_LIVE_FAULT_PROBES_ENV = "AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES"
 PROVIDER_E2E_LIVE_FAULT_CASES = {
     "unsupported_tools": {
         "suffix": "UNSUPPORTED_TOOLS_ERROR",
-        "expected_status": "unsupported_tools",
+        "expected_statuses": ("unsupported_tools",),
         "runtime_mode": "live_unsupported_tools_probe",
         "passed_message": "Live unsupported tool fault probe passed",
+        "skipped_message": "Live unsupported tool fault probe skipped",
         "failed_message": "Live unsupported tool fault probe failed",
     },
     "gateway_model_limitations": {
         "suffix": "GATEWAY_MODEL_ERROR",
-        "expected_status": "gateway_blocked",
+        "expected_statuses": ("gateway_blocked", "model_blocked"),
         "runtime_mode": "live_gateway_model_probe",
         "passed_message": "Live gateway/model fault probe passed",
+        "skipped_message": "Live gateway/model fault probe skipped",
         "failed_message": "Live gateway/model fault probe failed",
     },
 }
@@ -2354,7 +2356,12 @@ def _provider_e2e_live_fault_probe_payload(
             continue
 
         issue = _provider_issue_from_error(error_text)
-        passed = issue["status"] == case_config["expected_status"]
+        expected_statuses = case_config["expected_statuses"]
+        if isinstance(expected_statuses, str):
+            expected_status_values = {expected_statuses}
+        else:
+            expected_status_values = {str(status) for status in expected_statuses}
+        passed = issue["status"] in expected_status_values
         if passed:
             covered_cases.append(case_name)
         probes[case_name] = {
@@ -2400,15 +2407,18 @@ def _provider_e2e_live_fault_probe_runs(
         probe = probes.get(case_name)
         if not isinstance(probe, dict):
             continue
-        passed = probe.get("status") == "passed"
+        probe_status = str(probe.get("status") or "failed")
+        passed = probe_status == "passed"
+        if passed:
+            message = str(case_config["passed_message"])
+        elif probe_status == "skipped":
+            message = str(case_config["skipped_message"])
+        else:
+            message = str(case_config["failed_message"])
         run_payload = {
             "runtime_mode": str(case_config["runtime_mode"]),
-            "status": str(probe.get("status") or "failed"),
-            "message": str(
-                case_config["passed_message"]
-                if passed
-                else case_config["failed_message"]
-            ),
+            "status": probe_status,
+            "message": message,
         }
         reason = probe.get("reason")
         if not passed and isinstance(reason, str) and reason:

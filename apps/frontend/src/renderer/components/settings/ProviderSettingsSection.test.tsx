@@ -61,6 +61,7 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerNegativeFixtureCases': 'Negative fixture cases',
     'settings:aiProvider.connectionTest.providerLiveFaultProbes': 'Provider live fault probes',
     'settings:aiProvider.connectionTest.providerLiveFaultProbeCases': 'Live fault probe cases',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes': 'Live fault probe outcomes',
     'settings:aiProvider.connectionTest.providerLiveFaultProbeMissingEnv': 'Missing live fault env',
     'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv': 'Required live fault env',
     'settings:aiProvider.connectionTest.providerRunHistory': 'Provider run history',
@@ -153,6 +154,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryStable': 'Stable history',
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
+    'settings:aiProvider.runtimeDiagnosticValues.skipped': 'Skipped',
     'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatches': 'Transaction batches',
@@ -655,6 +657,19 @@ describe('buildProviderLiveFaultProbeDiagnosticRows', () => {
           'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR',
         ],
         missingEnv: ['AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR'],
+        probes: [
+          {
+            case: 'unsupported_tools',
+            status: 'passed',
+            reason: 'unsupported_tools',
+            envName: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR',
+          },
+          {
+            case: 'gateway_model_limitations',
+            status: 'skipped',
+            reason: 'missing_live_fault_fixture',
+          },
+        ],
       })
     ).toEqual([
       {
@@ -672,6 +687,14 @@ describe('buildProviderLiveFaultProbeDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv',
         value: 'AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES, AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes',
+        value: 'Unsupported tools: Passed (Unsupported tools - AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR)',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes',
+        value: 'Gateway model limitations: Skipped (missing live fault fixture)',
       },
     ]);
   });

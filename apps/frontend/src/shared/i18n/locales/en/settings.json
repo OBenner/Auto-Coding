@@ -1321,6 +1321,7 @@
       "providerNegativeFixtureCases": "Negative fixture cases",
       "providerLiveFaultProbes": "Provider live fault probes",
       "providerLiveFaultProbeCases": "Live fault probe cases",
+      "providerLiveFaultProbeOutcomes": "Live fault probe outcomes",
       "providerLiveFaultProbeMissingEnv": "Missing live fault env",
       "providerLiveFaultProbeRequiredEnv": "Required live fault env",
       "providerRunHistory": "Provider run history",

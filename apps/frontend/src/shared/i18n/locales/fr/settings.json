@@ -1269,6 +1269,7 @@
       "providerNegativeFixtureCases": "Cas de fixtures négatives",
       "providerLiveFaultProbes": "Probes live de panne fournisseur",
       "providerLiveFaultProbeCases": "Cas de probes live",
+      "providerLiveFaultProbeOutcomes": "Résultats des probes live",
       "providerLiveFaultProbeMissingEnv": "Env live de panne manquante",
       "providerLiveFaultProbeRequiredEnv": "Env live de panne requise",
       "providerRunHistory": "Historique des exécutions fournisseur",

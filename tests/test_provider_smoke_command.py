@@ -811,6 +811,37 @@ def test_provider_e2e_live_fault_probes_classify_opt_in_errors(
     }
 
 
+def test_provider_e2e_live_fault_probes_accept_model_limitations(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import _provider_e2e_live_fault_probe_payload
+
+    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
+        "OpenAI returned 400 because this model does not support tools.",
+    )
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+        "OpenAI returned model_not_found for this deployment.",
+    )
+
+    probes = _provider_e2e_live_fault_probe_payload("openai")
+
+    assert probes["status"] == "passed"
+    assert probes["covered_cases"] == [
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
+    assert probes["probes"]["gateway_model_limitations"] == {
+        "status": "passed",
+        "source": "provider_live_fault_fixture",
+        "reason": "model_unavailable",
+        "fixture_provider": "openai",
+        "env_name": "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+    }
+
+
 @pytest.mark.asyncio
 async def test_run_provider_smoke_check_generic_edit_runtime(
     tmp_path: Path,
