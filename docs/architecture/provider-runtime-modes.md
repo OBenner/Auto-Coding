@@ -299,52 +299,90 @@ suite without relying on Claude SDK semantics.
 
 ### Provider reliability implementation details
 
-- `--provider-smoke --provider-smoke-runtime generic_edit` validates the live
-  Generic Edit tool loop, native tool support, JSON fallback, gateway/model
-  limitations, unsupported tools, recovery status, resume policy, transaction
-  batch contract, boundary guards, staged drift guard details, staged
-  isolation/restore evidence, committed batch snapshots, commit operations, and
-  open transaction batches.
-- `--provider-smoke --provider-smoke-runtime mini_pipeline` runs a
-  planner/coder/test/reviewer flow plus checkpoint preflight and resume recovery,
-  then reports `recovery_loop_status`.
-- `--provider-smoke --provider-smoke-runtime transaction_batch_probe` isolates
-  the transaction-batch contract.
-- `--provider-smoke --provider-smoke-runtime provider_e2e` runs the
-  direct-provider e2e suite and adds the transaction batch probe plus
-  provider-specific unsupported-tool and gateway/model negative fixtures for
-  OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama.
-- Provider e2e merges child results into `provider_e2e_suite`,
-  `provider_e2e_negative_fixtures`, and `provider_reliability`.
+#### Runtime validation scopes
+
+- `generic_edit` validates the live tool loop, native tools, JSON fallback, and
+  provider limitation handling.
+- `generic_edit` reports recovery status, resume policy, transaction batches,
+  boundary guards, staged drift guards, and commit operations.
+- `mini_pipeline` runs the planner/coder/test/reviewer flow with checkpoint
+  preflight and resume recovery.
+- `mini_pipeline` reports `recovery_loop_status`.
+- `transaction_batch_probe` isolates the transaction-batch contract.
+- `provider_e2e` runs the direct-provider e2e suite.
+- `provider_e2e` adds transaction-batch coverage plus provider-specific
+  unsupported-tool and gateway/model negative fixtures.
+- The provider e2e suite covers OpenAI, Google/Gemini, OpenRouter, LiteLLM,
+  ZhipuAI, and Ollama.
+
+#### Results and persistence
+
+- Provider e2e merges child results into `provider_e2e_suite`.
+- Provider e2e records negative fixtures in `provider_e2e_negative_fixtures`.
+- Provider e2e reports aggregate readiness through `provider_reliability`.
 - Provider smoke history persists compact evidence in
-  `.auto-Codex/provider-smoke-history.json` and reports recent-run trend,
-  window counts, and pass/fail streaks.
-- Opt-in live fault probes use `AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES` plus
-  provider-specific captured error fixtures for unsupported-tool and
-  gateway/model cases.
-- Provider history now persists live fault probe status, enabled/pass counts,
-  and covered live-fault cases so repeated real-account e2e runs can influence
-  readiness recommendations over time.
-- The settings UI surfaces suite status, negative fixtures, live fault probes,
-  reliability, transaction-batch evidence, history evidence, and provider trend
-  rows.
+  `.auto-Codex/provider-smoke-history.json`.
+- Provider smoke history reports recent-run trend, window counts, and pass/fail
+  streaks.
+
+#### Live fault probes
+
+- Live fault probes are enabled with
+  `AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES=true` or `=1`.
+- A truthy opt-in must be paired with captured provider error fixture env vars.
+- Fixture env vars cover unsupported-tool and gateway/model cases.
+- Provider history persists live fault probe status, enabled/pass counts, and
+  covered live-fault cases.
+- Repeated real-account e2e runs can influence readiness recommendations over
+  time.
+
+#### UI surfaces
+
+- The settings UI surfaces suite status and negative fixtures.
+- The settings UI surfaces live fault probes and provider reliability.
+- The settings UI surfaces transaction-batch evidence.
+- The settings UI surfaces history evidence and provider trend rows.
 
 ### Frontend control plane implementation details
 
-- Runtime diagnostics cover provider smoke results, tool-loop contract,
-  transaction batch contract, committed batch snapshots, commit operations, and
-  resume policy.
-- MCP diagnostics cover bridge status and MCP permission gates.
-- Generic Edit diagnostics cover artifact transaction batches, staged batch
-  mutation/path/lifecycle counts, batch lifecycle rows, boundary blockers,
-  required next actions, resolution strategies, staged workspace
-  materialized/restored recent-event metadata, recovery timeline, and open-batch
-  resume state.
-- Provider reliability diagnostics cover provider e2e negative fixtures,
-  provider e2e live fault probes, provider run history, and provider trend rows.
-- Runtime governance diagnostics cover policy/eval rows, consolidated runtime
-  capability readiness/blockers/warnings, runtime eval history, CLI runner
-  contract status, and mutating-subagent gates.
+#### Runtime diagnostics
+
+- Runtime diagnostics show provider smoke results.
+- Runtime diagnostics show the tool-loop contract.
+- Runtime diagnostics show transaction batches and committed snapshots.
+- Runtime diagnostics show commit operations and resume policy.
+
+#### MCP diagnostics
+
+- MCP diagnostics show bridge status.
+- MCP diagnostics show permission gates.
+
+#### Generic Edit diagnostics
+
+- Generic Edit diagnostics show artifact transaction batches.
+- Generic Edit diagnostics show staged batch mutation, path, and lifecycle
+  counts.
+- Generic Edit diagnostics show batch lifecycle rows.
+- Generic Edit diagnostics show boundary blockers and required next actions.
+- Generic Edit diagnostics show resolution strategies.
+- Generic Edit diagnostics show staged workspace materialized/restored event
+  metadata.
+- Generic Edit diagnostics show recovery timeline and open-batch resume state.
+
+#### Provider reliability diagnostics
+
+- Provider diagnostics show e2e negative fixtures.
+- Provider diagnostics show e2e live fault probes.
+- Provider diagnostics show run history and trend rows.
+
+#### Runtime governance diagnostics
+
+- Runtime governance diagnostics show policy/eval rows.
+- Runtime governance diagnostics show capability readiness, blockers, and
+  warnings.
+- Runtime governance diagnostics show runtime eval history.
+- Runtime governance diagnostics show CLI runner contract status.
+- Runtime governance diagnostics show mutating-subagent gates.
 
 ## Generic Edit Contract
 

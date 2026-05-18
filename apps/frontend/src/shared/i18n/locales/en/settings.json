@@ -1334,6 +1334,8 @@
       "providerRunHistoryTrendPassStreak": "pass streak",
       "providerRunHistoryTrendFailStreak": "fail streak",
       "providerRunHistoryLiveFaultProbes": "Provider history live fault probes",
+      "providerRunHistoryLiveFaultProbeEnabled": "enabled runs",
+      "providerRunHistoryLiveFaultProbePassed": "passed runs",
       "providerRunHistoryPath": "Provider history artifact",
       "noneMissing": "None",
       "diagnosticsNote": "Provider smoke checks the API call only; autonomous coding still depends on runtime tools, MCP, subagents, and filesystem support.",

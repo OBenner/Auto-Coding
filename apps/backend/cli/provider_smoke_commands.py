@@ -421,54 +421,76 @@ def _provider_smoke_history_provider_stats(
         provider = str(run.get("provider") or "unknown")
         status = str(run.get("status") or "unknown")
         provider_runs.setdefault(provider, []).append(run)
-        stats = providers.setdefault(
-            provider,
-            {
-                "total_runs": 0,
-                "passed_runs": 0,
-                "failed_runs": 0,
-                "last_status": "unknown",
-                "last_runtime_mode": "unknown",
-                "last_model": None,
-                "last_run_at": None,
-                "last_reliability_status": None,
-                "last_provider_e2e_status": None,
-                "last_live_fault_probe_status": None,
-                "live_fault_probe_enabled_runs": 0,
-                "live_fault_probe_passed_runs": 0,
-                "live_fault_probe_covered_cases": [],
-            },
-        )
-        stats["total_runs"] += 1
-        if status == "passed":
-            stats["passed_runs"] += 1
-        elif status == "failed":
-            stats["failed_runs"] += 1
-        stats["last_status"] = status
-        stats["last_runtime_mode"] = run.get("runtime_mode")
-        stats["last_model"] = run.get("model")
-        stats["last_run_at"] = run.get("timestamp")
-        stats["last_reliability_status"] = run.get("reliability_status")
-        stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
-        live_fault_probe_status = run.get("live_fault_probe_status")
-        if isinstance(live_fault_probe_status, str) and live_fault_probe_status:
-            stats["last_live_fault_probe_status"] = live_fault_probe_status
-        if run.get("live_fault_probe_enabled") is True:
-            stats["live_fault_probe_enabled_runs"] += 1
-        if live_fault_probe_status == "passed":
-            stats["live_fault_probe_passed_runs"] += 1
-        covered_cases = _string_list_payload(run.get("live_fault_probe_covered_cases"))
-        if covered_cases:
-            existing_cases = stats["live_fault_probe_covered_cases"]
-            for covered_case in covered_cases:
-                if covered_case not in existing_cases:
-                    existing_cases.append(covered_case)
+        stats = providers.setdefault(provider, _provider_smoke_empty_provider_stats())
+        _provider_smoke_history_apply_run_stats(stats, run, status=status)
     for provider, stats in providers.items():
         stats["live_fault_probe_covered_cases"] = sorted(
             stats["live_fault_probe_covered_cases"]
         )
         stats.update(_provider_smoke_history_trend(provider_runs.get(provider, [])))
     return providers
+
+
+def _provider_smoke_empty_provider_stats() -> dict[str, Any]:
+    """Return a fresh provider history stats accumulator."""
+    return {
+        "total_runs": 0,
+        "passed_runs": 0,
+        "failed_runs": 0,
+        "last_status": "unknown",
+        "last_runtime_mode": "unknown",
+        "last_model": None,
+        "last_run_at": None,
+        "last_reliability_status": None,
+        "last_provider_e2e_status": None,
+        "last_live_fault_probe_status": None,
+        "live_fault_probe_enabled_runs": 0,
+        "live_fault_probe_passed_runs": 0,
+        "live_fault_probe_covered_cases": [],
+    }
+
+
+def _provider_smoke_history_apply_run_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+    *,
+    status: str,
+) -> None:
+    """Apply one persisted provider-smoke run to aggregate provider stats."""
+    stats["total_runs"] += 1
+    if status == "passed":
+        stats["passed_runs"] += 1
+    elif status == "failed":
+        stats["failed_runs"] += 1
+    stats["last_status"] = status
+    stats["last_runtime_mode"] = run.get("runtime_mode")
+    stats["last_model"] = run.get("model")
+    stats["last_run_at"] = run.get("timestamp")
+    stats["last_reliability_status"] = run.get("reliability_status")
+    stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
+    _provider_smoke_history_apply_live_fault_stats(stats, run)
+
+
+def _provider_smoke_history_apply_live_fault_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+) -> None:
+    """Apply live-fault probe evidence from one persisted run."""
+    live_fault_probe_status = run.get("live_fault_probe_status")
+    stats["last_live_fault_probe_status"] = (
+        live_fault_probe_status
+        if isinstance(live_fault_probe_status, str) and live_fault_probe_status
+        else None
+    )
+    if run.get("live_fault_probe_enabled") is True:
+        stats["live_fault_probe_enabled_runs"] += 1
+    if live_fault_probe_status == "passed":
+        stats["live_fault_probe_passed_runs"] += 1
+
+    existing_cases = stats["live_fault_probe_covered_cases"]
+    for covered_case in _string_list_payload(run.get("live_fault_probe_covered_cases")):
+        if covered_case not in existing_cases:
+            existing_cases.append(covered_case)
 
 
 def _provider_smoke_history_payload(
@@ -2393,47 +2415,23 @@ def _provider_e2e_live_fault_probe_payload(
     missing_env: list[str] = []
     covered_cases: list[str] = []
     for case_name, case_config in PROVIDER_E2E_LIVE_FAULT_CASES.items():
-        error_text, env_name, required_label = _provider_live_fault_error_from_env(
-            live_env,
+        case_result = _provider_e2e_live_fault_probe_case(
             provider=normalized_provider,
+            case_config=case_config,
             suffix=str(case_config["suffix"]),
+            env=live_env,
         )
-        if error_text is None:
-            missing_env.append(required_label)
-            probes[case_name] = {
-                "status": "skipped",
-                "source": "provider_live_fault_fixture",
-                "reason": "missing_live_fault_fixture",
-                "fixture_provider": normalized_provider,
-            }
-            continue
-
-        issue = _provider_issue_from_error(error_text)
-        expected_statuses = case_config["expected_statuses"]
-        if isinstance(expected_statuses, str):
-            expected_status_values = {expected_statuses}
-        else:
-            expected_status_values = {str(status) for status in expected_statuses}
-        passed = issue["status"] in expected_status_values
-        if passed:
+        probes[case_name] = case_result["probe"]
+        if case_result["missing_env"]:
+            missing_env.append(str(case_result["missing_env"]))
+        if case_result["covered"]:
             covered_cases.append(case_name)
-        probes[case_name] = {
-            "status": "passed" if passed else "failed",
-            "source": "provider_live_fault_fixture",
-            "reason": str(issue["reason"]),
-            "fixture_provider": normalized_provider,
-            "env_name": str(env_name),
-        }
-
-    if missing_env:
-        status = "configuration_blocked"
-    elif len(covered_cases) == len(PROVIDER_E2E_LIVE_FAULT_CASES):
-        status = "passed"
-    else:
-        status = "failed"
 
     payload: dict[str, Any] = {
-        "status": status,
+        "status": _provider_e2e_live_fault_status(
+            missing_env=missing_env,
+            covered_cases=covered_cases,
+        ),
         "provider": normalized_provider,
         "source": "provider_live_fault_fixture",
         "enabled": True,
@@ -2444,6 +2442,69 @@ def _provider_e2e_live_fault_probe_payload(
     if missing_env:
         payload["missing_env"] = missing_env
     return payload
+
+
+def _provider_e2e_live_fault_probe_case(
+    *,
+    provider: str,
+    case_config: Mapping[str, Any],
+    suffix: str,
+    env: Mapping[str, str],
+) -> dict[str, Any]:
+    """Return one live-fault probe case outcome."""
+    error_text, env_name, required_label = _provider_live_fault_error_from_env(
+        env,
+        provider=provider,
+        suffix=suffix,
+    )
+    if error_text is None:
+        return {
+            "covered": False,
+            "missing_env": required_label,
+            "probe": {
+                "status": "skipped",
+                "source": "provider_live_fault_fixture",
+                "reason": "missing_live_fault_fixture",
+                "fixture_provider": provider,
+            },
+        }
+
+    issue = _provider_issue_from_error(error_text)
+    passed = issue["status"] in _provider_live_fault_expected_statuses(case_config)
+    return {
+        "covered": passed,
+        "missing_env": None,
+        "probe": {
+            "status": "passed" if passed else "failed",
+            "source": "provider_live_fault_fixture",
+            "reason": str(issue["reason"]),
+            "fixture_provider": provider,
+            "env_name": str(env_name),
+        },
+    }
+
+
+def _provider_live_fault_expected_statuses(
+    case_config: Mapping[str, Any],
+) -> set[str]:
+    """Return normalized expected issue statuses for one live-fault case."""
+    expected_statuses = case_config["expected_statuses"]
+    if isinstance(expected_statuses, str):
+        return {expected_statuses}
+    return {str(status) for status in expected_statuses}
+
+
+def _provider_e2e_live_fault_status(
+    *,
+    missing_env: list[str],
+    covered_cases: list[str],
+) -> str:
+    """Return aggregate live-fault probe status from case outcomes."""
+    if missing_env:
+        return "configuration_blocked"
+    if len(covered_cases) == len(PROVIDER_E2E_LIVE_FAULT_CASES):
+        return "passed"
+    return "failed"
 
 
 def _provider_e2e_live_fault_probe_runs(

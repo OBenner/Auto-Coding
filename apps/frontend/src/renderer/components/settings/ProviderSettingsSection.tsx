@@ -827,9 +827,10 @@ export function buildProviderLiveFaultProbeDiagnosticRows(
     const reason = formatRuntimeDiagnosticValue(translate, probe.reason);
     const details = [reason, probe.envName].filter(Boolean).join(' - ');
     const value = [caseName, probeStatus].filter(Boolean).join(': ');
+    const detailSuffix = details ? ` (${details})` : '';
     return {
       labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes',
-      value: value ? `${value}${details ? ` (${details})` : ''}` : '',
+      value: value ? `${value}${detailSuffix}` : '',
     };
   }) ?? [];
   return [
@@ -895,10 +896,10 @@ export function buildProviderRunHistoryDiagnosticRows(
   ].filter(Boolean).join(' - ');
   const liveFaultProbeRunCounts = [
     typeof history.liveFaultProbeEnabledRuns === 'number'
-      ? `${history.liveFaultProbeEnabledRuns} enabled`
+      ? `${history.liveFaultProbeEnabledRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbeEnabled')}`
       : '',
     typeof history.liveFaultProbePassedRuns === 'number'
-      ? `${history.liveFaultProbePassedRuns} passed`
+      ? `${history.liveFaultProbePassedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed')}`
       : '',
   ].filter(Boolean).join(', ');
   const liveFaultProbeValue = [

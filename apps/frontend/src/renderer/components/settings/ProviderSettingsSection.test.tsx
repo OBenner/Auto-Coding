@@ -75,6 +75,10 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryTrendWindow': 'run window',
     'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes':
       'Provider history live fault probes',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbeEnabled':
+      'enabled runs',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed':
+      'passed runs',
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeCapability': 'Runtime capability',
@@ -747,7 +751,8 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
-        value: 'Passed - 2 enabled, 2 passed - Gateway model limitations, Unsupported tools',
+        value:
+          'Passed - 2 enabled runs, 2 passed runs - Gateway model limitations, Unsupported tools',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',

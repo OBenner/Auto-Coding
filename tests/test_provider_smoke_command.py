@@ -763,6 +763,26 @@ def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):
         "unsupported_tools",
     ]
 
+    resumed_result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=False,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite failed before live probes",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "failed", "runs": []},
+                "provider_reliability": {"status": "partial"},
+            },
+        ),
+    )
+
+    resumed_history = resumed_result.runtime_diagnostics["provider_run_history"]
+    assert resumed_history["last_live_fault_probe_status"] is None
+    assert resumed_history["live_fault_probe_enabled_runs"] == 1
+    assert resumed_history["live_fault_probe_passed_runs"] == 1
+
 
 def test_provider_e2e_negative_fixtures_cover_all_direct_api_providers():
     from cli.provider_smoke_commands import (
@@ -870,6 +890,82 @@ def test_provider_e2e_live_fault_probes_classify_opt_in_errors(
                 "env_name": "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
             },
         },
+    }
+
+
+def test_provider_e2e_live_fault_probes_use_generic_env_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import _provider_e2e_live_fault_probe_payload
+
+    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
+    monkeypatch.delenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
+        raising=False,
+    )
+    monkeypatch.delenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+        raising=False,
+    )
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_UNSUPPORTED_TOOLS_ERROR",
+        "OpenAI returned 400 because this model does not support tools.",
+    )
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR",
+        "OpenAI returned 502 bad gateway from the upstream provider.",
+    )
+
+    probes = _provider_e2e_live_fault_probe_payload("openai")
+
+    assert probes["status"] == "passed"
+    assert probes["covered_cases"] == [
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
+    assert probes["probes"]["unsupported_tools"]["env_name"] == (
+        "AUTO_CODE_PROVIDER_E2E_LIVE_UNSUPPORTED_TOOLS_ERROR"
+    )
+    assert probes["probes"]["gateway_model_limitations"]["env_name"] == (
+        "AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR"
+    )
+
+
+def test_provider_e2e_live_fault_probes_report_configuration_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import _provider_e2e_live_fault_probe_payload
+
+    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
+        "OpenAI returned 400 because this model does not support tools.",
+    )
+    monkeypatch.delenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+        raising=False,
+    )
+    monkeypatch.delenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR",
+        raising=False,
+    )
+
+    probes = _provider_e2e_live_fault_probe_payload("openai")
+
+    assert probes["status"] == "configuration_blocked"
+    assert probes["enabled"] is True
+    assert probes["covered_cases"] == ["unsupported_tools"]
+    assert probes["missing_env"] == [
+        (
+            "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR "
+            "or AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR"
+        ),
+    ]
+    assert probes["probes"]["gateway_model_limitations"] == {
+        "status": "skipped",
+        "source": "provider_live_fault_fixture",
+        "reason": "missing_live_fault_fixture",
+        "fixture_provider": "openai",
     }
 
 

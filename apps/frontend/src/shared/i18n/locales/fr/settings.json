@@ -1282,6 +1282,8 @@
       "providerRunHistoryTrendPassStreak": "série de réussites",
       "providerRunHistoryTrendFailStreak": "série d'échecs",
       "providerRunHistoryLiveFaultProbes": "Historique des probes live de panne",
+      "providerRunHistoryLiveFaultProbeEnabled": "exécutions activées",
+      "providerRunHistoryLiveFaultProbePassed": "exécutions réussies",
       "providerRunHistoryPath": "Artefact d'historique fournisseur",
       "noneMissing": "Aucun",
       "diagnosticsNote": "Le smoke test fournisseur vérifie uniquement l'appel API ; le codage autonome dépend encore des outils runtime, MCP, subagents et du support du système de fichiers.",
