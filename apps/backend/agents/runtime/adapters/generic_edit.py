@@ -6225,6 +6225,32 @@ def generic_edit_transaction_batch_status_counts(
     return counts
 
 
+def generic_edit_transaction_batch_lifecycle_counts_by_id(
+    summary: dict[str, Any],
+) -> dict[str, int]:
+    """Return lifecycle event counts keyed by transaction batch id."""
+    batches = summary.get("transaction_batches")
+    if not isinstance(batches, list):
+        return {}
+    counts: dict[str, int] = {}
+    for batch in batches:
+        if not isinstance(batch, dict):
+            continue
+        batch_id = str(batch.get("id") or "")
+        if not batch_id:
+            continue
+        count = batch.get("lifecycle_event_count")
+        if isinstance(count, int) and not isinstance(count, bool):
+            counts[batch_id] = count
+            continue
+        lifecycle_events = batch.get("lifecycle_events")
+        if isinstance(lifecycle_events, list):
+            counts[batch_id] = len(
+                [event for event in lifecycle_events if isinstance(event, dict)]
+            )
+    return counts
+
+
 def generic_edit_raise_transaction_batch_mismatch(
     message: str,
     *,
@@ -6315,6 +6341,25 @@ def validate_generic_edit_summary_transaction_batches(
                     batch_id=batch_id,
                     expected_transaction_batch_status=expected_status,
                     actual_transaction_batch_status=actual_status,
+                )
+
+    actual_lifecycle_counts = generic_edit_transaction_batch_lifecycle_counts_by_id(
+        actual_summary
+    )
+    expected_lifecycle_counts = generic_edit_transaction_batch_lifecycle_counts_by_id(
+        expected_summary
+    )
+    if actual_lifecycle_counts:
+        for batch_id, actual_count in actual_lifecycle_counts.items():
+            expected_count = expected_lifecycle_counts.get(batch_id)
+            if expected_count is not None and actual_count != expected_count:
+                generic_edit_raise_transaction_batch_mismatch(
+                    "Generic edit transaction batch lifecycle count does not match checkpoint trace.",
+                    artifact=artifact,
+                    path=path,
+                    batch_id=batch_id,
+                    expected_transaction_batch_lifecycle_event_count=expected_count,
+                    actual_transaction_batch_lifecycle_event_count=actual_count,
                 )
 
 

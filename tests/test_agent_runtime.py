@@ -8600,6 +8600,66 @@ def test_generic_edit_resume_preflight_blocks_manifest_batch_state_mismatch(
     }
 
 
+def test_generic_edit_resume_preflight_blocks_manifest_batch_lifecycle_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    transaction = {
+        "id": "json_actions-1",
+        "loop": "json_actions",
+        "iteration": 1,
+        "status": "partial_failure",
+        "batch_ids": ["batch-1"],
+        "batch_id": "batch-1",
+        "batch_status": "open",
+        "batch_actions": ["begin_batch"],
+        "recovery_required": True,
+    }
+    trace = [{"iteration": 1, "actions": [], "transaction": transaction}]
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+            transaction_summary=transaction_summary,
+        )
+    )
+    trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["counts"]["transaction_batch_count"] = 1
+    manifest["transaction_batches"] = compact_generic_edit_manifest_transaction_batches(
+        transaction_summary
+    )
+    manifest["transaction_batches"][0]["lifecycle_event_count"] = 99
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "artifact_manifest",
+        "reason": "checkpoint_mismatch",
+        "path": str(manifest_path),
+        "batch_id": "batch-1",
+        "expected_transaction_batch_lifecycle_event_count": 1,
+        "actual_transaction_batch_lifecycle_event_count": 99,
+    }
+
+
 def test_generic_edit_resume_preflight_blocks_manifest_boundary_policy_drift(
     tmp_path: Path,
 ):
