@@ -213,6 +213,54 @@ def generic_edit_required_resume_artifact_error(
     )
 
 
+def generic_edit_canonical_resume_input_artifact_paths(
+    checkpoint_path: Path,
+) -> dict[str, Path]:
+    """Return canonical resume artifact paths for a recovery checkpoint."""
+    return {
+        "trace_artifact": generic_edit_trace_path_for_checkpoint(checkpoint_path),
+        "event_artifact": generic_edit_event_path_for_checkpoint(checkpoint_path),
+        "recovery_plan_artifact": generic_edit_recovery_plan_path_for_checkpoint(
+            checkpoint_path
+        ),
+        "mutation_snapshot_artifact": (
+            generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path)
+        ),
+        "transaction_group_artifact": (
+            generic_edit_transaction_group_path_for_checkpoint(checkpoint_path)
+        ),
+    }
+
+
+def validate_generic_edit_resume_input_artifact_paths(
+    *,
+    resume_inputs: dict[str, Any],
+    checkpoint_path: Path,
+    owner_artifact: str,
+    owner_path: Path,
+) -> None:
+    """Reject stale resume inputs that point away from canonical artifacts."""
+    for (
+        artifact_name,
+        expected_path,
+    ) in generic_edit_canonical_resume_input_artifact_paths(checkpoint_path).items():
+        actual_path = resume_inputs.get(artifact_name)
+        if not isinstance(actual_path, str) or not actual_path:
+            continue
+        if Path(actual_path).resolve() == expected_path.resolve():
+            continue
+        raise generic_edit_resume_artifact_error(
+            "Generic edit resume input artifact path does not match the "
+            f"canonical checkpoint artifact: {artifact_name}.",
+            artifact=owner_artifact,
+            reason="checkpoint_mismatch",
+            path=owner_path,
+            artifact_name=artifact_name,
+            expected_artifact_path=str(expected_path),
+            actual_artifact_path=str(Path(actual_path)),
+        )
+
+
 def generic_edit_resume_blocked_preflight(
     *,
     checkpoint_path: Path,
@@ -5416,6 +5464,12 @@ def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, An
         raise GenericEditRuntimeError(
             "Generic edit recovery checkpoint is missing resume input metadata."
         )
+    validate_generic_edit_resume_input_artifact_paths(
+        resume_inputs=resume_inputs,
+        checkpoint_path=checkpoint_path,
+        owner_artifact="recovery_checkpoint",
+        owner_path=checkpoint_path,
+    )
     for artifact_name in normalize_string_list(resume_policy.get("required_artifacts")):
         artifact_path = resume_inputs.get(artifact_name)
         if not isinstance(artifact_path, str) or not artifact_path:
@@ -5500,6 +5554,12 @@ def load_generic_edit_session_state(
         raise GenericEditRuntimeError(
             "Generic edit session state is missing resume input metadata."
         )
+    validate_generic_edit_resume_input_artifact_paths(
+        resume_inputs=resume_inputs,
+        checkpoint_path=expected_checkpoint_path,
+        owner_artifact="session_state",
+        owner_path=session_state_path,
+    )
     resume_policy = payload.get("resume_policy")
     if not isinstance(resume_policy, dict):
         raise GenericEditRuntimeError(

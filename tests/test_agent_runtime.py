@@ -8171,6 +8171,75 @@ def test_generic_edit_resume_preflight_reports_missing_trace_artifact(
     assert health["owner_artifact"] == "recovery_checkpoint"
 
 
+def test_generic_edit_resume_preflight_blocks_checkpoint_trace_input_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    _, checkpoint_path, _, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+        write_session_state=False,
+    )
+    stale_trace_path = tmp_path / "stale-generic-edit-trace.json"
+    stale_trace_path.write_text(json.dumps({"trace": []}), encoding="utf-8")
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["resume_inputs"]["trace_artifact"] = str(stale_trace_path)
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "recovery_checkpoint",
+        "reason": "checkpoint_mismatch",
+        "path": str(checkpoint_path),
+        "artifact_name": "trace_artifact",
+        "expected_artifact_path": str(trace_path),
+        "actual_artifact_path": str(stale_trace_path),
+    }
+
+
+def test_generic_edit_resume_preflight_blocks_session_trace_input_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    _, _, session_state_path, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+    )
+    stale_trace_path = tmp_path / "stale-session-trace.json"
+    stale_trace_path.write_text(json.dumps({"trace": []}), encoding="utf-8")
+    session_state = json.loads(session_state_path.read_text(encoding="utf-8"))
+    session_state["resume_inputs"]["trace_artifact"] = str(stale_trace_path)
+    session_state_path.write_text(json.dumps(session_state), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=session_state_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "session_state",
+        "reason": "checkpoint_mismatch",
+        "path": str(session_state_path),
+        "artifact_name": "trace_artifact",
+        "expected_artifact_path": str(trace_path),
+        "actual_artifact_path": str(stale_trace_path),
+    }
+
+
 def test_generic_edit_resume_preflight_blocks_session_state_checkpoint_mismatch(
     tmp_path: Path,
 ):
