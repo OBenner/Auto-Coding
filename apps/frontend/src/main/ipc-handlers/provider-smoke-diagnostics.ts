@@ -112,6 +112,8 @@ export function mapProviderTransactionBatchContract(
       payload.staged_workspace_guard_statuses
     ),
     stagedDriftPaths: arrayFromUnknown(payload.staged_drift_paths),
+    batchLifecycleActions: arrayFromUnknown(payload.batch_lifecycle_actions),
+    batchLifecycleStatuses: arrayFromUnknown(payload.batch_lifecycle_statuses),
   };
 
   return Object.values(contract).some((field) =>

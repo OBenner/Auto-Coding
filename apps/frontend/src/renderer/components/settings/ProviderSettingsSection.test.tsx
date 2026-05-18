@@ -42,6 +42,8 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.batchResolutionStrategies': 'Batch resolution strategies',
     'settings:aiProvider.connectionTest.batchStagedGuardStatuses': 'Staged guard statuses',
     'settings:aiProvider.connectionTest.batchStagedDriftPaths': 'Staged drift paths',
+    'settings:aiProvider.connectionTest.batchLifecycleActions': 'Batch lifecycle actions',
+    'settings:aiProvider.connectionTest.batchLifecycleStatuses': 'Batch lifecycle statuses',
     'settings:aiProvider.connectionTest.reliabilityStatus': 'Provider reliability',
     'settings:aiProvider.connectionTest.reliabilitySuite': 'Reliability suite',
     'settings:aiProvider.connectionTest.reliabilityCoverage': 'Reliability coverage',
@@ -66,9 +68,11 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.abortBatch': 'Abort batch',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded': 'Boundary guarded',
     'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation': 'Batch boundary violation',
+    'settings:aiProvider.runtimeDiagnosticValues.beginBatch': 'Begin batch',
     'settings:aiProvider.runtimeDiagnosticValues.blocked': 'Blocked',
     'settings:aiProvider.runtimeDiagnosticValues.callCustomMcp': 'Call custom MCP',
     'settings:aiProvider.runtimeDiagnosticValues.coder': 'Coder',
+    'settings:aiProvider.runtimeDiagnosticValues.commitBatch': 'Commit batch',
     'settings:aiProvider.runtimeDiagnosticValues.complete': 'Complete',
     'settings:aiProvider.runtimeDiagnosticValues.denyBeforeExecution': 'Deny before execution',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
@@ -106,6 +110,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.missingFullAutonomousRuntime':
       'Missing full autonomous runtime',
     'settings:aiProvider.runtimeDiagnosticValues.openai': 'OpenAI',
+    'settings:aiProvider.runtimeDiagnosticValues.openBatch': 'Open batch',
     'settings:aiProvider.runtimeDiagnosticValues.miniPipeline': 'Mini pipeline',
     'settings:aiProvider.runtimeDiagnosticValues.passed': 'Passed',
     'settings:aiProvider.runtimeDiagnosticValues.permissionAllowlistCheck':
@@ -645,6 +650,8 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
         boundaryResolutionStrategies: ['abort_batch', 'repair_mutation'],
         stagedWorkspaceGuardStatuses: ['drifted'],
         stagedDriftPaths: ['batched.txt'],
+        batchLifecycleActions: ['begin_batch', 'commit_batch'],
+        batchLifecycleStatuses: ['open', 'blocked'],
       })
     ).toEqual([
       {
@@ -686,6 +693,14 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.batchStagedDriftPaths',
         value: 'batched.txt',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchLifecycleActions',
+        value: 'Begin batch, Commit batch',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchLifecycleStatuses',
+        value: 'Open batch, Blocked',
       },
     ]);
   });

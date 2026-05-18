@@ -1302,6 +1302,24 @@ def test_generic_edit_execution_diagnostics_reports_staged_batch_drift(
                     {
                         "id": "batch-1",
                         "status": "aborted",
+                        "lifecycle_events": [
+                            {
+                                "action": "begin_batch",
+                                "transaction_id": "json_actions-1",
+                                "status": "open",
+                            },
+                            {
+                                "action": "commit_batch",
+                                "transaction_id": "json_actions-1",
+                                "status": "blocked",
+                                "reason": "staged_batch_drift",
+                            },
+                            {
+                                "action": "abort_batch",
+                                "transaction_id": "json_actions-2",
+                                "status": "aborted",
+                            },
+                        ],
                         "boundary_errors": [{"reason": "staged_batch_drift"}],
                     }
                 ],
@@ -1325,6 +1343,8 @@ def test_generic_edit_execution_diagnostics_reports_staged_batch_drift(
         "boundary_resolution_strategies": ["abort_batch", "repair_mutation"],
         "staged_workspace_guard_statuses": ["drifted"],
         "staged_drift_paths": ["batched.txt"],
+        "batch_lifecycle_actions": ["begin_batch", "commit_batch", "abort_batch"],
+        "batch_lifecycle_statuses": ["open", "blocked", "aborted"],
     }
 
 

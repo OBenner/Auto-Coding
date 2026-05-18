@@ -212,6 +212,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   analysis_only: 'settings:aiProvider.runtimeDiagnosticValues.analysisOnly',
   apply_patch: 'settings:aiProvider.runtimeDiagnosticValues.applyPatch',
   batch_boundary_violation: 'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation',
+  begin_batch: 'settings:aiProvider.runtimeDiagnosticValues.beginBatch',
   boundary_guarded: 'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded',
   blocked: 'settings:aiProvider.runtimeDiagnosticValues.blocked',
   call_custom_mcp: 'settings:aiProvider.runtimeDiagnosticValues.callCustomMcp',
@@ -220,6 +221,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   client_disabled: 'settings:aiProvider.runtimeDiagnosticValues.clientDisabled',
   coder: 'settings:aiProvider.runtimeDiagnosticValues.coder',
   codex_cli: 'settings:aiProvider.runtimeDiagnosticValues.codexCli',
+  commit_batch: 'settings:aiProvider.runtimeDiagnosticValues.commitBatch',
   configuration_blocked: 'settings:aiProvider.runtimeDiagnosticValues.configurationBlocked',
   configuration_error: 'settings:aiProvider.runtimeDiagnosticValues.configurationError',
   configure_external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.configureExternalMcpClient',
@@ -295,6 +297,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   not_recorded: 'settings:aiProvider.runtimeDiagnosticValues.notRecorded',
   observed: 'settings:aiProvider.runtimeDiagnosticValues.observed',
   ok: 'settings:aiProvider.runtimeDiagnosticValues.ok',
+  open: 'settings:aiProvider.runtimeDiagnosticValues.openBatch',
   open_batch: 'settings:aiProvider.runtimeDiagnosticValues.openBatch',
   openai: 'settings:aiProvider.runtimeDiagnosticValues.openai',
   opencode: 'settings:aiProvider.runtimeDiagnosticValues.opencode',
@@ -1131,6 +1134,20 @@ export function buildProviderTransactionBatchDiagnosticRows(
       value: formatRuntimeDiagnosticList(
         translate,
         transactionBatchContract.stagedDriftPaths
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchLifecycleActions',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.batchLifecycleActions
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchLifecycleStatuses',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.batchLifecycleStatuses
       ),
     },
   ].filter((row) => row.value);

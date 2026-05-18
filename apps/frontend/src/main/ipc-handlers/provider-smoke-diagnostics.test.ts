@@ -86,6 +86,8 @@ describe('mapProviderTransactionBatchContract', () => {
         boundary_resolution_strategies: ['abort_batch', 'repair_mutation', 7],
         staged_workspace_guard_statuses: ['drifted', null],
         staged_drift_paths: ['batched.txt', 9],
+        batch_lifecycle_actions: ['begin_batch', 'commit_batch', null],
+        batch_lifecycle_statuses: ['open', 'blocked', 7],
         ignored_private_path: 'workspace-private/checkpoint.json',
       })
     ).toEqual({
@@ -100,6 +102,8 @@ describe('mapProviderTransactionBatchContract', () => {
       boundaryResolutionStrategies: ['abort_batch', 'repair_mutation'],
       stagedWorkspaceGuardStatuses: ['drifted'],
       stagedDriftPaths: ['batched.txt'],
+      batchLifecycleActions: ['begin_batch', 'commit_batch'],
+      batchLifecycleStatuses: ['open', 'blocked'],
     });
   });
 

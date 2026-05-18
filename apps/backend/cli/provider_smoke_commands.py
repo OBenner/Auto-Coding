@@ -603,10 +603,15 @@ def _generic_edit_transaction_batch_contract(
     boundary_preferred_strategy: str | None = None
     staged_workspace_guard_statuses: list[str] = []
     staged_drift_paths: list[str] = []
+    batch_lifecycle_actions: list[str] = []
+    batch_lifecycle_statuses: list[str] = []
     if isinstance(transaction_batches, list):
         for batch in transaction_batches:
             if not isinstance(batch, dict):
                 continue
+            actions, statuses = _generic_edit_batch_lifecycle_values(batch)
+            batch_lifecycle_actions.extend(actions)
+            batch_lifecycle_statuses.extend(statuses)
             batch_error_reasons = _string_list_payload(
                 batch.get("boundary_error_reasons")
             )
@@ -664,6 +669,10 @@ def _generic_edit_transaction_batch_contract(
         boundary_resolution_strategies.extend(
             _string_list_payload(event.get("resolution_strategies"))
         )
+    for batch in _generic_edit_manifest_transaction_batches(artifact_manifest):
+        actions, statuses = _generic_edit_batch_lifecycle_values(batch)
+        batch_lifecycle_actions.extend(actions)
+        batch_lifecycle_statuses.extend(statuses)
     if boundary_error_reasons:
         boundary_error_count = max(
             boundary_error_count,
@@ -715,7 +724,48 @@ def _generic_edit_transaction_batch_contract(
         )
     if staged_drift_paths:
         contract["staged_drift_paths"] = list(dict.fromkeys(staged_drift_paths))
+    if batch_lifecycle_actions:
+        contract["batch_lifecycle_actions"] = list(
+            dict.fromkeys(batch_lifecycle_actions)
+        )
+    if batch_lifecycle_statuses:
+        contract["batch_lifecycle_statuses"] = list(
+            dict.fromkeys(batch_lifecycle_statuses)
+        )
     return contract
+
+
+def _generic_edit_batch_lifecycle_values(
+    batch: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    """Return safe lifecycle action/status lists from a batch summary."""
+    events = batch.get("lifecycle_events")
+    if not isinstance(events, list):
+        return [], []
+    actions: list[str] = []
+    statuses: list[str] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        action = _string_payload_value(event.get("action"))
+        status = _string_payload_value(event.get("status"))
+        if action:
+            actions.append(action)
+        if status:
+            statuses.append(status)
+    return actions, statuses
+
+
+def _generic_edit_manifest_transaction_batches(
+    artifact_manifest: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return manifest transaction batch summaries when available."""
+    if not isinstance(artifact_manifest, dict):
+        return []
+    transaction_batches = artifact_manifest.get("transaction_batches")
+    if not isinstance(transaction_batches, list):
+        return []
+    return [batch for batch in transaction_batches if isinstance(batch, dict)]
 
 
 def _generic_edit_batch_boundary_manifest_events(
@@ -2908,6 +2958,14 @@ def _print_transaction_batch_contract(contract: Any) -> None:
     _print_string_list_line(
         "Batch resolution strategies",
         contract.get("boundary_resolution_strategies"),
+    )
+    _print_string_list_line(
+        "Batch lifecycle actions",
+        contract.get("batch_lifecycle_actions"),
+    )
+    _print_string_list_line(
+        "Batch lifecycle statuses",
+        contract.get("batch_lifecycle_statuses"),
     )
     _print_string_list_line(
         "Open transaction batches",

@@ -566,6 +566,8 @@ export interface ProviderValidatedTransactionBatchContract {
   boundaryResolutionStrategies?: string[];
   stagedWorkspaceGuardStatuses?: string[];
   stagedDriftPaths?: string[];
+  batchLifecycleActions?: string[];
+  batchLifecycleStatuses?: string[];
 }
 
 export interface ProviderMiniPipelineDiagnostics {
