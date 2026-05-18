@@ -117,6 +117,7 @@ export function mapProviderTransactionBatchContract(
     committedMutationSnapshotIds: arrayFromUnknown(
       payload.committed_mutation_snapshot_ids
     ),
+    commitOperationIds: arrayFromUnknown(payload.commit_operation_ids),
   };
 
   return Object.values(contract).some((field) =>

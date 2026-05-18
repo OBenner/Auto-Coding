@@ -606,6 +606,7 @@ def _generic_edit_transaction_batch_contract(
     batch_lifecycle_actions: list[str] = []
     batch_lifecycle_statuses: list[str] = []
     committed_mutation_snapshot_ids: list[str] = []
+    commit_operation_ids: list[str] = []
     if isinstance(transaction_batches, list):
         for batch in transaction_batches:
             if not isinstance(batch, dict):
@@ -613,6 +614,9 @@ def _generic_edit_transaction_batch_contract(
             actions, statuses = _generic_edit_batch_lifecycle_values(batch)
             batch_lifecycle_actions.extend(actions)
             batch_lifecycle_statuses.extend(statuses)
+            commit_operation_ids.extend(
+                _string_list_payload(batch.get("commit_operation_ids"))
+            )
             batch_error_reasons = _string_list_payload(
                 batch.get("boundary_error_reasons")
             )
@@ -674,9 +678,18 @@ def _generic_edit_transaction_batch_contract(
         actions, statuses = _generic_edit_batch_lifecycle_values(batch)
         batch_lifecycle_actions.extend(actions)
         batch_lifecycle_statuses.extend(statuses)
+        commit_operation_ids.extend(
+            _string_list_payload(batch.get("commit_operation_ids"))
+        )
     for event in _generic_edit_manifest_committed_batch_events(artifact_manifest):
         committed_mutation_snapshot_ids.extend(
             _string_list_payload(event.get("committed_mutation_snapshot_ids"))
+        )
+        commit_operation_id = _string_payload_value(event.get("commit_operation_id"))
+        if commit_operation_id:
+            commit_operation_ids.append(commit_operation_id)
+        commit_operation_ids.extend(
+            _string_list_payload(event.get("commit_operation_ids"))
         )
     if boundary_error_reasons:
         boundary_error_count = max(
@@ -741,6 +754,8 @@ def _generic_edit_transaction_batch_contract(
         contract["committed_mutation_snapshot_ids"] = list(
             dict.fromkeys(committed_mutation_snapshot_ids)
         )
+    if commit_operation_ids:
+        contract["commit_operation_ids"] = list(dict.fromkeys(commit_operation_ids))
     return contract
 
 
@@ -2997,6 +3012,10 @@ def _print_transaction_batch_contract(contract: Any) -> None:
     _print_string_list_line(
         "Committed mutation snapshots",
         contract.get("committed_mutation_snapshot_ids"),
+    )
+    _print_string_list_line(
+        "Batch commit operations",
+        contract.get("commit_operation_ids"),
     )
     _print_string_list_line(
         "Open transaction batches",

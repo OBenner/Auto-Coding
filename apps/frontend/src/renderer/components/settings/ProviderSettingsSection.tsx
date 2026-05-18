@@ -1157,6 +1157,13 @@ export function buildProviderTransactionBatchDiagnosticRows(
         transactionBatchContract.committedMutationSnapshotIds
       ),
     },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchCommitOperations',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.commitOperationIds
+      ),
+    },
   ].filter((row) => row.value);
 }
 

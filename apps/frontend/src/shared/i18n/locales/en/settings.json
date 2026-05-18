@@ -1286,6 +1286,7 @@
       "batchLifecycleActions": "Batch lifecycle actions",
       "batchLifecycleStatuses": "Batch lifecycle statuses",
       "batchCommittedSnapshots": "Committed snapshots",
+      "batchCommitOperations": "Commit operations",
       "reliabilityStatus": "Provider reliability",
       "reliabilitySuite": "Reliability suite",
       "reliabilityCoverage": "Reliability coverage",

@@ -1234,6 +1234,7 @@
       "batchLifecycleActions": "Actions du cycle de vie du lot",
       "batchLifecycleStatuses": "États du cycle de vie du lot",
       "batchCommittedSnapshots": "Snapshots validés",
+      "batchCommitOperations": "Opérations de validation",
       "reliabilityStatus": "Fiabilité fournisseur",
       "reliabilitySuite": "Suite de fiabilité",
       "reliabilityCoverage": "Couverture fiabilité",

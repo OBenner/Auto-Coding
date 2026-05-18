@@ -45,6 +45,7 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.batchLifecycleActions': 'Batch lifecycle actions',
     'settings:aiProvider.connectionTest.batchLifecycleStatuses': 'Batch lifecycle statuses',
     'settings:aiProvider.connectionTest.batchCommittedSnapshots': 'Committed snapshots',
+    'settings:aiProvider.connectionTest.batchCommitOperations': 'Commit operations',
     'settings:aiProvider.connectionTest.reliabilityStatus': 'Provider reliability',
     'settings:aiProvider.connectionTest.reliabilitySuite': 'Reliability suite',
     'settings:aiProvider.connectionTest.reliabilityCoverage': 'Reliability coverage',
@@ -654,6 +655,7 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
         batchLifecycleActions: ['begin_batch', 'commit_batch'],
         batchLifecycleStatuses: ['open', 'blocked'],
         committedMutationSnapshotIds: ['mutation-1'],
+        commitOperationIds: ['batch-1:commit'],
       })
     ).toEqual([
       {
@@ -707,6 +709,10 @@ describe('buildProviderTransactionBatchDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.batchCommittedSnapshots',
         value: 'mutation-1',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.batchCommitOperations',
+        value: 'batch-1:commit',
       },
     ]);
   });

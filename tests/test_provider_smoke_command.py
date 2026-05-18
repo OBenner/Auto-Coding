@@ -1367,6 +1367,7 @@ def test_generic_edit_execution_diagnostics_reports_committed_batch_snapshots(
                         "timeline_stage": "batch_committed",
                         "batch_id": "batch-1",
                         "batch_status": "committed",
+                        "commit_operation_id": "batch-1:commit",
                         "committed_mutation_snapshot_ids": ["mutation-1", 2],
                     }
                 ],
@@ -1395,6 +1396,7 @@ def test_generic_edit_execution_diagnostics_reports_committed_batch_snapshots(
                     {
                         "id": "batch-1",
                         "status": "committed",
+                        "commit_operation_ids": ["batch-1:commit", 9],
                         "lifecycle_events": [
                             {
                                 "action": "begin_batch",
@@ -1425,6 +1427,7 @@ def test_generic_edit_execution_diagnostics_reports_committed_batch_snapshots(
         "batch_lifecycle_actions": ["begin_batch", "commit_batch"],
         "batch_lifecycle_statuses": ["open", "committed"],
         "committed_mutation_snapshot_ids": ["mutation-1"],
+        "commit_operation_ids": ["batch-1:commit"],
     }
 
 
