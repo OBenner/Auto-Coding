@@ -9037,7 +9037,10 @@ def test_generic_edit_resume_preflight_blocks_manifest_batch_lifecycle_mismatch(
         transaction_summary
     )
     manifest["transaction_batches"][0]["lifecycle_event_count"] = 99
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
 
     preflight = inspect_generic_edit_resume_artifacts(
         checkpoint_path=checkpoint_path,
