@@ -4467,6 +4467,34 @@ def compact_generic_edit_batch_boundary_errors(
     return compact_errors
 
 
+def compact_generic_edit_batch_lifecycle_events(
+    value: Any,
+) -> list[dict[str, Any]]:
+    """Return bounded batch lifecycle events for UI manifests."""
+    if not isinstance(value, list):
+        return []
+    compact_events: list[dict[str, Any]] = []
+    for event in value[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]:
+        if not isinstance(event, dict):
+            continue
+        compact: dict[str, Any] = {
+            "action": str(event.get("action") or "")[:120],
+            "transaction_id": str(event.get("transaction_id") or "")[:120],
+            "status": str(event.get("status") or "")[:120],
+        }
+        reason = str(event.get("reason") or "")
+        if reason:
+            compact["reason"] = reason[:120]
+        blocked_group_ids = normalize_string_list(
+            event.get("blocked_transaction_group_ids")
+        )
+        if blocked_group_ids:
+            compact["blocked_transaction_group_ids"] = blocked_group_ids
+        if compact["action"]:
+            compact_events.append(compact)
+    return compact_events
+
+
 def compact_generic_edit_manifest_transaction_batches(
     transaction_summary: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -4501,6 +4529,10 @@ def compact_generic_edit_manifest_transaction_batches(
             ),
             "staged_mutation_count": int(batch.get("staged_mutation_count") or 0),
             "staged_path_count": int(batch.get("staged_path_count") or 0),
+            "lifecycle_event_count": int(batch.get("lifecycle_event_count") or 0),
+            "lifecycle_events": compact_generic_edit_batch_lifecycle_events(
+                batch.get("lifecycle_events")
+            ),
             "boundary_error_count": int(batch.get("boundary_error_count") or 0),
             "boundary_errors": compact_generic_edit_batch_boundary_errors(
                 batch.get("boundary_errors")
@@ -8314,6 +8346,7 @@ def summarize_generic_edit_transaction_batches(
                     "staged_mutated_paths": [],
                     "staged_restored_paths": [],
                     "staged_deleted_paths": [],
+                    "lifecycle_events": [],
                     "boundary_errors": [],
                     "boundary_error_reasons": [],
                 },
@@ -8338,6 +8371,22 @@ def summarize_generic_edit_transaction_batches(
                 for value in normalize_string_list(transaction.get(source_field)):
                     if value not in batch[staged_field]:
                         batch[staged_field].append(value)
+            blocked_batch_actions = generic_edit_blocked_batch_actions(
+                transaction,
+                batch_id=batch_id,
+            )
+            for action in generic_edit_transaction_batch_actions(transaction):
+                if action in blocked_batch_actions:
+                    continue
+                append_generic_edit_batch_lifecycle_event(
+                    batch,
+                    action=action,
+                    transaction_id=transaction_id,
+                    status=generic_edit_batch_action_lifecycle_status(
+                        action,
+                        transaction,
+                    ),
+                )
             for error in transaction.get("batch_boundary_errors") or []:
                 if not isinstance(error, dict):
                     continue
@@ -8351,6 +8400,16 @@ def summarize_generic_edit_transaction_batches(
                 }
                 if compact_error not in batch["boundary_errors"]:
                     batch["boundary_errors"].append(compact_error)
+                append_generic_edit_batch_lifecycle_event(
+                    batch,
+                    action=compact_error["tool"],
+                    transaction_id=transaction_id,
+                    status="blocked",
+                    reason=compact_error["reason"],
+                    blocked_transaction_group_ids=compact_error[
+                        "blocked_transaction_group_ids"
+                    ],
+                )
                 reason = compact_error["reason"]
                 if reason and reason not in batch["boundary_error_reasons"]:
                     batch["boundary_error_reasons"].append(reason)
@@ -8376,6 +8435,7 @@ def summarize_generic_edit_transaction_batches(
         }
         batch["staged_path_count"] = len(staged_paths)
         batch["boundary_error_count"] = len(batch["boundary_errors"])
+        batch["lifecycle_event_count"] = len(batch["lifecycle_events"])
     open_batch_ids = [
         str(batch["id"])
         for batch in ordered_batches
@@ -8389,6 +8449,78 @@ def summarize_generic_edit_transaction_batches(
         "open_transaction_batch_count": len(open_batch_ids),
         "open_transaction_batch_ids": open_batch_ids,
     }
+
+
+def generic_edit_batch_action_lifecycle_status(
+    action: str,
+    transaction: dict[str, Any],
+) -> str:
+    """Return the lifecycle status represented by one batch control action."""
+    if action == BEGIN_BATCH_TOOL:
+        return "open"
+    if action == COMMIT_BATCH_TOOL:
+        return "committed"
+    if action == ABORT_BATCH_TOOL:
+        return "aborted"
+    return str(transaction.get("batch_status") or "observed")
+
+
+def generic_edit_transaction_batch_actions(transaction: dict[str, Any]) -> list[str]:
+    """Return batch lifecycle actions from new or legacy transaction summaries."""
+    explicit_actions = normalize_string_list(transaction.get("batch_actions"))
+    if explicit_actions:
+        return explicit_actions
+    return [
+        tool
+        for tool in normalize_string_list(transaction.get("tool_sequence"))
+        if tool in BATCH_CONTROL_TOOLS
+    ]
+
+
+def generic_edit_blocked_batch_actions(
+    transaction: dict[str, Any],
+    *,
+    batch_id: str,
+) -> set[str]:
+    """Return batch actions that should be represented as blocked events."""
+    blocked: set[str] = set()
+    for error in transaction.get("batch_boundary_errors") or []:
+        if not isinstance(error, dict):
+            continue
+        error_batch_id = str(error.get("batch_id") or "")
+        if error_batch_id and error_batch_id != batch_id:
+            continue
+        tool = str(error.get("tool") or "")
+        if tool:
+            blocked.add(tool)
+    return blocked
+
+
+def append_generic_edit_batch_lifecycle_event(
+    batch: dict[str, Any],
+    *,
+    action: str,
+    transaction_id: str,
+    status: str,
+    reason: str = "",
+    blocked_transaction_group_ids: list[str] | None = None,
+) -> None:
+    """Append a stable batch lifecycle event without duplicates."""
+    if not action:
+        return
+    event: dict[str, Any] = {
+        "action": action,
+        "transaction_id": transaction_id,
+        "status": status,
+    }
+    if reason:
+        event["reason"] = reason
+    blocker_ids = normalize_string_list(blocked_transaction_group_ids)
+    if blocker_ids:
+        event["blocked_transaction_group_ids"] = blocker_ids
+    lifecycle_events = batch.setdefault("lifecycle_events", [])
+    if event not in lifecycle_events:
+        lifecycle_events.append(event)
 
 
 def summarize_generic_edit_transaction_groups(

@@ -5925,6 +5925,24 @@ async def test_generic_edit_runtime_blocks_batch_commit_when_staged_file_drifted
     ]
     batch = result_artifact["transaction_batches"][0]
     assert batch["status"] == "aborted"
+    assert batch["lifecycle_events"] == [
+        {
+            "action": "begin_batch",
+            "transaction_id": "json_actions-1",
+            "status": "open",
+        },
+        {
+            "action": "commit_batch",
+            "transaction_id": "json_actions-1",
+            "status": "blocked",
+            "reason": "staged_batch_drift",
+        },
+        {
+            "action": "abort_batch",
+            "transaction_id": "json_actions-2",
+            "status": "aborted",
+        },
+    ]
     assert batch["boundary_error_reasons"] == ["staged_batch_drift"]
     assert batch["boundary_errors"][0]["reason"] == "staged_batch_drift"
     assert manifest["transaction_batches"][0]["boundary_error_reasons"] == [
@@ -10105,6 +10123,19 @@ def test_generic_edit_transaction_batches_expose_staged_mutation_metadata():
     batch = summary["transaction_batches"][0]
     assert batch["id"] == "batch-1"
     assert batch["status"] == "committed"
+    assert batch["lifecycle_events"] == [
+        {
+            "action": "begin_batch",
+            "transaction_id": "json_actions-1",
+            "status": "open",
+        },
+        {
+            "action": "commit_batch",
+            "transaction_id": "json_actions-2",
+            "status": "committed",
+        },
+    ]
+    assert batch["lifecycle_event_count"] == 2
     assert batch["staged_mutation_ids"] == ["mutation-1", "mutation-2"]
     assert batch["staged_mutated_paths"] == ["created.txt", "updated.txt"]
     assert batch["staged_restored_paths"] == ["restored.txt"]
@@ -10113,6 +10144,19 @@ def test_generic_edit_transaction_batches_expose_staged_mutation_metadata():
     assert batch["staged_path_count"] == 4
 
     compact_batches = compact_generic_edit_manifest_transaction_batches(summary)
+    assert compact_batches[0]["lifecycle_events"] == [
+        {
+            "action": "begin_batch",
+            "transaction_id": "json_actions-1",
+            "status": "open",
+        },
+        {
+            "action": "commit_batch",
+            "transaction_id": "json_actions-2",
+            "status": "committed",
+        },
+    ]
+    assert compact_batches[0]["lifecycle_event_count"] == 2
     assert compact_batches[0]["staged_mutation_count"] == 2
     assert compact_batches[0]["staged_path_count"] == 4
     assert compact_batches[0]["staged_mutated_paths"] == [
