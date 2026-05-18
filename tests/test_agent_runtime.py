@@ -5355,16 +5355,30 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
     assert batch["status"] == "committed"
     assert batch["transaction_ids"] == ["json_actions-1"]
     assert batch["mutation_snapshot_ids"] == ["mutation-1"]
+    assert batch["committed_mutation_snapshot_ids"] == ["mutation-1"]
+    assert batch["commit_operation_ids"] == ["batch-1:commit"]
     assert result_artifact["transactions"][0]["batch_id"] == "batch-1"
     assert result_artifact["transactions"][0]["batch_status"] == "committed"
     assert result_artifact["transactions"][0]["batch_actions"] == [
         "begin_batch",
         "commit_batch",
     ]
+    assert result_artifact["transactions"][0]["committed_mutation_snapshot_ids"] == [
+        "mutation-1"
+    ]
+    assert result_artifact["transactions"][0]["commit_operation_ids"] == [
+        "batch-1:commit"
+    ]
     assert manifest["counts"]["transaction_batch_count"] == 1
     assert manifest["transaction_batches"][0]["id"] == "batch-1"
     assert manifest["transaction_batches"][0]["status"] == "committed"
     assert manifest["transaction_batches"][0]["transaction_ids"] == ["json_actions-1"]
+    assert manifest["transaction_batches"][0]["committed_mutation_snapshot_ids"] == [
+        "mutation-1"
+    ]
+    assert manifest["transaction_batches"][0]["commit_operation_ids"] == [
+        "batch-1:commit"
+    ]
     assert mutation_snapshots["snapshots"][0]["staged_status"] == "committed"
     assert mutation_snapshots["snapshots"][0]["commit_operation_id"] == (
         "batch-1:commit"
@@ -5374,12 +5388,15 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
     )
     assert transaction_event["batch_id"] == "batch-1"
     assert transaction_event["batch_status"] == "committed"
+    assert transaction_event["committed_mutation_snapshot_ids"] == ["mutation-1"]
+    assert transaction_event["commit_operation_ids"] == ["batch-1:commit"]
     commit_event = next(
         event
         for event in events
         if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
     )
     assert commit_event["committed_mutation_snapshot_ids"] == ["mutation-1"]
+    assert commit_event["commit_operation_id"] == "batch-1:commit"
     manifest_commit_event = next(
         event
         for event in manifest["recovery_timeline"]

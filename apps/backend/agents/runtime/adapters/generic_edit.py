@@ -435,6 +435,8 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "staged_workspace_guard_drift_count",
     "drift_paths",
     "committed_mutation_snapshot_ids",
+    "commit_operation_id",
+    "commit_operation_ids",
     "blocked_tool",
     "blocked_transaction_group_ids",
     "required_next_action_kinds",
@@ -1799,10 +1801,11 @@ class GenericEditRuntimeSession:
                         ],
                     },
                 )
+            commit_operation_id = f"{batch_id}:commit"
             committed_snapshot_ids = mark_generic_edit_mutation_snapshots_committed(
                 mutation_snapshots=self._mutation_snapshots,
                 batch_id=batch_id,
-                commit_operation_id=f"{batch_id}:commit",
+                commit_operation_id=commit_operation_id,
             )
             self._active_batch_id = None
             return ToolActionResult(
@@ -1813,6 +1816,7 @@ class GenericEditRuntimeSession:
                     "batch_id": batch_id,
                     "batch_action": COMMIT_BATCH_TOOL,
                     "batch_status": "committed",
+                    "commit_operation_id": commit_operation_id,
                     "committed_mutation_snapshot_ids": committed_snapshot_ids,
                 },
             )
@@ -2649,6 +2653,21 @@ def build_generic_edit_transaction(
         for snapshot_id in result.data.get("mutation_snapshot_ids") or []
     )
     mutation_snapshot_ids = list(dict.fromkeys(mutation_snapshot_ids))
+    committed_mutation_snapshot_ids = list(
+        dict.fromkeys(
+            str(snapshot_id)
+            for result in results
+            if result.ok
+            for snapshot_id in result.data.get("committed_mutation_snapshot_ids") or []
+        )
+    )
+    commit_operation_ids = list(
+        dict.fromkeys(
+            str(result.data.get("commit_operation_id")).strip()
+            for result in results
+            if result.ok and str(result.data.get("commit_operation_id") or "").strip()
+        )
+    )
     rollback_transaction_ids = [
         str(action.get("transaction_id")).strip()
         for action in actions
@@ -2759,6 +2778,10 @@ def build_generic_edit_transaction(
         transaction["batch_actions"] = batch_actions
     if batch_status:
         transaction["batch_status"] = batch_status
+    if committed_mutation_snapshot_ids:
+        transaction["committed_mutation_snapshot_ids"] = committed_mutation_snapshot_ids
+    if commit_operation_ids:
+        transaction["commit_operation_ids"] = commit_operation_ids
     if batch_boundary_errors:
         transaction["batch_boundary_errors"] = batch_boundary_errors
         transaction["batch_boundary_error_count"] = len(batch_boundary_errors)
@@ -4592,6 +4615,12 @@ def compact_generic_edit_manifest_transaction_batches(
             "transaction_ids": normalize_string_list(batch.get("transaction_ids")),
             "mutation_snapshot_ids": normalize_string_list(
                 batch.get("mutation_snapshot_ids")
+            ),
+            "committed_mutation_snapshot_ids": normalize_string_list(
+                batch.get("committed_mutation_snapshot_ids")
+            ),
+            "commit_operation_ids": normalize_string_list(
+                batch.get("commit_operation_ids")
             ),
             "staged_mutation_ids": normalize_string_list(
                 batch.get("staged_mutation_ids")
@@ -8192,6 +8221,8 @@ def build_generic_edit_action_event_extra_fields(
     )
     if committed_snapshot_ids:
         fields["committed_mutation_snapshot_ids"] = committed_snapshot_ids
+    if data.get("commit_operation_id"):
+        fields["commit_operation_id"] = str(data["commit_operation_id"])
     if data.get("rollback_available") is not None:
         fields["rollback_available"] = bool(data["rollback_available"])
     if data.get("exit_code") is not None:
@@ -8259,6 +8290,16 @@ def build_generic_edit_transaction_event(
         "mutated_paths": list(transaction.get("mutated_paths") or []),
         "mutation_snapshot_ids": list(transaction.get("mutation_snapshot_ids") or []),
     }
+    committed_snapshot_ids = normalize_string_list(
+        transaction.get("committed_mutation_snapshot_ids")
+    )
+    if committed_snapshot_ids:
+        event["committed_mutation_snapshot_ids"] = committed_snapshot_ids
+    commit_operation_ids = normalize_string_list(
+        transaction.get("commit_operation_ids")
+    )
+    if commit_operation_ids:
+        event["commit_operation_ids"] = commit_operation_ids
     if transaction.get("batch_id"):
         event["batch_id"] = str(transaction["batch_id"])
     if transaction.get("batch_status"):
@@ -8486,6 +8527,8 @@ def summarize_generic_edit_transaction_batches(
                     "status": "open",
                     "transaction_ids": [],
                     "mutation_snapshot_ids": [],
+                    "committed_mutation_snapshot_ids": [],
+                    "commit_operation_ids": [],
                     "restored_paths": [],
                     "deleted_paths": [],
                     "batch_actions": [],
@@ -8502,6 +8545,8 @@ def summarize_generic_edit_transaction_batches(
                 batch["transaction_ids"].append(transaction_id)
             for field_name in (
                 "mutation_snapshot_ids",
+                "committed_mutation_snapshot_ids",
+                "commit_operation_ids",
                 "restored_paths",
                 "deleted_paths",
                 "batch_actions",
