@@ -124,6 +124,18 @@ describe('readGenericEditArtifactManifest', () => {
           tool_schema_count: 6,
         },
       ],
+      transaction_batches: [
+        {
+          ...manifestPayload.transaction_batches[0],
+          staged_mutation_ids: ['mutation-1'],
+          staged_mutated_paths: ['created.txt', 'updated.txt'],
+          staged_restored_paths: ['restored.txt'],
+          staged_deleted_paths: ['deleted.txt'],
+          staged_mutation_count: 1,
+          staged_path_count: 4,
+          lifecycle_event_count: 2,
+        },
+      ],
     });
 
     const manifest = await readGenericEditArtifactManifest(project, task);
@@ -150,9 +162,18 @@ describe('readGenericEditArtifactManifest', () => {
         status: 'committed',
         transaction_ids: ['json_actions-1'],
         mutation_snapshot_ids: ['mutation-1'],
+        committed_mutation_snapshot_ids: [],
+        commit_operation_ids: [],
         transaction_group_ids: ['transaction-group-1'],
         unresolved_transaction_group_ids: [],
         recovery_outcome_count: 1,
+        staged_mutation_ids: ['mutation-1'],
+        staged_mutated_paths: ['created.txt', 'updated.txt'],
+        staged_restored_paths: ['restored.txt'],
+        staged_deleted_paths: ['deleted.txt'],
+        staged_mutation_count: 1,
+        staged_path_count: 4,
+        lifecycle_event_count: 2,
       },
     ]);
     expect(manifest?.artifacts).toHaveLength(2);

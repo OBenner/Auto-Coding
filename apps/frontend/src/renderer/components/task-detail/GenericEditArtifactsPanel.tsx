@@ -37,6 +37,8 @@ type ArtifactPreview = Readonly<{
   loading: boolean;
 }>;
 
+type TranslationFn = (key: string, values?: Record<string, unknown>) => string;
+
 function statusVariant(status: string): 'success' | 'destructive' | 'warning' | 'info' | 'muted' {
   const normalizedStatus = status.toLowerCase();
   if (['success', 'ok', 'completed', 'done'].includes(normalizedStatus)) {
@@ -113,8 +115,31 @@ function recoveryTimelineMeta(event: GenericEditRecentEvent): string {
     .join(' / ');
 }
 
-function recentEventMeta(event: GenericEditRecentEvent): string {
-  return [event.transaction_id, event.path, event.message]
+function uniqueStrings(values: readonly (string | undefined)[]): string[] {
+  const result: string[] = [];
+  for (const value of values) {
+    if (!value || result.includes(value)) {
+      continue;
+    }
+    result.push(value);
+  }
+  return result;
+}
+
+function recentEventMeta(event: GenericEditRecentEvent, t: TranslationFn): string {
+  const stagedBatch =
+    typeof event.staged_workspace_batch_id === 'string' && event.staged_workspace_batch_id.length > 0
+      ? t('tasks:overview.genericEditStagedBatch', { batchId: event.staged_workspace_batch_id })
+      : null;
+  const stagedWorkspaceMaterialized =
+    event.staged_workspace_materialized === true
+      ? t('tasks:overview.genericEditStagedWorkspaceMaterialized')
+      : null;
+  const stagedWorkspaceRestored =
+    event.staged_workspace_restored === true
+      ? t('tasks:overview.genericEditStagedWorkspaceRestored')
+      : null;
+  return [event.transaction_id, event.path, event.message, stagedBatch, stagedWorkspaceMaterialized, stagedWorkspaceRestored]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .join(' / ');
 }
@@ -476,6 +501,11 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="space-y-1.5">
               {transactionBatches.slice(0, 4).map((batch) => {
                 const meta = transactionBatchMeta(batch);
+                const stagedPaths = uniqueStrings([
+                  ...(batch.staged_mutated_paths ?? []),
+                  ...(batch.staged_restored_paths ?? []),
+                  ...(batch.staged_deleted_paths ?? []),
+                ]);
                 return (
                   <div
                     key={batch.id}
@@ -518,6 +548,39 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                           count: batch.recovery_outcome_count,
                         })}
                       </Badge>
+                    )}
+                    {countValue(batch.staged_mutation_count) > 0 && (
+                      <Badge variant="info" className="text-xs">
+                        {t('tasks:overview.genericEditBatchStagedMutations', {
+                          count: countValue(batch.staged_mutation_count),
+                        })}
+                      </Badge>
+                    )}
+                    {countValue(batch.staged_path_count) > 0 && (
+                      <Badge variant="muted" className="text-xs">
+                        {t('tasks:overview.genericEditBatchStagedPaths', {
+                          count: countValue(batch.staged_path_count),
+                        })}
+                      </Badge>
+                    )}
+                    {countValue(batch.lifecycle_event_count) > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        {t('tasks:overview.genericEditBatchLifecycleEvents', {
+                          count: countValue(batch.lifecycle_event_count),
+                        })}
+                      </Badge>
+                    )}
+                    {stagedPaths.length > 0 && (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        <span className="font-medium text-muted-foreground">
+                          {t('tasks:overview.genericEditBatchStagedPathList')}
+                        </span>
+                        {stagedPaths.slice(0, 4).map((stagedPath) => (
+                          <Badge key={stagedPath} variant="muted" className="max-w-full truncate text-xs">
+                            {stagedPath}
+                          </Badge>
+                        ))}
+                      </span>
                     )}
                   </div>
                 );
@@ -1124,7 +1187,7 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             </div>
             <div className="space-y-1.5">
               {manifest.recent_events.map((event) => {
-                const meta = recentEventMeta(event);
+                const meta = recentEventMeta(event, t);
                 let badgeText = recentEventBadge(event);
                 if (event.event_type === 'action_result' && typeof event.ok === 'boolean') {
                   badgeText = t(

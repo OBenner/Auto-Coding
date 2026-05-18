@@ -37,6 +37,13 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditBatchGroups': 'Groups',
         'overview.genericEditBatchUnresolvedGroups': 'Unresolved groups',
         'overview.genericEditBatchRecoveryOutcomes': `${interpolation('count', 0)} recovery outcome`,
+        'overview.genericEditBatchStagedMutations': `${interpolation('count', 0)} staged mutations`,
+        'overview.genericEditBatchStagedPaths': `${interpolation('count', 0)} staged paths`,
+        'overview.genericEditBatchLifecycleEvents': `${interpolation('count', 0)} lifecycle events`,
+        'overview.genericEditBatchStagedPathList': 'Staged paths',
+        'overview.genericEditStagedBatch': `Staged batch ${interpolation('batchId', '')}`,
+        'overview.genericEditStagedWorkspaceMaterialized': 'Workspace materialized',
+        'overview.genericEditStagedWorkspaceRestored': 'Workspace restored',
         'overview.genericEditResumable': 'Resumable',
         'overview.genericEditRecoverable': 'Recoverable',
         'overview.genericEditRecoveryPlan': 'Recovery plan',
@@ -240,6 +247,42 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getAllByText('batch-1').length).toBeGreaterThan(0);
     expect(screen.getByText('batch_open')).toBeInTheDocument();
     expect(screen.getByText(/json_actions-1 \/ batch-1/)).toBeInTheDocument();
+  });
+
+  it('renders staged batch and workspace isolation metadata', () => {
+    const manifest = createManifest();
+    Object.assign(manifest.transaction_batches[0], {
+      staged_mutation_ids: ['mutation-1', 'mutation-2'],
+      staged_mutated_paths: ['created.txt', 'updated.txt'],
+      staged_restored_paths: ['restored.txt'],
+      staged_deleted_paths: ['deleted.txt'],
+      staged_mutation_count: 2,
+      staged_path_count: 4,
+      lifecycle_event_count: 2,
+    });
+    manifest.recent_events = [
+      {
+        sequence: 12,
+        event_type: 'action_result',
+        tool: 'search_text',
+        ok: true,
+        staged_workspace_materialized: true,
+        staged_workspace_restored: true,
+        staged_workspace_batch_id: 'batch-1',
+      },
+    ];
+
+    render(<GenericEditArtifactsPanel manifest={manifest} />);
+
+    expect(screen.getByText('2 staged mutations')).toBeInTheDocument();
+    expect(screen.getByText('4 staged paths')).toBeInTheDocument();
+    expect(screen.getByText('2 lifecycle events')).toBeInTheDocument();
+    expect(screen.getByText('Staged paths')).toBeInTheDocument();
+    expect(screen.getByText('created.txt')).toBeInTheDocument();
+    expect(screen.getByText('deleted.txt')).toBeInTheDocument();
+    expect(screen.getByText(/Staged batch batch-1/)).toBeInTheDocument();
+    expect(screen.getByText(/Workspace materialized/)).toBeInTheDocument();
+    expect(screen.getByText(/Workspace restored/)).toBeInTheDocument();
   });
 
   it('opens an inline preview for present artifacts with paths', async () => {

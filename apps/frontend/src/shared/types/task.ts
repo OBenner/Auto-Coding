@@ -141,6 +141,12 @@ export interface GenericEditRecentEvent {
   failed_action_count?: number;
   recovery_attempt_count?: number;
   failed_recovery_attempt_count?: number;
+  batch_status?: string;
+  staged_workspace_materialized?: boolean;
+  staged_workspace_restored?: boolean;
+  staged_workspace_batch_id?: string;
+  staged_workspace_guard_status?: string;
+  staged_workspace_guard_drift_count?: number;
   [key: string]: unknown;
 }
 
@@ -182,6 +188,15 @@ export interface GenericEditTransactionBatch {
   status: string;
   transaction_ids: string[];
   mutation_snapshot_ids: string[];
+  committed_mutation_snapshot_ids?: string[];
+  commit_operation_ids?: string[];
+  staged_mutation_ids?: string[];
+  staged_mutated_paths?: string[];
+  staged_restored_paths?: string[];
+  staged_deleted_paths?: string[];
+  staged_mutation_count?: number;
+  staged_path_count?: number;
+  lifecycle_event_count?: number;
   transaction_group_ids: string[];
   unresolved_transaction_group_ids: string[];
   recovery_outcome_count: number;

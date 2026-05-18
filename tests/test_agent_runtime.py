@@ -71,6 +71,7 @@ from agents.runtime.adapters.generic_edit import (
     build_generic_edit_file_preimage,
     build_generic_edit_recovery_plan_policy,
     build_generic_edit_rollback_operation,
+    compact_generic_edit_manifest_event,
     compact_generic_edit_manifest_transaction_batches,
     execute_generic_edit_transaction_rollback,
     generic_edit_mcp_lines,
@@ -10608,6 +10609,28 @@ def test_generic_edit_transaction_batches_expose_staged_mutation_metadata():
         "updated.txt",
     ]
     assert compact_batches[0]["staged_deleted_paths"] == ["deleted.txt"]
+
+
+def test_generic_edit_manifest_event_preserves_staged_workspace_fields():
+    compact = compact_generic_edit_manifest_event(
+        {
+            "sequence": 12,
+            "event_type": "action_result",
+            "tool": "search_text",
+            "ok": True,
+            "staged_workspace_materialized": True,
+            "staged_workspace_restored": True,
+            "staged_workspace_batch_id": "batch-1",
+            "staged_workspace_guard_status": "clean",
+            "staged_workspace_guard_drift_count": 0,
+        }
+    )
+
+    assert compact["staged_workspace_materialized"] is True
+    assert compact["staged_workspace_restored"] is True
+    assert compact["staged_workspace_batch_id"] == "batch-1"
+    assert compact["staged_workspace_guard_status"] == "clean"
+    assert compact["staged_workspace_guard_drift_count"] == 0
 
 
 def test_generic_edit_transaction_summary_allows_workspace_recovery_verification():

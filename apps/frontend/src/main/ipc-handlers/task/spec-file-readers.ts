@@ -687,6 +687,20 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
     value.mutation_snapshot_ids === undefined
       ? []
       : normalizeStringList(value.mutation_snapshot_ids);
+  const committedMutationSnapshotIds =
+    value.committed_mutation_snapshot_ids === undefined
+      ? []
+      : normalizeStringList(value.committed_mutation_snapshot_ids);
+  const commitOperationIds =
+    value.commit_operation_ids === undefined ? [] : normalizeStringList(value.commit_operation_ids);
+  const stagedMutationIds =
+    value.staged_mutation_ids === undefined ? [] : normalizeStringList(value.staged_mutation_ids);
+  const stagedMutatedPaths =
+    value.staged_mutated_paths === undefined ? [] : normalizeStringList(value.staged_mutated_paths);
+  const stagedRestoredPaths =
+    value.staged_restored_paths === undefined ? [] : normalizeStringList(value.staged_restored_paths);
+  const stagedDeletedPaths =
+    value.staged_deleted_paths === undefined ? [] : normalizeStringList(value.staged_deleted_paths);
   const transactionGroupIds =
     value.transaction_group_ids === undefined ? [] : normalizeStringList(value.transaction_group_ids);
   const unresolvedTransactionGroupIds =
@@ -695,16 +709,33 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
       : normalizeStringList(value.unresolved_transaction_group_ids);
   const recoveryOutcomeCount =
     value.recovery_outcome_count === undefined ? 0 : value.recovery_outcome_count;
+  const stagedMutationCount =
+    value.staged_mutation_count === undefined ? 0 : value.staged_mutation_count;
+  const stagedPathCount = value.staged_path_count === undefined ? 0 : value.staged_path_count;
+  const lifecycleEventCount =
+    value.lifecycle_event_count === undefined ? 0 : value.lifecycle_event_count;
 
   if (
     id === null ||
     status === null ||
     transactionIds === null ||
     mutationSnapshotIds === null ||
+    committedMutationSnapshotIds === null ||
+    commitOperationIds === null ||
+    stagedMutationIds === null ||
+    stagedMutatedPaths === null ||
+    stagedRestoredPaths === null ||
+    stagedDeletedPaths === null ||
     transactionGroupIds === null ||
     unresolvedTransactionGroupIds === null ||
     typeof recoveryOutcomeCount !== 'number' ||
-    !Number.isFinite(recoveryOutcomeCount)
+    !Number.isFinite(recoveryOutcomeCount) ||
+    typeof stagedMutationCount !== 'number' ||
+    !Number.isFinite(stagedMutationCount) ||
+    typeof stagedPathCount !== 'number' ||
+    !Number.isFinite(stagedPathCount) ||
+    typeof lifecycleEventCount !== 'number' ||
+    !Number.isFinite(lifecycleEventCount)
   ) {
     return null;
   }
@@ -714,6 +745,15 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
     status,
     transaction_ids: transactionIds,
     mutation_snapshot_ids: mutationSnapshotIds,
+    committed_mutation_snapshot_ids: committedMutationSnapshotIds,
+    commit_operation_ids: commitOperationIds,
+    staged_mutation_ids: stagedMutationIds,
+    staged_mutated_paths: stagedMutatedPaths,
+    staged_restored_paths: stagedRestoredPaths,
+    staged_deleted_paths: stagedDeletedPaths,
+    staged_mutation_count: stagedMutationCount,
+    staged_path_count: stagedPathCount,
+    lifecycle_event_count: lifecycleEventCount,
     transaction_group_ids: transactionGroupIds,
     unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
     recovery_outcome_count: recoveryOutcomeCount,
