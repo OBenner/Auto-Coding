@@ -141,6 +141,12 @@ export interface GenericEditRecentEvent {
   failed_action_count?: number;
   recovery_attempt_count?: number;
   failed_recovery_attempt_count?: number;
+  batch_status?: string;
+  staged_workspace_materialized?: boolean;
+  staged_workspace_restored?: boolean;
+  staged_workspace_batch_id?: string;
+  staged_workspace_guard_status?: string;
+  staged_workspace_guard_drift_count?: number;
   [key: string]: unknown;
 }
 
@@ -177,11 +183,43 @@ export interface GenericEditNativeToolFallback {
   tool_schema_count: number;
 }
 
+export interface GenericEditBatchLifecycleEvent {
+  action: string;
+  transaction_id?: string;
+  status?: string;
+  reason?: string;
+  blocked_transaction_group_ids?: string[];
+}
+
+export interface GenericEditBatchBoundaryError {
+  tool: string;
+  batch_id: string;
+  reason: string;
+  blocked_transaction_group_ids: string[];
+}
+
 export interface GenericEditTransactionBatch {
   id: string;
   status: string;
+  recovery_status?: string;
+  finish_blocked?: boolean;
   transaction_ids: string[];
   mutation_snapshot_ids: string[];
+  committed_mutation_snapshot_ids?: string[];
+  commit_operation_ids?: string[];
+  staged_mutation_ids?: string[];
+  staged_mutated_paths?: string[];
+  staged_restored_paths?: string[];
+  staged_deleted_paths?: string[];
+  staged_mutation_count?: number;
+  staged_path_count?: number;
+  lifecycle_event_count?: number;
+  lifecycle_events?: GenericEditBatchLifecycleEvent[];
+  boundary_error_count?: number;
+  boundary_errors?: GenericEditBatchBoundaryError[];
+  boundary_error_reasons?: string[];
+  required_next_action_kinds?: string[];
+  resolution_strategies?: string[];
   transaction_group_ids: string[];
   unresolved_transaction_group_ids: string[];
   recovery_outcome_count: number;

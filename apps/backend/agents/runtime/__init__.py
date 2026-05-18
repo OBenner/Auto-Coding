@@ -7,6 +7,7 @@ inside an Auto Code workspace.
 """
 
 from .adapters import create_runtime_session
+from .adapters.generic_cli import GenericCliRuntimeSession
 from .artifacts import (
     save_runtime_fallback_artifact,
     save_runtime_runner_route_artifact,
@@ -73,6 +74,7 @@ from .mcp_bridge import (
     external_mcp_adapter_for,
     external_mcp_client_enabled,
     mcp_bridge_audit_path,
+    normalize_mcp_tool_result,
     policy_for_auto_claude_tool,
     registered_external_mcp_servers,
     resolve_runtime_mcp_support,
@@ -115,6 +117,7 @@ __all__ = [
     "CliRunnerProfile",
     "CliRunnerRejection",
     "CliRunnerSelection",
+    "GenericCliRuntimeSession",
     "RuntimeMode",
     "RuntimeExternalMcpClient",
     "RuntimeExternalMcpContractCheck",
@@ -161,6 +164,7 @@ __all__ = [
     "local_action_tool_schemas",
     "local_action_tool_specs",
     "mcp_bridge_audit_path",
+    "normalize_mcp_tool_result",
     "normalize_runtime_mode",
     "policy_for_auto_claude_tool",
     "registered_external_mcp_servers",

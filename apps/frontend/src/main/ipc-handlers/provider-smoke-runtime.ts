@@ -1,4 +1,8 @@
-export type ProviderSmokeRuntime = 'analysis_only' | 'generic_edit' | 'mini_pipeline';
+export type ProviderSmokeRuntime =
+  | 'analysis_only'
+  | 'generic_edit'
+  | 'mini_pipeline'
+  | 'provider_e2e';
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -10,6 +14,9 @@ function normalizeExplicitSmokeRuntime(value: string | undefined): ProviderSmoke
   const normalized = normalizeRuntimeMode(value);
   if (normalized === 'mini_pipeline') {
     return 'mini_pipeline';
+  }
+  if (normalized === 'provider_e2e') {
+    return 'provider_e2e';
   }
   if (normalized === 'generic_edit') {
     return 'generic_edit';

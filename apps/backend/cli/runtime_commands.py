@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ from agents.runtime.mcp_bridge import (
     CUSTOM_MCP_SERVERS_CONFIG_KEY,
     EXTERNAL_MCP_CLIENT_ENV,
     LOCAL_BRIDGE_SERVER,
+    MCP_ALLOWED_PERMISSIONS_ENV,
     MCP_SERVER_CATALOG,
     build_external_mcp_health_matrix,
     check_external_mcp_contracts,
@@ -37,6 +39,9 @@ from agents.runtime.mcp_bridge import (
     discover_external_mcp_tools,
     executable_external_mcp_servers,
     executable_external_mcp_tools,
+    external_mcp_adapter_for,
+    mcp_server_catalog_entry,
+    normalize_mcp_allowed_permissions,
     normalize_mcp_input_schema,
     registered_external_mcp_servers,
     resolve_runtime_mcp_support,
@@ -46,10 +51,102 @@ from agents.runtime.subagents import (
     DEFAULT_SUBAGENT_MERGE_POLICY,
     resolve_runtime_subagent_support,
 )
+from cli.provider_smoke_commands import (
+    PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
+    PROVIDER_SMOKE_HISTORY_RELATIVE_PATH,
+)
 
 DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
 DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS = registered_external_mcp_servers()
 logger = logging.getLogger(__name__)
+CLI_RUNNER_CONTRACT_FACETS = (
+    "run",
+    "cancel",
+    "resume",
+    "artifacts",
+    "event_parser",
+    "cost_account",
+)
+CLI_RUNNER_WIRED_CONTRACTS = {
+    "codex_cli": {
+        "run": "wired",
+        "cancel": "wired",
+        "resume": "wired",
+        "artifacts": "wired",
+        "event_parser": "wired",
+        "cost_account": "wired",
+    },
+}
+CLI_RUNNER_CONTRACT_READY_STATUSES = {
+    "wired",
+    "generic_core_configurable",
+    "generic_jsonl_core",
+}
+CLI_RUNNER_GENERIC_CORE_FACETS = {
+    "run": "generic_core_configurable",
+    "cancel": "generic_core_configurable",
+    "resume": "missing_runner_resume",
+    "artifacts": "generic_core_configurable",
+    "event_parser": "generic_jsonl_core",
+    "cost_account": "generic_jsonl_core",
+}
+MUTATING_SUBAGENT_REQUIRED_GATES = (
+    "isolated_child_contexts",
+    "transaction_boundaries",
+    "conflict_aware_merge",
+    "parent_approved_apply_abort",
+    "child_artifacts",
+)
+MUTATING_SUBAGENT_SATISFIED_GATES = (
+    "isolated_child_contexts",
+    "child_artifacts",
+)
+MCP_PERMISSION_REQUIRED_GATES = (
+    "tool_policy_metadata",
+    "permission_allowlist_check",
+    "deny_before_execution",
+    "audit_artifact",
+    "mutating_tool_classification",
+)
+
+RUNTIME_POLICY_PHASES = (
+    {
+        "phase": "planner",
+        "direct_provider_mode": "blocked",
+        "fallback_modes": (),
+        "requires_full_autonomous": True,
+        "fallback_allowed": False,
+        "policy": "must_use_full_runtime",
+        "reason": "planner_requires_workspace_tools",
+    },
+    {
+        "phase": "coder",
+        "direct_provider_mode": "generic_edit",
+        "fallback_modes": ("patch_proposal", "analysis_only"),
+        "requires_full_autonomous": False,
+        "fallback_allowed": True,
+        "policy": "prefer_generic_edit",
+        "reason": "coder_can_use_generic_edit_transactions",
+    },
+    {
+        "phase": "qa_reviewer",
+        "direct_provider_mode": "analysis_only",
+        "fallback_modes": (),
+        "requires_full_autonomous": False,
+        "fallback_allowed": True,
+        "policy": "prefer_analysis_only",
+        "reason": "qa_review_can_run_without_mutation",
+    },
+    {
+        "phase": "qa_fixer",
+        "direct_provider_mode": "generic_edit",
+        "fallback_modes": ("patch_proposal", "analysis_only"),
+        "requires_full_autonomous": False,
+        "fallback_allowed": True,
+        "policy": "prefer_generic_edit",
+        "reason": "qa_fix_needs_transactional_mutations",
+    },
+)
 
 
 def _format_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -127,6 +224,51 @@ def build_runtime_fallback_matrix(
     return matrix
 
 
+def build_cli_runner_contract_matrix() -> list[dict[str, Any]]:
+    """Build the shared full-runtime CLI runner contract matrix."""
+    matrix: list[dict[str, Any]] = []
+    for profile in CLI_RUNNER_PROFILES:
+        wired_facets = CLI_RUNNER_WIRED_CONTRACTS.get(
+            profile.runner_id,
+            CLI_RUNNER_GENERIC_CORE_FACETS,
+        )
+        facets = {
+            facet: wired_facets.get(facet, "missing_adapter")
+            for facet in CLI_RUNNER_CONTRACT_FACETS
+        }
+        missing_facets = [
+            facet
+            for facet, status in facets.items()
+            if status not in CLI_RUNNER_CONTRACT_READY_STATUSES
+        ]
+        if not missing_facets:
+            contract_status = "ready"
+        elif any(
+            status in CLI_RUNNER_CONTRACT_READY_STATUSES for status in facets.values()
+        ):
+            contract_status = "partial"
+        else:
+            contract_status = "planned"
+        matrix.append(
+            {
+                "runner_id": profile.runner_id,
+                "display_name": profile.display_name,
+                "runner_status": profile.runner_status,
+                "contract_status": contract_status,
+                "required_facets": list(CLI_RUNNER_CONTRACT_FACETS),
+                "missing_contract_facets": missing_facets,
+                "facets": facets,
+                "adapter_required": bool(missing_facets),
+                "supported_runtime_modes": list(profile.supported_runtime_modes),
+                "artifact_contract": (
+                    f"{profile.runner_id}_result.json, "
+                    f"{profile.runner_id}_timeline.json"
+                ),
+            }
+        )
+    return matrix
+
+
 def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
     """Build provider/runtime MCP bridge plan diagnostics."""
     matrix: list[dict[str, Any]] = []
@@ -198,6 +340,129 @@ def build_mcp_bridge_plan_matrix() -> list[dict[str, Any]]:
     return matrix
 
 
+def _unique_sorted(values: list[str]) -> list[str]:
+    """Return deterministic unique values for diagnostic payloads."""
+    return sorted({value for value in values if value})
+
+
+def _mcp_allowlist_fields() -> dict[str, Any]:
+    """Return the effective MCP permission allowlist diagnostic fields."""
+    allowed_permissions = normalize_mcp_allowed_permissions(None)
+    fields: dict[str, Any] = {
+        "strict_allowlist_configured": allowed_permissions is not None,
+        "allowlist_source": (
+            MCP_ALLOWED_PERMISSIONS_ENV
+            if allowed_permissions is not None
+            else "allow_all_default"
+        ),
+    }
+    if allowed_permissions is not None:
+        fields["allowed_permissions"] = sorted(allowed_permissions)
+    return fields
+
+
+def build_mcp_bridge_permission_matrix(
+    *,
+    project_mcp_config: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Build server-level MCP bridge permission/audit enforcement diagnostics."""
+    allowlist_fields = _mcp_allowlist_fields()
+    required_gates = list(MCP_PERMISSION_REQUIRED_GATES)
+    audit_artifact = ".auto-Codex/specs/<spec>/artifacts/mcp_bridge_audit.jsonl"
+    matrix: list[dict[str, Any]] = [
+        {
+            "server": LOCAL_BRIDGE_SERVER,
+            "display_name": str(
+                MCP_SERVER_CATALOG[LOCAL_BRIDGE_SERVER]["display_name"]
+            ),
+            "bridge_path": "local_bridge",
+            "status": "enforced",
+            "permission_enforced": True,
+            **allowlist_fields,
+            "audit_required": True,
+            "audit_artifact": audit_artifact,
+            "tool_count": None,
+            "tool_policy_coverage": "dynamic",
+            "permissions": ["dynamic_auto_claude_tool_policy"],
+            "mutating_permissions": ["dynamic_mutating_tool_policy"],
+            "required_gates": required_gates,
+            "satisfied_gates": required_gates,
+            "missing_gates": [],
+            "reason": "local_tools_receive_runtime_policy_before_execution",
+        }
+    ]
+
+    for server in registered_external_mcp_servers(
+        project_mcp_config=project_mcp_config,
+    ):
+        adapter = external_mcp_adapter_for(
+            server,
+            project_mcp_config=project_mcp_config,
+        )
+        catalog_entry = mcp_server_catalog_entry(
+            server,
+            project_mcp_config=project_mcp_config,
+        )
+        if adapter is None or not adapter.tool_definitions:
+            matrix.append(
+                {
+                    "server": server,
+                    "display_name": str(catalog_entry.get("display_name", server)),
+                    "bridge_path": "external_bridge",
+                    "status": "missing_policy",
+                    "permission_enforced": False,
+                    **allowlist_fields,
+                    "audit_required": False,
+                    "audit_artifact": audit_artifact,
+                    "tool_count": 0,
+                    "tool_policy_coverage": "missing",
+                    "permissions": [],
+                    "mutating_permissions": [],
+                    "required_gates": required_gates,
+                    "satisfied_gates": [],
+                    "missing_gates": required_gates,
+                    "reason": "external_adapter_has_no_tool_policy_metadata",
+                }
+            )
+            continue
+
+        tool_definitions = adapter.tool_definitions
+        missing_gates: list[str] = []
+        if not all(definition.policy.audit_required for definition in tool_definitions):
+            missing_gates.append("audit_artifact")
+        satisfied_gates = [gate for gate in required_gates if gate not in missing_gates]
+        matrix.append(
+            {
+                "server": server,
+                "display_name": str(catalog_entry.get("display_name", server)),
+                "bridge_path": "external_bridge",
+                "status": "enforced" if not missing_gates else "partial",
+                "permission_enforced": True,
+                **allowlist_fields,
+                "audit_required": not missing_gates,
+                "audit_artifact": audit_artifact,
+                "tool_count": len(tool_definitions),
+                "tool_policy_coverage": "static",
+                "permissions": _unique_sorted(
+                    [definition.policy.permission for definition in tool_definitions]
+                ),
+                "mutating_permissions": _unique_sorted(
+                    [
+                        definition.policy.permission
+                        for definition in tool_definitions
+                        if definition.policy.mutating
+                    ]
+                ),
+                "required_gates": required_gates,
+                "satisfied_gates": satisfied_gates,
+                "missing_gates": missing_gates,
+                "reason": "external_tools_receive_runtime_policy_before_execution",
+            }
+        )
+
+    return matrix
+
+
 def _subagent_orchestrator_available(provider: str, runtime_mode: str) -> bool:
     """Return true when the runtime can use Auto Code's child-session orchestrator."""
     if provider == "codex":
@@ -232,6 +497,348 @@ def build_runtime_subagent_matrix() -> list[dict[str, Any]]:
     return matrix
 
 
+def build_runtime_subagent_mutation_policy() -> list[dict[str, Any]]:
+    """Build explicit policy gates for future mutating subagent support."""
+    missing_gates = [
+        gate
+        for gate in MUTATING_SUBAGENT_REQUIRED_GATES
+        if gate not in MUTATING_SUBAGENT_SATISFIED_GATES
+    ]
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        for mode in RUNTIME_MODE_INFO:
+            if mode.mode not in {"full_autonomous", "generic_edit"}:
+                continue
+            matrix.append(
+                {
+                    "provider": provider_row.provider,
+                    "runtime_mode": mode.mode,
+                    "mutating_subagents_enabled": False,
+                    "status": "blocked",
+                    "transaction_boundary_required": True,
+                    "parent_approval_required": True,
+                    "merge_protocol": "read_only_until_transactional_merge",
+                    "required_gates": list(MUTATING_SUBAGENT_REQUIRED_GATES),
+                    "satisfied_gates": list(MUTATING_SUBAGENT_SATISFIED_GATES),
+                    "missing_gates": missing_gates,
+                    "reason": "mutating_subagents_require_transactional_merge",
+                }
+            )
+    return matrix
+
+
+def build_runtime_policy_matrix() -> list[dict[str, Any]]:
+    """Build phase/provider runtime policy diagnostics."""
+    full_runtime_runner_candidates = list(
+        select_cli_runner_profiles(
+            runtime_mode="full_autonomous",
+        ).selected_runner_ids
+    )
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        has_full_runtime = provider_row.full_autonomous == "yes"
+        for phase_policy in RUNTIME_POLICY_PHASES:
+            phase = str(phase_policy["phase"])
+            selected_mode = (
+                "full_autonomous"
+                if has_full_runtime
+                else str(phase_policy["direct_provider_mode"])
+            )
+            requires_full_autonomous = bool(phase_policy["requires_full_autonomous"])
+            requires_cli_runner = requires_full_autonomous and not has_full_runtime
+            matrix.append(
+                {
+                    "phase": phase,
+                    "provider": provider_row.provider,
+                    "required_runtime_mode": "full_autonomous"
+                    if requires_full_autonomous
+                    else selected_mode,
+                    "selected_runtime_mode": selected_mode,
+                    "fallback_allowed": bool(phase_policy["fallback_allowed"])
+                    and selected_mode != "blocked",
+                    "fallback_modes": list(phase_policy["fallback_modes"])
+                    if selected_mode != "blocked"
+                    else [],
+                    "requires_full_autonomous": requires_full_autonomous,
+                    "requires_cli_runner": requires_cli_runner,
+                    "runner_candidates": full_runtime_runner_candidates
+                    if requires_cli_runner
+                    else [],
+                    "policy": str(phase_policy["policy"])
+                    if not has_full_runtime
+                    else "use_full_runtime",
+                    "reason": str(phase_policy["reason"])
+                    if not has_full_runtime
+                    else "provider_has_full_runtime",
+                }
+            )
+    return matrix
+
+
+def build_runtime_capability_matrix() -> list[dict[str, Any]]:
+    """Build consolidated provider readiness diagnostics for the control plane."""
+    full_runtime_runner_candidates = list(
+        select_cli_runner_profiles(
+            runtime_mode="full_autonomous",
+        ).selected_runner_ids
+    )
+    gateway_providers = {"litellm", "openrouter"}
+    matrix: list[dict[str, Any]] = []
+    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
+        has_full_runtime = provider_row.full_autonomous == "yes"
+        blockers: list[str] = []
+        warnings: list[str] = []
+        if not has_full_runtime:
+            blockers.extend(
+                [
+                    "missing_full_autonomous_runtime",
+                    "live_provider_e2e_required",
+                    "transactional_recovery_required",
+                ]
+            )
+            warnings.append("direct_full_autonomous_blocked")
+        if provider_row.provider in gateway_providers:
+            warnings.append("gateway_model_limitations")
+        if provider_row.provider == "ollama":
+            warnings.append("local_model_quality_varies")
+
+        matrix.append(
+            {
+                "provider": provider_row.provider,
+                "readiness": "ready" if has_full_runtime else "limited",
+                "full_autonomous_ready": has_full_runtime,
+                "direct_full_autonomous": provider_row.full_autonomous,
+                "recommended_runtime_mode": (
+                    "full_autonomous" if has_full_runtime else "generic_edit"
+                ),
+                "generic_edit": provider_row.generic_edit,
+                "analysis_only": provider_row.analysis_only,
+                "patch_proposal": provider_row.patch_proposal,
+                "mcp_tools": provider_row.mcp_tools,
+                "subagents": provider_row.subagents,
+                "cli_runner_candidates": []
+                if has_full_runtime
+                else full_runtime_runner_candidates,
+                "blockers": blockers,
+                "warnings": warnings,
+                "notes": provider_row.notes,
+            }
+        )
+    return matrix
+
+
+def build_runtime_eval_matrix() -> list[dict[str, Any]]:
+    """Build runtime eval/smoke cases required before declaring full autonomy."""
+    return [
+        {
+            "case_id": "provider_e2e",
+            "runtime_mode": "provider_e2e",
+            "required_for_full_autonomous": True,
+            "providers": list(PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS),
+            "required_artifacts": [
+                "provider_e2e_suite",
+                "provider_e2e_negative_fixtures",
+                "provider_reliability",
+            ],
+        },
+        {
+            "case_id": "generic_edit_recovery",
+            "runtime_mode": "generic_edit",
+            "required_for_full_autonomous": True,
+            "providers": list(PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS),
+            "required_artifacts": [
+                "generic_edit_recovery_checkpoint.json",
+                "generic_edit_session_state.json",
+                "generic_edit_transaction_groups.json",
+            ],
+        },
+        {
+            "case_id": "mcp_bridge_contract",
+            "runtime_mode": "generic_edit",
+            "required_for_full_autonomous": True,
+            "providers": list(PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS),
+            "required_artifacts": ["external_mcp_contract_checks"],
+        },
+        {
+            "case_id": "subagent_orchestrator",
+            "runtime_mode": "generic_edit",
+            "required_for_full_autonomous": True,
+            "providers": list(PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS),
+            "required_artifacts": [
+                "runtime_subagents.json",
+                "runtime_subagents__<child>.json",
+            ],
+        },
+        {
+            "case_id": "cli_full_runtime",
+            "runtime_mode": "full_autonomous",
+            "required_for_full_autonomous": True,
+            "providers": ["codex"],
+            "required_artifacts": [
+                "codex_cli_result.json",
+                "codex_cli_timeline.json",
+            ],
+        },
+    ]
+
+
+def _runtime_eval_provider_history_status(provider_stats: dict[str, Any]) -> str:
+    """Classify a provider's latest persisted e2e eval evidence."""
+    if not provider_stats:
+        return "not_observed"
+    if (
+        provider_stats.get("last_status") == "passed"
+        and provider_stats.get("last_reliability_status") == "complete"
+        and provider_stats.get("last_provider_e2e_status") == "passed"
+    ):
+        return "passed"
+    return "failed"
+
+
+def _runtime_eval_history_status(provider_rows: list[dict[str, Any]]) -> str:
+    """Classify aggregate provider e2e history coverage."""
+    statuses = {row["status"] for row in provider_rows}
+    if statuses == {"passed"}:
+        return "complete"
+    if statuses == {"not_observed"}:
+        return "not_observed"
+    return "partial"
+
+
+def _runtime_eval_int_stat(value: Any) -> int:
+    """Return a safe integer stat from persisted history payloads."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def build_runtime_eval_history(
+    *,
+    project_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Build persisted runtime eval evidence from provider smoke history."""
+    history_path = (project_dir or Path.cwd()) / PROVIDER_SMOKE_HISTORY_RELATIVE_PATH
+    provider_stats_by_name: dict[str, Any] = {}
+    history_status = "not_observed"
+    if history_path.exists():
+        try:
+            payload = json.loads(history_path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and isinstance(payload.get("providers"), dict):
+                provider_stats_by_name = payload["providers"]
+            else:
+                history_status = "unreadable"
+        except Exception:
+            history_status = "unreadable"
+
+    provider_rows: list[dict[str, Any]] = []
+    total_runs = 0
+    passed_runs = 0
+    failed_runs = 0
+    missing_providers: list[str] = []
+    for provider in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        provider_stats = provider_stats_by_name.get(provider)
+        provider_stats = provider_stats if isinstance(provider_stats, dict) else {}
+        status = _runtime_eval_provider_history_status(provider_stats)
+        if status == "not_observed":
+            missing_providers.append(provider)
+        provider_total_runs = _runtime_eval_int_stat(provider_stats.get("total_runs"))
+        provider_passed_runs = _runtime_eval_int_stat(provider_stats.get("passed_runs"))
+        provider_failed_runs = _runtime_eval_int_stat(provider_stats.get("failed_runs"))
+        total_runs += provider_total_runs
+        passed_runs += provider_passed_runs
+        failed_runs += provider_failed_runs
+        provider_rows.append(
+            {
+                "provider": provider,
+                "status": status,
+                "total_runs": provider_total_runs,
+                "passed_runs": provider_passed_runs,
+                "failed_runs": provider_failed_runs,
+                "last_status": provider_stats.get("last_status"),
+                "last_reliability_status": provider_stats.get(
+                    "last_reliability_status",
+                ),
+                "last_provider_e2e_status": provider_stats.get(
+                    "last_provider_e2e_status",
+                ),
+                "last_run_at": provider_stats.get("last_run_at"),
+            }
+        )
+
+    if history_status != "unreadable":
+        history_status = _runtime_eval_history_status(provider_rows)
+    return [
+        {
+            "case_id": "provider_e2e",
+            "runtime_mode": "provider_e2e",
+            "history_path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
+            "status": history_status,
+            "total_runs": total_runs,
+            "passed_runs": passed_runs,
+            "failed_runs": failed_runs,
+            "missing_providers": missing_providers,
+            "providers": provider_rows,
+        }
+    ]
+
+
+def build_runtime_comparative_eval_matrix(
+    *,
+    project_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Build provider comparison rows for quality/cost/safety eval evidence."""
+    eval_history = build_runtime_eval_history(project_dir=project_dir)
+    provider_history = (
+        {
+            row["provider"]: row
+            for row in eval_history[0].get("providers", [])
+            if isinstance(row, dict)
+        }
+        if eval_history
+        else {}
+    )
+    history_path = (
+        eval_history[0].get("history_path")
+        if eval_history
+        else PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix()
+    )
+    compatibility = {row.provider: row for row in PROVIDER_RUNTIME_COMPATIBILITY}
+    comparison_providers = ("claude", "codex", "openai", "google", "ollama")
+    matrix: list[dict[str, Any]] = []
+    for provider in comparison_providers:
+        provider_row = compatibility[provider]
+        has_full_runtime = provider_row.full_autonomous == "yes"
+        provider_stats = provider_history.get(provider, {})
+        quality_status = (
+            "not_recorded"
+            if has_full_runtime
+            else str(provider_stats.get("status") or "not_observed")
+        )
+        matrix.append(
+            {
+                "provider": provider,
+                "runtime_path": "full_autonomous"
+                if has_full_runtime
+                else "generic_edit",
+                "quality_status": quality_status,
+                "cost_status": "not_recorded",
+                "safety_status": "native_runtime_policy"
+                if has_full_runtime
+                else "policy_gated",
+                "evidence_source": "native_runtime"
+                if has_full_runtime
+                else str(history_path),
+                "required_before_full_autonomous": not has_full_runtime,
+                "blockers": []
+                if has_full_runtime
+                else [
+                    "provider_e2e",
+                    "generic_edit_recovery",
+                    "mcp_bridge_contract",
+                ],
+            }
+        )
+    return matrix
+
+
 def build_runtime_modes_payload() -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
     cli_runner_selection = {
@@ -247,12 +854,20 @@ def build_runtime_modes_payload() -> dict[str, Any]:
             include_detection=True,
         ),
         "cli_runner_selection": cli_runner_selection,
+        "cli_runner_contract_matrix": build_cli_runner_contract_matrix(),
         "runtime_fallback_matrix": build_runtime_fallback_matrix(),
         "mcp_bridge_plan_matrix": build_mcp_bridge_plan_matrix(),
+        "mcp_bridge_permission_matrix": build_mcp_bridge_permission_matrix(),
         "external_mcp_server_health": build_external_mcp_health_matrix(
             requested_servers=DEFAULT_MCP_DIAGNOSTIC_SERVERS,
         ),
         "runtime_subagent_matrix": build_runtime_subagent_matrix(),
+        "runtime_subagent_mutation_policy": build_runtime_subagent_mutation_policy(),
+        "runtime_policy_matrix": build_runtime_policy_matrix(),
+        "runtime_capability_matrix": build_runtime_capability_matrix(),
+        "runtime_eval_matrix": build_runtime_eval_matrix(),
+        "runtime_eval_history": build_runtime_eval_history(),
+        "runtime_comparative_eval_matrix": build_runtime_comparative_eval_matrix(),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -626,9 +1241,20 @@ def format_generic_edit_resume_preflight_text(payload: dict[str, Any]) -> str:
                 f"  reason: {blocker.get('reason', 'unknown')}",
             ]
         )
-        for key in ("artifact_name", "path", "owner_artifact", "owner_path"):
+        for key in (
+            "artifact_name",
+            "path",
+            "owner_artifact",
+            "owner_path",
+            "expected_path",
+            "actual_path",
+        ):
             value = blocker.get(key)
             if isinstance(value, str) and value:
+                sections.append(f"  {key}: {value}")
+        for key in ("line_number", "expected_count", "actual_count"):
+            value = blocker.get(key)
+            if isinstance(value, int):
                 sections.append(f"  {key}: {value}")
         for key in (
             "missing_snapshot_ids",
@@ -721,6 +1347,16 @@ def format_runtime_modes_text() -> str:
         ]
         for mode in RUNTIME_MODE_INFO
     ]
+    cli_runner_contract_rows = [
+        [
+            row["runner_id"],
+            row["runner_status"],
+            row["contract_status"],
+            ", ".join(row["missing_contract_facets"]) or "none",
+            row["artifact_contract"],
+        ]
+        for row in build_cli_runner_contract_matrix()
+    ]
     runtime_fallback_rows = [
         [
             row["provider"],
@@ -761,6 +1397,18 @@ def format_runtime_modes_text() -> str:
         )
         if row["bridgeable"]
     ]
+    mcp_permission_rows = [
+        [
+            row["server"],
+            row["bridge_path"],
+            row["status"],
+            "yes" if row["strict_allowlist_configured"] else "no",
+            ", ".join(row["permissions"]) or "none",
+            ", ".join(row["mutating_permissions"]) or "none",
+            ", ".join(row["missing_gates"]) or "none",
+        ]
+        for row in build_mcp_bridge_permission_matrix()
+    ]
     subagent_rows = [
         [
             row["provider"],
@@ -773,6 +1421,77 @@ def format_runtime_modes_text() -> str:
         ]
         for row in build_runtime_subagent_matrix()
         if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
+    ]
+    mutating_subagent_rows = [
+        [
+            row["provider"],
+            row["runtime_mode"],
+            row["status"],
+            "yes" if row["mutating_subagents_enabled"] else "no",
+            ", ".join(row["missing_gates"]) or "none",
+            row["merge_protocol"],
+        ]
+        for row in build_runtime_subagent_mutation_policy()
+        if row["provider"] in {"claude", "codex", "openai", "google", "ollama"}
+    ]
+    runtime_policy_rows = [
+        [
+            row["phase"],
+            row["provider"],
+            row["required_runtime_mode"],
+            row["selected_runtime_mode"],
+            "yes" if row["fallback_allowed"] else "no",
+            row["policy"],
+            row["reason"],
+            ", ".join(row["runner_candidates"]) or "none",
+        ]
+        for row in build_runtime_policy_matrix()
+        if row["provider"] in {"claude", "codex", "openai", "google", "ollama"}
+    ]
+    runtime_capability_rows = [
+        [
+            row["provider"],
+            row["readiness"],
+            row["recommended_runtime_mode"],
+            ", ".join(row["blockers"]) or "none",
+            ", ".join(row["warnings"]) or "none",
+            ", ".join(row["cli_runner_candidates"]) or "none",
+        ]
+        for row in build_runtime_capability_matrix()
+    ]
+    runtime_eval_rows = [
+        [
+            row["case_id"],
+            row["runtime_mode"],
+            "yes" if row["required_for_full_autonomous"] else "no",
+            ", ".join(row["providers"]),
+            ", ".join(row["required_artifacts"]),
+        ]
+        for row in build_runtime_eval_matrix()
+    ]
+    runtime_eval_history_rows = [
+        [
+            row["case_id"],
+            row["status"],
+            str(row["total_runs"]),
+            str(row["passed_runs"]),
+            str(row["failed_runs"]),
+            ", ".join(row["missing_providers"]) or "none",
+            row["history_path"],
+        ]
+        for row in build_runtime_eval_history()
+    ]
+    runtime_comparative_eval_rows = [
+        [
+            row["provider"],
+            row["runtime_path"],
+            row["quality_status"],
+            row["cost_status"],
+            row["safety_status"],
+            ", ".join(row["blockers"]) or "none",
+            row["evidence_source"],
+        ]
+        for row in build_runtime_comparative_eval_matrix()
     ]
 
     return "\n\n".join(
@@ -814,6 +1533,17 @@ def format_runtime_modes_text() -> str:
                 ["Runtime mode", "Eligible runners"],
                 cli_runner_selection_rows,
             ),
+            "CLI Runner Contract Matrix",
+            _format_table(
+                [
+                    "Runner",
+                    "Runner status",
+                    "Contract status",
+                    "Missing facets",
+                    "Artifact contract",
+                ],
+                cli_runner_contract_rows,
+            ),
             "Runtime Fallback Matrix (coding)",
             _format_table(
                 [
@@ -840,6 +1570,19 @@ def format_runtime_modes_text() -> str:
                 ],
                 mcp_bridge_rows,
             ),
+            "MCP Bridge Permission Matrix",
+            _format_table(
+                [
+                    "Server",
+                    "Path",
+                    "Status",
+                    "Strict allowlist",
+                    "Permissions",
+                    "Mutating",
+                    "Missing gates",
+                ],
+                mcp_permission_rows,
+            ),
             "External MCP Client Health",
             _format_table(
                 [
@@ -864,6 +1607,81 @@ def format_runtime_modes_text() -> str:
                     "Max attempts",
                 ],
                 subagent_rows,
+            ),
+            "Mutating Subagent Policy",
+            _format_table(
+                [
+                    "Provider",
+                    "Runtime",
+                    "Status",
+                    "Enabled",
+                    "Missing gates",
+                    "Merge protocol",
+                ],
+                mutating_subagent_rows,
+            ),
+            "Runtime Policy Matrix",
+            _format_table(
+                [
+                    "Phase",
+                    "Provider",
+                    "Required",
+                    "Selected",
+                    "Fallback",
+                    "Policy",
+                    "Reason",
+                    "Runner candidates",
+                ],
+                runtime_policy_rows,
+            ),
+            "Runtime Capability Matrix",
+            _format_table(
+                [
+                    "Provider",
+                    "Readiness",
+                    "Recommended runtime",
+                    "Blockers",
+                    "Warnings",
+                    "CLI candidates",
+                ],
+                runtime_capability_rows,
+            ),
+            "Runtime Eval Matrix",
+            _format_table(
+                [
+                    "Case",
+                    "Runtime",
+                    "Full required",
+                    "Providers",
+                    "Required artifacts",
+                ],
+                runtime_eval_rows,
+            ),
+            "Runtime Eval History",
+            _format_table(
+                [
+                    "Case",
+                    "Status",
+                    "Runs",
+                    "Passed",
+                    "Failed",
+                    "Missing providers",
+                    "Artifact",
+                ],
+                runtime_eval_history_rows,
+            ),
+            "Runtime Comparative Eval Matrix",
+            _format_table(
+                [
+                    "Provider",
+                    "Runtime path",
+                    "Quality",
+                    "Cost",
+                    "Safety",
+                    "Blockers",
+                    "Evidence",
+                ],
+                runtime_comparative_eval_rows,
             ),
             "Recommended commands",
             "  Full autonomous: python run.py --spec 001 --provider claude",

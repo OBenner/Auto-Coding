@@ -36,7 +36,12 @@ import { getAPIProfileEnv } from '../services/profile';
 import { getCodexProfileManager } from '../codex-profile-manager';
 import {
   mapProviderContractHealth,
+  mapProviderE2eSuite,
+  mapProviderNegativeFixtures,
+  mapProviderReliability,
+  mapProviderRunHistory,
   mapProviderRuntimeResumePolicy,
+  mapProviderTransactionBatchContract,
   mapProviderToolLoopContract,
 } from './provider-smoke-diagnostics';
 import { resolveProviderSmokeRuntime } from './provider-smoke-runtime';
@@ -379,6 +384,7 @@ type ProviderSmokeCliResult = {
       tool_counts?: unknown;
       resume_policy?: unknown;
       tool_loop_contract?: unknown;
+      transaction_batch_contract?: unknown;
     } | null;
     mini_pipeline?: {
       status?: unknown;
@@ -389,16 +395,28 @@ type ProviderSmokeCliResult = {
       reason?: unknown;
       phases?: unknown;
     } | null;
+    provider_e2e_suite?: unknown;
+    provider_e2e_negative_fixtures?: unknown;
+    provider_run_history?: unknown;
+    provider_reliability?: unknown;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
   } | null;
 };
 
 type RuntimeModesCliPayload = {
+  cli_runner_contract_matrix?: RuntimeControlPlaneDiagnostics['cli_runner_contract_matrix'];
   runtime_fallback_matrix?: RuntimeControlPlaneDiagnostics['runtime_fallback_matrix'];
   mcp_bridge_plan_matrix?: RuntimeControlPlaneDiagnostics['mcp_bridge_plan_matrix'];
+  mcp_bridge_permission_matrix?: RuntimeControlPlaneDiagnostics['mcp_bridge_permission_matrix'];
   external_mcp_server_health?: RuntimeControlPlaneDiagnostics['external_mcp_server_health'];
   runtime_subagent_matrix?: RuntimeControlPlaneDiagnostics['runtime_subagent_matrix'];
+  runtime_subagent_mutation_policy?: RuntimeControlPlaneDiagnostics['runtime_subagent_mutation_policy'];
+  runtime_policy_matrix?: RuntimeControlPlaneDiagnostics['runtime_policy_matrix'];
+  runtime_capability_matrix?: RuntimeControlPlaneDiagnostics['runtime_capability_matrix'];
+  runtime_eval_matrix?: RuntimeControlPlaneDiagnostics['runtime_eval_matrix'];
+  runtime_eval_history?: RuntimeControlPlaneDiagnostics['runtime_eval_history'];
+  runtime_comparative_eval_matrix?: RuntimeControlPlaneDiagnostics['runtime_comparative_eval_matrix'];
   recommendations?: Record<string, string>;
 };
 
@@ -509,6 +527,9 @@ function mapValidatedRuntimeExecution(
     toolCounts: numberRecordFromUnknown(payload.tool_counts),
     resumePolicy: mapProviderRuntimeResumePolicy(payload.resume_policy),
     toolLoopContract: mapProviderToolLoopContract(payload.tool_loop_contract),
+    transactionBatchContract: mapProviderTransactionBatchContract(
+      payload.transaction_batch_contract
+    ),
   };
 }
 
@@ -565,6 +586,12 @@ function mapProviderRuntimeDiagnostics(
     validatedRuntimeMissingCapabilities: arrayFromUnknown(diagnostics.validated_runtime_missing_capabilities),
     validatedRuntimeExecution: mapValidatedRuntimeExecution(diagnostics.validated_runtime_execution),
     miniPipeline: mapMiniPipelineDiagnostics(diagnostics.mini_pipeline),
+    providerE2eSuite: mapProviderE2eSuite(diagnostics.provider_e2e_suite),
+    providerNegativeFixtures: mapProviderNegativeFixtures(
+      diagnostics.provider_e2e_negative_fixtures
+    ),
+    providerRunHistory: mapProviderRunHistory(diagnostics.provider_run_history),
+    providerReliability: mapProviderReliability(diagnostics.provider_reliability),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note
   };
@@ -599,17 +626,41 @@ function mapRuntimeControlPlaneDiagnostics(
   payload: RuntimeModesCliPayload
 ): RuntimeControlPlaneDiagnostics {
   return {
+    cli_runner_contract_matrix: Array.isArray(payload.cli_runner_contract_matrix)
+      ? payload.cli_runner_contract_matrix
+      : [],
     runtime_fallback_matrix: Array.isArray(payload.runtime_fallback_matrix)
       ? payload.runtime_fallback_matrix
       : [],
     mcp_bridge_plan_matrix: Array.isArray(payload.mcp_bridge_plan_matrix)
       ? payload.mcp_bridge_plan_matrix
       : [],
+    mcp_bridge_permission_matrix: Array.isArray(payload.mcp_bridge_permission_matrix)
+      ? payload.mcp_bridge_permission_matrix
+      : [],
     external_mcp_server_health: Array.isArray(payload.external_mcp_server_health)
       ? payload.external_mcp_server_health
       : [],
     runtime_subagent_matrix: Array.isArray(payload.runtime_subagent_matrix)
       ? payload.runtime_subagent_matrix
+      : [],
+    runtime_subagent_mutation_policy: Array.isArray(payload.runtime_subagent_mutation_policy)
+      ? payload.runtime_subagent_mutation_policy
+      : [],
+    runtime_policy_matrix: Array.isArray(payload.runtime_policy_matrix)
+      ? payload.runtime_policy_matrix
+      : [],
+    runtime_capability_matrix: Array.isArray(payload.runtime_capability_matrix)
+      ? payload.runtime_capability_matrix
+      : [],
+    runtime_eval_matrix: Array.isArray(payload.runtime_eval_matrix)
+      ? payload.runtime_eval_matrix
+      : [],
+    runtime_eval_history: Array.isArray(payload.runtime_eval_history)
+      ? payload.runtime_eval_history
+      : [],
+    runtime_comparative_eval_matrix: Array.isArray(payload.runtime_comparative_eval_matrix)
+      ? payload.runtime_comparative_eval_matrix
       : [],
     recommendations: payload.recommendations && typeof payload.recommendations === 'object'
       ? payload.recommendations

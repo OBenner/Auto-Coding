@@ -488,6 +488,10 @@ export interface ProviderRuntimeDiagnostics {
   validatedRuntimeMissingCapabilities?: string[];
   validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
   miniPipeline?: ProviderMiniPipelineDiagnostics | null;
+  providerE2eSuite?: ProviderE2eSuiteDiagnostics;
+  providerNegativeFixtures?: ProviderNegativeFixtureDiagnostics;
+  providerRunHistory?: ProviderRunHistoryDiagnostics;
+  providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
 }
@@ -515,6 +519,7 @@ export interface ProviderValidatedRuntimeExecution {
   toolCounts?: Record<string, number>;
   resumePolicy?: ProviderValidatedRuntimeResumePolicy;
   toolLoopContract?: ProviderValidatedToolLoopContract;
+  transactionBatchContract?: ProviderValidatedTransactionBatchContract;
 }
 
 export interface ProviderValidatedRuntimeFallback {
@@ -549,6 +554,27 @@ export interface ProviderValidatedToolLoopContract {
   blockingReason?: string;
 }
 
+export interface ProviderValidatedTransactionBatchContract {
+  status?: string;
+  batchBoundaryGuard?: string;
+  transactionBatchCount?: number;
+  openTransactionBatchIds?: string[];
+  boundaryErrorCount?: number;
+  boundaryErrorReasons?: string[];
+  boundaryPreferredStrategy?: string;
+  boundaryRequiredActionKinds?: string[];
+  boundaryResolutionStrategies?: string[];
+  stagedWorkspaceGuardStatuses?: string[];
+  stagedDriftPaths?: string[];
+  stagedIsolationStatuses?: string[];
+  stagedWorkspaceRestoreStatuses?: string[];
+  stagedBaselinePaths?: string[];
+  batchLifecycleActions?: string[];
+  batchLifecycleStatuses?: string[];
+  committedMutationSnapshotIds?: string[];
+  commitOperationIds?: string[];
+}
+
 export interface ProviderMiniPipelineDiagnostics {
   status?: string;
   task?: string;
@@ -562,6 +588,56 @@ export interface ProviderMiniPipelineDiagnostics {
 export interface ProviderMiniPipelinePhase {
   name?: string;
   status?: string;
+}
+
+export interface ProviderReliabilityDiagnostics {
+  provider?: string;
+  suite?: string;
+  status?: string;
+  observedCaseCount?: number;
+  passedCaseCount?: number;
+  requiredCaseCount?: number;
+  uncoveredCases?: string[];
+  cases?: ProviderReliabilityCase[];
+}
+
+export interface ProviderReliabilityCase {
+  case?: string;
+  status?: string;
+  source?: string;
+}
+
+export interface ProviderE2eSuiteDiagnostics {
+  status?: string;
+  runs?: ProviderE2eSuiteRun[];
+}
+
+export interface ProviderE2eSuiteRun {
+  runtimeMode?: string;
+  status?: string;
+  message?: string;
+  reason?: string;
+}
+
+export interface ProviderNegativeFixtureDiagnostics {
+  status?: string;
+  provider?: string;
+  source?: string;
+  coveredCases?: string[];
+}
+
+export interface ProviderRunHistoryDiagnostics {
+  status?: string;
+  provider?: string;
+  runtimeMode?: string;
+  totalRuns?: number;
+  passedRuns?: number;
+  failedRuns?: number;
+  lastStatus?: string;
+  lastReliabilityStatus?: string;
+  lastProviderE2eStatus?: string;
+  path?: string;
+  reason?: string;
 }
 
 export interface ProviderConnectionTestResult {
@@ -596,6 +672,27 @@ export interface RuntimeMcpBridgePlanRow {
   local_bridged_servers: string[];
   external_bridged_servers: string[];
   executable_external_tools: string[];
+}
+
+export interface RuntimeMcpBridgePermissionRow {
+  server: string;
+  display_name: string;
+  bridge_path: string;
+  status: string;
+  permission_enforced: boolean;
+  strict_allowlist_configured: boolean;
+  allowlist_source: string;
+  allowed_permissions?: string[];
+  audit_required: boolean;
+  audit_artifact: string;
+  tool_count?: number | null;
+  tool_policy_coverage: string;
+  permissions: string[];
+  mutating_permissions: string[];
+  required_gates: string[];
+  satisfied_gates: string[];
+  missing_gates: string[];
+  reason: string;
 }
 
 export interface RuntimeExternalMcpHealthRow {
@@ -637,6 +734,8 @@ export interface RuntimeExternalMcpContractCheckRow {
   adapter_tools_missing_on_server: string[];
   server_tools_missing_in_adapter: string[];
   error?: string | null;
+  failure_stage?: string | null;
+  failure_kind?: string | null;
 }
 
 export interface RuntimeExternalMcpSmokeSummary {
@@ -679,10 +778,119 @@ export interface RuntimeSubagentMatrixRow {
   artifact_support: boolean;
 }
 
+export interface RuntimeSubagentMutationPolicyRow {
+  provider: string;
+  runtime_mode: string;
+  mutating_subagents_enabled: boolean;
+  status: string;
+  transaction_boundary_required: boolean;
+  parent_approval_required: boolean;
+  merge_protocol: string;
+  required_gates: string[];
+  satisfied_gates: string[];
+  missing_gates: string[];
+  reason: string;
+}
+
+export interface RuntimePolicyMatrixRow {
+  phase: string;
+  provider: string;
+  required_runtime_mode: string;
+  selected_runtime_mode: string;
+  fallback_allowed: boolean;
+  fallback_modes: string[];
+  requires_full_autonomous: boolean;
+  requires_cli_runner: boolean;
+  runner_candidates: string[];
+  policy: string;
+  reason: string;
+}
+
+export interface RuntimeCapabilityMatrixRow {
+  provider: string;
+  readiness: string;
+  full_autonomous_ready: boolean;
+  direct_full_autonomous: string;
+  recommended_runtime_mode: string;
+  generic_edit: string;
+  analysis_only: string;
+  patch_proposal: string;
+  mcp_tools: string;
+  subagents: string;
+  cli_runner_candidates: string[];
+  blockers: string[];
+  warnings: string[];
+  notes: string;
+}
+
+export interface RuntimeEvalMatrixRow {
+  case_id: string;
+  runtime_mode: string;
+  required_for_full_autonomous: boolean;
+  providers: string[];
+  required_artifacts: string[];
+}
+
+export interface RuntimeEvalHistoryProviderRow {
+  provider: string;
+  status: string;
+  total_runs: number;
+  passed_runs: number;
+  failed_runs: number;
+  last_status?: string | null;
+  last_reliability_status?: string | null;
+  last_provider_e2e_status?: string | null;
+  last_run_at?: string | null;
+}
+
+export interface RuntimeEvalHistoryRow {
+  case_id: string;
+  runtime_mode: string;
+  history_path: string;
+  status: string;
+  total_runs: number;
+  passed_runs: number;
+  failed_runs: number;
+  missing_providers: string[];
+  providers: RuntimeEvalHistoryProviderRow[];
+}
+
+export interface RuntimeComparativeEvalMatrixRow {
+  provider: string;
+  runtime_path: string;
+  quality_status: string;
+  cost_status: string;
+  safety_status: string;
+  evidence_source: string;
+  required_before_full_autonomous: boolean;
+  blockers: string[];
+}
+
+export interface CliRunnerContractMatrixRow {
+  runner_id: string;
+  display_name: string;
+  runner_status: string;
+  contract_status: string;
+  required_facets: string[];
+  missing_contract_facets: string[];
+  facets: Record<string, string>;
+  adapter_required: boolean;
+  supported_runtime_modes: string[];
+  artifact_contract: string;
+}
+
 export interface RuntimeControlPlaneDiagnostics {
+  cli_runner_contract_matrix?: CliRunnerContractMatrixRow[];
   runtime_fallback_matrix?: RuntimeFallbackMatrixRow[];
   mcp_bridge_plan_matrix?: RuntimeMcpBridgePlanRow[];
+  mcp_bridge_permission_matrix?: RuntimeMcpBridgePermissionRow[];
   external_mcp_server_health?: RuntimeExternalMcpHealthRow[];
   runtime_subagent_matrix?: RuntimeSubagentMatrixRow[];
+  runtime_subagent_mutation_policy?: RuntimeSubagentMutationPolicyRow[];
+  runtime_policy_matrix?: RuntimePolicyMatrixRow[];
+  runtime_capability_matrix?: RuntimeCapabilityMatrixRow[];
+  runtime_eval_matrix?: RuntimeEvalMatrixRow[];
+  runtime_eval_history?: RuntimeEvalHistoryRow[];
+  runtime_comparative_eval_matrix?: RuntimeComparativeEvalMatrixRow[];
   recommendations?: Record<string, string>;
 }

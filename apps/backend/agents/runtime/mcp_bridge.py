@@ -1419,6 +1419,8 @@ class RuntimeExternalMcpContractCheck:
     adapter_tools_missing_on_server: tuple[str, ...] = ()
     server_tools_missing_in_adapter: tuple[str, ...] = ()
     error: str | None = None
+    failure_stage: str | None = None
+    failure_kind: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the contract check for CLI/UI diagnostics."""
@@ -1437,6 +1439,8 @@ class RuntimeExternalMcpContractCheck:
                 self.server_tools_missing_in_adapter
             ),
             "error": self.error,
+            "failure_stage": self.failure_stage,
+            "failure_kind": self.failure_kind,
         }
 
 
@@ -2205,12 +2209,14 @@ class RuntimeMcpBridge:
             if inspect.isawaitable(result):
                 result = await result
         except Exception as e:
+            failure = classify_external_mcp_error(e, stage="tools_call")
             audit_artifact = write_mcp_bridge_audit_event(
                 self.spec_dir,
                 {
                     **audit_base,
                     "status": "error",
                     "message": str(e),
+                    **failure,
                 },
             )
             return ToolActionResult(
@@ -2222,18 +2228,21 @@ class RuntimeMcpBridge:
                     "name": spec.name,
                     **spec.policy.to_dict(),
                     **permission_decision.to_audit_dict(),
+                    **failure,
                     "audit_artifact": audit_artifact,
                 },
             )
 
-        text = extract_mcp_text(result)
-        ok = not text.startswith("Error:")
+        normalized_result = normalize_mcp_tool_result(result)
+        text = str(normalized_result["text"])
+        ok = not bool(normalized_result["is_error"]) and not text.startswith("Error:")
         audit_artifact = write_mcp_bridge_audit_event(
             self.spec_dir,
             {
                 **audit_base,
                 "status": "ok" if ok else "error",
                 "message": text[:1000],
+                "normalized_result": normalized_result,
             },
         )
         return ToolActionResult(
@@ -2246,6 +2255,7 @@ class RuntimeMcpBridge:
                 **spec.policy.to_dict(),
                 **permission_decision.to_audit_dict(),
                 "audit_artifact": audit_artifact,
+                "normalized_result": normalized_result,
                 "result": result,
             },
         )
@@ -3190,6 +3200,42 @@ async def discover_external_mcp_tools(
     )
 
 
+def classify_external_mcp_error(
+    error: Exception,
+    *,
+    stage: str,
+) -> dict[str, str]:
+    """Classify external MCP lifecycle failures for diagnostics."""
+    message = str(error).lower()
+    if (
+        isinstance(error, TimeoutError)
+        or "timed out" in message
+        or "timeout" in message
+    ):
+        failure_kind = "timeout"
+    elif "failed to start mcp server" in message:
+        failure_kind = "startup_failed"
+    elif "closed stdout" in message:
+        failure_kind = "session_closed"
+    elif (
+        "invalid json" in message
+        or "invalid sse json" in message
+        or "mismatched json-rpc response id" in message
+        or "returned no json-rpc response" in message
+    ):
+        failure_kind = "invalid_response"
+    elif "returned error" in message:
+        failure_kind = "server_error"
+    elif "http mcp server" in message and "returned " in message:
+        failure_kind = "http_error"
+    else:
+        failure_kind = "unknown"
+    return {
+        "failure_stage": stage,
+        "failure_kind": failure_kind,
+    }
+
+
 async def check_external_mcp_contract(
     *,
     server: str,
@@ -3228,6 +3274,7 @@ async def check_external_mcp_contract(
             environment=environment,
         )
     except Exception as e:
+        failure = classify_external_mcp_error(e, stage="tools_list")
         return RuntimeExternalMcpContractCheck(
             server=server,
             ok=False,
@@ -3236,6 +3283,7 @@ async def check_external_mcp_contract(
             transport=health.transport,
             adapter_tools=adapter_tools,
             error=str(e),
+            **failure,
         )
 
     server_tools = extract_mcp_tool_names(result)
@@ -3673,6 +3721,73 @@ def example_value(schema: dict[str, Any]) -> Any:
     if schema_type == "object":
         return {}
     return "value"
+
+
+def _json_text(value: Any) -> str:
+    """Return stable JSON text for structured MCP payloads."""
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except TypeError:
+        return str(value)
+
+
+def normalize_mcp_tool_result(result: Any) -> dict[str, Any]:
+    """Normalize common MCP tool result shapes for observations and UI artifacts."""
+    raw_result_type = type(result).__name__
+    if not isinstance(result, Mapping):
+        text = str(result)
+        return {
+            "text": text,
+            "content": [{"type": "text", "text": text}],
+            "structured_content": None,
+            "is_error": False,
+            "raw_result_type": raw_result_type,
+        }
+
+    structured_content = (
+        result.get("structuredContent")
+        if "structuredContent" in result
+        else result.get("structured_content")
+    )
+    is_error = bool(result.get("isError") or result.get("is_error"))
+    content = result.get("content")
+    normalized_content: list[dict[str, Any]] = []
+    text_parts: list[str] = []
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, Mapping):
+                normalized_item = {str(key): value for key, value in item.items()}
+                normalized_item.setdefault("type", "unknown")
+                if normalized_item.get("type") == "text":
+                    normalized_item["text"] = str(normalized_item.get("text", ""))
+                    if normalized_item["text"]:
+                        text_parts.append(normalized_item["text"])
+                normalized_content.append(normalized_item)
+                continue
+            text_item = str(item)
+            normalized_content.append({"type": "text", "text": text_item})
+            if text_item:
+                text_parts.append(text_item)
+
+    text = "\n".join(text_parts)
+    if not text and isinstance(result.get("text"), str):
+        text = str(result["text"])
+        if not normalized_content:
+            normalized_content.append({"type": "text", "text": text})
+    if not text and structured_content is not None:
+        text = _json_text(structured_content)
+    if not text:
+        text = _json_text(dict(result))
+    if not normalized_content and text:
+        normalized_content.append({"type": "text", "text": text})
+
+    return {
+        "text": text,
+        "content": normalized_content,
+        "structured_content": structured_content,
+        "is_error": is_error,
+        "raw_result_type": raw_result_type,
+    }
 
 
 def extract_mcp_text(result: Any) -> str:

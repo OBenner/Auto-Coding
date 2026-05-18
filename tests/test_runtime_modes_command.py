@@ -2,6 +2,7 @@ import builtins
 import json
 import logging
 import sys
+from pathlib import Path
 
 
 def test_parse_args_with_runtime_modes():
@@ -89,10 +90,18 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "patch_proposal" in output
     assert "CLI Runner Profiles" in output
     assert "CLI Runner Selection" in output
+    assert "CLI Runner Contract Matrix" in output
     assert "Runtime Fallback Matrix" in output
+    assert "Runtime Capability Matrix" in output
     assert "MCP Bridge Plan Matrix" in output
+    assert "MCP Bridge Permission Matrix" in output
     assert "External MCP Client Health" in output
     assert "Subagent Orchestrator Matrix" in output
+    assert "Mutating Subagent Policy" in output
+    assert "Runtime Policy Matrix" in output
+    assert "Runtime Eval Matrix" in output
+    assert "Runtime Eval History" in output
+    assert "Runtime Comparative Eval Matrix" in output
     assert "codex_cli" in output
     assert "generic_cli_pool" in output
     assert "opencode" in output
@@ -140,6 +149,46 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert runner_rows["goose"]["role"] == "fallback"
     assert "mcp" in runner_rows["goose"]["capability_tags"]
     assert runner_rows["qwen_code"]["runner_status"] == "planned"
+    contract_rows = {
+        row["runner_id"]: row for row in payload["cli_runner_contract_matrix"]
+    }
+    assert contract_rows["codex_cli"]["contract_status"] == "ready"
+    assert contract_rows["codex_cli"]["missing_contract_facets"] == []
+    assert contract_rows["codex_cli"]["facets"] == {
+        "run": "wired",
+        "cancel": "wired",
+        "resume": "wired",
+        "artifacts": "wired",
+        "event_parser": "wired",
+        "cost_account": "wired",
+    }
+    assert contract_rows["opencode"]["contract_status"] == "partial"
+    assert contract_rows["opencode"]["missing_contract_facets"] == [
+        "resume",
+    ]
+    assert contract_rows["opencode"]["facets"] == {
+        "run": "generic_core_configurable",
+        "cancel": "generic_core_configurable",
+        "resume": "missing_runner_resume",
+        "artifacts": "generic_core_configurable",
+        "event_parser": "generic_jsonl_core",
+        "cost_account": "generic_jsonl_core",
+    }
+    assert contract_rows["opencode"]["adapter_required"] is True
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    assert capability_rows["claude"]["readiness"] == "ready"
+    assert capability_rows["claude"]["blockers"] == []
+    assert capability_rows["openai"]["readiness"] == "limited"
+    assert capability_rows["openai"]["recommended_runtime_mode"] == "generic_edit"
+    assert "codex_cli" in capability_rows["openai"]["cli_runner_candidates"]
+    assert capability_rows["openai"]["blockers"] == [
+        "missing_full_autonomous_runtime",
+        "live_provider_e2e_required",
+        "transactional_recovery_required",
+    ]
+    assert "direct_full_autonomous_blocked" in capability_rows["openai"]["warnings"]
     selection_rows = payload["cli_runner_selection"]
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
         "codex_cli",
@@ -154,6 +203,76 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert "external_mcp_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+    assert policy_rows[("planner", "openai")] == {
+        "phase": "planner",
+        "provider": "openai",
+        "required_runtime_mode": "full_autonomous",
+        "selected_runtime_mode": "blocked",
+        "fallback_allowed": False,
+        "fallback_modes": [],
+        "requires_full_autonomous": True,
+        "requires_cli_runner": True,
+        "runner_candidates": [
+            "codex_cli",
+            "claude_code",
+            "zai_claude_code",
+        ],
+        "policy": "must_use_full_runtime",
+        "reason": "planner_requires_workspace_tools",
+    }
+    assert policy_rows[("coder", "openai")]["selected_runtime_mode"] == "generic_edit"
+    assert (
+        policy_rows[("qa_reviewer", "openai")]["selected_runtime_mode"]
+        == "analysis_only"
+    )
+    assert (
+        policy_rows[("qa_fixer", "openai")]["selected_runtime_mode"] == "generic_edit"
+    )
+    mutation_rows = {
+        (row["provider"], row["runtime_mode"]): row
+        for row in payload["runtime_subagent_mutation_policy"]
+    }
+    assert mutation_rows[("openai", "generic_edit")] == {
+        "provider": "openai",
+        "runtime_mode": "generic_edit",
+        "mutating_subagents_enabled": False,
+        "status": "blocked",
+        "transaction_boundary_required": True,
+        "parent_approval_required": True,
+        "merge_protocol": "read_only_until_transactional_merge",
+        "required_gates": [
+            "isolated_child_contexts",
+            "transaction_boundaries",
+            "conflict_aware_merge",
+            "parent_approved_apply_abort",
+            "child_artifacts",
+        ],
+        "satisfied_gates": ["isolated_child_contexts", "child_artifacts"],
+        "missing_gates": [
+            "transaction_boundaries",
+            "conflict_aware_merge",
+            "parent_approved_apply_abort",
+        ],
+        "reason": "mutating_subagents_require_transactional_merge",
+    }
+    eval_rows = {row["case_id"]: row for row in payload["runtime_eval_matrix"]}
+    assert eval_rows["provider_e2e"]["runtime_mode"] == "provider_e2e"
+    assert eval_rows["provider_e2e"]["required_for_full_autonomous"] is True
+    assert eval_rows["provider_e2e"]["providers"] == [
+        "openai",
+        "google",
+        "openrouter",
+        "litellm",
+        "zhipuai",
+        "ollama",
+    ]
+    assert eval_rows["subagent_orchestrator"]["required_artifacts"] == [
+        "runtime_subagents.json",
+        "runtime_subagents__<child>.json",
+    ]
     external_health = {
         row["server"]: row for row in payload["external_mcp_server_health"]
     }
@@ -173,6 +292,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert external_health["graphiti"]["adapter_transport"] == "http"
     assert external_health["graphiti"]["adapter_exposed_server"] == "graphiti-memory"
     assert external_health["graphiti"]["transport_supported"] is True
+
     assert external_health["electron"]["status"] == "server_disabled"
     assert external_health["electron"]["adapter_registered"] is True
     assert external_health["electron"]["execution_supported"] is True
@@ -193,6 +313,52 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert openai_generic_mcp["external_bridge_adapter_missing_servers"] == []
     assert openai_generic_mcp["external_bridge_unsupported_transport_servers"] == []
     assert openai_generic_mcp["action_required"] == "configure_external_mcp_client"
+    permission_rows = {
+        row["server"]: row for row in payload["mcp_bridge_permission_matrix"]
+    }
+    assert permission_rows["auto-claude"] == {
+        "server": "auto-claude",
+        "display_name": "Auto Code local tools",
+        "bridge_path": "local_bridge",
+        "status": "enforced",
+        "permission_enforced": True,
+        "strict_allowlist_configured": False,
+        "allowlist_source": "allow_all_default",
+        "audit_required": True,
+        "audit_artifact": ".auto-Codex/specs/<spec>/artifacts/mcp_bridge_audit.jsonl",
+        "tool_count": None,
+        "tool_policy_coverage": "dynamic",
+        "permissions": ["dynamic_auto_claude_tool_policy"],
+        "mutating_permissions": ["dynamic_mutating_tool_policy"],
+        "required_gates": [
+            "tool_policy_metadata",
+            "permission_allowlist_check",
+            "deny_before_execution",
+            "audit_artifact",
+            "mutating_tool_classification",
+        ],
+        "satisfied_gates": [
+            "tool_policy_metadata",
+            "permission_allowlist_check",
+            "deny_before_execution",
+            "audit_artifact",
+            "mutating_tool_classification",
+        ],
+        "missing_gates": [],
+        "reason": "local_tools_receive_runtime_policy_before_execution",
+    }
+    assert permission_rows["context7"]["status"] == "enforced"
+    assert permission_rows["context7"]["permission_enforced"] is True
+    assert permission_rows["context7"]["strict_allowlist_configured"] is False
+    assert permission_rows["context7"]["allowlist_source"] == "allow_all_default"
+    assert permission_rows["context7"]["permissions"] == ["read_external_docs"]
+    assert permission_rows["context7"]["mutating_permissions"] == []
+    assert permission_rows["graphiti"]["permissions"] == [
+        "read_memory",
+        "write_memory",
+    ]
+    assert permission_rows["graphiti"]["mutating_permissions"] == ["write_memory"]
+    assert permission_rows["linear"]["mutating_permissions"] == ["write_linear"]
     fallback_rows = {
         (row["provider"], row["requested_mode"]): row
         for row in payload["runtime_fallback_matrix"]
@@ -240,6 +406,79 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert openai_generic_subagents["available"] is True
 
 
+def test_runtime_modes_command_reports_provider_eval_history(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    from cli.runtime_commands import handle_runtime_modes_command
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {
+                    "openai": {
+                        "total_runs": 2,
+                        "passed_runs": 2,
+                        "failed_runs": 0,
+                        "last_status": "passed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-17T00:00:00Z",
+                        "last_reliability_status": "complete",
+                        "last_provider_e2e_status": "passed",
+                    },
+                    "google": {
+                        "total_runs": 1,
+                        "passed_runs": 0,
+                        "failed_runs": 1,
+                        "last_status": "failed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-17T00:01:00Z",
+                        "last_reliability_status": "partial_coverage",
+                        "last_provider_e2e_status": "failed",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    handle_runtime_modes_command(output_json=True)
+    payload = json.loads(capsys.readouterr().out)
+    history_rows = {row["case_id"]: row for row in payload["runtime_eval_history"]}
+    provider_e2e = history_rows["provider_e2e"]
+
+    assert provider_e2e["status"] == "partial"
+    assert provider_e2e["history_path"] == ".auto-Codex/provider-smoke-history.json"
+    assert provider_e2e["total_runs"] == 3
+    assert provider_e2e["passed_runs"] == 2
+    assert provider_e2e["failed_runs"] == 1
+    assert provider_e2e["missing_providers"] == [
+        "openrouter",
+        "litellm",
+        "zhipuai",
+        "ollama",
+    ]
+    provider_rows = {row["provider"]: row for row in provider_e2e["providers"]}
+    assert provider_rows["openai"]["status"] == "passed"
+    assert provider_rows["google"]["status"] == "failed"
+    assert provider_rows["openrouter"]["status"] == "not_observed"
+    comparative_rows = {
+        row["provider"]: row for row in payload["runtime_comparative_eval_matrix"]
+    }
+    assert comparative_rows["openai"]["quality_status"] == "passed"
+    assert comparative_rows["openai"]["evidence_source"] == (
+        ".auto-Codex/provider-smoke-history.json"
+    )
+    assert comparative_rows["google"]["quality_status"] == "failed"
+    assert comparative_rows["ollama"]["quality_status"] == "not_observed"
+    assert comparative_rows["claude"]["safety_status"] == "native_runtime_policy"
+
+
 def test_runtime_modes_command_marks_context7_available_when_external_client_enabled(
     monkeypatch,
 ):
@@ -263,6 +502,58 @@ def test_runtime_modes_command_marks_context7_available_when_external_client_ena
         "mcp__context7__resolve-library-id",
         "mcp__context7__get-library-docs",
     ]
+
+
+def test_mcp_bridge_permission_matrix_reports_strict_allowlist_and_custom_server(
+    monkeypatch,
+):
+    from agents.runtime import MCP_ALLOWED_PERMISSIONS_ENV
+    from cli.runtime_commands import build_mcp_bridge_permission_matrix
+
+    monkeypatch.setenv(MCP_ALLOWED_PERMISSIONS_ENV, "read_memory,call_custom_mcp")
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "http://localhost:8765/mcp",
+                "tools": [
+                    {
+                        "name": "search",
+                        "description": "Search custom docs.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                            "required": ["query"],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+    rows = {
+        row["server"]: row
+        for row in build_mcp_bridge_permission_matrix(
+            project_mcp_config=project_mcp_config,
+        )
+    }
+
+    assert rows["graphiti"]["strict_allowlist_configured"] is True
+    assert rows["graphiti"]["allowlist_source"] == MCP_ALLOWED_PERMISSIONS_ENV
+    assert rows["graphiti"]["allowed_permissions"] == [
+        "call_custom_mcp",
+        "read_memory",
+    ]
+    assert rows["my-docs"]["display_name"] == "My Docs"
+    assert rows["my-docs"]["bridge_path"] == "external_bridge"
+    assert rows["my-docs"]["tool_count"] == 2
+    assert rows["my-docs"]["tool_policy_coverage"] == "static"
+    assert rows["my-docs"]["permissions"] == ["call_custom_mcp"]
+    assert rows["my-docs"]["mutating_permissions"] == ["call_custom_mcp"]
+    assert rows["my-docs"]["missing_gates"] == []
+    assert rows["my-docs"]["status"] == "enforced"
 
 
 def test_runtime_modes_command_marks_browser_mcp_available_when_enabled(
@@ -411,6 +702,32 @@ def test_generic_edit_resume_preflight_command_formats_blocker_details():
     assert "artifact_name: mutation_snapshot_artifact" in text
     assert "owner_artifact: recovery_checkpoint" in text
     assert "missing_snapshot_ids: mutation-missing" in text
+
+
+def test_generic_edit_resume_preflight_command_formats_numeric_blocker_details():
+    from cli.runtime_commands import format_generic_edit_resume_preflight_text
+
+    text = format_generic_edit_resume_preflight_text(
+        {
+            "runtime": "generic_edit",
+            "status": "blocked",
+            "requested_path": "/workspace/spec/artifacts/generic_edit_recovery_checkpoint.json",
+            "resume_artifact_health": {
+                "status": "blocked",
+                "artifact": "events",
+                "reason": "corrupt_json",
+                "path": "/workspace/spec/artifacts/generic_edit_events.jsonl",
+                "line_number": 7,
+                "expected_count": 1,
+                "actual_count": 2,
+            },
+            "artifacts": {},
+        }
+    )
+
+    assert "line_number: 7" in text
+    assert "expected_count: 1" in text
+    assert "actual_count: 2" in text
 
 
 def test_external_mcp_smoke_command_outputs_json(

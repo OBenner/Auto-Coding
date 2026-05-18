@@ -19,6 +19,8 @@ import type {
   QAEscalation,
   GenericEditArtifactManifest,
   GenericEditArtifactManifestEntry,
+  GenericEditBatchBoundaryError,
+  GenericEditBatchLifecycleEvent,
   GenericEditMcpOpenSession,
   GenericEditMcpPermissionPolicy,
   GenericEditMcpServerStatus,
@@ -676,35 +678,203 @@ function normalizeNativeToolFallbacks(value: unknown): GenericEditNativeToolFall
   return result;
 }
 
+function normalizeBatchLifecycleEvent(value: unknown): GenericEditBatchLifecycleEvent | null {
+  if (!isRecord(value)) return null;
+
+  const action = readString(value, 'action');
+  const transactionId = readString(value, 'transaction_id');
+  const status = readString(value, 'status');
+  const reason = readString(value, 'reason');
+  const blockedTransactionGroupIds =
+    value.blocked_transaction_group_ids === undefined
+      ? []
+      : normalizeStringList(value.blocked_transaction_group_ids);
+
+  if (action === null || blockedTransactionGroupIds === null) {
+    return null;
+  }
+
+  return {
+    action,
+    ...(transactionId !== null ? { transaction_id: transactionId } : {}),
+    ...(status !== null ? { status } : {}),
+    ...(reason !== null ? { reason } : {}),
+    blocked_transaction_group_ids: blockedTransactionGroupIds,
+  };
+}
+
+function normalizeBatchLifecycleEvents(value: unknown): GenericEditBatchLifecycleEvent[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditBatchLifecycleEvent[] = [];
+  for (const event of value) {
+    const normalizedEvent = normalizeBatchLifecycleEvent(event);
+    if (!normalizedEvent) {
+      return null;
+    }
+    result.push(normalizedEvent);
+  }
+  return result;
+}
+
+function normalizeBatchBoundaryError(value: unknown): GenericEditBatchBoundaryError | null {
+  if (!isRecord(value)) return null;
+
+  const tool = readString(value, 'tool');
+  const batchId = readString(value, 'batch_id');
+  const reason = readString(value, 'reason');
+  const blockedTransactionGroupIds =
+    value.blocked_transaction_group_ids === undefined
+      ? []
+      : normalizeStringList(value.blocked_transaction_group_ids);
+
+  if (tool === null || batchId === null || reason === null || blockedTransactionGroupIds === null) {
+    return null;
+  }
+
+  return {
+    tool,
+    batch_id: batchId,
+    reason,
+    blocked_transaction_group_ids: blockedTransactionGroupIds,
+  };
+}
+
+function normalizeBatchBoundaryErrors(value: unknown): GenericEditBatchBoundaryError[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditBatchBoundaryError[] = [];
+  for (const error of value) {
+    const normalizedError = normalizeBatchBoundaryError(error);
+    if (!normalizedError) {
+      return null;
+    }
+    result.push(normalizedError);
+  }
+  return result;
+}
+
+function normalizeOptionalBatchStringList(value: Record<string, unknown>, key: string): string[] | null {
+  const fieldValue = value[key];
+  if (fieldValue === undefined) return [];
+  return normalizeStringList(fieldValue);
+}
+
+function normalizeOptionalBatchCount(value: Record<string, unknown>, key: string): number | null {
+  const fieldValue = value[key];
+  if (fieldValue === undefined) return 0;
+  return typeof fieldValue === 'number' && Number.isFinite(fieldValue) ? fieldValue : null;
+}
+
+function normalizeTransactionBatchStringLists(
+  value: Record<string, unknown>
+): Pick<
+  GenericEditTransactionBatch,
+  | 'transaction_ids'
+  | 'mutation_snapshot_ids'
+  | 'committed_mutation_snapshot_ids'
+  | 'commit_operation_ids'
+  | 'staged_mutation_ids'
+  | 'staged_mutated_paths'
+  | 'staged_restored_paths'
+  | 'staged_deleted_paths'
+  | 'transaction_group_ids'
+  | 'unresolved_transaction_group_ids'
+  | 'boundary_error_reasons'
+  | 'required_next_action_kinds'
+  | 'resolution_strategies'
+> | null {
+  const lists = {
+    transaction_ids: normalizeOptionalBatchStringList(value, 'transaction_ids'),
+    mutation_snapshot_ids: normalizeOptionalBatchStringList(value, 'mutation_snapshot_ids'),
+    committed_mutation_snapshot_ids: normalizeOptionalBatchStringList(
+      value,
+      'committed_mutation_snapshot_ids'
+    ),
+    commit_operation_ids: normalizeOptionalBatchStringList(value, 'commit_operation_ids'),
+    staged_mutation_ids: normalizeOptionalBatchStringList(value, 'staged_mutation_ids'),
+    staged_mutated_paths: normalizeOptionalBatchStringList(value, 'staged_mutated_paths'),
+    staged_restored_paths: normalizeOptionalBatchStringList(value, 'staged_restored_paths'),
+    staged_deleted_paths: normalizeOptionalBatchStringList(value, 'staged_deleted_paths'),
+    transaction_group_ids: normalizeOptionalBatchStringList(value, 'transaction_group_ids'),
+    unresolved_transaction_group_ids: normalizeOptionalBatchStringList(
+      value,
+      'unresolved_transaction_group_ids'
+    ),
+    boundary_error_reasons: normalizeOptionalBatchStringList(value, 'boundary_error_reasons'),
+    required_next_action_kinds: normalizeOptionalBatchStringList(
+      value,
+      'required_next_action_kinds'
+    ),
+    resolution_strategies: normalizeOptionalBatchStringList(value, 'resolution_strategies'),
+  };
+  if (Object.values(lists).some((list) => list === null)) {
+    return null;
+  }
+  return lists as Pick<
+    GenericEditTransactionBatch,
+    | 'transaction_ids'
+    | 'mutation_snapshot_ids'
+    | 'committed_mutation_snapshot_ids'
+    | 'commit_operation_ids'
+    | 'staged_mutation_ids'
+    | 'staged_mutated_paths'
+    | 'staged_restored_paths'
+    | 'staged_deleted_paths'
+    | 'transaction_group_ids'
+    | 'unresolved_transaction_group_ids'
+    | 'boundary_error_reasons'
+    | 'required_next_action_kinds'
+    | 'resolution_strategies'
+  >;
+}
+
+function normalizeTransactionBatchCounts(
+  value: Record<string, unknown>
+): Pick<
+  GenericEditTransactionBatch,
+  'recovery_outcome_count' | 'staged_mutation_count' | 'staged_path_count' | 'lifecycle_event_count' | 'boundary_error_count'
+> | null {
+  const counts = {
+    recovery_outcome_count: normalizeOptionalBatchCount(value, 'recovery_outcome_count'),
+    staged_mutation_count: normalizeOptionalBatchCount(value, 'staged_mutation_count'),
+    staged_path_count: normalizeOptionalBatchCount(value, 'staged_path_count'),
+    lifecycle_event_count: normalizeOptionalBatchCount(value, 'lifecycle_event_count'),
+    boundary_error_count: normalizeOptionalBatchCount(value, 'boundary_error_count'),
+  };
+  if (Object.values(counts).some((count) => count === null)) {
+    return null;
+  }
+  return counts as Pick<
+    GenericEditTransactionBatch,
+    'recovery_outcome_count' | 'staged_mutation_count' | 'staged_path_count' | 'lifecycle_event_count' | 'boundary_error_count'
+  >;
+}
+
 function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch | null {
   if (!isRecord(value)) return null;
 
   const id = readString(value, 'id');
   const status = readString(value, 'status');
-  const transactionIds =
-    value.transaction_ids === undefined ? [] : normalizeStringList(value.transaction_ids);
-  const mutationSnapshotIds =
-    value.mutation_snapshot_ids === undefined
-      ? []
-      : normalizeStringList(value.mutation_snapshot_ids);
-  const transactionGroupIds =
-    value.transaction_group_ids === undefined ? [] : normalizeStringList(value.transaction_group_ids);
-  const unresolvedTransactionGroupIds =
-    value.unresolved_transaction_group_ids === undefined
-      ? []
-      : normalizeStringList(value.unresolved_transaction_group_ids);
-  const recoveryOutcomeCount =
-    value.recovery_outcome_count === undefined ? 0 : value.recovery_outcome_count;
+  const recoveryStatus =
+    value.recovery_status === undefined ? 'clean' : readString(value, 'recovery_status');
+  const finishBlocked = value.finish_blocked === undefined ? false : value.finish_blocked;
+  const stringLists = normalizeTransactionBatchStringLists(value);
+  const counts = normalizeTransactionBatchCounts(value);
+  const lifecycleEvents = normalizeBatchLifecycleEvents(value.lifecycle_events);
+  const boundaryErrors = normalizeBatchBoundaryErrors(value.boundary_errors);
 
   if (
     id === null ||
     status === null ||
-    transactionIds === null ||
-    mutationSnapshotIds === null ||
-    transactionGroupIds === null ||
-    unresolvedTransactionGroupIds === null ||
-    typeof recoveryOutcomeCount !== 'number' ||
-    !Number.isFinite(recoveryOutcomeCount)
+    recoveryStatus === null ||
+    typeof finishBlocked !== 'boolean' ||
+    stringLists === null ||
+    counts === null ||
+    lifecycleEvents === null ||
+    boundaryErrors === null
   ) {
     return null;
   }
@@ -712,11 +882,12 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
   return {
     id,
     status,
-    transaction_ids: transactionIds,
-    mutation_snapshot_ids: mutationSnapshotIds,
-    transaction_group_ids: transactionGroupIds,
-    unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
-    recovery_outcome_count: recoveryOutcomeCount,
+    recovery_status: recoveryStatus,
+    finish_blocked: finishBlocked,
+    ...stringLists,
+    ...counts,
+    lifecycle_events: lifecycleEvents,
+    boundary_errors: boundaryErrors,
   };
 }
 

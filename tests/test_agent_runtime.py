@@ -36,6 +36,7 @@ from agents.runtime import (
     local_action_tool_schemas,
     local_action_tool_specs,
     mcp_bridge_audit_path,
+    normalize_mcp_tool_result,
     normalize_runtime_mode,
     registered_external_mcp_servers,
     render_local_action_prompt,
@@ -62,6 +63,7 @@ from agents.runtime.adapters.codex_cli import (
     summarize_codex_account,
     summarize_codex_events,
 )
+from agents.runtime.adapters.generic_cli import GenericCliRuntimeSession
 from agents.runtime.adapters.generic_edit import (
     MAX_MUTATION_PREIMAGE_BYTES,
     GenericEditRuntimeError,
@@ -69,6 +71,7 @@ from agents.runtime.adapters.generic_edit import (
     build_generic_edit_file_preimage,
     build_generic_edit_recovery_plan_policy,
     build_generic_edit_rollback_operation,
+    compact_generic_edit_manifest_event,
     compact_generic_edit_manifest_transaction_batches,
     execute_generic_edit_transaction_rollback,
     generic_edit_mcp_lines,
@@ -540,6 +543,145 @@ async def test_cli_runtime_process_truncates_large_output(tmp_path: Path):
     assert result.truncated is True
     assert len(result.stdout_text) == 128
     assert result.stderr_text == ""
+
+
+@pytest.mark.asyncio
+async def test_generic_cli_runtime_writes_portable_artifacts(tmp_path: Path):
+    fake_cli_script = tmp_path / "generic_cli.py"
+    fake_cli_script.write_text(
+        textwrap.dedent(
+            """\
+            #!/usr/bin/env python3
+            import json
+            import sys
+
+            message = sys.stdin.read().strip()
+            print(json.dumps({
+                "type": "session.started",
+                "session_id": "generic-cli-session",
+                "account": {"email": "dev@example.com", "api_key": "secret"},
+            }))
+            print(json.dumps({
+                "type": "usage",
+                "usage": {
+                    "input_tokens": 2,
+                    "output_tokens": 4,
+                    "total_tokens": 6,
+                },
+                "cost_usd": 0.02,
+            }))
+            print(json.dumps({
+                "type": "assistant.message",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "reasoning", "text": "private"},
+                        {"type": "output_text", "text": f"generic final: {message}"},
+                    ],
+                },
+            }))
+            """
+        ),
+        encoding="utf-8",
+    )
+    if sys.platform == "win32":
+        fake_cli = tmp_path / "generic-cli.cmd"
+        fake_cli.write_text(
+            f'@echo off\r\n"{sys.executable}" "{fake_cli_script}" %*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        fake_cli = tmp_path / "generic-cli"
+        fake_cli.write_text(
+            fake_cli_script.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        fake_cli.chmod(0o755)
+
+    session = SimpleNamespace(cli_runner_command=str(fake_cli), cli_runner_args=[])
+    runtime_session = GenericCliRuntimeSession(
+        runner_id="gemini_cli",
+        agent_session=session,
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "do generic cli work",
+        tmp_path,
+        requirements=RuntimeRequirements.text_only(),
+    )
+
+    assert result.status == "complete"
+    assert result.response_text == "generic final: do generic cli work"
+    assert result.usage_metadata == {
+        "input_tokens": 2,
+        "output_tokens": 4,
+        "total_tokens": 6,
+        "cost_usd": pytest.approx(0.02),
+    }
+    assert result.artifacts
+    assert result.artifacts["gemini_cli_events"].endswith("gemini_cli_events.jsonl")
+    assert result.artifacts["gemini_cli_timeline"].endswith("gemini_cli_timeline.json")
+    assert result.artifacts["gemini_cli_result"].endswith("gemini_cli_result.json")
+    result_payload = json.loads(
+        (tmp_path / "artifacts" / "gemini_cli_result.json").read_text(encoding="utf-8")
+    )
+    assert result_payload["runtime"] == "gemini_cli"
+    assert result_payload["session_id"] == "generic-cli-session"
+    assert result_payload["account_summary"] == {"email": "dev@example.com"}
+    assert "secret" not in json.dumps(result_payload)
+    assert result_payload["final_message_excerpt"] == (
+        "generic final: do generic cli work"
+    )
+    timeline_payload = json.loads(
+        (tmp_path / "artifacts" / "gemini_cli_timeline.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert timeline_payload["runtime"] == "gemini_cli"
+    assert timeline_payload["event_count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_runtime_factory_can_create_generic_cli_runner(tmp_path: Path):
+    fake_cli_script = tmp_path / "factory_cli.py"
+    fake_cli_script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "print('factory final: ' + sys.stdin.read().strip())\n",
+        encoding="utf-8",
+    )
+    if sys.platform == "win32":
+        fake_cli = tmp_path / "factory-cli.cmd"
+        fake_cli.write_text(
+            f'@echo off\r\n"{sys.executable}" "{fake_cli_script}" %*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        fake_cli = tmp_path / "factory-cli"
+        fake_cli.write_text(
+            fake_cli_script.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        fake_cli.chmod(0o755)
+
+    runtime_session = create_runtime_session(
+        provider_name="opencode",
+        agent_session=SimpleNamespace(cli_runner_command=str(fake_cli)),
+        runtime_mode="full_autonomous",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "from factory",
+        tmp_path,
+        requirements=RuntimeRequirements.full_coder(),
+    )
+
+    assert runtime_session.name == "opencode"
+    assert result.status == "complete"
+    assert result.response_text == "factory final: from factory"
+    assert (tmp_path / "artifacts" / "opencode_result.json").exists()
 
 
 def test_provider_tool_call_parser_handles_responses_output_blocks():
@@ -3090,6 +3232,86 @@ async def test_runtime_mcp_bridge_allows_external_tool_from_permission_env(
     assert audit_lines[0]["allowed_permissions"] == ["read_external_docs"]
 
 
+def test_normalize_mcp_tool_result_preserves_structured_content_and_errors():
+    normalized = normalize_mcp_tool_result(
+        {
+            "content": [
+                {"type": "text", "text": "created"},
+                {"type": "image", "mimeType": "image/png", "data": "abc"},
+            ],
+            "structuredContent": {"issue": "ENG-1"},
+            "isError": True,
+        }
+    )
+
+    assert normalized == {
+        "text": "created",
+        "content": [
+            {"type": "text", "text": "created"},
+            {"type": "image", "mimeType": "image/png", "data": "abc"},
+        ],
+        "structured_content": {"issue": "ENG-1"},
+        "is_error": True,
+        "raw_result_type": "dict",
+    }
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_records_normalized_external_tool_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_call_external_mcp_tool(**_kwargs):
+        await asyncio.sleep(0)
+        return {
+            "content": [{"type": "text", "text": "created"}],
+            "structuredContent": {"issue": "ENG-1"},
+        }
+
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setenv(MCP_ALLOWED_PERMISSIONS_ENV, "write_linear")
+    monkeypatch.setenv("LINEAR_API_KEY", "linear-secret")
+    monkeypatch.setattr(
+        "agents.runtime.mcp_bridge.call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(mcp_servers=("linear",))
+
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    result = await bridge.execute(
+        {
+            "tool": "mcp__linear-server__create_issue",
+            "team": "ENG",
+            "title": "Bridge issue",
+        }
+    )
+
+    assert result.ok is True
+    assert result.message == "created"
+    assert result.data["normalized_result"] == {
+        "text": "created",
+        "content": [{"type": "text", "text": "created"}],
+        "structured_content": {"issue": "ENG-1"},
+        "is_error": False,
+        "raw_result_type": "dict",
+    }
+    audit_lines = [
+        json.loads(line)
+        for line in Path(result.data["audit_artifact"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert audit_lines[0]["normalized_result"]["structured_content"] == {
+        "issue": "ENG-1"
+    }
+
+
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_executes_context7_external_mcp_tool(
     tmp_path: Path,
@@ -3280,6 +3502,67 @@ async def test_runtime_mcp_bridge_executes_custom_mcp_generic_call_tool(
     assert audit_event["server"] == "my-docs"
     assert audit_event["tool"] == "call_tool"
     assert audit_event["permission"] == "call_custom_mcp"
+
+
+@pytest.mark.asyncio
+async def test_runtime_mcp_bridge_classifies_external_call_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    async def fake_call_external_mcp_tool(**_kwargs):
+        await asyncio.sleep(0)
+        raise RuntimeExternalMcpClientError(
+            "HTTP MCP server my-docs returned error: access denied"
+        )
+
+    project_mcp_config = {
+        "CUSTOM_MCP_SERVERS": [
+            {
+                "id": "my-docs",
+                "name": "My Docs",
+                "type": "http",
+                "url": "https://docs.example.test/mcp/",
+                "headers": {"Authorization": "Bearer test-token"},
+            }
+        ]
+    }
+    monkeypatch.setenv(EXTERNAL_MCP_CLIENT_ENV, "true")
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "call_external_mcp_tool",
+        fake_call_external_mcp_tool,
+    )
+    session = SimpleNamespace(
+        auto_claude_tools=[],
+        mcp_servers=("my-docs",),
+        mcp_config=project_mcp_config,
+        mcp_allowed_permissions=("call_custom_mcp",),
+    )
+    bridge = RuntimeMcpBridge.from_agent_session(
+        agent_session=session,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert bridge is not None
+    result = await bridge.execute(
+        {
+            "tool": "mcp__my-docs__call_tool",
+            "tool_name": "search",
+            "arguments": {"query": "runtime bridge"},
+        }
+    )
+
+    assert result.ok is False
+    assert result.data["failure_stage"] == "tools_call"
+    assert result.data["failure_kind"] == "server_error"
+    audit_path = Path(result.data["audit_artifact"])
+    audit_event = json.loads(audit_path.read_text(encoding="utf-8").splitlines()[0])
+    assert audit_event["status"] == "error"
+    assert audit_event["failure_stage"] == "tools_call"
+    assert audit_event["failure_kind"] == "server_error"
 
 
 @pytest.mark.asyncio
@@ -4779,6 +5062,42 @@ async def test_check_external_mcp_contract_reports_extra_and_missing_live_tools(
 
 
 @pytest.mark.asyncio
+async def test_check_external_mcp_contract_classifies_live_tools_list_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import agents.runtime.mcp_bridge as mcp_bridge_module
+
+    async def fake_discover_external_mcp_tools(**_kwargs):
+        raise RuntimeExternalMcpClientError(
+            "HTTP MCP server graphiti returned invalid JSON: bad payload"
+        )
+
+    monkeypatch.setattr(
+        mcp_bridge_module,
+        "discover_external_mcp_tools",
+        fake_discover_external_mcp_tools,
+    )
+    environment = {
+        EXTERNAL_MCP_CLIENT_ENV: "true",
+        "GRAPHITI_MCP_URL": "https://graphiti.local/mcp/",
+    }
+
+    result = await check_external_mcp_contract(
+        server="graphiti",
+        project_dir=tmp_path,
+        environment=environment,
+    )
+
+    assert result.ok is False
+    assert result.status == "error"
+    assert result.failure_stage == "tools_list"
+    assert result.failure_kind == "invalid_response"
+    assert result.to_dict()["failure_stage"] == "tools_list"
+    assert result.to_dict()["failure_kind"] == "invalid_response"
+
+
+@pytest.mark.asyncio
 async def test_call_external_mcp_tool_dispatches_http_with_linear_auth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -5016,6 +5335,11 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
             encoding="utf-8"
         )
     )
+    mutation_snapshots = json.loads(
+        (artifact_dir / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
     events = [
         json.loads(line)
         for line in (artifact_dir / "generic_edit_events.jsonl")
@@ -5032,21 +5356,275 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
     assert batch["status"] == "committed"
     assert batch["transaction_ids"] == ["json_actions-1"]
     assert batch["mutation_snapshot_ids"] == ["mutation-1"]
+    assert batch["committed_mutation_snapshot_ids"] == ["mutation-1"]
+    assert batch["commit_operation_ids"] == ["batch-1:commit"]
     assert result_artifact["transactions"][0]["batch_id"] == "batch-1"
     assert result_artifact["transactions"][0]["batch_status"] == "committed"
     assert result_artifact["transactions"][0]["batch_actions"] == [
         "begin_batch",
         "commit_batch",
     ]
+    assert result_artifact["transactions"][0]["committed_mutation_snapshot_ids"] == [
+        "mutation-1"
+    ]
+    assert result_artifact["transactions"][0]["commit_operation_ids"] == [
+        "batch-1:commit"
+    ]
     assert manifest["counts"]["transaction_batch_count"] == 1
     assert manifest["transaction_batches"][0]["id"] == "batch-1"
     assert manifest["transaction_batches"][0]["status"] == "committed"
     assert manifest["transaction_batches"][0]["transaction_ids"] == ["json_actions-1"]
+    assert manifest["transaction_batches"][0]["committed_mutation_snapshot_ids"] == [
+        "mutation-1"
+    ]
+    assert manifest["transaction_batches"][0]["commit_operation_ids"] == [
+        "batch-1:commit"
+    ]
+    assert mutation_snapshots["snapshots"][0]["staged_status"] == "committed"
+    assert mutation_snapshots["snapshots"][0]["commit_operation_id"] == (
+        "batch-1:commit"
+    )
     transaction_event = next(
         event for event in events if event["event_type"] == "transaction"
     )
     assert transaction_event["batch_id"] == "batch-1"
     assert transaction_event["batch_status"] == "committed"
+    assert transaction_event["committed_mutation_snapshot_ids"] == ["mutation-1"]
+    assert transaction_event["commit_operation_ids"] == ["batch-1:commit"]
+    commit_event = next(
+        event
+        for event in events
+        if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
+    )
+    assert commit_event["committed_mutation_snapshot_ids"] == ["mutation-1"]
+    assert commit_event["commit_operation_id"] == "batch-1:commit"
+    manifest_commit_event = next(
+        event
+        for event in manifest["recovery_timeline"]
+        if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
+    )
+    assert manifest_commit_event["committed_mutation_snapshot_ids"] == ["mutation-1"]
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_mutation_after_batch_commit_in_same_turn(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    outside = tmp_path / "outside.txt"
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "mix committed batch with a follow-up mutation",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "commit_batch",
+                        "batch_id": "batch-1",
+                        "summary": "batched.txt updated",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "outside.txt",
+                        "content": "outside\n",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Should not mix batch and outside mutation",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "reject mixed batch mutation",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+
+    assert result.status == "error"
+    assert "write_file cannot run after commit_batch" in result.response_text
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert not outside.exists()
+    assert result_artifact["stop_reason"] == "batch_boundary_violation"
+    assert trace["trace"][0]["error"] == (
+        "Generic edit action write_file cannot run after commit_batch in the "
+        "same provider turn. Start a new provider iteration before additional "
+        "mutations."
+    )
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_rejects_opaque_mutation_inside_open_batch(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    marker = tmp_path / "opaque-marker.txt"
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "try to run an opaque command inside a staged batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "run_command",
+                        "command": "touch opaque-marker.txt",
+                    },
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Rollback command drift",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Should not run opaque batch mutation",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+            {
+                "thought": "abort after the isolation guard blocks the command",
+                "actions": [
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Rollback isolated batch",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Opaque mutation was blocked and rolled back",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "reject opaque batch mutation",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(
+        (artifact_dir / "generic_edit_artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert not marker.exists()
+    assert [
+        transaction["status"] for transaction in result_artifact["transactions"]
+    ] == [
+        "partial_failure",
+        "complete",
+    ]
+    blocked_transaction = result_artifact["transactions"][0]
+    assert blocked_transaction["failed_tool"] == "run_command"
+    assert blocked_transaction["batch_boundary_errors"] == [
+        {
+            "tool": "run_command",
+            "batch_id": "batch-1",
+            "reason": "opaque_batch_mutation",
+            "blocked_transaction_group_ids": [],
+        }
+    ]
+    batch = result_artifact["transaction_batches"][0]
+    assert batch["status"] == "aborted"
+    assert batch["boundary_error_reasons"] == ["opaque_batch_mutation"]
+    assert batch["boundary_errors"] == [
+        {
+            "tool": "run_command",
+            "batch_id": "batch-1",
+            "reason": "opaque_batch_mutation",
+            "blocked_transaction_group_ids": [],
+        }
+    ]
+    assert any(
+        event["event_type"] == "action_result"
+        and event["tool"] == "run_command"
+        and event["ok"] is False
+        and event["timeline_stage"] == "batch_boundary_blocked"
+        and event["batch_boundary_error_reason"] == "opaque_batch_mutation"
+        and event["requires_user_action"] is True
+        for event in events
+    )
+    manifest_boundary_event = next(
+        event
+        for event in manifest["recovery_timeline"]
+        if event.get("tool") == "run_command"
+        and event.get("timeline_stage") == "batch_boundary_blocked"
+    )
+    assert manifest_boundary_event["batch_boundary_error_reason"] == (
+        "opaque_batch_mutation"
+    )
+    assert manifest_boundary_event["preferred_strategy"] == "abort_batch"
+    assert manifest_boundary_event["required_next_action_kinds"] == [
+        "abort_batch",
+        "repair_mutation",
+    ]
+    assert manifest_boundary_event["resolution_strategies"] == [
+        "abort_batch",
+        "repair_mutation",
+    ]
 
 
 @pytest.mark.asyncio
@@ -5103,6 +5681,11 @@ async def test_generic_edit_runtime_aborts_open_batch_with_snapshot_rollback(
             encoding="utf-8"
         )
     )
+    mutation_snapshots = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
 
     assert result.status == "continue"
     assert target.read_text(encoding="utf-8") == "old\n"
@@ -5116,6 +5699,401 @@ async def test_generic_edit_runtime_aborts_open_batch_with_snapshot_rollback(
         "begin_batch",
         "abort_batch",
     ]
+    assert mutation_snapshots["snapshots"][0]["staged_status"] == "rolled_back"
+    assert mutation_snapshots["snapshots"][0]["rollback_operation_id"]
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_blocks_batch_commit_with_unresolved_recovery(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "partially mutate an open batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "read_file",
+                        "path": "missing.txt",
+                    },
+                ],
+            },
+            {
+                "thought": "try to commit without recovery",
+                "actions": [
+                    {
+                        "tool": "commit_batch",
+                        "batch_id": "batch-1",
+                        "summary": "Commit unresolved batch",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Should not finish unresolved batch",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+            {
+                "thought": "abort unresolved batch instead",
+                "actions": [
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Rollback unresolved batch",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Batch rolled back",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "guard unresolved batch commit",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(
+        (artifact_dir / "generic_edit_artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert [
+        transaction["status"] for transaction in result_artifact["transactions"]
+    ] == [
+        "partial_failure",
+        "failed",
+        "complete",
+    ]
+    blocked_transaction = result_artifact["transactions"][1]
+    assert blocked_transaction["failed_tool"] == "commit_batch"
+    assert blocked_transaction["batch_boundary_errors"] == [
+        {
+            "tool": "commit_batch",
+            "batch_id": "batch-1",
+            "reason": "unresolved_batch_recovery",
+            "blocked_transaction_group_ids": ["transaction-group-1"],
+        }
+    ]
+    batch = result_artifact["transaction_batches"][0]
+    assert batch["status"] == "aborted"
+    assert batch["boundary_error_count"] == 1
+    assert batch["boundary_error_reasons"] == ["unresolved_batch_recovery"]
+    assert batch["boundary_errors"][0]["blocked_transaction_group_ids"] == [
+        "transaction-group-1"
+    ]
+    assert manifest["transaction_batches"][0]["boundary_error_count"] == 1
+    assert manifest["transaction_batches"][0]["boundary_error_reasons"] == [
+        "unresolved_batch_recovery"
+    ]
+    assert manifest["transaction_batches"][0]["boundary_errors"] == [
+        {
+            "tool": "commit_batch",
+            "batch_id": "batch-1",
+            "reason": "unresolved_batch_recovery",
+            "blocked_transaction_group_ids": ["transaction-group-1"],
+        }
+    ]
+    assert any(
+        event["timeline_stage"] == "batch_boundary_blocked"
+        and event["requires_user_action"] is True
+        for event in manifest["recovery_timeline"]
+    )
+    assert any(
+        event["event_type"] == "action_result"
+        and event["tool"] == "commit_batch"
+        and event["ok"] is False
+        and event["timeline_stage"] == "batch_boundary_blocked"
+        and event["batch_boundary_error_reason"] == "unresolved_batch_recovery"
+        and event["requires_user_action"] is True
+        for event in events
+    )
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_blocks_batch_commit_when_staged_file_drifted(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+
+    class DriftingGenericEditSession(FakeGenericEditSession):
+        async def complete(self, message: str, stream: bool = True):
+            assert stream is True
+            self.messages.append(message)
+            if len(self.messages) == 2:
+                target.write_text("external drift\n", encoding="utf-8")
+            yield self.responses.pop(0)
+
+    session = DriftingGenericEditSession(
+        [
+            {
+                "thought": "stage a batch update",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                ],
+            },
+            {
+                "thought": "hit drift before commit",
+                "actions": [
+                    {
+                        "tool": "commit_batch",
+                        "batch_id": "batch-1",
+                        "summary": "Commit drifted staged file",
+                    },
+                ],
+            },
+            {
+                "thought": "abort after the staged drift guard blocks commit",
+                "actions": [
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Rollback drifted staged file",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Batch drift was blocked and rolled back",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+            {
+                "thought": "finish if the guard failed to block commit",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Staged drift was not blocked",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "guard staged batch drift",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    result_artifact = json.loads(
+        (artifact_dir / "generic_edit_result.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(
+        (artifact_dir / "generic_edit_artifact_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    events = [
+        json.loads(line)
+        for line in (artifact_dir / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert [
+        transaction["status"] for transaction in result_artifact["transactions"]
+    ] == [
+        "complete",
+        "failed",
+        "complete",
+    ]
+    blocked_transaction = result_artifact["transactions"][1]
+    assert blocked_transaction["failed_tool"] == "commit_batch"
+    assert blocked_transaction["batch_boundary_errors"] == [
+        {
+            "tool": "commit_batch",
+            "batch_id": "batch-1",
+            "reason": "staged_batch_drift",
+            "blocked_transaction_group_ids": [],
+        }
+    ]
+    batch = result_artifact["transaction_batches"][0]
+    assert batch["status"] == "aborted"
+    assert batch["lifecycle_events"] == [
+        {
+            "action": "begin_batch",
+            "transaction_id": "json_actions-1",
+            "status": "open",
+        },
+        {
+            "action": "commit_batch",
+            "transaction_id": "json_actions-2",
+            "status": "blocked",
+            "reason": "staged_batch_drift",
+        },
+        {
+            "action": "abort_batch",
+            "transaction_id": "json_actions-3",
+            "status": "aborted",
+        },
+    ]
+    assert batch["boundary_error_reasons"] == ["staged_batch_drift"]
+    assert batch["boundary_errors"][0]["reason"] == "staged_batch_drift"
+    assert manifest["transaction_batches"][0]["boundary_error_reasons"] == [
+        "staged_batch_drift"
+    ]
+    commit_event = next(
+        event
+        for event in events
+        if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
+    )
+    assert commit_event["ok"] is False
+    assert commit_event["timeline_stage"] == "batch_boundary_blocked"
+    assert commit_event["batch_boundary_error_reason"] == "staged_batch_drift"
+    assert commit_event["requires_user_action"] is True
+    assert commit_event["staged_workspace_guard_status"] == "drifted"
+    assert commit_event["drift_paths"] == ["batched.txt"]
+    manifest_commit_event = next(
+        event
+        for event in manifest["recovery_timeline"]
+        if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
+    )
+    assert manifest_commit_event["staged_workspace_guard_status"] == "drifted"
+    assert manifest_commit_event["drift_paths"] == ["batched.txt"]
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_commits_batch_after_same_turn_recovery(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "partially mutate an open batch",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "read_file",
+                        "path": "missing.txt",
+                    },
+                ],
+            },
+            {
+                "thought": "recover the failed transaction then close the batch",
+                "actions": [
+                    {
+                        "tool": "rollback_transaction",
+                        "transaction_id": "json_actions-1",
+                    },
+                    {
+                        "tool": "commit_batch",
+                        "batch_id": "batch-1",
+                        "summary": "Commit recovered batch",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Recovered batch committed",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            },
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "recover then commit batch",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    result_artifact = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert result_artifact["recovery_resolved"] is True
+    assert [
+        transaction["status"] for transaction in result_artifact["transactions"]
+    ] == [
+        "partial_failure",
+        "complete",
+    ]
+    batch = result_artifact["transaction_batches"][0]
+    assert batch["id"] == "batch-1"
+    assert batch["status"] == "committed"
+    assert batch["boundary_error_count"] == 0
+    assert batch.get("unresolved_transaction_group_ids", []) == []
+    assert batch["recovery_outcome_count"] == 1
 
 
 @pytest.mark.asyncio
@@ -5187,10 +6165,20 @@ async def test_generic_edit_runtime_rejects_finish_with_open_batch(
     ]
 
     assert result.status == "error"
-    assert target.read_text(encoding="utf-8") == "new\n"
+    assert target.read_text(encoding="utf-8") == "old\n"
     assert result_artifact["stop_reason"] == "open_batch"
     assert result_artifact["open_transaction_batch_ids"] == ["batch-1"]
     assert result_artifact["recoverable"] is True
+    mutation_snapshots = json.loads(
+        (artifact_dir / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    snapshot = mutation_snapshots["snapshots"][0]
+    assert snapshot["staged_status"] == "staged"
+    assert snapshot["staged_isolation"]["status"] == "isolated"
+    assert snapshot["staged_isolation"]["workspace_restored"] is True
+    assert snapshot["staged_isolation"]["baseline_paths"] == ["batched.txt"]
     assert checkpoint["resume"]["strategy"] == "resolve_open_batch"
     assert checkpoint["resume_policy"]["finish_blocked"] is True
     assert checkpoint["resume_policy"]["required_resolution_action_kinds"] == [
@@ -5264,6 +6252,7 @@ async def test_generic_edit_resume_preflight_reports_ready_open_batch(
     )
 
     assert result.status == "error"
+    assert target.read_text(encoding="utf-8") == "old\n"
     assert preflight["status"] == "ready"
     assert preflight["resume"] == {
         "strategy": "resolve_open_batch",
@@ -5329,6 +6318,7 @@ async def test_generic_edit_runtime_resumes_open_batch_and_commits(
     checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
     assert first_result.status == "error"
     assert checkpoint_path.exists()
+    assert target.read_text(encoding="utf-8") == "old\n"
 
     resume_session = FakeGenericEditSession(
         [
@@ -5375,6 +6365,96 @@ async def test_generic_edit_runtime_resumes_open_batch_and_commits(
     assert result_artifact["transaction_batches"][0]["status"] == "committed"
     assert result_artifact["open_transaction_batch_ids"] == []
     assert not checkpoint_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_reads_isolated_staged_batch_content(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "stage and inspect a batch update",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "search_text",
+                        "path": "batched.txt",
+                        "query": "new",
+                    },
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Discard staged update",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Inspected and discarded staged update",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "read staged batch content",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    read_result = trace["trace"][0]["actions"][2]["result"]
+    mutation_snapshots = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert read_result["ok"] is True
+    assert read_result["data"]["match_count"] == 1
+    search_event = next(
+        event
+        for event in events
+        if event["event_type"] == "action_result" and event["tool"] == "search_text"
+    )
+    assert search_event["staged_workspace_materialized"] is True
+    assert search_event["staged_workspace_restored"] is True
+    assert search_event["staged_workspace_batch_id"] == "batch-1"
+    assert mutation_snapshots["snapshots"][0]["staged_isolation"] == {
+        "status": "isolated",
+        "workspace_restored": True,
+        "baseline_paths": ["batched.txt"],
+        "baseline_path_count": 1,
+    }
 
 
 @pytest.mark.asyncio
@@ -5816,6 +6896,7 @@ def generic_edit_text_snapshot(
     return {
         "id": snapshot_id,
         "transaction_id": transaction_id,
+        "paths": [path],
         "rollback": {"restorable": True},
         "preimages": [
             {
@@ -5827,6 +6908,18 @@ def generic_edit_text_snapshot(
                 "content": content,
             }
         ],
+        "postimages": [
+            {
+                "path": path,
+                "restorable": True,
+                "exists": True,
+                "type": "file",
+                "content_encoding": "utf-8",
+                "content_truncated": False,
+                "content_sha256": "test-snapshot",
+            }
+        ],
+        "workspace_guard": {"status": "captured"},
     }
 
 
@@ -7077,6 +8170,94 @@ def write_minimal_generic_edit_artifact_manifest(
     return manifest_path
 
 
+def write_generic_edit_manifest_batch_state_mismatch_artifacts(
+    tmp_path: Path,
+) -> tuple[Path, Path]:
+    transaction = {
+        "id": "json_actions-1",
+        "loop": "json_actions",
+        "iteration": 1,
+        "status": "partial_failure",
+        "batch_ids": ["batch-1"],
+        "batch_id": "batch-1",
+        "batch_status": "open",
+        "batch_actions": ["begin_batch"],
+        "mutation_snapshot_ids": ["mutation-1"],
+        "recovery_required": True,
+    }
+    trace = [{"iteration": 1, "actions": [], "transaction": transaction}]
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+            transaction_summary=transaction_summary,
+            mutation_snapshots=[
+                generic_edit_text_snapshot("mutation-1", "batched.txt", "old\n")
+            ],
+        )
+    )
+    trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["counts"]["transaction_batch_count"] = 1
+    manifest["transaction_batches"] = [
+        {
+            "id": "batch-other",
+            "status": "open",
+            "transaction_ids": ["json_actions-1"],
+        }
+    ]
+    manifest_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+    return checkpoint_path, manifest_path
+
+
+def write_generic_edit_manifest_event_count_mismatch_artifacts(
+    tmp_path: Path,
+) -> tuple[Path, Path]:
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    event_path = artifact_dir / "generic_edit_events.jsonl"
+    event_path.write_text(
+        json.dumps({"event_type": "resume_policy", "sequence": 1}) + "\n",
+        encoding="utf-8",
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["resume_inputs"]["event_artifact"] = str(event_path)
+    checkpoint["resume_policy"]["required_artifacts"].append("event_artifact")
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["counts"]["event_count"] = 99
+    manifest_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+    return checkpoint_path, manifest_path
+
+
 def update_generic_edit_session_state(
     session_state_path: Path,
     **updates: Any,
@@ -7145,6 +8326,75 @@ def test_generic_edit_resume_preflight_reports_missing_trace_artifact(
     assert health["owner_artifact"] == "recovery_checkpoint"
 
 
+def test_generic_edit_resume_preflight_blocks_checkpoint_trace_input_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    _, checkpoint_path, _, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+        write_session_state=False,
+    )
+    stale_trace_path = tmp_path / "stale-generic-edit-trace.json"
+    stale_trace_path.write_text(json.dumps({"trace": []}), encoding="utf-8")
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["resume_inputs"]["trace_artifact"] = str(stale_trace_path)
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "recovery_checkpoint",
+        "reason": "checkpoint_mismatch",
+        "path": str(checkpoint_path),
+        "artifact_name": "trace_artifact",
+        "expected_artifact_path": str(trace_path),
+        "actual_artifact_path": str(stale_trace_path),
+    }
+
+
+def test_generic_edit_resume_preflight_blocks_session_trace_input_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    _, _, session_state_path, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+    )
+    stale_trace_path = tmp_path / "stale-session-trace.json"
+    stale_trace_path.write_text(json.dumps({"trace": []}), encoding="utf-8")
+    session_state = json.loads(session_state_path.read_text(encoding="utf-8"))
+    session_state["resume_inputs"]["trace_artifact"] = str(stale_trace_path)
+    session_state_path.write_text(json.dumps(session_state), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=session_state_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "session_state",
+        "reason": "checkpoint_mismatch",
+        "path": str(session_state_path),
+        "artifact_name": "trace_artifact",
+        "expected_artifact_path": str(trace_path),
+        "actual_artifact_path": str(stale_trace_path),
+    }
+
+
 def test_generic_edit_resume_preflight_blocks_session_state_checkpoint_mismatch(
     tmp_path: Path,
 ):
@@ -7210,6 +8460,165 @@ def test_generic_edit_resume_preflight_blocks_missing_checkpoint_snapshot_ref(
     assert health["missing_snapshot_ids"] == ["mutation-missing"]
 
 
+def test_generic_edit_resume_preflight_blocks_incomplete_mutation_snapshot(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    transaction = {
+        "id": "json_actions-1",
+        "status": "complete",
+        "mutation_snapshot_ids": ["mutation-1"],
+    }
+    trace = [{"iteration": 1, "actions": [], "transaction": transaction}]
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    _, checkpoint_path, _, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+        transaction_summary=transaction_summary,
+        mutation_snapshots=[{"id": "mutation-1"}],
+    )
+    trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "invalid_schema"
+    assert health["snapshot_id"] == "mutation-1"
+    assert health["missing_snapshot_fields"] == [
+        "paths",
+        "preimages",
+        "postimages",
+        "rollback",
+        "transaction_id",
+        "workspace_guard",
+    ]
+
+
+def test_generic_edit_resume_preflight_blocks_corrupt_mutation_snapshots(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, _, _ = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+    )
+    mutation_snapshot_path = artifact_dir / "generic_edit_mutation_snapshots.json"
+    mutation_snapshot_path.write_text("{", encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(mutation_snapshot_path)
+
+
+def test_generic_edit_resume_preflight_blocks_invalid_mutation_snapshot_schema(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, _, _ = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+    )
+    mutation_snapshot_path = artifact_dir / "generic_edit_mutation_snapshots.json"
+    mutation_snapshot_path.write_text(json.dumps([]), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "invalid_schema"
+    assert health["path"] == str(mutation_snapshot_path)
+
+
+def test_generic_edit_resume_preflight_blocks_unrestored_isolated_staged_snapshot(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    preimage = build_generic_edit_file_preimage(
+        project_dir=tmp_path,
+        path="batched.txt",
+    )
+    target.write_text("new\n", encoding="utf-8")
+    postimage = build_generic_edit_file_preimage(
+        project_dir=tmp_path,
+        path="batched.txt",
+    )
+    target.write_text("old\n", encoding="utf-8")
+    transaction = {
+        "id": "json_actions-1",
+        "status": "complete",
+        "mutation_snapshot_ids": ["mutation-1"],
+    }
+    trace = [{"iteration": 1, "actions": [], "transaction": transaction}]
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    _, checkpoint_path, _, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+        transaction_summary=transaction_summary,
+        mutation_snapshots=[
+            {
+                "id": "mutation-1",
+                "transaction_id": "json_actions-1",
+                "batch_id": "batch-1",
+                "staged_status": "staged",
+                "paths": ["batched.txt"],
+                "preimages": [preimage],
+                "postimages": [postimage],
+                "rollback": {"restorable": True},
+                "workspace_guard": {"status": "captured"},
+                "staged_workspace_preimages": [preimage],
+                "staged_isolation": {
+                    "status": "isolated",
+                    "workspace_restored": False,
+                    "baseline_paths": ["batched.txt"],
+                },
+            }
+        ],
+    )
+    trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "invalid_schema"
+    assert health["snapshot_id"] == "mutation-1"
+    assert health["invalid_snapshot_fields"] == ["staged_isolation"]
+
+
 def test_generic_edit_resume_preflight_blocks_corrupt_artifact_manifest(
     tmp_path: Path,
 ):
@@ -7234,6 +8643,220 @@ def test_generic_edit_resume_preflight_blocks_corrupt_artifact_manifest(
     assert health["artifact"] == "artifact_manifest"
     assert health["reason"] == "corrupt_json"
     assert health["path"] == str(manifest_path)
+
+
+def test_generic_edit_resume_preflight_blocks_corrupt_recovery_plan(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    recovery_plan_path = artifact_dir / "generic_edit_recovery_plan.json"
+    recovery_plan_path.write_text("{", encoding="utf-8")
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["recovery_plan_artifact"] = str(recovery_plan_path)
+    checkpoint["resume_inputs"]["recovery_plan_artifact"] = str(recovery_plan_path)
+    checkpoint["resume_policy"]["required_artifacts"].append("recovery_plan_artifact")
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "recovery_plan"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(recovery_plan_path)
+
+
+def test_generic_edit_resume_preflight_blocks_corrupt_transaction_groups(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    transaction_group_path = artifact_dir / "generic_edit_transaction_groups.json"
+    transaction_group_path.write_text("{", encoding="utf-8")
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["transaction_group_artifact"] = str(transaction_group_path)
+    checkpoint["transaction_group_count"] = 1
+    checkpoint["resume_inputs"]["transaction_group_artifact"] = str(
+        transaction_group_path
+    )
+    checkpoint["resume_policy"]["required_artifacts"].append(
+        "transaction_group_artifact"
+    )
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "transaction_groups"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(transaction_group_path)
+
+
+def test_generic_edit_resume_preflight_blocks_transaction_group_count_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    transaction_group_path = artifact_dir / "generic_edit_transaction_groups.json"
+    transaction_group_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_transaction_groups",
+                "group_count": 2,
+                "status_counts": {"resolved": 2},
+                "unresolved_group_count": 0,
+                "unresolved_group_ids": [],
+                "recovery_attempt_count": 0,
+                "failed_recovery_attempt_count": 0,
+                "recovery_outcome_count": 0,
+                "recovery_outcomes": [],
+                "transaction_groups": [
+                    {"id": "transaction-group-1", "status": "resolved"},
+                    {"id": "transaction-group-2", "status": "resolved"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["transaction_group_artifact"] = str(transaction_group_path)
+    checkpoint["transaction_group_count"] = 1
+    checkpoint["resume_inputs"]["transaction_group_artifact"] = str(
+        transaction_group_path
+    )
+    checkpoint["resume_policy"]["required_artifacts"].append(
+        "transaction_group_artifact"
+    )
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "transaction_groups"
+    assert health["reason"] == "checkpoint_mismatch"
+    assert health["expected_count"] == 1
+    assert health["actual_count"] == 2
+
+
+def test_generic_edit_resume_preflight_blocks_corrupt_event_artifact(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, _ = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    event_path = artifact_dir / "generic_edit_events.jsonl"
+    event_path.write_text("{", encoding="utf-8")
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["event_artifact"] = str(event_path)
+    checkpoint["resume_inputs"]["event_artifact"] = str(event_path)
+    checkpoint["resume_policy"]["required_artifacts"].append("event_artifact")
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "events"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(event_path)
+
+
+def test_generic_edit_resume_preflight_blocks_manifest_event_count_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    checkpoint_path, manifest_path = (
+        write_generic_edit_manifest_event_count_mismatch_artifacts(tmp_path)
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "artifact_manifest",
+        "reason": "checkpoint_mismatch",
+        "path": str(manifest_path),
+        "expected_event_count": 1,
+        "actual_event_count": 99,
+    }
 
 
 def test_generic_edit_resume_preflight_blocks_manifest_checkpoint_mismatch(
@@ -7344,6 +8967,244 @@ def test_generic_edit_resume_preflight_blocks_manifest_count_mismatch(
         "expected_iteration_count": 1,
         "actual_iteration_count": 99,
     }
+
+
+def test_generic_edit_resume_preflight_blocks_manifest_batch_state_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    checkpoint_path, manifest_path = (
+        write_generic_edit_manifest_batch_state_mismatch_artifacts(tmp_path)
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "artifact_manifest",
+        "reason": "checkpoint_mismatch",
+        "path": str(manifest_path),
+        "expected_transaction_batch_ids": ["batch-1"],
+        "actual_transaction_batch_ids": ["batch-other"],
+    }
+
+
+def test_generic_edit_resume_preflight_blocks_manifest_batch_lifecycle_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    transaction = {
+        "id": "json_actions-1",
+        "loop": "json_actions",
+        "iteration": 1,
+        "status": "partial_failure",
+        "batch_ids": ["batch-1"],
+        "batch_id": "batch-1",
+        "batch_status": "open",
+        "batch_actions": ["begin_batch"],
+        "recovery_required": True,
+    }
+    trace = [{"iteration": 1, "actions": [], "transaction": transaction}]
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+            transaction_summary=transaction_summary,
+        )
+    )
+    trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["counts"]["transaction_batch_count"] = 1
+    manifest["transaction_batches"] = compact_generic_edit_manifest_transaction_batches(
+        transaction_summary
+    )
+    manifest["transaction_batches"][0]["lifecycle_event_count"] = 99
+    manifest_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "artifact_manifest",
+        "reason": "checkpoint_mismatch",
+        "path": str(manifest_path),
+        "batch_id": "batch-1",
+        "expected_transaction_batch_lifecycle_event_count": 1,
+        "actual_transaction_batch_lifecycle_event_count": 99,
+    }
+
+
+def test_generic_edit_resume_preflight_blocks_manifest_boundary_policy_drift(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["recovery_timeline"] = [
+        {
+            "event_type": "action_result",
+            "tool": "run_command",
+            "ok": False,
+            "timeline_stage": "batch_boundary_blocked",
+            "batch_id": "batch-1",
+            "batch_boundary_error_reason": "opaque_batch_mutation",
+            "requires_user_action": True,
+            "preferred_strategy": "abort_batch",
+            "required_next_action_kinds": [
+                "abort_batch",
+                "repair_mutation",
+            ],
+            "resolution_strategies": [
+                "abort_batch",
+                "repair_mutation",
+            ],
+        }
+    ]
+    manifest_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "artifact_manifest"
+    assert health["reason"] == "checkpoint_mismatch"
+    assert health["path"] == str(manifest_path)
+    assert health["expected_required_resolution_action_kinds"] == [
+        "abort_batch",
+        "repair_mutation",
+    ]
+    assert health["actual_required_resolution_action_kinds"] == []
+    assert health["missing_required_resolution_action_kinds"] == [
+        "abort_batch",
+        "repair_mutation",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_resume_blocks_manifest_batch_state_mismatch(
+    tmp_path: Path,
+):
+    checkpoint_path, _manifest_path = (
+        write_generic_edit_manifest_batch_state_mismatch_artifacts(tmp_path)
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "should not be reached",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Should not resume with stale manifest batch state",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    with pytest.raises(GenericEditRuntimeError, match="transaction batch"):
+        await runtime_session.resume(
+            checkpoint_path=checkpoint_path,
+            spec_dir=tmp_path,
+            verbose=False,
+            phase=None,
+        )
+
+    assert session.responses
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_resume_blocks_manifest_event_count_mismatch(
+    tmp_path: Path,
+):
+    checkpoint_path, _manifest_path = (
+        write_generic_edit_manifest_event_count_mismatch_artifacts(tmp_path)
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "should not be reached",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Should not resume with stale event count",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    with pytest.raises(GenericEditRuntimeError, match="event count"):
+        await runtime_session.resume(
+            checkpoint_path=checkpoint_path,
+            spec_dir=tmp_path,
+            verbose=False,
+            phase=None,
+        )
+
+    assert session.responses
 
 
 def test_generic_edit_recovery_checkpoint_requires_existing_policy_artifacts(
@@ -8762,6 +10623,19 @@ def test_generic_edit_transaction_batches_expose_staged_mutation_metadata():
     batch = summary["transaction_batches"][0]
     assert batch["id"] == "batch-1"
     assert batch["status"] == "committed"
+    assert batch["lifecycle_events"] == [
+        {
+            "action": "begin_batch",
+            "transaction_id": "json_actions-1",
+            "status": "open",
+        },
+        {
+            "action": "commit_batch",
+            "transaction_id": "json_actions-2",
+            "status": "committed",
+        },
+    ]
+    assert batch["lifecycle_event_count"] == 2
     assert batch["staged_mutation_ids"] == ["mutation-1", "mutation-2"]
     assert batch["staged_mutated_paths"] == ["created.txt", "updated.txt"]
     assert batch["staged_restored_paths"] == ["restored.txt"]
@@ -8770,6 +10644,19 @@ def test_generic_edit_transaction_batches_expose_staged_mutation_metadata():
     assert batch["staged_path_count"] == 4
 
     compact_batches = compact_generic_edit_manifest_transaction_batches(summary)
+    assert compact_batches[0]["lifecycle_events"] == [
+        {
+            "action": "begin_batch",
+            "transaction_id": "json_actions-1",
+            "status": "open",
+        },
+        {
+            "action": "commit_batch",
+            "transaction_id": "json_actions-2",
+            "status": "committed",
+        },
+    ]
+    assert compact_batches[0]["lifecycle_event_count"] == 2
     assert compact_batches[0]["staged_mutation_count"] == 2
     assert compact_batches[0]["staged_path_count"] == 4
     assert compact_batches[0]["staged_mutated_paths"] == [
@@ -8777,6 +10664,28 @@ def test_generic_edit_transaction_batches_expose_staged_mutation_metadata():
         "updated.txt",
     ]
     assert compact_batches[0]["staged_deleted_paths"] == ["deleted.txt"]
+
+
+def test_generic_edit_manifest_event_preserves_staged_workspace_fields():
+    compact = compact_generic_edit_manifest_event(
+        {
+            "sequence": 12,
+            "event_type": "action_result",
+            "tool": "search_text",
+            "ok": True,
+            "staged_workspace_materialized": True,
+            "staged_workspace_restored": True,
+            "staged_workspace_batch_id": "batch-1",
+            "staged_workspace_guard_status": "clean",
+            "staged_workspace_guard_drift_count": 0,
+        }
+    )
+
+    assert compact["staged_workspace_materialized"] is True
+    assert compact["staged_workspace_restored"] is True
+    assert compact["staged_workspace_batch_id"] == "batch-1"
+    assert compact["staged_workspace_guard_status"] == "clean"
+    assert compact["staged_workspace_guard_drift_count"] == 0
 
 
 def test_generic_edit_transaction_summary_allows_workspace_recovery_verification():

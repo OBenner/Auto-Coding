@@ -32,4 +32,9 @@ describe('resolveProviderSmokeRuntime', () => {
     expect(resolveProviderSmokeRuntime({}, 'mini_pipeline')).toBe('mini_pipeline');
     expect(resolveProviderSmokeRuntime({}, 'mini-pipeline')).toBe('mini_pipeline');
   });
+
+  it('uses an explicit smoke runtime request for the provider e2e suite', () => {
+    expect(resolveProviderSmokeRuntime({}, 'provider_e2e')).toBe('provider_e2e');
+    expect(resolveProviderSmokeRuntime({}, 'provider-e2e')).toBe('provider_e2e');
+  });
 });

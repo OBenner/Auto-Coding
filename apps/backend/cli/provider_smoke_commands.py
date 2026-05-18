@@ -7,7 +7,8 @@ import json
 import logging
 import sys
 import tempfile
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +17,11 @@ from agents.runtime import (
     create_runtime_session,
     get_runtime_mode,
     normalize_runtime_mode,
+    resume_runtime_session,
     run_runtime_session,
 )
 from agents.runtime.adapters.completion import CompletionRuntimeSession
+from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_artifacts
 from agents.runtime.fallback import capabilities_for_runtime_mode
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
@@ -36,6 +39,12 @@ DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_PROMPT = (
     "Use the available local tools to overwrite provider-smoke.txt with exactly "
     f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}, then finish with a short "
     "summary. Do not edit any other file."
+)
+DEFAULT_PROVIDER_TRANSACTION_BATCH_SMOKE_PROMPT = (
+    "Open a transaction batch with begin_batch using batch_id "
+    "`provider-batch-smoke`, overwrite provider-smoke.txt with exactly "
+    f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}, commit the batch with "
+    "commit_batch, then finish with a short summary. Do not edit any other file."
 )
 DEFAULT_PROVIDER_MINI_PIPELINE_TASK = (
     "Implement slugify(value: str) in string_tools.py."
@@ -71,6 +80,19 @@ DEFAULT_PROVIDER_MINI_PIPELINE_REVIEW_PROMPT = (
     "Final string_tools.py:\n{implementation}\n\n"
     "Reply with one short sentence stating whether the mini task is ready."
 )
+DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT = "provider recovery ok\n"
+DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_INITIAL_CONTENT = "pending recovery\n"
+DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_PROMPT = (
+    "Generic Edit recovery readiness exercise.\n\n"
+    "Use the available local tools to create an intentional recoverable partial "
+    "failure:\n"
+    "- Overwrite recovery-target.txt with exactly "
+    f"{DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT!r}.\n"
+    "- Then try to read missing-recovery.txt so the transaction records a "
+    "partial failure.\n"
+    "- After the observation reports the missing file, attempt to finish. The "
+    "runtime should block finish and create a recovery checkpoint.\n"
+)
 MINI_PIPELINE_INITIAL_STRING_TOOLS = (
     'def normalize_space(value: str) -> str:\n    return " ".join(value.split())\n'
 )
@@ -86,7 +108,106 @@ MINI_PIPELINE_TEST_FILE = (
     "    unittest.main()\n"
 )
 DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS = 30.0
-PROVIDER_SMOKE_RUNTIME_MODES = ("analysis_only", "generic_edit", "mini_pipeline")
+PROVIDER_SMOKE_RUNTIME_MODES = (
+    "analysis_only",
+    "generic_edit",
+    "mini_pipeline",
+    "transaction_batch_probe",
+    "provider_e2e",
+)
+PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = (
+    "openai",
+    "google",
+    "openrouter",
+    "litellm",
+    "zhipuai",
+    "ollama",
+)
+PROVIDER_RELIABILITY_CASE_ORDER = (
+    "text_completion",
+    "generic_edit_tool_loop",
+    "native_tool_calls",
+    "tool_results",
+    "recovery_loop",
+    "transaction_batches",
+    "unsupported_tools",
+    "gateway_model_limitations",
+)
+PROVIDER_RELIABILITY_NEGATIVE_FIXTURES = {
+    "openai": {
+        "surface": "openai_compat",
+        "unsupported_tools_error": (
+            "OpenAI tool-call completion failed: Error code: 400 - "
+            "This model does not support tools."
+        ),
+        "gateway_model_error": (
+            "OpenAI tool-call completion failed: Error code: 502 - "
+            "Bad gateway from upstream model provider."
+        ),
+    },
+    "google": {
+        "surface": "google_gemini",
+        "unsupported_tools_error": (
+            "Google tool-call completion failed: 400 function calling is not "
+            "supported for this model."
+        ),
+        "gateway_model_error": (
+            "Google tool-call completion failed: 503 upstream gateway timeout."
+        ),
+    },
+    "openrouter": {
+        "surface": "openrouter_openai_compat",
+        "unsupported_tools_error": (
+            "OpenRouter tool-call completion failed: Provider returned 400 "
+            "unsupported tool_choice for selected model."
+        ),
+        "gateway_model_error": (
+            "OpenRouter tool-call completion failed: 502 bad gateway from "
+            "upstream provider."
+        ),
+    },
+    "litellm": {
+        "surface": "litellm_gateway",
+        "unsupported_tools_error": (
+            "LiteLLM tool-call completion failed: UnsupportedParamsError: "
+            "function calling tools are not supported for this model."
+        ),
+        "gateway_model_error": (
+            "LiteLLM tool-call completion failed: upstream gateway 504 timeout."
+        ),
+    },
+    "zhipuai": {
+        "surface": "zhipuai_glm",
+        "unsupported_tools_error": (
+            "ZhipuAI tool-call completion failed: function calling is not "
+            "supported by this model."
+        ),
+        "gateway_model_error": (
+            "ZhipuAI tool-call completion failed: 503 upstream connection timeout."
+        ),
+    },
+    "ollama": {
+        "surface": "ollama_openai_compat",
+        "unsupported_tools_error": (
+            "Ollama tool-call completion failed: local model does not support tools."
+        ),
+        "gateway_model_error": (
+            "Ollama tool-call completion failed: connection refused by local "
+            "Ollama gateway."
+        ),
+    },
+}
+PROVIDER_RELIABILITY_STATUS_RANK = {
+    "not_covered": 0,
+    "blocked": 1,
+    "limited": 2,
+    "passed": 3,
+}
+PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = Path(
+    ".auto-Codex",
+    "provider-smoke-history.json",
+)
+PROVIDER_SMOKE_HISTORY_MAX_RUNS = 100
 
 
 @dataclass(frozen=True)
@@ -118,6 +239,172 @@ class ProviderSendMessageSession:
         del stream
         async for chunk in self._provider.send_message(message):
             yield chunk
+
+
+def _utc_timestamp() -> str:
+    """Return a compact UTC timestamp for provider evidence artifacts."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _provider_smoke_history_path(project_dir: Path) -> Path:
+    """Return the project-local provider smoke history path."""
+    return project_dir / PROVIDER_SMOKE_HISTORY_RELATIVE_PATH
+
+
+def _provider_smoke_history_record(
+    result: ProviderSmokeResult,
+    *,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    """Build a compact persisted provider smoke evidence record."""
+    runtime_diagnostics = result.runtime_diagnostics
+    reliability = runtime_diagnostics.get("provider_reliability")
+    reliability = reliability if isinstance(reliability, dict) else {}
+    provider_e2e_suite = runtime_diagnostics.get("provider_e2e_suite")
+    provider_e2e_suite = (
+        provider_e2e_suite if isinstance(provider_e2e_suite, dict) else {}
+    )
+    suite_runs = provider_e2e_suite.get("runs")
+    failed_suite_runs = (
+        [
+            str(run.get("runtime_mode") or "unknown")
+            for run in suite_runs
+            if isinstance(run, dict) and run.get("status") != "passed"
+        ]
+        if isinstance(suite_runs, list)
+        else []
+    )
+    record: dict[str, Any] = {
+        "timestamp": timestamp or _utc_timestamp(),
+        "provider": result.provider,
+        "model": result.model,
+        "runtime_mode": result.runtime_mode,
+        "status": "passed" if result.success else "failed",
+        "message": result.message,
+        "smoke_scope": runtime_diagnostics.get("smoke_scope"),
+        "reliability_status": reliability.get("status"),
+        "passed_case_count": reliability.get("passed_case_count"),
+        "required_case_count": reliability.get("required_case_count"),
+        "provider_e2e_status": provider_e2e_suite.get("status"),
+        "failed_suite_runs": failed_suite_runs,
+    }
+    if result.error_details:
+        record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
+    return record
+
+
+def _load_provider_smoke_history(
+    history_path: Path,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Load provider smoke history records, returning whether repair was needed."""
+    if not history_path.exists():
+        return [], False
+    try:
+        payload = json.loads(history_path.read_text(encoding="utf-8"))
+    except Exception:
+        return [], True
+    if not isinstance(payload, dict):
+        return [], True
+    runs = payload.get("runs")
+    if not isinstance(runs, list):
+        return [], True
+    return [run for run in runs if isinstance(run, dict)], False
+
+
+def _provider_smoke_history_provider_stats(
+    runs: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Return per-provider aggregate history stats from persisted records."""
+    providers: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        provider = str(run.get("provider") or "unknown")
+        status = str(run.get("status") or "unknown")
+        stats = providers.setdefault(
+            provider,
+            {
+                "total_runs": 0,
+                "passed_runs": 0,
+                "failed_runs": 0,
+                "last_status": "unknown",
+                "last_runtime_mode": "unknown",
+                "last_model": None,
+                "last_run_at": None,
+                "last_reliability_status": None,
+                "last_provider_e2e_status": None,
+            },
+        )
+        stats["total_runs"] += 1
+        if status == "passed":
+            stats["passed_runs"] += 1
+        elif status == "failed":
+            stats["failed_runs"] += 1
+        stats["last_status"] = status
+        stats["last_runtime_mode"] = run.get("runtime_mode")
+        stats["last_model"] = run.get("model")
+        stats["last_run_at"] = run.get("timestamp")
+        stats["last_reliability_status"] = run.get("reliability_status")
+        stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
+    return providers
+
+
+def _provider_smoke_history_payload(
+    runs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the persisted provider smoke history artifact payload."""
+    bounded_runs = runs[-PROVIDER_SMOKE_HISTORY_MAX_RUNS:]
+    return {
+        "schema_version": 1,
+        "runs": bounded_runs,
+        "providers": _provider_smoke_history_provider_stats(bounded_runs),
+    }
+
+
+def _with_provider_run_history(
+    project_dir: Path,
+    result: ProviderSmokeResult,
+) -> ProviderSmokeResult:
+    """Persist provider e2e history and attach a compact diagnostics summary."""
+    history_path = _provider_smoke_history_path(project_dir)
+    try:
+        runs, repaired = _load_provider_smoke_history(history_path)
+        record = _provider_smoke_history_record(result)
+        payload = _provider_smoke_history_payload([*runs, record])
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = history_path.with_name(f"{history_path.name}.tmp")
+        temp_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temp_path.replace(history_path)
+        provider_stats = payload["providers"].get(result.provider, {})
+        history_summary = {
+            "status": "recorded_after_repair" if repaired else "recorded",
+            "provider": result.provider,
+            "runtime_mode": result.runtime_mode,
+            "total_runs": provider_stats.get("total_runs", 0),
+            "passed_runs": provider_stats.get("passed_runs", 0),
+            "failed_runs": provider_stats.get("failed_runs", 0),
+            "last_status": provider_stats.get("last_status", "unknown"),
+            "last_reliability_status": provider_stats.get("last_reliability_status"),
+            "last_provider_e2e_status": provider_stats.get("last_provider_e2e_status"),
+            "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
+        }
+    except Exception as e:
+        logger.debug("Provider smoke history persistence failed", exc_info=True)
+        history_summary = {
+            "status": "record_failed",
+            "provider": result.provider,
+            "runtime_mode": result.runtime_mode,
+            "reason": str(e),
+            "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
+        }
+    return replace(
+        result,
+        runtime_diagnostics={
+            **result.runtime_diagnostics,
+            "provider_run_history": history_summary,
+        },
+    )
 
 
 def _response_excerpt(response_text: str, max_chars: int = 500) -> str:
@@ -164,12 +451,54 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
     resume_policy = _resume_policy_payload(payload.get("resume_policy"))
     if resume_policy is not None:
         diagnostics["resume_policy"] = resume_policy
+    artifact_manifest = _generic_edit_artifact_manifest_payload(artifact_dir)
+    mutation_snapshots = _generic_edit_mutation_snapshots_payload(artifact_dir)
+    diagnostics["transaction_batch_contract"] = (
+        _generic_edit_transaction_batch_contract(
+            payload,
+            artifact_manifest=artifact_manifest,
+            mutation_snapshots=mutation_snapshots,
+        )
+    )
     diagnostics["tool_loop_contract"] = _generic_edit_tool_loop_contract(
         payload=payload,
         native_tool_fallbacks=native_tool_fallbacks,
         resume_policy=resume_policy,
     )
     return diagnostics
+
+
+def _generic_edit_artifact_manifest_payload(
+    artifact_dir: Path,
+) -> dict[str, Any] | None:
+    """Return the adjacent generic_edit artifact manifest when it is readable."""
+    manifest_path = artifact_dir / "generic_edit_artifact_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _generic_edit_mutation_snapshots_payload(
+    artifact_dir: Path,
+) -> list[dict[str, Any]]:
+    """Return compact mutation snapshot entries when the artifact is readable."""
+    snapshot_path = artifact_dir / "generic_edit_mutation_snapshots.json"
+    if not snapshot_path.exists():
+        return []
+    try:
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(payload, dict):
+        return []
+    snapshots = payload.get("snapshots")
+    if not isinstance(snapshots, list):
+        return []
+    return [snapshot for snapshot in snapshots if isinstance(snapshot, dict)]
 
 
 def _generic_edit_tool_loop_contract(
@@ -280,6 +609,291 @@ def _generic_edit_recovery_status(
     return "not_required"
 
 
+def _generic_edit_transaction_batch_contract(
+    payload: dict[str, Any],
+    *,
+    artifact_manifest: dict[str, Any] | None = None,
+    mutation_snapshots: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Return safe batch-boundary diagnostics for provider smoke results."""
+    stop_reason = str(payload.get("stop_reason") or "unknown")
+    transaction_batch_count = _int_payload_value(payload, "transaction_batch_count")
+    transaction_batches = payload.get("transaction_batches")
+    if isinstance(transaction_batches, list):
+        transaction_batch_count = max(
+            transaction_batch_count,
+            len([batch for batch in transaction_batches if isinstance(batch, dict)]),
+        )
+
+    open_batches = _string_list_payload(payload.get("open_transaction_batch_ids"))
+    boundary_error_count = 0
+    boundary_error_reasons: list[str] = []
+    boundary_required_action_kinds: list[str] = []
+    boundary_resolution_strategies: list[str] = []
+    boundary_preferred_strategy: str | None = None
+    staged_workspace_guard_statuses: list[str] = []
+    staged_drift_paths: list[str] = []
+    batch_lifecycle_actions: list[str] = []
+    batch_lifecycle_statuses: list[str] = []
+    committed_mutation_snapshot_ids: list[str] = []
+    commit_operation_ids: list[str] = []
+    staged_isolation_statuses: list[str] = []
+    staged_workspace_restore_statuses: list[str] = []
+    staged_baseline_paths: list[str] = []
+    if isinstance(transaction_batches, list):
+        for batch in transaction_batches:
+            if not isinstance(batch, dict):
+                continue
+            actions, statuses = _generic_edit_batch_lifecycle_values(batch)
+            batch_lifecycle_actions.extend(actions)
+            batch_lifecycle_statuses.extend(statuses)
+            commit_operation_ids.extend(
+                _string_list_payload(batch.get("commit_operation_ids"))
+            )
+            batch_error_reasons = _string_list_payload(
+                batch.get("boundary_error_reasons")
+            )
+            batch_error_count = batch.get("boundary_error_count")
+            if isinstance(batch_error_count, int) and not isinstance(
+                batch_error_count, bool
+            ):
+                boundary_error_count += batch_error_count
+            boundary_errors = batch.get("boundary_errors")
+            if isinstance(boundary_errors, list):
+                batch_error_reasons.extend(
+                    str(error.get("reason"))
+                    for error in boundary_errors
+                    if isinstance(error, dict)
+                    and isinstance(error.get("reason"), str)
+                    and error.get("reason")
+                )
+                for error in boundary_errors:
+                    if not isinstance(error, dict):
+                        continue
+                    boundary_preferred_strategy = (
+                        boundary_preferred_strategy
+                        or _string_payload_value(error.get("preferred_strategy"))
+                    )
+                    boundary_required_action_kinds.extend(
+                        _string_list_payload(error.get("required_next_action_kinds"))
+                    )
+                    boundary_resolution_strategies.extend(
+                        _string_list_payload(error.get("resolution_strategies"))
+                    )
+            if not (
+                isinstance(batch_error_count, int)
+                and not isinstance(batch_error_count, bool)
+            ):
+                boundary_error_count += len(batch_error_reasons)
+            boundary_error_reasons.extend(batch_error_reasons)
+
+    for event in _generic_edit_batch_boundary_manifest_events(artifact_manifest):
+        reason = _string_payload_value(event.get("batch_boundary_error_reason"))
+        if reason:
+            boundary_error_reasons.append(reason)
+        staged_guard_status = _string_payload_value(
+            event.get("staged_workspace_guard_status")
+        )
+        if staged_guard_status:
+            staged_workspace_guard_statuses.append(staged_guard_status)
+        staged_drift_paths.extend(_string_list_payload(event.get("drift_paths")))
+        boundary_preferred_strategy = (
+            boundary_preferred_strategy
+            or _string_payload_value(event.get("preferred_strategy"))
+        )
+        boundary_required_action_kinds.extend(
+            _string_list_payload(event.get("required_next_action_kinds"))
+        )
+        boundary_resolution_strategies.extend(
+            _string_list_payload(event.get("resolution_strategies"))
+        )
+    for batch in _generic_edit_manifest_transaction_batches(artifact_manifest):
+        actions, statuses = _generic_edit_batch_lifecycle_values(batch)
+        batch_lifecycle_actions.extend(actions)
+        batch_lifecycle_statuses.extend(statuses)
+        commit_operation_ids.extend(
+            _string_list_payload(batch.get("commit_operation_ids"))
+        )
+    for event in _generic_edit_manifest_committed_batch_events(artifact_manifest):
+        committed_mutation_snapshot_ids.extend(
+            _string_list_payload(event.get("committed_mutation_snapshot_ids"))
+        )
+        commit_operation_id = _string_payload_value(event.get("commit_operation_id"))
+        if commit_operation_id:
+            commit_operation_ids.append(commit_operation_id)
+        commit_operation_ids.extend(
+            _string_list_payload(event.get("commit_operation_ids"))
+        )
+    for snapshot in mutation_snapshots or []:
+        isolation = snapshot.get("staged_isolation")
+        if not isinstance(isolation, dict):
+            continue
+        isolation_status = _string_payload_value(isolation.get("status"))
+        if isolation_status:
+            staged_isolation_statuses.append(isolation_status)
+        if isolation.get("workspace_restored") is True:
+            staged_workspace_restore_statuses.append("restored")
+        elif isolation.get("workspace_restored") is False:
+            staged_workspace_restore_statuses.append("not_restored")
+        staged_baseline_paths.extend(
+            _string_list_payload(isolation.get("baseline_paths"))
+        )
+    if boundary_error_reasons:
+        boundary_error_count = max(
+            boundary_error_count,
+            len(set(boundary_error_reasons)),
+        )
+
+    if stop_reason == "batch_boundary_violation":
+        boundary_error_count = max(boundary_error_count, 1)
+        boundary_error_reasons.append("batch_boundary_violation")
+        status = "boundary_guarded"
+        boundary_guard = "pre_execution_blocked"
+    elif boundary_error_count > 0:
+        status = "boundary_guarded"
+        boundary_guard = "runtime_blocked"
+    elif open_batches:
+        status = "requires_resolution"
+        boundary_guard = "open_batch"
+    elif transaction_batch_count > 0:
+        status = "observed"
+        boundary_guard = "observed"
+    else:
+        status = "not_observed"
+        boundary_guard = "not_observed"
+
+    contract: dict[str, Any] = {
+        "status": status,
+        "batch_boundary_guard": boundary_guard,
+        "transaction_batch_count": transaction_batch_count,
+        "open_transaction_batch_ids": open_batches,
+    }
+    if boundary_error_count > 0:
+        contract["boundary_error_count"] = boundary_error_count
+        contract["boundary_error_reasons"] = sorted(
+            dict.fromkeys(boundary_error_reasons)
+        )
+    if boundary_preferred_strategy:
+        contract["boundary_preferred_strategy"] = boundary_preferred_strategy
+    if boundary_required_action_kinds:
+        contract["boundary_required_action_kinds"] = list(
+            dict.fromkeys(boundary_required_action_kinds)
+        )
+    if boundary_resolution_strategies:
+        contract["boundary_resolution_strategies"] = list(
+            dict.fromkeys(boundary_resolution_strategies)
+        )
+    if staged_workspace_guard_statuses:
+        contract["staged_workspace_guard_statuses"] = list(
+            dict.fromkeys(staged_workspace_guard_statuses)
+        )
+    if staged_drift_paths:
+        contract["staged_drift_paths"] = list(dict.fromkeys(staged_drift_paths))
+    if batch_lifecycle_actions:
+        contract["batch_lifecycle_actions"] = list(
+            dict.fromkeys(batch_lifecycle_actions)
+        )
+    if batch_lifecycle_statuses:
+        contract["batch_lifecycle_statuses"] = list(
+            dict.fromkeys(batch_lifecycle_statuses)
+        )
+    if committed_mutation_snapshot_ids:
+        contract["committed_mutation_snapshot_ids"] = list(
+            dict.fromkeys(committed_mutation_snapshot_ids)
+        )
+    if commit_operation_ids:
+        contract["commit_operation_ids"] = list(dict.fromkeys(commit_operation_ids))
+    if staged_isolation_statuses:
+        contract["staged_isolation_statuses"] = list(
+            dict.fromkeys(staged_isolation_statuses)
+        )
+    if staged_workspace_restore_statuses:
+        contract["staged_workspace_restore_statuses"] = list(
+            dict.fromkeys(staged_workspace_restore_statuses)
+        )
+    if staged_baseline_paths:
+        contract["staged_baseline_paths"] = list(dict.fromkeys(staged_baseline_paths))
+    return contract
+
+
+def _generic_edit_batch_lifecycle_values(
+    batch: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    """Return safe lifecycle action/status lists from a batch summary."""
+    events = batch.get("lifecycle_events")
+    if not isinstance(events, list):
+        return [], []
+    actions: list[str] = []
+    statuses: list[str] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        action = _string_payload_value(event.get("action"))
+        status = _string_payload_value(event.get("status"))
+        if action:
+            actions.append(action)
+        if status:
+            statuses.append(status)
+    return actions, statuses
+
+
+def _generic_edit_manifest_transaction_batches(
+    artifact_manifest: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return manifest transaction batch summaries when available."""
+    if not isinstance(artifact_manifest, dict):
+        return []
+    transaction_batches = artifact_manifest.get("transaction_batches")
+    if not isinstance(transaction_batches, list):
+        return []
+    return [batch for batch in transaction_batches if isinstance(batch, dict)]
+
+
+def _generic_edit_manifest_committed_batch_events(
+    artifact_manifest: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return manifest timeline events that describe committed batches."""
+    if not isinstance(artifact_manifest, dict):
+        return []
+    recovery_timeline = artifact_manifest.get("recovery_timeline")
+    if not isinstance(recovery_timeline, list):
+        return []
+    events: list[dict[str, Any]] = []
+    for event in recovery_timeline:
+        if not isinstance(event, dict):
+            continue
+        if event.get("timeline_stage") == "batch_committed":
+            events.append(event)
+    return events
+
+
+def _generic_edit_batch_boundary_manifest_events(
+    artifact_manifest: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return manifest timeline events that describe batch-boundary recovery."""
+    if not isinstance(artifact_manifest, dict):
+        return []
+    recovery_timeline = artifact_manifest.get("recovery_timeline")
+    if not isinstance(recovery_timeline, list):
+        return []
+    events: list[dict[str, Any]] = []
+    for event in recovery_timeline:
+        if not isinstance(event, dict):
+            continue
+        has_boundary_reason = bool(
+            _string_payload_value(event.get("batch_boundary_error_reason"))
+        )
+        has_boundary_stage = event.get("timeline_stage") == "batch_boundary_blocked"
+        if has_boundary_reason or has_boundary_stage:
+            events.append(event)
+    return events
+
+
+def _string_payload_value(value: Any) -> str | None:
+    """Return a non-empty string payload value."""
+    return value if isinstance(value, str) and value else None
+
+
 def _native_tool_fallbacks_payload(value: Any) -> list[dict[str, Any]]:
     """Return safe native tool fallback records for provider smoke diagnostics."""
     if not isinstance(value, list):
@@ -385,6 +999,15 @@ def _provider_contract_health(
         if health:
             return health
 
+    provider_e2e_suite = runtime_diagnostics.get("provider_e2e_suite")
+    if isinstance(provider_e2e_suite, dict):
+        health = _provider_health_from_e2e_suite(
+            provider_e2e_suite,
+            smoke_scope=smoke_scope,
+        )
+        if health:
+            return health
+
     if error_details:
         issue = _provider_issue_from_error(error_details)
         return {
@@ -429,14 +1052,420 @@ def _with_provider_contract_health(
     error_details: str | None = None,
 ) -> dict[str, Any]:
     """Attach provider health classification without mutating caller payloads."""
-    return {
+    provider_contract_health = _provider_contract_health(
+        runtime_diagnostics,
+        success=success,
+        error_details=error_details,
+    )
+    diagnostics = {
         **runtime_diagnostics,
-        "provider_contract_health": _provider_contract_health(
-            runtime_diagnostics,
-            success=success,
-            error_details=error_details,
-        ),
+        "provider_contract_health": provider_contract_health,
     }
+    existing_reliability = runtime_diagnostics.get("provider_reliability")
+    provider_reliability = (
+        existing_reliability
+        if isinstance(existing_reliability, dict)
+        else _provider_reliability_diagnostics(
+            diagnostics,
+            provider_contract_health=provider_contract_health,
+            success=success,
+        )
+    )
+    if provider_reliability is not None:
+        diagnostics["provider_reliability"] = provider_reliability
+    return diagnostics
+
+
+def _provider_reliability_diagnostics(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    provider_contract_health: dict[str, Any],
+    success: bool | None,
+) -> dict[str, Any] | None:
+    """Return direct-provider e2e coverage status from one smoke run."""
+    provider = str(runtime_diagnostics.get("provider") or "").lower()
+    if provider not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return None
+
+    cases = [
+        _provider_text_completion_case(runtime_diagnostics, success=success),
+        _provider_generic_edit_case(runtime_diagnostics),
+        _provider_native_tool_case(runtime_diagnostics),
+        _provider_tool_result_case(runtime_diagnostics),
+        _provider_recovery_loop_case(runtime_diagnostics),
+        _provider_transaction_batch_case(runtime_diagnostics),
+        _provider_unsupported_tools_case(
+            runtime_diagnostics,
+            provider_contract_health=provider_contract_health,
+        ),
+        _provider_gateway_model_case(
+            runtime_diagnostics,
+            provider_contract_health=provider_contract_health,
+        ),
+    ]
+    return _provider_reliability_payload(provider, cases)
+
+
+def _provider_reliability_payload(
+    provider: str,
+    cases: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Return direct-provider reliability counters for ordered case results."""
+    observed_cases = [case for case in cases if case.get("status") != "not_covered"]
+    passed_cases = [case for case in cases if case.get("status") == "passed"]
+    uncovered_cases = [
+        str(case["case"]) for case in cases if case.get("status") == "not_covered"
+    ]
+    return {
+        "provider": provider,
+        "suite": "direct_api_full_autonomy",
+        "status": "complete" if len(passed_cases) == len(cases) else "partial_coverage",
+        "observed_case_count": len(observed_cases),
+        "passed_case_count": len(passed_cases),
+        "required_case_count": len(cases),
+        "uncovered_cases": uncovered_cases,
+        "cases": cases,
+    }
+
+
+def _merge_provider_reliability_diagnostics(
+    provider: str,
+    reliabilities: list[Any],
+) -> dict[str, Any] | None:
+    """Merge per-smoke reliability payloads into one provider e2e suite view."""
+    normalized_provider = provider.lower()
+    if normalized_provider not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return None
+
+    cases_by_name: dict[str, dict[str, str]] = {
+        case_name: {
+            "case": case_name,
+            "status": "not_covered",
+            "source": "provider_e2e_required",
+        }
+        for case_name in PROVIDER_RELIABILITY_CASE_ORDER
+    }
+    observed = False
+    for reliability in reliabilities:
+        if not isinstance(reliability, dict):
+            continue
+        cases = reliability.get("cases")
+        if not isinstance(cases, list):
+            continue
+        for candidate in cases:
+            if not isinstance(candidate, dict):
+                continue
+            case_name = str(candidate.get("case") or "")
+            if case_name not in cases_by_name:
+                continue
+            status = str(candidate.get("status") or "not_covered")
+            current_status = cases_by_name[case_name]["status"]
+            if PROVIDER_RELIABILITY_STATUS_RANK.get(
+                status,
+                0,
+            ) > PROVIDER_RELIABILITY_STATUS_RANK.get(current_status, 0):
+                source = str(candidate.get("source") or "provider_e2e_suite")
+                cases_by_name[case_name] = {
+                    "case": case_name,
+                    "status": status,
+                    "source": source,
+                }
+                observed = True
+
+    if not observed:
+        return None
+    return _provider_reliability_payload(
+        normalized_provider,
+        [cases_by_name[case_name] for case_name in PROVIDER_RELIABILITY_CASE_ORDER],
+    )
+
+
+def _provider_text_completion_case(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    success: bool | None,
+) -> dict[str, str]:
+    smoke_scope = str(runtime_diagnostics.get("smoke_scope") or "unknown")
+    if success is True:
+        return {
+            "case": "text_completion",
+            "status": "passed",
+            "source": "mini_pipeline"
+            if smoke_scope == "mini_task_pipeline"
+            else smoke_scope,
+        }
+    if smoke_scope != "unknown":
+        return {
+            "case": "text_completion",
+            "status": "blocked",
+            "source": smoke_scope,
+        }
+    return {
+        "case": "text_completion",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_generic_edit_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    contract = _provider_tool_loop_contract(runtime_diagnostics)
+    status = str(contract.get("status") or "") if isinstance(contract, dict) else ""
+    if status in {"passed", "recovered"}:
+        return {
+            "case": "generic_edit_tool_loop",
+            "status": "passed",
+            "source": "tool_loop_contract",
+        }
+    if status in {"needs_recovery", "unsupported_tools", "blocked"}:
+        return {
+            "case": "generic_edit_tool_loop",
+            "status": "blocked",
+            "source": "tool_loop_contract",
+        }
+    return {
+        "case": "generic_edit_tool_loop",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_native_tool_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    contract = _provider_tool_loop_contract(runtime_diagnostics)
+    support = (
+        str(contract.get("tool_call_support") or "")
+        if isinstance(contract, dict)
+        else ""
+    )
+    if support == "native":
+        return {
+            "case": "native_tool_calls",
+            "status": "passed",
+            "source": "tool_loop_contract",
+        }
+    if support in {"json_fallback", "json_actions"}:
+        return {
+            "case": "native_tool_calls",
+            "status": "limited",
+            "source": "tool_loop_contract",
+        }
+    return {
+        "case": "native_tool_calls",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_tool_result_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    contract = _provider_tool_loop_contract(runtime_diagnostics)
+    support = (
+        str(contract.get("tool_result_support") or "")
+        if isinstance(contract, dict)
+        else ""
+    )
+    if support == "normalized":
+        return {
+            "case": "tool_results",
+            "status": "passed",
+            "source": "tool_loop_contract",
+        }
+    if support == "partial_failure":
+        return {
+            "case": "tool_results",
+            "status": "limited",
+            "source": "tool_loop_contract",
+        }
+    if support == "failed":
+        return {
+            "case": "tool_results",
+            "status": "blocked",
+            "source": "tool_loop_contract",
+        }
+    return {
+        "case": "tool_results",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_recovery_loop_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    mini_pipeline = runtime_diagnostics.get("mini_pipeline")
+    recovery_loop = (
+        mini_pipeline.get("recovery_loop") if isinstance(mini_pipeline, dict) else None
+    )
+    if isinstance(recovery_loop, dict):
+        status = str(recovery_loop.get("status") or "")
+        if status == "passed":
+            return {
+                "case": "recovery_loop",
+                "status": "passed",
+                "source": "mini_pipeline",
+            }
+        if status:
+            return {
+                "case": "recovery_loop",
+                "status": "blocked",
+                "source": "mini_pipeline",
+            }
+    return {
+        "case": "recovery_loop",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_transaction_batch_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    execution = runtime_diagnostics.get("validated_runtime_execution")
+    contract = (
+        execution.get("transaction_batch_contract")
+        if isinstance(execution, dict)
+        else None
+    )
+    if not isinstance(contract, dict):
+        return {
+            "case": "transaction_batches",
+            "status": "not_covered",
+            "source": "provider_e2e_required",
+        }
+
+    status = str(contract.get("status") or "")
+    lifecycle_actions = set(
+        _string_list_payload(contract.get("batch_lifecycle_actions"))
+    )
+    lifecycle_statuses = set(
+        _string_list_payload(contract.get("batch_lifecycle_statuses"))
+    )
+    transaction_batch_count = _int_payload_value(contract, "transaction_batch_count")
+    if (
+        status == "observed"
+        and transaction_batch_count > 0
+        and {"begin_batch", "commit_batch"}.issubset(lifecycle_actions)
+        and "committed" in lifecycle_statuses
+    ):
+        return {
+            "case": "transaction_batches",
+            "status": "passed",
+            "source": "transaction_batch_contract",
+        }
+    if status in {"boundary_guarded", "requires_resolution"}:
+        return {
+            "case": "transaction_batches",
+            "status": "blocked",
+            "source": "transaction_batch_contract",
+        }
+    if status and status != "not_observed":
+        return {
+            "case": "transaction_batches",
+            "status": "limited",
+            "source": "transaction_batch_contract",
+        }
+    return {
+        "case": "transaction_batches",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_unsupported_tools_case(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    provider_contract_health: dict[str, Any],
+) -> dict[str, str]:
+    negative_probe_case = _provider_negative_probe_case(
+        runtime_diagnostics,
+        "unsupported_tools",
+    )
+    if negative_probe_case is not None:
+        return negative_probe_case
+
+    contract = _provider_tool_loop_contract(runtime_diagnostics)
+    contract_status = (
+        str(contract.get("status") or "") if isinstance(contract, dict) else ""
+    )
+    health_status = str(provider_contract_health.get("status") or "")
+    if contract_status == "unsupported_tools" or health_status == "unsupported_tools":
+        return {
+            "case": "unsupported_tools",
+            "status": "blocked",
+            "source": "tool_loop_contract",
+        }
+    return {
+        "case": "unsupported_tools",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_gateway_model_case(
+    runtime_diagnostics: dict[str, Any],
+    *,
+    provider_contract_health: dict[str, Any],
+) -> dict[str, str]:
+    negative_probe_case = _provider_negative_probe_case(
+        runtime_diagnostics,
+        "gateway_model_limitations",
+    )
+    if negative_probe_case is not None:
+        return negative_probe_case
+
+    health_status = str(provider_contract_health.get("status") or "")
+    if health_status in {"gateway_blocked", "model_blocked"}:
+        return {
+            "case": "gateway_model_limitations",
+            "status": "blocked",
+            "source": "provider_contract_health",
+        }
+    return {
+        "case": "gateway_model_limitations",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_negative_probe_case(
+    runtime_diagnostics: dict[str, Any],
+    case_name: str,
+) -> dict[str, str] | None:
+    probes = runtime_diagnostics.get("provider_e2e_negative_probes")
+    if not isinstance(probes, dict):
+        return None
+    probe = probes.get(case_name)
+    if not isinstance(probe, dict):
+        return None
+    status = str(probe.get("status") or "")
+    source = str(probe.get("source") or "provider_e2e_negative_probe")
+    if status == "passed":
+        return {
+            "case": case_name,
+            "status": "passed",
+            "source": source,
+        }
+    if status:
+        return {
+            "case": case_name,
+            "status": "blocked",
+            "source": source,
+        }
+    return None
+
+
+def _provider_tool_loop_contract(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, Any] | None:
+    execution = runtime_diagnostics.get("validated_runtime_execution")
+    if not isinstance(execution, dict):
+        return None
+    contract = execution.get("tool_loop_contract")
+    return contract if isinstance(contract, dict) else None
 
 
 def _provider_health_from_tool_loop_contract(
@@ -503,8 +1532,56 @@ def _provider_health_from_mini_pipeline(
             value = contract.get(source_key)
             if isinstance(value, str) and value:
                 health[target_key] = value
+    recovery_loop = mini_pipeline.get("recovery_loop")
+    if isinstance(recovery_loop, dict):
+        recovery_loop_status = recovery_loop.get("status")
+        if isinstance(recovery_loop_status, str) and recovery_loop_status:
+            health["recovery_loop_status"] = recovery_loop_status
+        recovery_status = recovery_loop.get("recovery_status")
+        if isinstance(recovery_status, str) and recovery_status:
+            health["recovery_status"] = recovery_status
+        if status == "failed":
+            reason = recovery_loop.get("reason")
+            if isinstance(reason, str) and reason:
+                health["reason"] = reason
     if status == "failed":
-        health["reason"] = str(mini_pipeline.get("reason") or "mini_pipeline_failed")
+        health.setdefault(
+            "reason",
+            str(mini_pipeline.get("reason") or "mini_pipeline_failed"),
+        )
+    return health
+
+
+def _provider_health_from_e2e_suite(
+    provider_e2e_suite: dict[str, Any],
+    *,
+    smoke_scope: str,
+) -> dict[str, Any] | None:
+    """Return provider health for the direct-provider e2e suite."""
+    status = str(provider_e2e_suite.get("status") or "unknown")
+    if status not in {"passed", "failed"}:
+        return None
+
+    runs = provider_e2e_suite.get("runs")
+    run_payloads = (
+        [run for run in runs if isinstance(run, dict)] if isinstance(runs, list) else []
+    )
+    failed_runs = [
+        str(run.get("runtime_mode") or "unknown")
+        for run in run_payloads
+        if str(run.get("status") or "") != "passed"
+    ]
+    health: dict[str, Any] = {
+        "status": "provider_e2e_ready"
+        if status == "passed"
+        else "provider_e2e_blocked",
+        "smoke_scope": smoke_scope,
+        "passed_run_count": len(run_payloads) - len(failed_runs),
+        "required_run_count": len(run_payloads),
+    }
+    if failed_runs:
+        health["reason"] = "provider_e2e_failed"
+        health["failed_runs"] = failed_runs
     return health
 
 
@@ -598,9 +1675,14 @@ def normalize_provider_smoke_runtime_mode(value: str | None) -> str:
 
 
 def _provider_smoke_requirements(runtime_mode: str) -> RuntimeRequirements:
-    if runtime_mode == "mini_pipeline":
+    if runtime_mode == "provider_e2e":
         return RuntimeRequirements(
-            mode="mini_pipeline",
+            mode="provider_e2e",
+            required=RuntimeRequirements.generic_edit().required,
+        )
+    if runtime_mode in {"mini_pipeline", "transaction_batch_probe"}:
+        return RuntimeRequirements(
+            mode=runtime_mode,
             required=RuntimeRequirements.generic_edit().required,
         )
     if runtime_mode == "generic_edit":
@@ -609,19 +1691,37 @@ def _provider_smoke_requirements(runtime_mode: str) -> RuntimeRequirements:
 
 
 def _provider_smoke_scope(runtime_mode: str) -> str:
+    if runtime_mode == "provider_e2e":
+        return "direct_api_full_autonomy_e2e"
     if runtime_mode == "mini_pipeline":
         return "mini_task_pipeline"
+    if runtime_mode == "transaction_batch_probe":
+        return "transaction_batch_probe"
     if runtime_mode == "generic_edit":
         return "generic_edit_tool_loop"
     return "text_completion_only"
 
 
 def _provider_smoke_note(runtime_mode: str) -> str:
+    if runtime_mode == "provider_e2e":
+        return (
+            "Provider e2e smoke runs the direct-provider generic_edit tool-loop "
+            "check and the mini planner/coder/tests/reviewer pipeline. It "
+            "aggregates full-autonomy coverage cases, but unsupported-tool and "
+            "gateway/model limitation probes still require explicit negative "
+            "provider runs."
+        )
     if runtime_mode == "mini_pipeline":
         return (
             "Provider smoke runs a temporary planner/coder/reviewer mini task. "
-            "It validates the local edit loop and one unit-test command, but it "
-            "does not prove full production autonomy for arbitrary repositories."
+            "It validates the local edit loop, one unit-test command, and a "
+            "generic_edit recovery/resume loop, but it does not prove full "
+            "production autonomy for arbitrary repositories."
+        )
+    if runtime_mode == "transaction_batch_probe":
+        return (
+            "Provider smoke validates a temporary generic_edit transaction batch "
+            "with begin_batch, commit_batch, and committed batch diagnostics."
         )
     if runtime_mode == "generic_edit":
         return (
@@ -637,7 +1737,9 @@ def _provider_smoke_note(runtime_mode: str) -> str:
 
 def _provider_smoke_capability_mode(runtime_mode: str) -> str:
     """Map smoke-only scopes to the runtime mode that supplies capabilities."""
-    if runtime_mode == "mini_pipeline":
+    if runtime_mode == "provider_e2e":
+        return "generic_edit"
+    if runtime_mode in {"mini_pipeline", "transaction_batch_probe"}:
         return "generic_edit"
     return runtime_mode
 
@@ -676,6 +1778,7 @@ def build_provider_smoke_runtime_diagnostics(
     )
     full_autonomous_requirements = RuntimeRequirements.full_coder()
     return {
+        "provider": provider_name,
         "smoke_scope": _provider_smoke_scope(validated_mode),
         "requested_runtime_mode": requested_mode,
         "validated_runtime_mode": smoke_requirements.mode,
@@ -715,7 +1818,7 @@ async def run_provider_smoke_check(
         provider = create_engine_provider(provider_config)
     except Exception as e:
         logger.debug("Provider creation failed for smoke check", exc_info=True)
-        return ProviderSmokeResult(
+        result = ProviderSmokeResult(
             success=False,
             provider=provider_name,
             model=resolved_model,
@@ -727,6 +1830,9 @@ async def run_provider_smoke_check(
                 error_details=str(e),
             ),
         )
+        if validated_runtime_mode == "provider_e2e":
+            return _with_provider_run_history(project_dir, result)
+        return result
 
     runtime_diagnostics = build_provider_smoke_runtime_diagnostics(
         provider_name=provider.name,
@@ -736,7 +1842,7 @@ async def run_provider_smoke_check(
     validation_errors = _provider_validation_errors(provider)
     if validation_errors:
         error_details = "; ".join(validation_errors)
-        return ProviderSmokeResult(
+        result = ProviderSmokeResult(
             success=False,
             provider=provider.name,
             model=resolved_model,
@@ -748,6 +1854,9 @@ async def run_provider_smoke_check(
                 error_details=error_details,
             ),
         )
+        if validated_runtime_mode == "provider_e2e":
+            return _with_provider_run_history(project_dir, result)
+        return result
 
     session_config = SessionConfig(
         name="provider-smoke-session",
@@ -757,6 +1866,17 @@ async def run_provider_smoke_check(
     )
 
     try:
+        if validated_runtime_mode == "provider_e2e":
+            result = await _complete_provider_e2e_smoke_suite(
+                provider=provider,
+                session_config=session_config,
+                prompt=prompt,
+                timeout_seconds=timeout_seconds,
+                model=resolved_model,
+                runtime_diagnostics=runtime_diagnostics,
+            )
+            return _with_provider_run_history(project_dir, result)
+
         if validated_runtime_mode == "mini_pipeline":
             return await _complete_provider_mini_pipeline_smoke(
                 provider=provider,
@@ -813,7 +1933,7 @@ async def run_provider_smoke_check(
         )
     except Exception as e:
         logger.debug("Provider smoke check failed", exc_info=True)
-        return ProviderSmokeResult(
+        result = ProviderSmokeResult(
             success=False,
             provider=provider.name,
             model=resolved_model,
@@ -825,6 +1945,9 @@ async def run_provider_smoke_check(
                 error_details=str(e),
             ),
         )
+        if validated_runtime_mode == "provider_e2e":
+            return _with_provider_run_history(project_dir, result)
+        return result
 
 
 def _create_provider_session(
@@ -896,6 +2019,279 @@ async def _complete_provider_smoke(
         runtime_diagnostics=_with_provider_contract_health(
             runtime_diagnostics,
             success=True,
+        ),
+    )
+
+
+def _provider_e2e_negative_probe_payload() -> dict[str, dict[str, str]]:
+    """Return deterministic negative classification probes for provider e2e."""
+    unsupported_issue = _provider_issue_from_error(
+        "The selected model does not support tools."
+    )
+    gateway_issue = _provider_issue_from_error(
+        "502 Bad gateway from the upstream model gateway."
+    )
+    return {
+        "unsupported_tools": {
+            "status": "passed"
+            if unsupported_issue["status"] == "unsupported_tools"
+            else "failed",
+            "source": "provider_e2e_negative_probe",
+            "reason": unsupported_issue["reason"],
+        },
+        "gateway_model_limitations": {
+            "status": "passed"
+            if gateway_issue["status"] == "gateway_blocked"
+            else "failed",
+            "source": "provider_e2e_negative_probe",
+            "reason": gateway_issue["reason"],
+        },
+    }
+
+
+def _provider_e2e_negative_fixture_payload(provider: str) -> dict[str, dict[str, str]]:
+    """Return provider-specific negative fixtures for direct-provider e2e."""
+    normalized_provider = provider.lower()
+    fixture = PROVIDER_RELIABILITY_NEGATIVE_FIXTURES.get(normalized_provider)
+    if fixture is None:
+        return _provider_e2e_negative_probe_payload()
+
+    surface = str(fixture["surface"])
+    unsupported_issue = _provider_issue_from_error(
+        str(fixture["unsupported_tools_error"])
+    )
+    gateway_issue = _provider_issue_from_error(str(fixture["gateway_model_error"]))
+    return {
+        "unsupported_tools": {
+            "status": "passed"
+            if unsupported_issue["status"] == "unsupported_tools"
+            else "failed",
+            "source": "provider_adapter_negative_fixture",
+            "reason": unsupported_issue["reason"],
+            "fixture_provider": normalized_provider,
+            "fixture_surface": surface,
+        },
+        "gateway_model_limitations": {
+            "status": "passed"
+            if gateway_issue["status"] == "gateway_blocked"
+            else "failed",
+            "source": "provider_adapter_negative_fixture",
+            "reason": gateway_issue["reason"],
+            "fixture_provider": normalized_provider,
+            "fixture_surface": surface,
+        },
+    }
+
+
+def _provider_e2e_negative_fixture_summary(
+    *,
+    provider: str,
+    probes: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    """Return provider e2e fixture coverage summary for diagnostics/UI."""
+    covered_cases = [
+        case_name
+        for case_name, probe in probes.items()
+        if isinstance(probe, dict) and probe.get("status") == "passed"
+    ]
+    source = next(
+        (
+            str(probe.get("source"))
+            for probe in probes.values()
+            if isinstance(probe, dict) and probe.get("source")
+        ),
+        "provider_e2e_negative_probe",
+    )
+    return {
+        "status": "passed"
+        if len(covered_cases) == len(probes) and bool(probes)
+        else "failed",
+        "provider": provider.lower(),
+        "source": source,
+        "covered_cases": covered_cases,
+    }
+
+
+def _provider_e2e_negative_probe_runs(
+    probes: dict[str, dict[str, str]],
+) -> list[dict[str, str]]:
+    """Return e2e suite child-run summaries for deterministic negative probes."""
+    return [
+        {
+            "runtime_mode": "unsupported_tools_probe",
+            "status": str(probes["unsupported_tools"].get("status") or "failed"),
+            "message": "Unsupported tool classification probe passed"
+            if probes["unsupported_tools"].get("status") == "passed"
+            else "Unsupported tool classification probe failed",
+        },
+        {
+            "runtime_mode": "gateway_model_probe",
+            "status": str(
+                probes["gateway_model_limitations"].get("status") or "failed"
+            ),
+            "message": "Gateway/model limitation classification probe passed"
+            if probes["gateway_model_limitations"].get("status") == "passed"
+            else "Gateway/model limitation classification probe failed",
+        },
+    ]
+
+
+def _provider_e2e_negative_probe_reliability(
+    provider: str,
+    probes: dict[str, dict[str, str]],
+) -> dict[str, Any] | None:
+    """Return a provider reliability payload covering e2e negative probes."""
+    normalized_provider = provider.lower()
+    if normalized_provider not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return None
+    probe_diagnostics = {
+        "provider": normalized_provider,
+        "provider_e2e_negative_probes": probes,
+    }
+    cases = [
+        {
+            "case": case_name,
+            "status": "not_covered",
+            "source": "provider_e2e_required",
+        }
+        for case_name in PROVIDER_RELIABILITY_CASE_ORDER
+    ]
+    for index, case_name in enumerate(PROVIDER_RELIABILITY_CASE_ORDER):
+        probe_case = _provider_negative_probe_case(probe_diagnostics, case_name)
+        if probe_case is not None:
+            cases[index] = probe_case
+    return _provider_reliability_payload(normalized_provider, cases)
+
+
+async def _complete_provider_e2e_smoke_suite(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    prompt: str | None,
+    timeout_seconds: float,
+    model: str | None,
+    runtime_diagnostics: dict[str, Any],
+) -> ProviderSmokeResult:
+    """Run the provider-specific e2e suite over live direct-provider surfaces."""
+    child_results: list[ProviderSmokeResult] = []
+    suite_runs: list[dict[str, str]] = []
+    for child_runtime_mode, runner, child_prompt in (
+        ("generic_edit", _complete_provider_generic_edit_smoke, None),
+        ("mini_pipeline", _complete_provider_mini_pipeline_smoke, prompt),
+        (
+            "transaction_batch_probe",
+            _complete_provider_transaction_batch_smoke,
+            None,
+        ),
+    ):
+        child_diagnostics = build_provider_smoke_runtime_diagnostics(
+            provider_name=provider.name,
+            requested_runtime_mode=child_runtime_mode,
+            validated_runtime_mode=child_runtime_mode,
+        )
+        try:
+            child_result = await runner(
+                provider=provider,
+                session_config=session_config,
+                prompt=child_prompt,
+                timeout_seconds=timeout_seconds,
+                model=model,
+                runtime_diagnostics=child_diagnostics,
+            )
+        except Exception as e:
+            logger.debug(
+                "Provider e2e smoke child run failed",
+                exc_info=True,
+                extra={"runtime_mode": child_runtime_mode},
+            )
+            child_result = ProviderSmokeResult(
+                success=False,
+                provider=provider.name,
+                model=model,
+                runtime_mode=child_runtime_mode,
+                message=f"Provider {child_runtime_mode} smoke failed: {e}",
+                error_details=str(e),
+                runtime_diagnostics=_with_provider_contract_health(
+                    child_diagnostics,
+                    error_details=str(e),
+                ),
+            )
+        child_results.append(child_result)
+        run_payload = {
+            "runtime_mode": child_result.runtime_mode,
+            "status": "passed" if child_result.success else "failed",
+            "message": child_result.message,
+        }
+        if child_result.error_details:
+            run_payload["reason"] = _response_excerpt(
+                child_result.error_details,
+                max_chars=160,
+            )
+        suite_runs.append(run_payload)
+
+    negative_probes = _provider_e2e_negative_fixture_payload(provider.name)
+    negative_fixture_summary = _provider_e2e_negative_fixture_summary(
+        provider=provider.name,
+        probes=negative_probes,
+    )
+    negative_probe_runs = _provider_e2e_negative_probe_runs(negative_probes)
+    suite_runs.extend(negative_probe_runs)
+    negative_probe_success = all(
+        run.get("status") == "passed" for run in negative_probe_runs
+    )
+    success = all(child.success for child in child_results) and negative_probe_success
+    suite_status = "passed" if success else "failed"
+    reliability = _merge_provider_reliability_diagnostics(
+        provider.name,
+        [
+            child.runtime_diagnostics.get("provider_reliability")
+            for child in child_results
+        ]
+        + [_provider_e2e_negative_probe_reliability(provider.name, negative_probes)],
+    )
+    next_diagnostics: dict[str, Any] = {
+        **runtime_diagnostics,
+        "provider_e2e_suite": {
+            "status": suite_status,
+            "runs": suite_runs,
+        },
+        "provider_e2e_negative_probes": negative_probes,
+        "provider_e2e_negative_fixtures": negative_fixture_summary,
+    }
+    if reliability is not None:
+        next_diagnostics["provider_reliability"] = reliability
+
+    response_excerpt = _response_excerpt(
+        "; ".join(
+            child.response_excerpt or child.message
+            for child in child_results
+            if child.response_excerpt or child.message
+        )
+    )
+    error_details = (
+        "; ".join(
+            child.error_details or child.message
+            for child in child_results
+            if not child.success
+        )
+        or None
+    )
+    return ProviderSmokeResult(
+        success=success,
+        provider=provider.name,
+        model=model,
+        runtime_mode="provider_e2e",
+        message=(
+            "Provider e2e smoke suite passed"
+            if success
+            else "Provider e2e smoke suite failed"
+        ),
+        response_excerpt=response_excerpt if success else None,
+        error_details=error_details,
+        runtime_diagnostics=_with_provider_contract_health(
+            next_diagnostics,
+            success=success,
+            error_details=error_details,
         ),
     )
 
@@ -1001,6 +2397,74 @@ async def _complete_provider_generic_edit_smoke(
     )
 
 
+async def _complete_provider_transaction_batch_smoke(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    prompt: str | None,
+    timeout_seconds: float,
+    model: str | None,
+    runtime_diagnostics: dict[str, Any],
+) -> ProviderSmokeResult:
+    """Run a generic_edit smoke that must exercise begin/commit batch semantics."""
+    del prompt
+    result = await _complete_provider_generic_edit_smoke(
+        provider=provider,
+        session_config=session_config,
+        prompt=DEFAULT_PROVIDER_TRANSACTION_BATCH_SMOKE_PROMPT,
+        timeout_seconds=timeout_seconds,
+        model=model,
+        runtime_diagnostics={
+            **runtime_diagnostics,
+            "smoke_scope": "transaction_batch_probe",
+        },
+    )
+    execution = result.runtime_diagnostics.get("validated_runtime_execution")
+    contract = (
+        execution.get("transaction_batch_contract")
+        if isinstance(execution, dict)
+        else None
+    )
+    case = _provider_transaction_batch_case(result.runtime_diagnostics)
+    if case.get("status") != "passed":
+        error_details = (
+            "Provider transaction batch smoke did not observe a committed batch."
+        )
+        return ProviderSmokeResult(
+            success=False,
+            provider=provider.name,
+            model=model,
+            runtime_mode="transaction_batch_probe",
+            message="Provider transaction batch smoke failed",
+            response_excerpt=result.response_excerpt,
+            error_details=error_details,
+            runtime_diagnostics=_with_provider_contract_health(
+                {
+                    **result.runtime_diagnostics,
+                    "smoke_scope": "transaction_batch_probe",
+                    "transaction_batch_contract": contract,
+                },
+                error_details=error_details,
+            ),
+        )
+
+    return ProviderSmokeResult(
+        success=True,
+        provider=provider.name,
+        model=model,
+        runtime_mode="transaction_batch_probe",
+        message="Provider transaction batch smoke passed",
+        response_excerpt=result.response_excerpt,
+        runtime_diagnostics=_with_provider_contract_health(
+            {
+                **result.runtime_diagnostics,
+                "smoke_scope": "transaction_batch_probe",
+            },
+            success=True,
+        ),
+    )
+
+
 async def _complete_provider_mini_pipeline_smoke(
     *,
     provider: Any,
@@ -1101,6 +2565,42 @@ async def _complete_provider_mini_pipeline_smoke(
             )
         phases.append({"name": "tests", "status": "passed"})
 
+        recovery_spec_dir = smoke_spec_dir / "recovery"
+        recovery_spec_dir.mkdir(parents=True, exist_ok=True)
+        (
+            recovery_loop,
+            recovery_execution,
+        ) = await _complete_provider_mini_pipeline_recovery_loop(
+            provider=provider,
+            session_config=session_config,
+            project_dir=smoke_project_dir,
+            spec_dir=recovery_spec_dir,
+            timeout_seconds=timeout_seconds,
+        )
+        if recovery_execution is not None:
+            runtime_diagnostics = {
+                **runtime_diagnostics,
+                "validated_recovery_execution": recovery_execution,
+            }
+        if recovery_loop.get("status") != "passed":
+            phases.append({"name": "recovery", "status": "failed"})
+            return _mini_pipeline_result(
+                provider=provider,
+                model=model,
+                runtime_diagnostics=runtime_diagnostics,
+                task=task,
+                phases=phases,
+                changed_files=_mini_pipeline_changed_files(string_tools_path),
+                success=False,
+                message="Provider mini pipeline recovery loop failed",
+                response_excerpt=None,
+                error_details=str(recovery_loop.get("reason") or "recovery_failed"),
+                test_exit_code=test_exit_code,
+                reason="recovery_loop_failed",
+                recovery_loop=recovery_loop,
+            )
+        phases.append({"name": "recovery", "status": "passed"})
+
         implementation = string_tools_path.read_text(encoding="utf-8")
         reviewer_response = await _complete_provider_text_phase(
             provider=provider,
@@ -1129,6 +2629,7 @@ async def _complete_provider_mini_pipeline_smoke(
                 error_details="Provider mini pipeline reviewer returned an empty response",
                 test_exit_code=test_exit_code,
                 reason="reviewer_empty_response",
+                recovery_loop=recovery_loop,
             )
         phases.append({"name": "reviewer", "status": "passed"})
 
@@ -1144,7 +2645,201 @@ async def _complete_provider_mini_pipeline_smoke(
             response_excerpt=_response_excerpt(reviewer_response),
             error_details=None,
             test_exit_code=test_exit_code,
+            recovery_loop=recovery_loop,
         )
+
+
+async def _complete_provider_mini_pipeline_recovery_loop(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    project_dir: Path,
+    spec_dir: Path,
+    timeout_seconds: float,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Run a recoverable generic_edit failure and resume it to completion."""
+    target_path = project_dir / "recovery-target.txt"
+    target_path.write_text(
+        DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_INITIAL_CONTENT,
+        encoding="utf-8",
+    )
+    checkpoint_path = spec_dir / "artifacts" / "generic_edit_recovery_checkpoint.json"
+
+    try:
+        initial_session = _create_provider_session(
+            provider=provider,
+            session_config=session_config,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="coder",
+        )
+        initial_runtime = create_runtime_session(
+            provider_name=provider.name,
+            agent_session=initial_session,
+            runtime_mode="generic_edit",
+            project_dir=project_dir,
+            agent_type="coder",
+        )
+        first_result = await asyncio.wait_for(
+            run_runtime_session(
+                initial_runtime,
+                DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_PROMPT,
+                spec_dir,
+                verbose=False,
+                phase=LogPhase.PLANNING,
+                requirements=RuntimeRequirements.generic_edit(),
+            ),
+            timeout=timeout_seconds,
+        )
+        if first_result.status != "error" or not checkpoint_path.exists():
+            return (
+                {
+                    "status": "failed",
+                    "reason": "recovery_checkpoint_not_created",
+                    "initial_result_status": first_result.status,
+                },
+                _generic_edit_execution_diagnostics(spec_dir / "artifacts"),
+            )
+
+        preflight = inspect_generic_edit_resume_artifacts(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+        )
+        if preflight.get("status") != "ready":
+            return (
+                _mini_pipeline_recovery_loop_failure(
+                    reason="resume_preflight_blocked",
+                    preflight=preflight,
+                ),
+                _generic_edit_execution_diagnostics(spec_dir / "artifacts"),
+            )
+
+        resume_session = _create_provider_session(
+            provider=provider,
+            session_config=session_config,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="coder",
+        )
+        resume_runtime = create_runtime_session(
+            provider_name=provider.name,
+            agent_session=resume_session,
+            runtime_mode="generic_edit",
+            project_dir=project_dir,
+            agent_type="coder",
+        )
+        resumed = await asyncio.wait_for(
+            resume_runtime_session(
+                resume_runtime,
+                checkpoint_path,
+                spec_dir,
+                verbose=False,
+                phase=LogPhase.PLANNING,
+                requirements=RuntimeRequirements.generic_edit(),
+            ),
+            timeout=timeout_seconds,
+        )
+
+        artifact_dir = spec_dir / "artifacts"
+        execution_diagnostics = _generic_edit_execution_diagnostics(artifact_dir)
+        result_payload = _load_json_file(artifact_dir / "generic_edit_result.json")
+        if not isinstance(result_payload, dict):
+            return (
+                {
+                    "status": "failed",
+                    "reason": "result_artifact_unreadable",
+                    "resume_result_status": resumed.status,
+                },
+                execution_diagnostics,
+            )
+
+        final_content = target_path.read_text(encoding="utf-8")
+        workspace_guard = (
+            result_payload.get("resume", {}).get("workspace_guard")
+            if isinstance(result_payload.get("resume"), dict)
+            else {}
+        )
+        workspace_guard_status = (
+            workspace_guard.get("status")
+            if isinstance(workspace_guard, dict)
+            else "unknown"
+        )
+        recovery_resolved = result_payload.get("recovery_resolved") is True
+        if (
+            resumed.status != "continue"
+            or final_content != DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT
+            or not recovery_resolved
+            or workspace_guard_status != "clean"
+        ):
+            return (
+                {
+                    "status": "failed",
+                    "reason": "resume_recovery_not_clean",
+                    "resume_result_status": resumed.status,
+                    "recovery_status": "resolved"
+                    if recovery_resolved
+                    else "requires_resolution",
+                    "workspace_guard_status": str(workspace_guard_status),
+                },
+                execution_diagnostics,
+            )
+
+        resume_policy = preflight.get("resume_policy")
+        if not isinstance(resume_policy, dict):
+            resume_policy = {}
+        return (
+            {
+                "status": "passed",
+                "preflight_status": str(preflight.get("status") or "unknown"),
+                "resume_policy_status": str(resume_policy.get("status") or "unknown"),
+                "required_resolution_action_kinds": _string_list_payload(
+                    resume_policy.get("required_resolution_action_kinds")
+                ),
+                "resume_result_status": resumed.status,
+                "recovery_status": "resolved",
+                "workspace_guard_status": str(workspace_guard_status),
+                "changed_files": ["recovery-target.txt"],
+            },
+            execution_diagnostics,
+        )
+    except Exception as e:
+        logger.debug("Provider mini pipeline recovery loop failed", exc_info=True)
+        return (
+            {
+                "status": "failed",
+                "reason": "recovery_loop_exception",
+                "message": _response_excerpt(str(e), max_chars=240),
+            },
+            _generic_edit_execution_diagnostics(spec_dir / "artifacts"),
+        )
+
+
+def _mini_pipeline_recovery_loop_failure(
+    *,
+    reason: str,
+    preflight: dict[str, Any],
+) -> dict[str, Any]:
+    resume_policy = preflight.get("resume_policy")
+    if not isinstance(resume_policy, dict):
+        resume_policy = {}
+    return {
+        "status": "failed",
+        "reason": reason,
+        "preflight_status": str(preflight.get("status") or "unknown"),
+        "resume_policy_status": str(resume_policy.get("status") or "unknown"),
+        "required_resolution_action_kinds": _string_list_payload(
+            resume_policy.get("required_resolution_action_kinds")
+        ),
+        "blockers": preflight.get("blockers", []),
+    }
+
+
+def _load_json_file(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 
 async def _complete_provider_text_phase(
@@ -1230,6 +2925,7 @@ def _mini_pipeline_result(
     error_details: str | None,
     test_exit_code: int,
     reason: str | None = None,
+    recovery_loop: dict[str, Any] | None = None,
 ) -> ProviderSmokeResult:
     mini_pipeline: dict[str, Any] = {
         "status": "passed" if success else "failed",
@@ -1241,6 +2937,8 @@ def _mini_pipeline_result(
     }
     if reason:
         mini_pipeline["reason"] = reason
+    if recovery_loop is not None:
+        mini_pipeline["recovery_loop"] = recovery_loop
     next_diagnostics = {
         **runtime_diagnostics,
         "mini_pipeline": mini_pipeline,
@@ -1287,6 +2985,9 @@ def _print_provider_runtime_diagnostics(
         str(runtime_diagnostics.get("smoke_scope", "unknown")),
     )
     _print_provider_contract_health(runtime_diagnostics.get("provider_contract_health"))
+    _print_provider_reliability(runtime_diagnostics.get("provider_reliability"))
+    _print_provider_e2e_suite(runtime_diagnostics.get("provider_e2e_suite"))
+    _print_provider_run_history(runtime_diagnostics.get("provider_run_history"))
     _print_provider_execution_diagnostics(
         runtime_diagnostics.get("validated_runtime_execution")
     )
@@ -1305,6 +3006,82 @@ def _print_provider_contract_health(health: Any) -> None:
         print_key_value("Provider health reason", reason)
 
 
+def _print_provider_reliability(reliability: Any) -> None:
+    """Print direct-provider reliability coverage diagnostics."""
+    if not isinstance(reliability, dict):
+        return
+    status = reliability.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Provider reliability", status)
+    coverage_parts = [
+        (
+            f"{reliability['passed_case_count']}/"
+            f"{reliability['required_case_count']} passed"
+        )
+        if isinstance(reliability.get("passed_case_count"), int)
+        and not isinstance(reliability.get("passed_case_count"), bool)
+        and isinstance(reliability.get("required_case_count"), int)
+        and not isinstance(reliability.get("required_case_count"), bool)
+        else "",
+        f"{reliability['observed_case_count']} observed"
+        if isinstance(reliability.get("observed_case_count"), int)
+        and not isinstance(reliability.get("observed_case_count"), bool)
+        else "",
+    ]
+    coverage = ", ".join(part for part in coverage_parts if part)
+    if coverage:
+        print_key_value("Reliability coverage", coverage)
+    _print_string_list_line("Reliability uncovered", reliability.get("uncovered_cases"))
+
+
+def _print_provider_e2e_suite(provider_e2e_suite: Any) -> None:
+    """Print provider e2e suite run diagnostics."""
+    if not isinstance(provider_e2e_suite, dict):
+        return
+    status = provider_e2e_suite.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Provider e2e suite", status)
+    runs = provider_e2e_suite.get("runs")
+    if not isinstance(runs, list):
+        return
+    run_parts = [
+        f"{run.get('runtime_mode', 'unknown')}={run.get('status', 'unknown')}"
+        for run in runs
+        if isinstance(run, dict)
+    ]
+    if run_parts:
+        print_key_value("Provider e2e runs", ", ".join(run_parts))
+
+
+def _print_provider_run_history(provider_run_history: Any) -> None:
+    """Print persisted provider run history diagnostics."""
+    if not isinstance(provider_run_history, dict):
+        return
+    status = provider_run_history.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Provider run history", status)
+    total_runs = provider_run_history.get("total_runs")
+    passed_runs = provider_run_history.get("passed_runs")
+    failed_runs = provider_run_history.get("failed_runs")
+    run_parts = [
+        f"{total_runs} total"
+        if isinstance(total_runs, int) and not isinstance(total_runs, bool)
+        else "",
+        f"{passed_runs} passed"
+        if isinstance(passed_runs, int) and not isinstance(passed_runs, bool)
+        else "",
+        f"{failed_runs} failed"
+        if isinstance(failed_runs, int) and not isinstance(failed_runs, bool)
+        else "",
+    ]
+    runs = ", ".join(part for part in run_parts if part)
+    if runs:
+        print_key_value("Provider history runs", runs)
+    path = provider_run_history.get("path")
+    if isinstance(path, str) and path:
+        print_key_value("Provider history artifact", path)
+
+
 def _print_provider_execution_diagnostics(execution: Any) -> None:
     """Print validated generic_edit execution diagnostics."""
     if not isinstance(execution, dict):
@@ -1321,6 +3098,7 @@ def _print_provider_execution_diagnostics(execution: Any) -> None:
     )
     _print_first_native_tool_fallback(execution.get("native_tool_fallbacks"))
     _print_provider_resume_policy(execution.get("resume_policy"))
+    _print_transaction_batch_contract(execution.get("transaction_batch_contract"))
 
 
 def _print_tool_loop_contract(contract: Any) -> None:
@@ -1383,6 +3161,57 @@ def _print_provider_resume_policy(resume_policy: Any) -> None:
     _print_string_list_line(
         "Resume open batches",
         resume_policy.get("open_transaction_batch_ids"),
+    )
+
+
+def _print_transaction_batch_contract(contract: Any) -> None:
+    """Print batch-boundary diagnostics for provider smoke output."""
+    if not isinstance(contract, dict):
+        return
+    contract_parts = [
+        str(contract[field])
+        for field in ("status", "batch_boundary_guard")
+        if isinstance(contract.get(field), str) and str(contract[field])
+    ]
+    if contract_parts:
+        print_key_value(
+            "Batch contract",
+            ", ".join(contract_parts),
+        )
+    _print_string_list_line(
+        "Batch boundary reasons",
+        contract.get("boundary_error_reasons"),
+    )
+    preferred_strategy = contract.get("boundary_preferred_strategy")
+    if isinstance(preferred_strategy, str) and preferred_strategy:
+        print_key_value("Batch preferred strategy", preferred_strategy)
+    _print_string_list_line(
+        "Batch required actions",
+        contract.get("boundary_required_action_kinds"),
+    )
+    _print_string_list_line(
+        "Batch resolution strategies",
+        contract.get("boundary_resolution_strategies"),
+    )
+    _print_string_list_line(
+        "Batch lifecycle actions",
+        contract.get("batch_lifecycle_actions"),
+    )
+    _print_string_list_line(
+        "Batch lifecycle statuses",
+        contract.get("batch_lifecycle_statuses"),
+    )
+    _print_string_list_line(
+        "Committed mutation snapshots",
+        contract.get("committed_mutation_snapshot_ids"),
+    )
+    _print_string_list_line(
+        "Batch commit operations",
+        contract.get("commit_operation_ids"),
+    )
+    _print_string_list_line(
+        "Open transaction batches",
+        contract.get("open_transaction_batch_ids"),
     )
 
 

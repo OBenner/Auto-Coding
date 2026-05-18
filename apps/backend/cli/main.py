@@ -195,11 +195,14 @@ Environment Variables:
             "generic-edit",
             "mini_pipeline",
             "mini-pipeline",
+            "provider_e2e",
+            "provider-e2e",
         ),
         help=(
             "With --provider-smoke: runtime surface to validate "
             "(default: analysis_only; use generic_edit for a tool-loop smoke "
-            "or mini_pipeline for a tiny planner/coder/reviewer task)"
+            "or mini_pipeline for a tiny planner/coder/reviewer task; "
+            "provider_e2e runs the direct-provider smoke suite)"
         ),
     )
 

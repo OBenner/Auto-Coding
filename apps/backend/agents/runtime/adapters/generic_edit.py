@@ -213,6 +213,54 @@ def generic_edit_required_resume_artifact_error(
     )
 
 
+def generic_edit_canonical_resume_input_artifact_paths(
+    checkpoint_path: Path,
+) -> dict[str, Path]:
+    """Return canonical resume artifact paths for a recovery checkpoint."""
+    return {
+        "trace_artifact": generic_edit_trace_path_for_checkpoint(checkpoint_path),
+        "event_artifact": generic_edit_event_path_for_checkpoint(checkpoint_path),
+        "recovery_plan_artifact": generic_edit_recovery_plan_path_for_checkpoint(
+            checkpoint_path
+        ),
+        "mutation_snapshot_artifact": (
+            generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path)
+        ),
+        "transaction_group_artifact": (
+            generic_edit_transaction_group_path_for_checkpoint(checkpoint_path)
+        ),
+    }
+
+
+def validate_generic_edit_resume_input_artifact_paths(
+    *,
+    resume_inputs: dict[str, Any],
+    checkpoint_path: Path,
+    owner_artifact: str,
+    owner_path: Path,
+) -> None:
+    """Reject stale resume inputs that point away from canonical artifacts."""
+    for (
+        artifact_name,
+        expected_path,
+    ) in generic_edit_canonical_resume_input_artifact_paths(checkpoint_path).items():
+        actual_path = resume_inputs.get(artifact_name)
+        if not isinstance(actual_path, str) or not actual_path:
+            continue
+        if Path(actual_path).resolve() == expected_path.resolve():
+            continue
+        raise generic_edit_resume_artifact_error(
+            "Generic edit resume input artifact path does not match the "
+            f"canonical checkpoint artifact: {artifact_name}.",
+            artifact=owner_artifact,
+            reason="checkpoint_mismatch",
+            path=owner_path,
+            artifact_name=artifact_name,
+            expected_artifact_path=str(expected_path),
+            actual_artifact_path=str(Path(actual_path)),
+        )
+
+
 def generic_edit_resume_blocked_preflight(
     *,
     checkpoint_path: Path,
@@ -310,6 +358,15 @@ MAX_MUTATION_PREIMAGE_BYTES = 20000
 SNAPSHOT_MUTATING_ACTIONS = frozenset(
     {"write_file", "replace_text", "delete_file", "move_file", "apply_patch"}
 )
+OPAQUE_BATCH_MUTATING_ACTIONS = (
+    MUTATING_LOCAL_ACTIONS
+    - SNAPSHOT_MUTATING_ACTIONS
+    - {
+        ROLLBACK_TRANSACTION_TOOL,
+        REPAIR_MUTATION_TOOL,
+        ABORT_BATCH_TOOL,
+    }
+)
 RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
     {
         "cancelled",
@@ -322,6 +379,10 @@ RECOVERABLE_GENERIC_EDIT_STOP_REASONS = frozenset(
     }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
+GENERIC_EDIT_EVENTS_FILENAME = "generic_edit_events.jsonl"
+GENERIC_EDIT_SESSION_STATE_FILENAME = "generic_edit_session_state.json"
+GENERIC_EDIT_RECOVERY_PLAN_FILENAME = "generic_edit_recovery_plan.json"
+GENERIC_EDIT_TRANSACTION_GROUPS_FILENAME = "generic_edit_transaction_groups.json"
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT = 5
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_LIMIT = 20
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIMIT = 10
@@ -368,6 +429,21 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "previous_stop_reason",
     "preferred_strategy",
     "next_action_count",
+    "batch_boundary_error",
+    "batch_boundary_error_reason",
+    "staged_workspace_guard_status",
+    "staged_workspace_guard_drift_count",
+    "staged_workspace_materialized",
+    "staged_workspace_restored",
+    "staged_workspace_batch_id",
+    "drift_paths",
+    "committed_mutation_snapshot_ids",
+    "commit_operation_id",
+    "commit_operation_ids",
+    "blocked_tool",
+    "blocked_transaction_group_ids",
+    "required_next_action_kinds",
+    "resolution_strategies",
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_STAGES = frozenset(
     {
@@ -379,6 +455,8 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_STAGES = frozenset(
         "resume_clean",
         "resume_policy",
         "batch_open",
+        "batch_committed",
+        "batch_boundary_blocked",
     }
 )
 GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_STRING_FIELDS = (
@@ -432,6 +510,7 @@ class GenericEditRuntimeSession:
         self._mutation_snapshots: list[dict[str, Any]] = []
         self._resume_metadata: dict[str, Any] | None = None
         self._active_batch_id: str | None = None
+        self._batch_recovery_blockers: dict[str, list[str]] = {}
 
     @property
     def context_client(self) -> Any:
@@ -459,6 +538,7 @@ class GenericEditRuntimeSession:
         self._mutation_snapshots = []
         self._resume_metadata = None
         self._active_batch_id = None
+        self._batch_recovery_blockers = {}
         self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
             agent_session=self.agent_session,
             spec_dir=spec_dir,
@@ -498,6 +578,7 @@ class GenericEditRuntimeSession:
         """Resume generic_edit execution from a recovery checkpoint artifact."""
         self._cancel_requested = False
         self._active_batch_id = None
+        self._batch_recovery_blockers = {}
         self._mcp_bridge = RuntimeMcpBridge.from_agent_session(
             agent_session=self.agent_session,
             spec_dir=spec_dir,
@@ -515,13 +596,59 @@ class GenericEditRuntimeSession:
             checkpoint=checkpoint,
             trace=trace,
         )
+        session_state_path = (
+            checkpoint_path.parent / GENERIC_EDIT_SESSION_STATE_FILENAME
+        )
+        session_state = (
+            load_generic_edit_session_state(
+                session_state_path,
+                expected_checkpoint_path=checkpoint_path,
+            )
+            if session_state_path.exists()
+            else None
+        )
+        artifact_manifest_path = generic_edit_artifact_manifest_path_for_checkpoint(
+            checkpoint_path,
+        )
+        artifact_manifest = (
+            load_generic_edit_artifact_manifest(artifact_manifest_path)
+            if artifact_manifest_path.exists()
+            else None
+        )
+        event_path = generic_edit_event_path_from_checkpoint(checkpoint)
+        events = (
+            load_generic_edit_events_artifact(
+                event_path,
+                expected_event_path=generic_edit_event_path_for_checkpoint(
+                    checkpoint_path
+                ),
+            )
+            if event_path is not None
+            else None
+        )
+        mutation_snapshot_path = generic_edit_mutation_snapshot_path_for_checkpoint(
+            checkpoint_path
+        )
         self._mutation_snapshots = load_generic_edit_mutation_snapshots(
-            generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path)
+            mutation_snapshot_path
+        )
+        validate_generic_edit_resume_artifact_consistency(
+            checkpoint=checkpoint,
+            checkpoint_path=checkpoint_path,
+            trace=trace,
+            session_state=session_state,
+            session_state_path=session_state_path,
+            artifact_manifest=artifact_manifest,
+            artifact_manifest_path=artifact_manifest_path,
+            events=events,
+            mutation_snapshots=self._mutation_snapshots,
+            mutation_snapshot_path=mutation_snapshot_path,
         )
         self._active_batch_id = generic_edit_resume_open_batch_id(
             checkpoint=checkpoint,
             trace=trace,
         )
+        self._refresh_batch_recovery_guards(trace)
         workspace_guard = validate_generic_edit_resume_workspace_guard(
             project_dir=self._executor.project_dir,
             mutation_snapshots=self._mutation_snapshots,
@@ -646,6 +773,7 @@ class GenericEditRuntimeSession:
                 results=execution.action_results,
             )
             trace.append(iteration_entry)
+            self._refresh_batch_recovery_guards(trace)
             prompt = build_observation_prompt(
                 base_prompt=base_prompt,
                 results=execution.action_results,
@@ -747,6 +875,23 @@ class GenericEditRuntimeSession:
                     response_prefix="Generic edit runtime rejected provider actions",
                 ),
             )
+        try:
+            validate_batch_boundary_actions(actions)
+        except GenericEditRuntimeError as e:
+            return JsonActionParseResult(
+                actions=[],
+                terminal_result=self._json_error_result(
+                    error=e,
+                    iteration_entry=iteration_entry,
+                    trace=trace,
+                    spec_dir=spec_dir,
+                    observation_path=observation_path,
+                    subtask_id=subtask_id,
+                    stop_reason="batch_boundary_violation",
+                    summary="Generic edit runtime rejected a batch boundary violation.",
+                    response_prefix="Generic edit runtime rejected provider actions",
+                ),
+            )
         return JsonActionParseResult(actions=actions)
 
     def _json_error_result(
@@ -806,6 +951,15 @@ class GenericEditRuntimeSession:
             if self._cancel_requested:
                 execution.cancelled = True
                 return execution
+            self._refresh_batch_recovery_guards_before_action(
+                action=action,
+                trace=trace,
+                iteration_entry=iteration_entry,
+                loop="json_actions",
+                iteration=iteration,
+                actions=execution.executed_actions,
+                results=execution.action_results,
+            )
             result = await self._execute_action(
                 action,
                 loop="json_actions",
@@ -1008,6 +1162,7 @@ class GenericEditRuntimeSession:
             verbose=verbose,
             phase=phase,
             subtask_id=subtask_id,
+            trace=trace,
         )
         if execution.cancelled:
             return None, generic_edit_cancelled_result()
@@ -1033,6 +1188,7 @@ class GenericEditRuntimeSession:
             results=execution.action_results,
         )
         trace.append(iteration_entry)
+        self._refresh_batch_recovery_guards(trace)
         return build_native_recovery_prompt(iteration_entry["transaction"]), None
 
     def _max_iterations_result(
@@ -1228,6 +1384,32 @@ class GenericEditRuntimeSession:
                     f"Artifacts: {artifacts['generic_edit_trace']}"
                 ),
             )
+        try:
+            validate_batch_boundary_actions([action for _, action in tool_actions])
+        except GenericEditRuntimeError as e:
+            iteration_entry["error"] = str(e)
+            trace.append(iteration_entry)
+            artifacts = save_generic_edit_artifacts(
+                spec_dir=spec_dir,
+                provider_name=self.provider_name,
+                subtask_id=subtask_id,
+                status="error",
+                stop_reason="batch_boundary_violation",
+                message=str(e),
+                trace=trace,
+                summary="Generic edit runtime rejected a batch boundary violation.",
+                observation_path=observation_path,
+                mutation_snapshots=self._mutation_snapshots,
+                mcp_support=self._mcp_support_payload(),
+                resume_metadata=self._resume_metadata,
+            )
+            return AgentRunResult(
+                status="error",
+                response_text=(
+                    f"Generic edit runtime rejected provider tool calls: {e}\n"
+                    f"Artifacts: {artifacts['generic_edit_trace']}"
+                ),
+            )
         return None
 
     async def _execute_native_tool_actions(
@@ -1241,6 +1423,7 @@ class GenericEditRuntimeSession:
         verbose: bool,
         phase: Any,
         subtask_id: str | None,
+        trace: list[dict[str, Any]],
     ) -> NativeToolExecutionResult:
         """Execute provider-native tool calls through local action handlers."""
         execution = NativeToolExecutionResult(
@@ -1251,6 +1434,15 @@ class GenericEditRuntimeSession:
             if self._cancel_requested:
                 execution.cancelled = True
                 return execution
+            self._refresh_batch_recovery_guards_before_action(
+                action=action,
+                trace=trace,
+                iteration_entry=iteration_entry,
+                loop="native_tool_calls",
+                iteration=iteration,
+                actions=execution.executed_actions,
+                results=execution.action_results,
+            )
             result = await self._execute_action(
                 action,
                 loop="native_tool_calls",
@@ -1459,13 +1651,28 @@ class GenericEditRuntimeSession:
         phase: Any,
         subtask_id: str | None,
     ) -> ToolActionResult:
+        isolation_error = self._opaque_batch_mutation_result(action)
+        if isolation_error is not None:
+            return isolation_error
+
+        tool = action_tool(action)
+        try:
+            staged_workspace = self._materialize_staged_batch_workspace(action)
+        except GenericEditRuntimeError as e:
+            return ToolActionResult(
+                tool=tool,
+                ok=False,
+                message=str(e),
+                data=dict(e.data),
+            )
+
         mutation_snapshot = self._build_mutation_snapshot(
             action,
             loop=loop,
             iteration=iteration,
             action_index=action_index,
         )
-        if action_tool(action) == "run_subagents":
+        if tool == "run_subagents":
             result = await self._run_subagents_action(
                 action,
                 spec_dir=spec_dir,
@@ -1473,21 +1680,125 @@ class GenericEditRuntimeSession:
                 phase=phase,
                 subtask_id=subtask_id,
             )
-        elif action_tool(action) in BATCH_CONTROL_TOOLS:
+        elif tool in BATCH_CONTROL_TOOLS:
             result = self._batch_control_action(action)
-        elif action_tool(action) == ROLLBACK_TRANSACTION_TOOL:
+        elif tool == ROLLBACK_TRANSACTION_TOOL:
             result = self._rollback_transaction_action(action)
         elif self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
             result = await self._mcp_bridge.execute(action)
-        elif is_mcp_action_name(action_tool(action)):
+        elif is_mcp_action_name(tool):
             result = unavailable_mcp_action_result(
                 action,
                 support=self._mcp_support_payload(),
             )
         else:
             result = await self._executor.execute(action)
-        self._record_mutation_snapshot_result(mutation_snapshot, result)
+        self._record_mutation_snapshot_result(
+            mutation_snapshot,
+            result,
+            staged_workspace=staged_workspace,
+        )
+        restore_error = self._restore_staged_batch_workspace(
+            staged_workspace=staged_workspace,
+            snapshot=mutation_snapshot,
+            result=result,
+        )
+        if restore_error is not None:
+            return restore_error
         return result
+
+    def _materialize_staged_batch_workspace(
+        self,
+        action: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Temporarily expose staged batch postimages to one local action."""
+        if self._active_batch_id is None:
+            return None
+        tool = action_tool(action)
+        if tool in BATCH_CONTROL_TOOLS:
+            return None
+        additional_paths = (
+            action_path_values(action) if tool in SNAPSHOT_MUTATING_ACTIONS else []
+        )
+        return materialize_generic_edit_staged_workspace(
+            project_dir=self._executor.project_dir,
+            batch_id=self._active_batch_id,
+            mutation_snapshots=self._mutation_snapshots,
+            additional_paths=additional_paths,
+        )
+
+    def _restore_staged_batch_workspace(
+        self,
+        *,
+        staged_workspace: dict[str, Any] | None,
+        snapshot: dict[str, Any] | None,
+        result: ToolActionResult,
+    ) -> ToolActionResult | None:
+        """Restore the real workspace after a temporary staged materialization."""
+        if staged_workspace is None:
+            return None
+        try:
+            restore_generic_edit_staged_workspace(
+                project_dir=self._executor.project_dir,
+                staged_workspace=staged_workspace,
+            )
+        except GenericEditRuntimeError as e:
+            return ToolActionResult(
+                tool=result.tool,
+                ok=False,
+                message=str(e),
+                data={
+                    **result.data,
+                    **dict(e.data),
+                    "batch_id": staged_workspace["batch_id"],
+                    "batch_boundary_error": True,
+                    "batch_boundary_error_reason": "staged_workspace_restore_failed",
+                    "batch_isolation_error": True,
+                },
+            )
+        mark_generic_edit_snapshot_workspace_restored(snapshot)
+        if staged_workspace.get("materialized"):
+            result.data = {
+                **result.data,
+                "staged_workspace_materialized": True,
+                "staged_workspace_restored": True,
+                "staged_workspace_batch_id": staged_workspace["batch_id"],
+            }
+        return None
+
+    def _opaque_batch_mutation_result(
+        self,
+        action: dict[str, Any],
+    ) -> ToolActionResult | None:
+        """Reject open-batch mutations that cannot produce staged snapshots."""
+        tool = action_tool(action)
+        if self._active_batch_id is None or tool not in OPAQUE_BATCH_MUTATING_ACTIONS:
+            return None
+        return ToolActionResult(
+            tool=tool,
+            ok=False,
+            message=(
+                f"Cannot run {tool} inside open batch {self._active_batch_id}: "
+                "this action cannot be staged with mutation snapshots. Commit or "
+                "abort the batch before running opaque workspace commands."
+            ),
+            data={
+                "batch_id": self._active_batch_id,
+                "batch_boundary_error": True,
+                "batch_boundary_error_reason": "opaque_batch_mutation",
+                "batch_isolation_error": True,
+                "blocked_tool": tool,
+                "preferred_strategy": ABORT_BATCH_TOOL,
+                "required_next_action_kinds": [
+                    ABORT_BATCH_TOOL,
+                    REPAIR_MUTATION_TOOL,
+                ],
+                "resolution_strategies": [
+                    ABORT_BATCH_TOOL,
+                    REPAIR_MUTATION_TOOL,
+                ],
+            },
+        )
 
     def _batch_control_action(self, action: dict[str, Any]) -> ToolActionResult:
         """Open, commit, or abort one runtime-managed transaction batch."""
@@ -1529,6 +1840,98 @@ class GenericEditRuntimeSession:
             )
 
         if tool == COMMIT_BATCH_TOOL:
+            blockers = self._batch_recovery_blockers.get(batch_id) or []
+            if blockers:
+                return ToolActionResult(
+                    tool=tool,
+                    ok=False,
+                    message=(
+                        f"Cannot commit batch {batch_id}: unresolved recovery "
+                        "group(s) remain inside the batch: "
+                        f"{', '.join(blockers)}."
+                    ),
+                    data={
+                        "batch_id": batch_id,
+                        "batch_action": COMMIT_BATCH_TOOL,
+                        "batch_boundary_error": True,
+                        "batch_boundary_error_reason": "unresolved_batch_recovery",
+                        "blocked_transaction_group_ids": blockers,
+                    },
+                )
+            staged_guard = build_generic_edit_staged_batch_guard(
+                project_dir=self._executor.project_dir,
+                batch_id=batch_id,
+                mutation_snapshots=self._mutation_snapshots,
+            )
+            if staged_guard["status"] in {"drifted", "unavailable", "unverified"}:
+                reason = "staged_batch_drift"
+                if staged_guard["status"] != "drifted":
+                    reason = f"staged_batch_{staged_guard['status']}"
+                return ToolActionResult(
+                    tool=tool,
+                    ok=False,
+                    message=(
+                        f"Cannot commit batch {batch_id}: staged workspace guard "
+                        f"reported {staged_guard['status']}."
+                    ),
+                    data={
+                        "batch_id": batch_id,
+                        "batch_action": COMMIT_BATCH_TOOL,
+                        "batch_boundary_error": True,
+                        "batch_boundary_error_reason": reason,
+                        "batch_isolation_error": True,
+                        "staged_workspace_guard": staged_guard,
+                        "drift_paths": [
+                            str(drift.get("path"))
+                            for drift in staged_guard.get("drifts", [])
+                            if isinstance(drift, dict) and drift.get("path")
+                        ],
+                        "preferred_strategy": ABORT_BATCH_TOOL,
+                        "required_next_action_kinds": [
+                            ABORT_BATCH_TOOL,
+                            REPAIR_MUTATION_TOOL,
+                        ],
+                        "resolution_strategies": [
+                            ABORT_BATCH_TOOL,
+                            REPAIR_MUTATION_TOOL,
+                        ],
+                    },
+                )
+            try:
+                materialize_generic_edit_staged_workspace(
+                    project_dir=self._executor.project_dir,
+                    batch_id=batch_id,
+                    mutation_snapshots=self._mutation_snapshots,
+                )
+            except GenericEditRuntimeError as e:
+                return ToolActionResult(
+                    tool=tool,
+                    ok=False,
+                    message=str(e),
+                    data={
+                        **dict(e.data),
+                        "batch_id": batch_id,
+                        "batch_action": COMMIT_BATCH_TOOL,
+                        "batch_boundary_error": True,
+                        "batch_boundary_error_reason": "staged_batch_unavailable",
+                        "batch_isolation_error": True,
+                        "preferred_strategy": ABORT_BATCH_TOOL,
+                        "required_next_action_kinds": [
+                            ABORT_BATCH_TOOL,
+                            REPAIR_MUTATION_TOOL,
+                        ],
+                        "resolution_strategies": [
+                            ABORT_BATCH_TOOL,
+                            REPAIR_MUTATION_TOOL,
+                        ],
+                    },
+                )
+            commit_operation_id = f"{batch_id}:commit"
+            committed_snapshot_ids = mark_generic_edit_mutation_snapshots_committed(
+                mutation_snapshots=self._mutation_snapshots,
+                batch_id=batch_id,
+                commit_operation_id=commit_operation_id,
+            )
             self._active_batch_id = None
             return ToolActionResult(
                 tool=tool,
@@ -1538,6 +1941,8 @@ class GenericEditRuntimeSession:
                     "batch_id": batch_id,
                     "batch_action": COMMIT_BATCH_TOOL,
                     "batch_status": "committed",
+                    "commit_operation_id": commit_operation_id,
+                    "committed_mutation_snapshot_ids": committed_snapshot_ids,
                 },
             )
 
@@ -1557,10 +1962,59 @@ class GenericEditRuntimeSession:
         self._active_batch_id = None
         return result
 
+    def _refresh_batch_recovery_guards(self, trace: list[dict[str, Any]]) -> None:
+        """Refresh per-batch unresolved recovery blockers from the trace."""
+        transaction_summary = summarize_generic_edit_transactions(trace)
+        transaction_group_summary = summarize_generic_edit_transaction_groups(
+            transaction_summary=transaction_summary,
+            mutation_snapshots=self._mutation_snapshots,
+        )
+        linked_summary = link_generic_edit_transaction_batches_to_groups(
+            transaction_summary=transaction_summary,
+            transaction_group_summary=transaction_group_summary,
+        )
+        blockers: dict[str, list[str]] = {}
+        for batch in linked_summary.get("transaction_batches") or []:
+            if not isinstance(batch, dict):
+                continue
+            batch_id = str(batch.get("id") or "")
+            unresolved = normalize_string_list(
+                batch.get("unresolved_transaction_group_ids")
+            )
+            if batch_id and unresolved:
+                blockers[batch_id] = unresolved
+        self._batch_recovery_blockers = blockers
+
+    def _refresh_batch_recovery_guards_before_action(
+        self,
+        *,
+        action: dict[str, Any],
+        trace: list[dict[str, Any]],
+        iteration_entry: dict[str, Any],
+        loop: str,
+        iteration: int,
+        actions: list[dict[str, Any]],
+        results: list[ToolActionResult],
+    ) -> None:
+        """Include same-turn recovery actions before evaluating batch commits."""
+        if action_tool(action) != COMMIT_BATCH_TOOL:
+            return
+        if not actions or not results:
+            self._refresh_batch_recovery_guards(trace)
+            return
+        pending_iteration = dict(iteration_entry)
+        pending_iteration["transaction"] = build_generic_edit_transaction(
+            loop=loop,
+            iteration=iteration,
+            actions=actions,
+            results=results,
+        )
+        self._refresh_batch_recovery_guards([*trace, pending_iteration])
+
     def _rollback_transaction_action(self, action: dict[str, Any]) -> ToolActionResult:
         """Restore workspace files from captured mutation snapshots."""
         try:
-            return execute_generic_edit_transaction_rollback(
+            result = execute_generic_edit_transaction_rollback(
                 action=action,
                 project_dir=self._executor.project_dir,
                 mutation_snapshots=self._mutation_snapshots,
@@ -1572,6 +2026,14 @@ class GenericEditRuntimeSession:
                 message=str(e),
                 data=dict(e.data),
             )
+        mark_generic_edit_mutation_snapshots_rolled_back(
+            mutation_snapshots=self._mutation_snapshots,
+            snapshot_ids=normalize_string_list(
+                result.data.get("mutation_snapshot_ids")
+            ),
+            rollback_operation_id=str(result.data.get("rollback_operation_id") or ""),
+        )
+        return result
 
     def _build_mutation_snapshot(
         self,
@@ -1601,6 +2063,8 @@ class GenericEditRuntimeSession:
         self,
         snapshot: dict[str, Any] | None,
         result: ToolActionResult,
+        *,
+        staged_workspace: dict[str, Any] | None = None,
     ) -> None:
         """Attach a successful mutation snapshot to result metadata and artifacts."""
         if snapshot is None or not result.ok:
@@ -1616,6 +2080,22 @@ class GenericEditRuntimeSession:
         snapshot["workspace_guard"] = build_generic_edit_snapshot_workspace_guard(
             snapshot
         )
+        if snapshot.get("batch_id"):
+            snapshot["staged_status"] = "staged"
+            if staged_workspace is not None:
+                snapshot["staged_workspace_preimages"] = list(
+                    staged_workspace.get("baseline_states") or []
+                )
+                snapshot["staged_isolation"] = {
+                    "status": "isolated",
+                    "workspace_restored": False,
+                    "baseline_paths": normalize_string_list(
+                        staged_workspace.get("baseline_paths")
+                    ),
+                    "baseline_path_count": len(
+                        normalize_string_list(staged_workspace.get("baseline_paths"))
+                    ),
+                }
         self._mutation_snapshots.append(snapshot)
         result.data = {
             **result.data,
@@ -2080,6 +2560,25 @@ def validate_terminal_finish(actions: list[dict[str, Any]]) -> None:
             )
 
 
+def validate_batch_boundary_actions(actions: list[dict[str, Any]]) -> None:
+    """Reject mutating actions after a batch closes in the same provider turn."""
+    closing_tool: str | None = None
+    for action in actions:
+        tool = action_tool(action)
+        if not tool:
+            continue
+        if closing_tool and (
+            tool in MUTATING_LOCAL_ACTIONS or tool in BATCH_CONTROL_TOOLS
+        ):
+            raise GenericEditRuntimeError(
+                f"Generic edit action {tool} cannot run after {closing_tool} "
+                "in the same provider turn. Start a new provider iteration "
+                "before additional mutations."
+            )
+        if tool in {COMMIT_BATCH_TOOL, ABORT_BATCH_TOOL}:
+            closing_tool = tool
+
+
 def parse_runtime_subagent_action_tasks(
     action: dict[str, Any],
     *,
@@ -2297,6 +2796,21 @@ def build_generic_edit_transaction(
         for snapshot_id in result.data.get("mutation_snapshot_ids") or []
     )
     mutation_snapshot_ids = list(dict.fromkeys(mutation_snapshot_ids))
+    committed_mutation_snapshot_ids = list(
+        dict.fromkeys(
+            str(snapshot_id)
+            for result in results
+            if result.ok
+            for snapshot_id in result.data.get("committed_mutation_snapshot_ids") or []
+        )
+    )
+    commit_operation_ids = list(
+        dict.fromkeys(
+            str(result.data.get("commit_operation_id")).strip()
+            for result in results
+            if result.ok and str(result.data.get("commit_operation_id") or "").strip()
+        )
+    )
     rollback_transaction_ids = [
         str(action.get("transaction_id")).strip()
         for action in actions
@@ -2329,6 +2843,18 @@ def build_generic_edit_transaction(
         ),
         None,
     )
+    batch_boundary_errors = [
+        {
+            "tool": result.tool,
+            "batch_id": str(result.data.get("batch_id") or ""),
+            "reason": str(result.data.get("batch_boundary_error_reason") or ""),
+            "blocked_transaction_group_ids": normalize_string_list(
+                result.data.get("blocked_transaction_group_ids")
+            ),
+        }
+        for result in results
+        if result.data.get("batch_boundary_error")
+    ]
     restored_paths = sorted(
         dict.fromkeys(
             str(path)
@@ -2395,6 +2921,18 @@ def build_generic_edit_transaction(
         transaction["batch_actions"] = batch_actions
     if batch_status:
         transaction["batch_status"] = batch_status
+    if committed_mutation_snapshot_ids:
+        transaction["committed_mutation_snapshot_ids"] = committed_mutation_snapshot_ids
+    if commit_operation_ids:
+        transaction["commit_operation_ids"] = commit_operation_ids
+    if batch_boundary_errors:
+        transaction["batch_boundary_errors"] = batch_boundary_errors
+        transaction["batch_boundary_error_count"] = len(batch_boundary_errors)
+        transaction["batch_boundary_error_reasons"] = list(
+            dict.fromkeys(
+                error["reason"] for error in batch_boundary_errors if error["reason"]
+            )
+        )
     if restored_paths:
         transaction["restored_paths"] = restored_paths
     if deleted_paths:
@@ -2898,6 +3436,168 @@ def build_generic_edit_snapshot_workspace_guard(
     }
 
 
+def generic_edit_snapshot_is_isolated_staged(snapshot: dict[str, Any]) -> bool:
+    """Return true when a snapshot is staged outside the real workspace."""
+    isolation = snapshot.get("staged_isolation")
+    return (
+        str(snapshot.get("staged_status") or "") == "staged"
+        and isinstance(isolation, dict)
+        and isolation.get("status") == "isolated"
+    )
+
+
+def generic_edit_snapshot_is_active_staged(
+    snapshot: dict[str, Any],
+    *,
+    batch_id: str,
+) -> bool:
+    """Return true when a snapshot still belongs to an open staged batch."""
+    staged_status = str(snapshot.get("staged_status") or "")
+    return str(snapshot.get("batch_id") or "") == batch_id and staged_status not in {
+        "rolled_back",
+        "committed",
+    }
+
+
+def generic_edit_file_state_is_materializable(state: dict[str, Any]) -> bool:
+    """Return true when a captured file state can be restored to the workspace."""
+    if state.get("type") == "missing" and state.get("exists") is False:
+        return True
+    return (
+        state.get("type") == "file"
+        and state.get("exists") is True
+        and state.get("content_encoding") == "utf-8"
+        and state.get("content_truncated") is False
+        and isinstance(state.get("content"), str)
+    )
+
+
+def apply_generic_edit_file_state(*, project_dir: Path, state: dict[str, Any]) -> None:
+    """Apply a captured file state to the real workspace."""
+    path = str(state.get("path") or "")
+    if not path:
+        raise GenericEditRuntimeError("Cannot apply staged state without a path.")
+    target = resolve_snapshot_workspace_path(project_dir, path)
+    if state.get("type") == "missing" and state.get("exists") is False:
+        if not target.exists():
+            return
+        if not target.is_file():
+            raise GenericEditRuntimeError(
+                f"Cannot restore missing state for non-file path: {path}",
+                data={"path": path, "reason": "non_file_restore_target"},
+            )
+        target.unlink()
+        return
+    if not generic_edit_file_state_is_materializable(state):
+        raise GenericEditRuntimeError(
+            f"Cannot materialize staged state for path: {path}",
+            data={"path": path, "reason": "unmaterializable_file_state"},
+        )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(str(state.get("content") or ""), encoding="utf-8")
+
+
+def active_generic_edit_staged_postimages(
+    *,
+    mutation_snapshots: list[dict[str, Any]],
+    batch_id: str,
+) -> list[dict[str, Any]]:
+    """Return active staged postimages in the order they were produced."""
+    postimages: list[dict[str, Any]] = []
+    for snapshot in mutation_snapshots:
+        if not generic_edit_snapshot_is_active_staged(snapshot, batch_id=batch_id):
+            continue
+        snapshot_id = str(snapshot.get("id") or "")
+        for postimage in snapshot.get("postimages") or []:
+            if not isinstance(postimage, dict):
+                continue
+            postimages.append({**postimage, "snapshot_id": snapshot_id})
+    return postimages
+
+
+def materialize_generic_edit_staged_workspace(
+    *,
+    project_dir: Path,
+    batch_id: str,
+    mutation_snapshots: list[dict[str, Any]],
+    additional_paths: list[str] | None = None,
+) -> dict[str, Any]:
+    """Temporarily apply active staged postimages and capture workspace baseline."""
+    postimages = active_generic_edit_staged_postimages(
+        mutation_snapshots=mutation_snapshots,
+        batch_id=batch_id,
+    )
+    baseline_paths = list(
+        dict.fromkeys(
+            [
+                *(additional_paths or []),
+                *(
+                    str(postimage.get("path"))
+                    for postimage in postimages
+                    if postimage.get("path")
+                ),
+            ]
+        )
+    )
+    baseline_states = [
+        build_generic_edit_file_preimage(project_dir=project_dir, path=path)
+        for path in baseline_paths
+    ]
+    materialization = {
+        "batch_id": batch_id,
+        "materialized": bool(postimages),
+        "baseline_paths": baseline_paths,
+        "baseline_states": baseline_states,
+        "applied_snapshot_ids": list(
+            dict.fromkeys(
+                str(postimage.get("snapshot_id"))
+                for postimage in postimages
+                if postimage.get("snapshot_id")
+            )
+        ),
+        "applied_path_count": len(
+            {
+                str(postimage.get("path"))
+                for postimage in postimages
+                if postimage.get("path")
+            }
+        ),
+    }
+    try:
+        for postimage in postimages:
+            apply_generic_edit_file_state(project_dir=project_dir, state=postimage)
+    except GenericEditRuntimeError:
+        restore_generic_edit_staged_workspace(
+            project_dir=project_dir,
+            staged_workspace=materialization,
+        )
+        raise
+    return materialization
+
+
+def restore_generic_edit_staged_workspace(
+    *,
+    project_dir: Path,
+    staged_workspace: dict[str, Any],
+) -> None:
+    """Restore the captured baseline after a staged workspace materialization."""
+    for state in reversed(staged_workspace.get("baseline_states") or []):
+        if not isinstance(state, dict):
+            continue
+        apply_generic_edit_file_state(project_dir=project_dir, state=state)
+
+
+def mark_generic_edit_snapshot_workspace_restored(
+    snapshot: dict[str, Any] | None,
+) -> None:
+    """Mark a staged snapshot as no longer present in the real workspace."""
+    if snapshot is None:
+        return
+    isolation = snapshot.get("staged_isolation")
+    if isinstance(isolation, dict):
+        isolation["workspace_restored"] = True
+
+
 def validate_generic_edit_resume_workspace_guard(
     *,
     project_dir: Path,
@@ -2937,16 +3637,20 @@ def build_generic_edit_resume_workspace_guard(
     project_dir: Path,
     mutation_snapshots: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Compare persisted mutation postimages with the current workspace."""
+    """Compare persisted mutation states with the current workspace."""
     checks: list[dict[str, Any]] = []
     for snapshot in mutation_snapshots:
-        postimages = snapshot.get("postimages")
-        if not isinstance(postimages, list):
+        expected_states = (
+            snapshot.get("staged_workspace_preimages")
+            if generic_edit_snapshot_is_isolated_staged(snapshot)
+            else snapshot.get("postimages")
+        )
+        if not isinstance(expected_states, list):
             continue
-        for postimage in postimages:
-            if not isinstance(postimage, dict):
+        for expected in expected_states:
+            if not isinstance(expected, dict):
                 continue
-            path = str(postimage.get("path") or "")
+            path = str(expected.get("path") or "")
             if not path:
                 continue
             current = build_generic_edit_file_preimage(
@@ -2955,7 +3659,7 @@ def build_generic_edit_resume_workspace_guard(
             )
             checks.append(
                 compare_generic_edit_file_state(
-                    expected=postimage,
+                    expected=expected,
                     current=current,
                     snapshot=snapshot,
                 )
@@ -2977,6 +3681,50 @@ def build_generic_edit_resume_workspace_guard(
         "drifts": drifts,
         "unverified": unverified,
     }
+
+
+def build_generic_edit_staged_batch_guard(
+    *,
+    project_dir: Path,
+    batch_id: str,
+    mutation_snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate that an isolated staged batch can be safely committed."""
+    staged_snapshots = [
+        snapshot
+        for snapshot in mutation_snapshots
+        if generic_edit_snapshot_is_active_staged(snapshot, batch_id=batch_id)
+    ]
+    if any(generic_edit_snapshot_is_isolated_staged(item) for item in staged_snapshots):
+        guard = build_generic_edit_resume_workspace_guard(
+            project_dir=project_dir,
+            mutation_snapshots=staged_snapshots,
+        )
+        guard["isolation_mode"] = "workspace_restored"
+    else:
+        guard = build_generic_edit_resume_workspace_guard(
+            project_dir=project_dir,
+            mutation_snapshots=staged_snapshots,
+        )
+        guard["isolation_mode"] = "workspace_materialized"
+    snapshot_ids = [
+        str(snapshot.get("id"))
+        for snapshot in staged_snapshots
+        if isinstance(snapshot.get("id"), str) and snapshot.get("id")
+    ]
+    guard.update(
+        {
+            "batch_id": batch_id,
+            "staged_snapshot_ids": snapshot_ids,
+            "staged_snapshot_count": len(staged_snapshots),
+        }
+    )
+    if not staged_snapshots:
+        guard["status"] = "empty"
+        return guard
+    if guard["status"] == "clean" and guard["unverified_path_count"]:
+        guard["status"] = "unverified"
+    return guard
 
 
 def compare_generic_edit_file_state(
@@ -3170,6 +3918,13 @@ def execute_generic_edit_batch_abort(
             project_dir=project_dir,
             mutation_snapshots=mutation_snapshots,
         )
+        mark_generic_edit_mutation_snapshots_rolled_back(
+            mutation_snapshots=mutation_snapshots,
+            snapshot_ids=normalize_string_list(
+                result.data.get("mutation_snapshot_ids")
+            ),
+            rollback_operation_id=str(result.data.get("rollback_operation_id") or ""),
+        )
         rollback_transaction_ids.append(transaction_id)
         mutation_snapshot_ids.extend(
             str(item) for item in result.data.get("mutation_snapshot_ids") or []
@@ -3202,6 +3957,47 @@ def execute_generic_edit_batch_abort(
             "recovery_strategy": ABORT_BATCH_TOOL,
         },
     )
+
+
+def mark_generic_edit_mutation_snapshots_rolled_back(
+    *,
+    mutation_snapshots: list[dict[str, Any]],
+    snapshot_ids: list[str],
+    rollback_operation_id: str,
+) -> None:
+    """Mark staged mutation snapshots already restored by rollback/abort."""
+    selected_ids = {str(snapshot_id) for snapshot_id in snapshot_ids if snapshot_id}
+    if not selected_ids:
+        return
+    for snapshot in mutation_snapshots:
+        snapshot_id = str(snapshot.get("id") or "")
+        if snapshot_id not in selected_ids:
+            continue
+        snapshot["staged_status"] = "rolled_back"
+        if rollback_operation_id:
+            snapshot["rollback_operation_id"] = rollback_operation_id
+
+
+def mark_generic_edit_mutation_snapshots_committed(
+    *,
+    mutation_snapshots: list[dict[str, Any]],
+    batch_id: str,
+    commit_operation_id: str,
+) -> list[str]:
+    """Mark staged mutation snapshots accepted by a batch commit."""
+    committed_ids: list[str] = []
+    for snapshot in mutation_snapshots:
+        if str(snapshot.get("batch_id") or "") != batch_id:
+            continue
+        if str(snapshot.get("staged_status") or "") == "rolled_back":
+            continue
+        snapshot["staged_status"] = "committed"
+        if commit_operation_id:
+            snapshot["commit_operation_id"] = commit_operation_id
+        snapshot_id = str(snapshot.get("id") or "")
+        if snapshot_id:
+            committed_ids.append(snapshot_id)
+    return committed_ids
 
 
 def validate_generic_edit_rollback_steps(
@@ -3723,11 +4519,11 @@ def save_generic_edit_artifacts(
 def generic_edit_artifact_paths(artifact_dir: Path) -> dict[str, Path]:
     return {
         "trace": artifact_dir / "generic_edit_trace.json",
-        "events": artifact_dir / "generic_edit_events.jsonl",
-        "session_state": artifact_dir / "generic_edit_session_state.json",
+        "events": artifact_dir / GENERIC_EDIT_EVENTS_FILENAME,
+        "session_state": artifact_dir / GENERIC_EDIT_SESSION_STATE_FILENAME,
         "timeline": artifact_dir / "generic_edit_timeline.json",
         "transactions": artifact_dir / "generic_edit_transactions.jsonl",
-        "transaction_groups": artifact_dir / "generic_edit_transaction_groups.json",
+        "transaction_groups": artifact_dir / GENERIC_EDIT_TRANSACTION_GROUPS_FILENAME,
         "recovery_checkpoint": artifact_dir / "generic_edit_recovery_checkpoint.json",
         "recovery_plan": artifact_dir / "generic_edit_recovery_plan.json",
         "mutation_snapshots": artifact_dir / "generic_edit_mutation_snapshots.json",
@@ -4065,6 +4861,57 @@ def compact_generic_edit_native_tool_fallbacks(value: Any) -> list[dict[str, Any
     return fallbacks[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]
 
 
+def compact_generic_edit_batch_boundary_errors(
+    value: Any,
+) -> list[dict[str, Any]]:
+    """Return bounded batch-boundary errors without dropping blocker IDs."""
+    if not isinstance(value, list):
+        return []
+    compact_errors: list[dict[str, Any]] = []
+    for error in value[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]:
+        if not isinstance(error, dict):
+            continue
+        compact_errors.append(
+            {
+                "tool": str(error.get("tool") or "")[:120],
+                "batch_id": str(error.get("batch_id") or "")[:120],
+                "reason": str(error.get("reason") or "")[:120],
+                "blocked_transaction_group_ids": normalize_string_list(
+                    error.get("blocked_transaction_group_ids")
+                ),
+            }
+        )
+    return compact_errors
+
+
+def compact_generic_edit_batch_lifecycle_events(
+    value: Any,
+) -> list[dict[str, Any]]:
+    """Return bounded batch lifecycle events for UI manifests."""
+    if not isinstance(value, list):
+        return []
+    compact_events: list[dict[str, Any]] = []
+    for event in value[:GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_LIMIT]:
+        if not isinstance(event, dict):
+            continue
+        compact: dict[str, Any] = {
+            "action": str(event.get("action") or "")[:120],
+            "transaction_id": str(event.get("transaction_id") or "")[:120],
+            "status": str(event.get("status") or "")[:120],
+        }
+        reason = str(event.get("reason") or "")
+        if reason:
+            compact["reason"] = reason[:120]
+        blocked_group_ids = normalize_string_list(
+            event.get("blocked_transaction_group_ids")
+        )
+        if blocked_group_ids:
+            compact["blocked_transaction_group_ids"] = blocked_group_ids
+        if compact["action"]:
+            compact_events.append(compact)
+    return compact_events
+
+
 def compact_generic_edit_manifest_transaction_batches(
     transaction_summary: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -4085,6 +4932,12 @@ def compact_generic_edit_manifest_transaction_batches(
             "mutation_snapshot_ids": normalize_string_list(
                 batch.get("mutation_snapshot_ids")
             ),
+            "committed_mutation_snapshot_ids": normalize_string_list(
+                batch.get("committed_mutation_snapshot_ids")
+            ),
+            "commit_operation_ids": normalize_string_list(
+                batch.get("commit_operation_ids")
+            ),
             "staged_mutation_ids": normalize_string_list(
                 batch.get("staged_mutation_ids")
             ),
@@ -4099,6 +4952,17 @@ def compact_generic_edit_manifest_transaction_batches(
             ),
             "staged_mutation_count": int(batch.get("staged_mutation_count") or 0),
             "staged_path_count": int(batch.get("staged_path_count") or 0),
+            "lifecycle_event_count": int(batch.get("lifecycle_event_count") or 0),
+            "lifecycle_events": compact_generic_edit_batch_lifecycle_events(
+                batch.get("lifecycle_events")
+            ),
+            "boundary_error_count": int(batch.get("boundary_error_count") or 0),
+            "boundary_errors": compact_generic_edit_batch_boundary_errors(
+                batch.get("boundary_errors")
+            ),
+            "boundary_error_reasons": normalize_string_list(
+                batch.get("boundary_error_reasons")
+            ),
             "transaction_group_ids": normalize_string_list(
                 batch.get("transaction_group_ids")
             ),
@@ -4945,6 +5809,12 @@ def load_generic_edit_recovery_checkpoint(checkpoint_path: Path) -> dict[str, An
         raise GenericEditRuntimeError(
             "Generic edit recovery checkpoint is missing resume input metadata."
         )
+    validate_generic_edit_resume_input_artifact_paths(
+        resume_inputs=resume_inputs,
+        checkpoint_path=checkpoint_path,
+        owner_artifact="recovery_checkpoint",
+        owner_path=checkpoint_path,
+    )
     for artifact_name in normalize_string_list(resume_policy.get("required_artifacts")):
         artifact_path = resume_inputs.get(artifact_name)
         if not isinstance(artifact_path, str) or not artifact_path:
@@ -5029,6 +5899,12 @@ def load_generic_edit_session_state(
         raise GenericEditRuntimeError(
             "Generic edit session state is missing resume input metadata."
         )
+    validate_generic_edit_resume_input_artifact_paths(
+        resume_inputs=resume_inputs,
+        checkpoint_path=expected_checkpoint_path,
+        owner_artifact="session_state",
+        owner_path=session_state_path,
+    )
     resume_policy = payload.get("resume_policy")
     if not isinstance(resume_policy, dict):
         raise GenericEditRuntimeError(
@@ -5104,30 +5980,50 @@ def load_generic_edit_mutation_snapshots(snapshot_path: Path) -> list[dict[str, 
     except FileNotFoundError:
         return []
     except json.JSONDecodeError as e:
-        raise GenericEditRuntimeError(
-            f"Generic edit mutation snapshot artifact is not valid JSON: {e}"
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit mutation snapshot artifact is not valid JSON: {e}",
+            artifact="mutation_snapshots",
+            reason="corrupt_json",
+            path=snapshot_path,
         ) from e
     if not isinstance(payload, dict):
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot artifact must be a JSON object."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact must be a JSON object.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
         )
     if payload.get("artifact_type") != "generic_edit_mutation_snapshots":
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot artifact has unexpected type."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact has unexpected type.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
         )
     snapshots = payload.get("snapshots")
     if not isinstance(snapshots, list):
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot artifact is missing snapshots."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact is missing snapshots.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
         )
     if not all(isinstance(snapshot, dict) for snapshot in snapshots):
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot artifact contains invalid snapshot entries."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact contains invalid snapshot entries.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
         )
     expected_count = payload.get("snapshot_count")
     if isinstance(expected_count, int) and expected_count != len(snapshots):
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot count does not match snapshots."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot count does not match snapshots.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
+            expected_snapshot_count=expected_count,
+            actual_snapshot_count=len(snapshots),
         )
     return snapshots
 
@@ -5142,7 +6038,7 @@ def resolve_generic_edit_resume_checkpoint_path(
         spec_dir / "artifacts" / "generic_edit_recovery_checkpoint.json"
     ).resolve()
     expected_session_state_path = (
-        spec_dir / "artifacts" / "generic_edit_session_state.json"
+        spec_dir / "artifacts" / GENERIC_EDIT_SESSION_STATE_FILENAME
     ).resolve()
     requested_path = checkpoint_path.resolve()
     if requested_path == expected_path:
@@ -5164,14 +6060,317 @@ def generic_edit_trace_path_for_checkpoint(checkpoint_path: Path) -> Path:
     return checkpoint_path.parent / "generic_edit_trace.json"
 
 
+def generic_edit_event_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted event stream path colocated with a checkpoint."""
+    return checkpoint_path.parent / GENERIC_EDIT_EVENTS_FILENAME
+
+
 def generic_edit_mutation_snapshot_path_for_checkpoint(checkpoint_path: Path) -> Path:
     """Return the trusted mutation snapshot path colocated with a checkpoint."""
     return checkpoint_path.parent / "generic_edit_mutation_snapshots.json"
 
 
+def generic_edit_recovery_plan_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted recovery-plan path colocated with a checkpoint."""
+    return checkpoint_path.parent / GENERIC_EDIT_RECOVERY_PLAN_FILENAME
+
+
+def generic_edit_transaction_group_path_for_checkpoint(checkpoint_path: Path) -> Path:
+    """Return the trusted transaction-group path colocated with a checkpoint."""
+    return checkpoint_path.parent / GENERIC_EDIT_TRANSACTION_GROUPS_FILENAME
+
+
 def generic_edit_artifact_manifest_path_for_checkpoint(checkpoint_path: Path) -> Path:
     """Return the trusted artifact manifest path colocated with a checkpoint."""
     return checkpoint_path.parent / "generic_edit_artifact_manifest.json"
+
+
+def generic_edit_recovery_plan_path_from_checkpoint(
+    checkpoint: dict[str, Any],
+) -> Path | None:
+    """Return the recovery-plan path requested by checkpoint metadata."""
+    resume_inputs = checkpoint.get("resume_inputs")
+    if not isinstance(resume_inputs, dict):
+        return None
+    recovery_plan_path = resume_inputs.get("recovery_plan_artifact")
+    if not isinstance(recovery_plan_path, str) or not recovery_plan_path:
+        return None
+    return Path(recovery_plan_path)
+
+
+def generic_edit_event_path_from_checkpoint(
+    checkpoint: dict[str, Any],
+) -> Path | None:
+    """Return the event stream path requested by checkpoint metadata."""
+    resume_inputs = checkpoint.get("resume_inputs")
+    if not isinstance(resume_inputs, dict):
+        return None
+    event_path = resume_inputs.get("event_artifact")
+    if not isinstance(event_path, str) or not event_path:
+        return None
+    return Path(event_path)
+
+
+def generic_edit_transaction_group_path_from_checkpoint(
+    checkpoint: dict[str, Any],
+) -> Path | None:
+    """Return the transaction-group path requested by checkpoint metadata."""
+    resume_inputs = checkpoint.get("resume_inputs")
+    if not isinstance(resume_inputs, dict):
+        return None
+    transaction_group_path = resume_inputs.get("transaction_group_artifact")
+    if not isinstance(transaction_group_path, str) or not transaction_group_path:
+        return None
+    return Path(transaction_group_path)
+
+
+def load_generic_edit_recovery_plan(
+    recovery_plan_path: Path,
+    *,
+    expected_recovery_plan_path: Path,
+) -> dict[str, Any]:
+    """Load and validate a required generic_edit recovery plan artifact."""
+    if recovery_plan_path.resolve() != expected_recovery_plan_path.resolve():
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery plan artifact path is not canonical.",
+            artifact="recovery_plan",
+            reason="checkpoint_mismatch",
+            path=recovery_plan_path,
+            expected_path=str(expected_recovery_plan_path),
+        )
+    try:
+        payload = json.loads(recovery_plan_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit recovery plan not found: {recovery_plan_path}",
+            artifact="recovery_plan",
+            reason="missing",
+            path=recovery_plan_path,
+        ) from e
+    except json.JSONDecodeError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit recovery plan is not valid JSON: {e}",
+            artifact="recovery_plan",
+            reason="corrupt_json",
+            path=recovery_plan_path,
+        ) from e
+
+    if not isinstance(payload, dict):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery plan must be a JSON object.",
+            artifact="recovery_plan",
+            reason="invalid_schema",
+            path=recovery_plan_path,
+        )
+    if not isinstance(payload.get("strategy"), str) or not payload.get("strategy"):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery plan is missing strategy metadata.",
+            artifact="recovery_plan",
+            reason="invalid_schema",
+            path=recovery_plan_path,
+        )
+    artifact_path = payload.get("artifact_path")
+    if (
+        not isinstance(artifact_path, str)
+        or Path(artifact_path).resolve() != expected_recovery_plan_path.resolve()
+    ):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit recovery plan artifact path does not match its file path.",
+            artifact="recovery_plan",
+            reason="checkpoint_mismatch",
+            path=recovery_plan_path,
+            expected_path=str(expected_recovery_plan_path),
+            actual_path=artifact_path,
+        )
+    return payload
+
+
+def load_generic_edit_events_artifact(
+    event_path: Path,
+    *,
+    expected_event_path: Path,
+) -> list[dict[str, Any]]:
+    """Load and validate the generic_edit event JSONL artifact."""
+    if event_path.resolve() != expected_event_path.resolve():
+        raise generic_edit_resume_artifact_error(
+            "Generic edit event artifact path is not canonical.",
+            artifact="events",
+            reason="checkpoint_mismatch",
+            path=event_path,
+            expected_path=str(expected_event_path),
+        )
+    try:
+        lines = event_path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit event artifact not found: {event_path}",
+            artifact="events",
+            reason="missing",
+            path=event_path,
+        ) from e
+
+    events: list[dict[str, Any]] = []
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as e:
+            raise generic_edit_resume_artifact_error(
+                f"Generic edit event artifact is not valid JSONL: {e}",
+                artifact="events",
+                reason="corrupt_json",
+                path=event_path,
+                line_number=line_number,
+            ) from e
+        if not isinstance(event, dict):
+            raise generic_edit_resume_artifact_error(
+                "Generic edit event artifact lines must be JSON objects.",
+                artifact="events",
+                reason="invalid_schema",
+                path=event_path,
+                line_number=line_number,
+            )
+        events.append(event)
+    return events
+
+
+def validate_generic_edit_transaction_group_payload(
+    payload: Any,
+    *,
+    transaction_group_path: Path,
+) -> dict[str, Any]:
+    """Validate persisted transaction-group artifact shape and counters."""
+    if not isinstance(payload, dict):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction groups must be a JSON object.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    if payload.get("artifact_type") != "generic_edit_transaction_groups":
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction groups artifact has unexpected type.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    groups = payload.get("transaction_groups")
+    if not isinstance(groups, list):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction groups artifact is missing groups.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    group_count = payload.get("group_count")
+    if type(group_count) is not int or group_count != len(groups):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction group count does not match groups.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    unresolved_group_ids = normalize_string_list(payload.get("unresolved_group_ids"))
+    unresolved_group_count = payload.get("unresolved_group_count")
+    if type(unresolved_group_count) is not int or unresolved_group_count != len(
+        unresolved_group_ids
+    ):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit unresolved transaction group count does not match ids.",
+            artifact="transaction_groups",
+            reason="invalid_schema",
+            path=transaction_group_path,
+        )
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get("id"), str):
+            raise generic_edit_resume_artifact_error(
+                "Generic edit transaction group entry is missing an id.",
+                artifact="transaction_groups",
+                reason="invalid_schema",
+                path=transaction_group_path,
+            )
+        if not isinstance(group.get("status"), str):
+            raise generic_edit_resume_artifact_error(
+                "Generic edit transaction group entry is missing status.",
+                artifact="transaction_groups",
+                reason="invalid_schema",
+                path=transaction_group_path,
+            )
+    return payload
+
+
+def load_generic_edit_transaction_groups(
+    transaction_group_path: Path,
+    *,
+    expected_transaction_group_path: Path,
+) -> dict[str, Any]:
+    """Load and validate a required generic_edit transaction-group artifact."""
+    if transaction_group_path.resolve() != expected_transaction_group_path.resolve():
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction group artifact path is not canonical.",
+            artifact="transaction_groups",
+            reason="checkpoint_mismatch",
+            path=transaction_group_path,
+            expected_path=str(expected_transaction_group_path),
+        )
+    try:
+        payload = json.loads(transaction_group_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit transaction groups not found: {transaction_group_path}",
+            artifact="transaction_groups",
+            reason="missing",
+            path=transaction_group_path,
+        ) from e
+    except json.JSONDecodeError as e:
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit transaction groups are not valid JSON: {e}",
+            artifact="transaction_groups",
+            reason="corrupt_json",
+            path=transaction_group_path,
+        ) from e
+    return validate_generic_edit_transaction_group_payload(
+        payload,
+        transaction_group_path=transaction_group_path,
+    )
+
+
+def validate_generic_edit_checkpoint_transaction_groups(
+    *,
+    checkpoint: dict[str, Any],
+    transaction_groups: dict[str, Any],
+    transaction_group_path: Path,
+) -> None:
+    """Reject transaction-group artifacts that drifted from checkpoint metadata."""
+    checkpoint_group_count = checkpoint.get("transaction_group_count")
+    if (
+        checkpoint_group_count is not None
+        and checkpoint_group_count != transaction_groups["group_count"]
+    ):
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction group artifact count does not match checkpoint.",
+            artifact="transaction_groups",
+            reason="checkpoint_mismatch",
+            path=transaction_group_path,
+            expected_count=checkpoint_group_count,
+            actual_count=transaction_groups["group_count"],
+        )
+    checkpoint_unresolved_ids = normalize_string_list(
+        checkpoint.get("unresolved_transaction_group_ids")
+    )
+    artifact_unresolved_ids = normalize_string_list(
+        transaction_groups.get("unresolved_group_ids")
+    )
+    if checkpoint_unresolved_ids != artifact_unresolved_ids:
+        raise generic_edit_resume_artifact_error(
+            "Generic edit transaction group artifact unresolved ids do not match checkpoint.",
+            artifact="transaction_groups",
+            reason="checkpoint_mismatch",
+            path=transaction_group_path,
+            expected_unresolved_group_ids=checkpoint_unresolved_ids,
+            actual_unresolved_group_ids=artifact_unresolved_ids,
+        )
 
 
 def load_generic_edit_artifact_manifest(manifest_path: Path) -> dict[str, Any]:
@@ -5417,6 +6616,362 @@ def validate_generic_edit_manifest_trace_counts(
     )
 
 
+def validate_generic_edit_manifest_event_counts(
+    *,
+    manifest: dict[str, Any],
+    events: list[dict[str, Any]],
+    manifest_path: Path,
+) -> None:
+    """Reject manifest event counters that disagree with the event artifact."""
+    counts = manifest.get("counts")
+    if not isinstance(counts, dict):
+        return
+    actual_count = counts.get("event_count")
+    if actual_count is None:
+        return
+    expected_count = len(events)
+    if actual_count != expected_count:
+        raise generic_edit_resume_artifact_error(
+            "Generic edit artifact manifest event count does not match event artifact.",
+            artifact="artifact_manifest",
+            reason="checkpoint_mismatch",
+            path=manifest_path,
+            expected_event_count=expected_count,
+            actual_event_count=actual_count,
+        )
+
+
+def generic_edit_transaction_batch_ids_from_summary(
+    summary: dict[str, Any],
+) -> list[str]:
+    """Return transaction batch ids from either full or compact summaries."""
+    ids = normalize_string_list(summary.get("transaction_batch_ids"))
+    if ids:
+        return ids
+    batches = summary.get("transaction_batches")
+    if not isinstance(batches, list):
+        return []
+    return list(
+        dict.fromkeys(
+            str(batch.get("id") or "")
+            for batch in batches
+            if isinstance(batch, dict) and str(batch.get("id") or "")
+        )
+    )
+
+
+def generic_edit_transaction_batch_status_by_id(
+    summary: dict[str, Any],
+) -> dict[str, str]:
+    """Return batch status keyed by batch id when batch entries expose status."""
+    batches = summary.get("transaction_batches")
+    if not isinstance(batches, list):
+        return {}
+    statuses: dict[str, str] = {}
+    for batch in batches:
+        if not isinstance(batch, dict):
+            continue
+        batch_id = str(batch.get("id") or "")
+        if not batch_id:
+            continue
+        statuses[batch_id] = str(batch.get("status") or "unknown")
+    return statuses
+
+
+def generic_edit_transaction_batch_count(summary: dict[str, Any]) -> int | None:
+    """Return a batch count when the summary exposes one."""
+    count = summary.get("transaction_batch_count")
+    if isinstance(count, int):
+        return count
+    ids = generic_edit_transaction_batch_ids_from_summary(summary)
+    if ids:
+        return len(ids)
+    batches = summary.get("transaction_batches")
+    if isinstance(batches, list):
+        return len([batch for batch in batches if isinstance(batch, dict)])
+    return None
+
+
+def generic_edit_transaction_batch_status_counts(
+    value: Any,
+) -> dict[str, int]:
+    """Return normalized batch status counters."""
+    if not isinstance(value, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for status, count in value.items():
+        if isinstance(count, int):
+            counts[str(status)] = count
+    return counts
+
+
+def generic_edit_transaction_batch_lifecycle_counts_by_id(
+    summary: dict[str, Any],
+) -> dict[str, int]:
+    """Return lifecycle event counts keyed by transaction batch id."""
+    batches = summary.get("transaction_batches")
+    if not isinstance(batches, list):
+        return {}
+    counts: dict[str, int] = {}
+    for batch in batches:
+        if not isinstance(batch, dict):
+            continue
+        batch_id = str(batch.get("id") or "")
+        if not batch_id:
+            continue
+        count = batch.get("lifecycle_event_count")
+        if isinstance(count, int) and not isinstance(count, bool):
+            counts[batch_id] = count
+            continue
+        lifecycle_events = batch.get("lifecycle_events")
+        if isinstance(lifecycle_events, list):
+            counts[batch_id] = len(
+                [event for event in lifecycle_events if isinstance(event, dict)]
+            )
+    return counts
+
+
+def generic_edit_raise_transaction_batch_mismatch(
+    message: str,
+    *,
+    artifact: str,
+    path: Path,
+    **details: Any,
+) -> None:
+    """Raise a structured transaction-batch consistency error."""
+    raise generic_edit_resume_artifact_error(
+        message,
+        artifact=artifact,
+        reason="checkpoint_mismatch",
+        path=path,
+        **details,
+    )
+
+
+def validate_generic_edit_summary_transaction_batches(
+    *,
+    expected_summary: dict[str, Any],
+    actual_summary: dict[str, Any],
+    artifact: str,
+    path: Path,
+) -> None:
+    """Reject transaction-batch metadata that diverges from trace-derived state."""
+    expected_count = generic_edit_transaction_batch_count(expected_summary)
+    actual_count = generic_edit_transaction_batch_count(actual_summary)
+    if actual_count is not None and expected_count != actual_count:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit transaction batch count does not match checkpoint trace.",
+            artifact=artifact,
+            path=path,
+            expected_transaction_batch_count=expected_count,
+            actual_transaction_batch_count=actual_count,
+        )
+
+    expected_ids = generic_edit_transaction_batch_ids_from_summary(expected_summary)
+    actual_ids = generic_edit_transaction_batch_ids_from_summary(actual_summary)
+    if actual_ids and actual_ids != expected_ids:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit transaction batch ids do not match checkpoint trace.",
+            artifact=artifact,
+            path=path,
+            expected_transaction_batch_ids=expected_ids,
+            actual_transaction_batch_ids=actual_ids,
+        )
+
+    actual_open_ids = normalize_string_list(
+        actual_summary.get("open_transaction_batch_ids")
+    )
+    expected_open_ids = normalize_string_list(
+        expected_summary.get("open_transaction_batch_ids")
+    )
+    if actual_open_ids and actual_open_ids != expected_open_ids:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit open transaction batches do not match checkpoint trace.",
+            artifact=artifact,
+            path=path,
+            expected_open_transaction_batch_ids=expected_open_ids,
+            actual_open_transaction_batch_ids=actual_open_ids,
+        )
+
+    actual_status_counts = generic_edit_transaction_batch_status_counts(
+        actual_summary.get("transaction_batch_status_counts")
+    )
+    expected_status_counts = generic_edit_transaction_batch_status_counts(
+        expected_summary.get("transaction_batch_status_counts")
+    )
+    if actual_status_counts and actual_status_counts != expected_status_counts:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit transaction batch status counts do not match checkpoint trace.",
+            artifact=artifact,
+            path=path,
+            expected_transaction_batch_status_counts=expected_status_counts,
+            actual_transaction_batch_status_counts=actual_status_counts,
+        )
+
+    actual_statuses = generic_edit_transaction_batch_status_by_id(actual_summary)
+    expected_statuses = generic_edit_transaction_batch_status_by_id(expected_summary)
+    if actual_statuses:
+        for batch_id, actual_status in actual_statuses.items():
+            expected_status = expected_statuses.get(batch_id)
+            if expected_status is not None and actual_status != expected_status:
+                generic_edit_raise_transaction_batch_mismatch(
+                    "Generic edit transaction batch status does not match checkpoint trace.",
+                    artifact=artifact,
+                    path=path,
+                    batch_id=batch_id,
+                    expected_transaction_batch_status=expected_status,
+                    actual_transaction_batch_status=actual_status,
+                )
+
+    actual_lifecycle_counts = generic_edit_transaction_batch_lifecycle_counts_by_id(
+        actual_summary
+    )
+    expected_lifecycle_counts = generic_edit_transaction_batch_lifecycle_counts_by_id(
+        expected_summary
+    )
+    if actual_lifecycle_counts:
+        for batch_id, actual_count in actual_lifecycle_counts.items():
+            expected_count = expected_lifecycle_counts.get(batch_id)
+            if expected_count is not None and actual_count != expected_count:
+                generic_edit_raise_transaction_batch_mismatch(
+                    "Generic edit transaction batch lifecycle count does not match checkpoint trace.",
+                    artifact=artifact,
+                    path=path,
+                    batch_id=batch_id,
+                    expected_transaction_batch_lifecycle_event_count=expected_count,
+                    actual_transaction_batch_lifecycle_event_count=actual_count,
+                )
+
+
+def validate_generic_edit_manifest_transaction_batches(
+    *,
+    manifest: dict[str, Any],
+    transaction_summary: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    """Reject compact manifest transaction-batch state that drifts from trace."""
+    actual_summary: dict[str, Any] = {}
+    counts = manifest.get("counts")
+    if isinstance(counts, dict) and "transaction_batch_count" in counts:
+        actual_summary["transaction_batch_count"] = counts["transaction_batch_count"]
+    if "transaction_batches" in manifest:
+        actual_summary["transaction_batches"] = manifest.get("transaction_batches")
+    if not actual_summary:
+        return
+    validate_generic_edit_summary_transaction_batches(
+        expected_summary=transaction_summary,
+        actual_summary=actual_summary,
+        artifact="artifact_manifest",
+        path=manifest_path,
+    )
+
+
+def validate_generic_edit_resume_artifact_consistency(
+    *,
+    checkpoint: dict[str, Any],
+    checkpoint_path: Path,
+    trace: list[dict[str, Any]],
+    session_state: dict[str, Any] | None = None,
+    session_state_path: Path | None = None,
+    artifact_manifest: dict[str, Any] | None = None,
+    artifact_manifest_path: Path | None = None,
+    events: list[dict[str, Any]] | None = None,
+    mutation_snapshots: list[dict[str, Any]] | None = None,
+    mutation_snapshot_path: Path | None = None,
+) -> None:
+    """Validate one canonical resume state across all generic_edit artifacts."""
+    validate_generic_edit_checkpoint_trace_consistency(
+        checkpoint=checkpoint,
+        trace=trace,
+    )
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    checkpoint_transaction_summary = checkpoint.get("transaction_summary")
+    if isinstance(checkpoint_transaction_summary, dict):
+        validate_generic_edit_summary_transaction_batches(
+            expected_summary=transaction_summary,
+            actual_summary=checkpoint_transaction_summary,
+            artifact="recovery_checkpoint",
+            path=checkpoint_path,
+        )
+
+    checkpoint_open_ids = normalize_string_list(
+        checkpoint.get("open_transaction_batch_ids")
+    )
+    expected_open_ids = normalize_string_list(
+        transaction_summary.get("open_transaction_batch_ids")
+    )
+    if checkpoint_open_ids and checkpoint_open_ids != expected_open_ids:
+        generic_edit_raise_transaction_batch_mismatch(
+            "Generic edit checkpoint open batches do not match checkpoint trace.",
+            artifact="recovery_checkpoint",
+            path=checkpoint_path,
+            expected_open_transaction_batch_ids=expected_open_ids,
+            actual_open_transaction_batch_ids=checkpoint_open_ids,
+        )
+
+    if session_state is not None and session_state_path is not None:
+        validate_generic_edit_session_state_checkpoint_consistency(
+            session_state=session_state,
+            checkpoint=checkpoint,
+            session_state_path=session_state_path,
+        )
+        validate_generic_edit_session_state_trace_counts(
+            session_state=session_state,
+            checkpoint=checkpoint,
+            trace=trace,
+            session_state_path=session_state_path,
+        )
+        session_open_ids = normalize_string_list(
+            session_state.get("open_transaction_batch_ids")
+        )
+        if session_open_ids and session_open_ids != expected_open_ids:
+            generic_edit_raise_transaction_batch_mismatch(
+                "Generic edit session state open batches do not match checkpoint trace.",
+                artifact="session_state",
+                path=session_state_path,
+                expected_open_transaction_batch_ids=expected_open_ids,
+                actual_open_transaction_batch_ids=session_open_ids,
+            )
+
+    if artifact_manifest is not None and artifact_manifest_path is not None:
+        validate_generic_edit_artifact_manifest_checkpoint_consistency(
+            manifest=artifact_manifest,
+            checkpoint=checkpoint,
+            checkpoint_path=checkpoint_path,
+            session_state_path=(
+                session_state_path
+                if session_state_path is not None
+                else checkpoint_path.parent / GENERIC_EDIT_SESSION_STATE_FILENAME
+            ),
+            trace_path=generic_edit_trace_path_for_checkpoint(checkpoint_path),
+            manifest_path=artifact_manifest_path,
+        )
+        validate_generic_edit_manifest_trace_counts(
+            manifest=artifact_manifest,
+            checkpoint=checkpoint,
+            trace=trace,
+            manifest_path=artifact_manifest_path,
+        )
+        if events is not None:
+            validate_generic_edit_manifest_event_counts(
+                manifest=artifact_manifest,
+                events=events,
+                manifest_path=artifact_manifest_path,
+            )
+        validate_generic_edit_manifest_transaction_batches(
+            manifest=artifact_manifest,
+            transaction_summary=transaction_summary,
+            manifest_path=artifact_manifest_path,
+        )
+
+    if mutation_snapshots is not None and mutation_snapshot_path is not None:
+        validate_generic_edit_checkpoint_mutation_snapshots(
+            checkpoint=checkpoint,
+            mutation_snapshots=mutation_snapshots,
+            mutation_snapshot_path=mutation_snapshot_path,
+        )
+
+
 def validate_generic_edit_manifest_resume_action(
     *,
     manifest: dict[str, Any],
@@ -5477,6 +7032,96 @@ def validate_generic_edit_manifest_entrypoints(
             )
 
 
+def generic_edit_manifest_boundary_event_action_kinds(event: Any) -> list[str]:
+    """Return required action kinds from one boundary-blocked timeline event."""
+    if not isinstance(event, dict):
+        return []
+    timeline_stage = str(event.get("timeline_stage") or "")
+    if timeline_stage != "batch_boundary_blocked" and not event.get(
+        "batch_boundary_error_reason"
+    ):
+        return []
+    return normalize_string_list(event.get("required_next_action_kinds"))
+
+
+def generic_edit_manifest_boundary_batch_action_kinds(batch: Any) -> list[str]:
+    """Return required action kinds from one boundary-error batch summary."""
+    if not isinstance(batch, dict):
+        return []
+    has_boundary_error = bool(batch.get("boundary_error_count")) or bool(
+        normalize_string_list(batch.get("boundary_error_reasons"))
+    )
+    if not has_boundary_error:
+        return []
+    return normalize_string_list(batch.get("required_next_action_kinds"))
+
+
+def deduplicate_generic_edit_action_kinds(action_kinds: list[str]) -> list[str]:
+    """Return required action kinds in first-seen order."""
+    return list(dict.fromkeys(action_kinds))
+
+
+def generic_edit_manifest_boundary_required_action_kinds(
+    manifest: dict[str, Any],
+) -> list[str]:
+    """Return action kinds required by manifest batch-boundary blockers."""
+    required_action_kinds = []
+    recovery_timeline = manifest.get("recovery_timeline")
+    if isinstance(recovery_timeline, list):
+        required_action_kinds.extend(
+            action_kind
+            for event in recovery_timeline
+            for action_kind in generic_edit_manifest_boundary_event_action_kinds(event)
+        )
+
+    transaction_batches = manifest.get("transaction_batches")
+    if isinstance(transaction_batches, list):
+        required_action_kinds.extend(
+            action_kind
+            for batch in transaction_batches
+            for action_kind in generic_edit_manifest_boundary_batch_action_kinds(batch)
+        )
+
+    return deduplicate_generic_edit_action_kinds(required_action_kinds)
+
+
+def validate_generic_edit_manifest_boundary_policy_consistency(
+    *,
+    manifest: dict[str, Any],
+    checkpoint: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    """Reject manifests whose boundary blockers are absent from resume policy."""
+    expected_action_kinds = generic_edit_manifest_boundary_required_action_kinds(
+        manifest,
+    )
+    if not expected_action_kinds:
+        return
+
+    resume_policy = checkpoint.get("resume_policy")
+    actual_action_kinds = (
+        normalize_string_list(resume_policy.get("required_resolution_action_kinds"))
+        if isinstance(resume_policy, dict)
+        else []
+    )
+    missing_action_kinds = [
+        action_kind
+        for action_kind in expected_action_kinds
+        if action_kind not in actual_action_kinds
+    ]
+    if missing_action_kinds:
+        raise generic_edit_resume_artifact_error(
+            "Generic edit artifact manifest recovery timeline requires resolution "
+            "action(s) absent from checkpoint resume policy.",
+            artifact="artifact_manifest",
+            reason="checkpoint_mismatch",
+            path=manifest_path,
+            expected_required_resolution_action_kinds=expected_action_kinds,
+            actual_required_resolution_action_kinds=actual_action_kinds,
+            missing_required_resolution_action_kinds=missing_action_kinds,
+        )
+
+
 def validate_generic_edit_artifact_manifest_checkpoint_consistency(
     *,
     manifest: dict[str, Any],
@@ -5503,6 +7148,11 @@ def validate_generic_edit_artifact_manifest_checkpoint_consistency(
             "Generic edit artifact manifest resume inputs do not match checkpoint.",
             manifest_path,
         )
+    validate_generic_edit_manifest_boundary_policy_consistency(
+        manifest=manifest,
+        checkpoint=checkpoint,
+        manifest_path=manifest_path,
+    )
     validate_generic_edit_manifest_resume_action(
         manifest=manifest,
         checkpoint=checkpoint,
@@ -5562,6 +7212,88 @@ def validate_generic_edit_checkpoint_mutation_snapshots(
             missing_snapshot_ids=missing_snapshot_ids,
             expected_snapshot_ids=expected_snapshot_ids,
             actual_snapshot_ids=sorted(actual_snapshot_ids),
+        )
+    validate_generic_edit_checkpoint_mutation_snapshot_integrity(
+        expected_snapshot_ids=expected_snapshot_ids,
+        mutation_snapshots=mutation_snapshots,
+        mutation_snapshot_path=mutation_snapshot_path,
+    )
+
+
+def validate_generic_edit_checkpoint_mutation_snapshot_integrity(
+    *,
+    expected_snapshot_ids: list[str],
+    mutation_snapshots: list[dict[str, Any]],
+    mutation_snapshot_path: Path,
+) -> None:
+    """Reject resume when referenced mutation snapshots are structurally incomplete."""
+    snapshots_by_id = {
+        str(snapshot.get("id")): snapshot
+        for snapshot in mutation_snapshots
+        if isinstance(snapshot.get("id"), str) and snapshot.get("id")
+    }
+    required_fields = (
+        "paths",
+        "preimages",
+        "postimages",
+        "rollback",
+        "transaction_id",
+        "workspace_guard",
+    )
+    for snapshot_id in expected_snapshot_ids:
+        snapshot = snapshots_by_id.get(snapshot_id)
+        if snapshot is None:
+            continue
+        missing_fields = [
+            field_name for field_name in required_fields if field_name not in snapshot
+        ]
+        invalid_fields = [
+            field_name
+            for field_name in ("paths", "preimages", "postimages")
+            if field_name in snapshot and not isinstance(snapshot[field_name], list)
+        ]
+        for field_name in ("rollback", "workspace_guard"):
+            if field_name in snapshot and not isinstance(snapshot[field_name], dict):
+                invalid_fields.append(field_name)
+        if generic_edit_snapshot_is_isolated_staged(snapshot):
+            isolation = snapshot.get("staged_isolation")
+            if (
+                not isinstance(isolation, dict)
+                or isolation.get("workspace_restored") is not True
+            ):
+                invalid_fields.append("staged_isolation")
+            baseline_paths = (
+                normalize_string_list(isolation.get("baseline_paths"))
+                if isinstance(isolation, dict)
+                else []
+            )
+            baseline_preimages = snapshot.get("staged_workspace_preimages")
+            if (
+                not isinstance(baseline_preimages, list)
+                or not baseline_preimages
+                or not baseline_paths
+            ):
+                invalid_fields.append("staged_workspace_preimages")
+        if (
+            isinstance(snapshot.get("transaction_id"), str)
+            and snapshot["transaction_id"]
+        ):
+            transaction_id_missing = False
+        else:
+            transaction_id_missing = "transaction_id" in snapshot
+        if transaction_id_missing:
+            invalid_fields.append("transaction_id")
+        if not missing_fields and not invalid_fields:
+            continue
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact contains an incomplete "
+            f"checkpoint snapshot reference: {snapshot_id}.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=mutation_snapshot_path,
+            snapshot_id=snapshot_id,
+            missing_snapshot_fields=missing_fields,
+            invalid_snapshot_fields=sorted(dict.fromkeys(invalid_fields)),
         )
 
 
@@ -5632,7 +7364,7 @@ def inspect_generic_edit_resume_artifacts(
         "path": str(resolved_checkpoint_path),
     }
     session_state_path = (
-        spec_dir / "artifacts" / "generic_edit_session_state.json"
+        spec_dir / "artifacts" / GENERIC_EDIT_SESSION_STATE_FILENAME
     ).resolve()
     session_state: dict[str, Any] | None = None
     if session_state_path.exists():
@@ -5697,6 +7429,132 @@ def inspect_generic_edit_resume_artifacts(
                 ),
                 artifacts=artifacts,
             )
+
+    expected_recovery_plan_path = generic_edit_recovery_plan_path_for_checkpoint(
+        resolved_checkpoint_path,
+    )
+    recovery_plan_path = generic_edit_recovery_plan_path_from_checkpoint(checkpoint)
+    if recovery_plan_path is not None:
+        artifacts["recovery_plan"] = {
+            "status": "pending",
+            "path": str(recovery_plan_path),
+        }
+        try:
+            recovery_plan = load_generic_edit_recovery_plan(
+                recovery_plan_path,
+                expected_recovery_plan_path=expected_recovery_plan_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="recovery_plan",
+                    path=recovery_plan_path,
+                ),
+                artifacts=artifacts,
+            )
+        next_actions = recovery_plan.get("next_actions")
+        artifacts["recovery_plan"] = {
+            "status": "ready",
+            "path": str(recovery_plan_path),
+            "strategy": recovery_plan.get("strategy"),
+            "next_action_count": len(next_actions)
+            if isinstance(next_actions, list)
+            else 0,
+        }
+    else:
+        artifacts["recovery_plan"] = {
+            "status": "missing_optional",
+            "path": str(expected_recovery_plan_path),
+        }
+
+    expected_transaction_group_path = (
+        generic_edit_transaction_group_path_for_checkpoint(
+            resolved_checkpoint_path,
+        )
+    )
+    transaction_group_path = generic_edit_transaction_group_path_from_checkpoint(
+        checkpoint,
+    )
+    if transaction_group_path is not None:
+        artifacts["transaction_groups"] = {
+            "status": "pending",
+            "path": str(transaction_group_path),
+        }
+        try:
+            transaction_groups = load_generic_edit_transaction_groups(
+                transaction_group_path,
+                expected_transaction_group_path=expected_transaction_group_path,
+            )
+            validate_generic_edit_checkpoint_transaction_groups(
+                checkpoint=checkpoint,
+                transaction_groups=transaction_groups,
+                transaction_group_path=transaction_group_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="transaction_groups",
+                    path=transaction_group_path,
+                ),
+                artifacts=artifacts,
+            )
+        artifacts["transaction_groups"] = {
+            "status": "ready",
+            "path": str(transaction_group_path),
+            "group_count": transaction_groups["group_count"],
+            "unresolved_group_count": transaction_groups["unresolved_group_count"],
+        }
+    else:
+        artifacts["transaction_groups"] = {
+            "status": "missing_optional",
+            "path": str(expected_transaction_group_path),
+        }
+
+    expected_event_path = generic_edit_event_path_for_checkpoint(
+        resolved_checkpoint_path,
+    )
+    event_path = generic_edit_event_path_from_checkpoint(checkpoint)
+    events: list[dict[str, Any]] | None = None
+    if event_path is not None:
+        artifacts["events"] = {
+            "status": "pending",
+            "path": str(event_path),
+        }
+        try:
+            events = load_generic_edit_events_artifact(
+                event_path,
+                expected_event_path=expected_event_path,
+            )
+        except GenericEditRuntimeError as e:
+            return generic_edit_resume_blocked_preflight(
+                checkpoint_path=checkpoint_path,
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                artifact_health=generic_edit_resume_error_health(
+                    e,
+                    artifact="events",
+                    path=event_path,
+                ),
+                artifacts=artifacts,
+            )
+        artifacts["events"] = {
+            "status": "ready",
+            "path": str(event_path),
+            "event_count": len(events),
+        }
+    else:
+        artifacts["events"] = {
+            "status": "missing_optional",
+            "path": str(expected_event_path),
+        }
 
     trace_path = generic_edit_trace_path_for_checkpoint(resolved_checkpoint_path)
     artifact_manifest_path = generic_edit_artifact_manifest_path_for_checkpoint(
@@ -5851,6 +7709,31 @@ def inspect_generic_edit_resume_artifacts(
                 e,
                 artifact="mutation_snapshots",
                 path=mutation_snapshot_path,
+            ),
+            artifacts=artifacts,
+        )
+
+    try:
+        validate_generic_edit_resume_artifact_consistency(
+            checkpoint=checkpoint,
+            checkpoint_path=resolved_checkpoint_path,
+            trace=trace,
+            session_state=session_state,
+            session_state_path=session_state_path,
+            artifact_manifest=artifact_manifest,
+            artifact_manifest_path=artifact_manifest_path,
+            events=events,
+            mutation_snapshots=mutation_snapshots,
+            mutation_snapshot_path=mutation_snapshot_path,
+        )
+    except GenericEditRuntimeError as e:
+        return generic_edit_resume_blocked_preflight(
+            checkpoint_path=checkpoint_path,
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            artifact_health=generic_edit_resume_error_health(
+                e,
+                artifact="resume_artifact_consistency",
             ),
             artifacts=artifacts,
         )
@@ -6535,6 +8418,17 @@ def enrich_generic_edit_timeline_event(event: dict[str, Any]) -> None:
         if event.get("finish_blocked"):
             event["requires_user_action"] = True
         return
+    if event_type == "action_result" and event.get("batch_boundary_error"):
+        event["timeline_stage"] = "batch_boundary_blocked"
+        event["requires_user_action"] = True
+        return
+    if (
+        event_type == "action_result"
+        and event.get("tool") == COMMIT_BATCH_TOOL
+        and event.get("ok") is True
+    ):
+        event["timeline_stage"] = "batch_committed"
+        return
     if event_type == "action_result" and event.get("tool") in {
         ROLLBACK_TRANSACTION_TOOL,
         REPAIR_MUTATION_TOOL,
@@ -6658,6 +8552,81 @@ def build_generic_edit_resume_policy_event(
     return event
 
 
+def build_generic_edit_batch_boundary_event_fields(
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Return normalized action-event fields for a batch boundary blocker."""
+    if not data.get("batch_boundary_error"):
+        return {}
+    fields: dict[str, Any] = {
+        "batch_boundary_error": True,
+        "batch_boundary_error_reason": str(
+            data.get("batch_boundary_error_reason") or ""
+        ),
+        "blocked_transaction_group_ids": normalize_string_list(
+            data.get("blocked_transaction_group_ids")
+        ),
+        "required_next_action_kinds": normalize_string_list(
+            data.get("required_next_action_kinds")
+        ),
+        "resolution_strategies": normalize_string_list(
+            data.get("resolution_strategies")
+        ),
+    }
+    if data.get("blocked_tool"):
+        fields["blocked_tool"] = str(data["blocked_tool"])
+    if data.get("preferred_strategy"):
+        fields["preferred_strategy"] = str(data["preferred_strategy"])
+    return fields
+
+
+def build_generic_edit_action_event_extra_fields(
+    *,
+    request: dict[str, Any],
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Return optional action-event fields from request/result metadata."""
+    fields: dict[str, Any] = {}
+    path = request.get("path") or data.get("path")
+    if path:
+        fields["path"] = str(path)
+    for field_name in ("mutation_snapshot_id", "batch_id", "batch_status"):
+        if data.get(field_name):
+            fields[field_name] = str(data[field_name])
+    fields.update(build_generic_edit_batch_boundary_event_fields(data))
+    staged_guard = data.get("staged_workspace_guard")
+    if isinstance(staged_guard, dict):
+        fields["staged_workspace_guard_status"] = str(
+            staged_guard.get("status") or "unknown"
+        )
+        fields["staged_workspace_guard_drift_count"] = int(
+            staged_guard.get("drift_count") or 0
+        )
+    drift_paths = normalize_string_list(data.get("drift_paths"))
+    if drift_paths:
+        fields["drift_paths"] = drift_paths
+    committed_snapshot_ids = normalize_string_list(
+        data.get("committed_mutation_snapshot_ids")
+    )
+    if committed_snapshot_ids:
+        fields["committed_mutation_snapshot_ids"] = committed_snapshot_ids
+    if data.get("commit_operation_id"):
+        fields["commit_operation_id"] = str(data["commit_operation_id"])
+    if data.get("staged_workspace_materialized") is not None:
+        fields["staged_workspace_materialized"] = bool(
+            data["staged_workspace_materialized"]
+        )
+    if data.get("staged_workspace_restored") is not None:
+        fields["staged_workspace_restored"] = bool(data["staged_workspace_restored"])
+    if data.get("staged_workspace_batch_id"):
+        fields["staged_workspace_batch_id"] = str(data["staged_workspace_batch_id"])
+    if data.get("rollback_available") is not None:
+        fields["rollback_available"] = bool(data["rollback_available"])
+    if data.get("exit_code") is not None:
+        fields["exit_code"] = data["exit_code"]
+    return fields
+
+
 def build_generic_edit_action_event(
     *,
     action_entry: dict[str, Any],
@@ -6688,19 +8657,12 @@ def build_generic_edit_action_event(
         "ok": result.get("ok") is not False,
         "message": str(result.get("message") or "")[:300],
     }
-    path = request.get("path") or data.get("path")
-    if path:
-        event["path"] = str(path)
-    if data.get("mutation_snapshot_id"):
-        event["mutation_snapshot_id"] = str(data["mutation_snapshot_id"])
-    if data.get("batch_id"):
-        event["batch_id"] = str(data["batch_id"])
-    if data.get("batch_status"):
-        event["batch_status"] = str(data["batch_status"])
-    if data.get("rollback_available") is not None:
-        event["rollback_available"] = bool(data["rollback_available"])
-    if data.get("exit_code") is not None:
-        event["exit_code"] = data["exit_code"]
+    event.update(
+        build_generic_edit_action_event_extra_fields(
+            request=request,
+            data=data,
+        )
+    )
     return event
 
 
@@ -6725,12 +8687,29 @@ def build_generic_edit_transaction_event(
         "mutated_paths": list(transaction.get("mutated_paths") or []),
         "mutation_snapshot_ids": list(transaction.get("mutation_snapshot_ids") or []),
     }
+    committed_snapshot_ids = normalize_string_list(
+        transaction.get("committed_mutation_snapshot_ids")
+    )
+    if committed_snapshot_ids:
+        event["committed_mutation_snapshot_ids"] = committed_snapshot_ids
+    commit_operation_ids = normalize_string_list(
+        transaction.get("commit_operation_ids")
+    )
+    if commit_operation_ids:
+        event["commit_operation_ids"] = commit_operation_ids
     if transaction.get("batch_id"):
         event["batch_id"] = str(transaction["batch_id"])
     if transaction.get("batch_status"):
         event["batch_status"] = str(transaction["batch_status"])
     if transaction.get("batch_actions"):
         event["batch_actions"] = list(transaction["batch_actions"])
+    if transaction.get("batch_boundary_error_count"):
+        event["batch_boundary_error_count"] = int(
+            transaction["batch_boundary_error_count"]
+        )
+        event["batch_boundary_error_reasons"] = normalize_string_list(
+            transaction.get("batch_boundary_error_reasons")
+        )
     return event
 
 
@@ -6945,6 +8924,8 @@ def summarize_generic_edit_transaction_batches(
                     "status": "open",
                     "transaction_ids": [],
                     "mutation_snapshot_ids": [],
+                    "committed_mutation_snapshot_ids": [],
+                    "commit_operation_ids": [],
                     "restored_paths": [],
                     "deleted_paths": [],
                     "batch_actions": [],
@@ -6952,12 +8933,17 @@ def summarize_generic_edit_transaction_batches(
                     "staged_mutated_paths": [],
                     "staged_restored_paths": [],
                     "staged_deleted_paths": [],
+                    "lifecycle_events": [],
+                    "boundary_errors": [],
+                    "boundary_error_reasons": [],
                 },
             )
             if transaction_id and transaction_id not in batch["transaction_ids"]:
                 batch["transaction_ids"].append(transaction_id)
             for field_name in (
                 "mutation_snapshot_ids",
+                "committed_mutation_snapshot_ids",
+                "commit_operation_ids",
                 "restored_paths",
                 "deleted_paths",
                 "batch_actions",
@@ -6974,6 +8960,48 @@ def summarize_generic_edit_transaction_batches(
                 for value in normalize_string_list(transaction.get(source_field)):
                     if value not in batch[staged_field]:
                         batch[staged_field].append(value)
+            blocked_batch_actions = generic_edit_blocked_batch_actions(
+                transaction,
+                batch_id=batch_id,
+            )
+            for action in generic_edit_transaction_batch_actions(transaction):
+                if action in blocked_batch_actions:
+                    continue
+                append_generic_edit_batch_lifecycle_event(
+                    batch,
+                    action=action,
+                    transaction_id=transaction_id,
+                    status=generic_edit_batch_action_lifecycle_status(
+                        action,
+                        transaction,
+                    ),
+                )
+            for error in transaction.get("batch_boundary_errors") or []:
+                if not isinstance(error, dict):
+                    continue
+                compact_error = {
+                    "tool": str(error.get("tool") or ""),
+                    "batch_id": str(error.get("batch_id") or batch_id),
+                    "reason": str(error.get("reason") or ""),
+                    "blocked_transaction_group_ids": normalize_string_list(
+                        error.get("blocked_transaction_group_ids")
+                    ),
+                }
+                if compact_error not in batch["boundary_errors"]:
+                    batch["boundary_errors"].append(compact_error)
+                append_generic_edit_batch_lifecycle_event(
+                    batch,
+                    action=compact_error["tool"],
+                    transaction_id=transaction_id,
+                    status="blocked",
+                    reason=compact_error["reason"],
+                    blocked_transaction_group_ids=compact_error[
+                        "blocked_transaction_group_ids"
+                    ],
+                )
+                reason = compact_error["reason"]
+                if reason and reason not in batch["boundary_error_reasons"]:
+                    batch["boundary_error_reasons"].append(reason)
             if transaction.get("batch_status"):
                 batch["status"] = str(transaction["batch_status"])
 
@@ -6995,6 +9023,8 @@ def summarize_generic_edit_transaction_batches(
             for path in normalize_string_list(batch.get(field_name))
         }
         batch["staged_path_count"] = len(staged_paths)
+        batch["boundary_error_count"] = len(batch["boundary_errors"])
+        batch["lifecycle_event_count"] = len(batch["lifecycle_events"])
     open_batch_ids = [
         str(batch["id"])
         for batch in ordered_batches
@@ -7008,6 +9038,78 @@ def summarize_generic_edit_transaction_batches(
         "open_transaction_batch_count": len(open_batch_ids),
         "open_transaction_batch_ids": open_batch_ids,
     }
+
+
+def generic_edit_batch_action_lifecycle_status(
+    action: str,
+    transaction: dict[str, Any],
+) -> str:
+    """Return the lifecycle status represented by one batch control action."""
+    if action == BEGIN_BATCH_TOOL:
+        return "open"
+    if action == COMMIT_BATCH_TOOL:
+        return "committed"
+    if action == ABORT_BATCH_TOOL:
+        return "aborted"
+    return str(transaction.get("batch_status") or "observed")
+
+
+def generic_edit_transaction_batch_actions(transaction: dict[str, Any]) -> list[str]:
+    """Return batch lifecycle actions from new or legacy transaction summaries."""
+    explicit_actions = normalize_string_list(transaction.get("batch_actions"))
+    if explicit_actions:
+        return explicit_actions
+    return [
+        tool
+        for tool in normalize_string_list(transaction.get("tool_sequence"))
+        if tool in BATCH_CONTROL_TOOLS
+    ]
+
+
+def generic_edit_blocked_batch_actions(
+    transaction: dict[str, Any],
+    *,
+    batch_id: str,
+) -> set[str]:
+    """Return batch actions that should be represented as blocked events."""
+    blocked: set[str] = set()
+    for error in transaction.get("batch_boundary_errors") or []:
+        if not isinstance(error, dict):
+            continue
+        error_batch_id = str(error.get("batch_id") or "")
+        if error_batch_id and error_batch_id != batch_id:
+            continue
+        tool = str(error.get("tool") or "")
+        if tool:
+            blocked.add(tool)
+    return blocked
+
+
+def append_generic_edit_batch_lifecycle_event(
+    batch: dict[str, Any],
+    *,
+    action: str,
+    transaction_id: str,
+    status: str,
+    reason: str = "",
+    blocked_transaction_group_ids: list[str] | None = None,
+) -> None:
+    """Append a stable batch lifecycle event without duplicates."""
+    if not action:
+        return
+    event: dict[str, Any] = {
+        "action": action,
+        "transaction_id": transaction_id,
+        "status": status,
+    }
+    if reason:
+        event["reason"] = reason
+    blocker_ids = normalize_string_list(blocked_transaction_group_ids)
+    if blocker_ids:
+        event["blocked_transaction_group_ids"] = blocker_ids
+    lifecycle_events = batch.setdefault("lifecycle_events", [])
+    if event not in lifecycle_events:
+        lifecycle_events.append(event)
 
 
 def summarize_generic_edit_transaction_groups(

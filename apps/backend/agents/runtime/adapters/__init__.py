@@ -4,11 +4,19 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+from ..cli_profiles import CLI_RUNNER_PROFILES
 from .claude import ClaudeAgentRuntimeSession
 from .codex_cli import CodexCliRuntimeSession
 from .completion import CompletionRuntimeSession
+from .generic_cli import GenericCliRuntimeSession
 from .generic_edit import GenericEditRuntimeSession
 from .patch_proposal import PatchProposalRuntimeSession
+
+CLI_RUNTIME_PROVIDER_NAMES = {
+    profile.runner_id
+    for profile in CLI_RUNNER_PROFILES
+    if profile.runner_id != "codex_cli"
+}
 
 
 def create_runtime_session(
@@ -64,6 +72,15 @@ def create_runtime_session(
         if project_dir is None:
             raise ValueError("project_dir is required for Codex CLI runtime")
         return CodexCliRuntimeSession(
+            agent_session=agent_session,
+            project_dir=project_dir,
+        )
+
+    if provider_name in CLI_RUNTIME_PROVIDER_NAMES:
+        if project_dir is None:
+            raise ValueError("project_dir is required for generic CLI runtime")
+        return GenericCliRuntimeSession(
+            runner_id=provider_name,
             agent_session=agent_session,
             project_dir=project_dir,
         )
