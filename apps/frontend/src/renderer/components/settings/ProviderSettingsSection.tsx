@@ -2427,7 +2427,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
               ))}
               {providerLiveFaultProbeRows.map((row) => (
                 <RuntimeDiagnosticRow
-                  key={row.labelKey}
+                  key={`${row.labelKey}-${row.value}`}
                   label={t(row.labelKey)}
                   value={row.value}
                   breakWords
