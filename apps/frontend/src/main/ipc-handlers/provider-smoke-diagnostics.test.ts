@@ -291,6 +291,13 @@ describe('mapProviderRunHistory', () => {
         last_status: 'passed',
         last_reliability_status: 'complete',
         last_provider_e2e_status: 'passed',
+        trend: 'provider_history_stable',
+        trend_reason: 'recent_runs_all_passed',
+        recent_window: 3,
+        recent_passed_runs: 3,
+        recent_failed_runs: 0,
+        consecutive_passes: 3,
+        consecutive_failures: 0,
         path: '.auto-Codex/provider-smoke-history.json',
         ignored_private_path: 'workspace-private/provider-history.json',
       })
@@ -304,6 +311,13 @@ describe('mapProviderRunHistory', () => {
       lastStatus: 'passed',
       lastReliabilityStatus: 'complete',
       lastProviderE2eStatus: 'passed',
+      trend: 'provider_history_stable',
+      trendReason: 'recent_runs_all_passed',
+      recentWindow: 3,
+      recentPassedRuns: 3,
+      recentFailedRuns: 0,
+      consecutivePasses: 3,
+      consecutiveFailures: 0,
       path: '.auto-Codex/provider-smoke-history.json',
     });
   });

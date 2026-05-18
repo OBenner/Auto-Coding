@@ -322,6 +322,14 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_e2e_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eBlocked',
   provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired',
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
+  provider_history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryDegraded',
+  provider_history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
+  provider_history_recovering:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryRecovering',
+  provider_history_stable: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryStable',
+  provider_history_unknown: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryUnknown',
+  provider_history_warming_up:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp',
   provider_smoke_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeBlocked',
   provider_smoke_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeReady',
   pre_execution_blocked: 'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked',
@@ -355,10 +363,14 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   staged_batch_drift: 'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift',
   streaming_text: 'settings:aiProvider.runtimeDiagnosticValues.streamingText',
   structured_output: 'settings:aiProvider.runtimeDiagnosticValues.structuredOutput',
+  recent_runs_all_passed: 'settings:aiProvider.runtimeDiagnosticValues.recentRunsAllPassed',
   subagent: 'settings:aiProvider.runtimeDiagnosticValues.subagent',
   subagents: 'settings:aiProvider.runtimeDiagnosticValues.subagents',
   skipped: 'settings:aiProvider.runtimeDiagnosticValues.skipped',
+  single_history_run: 'settings:aiProvider.runtimeDiagnosticValues.singleHistoryRun',
   smoke_not_completed: 'settings:aiProvider.runtimeDiagnosticValues.smokeNotCompleted',
+  consecutive_recent_failures:
+    'settings:aiProvider.runtimeDiagnosticValues.consecutiveRecentFailures',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
   transaction_batches: 'settings:aiProvider.runtimeDiagnosticValues.transactionBatches',
   transaction_batch_probe:
@@ -398,6 +410,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   wire_external_mcp_tool_execution: 'settings:aiProvider.runtimeDiagnosticValues.wireExternalMcpToolExecution',
   yes: 'settings:aiProvider.runtimeDiagnosticValues.yes',
   zhipuai: 'settings:aiProvider.runtimeDiagnosticValues.zhipuai',
+  latest_run_passed_after_failures:
+    'settings:aiProvider.runtimeDiagnosticValues.latestRunPassedAfterFailures',
+  mixed_recent_results: 'settings:aiProvider.runtimeDiagnosticValues.mixedRecentResults',
+  no_history_runs: 'settings:aiProvider.runtimeDiagnosticValues.noHistoryRuns',
 };
 
 type RuntimeDiagnosticTranslate = (key: string) => string;
@@ -811,6 +827,24 @@ export function buildProviderRunHistoryDiagnosticRows(
     formatRuntimeDiagnosticValue(translate, history.lastReliabilityStatus),
     formatRuntimeDiagnosticValue(translate, history.lastProviderE2eStatus),
   ].filter(Boolean).join(', ');
+  const trendCounts = [
+    typeof history.recentWindow === 'number'
+      ? `${history.recentWindow} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendWindow')}`
+      : '',
+    typeof history.recentPassedRuns === 'number' && typeof history.recentFailedRuns === 'number'
+      ? `${history.recentPassedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendPassed')}, ${history.recentFailedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendFailed')}`
+      : '',
+    typeof history.consecutivePasses === 'number' && history.consecutivePasses > 0
+      ? `${history.consecutivePasses} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendPassStreak')}`
+      : '',
+    typeof history.consecutiveFailures === 'number' && history.consecutiveFailures > 0
+      ? `${history.consecutiveFailures} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendFailStreak')}`
+      : '',
+  ].filter(Boolean).join(', ');
+  const trendValue = [
+    formatRuntimeDiagnosticValue(translate, history.trend),
+    trendCounts,
+  ].filter(Boolean).join(' - ');
   return [
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistory',
@@ -823,6 +857,10 @@ export function buildProviderRunHistoryDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLast',
       value: lastValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryTrend',
+      value: trendValue,
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',

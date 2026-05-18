@@ -487,6 +487,13 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "last_status": "passed",
         "last_reliability_status": "complete",
         "last_provider_e2e_status": "passed",
+        "trend": "provider_history_warming_up",
+        "trend_reason": "single_history_run",
+        "recent_window": 1,
+        "recent_passed_runs": 1,
+        "recent_failed_runs": 0,
+        "consecutive_passes": 1,
+        "consecutive_failures": 0,
         "path": ".auto-Codex/provider-smoke-history.json",
     }
     history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
@@ -576,6 +583,70 @@ def test_provider_run_history_recovers_corrupt_artifact(tmp_path: Path):
     assert history["schema_version"] == 1
     assert len(history["runs"]) == 1
     assert history["runs"][0]["provider"] == "openai"
+
+
+def test_provider_run_history_reports_recent_trend(tmp_path: Path):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "runs": [
+                    {
+                        "timestamp": "2026-05-18T09:00:00Z",
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "runtime_mode": "provider_e2e",
+                        "status": "failed",
+                    },
+                    {
+                        "timestamp": "2026-05-18T09:05:00Z",
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "runtime_mode": "provider_e2e",
+                        "status": "failed",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["trend"] == "provider_history_recovering"
+    assert history_summary["trend_reason"] == "latest_run_passed_after_failures"
+    assert history_summary["recent_window"] == 3
+    assert history_summary["recent_passed_runs"] == 1
+    assert history_summary["recent_failed_runs"] == 2
+    assert history_summary["consecutive_passes"] == 1
+    assert history_summary["consecutive_failures"] == 0
+
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    provider_stats = history["providers"]["openai"]
+    assert provider_stats["trend"] == "provider_history_recovering"
+    assert provider_stats["recent_failed_runs"] == 2
+    assert provider_stats["consecutive_passes"] == 1
 
 
 def test_provider_e2e_negative_fixtures_cover_all_direct_api_providers():
