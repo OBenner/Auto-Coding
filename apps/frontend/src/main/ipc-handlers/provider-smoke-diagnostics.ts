@@ -268,6 +268,13 @@ export function mapProviderRunHistory(
     lastStatus: stringFromUnknown(payload.last_status),
     lastReliabilityStatus: stringFromUnknown(payload.last_reliability_status),
     lastProviderE2eStatus: stringFromUnknown(payload.last_provider_e2e_status),
+    trend: stringFromUnknown(payload.trend),
+    trendReason: stringFromUnknown(payload.trend_reason),
+    recentWindow: numberFromUnknown(payload.recent_window),
+    recentPassedRuns: numberFromUnknown(payload.recent_passed_runs),
+    recentFailedRuns: numberFromUnknown(payload.recent_failed_runs),
+    consecutivePasses: numberFromUnknown(payload.consecutive_passes),
+    consecutiveFailures: numberFromUnknown(payload.consecutive_failures),
     path: stringFromUnknown(payload.path),
     reason: stringFromUnknown(payload.reason),
   };

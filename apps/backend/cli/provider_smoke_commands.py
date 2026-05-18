@@ -208,6 +208,7 @@ PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = Path(
     "provider-smoke-history.json",
 )
 PROVIDER_SMOKE_HISTORY_MAX_RUNS = 100
+PROVIDER_SMOKE_HISTORY_TREND_WINDOW = 5
 
 
 @dataclass(frozen=True)
@@ -311,14 +312,76 @@ def _load_provider_smoke_history(
     return [run for run in runs if isinstance(run, dict)], False
 
 
+def _provider_smoke_history_streak(
+    statuses: list[str],
+    *,
+    status: str,
+) -> int:
+    """Return the trailing streak length for a status."""
+    streak = 0
+    for run_status in reversed(statuses):
+        if run_status != status:
+            break
+        streak += 1
+    return streak
+
+
+def _provider_smoke_history_trend(
+    runs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Return compact recent-run trend diagnostics for one provider."""
+    recent_runs = runs[-PROVIDER_SMOKE_HISTORY_TREND_WINDOW:]
+    statuses = [str(run.get("status") or "unknown") for run in recent_runs]
+    recent_passed_runs = statuses.count("passed")
+    recent_failed_runs = statuses.count("failed")
+    consecutive_passes = _provider_smoke_history_streak(
+        statuses,
+        status="passed",
+    )
+    consecutive_failures = _provider_smoke_history_streak(
+        statuses,
+        status="failed",
+    )
+    latest_status = statuses[-1] if statuses else "unknown"
+    if not statuses:
+        trend = "provider_history_unknown"
+        trend_reason = "no_history_runs"
+    elif len(statuses) == 1:
+        trend = "provider_history_warming_up"
+        trend_reason = "single_history_run"
+    elif recent_failed_runs == 0 and recent_passed_runs == len(statuses):
+        trend = "provider_history_stable"
+        trend_reason = "recent_runs_all_passed"
+    elif latest_status == "failed" and consecutive_failures >= 2:
+        trend = "provider_history_degraded"
+        trend_reason = "consecutive_recent_failures"
+    elif latest_status == "passed" and recent_failed_runs > 0:
+        trend = "provider_history_recovering"
+        trend_reason = "latest_run_passed_after_failures"
+    else:
+        trend = "provider_history_flaky"
+        trend_reason = "mixed_recent_results"
+    return {
+        "trend": trend,
+        "trend_reason": trend_reason,
+        "recent_window": len(recent_runs),
+        "recent_passed_runs": recent_passed_runs,
+        "recent_failed_runs": recent_failed_runs,
+        "consecutive_passes": consecutive_passes,
+        "consecutive_failures": consecutive_failures,
+    }
+
+
 def _provider_smoke_history_provider_stats(
     runs: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     """Return per-provider aggregate history stats from persisted records."""
     providers: dict[str, dict[str, Any]] = {}
+    provider_runs: dict[str, list[dict[str, Any]]] = {}
     for run in runs:
         provider = str(run.get("provider") or "unknown")
         status = str(run.get("status") or "unknown")
+        provider_runs.setdefault(provider, []).append(run)
         stats = providers.setdefault(
             provider,
             {
@@ -344,6 +407,8 @@ def _provider_smoke_history_provider_stats(
         stats["last_run_at"] = run.get("timestamp")
         stats["last_reliability_status"] = run.get("reliability_status")
         stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
+    for provider, stats in providers.items():
+        stats.update(_provider_smoke_history_trend(provider_runs.get(provider, [])))
     return providers
 
 
@@ -387,6 +452,13 @@ def _with_provider_run_history(
             "last_status": provider_stats.get("last_status", "unknown"),
             "last_reliability_status": provider_stats.get("last_reliability_status"),
             "last_provider_e2e_status": provider_stats.get("last_provider_e2e_status"),
+            "trend": provider_stats.get("trend"),
+            "trend_reason": provider_stats.get("trend_reason"),
+            "recent_window": provider_stats.get("recent_window"),
+            "recent_passed_runs": provider_stats.get("recent_passed_runs"),
+            "recent_failed_runs": provider_stats.get("recent_failed_runs"),
+            "consecutive_passes": provider_stats.get("consecutive_passes"),
+            "consecutive_failures": provider_stats.get("consecutive_failures"),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }
     except Exception as e:
@@ -3077,6 +3149,25 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
     runs = ", ".join(part for part in run_parts if part)
     if runs:
         print_key_value("Provider history runs", runs)
+    trend = provider_run_history.get("trend")
+    recent_window = provider_run_history.get("recent_window")
+    recent_passed_runs = provider_run_history.get("recent_passed_runs")
+    recent_failed_runs = provider_run_history.get("recent_failed_runs")
+    trend_parts = [
+        str(trend) if isinstance(trend, str) and trend else "",
+        f"{recent_window} run window"
+        if isinstance(recent_window, int) and not isinstance(recent_window, bool)
+        else "",
+        (f"{recent_passed_runs} passed, {recent_failed_runs} failed")
+        if isinstance(recent_passed_runs, int)
+        and not isinstance(recent_passed_runs, bool)
+        and isinstance(recent_failed_runs, int)
+        and not isinstance(recent_failed_runs, bool)
+        else "",
+    ]
+    trend_summary = ", ".join(part for part in trend_parts if part)
+    if trend_summary:
+        print_key_value("Provider history trend", trend_summary)
     path = provider_run_history.get("path")
     if isinstance(path, str) and path:
         print_key_value("Provider history artifact", path)
