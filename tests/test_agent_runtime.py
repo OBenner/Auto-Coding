@@ -8502,6 +8502,58 @@ def test_generic_edit_resume_preflight_blocks_incomplete_mutation_snapshot(
     ]
 
 
+def test_generic_edit_resume_preflight_blocks_corrupt_mutation_snapshots(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, _, _ = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+    )
+    mutation_snapshot_path = artifact_dir / "generic_edit_mutation_snapshots.json"
+    mutation_snapshot_path.write_text("{", encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "corrupt_json"
+    assert health["path"] == str(mutation_snapshot_path)
+
+
+def test_generic_edit_resume_preflight_blocks_invalid_mutation_snapshot_schema(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    artifact_dir, checkpoint_path, _, _ = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+    )
+    mutation_snapshot_path = artifact_dir / "generic_edit_mutation_snapshots.json"
+    mutation_snapshot_path.write_text(json.dumps([]), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "invalid_schema"
+    assert health["path"] == str(mutation_snapshot_path)
+
+
 def test_generic_edit_resume_preflight_blocks_unrestored_isolated_staged_snapshot(
     tmp_path: Path,
 ):

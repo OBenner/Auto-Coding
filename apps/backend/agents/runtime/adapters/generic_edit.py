@@ -5980,30 +5980,50 @@ def load_generic_edit_mutation_snapshots(snapshot_path: Path) -> list[dict[str, 
     except FileNotFoundError:
         return []
     except json.JSONDecodeError as e:
-        raise GenericEditRuntimeError(
-            f"Generic edit mutation snapshot artifact is not valid JSON: {e}"
+        raise generic_edit_resume_artifact_error(
+            f"Generic edit mutation snapshot artifact is not valid JSON: {e}",
+            artifact="mutation_snapshots",
+            reason="corrupt_json",
+            path=snapshot_path,
         ) from e
     if not isinstance(payload, dict):
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot artifact must be a JSON object."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact must be a JSON object.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
         )
     if payload.get("artifact_type") != "generic_edit_mutation_snapshots":
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot artifact has unexpected type."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact has unexpected type.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
         )
     snapshots = payload.get("snapshots")
     if not isinstance(snapshots, list):
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot artifact is missing snapshots."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact is missing snapshots.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
         )
     if not all(isinstance(snapshot, dict) for snapshot in snapshots):
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot artifact contains invalid snapshot entries."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot artifact contains invalid snapshot entries.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
         )
     expected_count = payload.get("snapshot_count")
     if isinstance(expected_count, int) and expected_count != len(snapshots):
-        raise GenericEditRuntimeError(
-            "Generic edit mutation snapshot count does not match snapshots."
+        raise generic_edit_resume_artifact_error(
+            "Generic edit mutation snapshot count does not match snapshots.",
+            artifact="mutation_snapshots",
+            reason="invalid_schema",
+            path=snapshot_path,
+            expected_snapshot_count=expected_count,
+            actual_snapshot_count=len(snapshots),
         )
     return snapshots
 
