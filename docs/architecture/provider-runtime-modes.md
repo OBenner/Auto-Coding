@@ -160,20 +160,23 @@ and now adds a recovery exercise: it creates a recoverable partial edit, checks
 the resume preflight, resumes from the generated checkpoint, and requires the
 recovery result to resolve cleanly before reporting `mini_pipeline_ready`.
 `provider_e2e` runs the direct-provider e2e suite: the `generic_edit` smoke,
-the mini pipeline smoke, and provider-specific negative fixtures for unsupported
-tools plus gateway/model limitations are executed for the configured provider,
-then merged into one `provider_e2e_suite`, `provider_e2e_negative_fixtures`, and
+the mini pipeline smoke, the `transaction_batch_probe`, and provider-specific
+negative fixtures for unsupported tools plus gateway/model limitations are
+executed for the configured provider, then merged into one
+`provider_e2e_suite`, `provider_e2e_negative_fixtures`, and
 `provider_reliability` payload.
 The JSON diagnostics also include `provider_reliability`: a direct-provider
 coverage matrix for the full-autonomy e2e cases. It marks observed cases such
-as text completion, generic edit tool loop, native tool calls, tool results, and
-recovery loop. In `provider_e2e`, the unsupported-tool and gateway/model cases
-are covered by provider adapter/gateway fixtures for OpenAI, Google/Gemini,
-OpenRouter, LiteLLM, ZhipuAI, and Ollama; they prove the configured direct
-provider surfaces the right fallback reason at the adapter boundary. Live
-external fault-injection against real provider accounts remains optional because
-it depends on credentials, model availability, and gateway behavior outside the
-repository.
+as text completion, generic edit tool loop, native tool calls, tool results,
+recovery loop, and transaction batches. In `provider_e2e`, the unsupported-tool
+and gateway/model cases are covered by provider adapter/gateway fixtures for
+OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama; they prove the
+configured direct provider surfaces the right fallback reason at the adapter
+boundary. The transaction-batch case requires an observed batch contract, at
+least one batch, `begin_batch` / `commit_batch` lifecycle actions, and a
+committed lifecycle status. Live external fault-injection against real provider
+accounts remains optional because it depends on credentials, model availability,
+and gateway behavior outside the repository.
 
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
@@ -275,18 +278,18 @@ what is already implemented from what still blocks OpenAI, Gemini, OpenRouter,
 LiteLLM, ZhipuAI, and Ollama from being treated as full autonomous coding
 providers.
 
-Last updated: 2026-05-17.
+Last updated: 2026-05-18.
 
 | Area | Current status | Done | Remaining |
 |------|----------------|------|-----------|
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
-| Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, batch boundary guards, pre-execution staged isolation guards for opaque open-batch mutations, pre-commit staged workspace drift guards, staged guard status/drift-path timeline events, mutation snapshots, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing/incomplete artifact preflight blockers, recovery-plan artifact health checks, artifact manifest transaction batches, manifest/checkpoint consistency checks, manifest recovery-timeline/resume-policy drift guards, trace/session/manifest counter drift checks, unified resume artifact consistency across trace, checkpoint, session state, manifest, mutation snapshots, and transaction batch state, and rich runtime events are implemented. | Harden non-happy-path recovery further for true staged apply storage/isolation and UI-driven repair/rollback workflows. |
-| Provider reliability | Strong partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, transaction batch contract, boundary guards, staged drift guard details, and open transaction batches. `--provider-smoke --provider-smoke-runtime mini_pipeline` runs a planner/coder/test/reviewer flow plus a checkpoint preflight/resume recovery loop and reports `recovery_loop_status`. `--provider-smoke --provider-smoke-runtime provider_e2e` now runs the direct-provider e2e suite, adds provider-specific unsupported-tool and gateway/model negative fixtures for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama, merges child results into `provider_e2e_suite`, `provider_e2e_negative_fixtures`, and `provider_reliability`, and persists compact provider run history in `.auto-Codex/provider-smoke-history.json`; the settings UI surfaces suite, fixtures, reliability, and history evidence. | Add optional live fault-injection fixtures for real external accounts/gateways when credentials are available, plus richer provider history trend views from accumulated runs. |
+| Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, batch boundary guards, pre-execution staged isolation guards for opaque open-batch mutations, pre-commit staged workspace drift guards, staged guard status/drift-path timeline events, mutation snapshots, committed snapshot ids, commit operation ids, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing/incomplete artifact preflight blockers, recovery-plan artifact health checks, artifact manifest transaction batches, manifest/checkpoint/event-count consistency checks, manifest recovery-timeline/resume-policy drift guards, trace/session/manifest counter drift checks, unified resume artifact consistency across trace, checkpoint, session state, manifest, mutation snapshots, and transaction batch state, and rich runtime events are implemented. | Harden non-happy-path recovery further for true staged apply storage/isolation and UI-driven repair/rollback workflows. |
+| Provider reliability | Strong partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, transaction batch contract, boundary guards, staged drift guard details, committed batch snapshots, commit operations, and open transaction batches. `--provider-smoke --provider-smoke-runtime mini_pipeline` runs a planner/coder/test/reviewer flow plus a checkpoint preflight/resume recovery loop and reports `recovery_loop_status`. `--provider-smoke --provider-smoke-runtime transaction_batch_probe` isolates the transaction-batch contract. `--provider-smoke --provider-smoke-runtime provider_e2e` now runs the direct-provider e2e suite, adds the transaction batch probe plus provider-specific unsupported-tool and gateway/model negative fixtures for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama, merges child results into `provider_e2e_suite`, `provider_e2e_negative_fixtures`, and `provider_reliability`, and persists compact provider run history in `.auto-Codex/provider-smoke-history.json`; the settings UI surfaces suite, fixtures, reliability, transaction-batch evidence, and history evidence. | Add optional live fault-injection fixtures for real external accounts/gateways when credentials are available, plus richer provider history trend views from accumulated runs. |
 | MCP Bridge v1 | Strong partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, unavailable-tool observations, readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers, and `mcp_bridge_permission_matrix` for local/external/custom permission gates are represented. The runtime enforces `RuntimeMcpToolPolicy` before execution, writes audit artifacts, classifies mutating tools, normalizes MCP tool results into `text`, `content`, `structured_content`, and `is_error`, classifies live `tools/list` and bridged `tools/call` lifecycle failures by stage/kind, and exposes whether strict `AUTO_CODE_MCP_ALLOWED_PERMISSIONS` allowlists are configured. | Generalize live execution coverage across all registered external servers, normalize arbitrary live schemas continuously, and keep hardening external session reuse plus per-server execution smoke. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, read-only merge plans, and `runtime_subagent_mutation_policy` now exposes the gates blocking mutating children until transactional merge is ready. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, then move the mutation policy from blocked to enabled. |
 | CLI runtimes as full runtime class | Partial, stronger core | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners, `cli_runner_contract_matrix` tracks `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata for every candidate, and the generic CLI core now supplies configurable run/cancel/artifact/event parsing for planned runners. | Add runner-specific command builders, resume semantics, and live smoke/e2e coverage for Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs so they can move from generic-core partial to ready. |
-| Frontend runtime control plane | Strong partial | Provider settings show runtime diagnostics, MCP bridge status, MCP permission gates, provider smoke results, tool-loop contract, transaction batch contract, resume policy, transaction batches in Generic Edit artifacts, recovery timeline, open-batch resume state, provider e2e negative fixtures, provider run history, runtime policy/eval rows, consolidated runtime capability readiness/blockers/warnings, runtime eval history, CLI runner contract status, and mutating-subagent gates. | Add cost estimates, trend views, deeper provider controls, and richer artifact viewers into one operator-grade surface. |
+| Frontend runtime control plane | Strong partial | Provider settings show runtime diagnostics, MCP bridge status, MCP permission gates, provider smoke results, tool-loop contract, transaction batch contract, committed batch snapshots, commit operations, resume policy, transaction batches in Generic Edit artifacts, recovery timeline, open-batch resume state, provider e2e negative fixtures, provider run history, runtime policy/eval rows, consolidated runtime capability readiness/blockers/warnings, runtime eval history, CLI runner contract status, and mutating-subagent gates. | Add cost estimates, trend views, deeper provider controls, and richer artifact viewers into one operator-grade surface. |
 | Policy and evals | Strong partial | Runtime recommendations, compatibility diagnostics, `runtime_policy_matrix` for planner/coder/QA phase selection, `runtime_eval_matrix` for provider e2e, generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts, CLI full-runtime artifacts, `runtime_eval_history` from persisted provider smoke evidence, and `runtime_comparative_eval_matrix` for Claude/Codex/OpenAI/Gemini/Ollama quality/cost/safety comparison are implemented. | Add real cost/quality/safety metrics from live eval runs instead of mostly presence/status evidence, plus richer comparative reporting over time. |
 
 The practical rule remains: a direct API provider is not `full_autonomous` until
@@ -397,8 +400,9 @@ Auto Code validates and executes these actions locally:
   resolved by a later covered inspection/repair or workspace verification
   transaction, and any unresolved partial failures;
 - transaction batches link batch ids to transaction ids, staged mutation ids,
-  staged path metadata, mutation snapshots, transaction groups, unresolved
-  groups, per-batch recovery policies, boundary errors, and recovery outcomes.
+  staged path metadata, mutation snapshots, committed mutation snapshot ids,
+  commit operation ids, transaction groups, unresolved groups, per-batch
+  recovery policies, boundary errors, and recovery outcomes.
   `commit_batch` is rejected while the batch still has unresolved recovery
   groups, mutating actions after `commit_batch` / `abort_batch` in the same
   provider turn are rejected before any action in that turn mutates the
@@ -413,14 +417,16 @@ Auto Code validates and executes these actions locally:
   diagnostics rows. Provider smoke
   now reports the boundary preferred strategy, required action kinds, and
   resolution strategies from the manifest recovery timeline instead of only
-  exposing the raw boundary reason, and includes staged guard statuses plus
-  drift paths for `staged_batch_drift` events;
+  exposing the raw boundary reason, and includes staged guard statuses, drift
+  paths for `staged_batch_drift` events, committed snapshot ids, and commit
+  operation ids;
 - interrupted or partial runs persist `generic_edit_session_state.json`,
   `generic_edit_recovery_checkpoint.json`, `generic_edit_mutation_snapshots.json`,
   and `generic_edit_transaction_groups.json`. The read-only resume preflight
   blocks corrupt checkpoints, corrupt manifests, missing required artifacts,
   mismatched session/checkpoint/manifest policies, stale trace/session/manifest
-  counters, missing checkpoint snapshot references, incomplete referenced mutation
+  counters, manifest event-count drift against the persisted event stream,
+  missing checkpoint snapshot references, incomplete referenced mutation
   snapshots, trace mismatches, transaction batch drift between trace, checkpoint,
   session state, manifest, and mutation snapshots, corrupt or non-canonical required event streams, recovery-plan
   artifacts, and transaction-group artifacts, transaction-group
