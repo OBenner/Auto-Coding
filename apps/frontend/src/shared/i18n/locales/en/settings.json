@@ -1285,6 +1285,7 @@
       "batchStagedDriftPaths": "Staged drift paths",
       "batchLifecycleActions": "Batch lifecycle actions",
       "batchLifecycleStatuses": "Batch lifecycle statuses",
+      "batchCommittedSnapshots": "Committed snapshots",
       "reliabilityStatus": "Provider reliability",
       "reliabilitySuite": "Reliability suite",
       "reliabilityCoverage": "Reliability coverage",

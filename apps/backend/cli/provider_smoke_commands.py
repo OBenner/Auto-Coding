@@ -605,6 +605,7 @@ def _generic_edit_transaction_batch_contract(
     staged_drift_paths: list[str] = []
     batch_lifecycle_actions: list[str] = []
     batch_lifecycle_statuses: list[str] = []
+    committed_mutation_snapshot_ids: list[str] = []
     if isinstance(transaction_batches, list):
         for batch in transaction_batches:
             if not isinstance(batch, dict):
@@ -673,6 +674,10 @@ def _generic_edit_transaction_batch_contract(
         actions, statuses = _generic_edit_batch_lifecycle_values(batch)
         batch_lifecycle_actions.extend(actions)
         batch_lifecycle_statuses.extend(statuses)
+    for event in _generic_edit_manifest_committed_batch_events(artifact_manifest):
+        committed_mutation_snapshot_ids.extend(
+            _string_list_payload(event.get("committed_mutation_snapshot_ids"))
+        )
     if boundary_error_reasons:
         boundary_error_count = max(
             boundary_error_count,
@@ -732,6 +737,10 @@ def _generic_edit_transaction_batch_contract(
         contract["batch_lifecycle_statuses"] = list(
             dict.fromkeys(batch_lifecycle_statuses)
         )
+    if committed_mutation_snapshot_ids:
+        contract["committed_mutation_snapshot_ids"] = list(
+            dict.fromkeys(committed_mutation_snapshot_ids)
+        )
     return contract
 
 
@@ -766,6 +775,24 @@ def _generic_edit_manifest_transaction_batches(
     if not isinstance(transaction_batches, list):
         return []
     return [batch for batch in transaction_batches if isinstance(batch, dict)]
+
+
+def _generic_edit_manifest_committed_batch_events(
+    artifact_manifest: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return manifest timeline events that describe committed batches."""
+    if not isinstance(artifact_manifest, dict):
+        return []
+    recovery_timeline = artifact_manifest.get("recovery_timeline")
+    if not isinstance(recovery_timeline, list):
+        return []
+    events: list[dict[str, Any]] = []
+    for event in recovery_timeline:
+        if not isinstance(event, dict):
+            continue
+        if event.get("timeline_stage") == "batch_committed":
+            events.append(event)
+    return events
 
 
 def _generic_edit_batch_boundary_manifest_events(
@@ -2966,6 +2993,10 @@ def _print_transaction_batch_contract(contract: Any) -> None:
     _print_string_list_line(
         "Batch lifecycle statuses",
         contract.get("batch_lifecycle_statuses"),
+    )
+    _print_string_list_line(
+        "Committed mutation snapshots",
+        contract.get("committed_mutation_snapshot_ids"),
     )
     _print_string_list_line(
         "Open transaction batches",

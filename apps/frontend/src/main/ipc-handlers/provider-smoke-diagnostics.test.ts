@@ -88,6 +88,7 @@ describe('mapProviderTransactionBatchContract', () => {
         staged_drift_paths: ['batched.txt', 9],
         batch_lifecycle_actions: ['begin_batch', 'commit_batch', null],
         batch_lifecycle_statuses: ['open', 'blocked', 7],
+        committed_mutation_snapshot_ids: ['mutation-1', null],
         ignored_private_path: 'workspace-private/checkpoint.json',
       })
     ).toEqual({
@@ -104,6 +105,7 @@ describe('mapProviderTransactionBatchContract', () => {
       stagedDriftPaths: ['batched.txt'],
       batchLifecycleActions: ['begin_batch', 'commit_batch'],
       batchLifecycleStatuses: ['open', 'blocked'],
+      committedMutationSnapshotIds: ['mutation-1'],
     });
   });
 

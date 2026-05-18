@@ -1348,6 +1348,86 @@ def test_generic_edit_execution_diagnostics_reports_staged_batch_drift(
     }
 
 
+def test_generic_edit_execution_diagnostics_reports_committed_batch_snapshots(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import _generic_edit_execution_diagnostics
+
+    result_path = tmp_path / "generic_edit_result.json"
+    manifest_path = tmp_path / "generic_edit_artifact_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_artifact_manifest",
+                "recovery_timeline": [
+                    {
+                        "event_type": "action_result",
+                        "tool": "commit_batch",
+                        "ok": True,
+                        "timeline_stage": "batch_committed",
+                        "batch_id": "batch-1",
+                        "batch_status": "committed",
+                        "committed_mutation_snapshot_ids": ["mutation-1", 2],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "stop_reason": "finish",
+                "loop": "json_actions",
+                "action_count": 3,
+                "failed_action_count": 0,
+                "native_tool_fallback_count": 0,
+                "tool_counts": {
+                    "begin_batch": 1,
+                    "write_file": 1,
+                    "commit_batch": 1,
+                },
+                "transaction_batch_count": 1,
+                "open_transaction_batch_ids": [],
+                "artifact_manifest_artifact": str(manifest_path),
+                "transaction_batches": [
+                    {
+                        "id": "batch-1",
+                        "status": "committed",
+                        "lifecycle_events": [
+                            {
+                                "action": "begin_batch",
+                                "transaction_id": "json_actions-1",
+                                "status": "open",
+                            },
+                            {
+                                "action": "commit_batch",
+                                "transaction_id": "json_actions-1",
+                                "status": "committed",
+                            },
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    diagnostics = _generic_edit_execution_diagnostics(tmp_path)
+
+    assert diagnostics is not None
+    assert diagnostics["transaction_batch_contract"] == {
+        "status": "observed",
+        "batch_boundary_guard": "observed",
+        "transaction_batch_count": 1,
+        "open_transaction_batch_ids": [],
+        "batch_lifecycle_actions": ["begin_batch", "commit_batch"],
+        "batch_lifecycle_statuses": ["open", "committed"],
+        "committed_mutation_snapshot_ids": ["mutation-1"],
+    }
+
+
 def test_generic_edit_execution_diagnostics_classifies_native_tool_contract(
     tmp_path: Path,
 ):

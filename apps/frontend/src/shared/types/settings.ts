@@ -568,6 +568,7 @@ export interface ProviderValidatedTransactionBatchContract {
   stagedDriftPaths?: string[];
   batchLifecycleActions?: string[];
   batchLifecycleStatuses?: string[];
+  committedMutationSnapshotIds?: string[];
 }
 
 export interface ProviderMiniPipelineDiagnostics {
