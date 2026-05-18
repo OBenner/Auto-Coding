@@ -1652,13 +1652,24 @@ class GenericEditRuntimeSession:
         if isolation_error is not None:
             return isolation_error
 
+        tool = action_tool(action)
+        try:
+            staged_workspace = self._materialize_staged_batch_workspace(action)
+        except GenericEditRuntimeError as e:
+            return ToolActionResult(
+                tool=tool,
+                ok=False,
+                message=str(e),
+                data=dict(e.data),
+            )
+
         mutation_snapshot = self._build_mutation_snapshot(
             action,
             loop=loop,
             iteration=iteration,
             action_index=action_index,
         )
-        if action_tool(action) == "run_subagents":
+        if tool == "run_subagents":
             result = await self._run_subagents_action(
                 action,
                 spec_dir=spec_dir,
@@ -1666,21 +1677,91 @@ class GenericEditRuntimeSession:
                 phase=phase,
                 subtask_id=subtask_id,
             )
-        elif action_tool(action) in BATCH_CONTROL_TOOLS:
+        elif tool in BATCH_CONTROL_TOOLS:
             result = self._batch_control_action(action)
-        elif action_tool(action) == ROLLBACK_TRANSACTION_TOOL:
+        elif tool == ROLLBACK_TRANSACTION_TOOL:
             result = self._rollback_transaction_action(action)
         elif self._mcp_bridge is not None and self._mcp_bridge.can_execute(action):
             result = await self._mcp_bridge.execute(action)
-        elif is_mcp_action_name(action_tool(action)):
+        elif is_mcp_action_name(tool):
             result = unavailable_mcp_action_result(
                 action,
                 support=self._mcp_support_payload(),
             )
         else:
             result = await self._executor.execute(action)
-        self._record_mutation_snapshot_result(mutation_snapshot, result)
+        self._record_mutation_snapshot_result(
+            mutation_snapshot,
+            result,
+            staged_workspace=staged_workspace,
+        )
+        restore_error = self._restore_staged_batch_workspace(
+            staged_workspace=staged_workspace,
+            snapshot=mutation_snapshot,
+            result=result,
+        )
+        if restore_error is not None:
+            return restore_error
         return result
+
+    def _materialize_staged_batch_workspace(
+        self,
+        action: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Temporarily expose staged batch postimages to one local action."""
+        if self._active_batch_id is None:
+            return None
+        tool = action_tool(action)
+        if tool in BATCH_CONTROL_TOOLS:
+            return None
+        additional_paths = (
+            action_path_values(action) if tool in SNAPSHOT_MUTATING_ACTIONS else []
+        )
+        return materialize_generic_edit_staged_workspace(
+            project_dir=self._executor.project_dir,
+            batch_id=self._active_batch_id,
+            mutation_snapshots=self._mutation_snapshots,
+            additional_paths=additional_paths,
+        )
+
+    def _restore_staged_batch_workspace(
+        self,
+        *,
+        staged_workspace: dict[str, Any] | None,
+        snapshot: dict[str, Any] | None,
+        result: ToolActionResult,
+    ) -> ToolActionResult | None:
+        """Restore the real workspace after a temporary staged materialization."""
+        if staged_workspace is None:
+            return None
+        try:
+            restore_generic_edit_staged_workspace(
+                project_dir=self._executor.project_dir,
+                staged_workspace=staged_workspace,
+            )
+        except GenericEditRuntimeError as e:
+            return ToolActionResult(
+                tool=result.tool,
+                ok=False,
+                message=str(e),
+                data={
+                    **result.data,
+                    **dict(e.data),
+                    "batch_id": staged_workspace["batch_id"],
+                    "batch_boundary_error": True,
+                    "batch_boundary_error_reason": "staged_workspace_restore_failed",
+                    "batch_isolation_error": True,
+                },
+            )
+        mark_generic_edit_snapshot_workspace_restored(snapshot)
+        if staged_workspace.get("materialized"):
+            result.data = {
+                **result.data,
+                "staged_workspace_materialized": True,
+                "staged_workspace_restored": True,
+                "staged_workspace_batch_id": staged_workspace["batch_id"],
+            }
+        return None
 
     def _opaque_batch_mutation_result(
         self,
@@ -1802,6 +1883,35 @@ class GenericEditRuntimeSession:
                             for drift in staged_guard.get("drifts", [])
                             if isinstance(drift, dict) and drift.get("path")
                         ],
+                        "preferred_strategy": ABORT_BATCH_TOOL,
+                        "required_next_action_kinds": [
+                            ABORT_BATCH_TOOL,
+                            REPAIR_MUTATION_TOOL,
+                        ],
+                        "resolution_strategies": [
+                            ABORT_BATCH_TOOL,
+                            REPAIR_MUTATION_TOOL,
+                        ],
+                    },
+                )
+            try:
+                materialize_generic_edit_staged_workspace(
+                    project_dir=self._executor.project_dir,
+                    batch_id=batch_id,
+                    mutation_snapshots=self._mutation_snapshots,
+                )
+            except GenericEditRuntimeError as e:
+                return ToolActionResult(
+                    tool=tool,
+                    ok=False,
+                    message=str(e),
+                    data={
+                        **dict(e.data),
+                        "batch_id": batch_id,
+                        "batch_action": COMMIT_BATCH_TOOL,
+                        "batch_boundary_error": True,
+                        "batch_boundary_error_reason": "staged_batch_unavailable",
+                        "batch_isolation_error": True,
                         "preferred_strategy": ABORT_BATCH_TOOL,
                         "required_next_action_kinds": [
                             ABORT_BATCH_TOOL,
@@ -1950,6 +2060,8 @@ class GenericEditRuntimeSession:
         self,
         snapshot: dict[str, Any] | None,
         result: ToolActionResult,
+        *,
+        staged_workspace: dict[str, Any] | None = None,
     ) -> None:
         """Attach a successful mutation snapshot to result metadata and artifacts."""
         if snapshot is None or not result.ok:
@@ -1965,6 +2077,22 @@ class GenericEditRuntimeSession:
         snapshot["workspace_guard"] = build_generic_edit_snapshot_workspace_guard(
             snapshot
         )
+        if snapshot.get("batch_id"):
+            snapshot["staged_status"] = "staged"
+            if staged_workspace is not None:
+                snapshot["staged_workspace_preimages"] = list(
+                    staged_workspace.get("baseline_states") or []
+                )
+                snapshot["staged_isolation"] = {
+                    "status": "isolated",
+                    "workspace_restored": False,
+                    "baseline_paths": normalize_string_list(
+                        staged_workspace.get("baseline_paths")
+                    ),
+                    "baseline_path_count": len(
+                        normalize_string_list(staged_workspace.get("baseline_paths"))
+                    ),
+                }
         self._mutation_snapshots.append(snapshot)
         result.data = {
             **result.data,
@@ -3305,6 +3433,168 @@ def build_generic_edit_snapshot_workspace_guard(
     }
 
 
+def generic_edit_snapshot_is_isolated_staged(snapshot: dict[str, Any]) -> bool:
+    """Return true when a snapshot is staged outside the real workspace."""
+    isolation = snapshot.get("staged_isolation")
+    return (
+        str(snapshot.get("staged_status") or "") == "staged"
+        and isinstance(isolation, dict)
+        and isolation.get("status") == "isolated"
+    )
+
+
+def generic_edit_snapshot_is_active_staged(
+    snapshot: dict[str, Any],
+    *,
+    batch_id: str,
+) -> bool:
+    """Return true when a snapshot still belongs to an open staged batch."""
+    staged_status = str(snapshot.get("staged_status") or "")
+    return str(snapshot.get("batch_id") or "") == batch_id and staged_status not in {
+        "rolled_back",
+        "committed",
+    }
+
+
+def generic_edit_file_state_is_materializable(state: dict[str, Any]) -> bool:
+    """Return true when a captured file state can be restored to the workspace."""
+    if state.get("type") == "missing" and state.get("exists") is False:
+        return True
+    return (
+        state.get("type") == "file"
+        and state.get("exists") is True
+        and state.get("content_encoding") == "utf-8"
+        and state.get("content_truncated") is False
+        and isinstance(state.get("content"), str)
+    )
+
+
+def apply_generic_edit_file_state(*, project_dir: Path, state: dict[str, Any]) -> None:
+    """Apply a captured file state to the real workspace."""
+    path = str(state.get("path") or "")
+    if not path:
+        raise GenericEditRuntimeError("Cannot apply staged state without a path.")
+    target = resolve_snapshot_workspace_path(project_dir, path)
+    if state.get("type") == "missing" and state.get("exists") is False:
+        if not target.exists():
+            return
+        if not target.is_file():
+            raise GenericEditRuntimeError(
+                f"Cannot restore missing state for non-file path: {path}",
+                data={"path": path, "reason": "non_file_restore_target"},
+            )
+        target.unlink()
+        return
+    if not generic_edit_file_state_is_materializable(state):
+        raise GenericEditRuntimeError(
+            f"Cannot materialize staged state for path: {path}",
+            data={"path": path, "reason": "unmaterializable_file_state"},
+        )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(str(state.get("content") or ""), encoding="utf-8")
+
+
+def active_generic_edit_staged_postimages(
+    *,
+    mutation_snapshots: list[dict[str, Any]],
+    batch_id: str,
+) -> list[dict[str, Any]]:
+    """Return active staged postimages in the order they were produced."""
+    postimages: list[dict[str, Any]] = []
+    for snapshot in mutation_snapshots:
+        if not generic_edit_snapshot_is_active_staged(snapshot, batch_id=batch_id):
+            continue
+        snapshot_id = str(snapshot.get("id") or "")
+        for postimage in snapshot.get("postimages") or []:
+            if not isinstance(postimage, dict):
+                continue
+            postimages.append({**postimage, "snapshot_id": snapshot_id})
+    return postimages
+
+
+def materialize_generic_edit_staged_workspace(
+    *,
+    project_dir: Path,
+    batch_id: str,
+    mutation_snapshots: list[dict[str, Any]],
+    additional_paths: list[str] | None = None,
+) -> dict[str, Any]:
+    """Temporarily apply active staged postimages and capture workspace baseline."""
+    postimages = active_generic_edit_staged_postimages(
+        mutation_snapshots=mutation_snapshots,
+        batch_id=batch_id,
+    )
+    baseline_paths = list(
+        dict.fromkeys(
+            [
+                *(additional_paths or []),
+                *(
+                    str(postimage.get("path"))
+                    for postimage in postimages
+                    if postimage.get("path")
+                ),
+            ]
+        )
+    )
+    baseline_states = [
+        build_generic_edit_file_preimage(project_dir=project_dir, path=path)
+        for path in baseline_paths
+    ]
+    materialization = {
+        "batch_id": batch_id,
+        "materialized": bool(postimages),
+        "baseline_paths": baseline_paths,
+        "baseline_states": baseline_states,
+        "applied_snapshot_ids": list(
+            dict.fromkeys(
+                str(postimage.get("snapshot_id"))
+                for postimage in postimages
+                if postimage.get("snapshot_id")
+            )
+        ),
+        "applied_path_count": len(
+            {
+                str(postimage.get("path"))
+                for postimage in postimages
+                if postimage.get("path")
+            }
+        ),
+    }
+    try:
+        for postimage in postimages:
+            apply_generic_edit_file_state(project_dir=project_dir, state=postimage)
+    except GenericEditRuntimeError:
+        restore_generic_edit_staged_workspace(
+            project_dir=project_dir,
+            staged_workspace=materialization,
+        )
+        raise
+    return materialization
+
+
+def restore_generic_edit_staged_workspace(
+    *,
+    project_dir: Path,
+    staged_workspace: dict[str, Any],
+) -> None:
+    """Restore the captured baseline after a staged workspace materialization."""
+    for state in reversed(staged_workspace.get("baseline_states") or []):
+        if not isinstance(state, dict):
+            continue
+        apply_generic_edit_file_state(project_dir=project_dir, state=state)
+
+
+def mark_generic_edit_snapshot_workspace_restored(
+    snapshot: dict[str, Any] | None,
+) -> None:
+    """Mark a staged snapshot as no longer present in the real workspace."""
+    if snapshot is None:
+        return
+    isolation = snapshot.get("staged_isolation")
+    if isinstance(isolation, dict):
+        isolation["workspace_restored"] = True
+
+
 def validate_generic_edit_resume_workspace_guard(
     *,
     project_dir: Path,
@@ -3344,16 +3634,20 @@ def build_generic_edit_resume_workspace_guard(
     project_dir: Path,
     mutation_snapshots: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Compare persisted mutation postimages with the current workspace."""
+    """Compare persisted mutation states with the current workspace."""
     checks: list[dict[str, Any]] = []
     for snapshot in mutation_snapshots:
-        postimages = snapshot.get("postimages")
-        if not isinstance(postimages, list):
+        expected_states = (
+            snapshot.get("staged_workspace_preimages")
+            if generic_edit_snapshot_is_isolated_staged(snapshot)
+            else snapshot.get("postimages")
+        )
+        if not isinstance(expected_states, list):
             continue
-        for postimage in postimages:
-            if not isinstance(postimage, dict):
+        for expected in expected_states:
+            if not isinstance(expected, dict):
                 continue
-            path = str(postimage.get("path") or "")
+            path = str(expected.get("path") or "")
             if not path:
                 continue
             current = build_generic_edit_file_preimage(
@@ -3362,7 +3656,7 @@ def build_generic_edit_resume_workspace_guard(
             )
             checks.append(
                 compare_generic_edit_file_state(
-                    expected=postimage,
+                    expected=expected,
                     current=current,
                     snapshot=snapshot,
                 )
@@ -3392,17 +3686,24 @@ def build_generic_edit_staged_batch_guard(
     batch_id: str,
     mutation_snapshots: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Validate that staged batch files still match captured mutation postimages."""
+    """Validate that an isolated staged batch can be safely committed."""
     staged_snapshots = [
         snapshot
         for snapshot in mutation_snapshots
-        if str(snapshot.get("batch_id") or "") == batch_id
-        and str(snapshot.get("staged_status") or "") != "rolled_back"
+        if generic_edit_snapshot_is_active_staged(snapshot, batch_id=batch_id)
     ]
-    guard = build_generic_edit_resume_workspace_guard(
-        project_dir=project_dir,
-        mutation_snapshots=staged_snapshots,
-    )
+    if any(generic_edit_snapshot_is_isolated_staged(item) for item in staged_snapshots):
+        guard = build_generic_edit_resume_workspace_guard(
+            project_dir=project_dir,
+            mutation_snapshots=staged_snapshots,
+        )
+        guard["isolation_mode"] = "workspace_restored"
+    else:
+        guard = build_generic_edit_resume_workspace_guard(
+            project_dir=project_dir,
+            mutation_snapshots=staged_snapshots,
+        )
+        guard["isolation_mode"] = "workspace_materialized"
     snapshot_ids = [
         str(snapshot.get("id"))
         for snapshot in staged_snapshots
@@ -8269,6 +8570,14 @@ def build_generic_edit_action_event_extra_fields(
         fields["committed_mutation_snapshot_ids"] = committed_snapshot_ids
     if data.get("commit_operation_id"):
         fields["commit_operation_id"] = str(data["commit_operation_id"])
+    if data.get("staged_workspace_materialized") is not None:
+        fields["staged_workspace_materialized"] = bool(
+            data["staged_workspace_materialized"]
+        )
+    if data.get("staged_workspace_restored") is not None:
+        fields["staged_workspace_restored"] = bool(data["staged_workspace_restored"])
+    if data.get("staged_workspace_batch_id"):
+        fields["staged_workspace_batch_id"] = str(data["staged_workspace_batch_id"])
     if data.get("rollback_available") is not None:
         fields["rollback_available"] = bool(data["rollback_available"])
     if data.get("exit_code") is not None:

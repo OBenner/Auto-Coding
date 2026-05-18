@@ -5849,27 +5849,22 @@ async def test_generic_edit_runtime_blocks_batch_commit_with_unresolved_recovery
 @pytest.mark.asyncio
 async def test_generic_edit_runtime_blocks_batch_commit_when_staged_file_drifted(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     target = tmp_path / "batched.txt"
     target.write_text("old\n", encoding="utf-8")
-    trigger = tmp_path / "trigger.txt"
-    trigger.write_text("trigger\n", encoding="utf-8")
-    original_execute = LocalActionExecutor.execute
 
-    async def drifting_execute(
-        self: LocalActionExecutor,
-        action: dict[str, Any],
-    ) -> ToolActionResult:
-        if action.get("tool") == "read_file" and action.get("path") == "trigger.txt":
-            target.write_text("external drift\n", encoding="utf-8")
-        return await original_execute(self, action)
+    class DriftingGenericEditSession(FakeGenericEditSession):
+        async def complete(self, message: str, stream: bool = True):
+            assert stream is True
+            self.messages.append(message)
+            if len(self.messages) == 2:
+                target.write_text("external drift\n", encoding="utf-8")
+            yield self.responses.pop(0)
 
-    monkeypatch.setattr(LocalActionExecutor, "execute", drifting_execute)
-    session = FakeGenericEditSession(
+    session = DriftingGenericEditSession(
         [
             {
-                "thought": "stage a batch then hit drift before commit",
+                "thought": "stage a batch update",
                 "actions": [
                     {
                         "tool": "begin_batch",
@@ -5880,10 +5875,11 @@ async def test_generic_edit_runtime_blocks_batch_commit_when_staged_file_drifted
                         "path": "batched.txt",
                         "content": "new\n",
                     },
-                    {
-                        "tool": "read_file",
-                        "path": "trigger.txt",
-                    },
+                ],
+            },
+            {
+                "thought": "hit drift before commit",
+                "actions": [
                     {
                         "tool": "commit_batch",
                         "batch_id": "batch-1",
@@ -5955,10 +5951,11 @@ async def test_generic_edit_runtime_blocks_batch_commit_when_staged_file_drifted
     assert [
         transaction["status"] for transaction in result_artifact["transactions"]
     ] == [
-        "partial_failure",
+        "complete",
+        "failed",
         "complete",
     ]
-    blocked_transaction = result_artifact["transactions"][0]
+    blocked_transaction = result_artifact["transactions"][1]
     assert blocked_transaction["failed_tool"] == "commit_batch"
     assert blocked_transaction["batch_boundary_errors"] == [
         {
@@ -5978,13 +5975,13 @@ async def test_generic_edit_runtime_blocks_batch_commit_when_staged_file_drifted
         },
         {
             "action": "commit_batch",
-            "transaction_id": "json_actions-1",
+            "transaction_id": "json_actions-2",
             "status": "blocked",
             "reason": "staged_batch_drift",
         },
         {
             "action": "abort_batch",
-            "transaction_id": "json_actions-2",
+            "transaction_id": "json_actions-3",
             "status": "aborted",
         },
     ]
@@ -6167,10 +6164,20 @@ async def test_generic_edit_runtime_rejects_finish_with_open_batch(
     ]
 
     assert result.status == "error"
-    assert target.read_text(encoding="utf-8") == "new\n"
+    assert target.read_text(encoding="utf-8") == "old\n"
     assert result_artifact["stop_reason"] == "open_batch"
     assert result_artifact["open_transaction_batch_ids"] == ["batch-1"]
     assert result_artifact["recoverable"] is True
+    mutation_snapshots = json.loads(
+        (artifact_dir / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    snapshot = mutation_snapshots["snapshots"][0]
+    assert snapshot["staged_status"] == "staged"
+    assert snapshot["staged_isolation"]["status"] == "isolated"
+    assert snapshot["staged_isolation"]["workspace_restored"] is True
+    assert snapshot["staged_isolation"]["baseline_paths"] == ["batched.txt"]
     assert checkpoint["resume"]["strategy"] == "resolve_open_batch"
     assert checkpoint["resume_policy"]["finish_blocked"] is True
     assert checkpoint["resume_policy"]["required_resolution_action_kinds"] == [
@@ -6244,6 +6251,7 @@ async def test_generic_edit_resume_preflight_reports_ready_open_batch(
     )
 
     assert result.status == "error"
+    assert target.read_text(encoding="utf-8") == "old\n"
     assert preflight["status"] == "ready"
     assert preflight["resume"] == {
         "strategy": "resolve_open_batch",
@@ -6309,6 +6317,7 @@ async def test_generic_edit_runtime_resumes_open_batch_and_commits(
     checkpoint_path = tmp_path / "artifacts" / "generic_edit_recovery_checkpoint.json"
     assert first_result.status == "error"
     assert checkpoint_path.exists()
+    assert target.read_text(encoding="utf-8") == "old\n"
 
     resume_session = FakeGenericEditSession(
         [
@@ -6355,6 +6364,96 @@ async def test_generic_edit_runtime_resumes_open_batch_and_commits(
     assert result_artifact["transaction_batches"][0]["status"] == "committed"
     assert result_artifact["open_transaction_batch_ids"] == []
     assert not checkpoint_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_reads_isolated_staged_batch_content(
+    tmp_path: Path,
+):
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "stage and inspect a batch update",
+                "actions": [
+                    {
+                        "tool": "begin_batch",
+                        "batch_id": "batch-1",
+                    },
+                    {
+                        "tool": "write_file",
+                        "path": "batched.txt",
+                        "content": "new\n",
+                    },
+                    {
+                        "tool": "search_text",
+                        "path": "batched.txt",
+                        "query": "new",
+                    },
+                    {
+                        "tool": "abort_batch",
+                        "batch_id": "batch-1",
+                        "reason": "Discard staged update",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "Inspected and discarded staged update",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        "read staged batch content",
+        tmp_path,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+
+    trace = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_trace.json").read_text(encoding="utf-8")
+    )
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "artifacts" / "generic_edit_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    read_result = trace["trace"][0]["actions"][2]["result"]
+    mutation_snapshots = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert result.status == "continue"
+    assert target.read_text(encoding="utf-8") == "old\n"
+    assert read_result["ok"] is True
+    assert read_result["data"]["match_count"] == 1
+    search_event = next(
+        event
+        for event in events
+        if event["event_type"] == "action_result" and event["tool"] == "search_text"
+    )
+    assert search_event["staged_workspace_materialized"] is True
+    assert search_event["staged_workspace_restored"] is True
+    assert search_event["staged_workspace_batch_id"] == "batch-1"
+    assert mutation_snapshots["snapshots"][0]["staged_isolation"] == {
+        "status": "isolated",
+        "workspace_restored": True,
+        "baseline_paths": ["batched.txt"],
+        "baseline_path_count": 1,
+    }
 
 
 @pytest.mark.asyncio
