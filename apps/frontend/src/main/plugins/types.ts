@@ -63,6 +63,8 @@ export interface PluginMetadata {
   plugin_type: PluginType;
   /** List of permissions the plugin requires */
   required_permissions: PluginPermission[];
+  /** Runtime capability declarations for agent integration */
+  capabilities: string[];
   /** List of other plugin names this plugin depends on */
   dependencies: string[];
   /** Optional URL to plugin documentation/repository */

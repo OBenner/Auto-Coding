@@ -160,6 +160,7 @@ function parsePluginInfo(data: Record<string, unknown>): PluginInfo {
       description: metadata.description as string,
       plugin_type: metadata.plugin_type as PluginType,
       required_permissions: metadata.required_permissions as PluginPermission[],
+      capabilities: (metadata.capabilities as string[]) || [],
       dependencies: (metadata.dependencies as string[]) || [],
       homepage: metadata.homepage as string | undefined,
       license: metadata.license as string | undefined

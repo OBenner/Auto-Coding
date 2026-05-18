@@ -143,6 +143,23 @@ export function PluginCard({
           )}
         </div>
 
+        {/* Capabilities */}
+        {metadata.capabilities.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">{t('plugins:capabilities.title')}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {metadata.capabilities.map((capability) => (
+                <Badge key={capability} variant="secondary" className="text-xs">
+                  {t(`plugins:capabilities.${capability}`, { defaultValue: capability })}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Permissions */}
         {metadata.required_permissions.length > 0 && (
           <div>

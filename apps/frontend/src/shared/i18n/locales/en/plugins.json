@@ -27,6 +27,7 @@
     "create_mcp_tools": "Create MCP Tools"
   },
   "capabilities": {
+    "title": "Capabilities",
     "analysis_only": "Analysis Only",
     "generic_edit": "Generic Edit",
     "full_agent_runtime": "Full Agent Runtime"

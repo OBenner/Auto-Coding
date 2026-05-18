@@ -27,6 +27,7 @@
     "create_mcp_tools": "Créer des Outils MCP"
   },
   "capabilities": {
+    "title": "Capacités",
     "analysis_only": "Analyse Uniquement",
     "generic_edit": "Modification Générique",
     "full_agent_runtime": "Runtime Agent Complet"

@@ -47,19 +47,16 @@ if __name__ == "__main__":
     from plugins.base import PluginType
     from plugins.loader import PluginLoader, PluginLoadError, PluginValidationError
     from plugins.registry import PluginRegistry
-    from plugins.sdk.agent import AgentPlugin
 else:
     # Module import - use relative imports
     try:
         from .base import PluginType
         from .loader import PluginLoader, PluginLoadError, PluginValidationError
         from .registry import PluginRegistry
-        from .sdk.agent import AgentPlugin
     except ImportError:
         from plugins.base import PluginType
         from plugins.loader import PluginLoader, PluginLoadError, PluginValidationError
         from plugins.registry import PluginRegistry
-        from plugins.sdk.agent import AgentPlugin
 
 # Import git utilities
 from core.git_executable import run_git
@@ -1265,18 +1262,11 @@ def cmd_preview_context(args: argparse.Namespace) -> int:
             append_prompt_augmentations,
             build_agent_context,
             collect_prompt_augmentations,
+            load_enabled_runtime_plugins,
         )
 
-        registry = _load_registry_with_plugins()
-        plugins = [
-            plugin
-            for plugin in registry.list_plugins(
-                plugin_type=PluginType.AGENT,
-                enabled_only=True,
-            )
-            if isinstance(plugin, AgentPlugin)
-        ]
         project_dir = Path.cwd()
+        plugins = load_enabled_runtime_plugins(project_dir)
         spec_dir = (
             Path(args.spec_dir)
             if args.spec_dir
