@@ -612,6 +612,17 @@ class GenericEditRuntimeSession:
             if artifact_manifest_path.exists()
             else None
         )
+        event_path = generic_edit_event_path_from_checkpoint(checkpoint)
+        events = (
+            load_generic_edit_events_artifact(
+                event_path,
+                expected_event_path=generic_edit_event_path_for_checkpoint(
+                    checkpoint_path
+                ),
+            )
+            if event_path is not None
+            else None
+        )
         mutation_snapshot_path = generic_edit_mutation_snapshot_path_for_checkpoint(
             checkpoint_path
         )
@@ -626,6 +637,7 @@ class GenericEditRuntimeSession:
             session_state_path=session_state_path,
             artifact_manifest=artifact_manifest,
             artifact_manifest_path=artifact_manifest_path,
+            events=events,
             mutation_snapshots=self._mutation_snapshots,
             mutation_snapshot_path=mutation_snapshot_path,
         )
@@ -6280,6 +6292,31 @@ def validate_generic_edit_manifest_trace_counts(
     )
 
 
+def validate_generic_edit_manifest_event_counts(
+    *,
+    manifest: dict[str, Any],
+    events: list[dict[str, Any]],
+    manifest_path: Path,
+) -> None:
+    """Reject manifest event counters that disagree with the event artifact."""
+    counts = manifest.get("counts")
+    if not isinstance(counts, dict):
+        return
+    actual_count = counts.get("event_count")
+    if actual_count is None:
+        return
+    expected_count = len(events)
+    if actual_count != expected_count:
+        raise generic_edit_resume_artifact_error(
+            "Generic edit artifact manifest event count does not match event artifact.",
+            artifact="artifact_manifest",
+            reason="checkpoint_mismatch",
+            path=manifest_path,
+            expected_event_count=expected_count,
+            actual_event_count=actual_count,
+        )
+
+
 def generic_edit_transaction_batch_ids_from_summary(
     summary: dict[str, Any],
 ) -> list[str]:
@@ -6514,6 +6551,7 @@ def validate_generic_edit_resume_artifact_consistency(
     session_state_path: Path | None = None,
     artifact_manifest: dict[str, Any] | None = None,
     artifact_manifest_path: Path | None = None,
+    events: list[dict[str, Any]] | None = None,
     mutation_snapshots: list[dict[str, Any]] | None = None,
     mutation_snapshot_path: Path | None = None,
 ) -> None:
@@ -6590,6 +6628,12 @@ def validate_generic_edit_resume_artifact_consistency(
             trace=trace,
             manifest_path=artifact_manifest_path,
         )
+        if events is not None:
+            validate_generic_edit_manifest_event_counts(
+                manifest=artifact_manifest,
+                events=events,
+                manifest_path=artifact_manifest_path,
+            )
         validate_generic_edit_manifest_transaction_batches(
             manifest=artifact_manifest,
             transaction_summary=transaction_summary,
@@ -7135,6 +7179,7 @@ def inspect_generic_edit_resume_artifacts(
         resolved_checkpoint_path,
     )
     event_path = generic_edit_event_path_from_checkpoint(checkpoint)
+    events: list[dict[str, Any]] | None = None
     if event_path is not None:
         artifacts["events"] = {
             "status": "pending",
@@ -7334,6 +7379,7 @@ def inspect_generic_edit_resume_artifacts(
             session_state_path=session_state_path,
             artifact_manifest=artifact_manifest,
             artifact_manifest_path=artifact_manifest_path,
+            events=events,
             mutation_snapshots=mutation_snapshots,
             mutation_snapshot_path=mutation_snapshot_path,
         )

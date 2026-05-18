@@ -8120,6 +8120,44 @@ def write_generic_edit_manifest_batch_state_mismatch_artifacts(
     return checkpoint_path, manifest_path
 
 
+def write_generic_edit_manifest_event_count_mismatch_artifacts(
+    tmp_path: Path,
+) -> tuple[Path, Path]:
+    artifact_dir, checkpoint_path, session_state_path, trace_path = (
+        write_minimal_generic_edit_resume_artifacts(
+            tmp_path,
+            checkpoint_next_iteration=2,
+        )
+    )
+    event_path = artifact_dir / "generic_edit_events.jsonl"
+    event_path.write_text(
+        json.dumps({"event_type": "resume_policy", "sequence": 1}) + "\n",
+        encoding="utf-8",
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["resume_inputs"]["event_artifact"] = str(event_path)
+    checkpoint["resume_policy"]["required_artifacts"].append("event_artifact")
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    update_generic_edit_session_state(
+        session_state_path,
+        resume_inputs=checkpoint["resume_inputs"],
+        resume_policy=checkpoint["resume_policy"],
+    )
+    manifest_path = write_minimal_generic_edit_artifact_manifest(
+        artifact_dir,
+        checkpoint_path=checkpoint_path,
+        session_state_path=session_state_path,
+        trace_path=trace_path,
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["counts"]["event_count"] = 99
+    manifest_path.write_text(  # NOSONAR - pytest tmp_path fixture path.
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+    return checkpoint_path, manifest_path
+
+
 def update_generic_edit_session_state(
     session_state_path: Path,
     **updates: Any,
@@ -8576,6 +8614,34 @@ def test_generic_edit_resume_preflight_blocks_corrupt_event_artifact(
     assert health["path"] == str(event_path)
 
 
+def test_generic_edit_resume_preflight_blocks_manifest_event_count_mismatch(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    checkpoint_path, manifest_path = (
+        write_generic_edit_manifest_event_count_mismatch_artifacts(tmp_path)
+    )
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "blocked"
+    assert preflight["resume_artifact_health"] == {
+        "status": "blocked",
+        "artifact": "artifact_manifest",
+        "reason": "checkpoint_mismatch",
+        "path": str(manifest_path),
+        "expected_event_count": 1,
+        "actual_event_count": 99,
+    }
+
+
 def test_generic_edit_resume_preflight_blocks_manifest_checkpoint_mismatch(
     tmp_path: Path,
 ):
@@ -8871,6 +8937,46 @@ async def test_generic_edit_runtime_resume_blocks_manifest_batch_state_mismatch(
     )
 
     with pytest.raises(GenericEditRuntimeError, match="transaction batch"):
+        await runtime_session.resume(
+            checkpoint_path=checkpoint_path,
+            spec_dir=tmp_path,
+            verbose=False,
+            phase=None,
+        )
+
+    assert session.responses
+
+
+@pytest.mark.asyncio
+async def test_generic_edit_runtime_resume_blocks_manifest_event_count_mismatch(
+    tmp_path: Path,
+):
+    checkpoint_path, _manifest_path = (
+        write_generic_edit_manifest_event_count_mismatch_artifacts(tmp_path)
+    )
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "should not be reached",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Should not resume with stale event count",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            }
+        ]
+    )
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="generic_edit",
+        project_dir=tmp_path,
+    )
+
+    with pytest.raises(GenericEditRuntimeError, match="event count"):
         await runtime_session.resume(
             checkpoint_path=checkpoint_path,
             spec_dir=tmp_path,
