@@ -296,6 +296,16 @@ def _provider_smoke_history_record(
         if isinstance(suite_runs, list)
         else []
     )
+    live_fault_probes = runtime_diagnostics.get("provider_e2e_live_fault_probes")
+    live_fault_probes = live_fault_probes if isinstance(live_fault_probes, dict) else {}
+    live_fault_probe_status = live_fault_probes.get("status")
+    live_fault_probe_enabled = live_fault_probes.get("enabled")
+    live_fault_probe_covered_cases = _string_list_payload(
+        live_fault_probes.get("covered_cases")
+    )
+    live_fault_probe_missing_env = _string_list_payload(
+        live_fault_probes.get("missing_env")
+    )
     record: dict[str, Any] = {
         "timestamp": timestamp or _utc_timestamp(),
         "provider": result.provider,
@@ -310,6 +320,14 @@ def _provider_smoke_history_record(
         "provider_e2e_status": provider_e2e_suite.get("status"),
         "failed_suite_runs": failed_suite_runs,
     }
+    if isinstance(live_fault_probe_status, str) and live_fault_probe_status:
+        record["live_fault_probe_status"] = live_fault_probe_status
+    if isinstance(live_fault_probe_enabled, bool):
+        record["live_fault_probe_enabled"] = live_fault_probe_enabled
+    if live_fault_probe_covered_cases:
+        record["live_fault_probe_covered_cases"] = live_fault_probe_covered_cases
+    if live_fault_probe_missing_env:
+        record["live_fault_probe_missing_env_count"] = len(live_fault_probe_missing_env)
     if result.error_details:
         record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
     return record
@@ -415,6 +433,10 @@ def _provider_smoke_history_provider_stats(
                 "last_run_at": None,
                 "last_reliability_status": None,
                 "last_provider_e2e_status": None,
+                "last_live_fault_probe_status": None,
+                "live_fault_probe_enabled_runs": 0,
+                "live_fault_probe_passed_runs": 0,
+                "live_fault_probe_covered_cases": [],
             },
         )
         stats["total_runs"] += 1
@@ -428,7 +450,23 @@ def _provider_smoke_history_provider_stats(
         stats["last_run_at"] = run.get("timestamp")
         stats["last_reliability_status"] = run.get("reliability_status")
         stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
+        live_fault_probe_status = run.get("live_fault_probe_status")
+        if isinstance(live_fault_probe_status, str) and live_fault_probe_status:
+            stats["last_live_fault_probe_status"] = live_fault_probe_status
+        if run.get("live_fault_probe_enabled") is True:
+            stats["live_fault_probe_enabled_runs"] += 1
+        if live_fault_probe_status == "passed":
+            stats["live_fault_probe_passed_runs"] += 1
+        covered_cases = _string_list_payload(run.get("live_fault_probe_covered_cases"))
+        if covered_cases:
+            existing_cases = stats["live_fault_probe_covered_cases"]
+            for covered_case in covered_cases:
+                if covered_case not in existing_cases:
+                    existing_cases.append(covered_case)
     for provider, stats in providers.items():
+        stats["live_fault_probe_covered_cases"] = sorted(
+            stats["live_fault_probe_covered_cases"]
+        )
         stats.update(_provider_smoke_history_trend(provider_runs.get(provider, [])))
     return providers
 
@@ -473,6 +511,21 @@ def _with_provider_run_history(
             "last_status": provider_stats.get("last_status", "unknown"),
             "last_reliability_status": provider_stats.get("last_reliability_status"),
             "last_provider_e2e_status": provider_stats.get("last_provider_e2e_status"),
+            "last_live_fault_probe_status": provider_stats.get(
+                "last_live_fault_probe_status"
+            ),
+            "live_fault_probe_enabled_runs": provider_stats.get(
+                "live_fault_probe_enabled_runs",
+                0,
+            ),
+            "live_fault_probe_passed_runs": provider_stats.get(
+                "live_fault_probe_passed_runs",
+                0,
+            ),
+            "live_fault_probe_covered_cases": provider_stats.get(
+                "live_fault_probe_covered_cases",
+                [],
+            ),
             "trend": provider_stats.get("trend"),
             "trend_reason": provider_stats.get("trend_reason"),
             "recent_window": provider_stats.get("recent_window"),

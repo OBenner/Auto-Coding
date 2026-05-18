@@ -656,6 +656,10 @@ export interface ProviderRunHistoryDiagnostics {
   lastStatus?: string;
   lastReliabilityStatus?: string;
   lastProviderE2eStatus?: string;
+  lastLiveFaultProbeStatus?: string;
+  liveFaultProbeEnabledRuns?: number;
+  liveFaultProbePassedRuns?: number;
+  liveFaultProbeCoveredCases?: string[];
   trend?: string;
   trendReason?: string;
   recentWindow?: number;

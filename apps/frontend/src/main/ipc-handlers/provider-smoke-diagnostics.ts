@@ -311,6 +311,10 @@ export function mapProviderRunHistory(
     lastStatus: stringFromUnknown(payload.last_status),
     lastReliabilityStatus: stringFromUnknown(payload.last_reliability_status),
     lastProviderE2eStatus: stringFromUnknown(payload.last_provider_e2e_status),
+    lastLiveFaultProbeStatus: stringFromUnknown(payload.last_live_fault_probe_status),
+    liveFaultProbeEnabledRuns: numberFromUnknown(payload.live_fault_probe_enabled_runs),
+    liveFaultProbePassedRuns: numberFromUnknown(payload.live_fault_probe_passed_runs),
+    liveFaultProbeCoveredCases: arrayFromUnknown(payload.live_fault_probe_covered_cases),
     trend: stringFromUnknown(payload.trend),
     trendReason: stringFromUnknown(payload.trend_reason),
     recentWindow: numberFromUnknown(payload.recent_window),
@@ -322,7 +326,9 @@ export function mapProviderRunHistory(
     reason: stringFromUnknown(payload.reason),
   };
 
-  return Object.values(history).some((field) => field !== undefined)
+  return Object.values(history).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
     ? history
     : undefined;
 }

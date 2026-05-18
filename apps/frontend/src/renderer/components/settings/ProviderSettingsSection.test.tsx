@@ -73,6 +73,8 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryTrendPassed': 'passed',
     'settings:aiProvider.connectionTest.providerRunHistoryTrendPassStreak': 'pass streak',
     'settings:aiProvider.connectionTest.providerRunHistoryTrendWindow': 'run window',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes':
+      'Provider history live fault probes',
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeCapability': 'Runtime capability',
@@ -713,6 +715,10 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
         lastStatus: 'passed',
         lastReliabilityStatus: 'complete',
         lastProviderE2eStatus: 'passed',
+        lastLiveFaultProbeStatus: 'passed',
+        liveFaultProbeEnabledRuns: 2,
+        liveFaultProbePassedRuns: 2,
+        liveFaultProbeCoveredCases: ['gateway_model_limitations', 'unsupported_tools'],
         trend: 'provider_history_stable',
         trendReason: 'recent_runs_all_passed',
         recentWindow: 3,
@@ -738,6 +744,10 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryTrend',
         value: 'Stable history - 3 run window, 3 passed, 0 failed, 3 pass streak',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
+        value: 'Passed - 2 enabled, 2 passed - Gateway model limitations, Unsupported tools',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',

@@ -893,6 +893,19 @@ export function buildProviderRunHistoryDiagnosticRows(
     formatRuntimeDiagnosticValue(translate, history.trend),
     trendCounts,
   ].filter(Boolean).join(' - ');
+  const liveFaultProbeRunCounts = [
+    typeof history.liveFaultProbeEnabledRuns === 'number'
+      ? `${history.liveFaultProbeEnabledRuns} enabled`
+      : '',
+    typeof history.liveFaultProbePassedRuns === 'number'
+      ? `${history.liveFaultProbePassedRuns} passed`
+      : '',
+  ].filter(Boolean).join(', ');
+  const liveFaultProbeValue = [
+    formatRuntimeDiagnosticValue(translate, history.lastLiveFaultProbeStatus),
+    liveFaultProbeRunCounts,
+    formatRuntimeDiagnosticList(translate, history.liveFaultProbeCoveredCases),
+  ].filter(Boolean).join(' - ');
   return [
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistory',
@@ -909,6 +922,10 @@ export function buildProviderRunHistoryDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryTrend',
       value: trendValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
+      value: liveFaultProbeValue,
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',
