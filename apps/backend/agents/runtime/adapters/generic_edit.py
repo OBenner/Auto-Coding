@@ -1749,6 +1749,11 @@ class GenericEditRuntimeSession:
                         ],
                     },
                 )
+            committed_snapshot_ids = mark_generic_edit_mutation_snapshots_committed(
+                mutation_snapshots=self._mutation_snapshots,
+                batch_id=batch_id,
+                commit_operation_id=f"{batch_id}:commit",
+            )
             self._active_batch_id = None
             return ToolActionResult(
                 tool=tool,
@@ -1758,6 +1763,7 @@ class GenericEditRuntimeSession:
                     "batch_id": batch_id,
                     "batch_action": COMMIT_BATCH_TOOL,
                     "batch_status": "committed",
+                    "committed_mutation_snapshot_ids": committed_snapshot_ids,
                 },
             )
 
@@ -3581,6 +3587,28 @@ def mark_generic_edit_mutation_snapshots_rolled_back(
         snapshot["staged_status"] = "rolled_back"
         if rollback_operation_id:
             snapshot["rollback_operation_id"] = rollback_operation_id
+
+
+def mark_generic_edit_mutation_snapshots_committed(
+    *,
+    mutation_snapshots: list[dict[str, Any]],
+    batch_id: str,
+    commit_operation_id: str,
+) -> list[str]:
+    """Mark staged mutation snapshots accepted by a batch commit."""
+    committed_ids: list[str] = []
+    for snapshot in mutation_snapshots:
+        if str(snapshot.get("batch_id") or "") != batch_id:
+            continue
+        if str(snapshot.get("staged_status") or "") == "rolled_back":
+            continue
+        snapshot["staged_status"] = "committed"
+        if commit_operation_id:
+            snapshot["commit_operation_id"] = commit_operation_id
+        snapshot_id = str(snapshot.get("id") or "")
+        if snapshot_id:
+            committed_ids.append(snapshot_id)
+    return committed_ids
 
 
 def validate_generic_edit_rollback_steps(

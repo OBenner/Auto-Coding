@@ -5334,6 +5334,11 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
             encoding="utf-8"
         )
     )
+    mutation_snapshots = json.loads(
+        (artifact_dir / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
     events = [
         json.loads(line)
         for line in (artifact_dir / "generic_edit_events.jsonl")
@@ -5360,6 +5365,10 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
     assert manifest["transaction_batches"][0]["id"] == "batch-1"
     assert manifest["transaction_batches"][0]["status"] == "committed"
     assert manifest["transaction_batches"][0]["transaction_ids"] == ["json_actions-1"]
+    assert mutation_snapshots["snapshots"][0]["staged_status"] == "committed"
+    assert mutation_snapshots["snapshots"][0]["commit_operation_id"] == (
+        "batch-1:commit"
+    )
     transaction_event = next(
         event for event in events if event["event_type"] == "transaction"
     )
@@ -5642,6 +5651,11 @@ async def test_generic_edit_runtime_aborts_open_batch_with_snapshot_rollback(
             encoding="utf-8"
         )
     )
+    mutation_snapshots = json.loads(
+        (tmp_path / "artifacts" / "generic_edit_mutation_snapshots.json").read_text(
+            encoding="utf-8"
+        )
+    )
 
     assert result.status == "continue"
     assert target.read_text(encoding="utf-8") == "old\n"
@@ -5655,6 +5669,8 @@ async def test_generic_edit_runtime_aborts_open_batch_with_snapshot_rollback(
         "begin_batch",
         "abort_batch",
     ]
+    assert mutation_snapshots["snapshots"][0]["staged_status"] == "rolled_back"
+    assert mutation_snapshots["snapshots"][0]["rollback_operation_id"]
 
 
 @pytest.mark.asyncio
