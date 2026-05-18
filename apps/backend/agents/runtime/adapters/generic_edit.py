@@ -386,6 +386,7 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECENT_EVENT_FIELDS = (
     "staged_workspace_guard_status",
     "staged_workspace_guard_drift_count",
     "drift_paths",
+    "committed_mutation_snapshot_ids",
     "blocked_tool",
     "blocked_transaction_group_ids",
     "required_next_action_kinds",
@@ -401,6 +402,7 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_TIMELINE_STAGES = frozenset(
         "resume_clean",
         "resume_policy",
         "batch_open",
+        "batch_committed",
         "batch_boundary_blocked",
     }
 )
@@ -7942,6 +7944,13 @@ def enrich_generic_edit_timeline_event(event: dict[str, Any]) -> None:
         event["timeline_stage"] = "batch_boundary_blocked"
         event["requires_user_action"] = True
         return
+    if (
+        event_type == "action_result"
+        and event.get("tool") == COMMIT_BATCH_TOOL
+        and event.get("ok") is True
+    ):
+        event["timeline_stage"] = "batch_committed"
+        return
     if event_type == "action_result" and event.get("tool") in {
         ROLLBACK_TRANSACTION_TOOL,
         REPAIR_MUTATION_TOOL,
@@ -8118,6 +8127,11 @@ def build_generic_edit_action_event_extra_fields(
     drift_paths = normalize_string_list(data.get("drift_paths"))
     if drift_paths:
         fields["drift_paths"] = drift_paths
+    committed_snapshot_ids = normalize_string_list(
+        data.get("committed_mutation_snapshot_ids")
+    )
+    if committed_snapshot_ids:
+        fields["committed_mutation_snapshot_ids"] = committed_snapshot_ids
     if data.get("rollback_available") is not None:
         fields["rollback_available"] = bool(data["rollback_available"])
     if data.get("exit_code") is not None:

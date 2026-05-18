@@ -5374,6 +5374,18 @@ async def test_generic_edit_runtime_records_committed_batch_protocol(
     )
     assert transaction_event["batch_id"] == "batch-1"
     assert transaction_event["batch_status"] == "committed"
+    commit_event = next(
+        event
+        for event in events
+        if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
+    )
+    assert commit_event["committed_mutation_snapshot_ids"] == ["mutation-1"]
+    manifest_commit_event = next(
+        event
+        for event in manifest["recovery_timeline"]
+        if event["event_type"] == "action_result" and event["tool"] == "commit_batch"
+    )
+    assert manifest_commit_event["committed_mutation_snapshot_ids"] == ["mutation-1"]
 
 
 @pytest.mark.asyncio
