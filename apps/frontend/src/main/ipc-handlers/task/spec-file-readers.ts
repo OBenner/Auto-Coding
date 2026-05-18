@@ -19,6 +19,8 @@ import type {
   QAEscalation,
   GenericEditArtifactManifest,
   GenericEditArtifactManifestEntry,
+  GenericEditBatchBoundaryError,
+  GenericEditBatchLifecycleEvent,
   GenericEditMcpOpenSession,
   GenericEditMcpPermissionPolicy,
   GenericEditMcpServerStatus,
@@ -676,11 +678,92 @@ function normalizeNativeToolFallbacks(value: unknown): GenericEditNativeToolFall
   return result;
 }
 
+function normalizeBatchLifecycleEvent(value: unknown): GenericEditBatchLifecycleEvent | null {
+  if (!isRecord(value)) return null;
+
+  const action = readString(value, 'action');
+  const transactionId = readString(value, 'transaction_id');
+  const status = readString(value, 'status');
+  const reason = readString(value, 'reason');
+  const blockedTransactionGroupIds =
+    value.blocked_transaction_group_ids === undefined
+      ? []
+      : normalizeStringList(value.blocked_transaction_group_ids);
+
+  if (action === null || blockedTransactionGroupIds === null) {
+    return null;
+  }
+
+  return {
+    action,
+    ...(transactionId !== null ? { transaction_id: transactionId } : {}),
+    ...(status !== null ? { status } : {}),
+    ...(reason !== null ? { reason } : {}),
+    blocked_transaction_group_ids: blockedTransactionGroupIds,
+  };
+}
+
+function normalizeBatchLifecycleEvents(value: unknown): GenericEditBatchLifecycleEvent[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditBatchLifecycleEvent[] = [];
+  for (const event of value) {
+    const normalizedEvent = normalizeBatchLifecycleEvent(event);
+    if (!normalizedEvent) {
+      return null;
+    }
+    result.push(normalizedEvent);
+  }
+  return result;
+}
+
+function normalizeBatchBoundaryError(value: unknown): GenericEditBatchBoundaryError | null {
+  if (!isRecord(value)) return null;
+
+  const tool = readString(value, 'tool');
+  const batchId = readString(value, 'batch_id');
+  const reason = readString(value, 'reason');
+  const blockedTransactionGroupIds =
+    value.blocked_transaction_group_ids === undefined
+      ? []
+      : normalizeStringList(value.blocked_transaction_group_ids);
+
+  if (tool === null || batchId === null || reason === null || blockedTransactionGroupIds === null) {
+    return null;
+  }
+
+  return {
+    tool,
+    batch_id: batchId,
+    reason,
+    blocked_transaction_group_ids: blockedTransactionGroupIds,
+  };
+}
+
+function normalizeBatchBoundaryErrors(value: unknown): GenericEditBatchBoundaryError[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const result: GenericEditBatchBoundaryError[] = [];
+  for (const error of value) {
+    const normalizedError = normalizeBatchBoundaryError(error);
+    if (!normalizedError) {
+      return null;
+    }
+    result.push(normalizedError);
+  }
+  return result;
+}
+
 function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch | null {
   if (!isRecord(value)) return null;
 
   const id = readString(value, 'id');
   const status = readString(value, 'status');
+  const recoveryStatus =
+    value.recovery_status === undefined ? 'clean' : readString(value, 'recovery_status');
+  const finishBlocked = value.finish_blocked === undefined ? false : value.finish_blocked;
   const transactionIds =
     value.transaction_ids === undefined ? [] : normalizeStringList(value.transaction_ids);
   const mutationSnapshotIds =
@@ -714,10 +797,24 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
   const stagedPathCount = value.staged_path_count === undefined ? 0 : value.staged_path_count;
   const lifecycleEventCount =
     value.lifecycle_event_count === undefined ? 0 : value.lifecycle_event_count;
+  const lifecycleEvents = normalizeBatchLifecycleEvents(value.lifecycle_events);
+  const boundaryErrorCount =
+    value.boundary_error_count === undefined ? 0 : value.boundary_error_count;
+  const boundaryErrors = normalizeBatchBoundaryErrors(value.boundary_errors);
+  const boundaryErrorReasons =
+    value.boundary_error_reasons === undefined ? [] : normalizeStringList(value.boundary_error_reasons);
+  const requiredNextActionKinds =
+    value.required_next_action_kinds === undefined
+      ? []
+      : normalizeStringList(value.required_next_action_kinds);
+  const resolutionStrategies =
+    value.resolution_strategies === undefined ? [] : normalizeStringList(value.resolution_strategies);
 
   if (
     id === null ||
     status === null ||
+    recoveryStatus === null ||
+    typeof finishBlocked !== 'boolean' ||
     transactionIds === null ||
     mutationSnapshotIds === null ||
     committedMutationSnapshotIds === null ||
@@ -728,6 +825,11 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
     stagedDeletedPaths === null ||
     transactionGroupIds === null ||
     unresolvedTransactionGroupIds === null ||
+    lifecycleEvents === null ||
+    boundaryErrors === null ||
+    boundaryErrorReasons === null ||
+    requiredNextActionKinds === null ||
+    resolutionStrategies === null ||
     typeof recoveryOutcomeCount !== 'number' ||
     !Number.isFinite(recoveryOutcomeCount) ||
     typeof stagedMutationCount !== 'number' ||
@@ -735,7 +837,9 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
     typeof stagedPathCount !== 'number' ||
     !Number.isFinite(stagedPathCount) ||
     typeof lifecycleEventCount !== 'number' ||
-    !Number.isFinite(lifecycleEventCount)
+    !Number.isFinite(lifecycleEventCount) ||
+    typeof boundaryErrorCount !== 'number' ||
+    !Number.isFinite(boundaryErrorCount)
   ) {
     return null;
   }
@@ -743,6 +847,8 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
   return {
     id,
     status,
+    recovery_status: recoveryStatus,
+    finish_blocked: finishBlocked,
     transaction_ids: transactionIds,
     mutation_snapshot_ids: mutationSnapshotIds,
     committed_mutation_snapshot_ids: committedMutationSnapshotIds,
@@ -754,6 +860,12 @@ function normalizeTransactionBatch(value: unknown): GenericEditTransactionBatch 
     staged_mutation_count: stagedMutationCount,
     staged_path_count: stagedPathCount,
     lifecycle_event_count: lifecycleEventCount,
+    lifecycle_events: lifecycleEvents,
+    boundary_error_count: boundaryErrorCount,
+    boundary_errors: boundaryErrors,
+    boundary_error_reasons: boundaryErrorReasons,
+    required_next_action_kinds: requiredNextActionKinds,
+    resolution_strategies: resolutionStrategies,
     transaction_group_ids: transactionGroupIds,
     unresolved_transaction_group_ids: unresolvedTransactionGroupIds,
     recovery_outcome_count: recoveryOutcomeCount,

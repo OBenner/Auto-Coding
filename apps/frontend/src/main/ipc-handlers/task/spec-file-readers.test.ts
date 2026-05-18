@@ -134,6 +134,32 @@ describe('readGenericEditArtifactManifest', () => {
           staged_mutation_count: 1,
           staged_path_count: 4,
           lifecycle_event_count: 2,
+          lifecycle_events: [
+            {
+              action: 'begin_batch',
+              transaction_id: 'json_actions-1',
+              status: 'open',
+            },
+            {
+              action: 'commit_batch',
+              transaction_id: 'json_actions-2',
+              status: 'committed',
+            },
+          ],
+          recovery_status: 'requires_resolution',
+          finish_blocked: true,
+          required_next_action_kinds: ['repair_mutation'],
+          resolution_strategies: ['repair_mutation'],
+          boundary_error_count: 1,
+          boundary_error_reasons: ['open_batch_has_unresolved_groups'],
+          boundary_errors: [
+            {
+              tool: 'commit_batch',
+              batch_id: 'batch-1',
+              reason: 'open_batch_has_unresolved_groups',
+              blocked_transaction_group_ids: ['transaction-group-1'],
+            },
+          ],
         },
       ],
     });
@@ -174,6 +200,34 @@ describe('readGenericEditArtifactManifest', () => {
         staged_mutation_count: 1,
         staged_path_count: 4,
         lifecycle_event_count: 2,
+        lifecycle_events: [
+          {
+            action: 'begin_batch',
+            transaction_id: 'json_actions-1',
+            status: 'open',
+            blocked_transaction_group_ids: [],
+          },
+          {
+            action: 'commit_batch',
+            transaction_id: 'json_actions-2',
+            status: 'committed',
+            blocked_transaction_group_ids: [],
+          },
+        ],
+        recovery_status: 'requires_resolution',
+        finish_blocked: true,
+        required_next_action_kinds: ['repair_mutation'],
+        resolution_strategies: ['repair_mutation'],
+        boundary_error_count: 1,
+        boundary_error_reasons: ['open_batch_has_unresolved_groups'],
+        boundary_errors: [
+          {
+            tool: 'commit_batch',
+            batch_id: 'batch-1',
+            reason: 'open_batch_has_unresolved_groups',
+            blocked_transaction_group_ids: ['transaction-group-1'],
+          },
+        ],
       },
     ]);
     expect(manifest?.artifacts).toHaveLength(2);

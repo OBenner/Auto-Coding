@@ -163,6 +163,28 @@ function transactionBatchMeta(batch: GenericEditTransactionBatch): string {
   return [...batch.transaction_ids, ...batch.mutation_snapshot_ids].join(' / ');
 }
 
+function batchLifecycleEventMeta(
+  event: NonNullable<GenericEditTransactionBatch['lifecycle_events']>[number]
+): string {
+  return [
+    event.action,
+    event.status,
+    event.transaction_id,
+    event.reason,
+    ...(event.blocked_transaction_group_ids ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' / ');
+}
+
+function batchBoundaryErrorMeta(
+  error: NonNullable<GenericEditTransactionBatch['boundary_errors']>[number]
+): string {
+  return [error.tool, error.reason, ...error.blocked_transaction_group_ids]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' / ');
+}
+
 function mcpRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -501,6 +523,11 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
             <div className="space-y-1.5">
               {transactionBatches.slice(0, 4).map((batch) => {
                 const meta = transactionBatchMeta(batch);
+                const lifecycleEvents = batch.lifecycle_events ?? [];
+                const boundaryErrors = batch.boundary_errors ?? [];
+                const boundaryErrorReasons = batch.boundary_error_reasons ?? [];
+                const requiredNextActionKinds = batch.required_next_action_kinds ?? [];
+                const resolutionStrategies = batch.resolution_strategies ?? [];
                 const stagedPaths = uniqueStrings([
                   ...(batch.staged_mutated_paths ?? []),
                   ...(batch.staged_restored_paths ?? []),
@@ -517,6 +544,16 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                     <Badge variant="outline" className="text-xs">
                       {batch.id}
                     </Badge>
+                    {batch.recovery_status && batch.recovery_status !== 'clean' && (
+                      <Badge variant={batch.finish_blocked ? 'warning' : 'muted'} className="text-xs">
+                        {batch.recovery_status}
+                      </Badge>
+                    )}
+                    {batch.finish_blocked && (
+                      <Badge variant="destructive" className="text-xs">
+                        {t('tasks:overview.genericEditFinishBlocked')}
+                      </Badge>
+                    )}
                     {meta && <span className="min-w-0 truncate text-muted-foreground">{meta}</span>}
                     {batch.transaction_group_ids.length > 0 && (
                       <span className="flex min-w-0 flex-wrap items-center gap-1">
@@ -578,6 +615,66 @@ export function GenericEditArtifactsPanel({ manifest }: GenericEditArtifactsPane
                         {stagedPaths.slice(0, 4).map((stagedPath) => (
                           <Badge key={stagedPath} variant="muted" className="max-w-full truncate text-xs">
                             {stagedPath}
+                          </Badge>
+                        ))}
+                      </span>
+                    )}
+                    {lifecycleEvents.length > 0 && (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        <span className="font-medium text-muted-foreground">
+                          {t('tasks:overview.genericEditBatchLifecycle')}
+                        </span>
+                        {lifecycleEvents.slice(0, 3).map((event) => {
+                          const eventMeta = batchLifecycleEventMeta(event);
+                          return (
+                            <Badge key={`${event.action}-${event.transaction_id ?? event.status}`} variant="outline" className="max-w-full truncate text-xs">
+                              {eventMeta}
+                            </Badge>
+                          );
+                        })}
+                      </span>
+                    )}
+                    {(boundaryErrors.length > 0 || boundaryErrorReasons.length > 0) && (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        <span className="font-medium text-muted-foreground">
+                          {t('tasks:overview.genericEditBatchBoundaryBlockers')}
+                        </span>
+                        {boundaryErrors.slice(0, 3).map((error) => {
+                          const errorMeta = batchBoundaryErrorMeta(error);
+                          return (
+                            <Badge key={`${error.tool}-${error.batch_id}-${error.reason}`} variant="warning" className="max-w-full truncate text-xs">
+                              {errorMeta}
+                            </Badge>
+                          );
+                        })}
+                        {boundaryErrors.length === 0 &&
+                          boundaryErrorReasons.slice(0, 3).map((reason) => (
+                            <Badge key={reason} variant="warning" className="max-w-full truncate text-xs">
+                              {reason}
+                            </Badge>
+                          ))}
+                      </span>
+                    )}
+                    {requiredNextActionKinds.length > 0 && (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        <span className="font-medium text-muted-foreground">
+                          {t('tasks:overview.genericEditBatchRequiredNextActions')}
+                        </span>
+                        {requiredNextActionKinds.map((kind) => (
+                          <Badge key={kind} variant="warning" className="max-w-full truncate text-xs">
+                            {kind}
+                          </Badge>
+                        ))}
+                      </span>
+                    )}
+                    {resolutionStrategies.length > 0 && (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        <span className="font-medium text-muted-foreground">
+                          {t('tasks:overview.genericEditBatchResolutionStrategies')}
+                        </span>
+                        {resolutionStrategies.map((strategy) => (
+                          <Badge key={strategy} variant="muted" className="max-w-full truncate text-xs">
+                            {strategy}
                           </Badge>
                         ))}
                       </span>

@@ -41,6 +41,10 @@ vi.mock('react-i18next', () => ({
         'overview.genericEditBatchStagedPaths': `${interpolation('count', 0)} staged paths`,
         'overview.genericEditBatchLifecycleEvents': `${interpolation('count', 0)} lifecycle events`,
         'overview.genericEditBatchStagedPathList': 'Staged paths',
+        'overview.genericEditBatchLifecycle': 'Lifecycle',
+        'overview.genericEditBatchBoundaryBlockers': 'Boundary blockers',
+        'overview.genericEditBatchRequiredNextActions': 'Required next actions',
+        'overview.genericEditBatchResolutionStrategies': 'Resolution strategies',
         'overview.genericEditStagedBatch': `Staged batch ${interpolation('batchId', '')}`,
         'overview.genericEditStagedWorkspaceMaterialized': 'Workspace materialized',
         'overview.genericEditStagedWorkspaceRestored': 'Workspace restored',
@@ -259,6 +263,32 @@ describe('GenericEditArtifactsPanel', () => {
       staged_mutation_count: 2,
       staged_path_count: 4,
       lifecycle_event_count: 2,
+      lifecycle_events: [
+        {
+          action: 'begin_batch',
+          transaction_id: 'json_actions-1',
+          status: 'open',
+        },
+        {
+          action: 'commit_batch',
+          transaction_id: 'json_actions-2',
+          status: 'committed',
+        },
+      ],
+      recovery_status: 'requires_resolution',
+      finish_blocked: true,
+      required_next_action_kinds: ['repair_mutation'],
+      resolution_strategies: ['repair_mutation'],
+      boundary_error_count: 1,
+      boundary_error_reasons: ['open_batch_has_unresolved_groups'],
+      boundary_errors: [
+        {
+          tool: 'commit_batch',
+          batch_id: 'batch-1',
+          reason: 'open_batch_has_unresolved_groups',
+          blocked_transaction_group_ids: ['transaction-group-1'],
+        },
+      ],
     });
     manifest.recent_events = [
       {
@@ -280,6 +310,13 @@ describe('GenericEditArtifactsPanel', () => {
     expect(screen.getByText('Staged paths')).toBeInTheDocument();
     expect(screen.getByText('created.txt')).toBeInTheDocument();
     expect(screen.getByText('deleted.txt')).toBeInTheDocument();
+    expect(screen.getByText('Lifecycle')).toBeInTheDocument();
+    expect(screen.getByText(/begin_batch/)).toBeInTheDocument();
+    expect(screen.getAllByText(/commit_batch/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Boundary blockers')).toBeInTheDocument();
+    expect(screen.getByText(/open_batch_has_unresolved_groups/)).toBeInTheDocument();
+    expect(screen.getByText('Required next actions')).toBeInTheDocument();
+    expect(screen.getAllByText('Resolution strategies').length).toBeGreaterThan(0);
     expect(screen.getByText(/Staged batch batch-1/)).toBeInTheDocument();
     expect(screen.getByText(/Workspace materialized/)).toBeInTheDocument();
     expect(screen.getByText(/Workspace restored/)).toBeInTheDocument();
