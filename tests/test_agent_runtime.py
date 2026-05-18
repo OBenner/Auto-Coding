@@ -8501,6 +8501,71 @@ def test_generic_edit_resume_preflight_blocks_incomplete_mutation_snapshot(
     ]
 
 
+def test_generic_edit_resume_preflight_blocks_unrestored_isolated_staged_snapshot(
+    tmp_path: Path,
+):
+    from agents.runtime.adapters.generic_edit import (
+        inspect_generic_edit_resume_artifacts,
+    )
+
+    target = tmp_path / "batched.txt"
+    target.write_text("old\n", encoding="utf-8")
+    preimage = build_generic_edit_file_preimage(
+        project_dir=tmp_path,
+        path="batched.txt",
+    )
+    target.write_text("new\n", encoding="utf-8")
+    postimage = build_generic_edit_file_preimage(
+        project_dir=tmp_path,
+        path="batched.txt",
+    )
+    target.write_text("old\n", encoding="utf-8")
+    transaction = {
+        "id": "json_actions-1",
+        "status": "complete",
+        "mutation_snapshot_ids": ["mutation-1"],
+    }
+    trace = [{"iteration": 1, "actions": [], "transaction": transaction}]
+    transaction_summary = summarize_generic_edit_transactions(trace)
+    _, checkpoint_path, _, trace_path = write_minimal_generic_edit_resume_artifacts(
+        tmp_path,
+        transaction_summary=transaction_summary,
+        mutation_snapshots=[
+            {
+                "id": "mutation-1",
+                "transaction_id": "json_actions-1",
+                "batch_id": "batch-1",
+                "staged_status": "staged",
+                "paths": ["batched.txt"],
+                "preimages": [preimage],
+                "postimages": [postimage],
+                "rollback": {"restorable": True},
+                "workspace_guard": {"status": "captured"},
+                "staged_workspace_preimages": [preimage],
+                "staged_isolation": {
+                    "status": "isolated",
+                    "workspace_restored": False,
+                    "baseline_paths": ["batched.txt"],
+                },
+            }
+        ],
+    )
+    trace_path.write_text(json.dumps({"trace": trace}), encoding="utf-8")
+
+    preflight = inspect_generic_edit_resume_artifacts(
+        checkpoint_path=checkpoint_path,
+        spec_dir=tmp_path,
+        project_dir=tmp_path,
+    )
+
+    health = preflight["resume_artifact_health"]
+    assert preflight["status"] == "blocked"
+    assert health["artifact"] == "mutation_snapshots"
+    assert health["reason"] == "invalid_schema"
+    assert health["snapshot_id"] == "mutation-1"
+    assert health["invalid_snapshot_fields"] == ["staged_isolation"]
+
+
 def test_generic_edit_resume_preflight_blocks_corrupt_artifact_manifest(
     tmp_path: Path,
 ):

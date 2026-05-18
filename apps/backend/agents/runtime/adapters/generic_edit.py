@@ -7232,6 +7232,25 @@ def validate_generic_edit_checkpoint_mutation_snapshot_integrity(
         for field_name in ("rollback", "workspace_guard"):
             if field_name in snapshot and not isinstance(snapshot[field_name], dict):
                 invalid_fields.append(field_name)
+        if generic_edit_snapshot_is_isolated_staged(snapshot):
+            isolation = snapshot.get("staged_isolation")
+            if (
+                not isinstance(isolation, dict)
+                or isolation.get("workspace_restored") is not True
+            ):
+                invalid_fields.append("staged_isolation")
+            baseline_paths = (
+                normalize_string_list(isolation.get("baseline_paths"))
+                if isinstance(isolation, dict)
+                else []
+            )
+            baseline_preimages = snapshot.get("staged_workspace_preimages")
+            if (
+                not isinstance(baseline_preimages, list)
+                or not baseline_preimages
+                or not baseline_paths
+            ):
+                invalid_fields.append("staged_workspace_preimages")
         if (
             isinstance(snapshot.get("transaction_id"), str)
             and snapshot["transaction_id"]
