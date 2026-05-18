@@ -256,6 +256,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   http_error: 'settings:aiProvider.runtimeDiagnosticValues.httpError',
   incomplete: 'settings:aiProvider.runtimeDiagnosticValues.incomplete',
   inspect_diff: 'settings:aiProvider.runtimeDiagnosticValues.inspectDiff',
+  isolated: 'settings:aiProvider.runtimeDiagnosticValues.isolated',
   invalid_response: 'settings:aiProvider.runtimeDiagnosticValues.invalidResponse',
   json_actions: 'settings:aiProvider.runtimeDiagnosticValues.jsonActions',
   json_fallback: 'settings:aiProvider.runtimeDiagnosticValues.jsonFallback',
@@ -338,6 +339,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   recovered: 'settings:aiProvider.runtimeDiagnosticValues.recovered',
   repair_mutation: 'settings:aiProvider.runtimeDiagnosticValues.repairMutation',
   requires_resolution: 'settings:aiProvider.runtimeDiagnosticValues.requiresResolution',
+  restored: 'settings:aiProvider.runtimeDiagnosticValues.restored',
+  not_restored: 'settings:aiProvider.runtimeDiagnosticValues.notRestored',
   register_external_mcp_adapter: 'settings:aiProvider.runtimeDiagnosticValues.registerExternalMcpAdapter',
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
@@ -1137,6 +1140,27 @@ export function buildProviderTransactionBatchDiagnosticRows(
       value: formatRuntimeDiagnosticList(
         translate,
         transactionBatchContract.stagedDriftPaths
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchStagedIsolation',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.stagedIsolationStatuses
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchStagedWorkspaceRestore',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.stagedWorkspaceRestoreStatuses
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.batchStagedBaselinePaths',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        transactionBatchContract.stagedBaselinePaths
       ),
     },
     {

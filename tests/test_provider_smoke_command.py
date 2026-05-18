@@ -1416,6 +1416,7 @@ def test_generic_edit_execution_diagnostics_reports_committed_batch_snapshots(
 
     result_path = tmp_path / "generic_edit_result.json"
     manifest_path = tmp_path / "generic_edit_artifact_manifest.json"
+    mutation_snapshot_path = tmp_path / "generic_edit_mutation_snapshots.json"
     manifest_path.write_text(
         json.dumps(
             {
@@ -1430,6 +1431,27 @@ def test_generic_edit_execution_diagnostics_reports_committed_batch_snapshots(
                         "batch_status": "committed",
                         "commit_operation_id": "batch-1:commit",
                         "committed_mutation_snapshot_ids": ["mutation-1", 2],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    mutation_snapshot_path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "generic_edit_mutation_snapshots",
+                "snapshot_count": 1,
+                "snapshots": [
+                    {
+                        "id": "mutation-1",
+                        "batch_id": "batch-1",
+                        "staged_status": "committed",
+                        "staged_isolation": {
+                            "status": "isolated",
+                            "workspace_restored": True,
+                            "baseline_paths": ["batched.txt", 7],
+                        },
                     }
                 ],
             }
@@ -1489,6 +1511,9 @@ def test_generic_edit_execution_diagnostics_reports_committed_batch_snapshots(
         "batch_lifecycle_statuses": ["open", "committed"],
         "committed_mutation_snapshot_ids": ["mutation-1"],
         "commit_operation_ids": ["batch-1:commit"],
+        "staged_isolation_statuses": ["isolated"],
+        "staged_workspace_restore_statuses": ["restored"],
+        "staged_baseline_paths": ["batched.txt"],
     }
 
 

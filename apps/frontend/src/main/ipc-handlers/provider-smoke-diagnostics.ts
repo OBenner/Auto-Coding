@@ -112,6 +112,11 @@ export function mapProviderTransactionBatchContract(
       payload.staged_workspace_guard_statuses
     ),
     stagedDriftPaths: arrayFromUnknown(payload.staged_drift_paths),
+    stagedIsolationStatuses: arrayFromUnknown(payload.staged_isolation_statuses),
+    stagedWorkspaceRestoreStatuses: arrayFromUnknown(
+      payload.staged_workspace_restore_statuses
+    ),
+    stagedBaselinePaths: arrayFromUnknown(payload.staged_baseline_paths),
     batchLifecycleActions: arrayFromUnknown(payload.batch_lifecycle_actions),
     batchLifecycleStatuses: arrayFromUnknown(payload.batch_lifecycle_statuses),
     committedMutationSnapshotIds: arrayFromUnknown(

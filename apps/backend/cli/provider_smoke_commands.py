@@ -452,10 +452,12 @@ def _generic_edit_execution_diagnostics(artifact_dir: Path) -> dict[str, Any] | 
     if resume_policy is not None:
         diagnostics["resume_policy"] = resume_policy
     artifact_manifest = _generic_edit_artifact_manifest_payload(artifact_dir)
+    mutation_snapshots = _generic_edit_mutation_snapshots_payload(artifact_dir)
     diagnostics["transaction_batch_contract"] = (
         _generic_edit_transaction_batch_contract(
             payload,
             artifact_manifest=artifact_manifest,
+            mutation_snapshots=mutation_snapshots,
         )
     )
     diagnostics["tool_loop_contract"] = _generic_edit_tool_loop_contract(
@@ -478,6 +480,25 @@ def _generic_edit_artifact_manifest_payload(
     except Exception:
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _generic_edit_mutation_snapshots_payload(
+    artifact_dir: Path,
+) -> list[dict[str, Any]]:
+    """Return compact mutation snapshot entries when the artifact is readable."""
+    snapshot_path = artifact_dir / "generic_edit_mutation_snapshots.json"
+    if not snapshot_path.exists():
+        return []
+    try:
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(payload, dict):
+        return []
+    snapshots = payload.get("snapshots")
+    if not isinstance(snapshots, list):
+        return []
+    return [snapshot for snapshot in snapshots if isinstance(snapshot, dict)]
 
 
 def _generic_edit_tool_loop_contract(
@@ -592,6 +613,7 @@ def _generic_edit_transaction_batch_contract(
     payload: dict[str, Any],
     *,
     artifact_manifest: dict[str, Any] | None = None,
+    mutation_snapshots: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return safe batch-boundary diagnostics for provider smoke results."""
     stop_reason = str(payload.get("stop_reason") or "unknown")
@@ -615,6 +637,9 @@ def _generic_edit_transaction_batch_contract(
     batch_lifecycle_statuses: list[str] = []
     committed_mutation_snapshot_ids: list[str] = []
     commit_operation_ids: list[str] = []
+    staged_isolation_statuses: list[str] = []
+    staged_workspace_restore_statuses: list[str] = []
+    staged_baseline_paths: list[str] = []
     if isinstance(transaction_batches, list):
         for batch in transaction_batches:
             if not isinstance(batch, dict):
@@ -699,6 +724,20 @@ def _generic_edit_transaction_batch_contract(
         commit_operation_ids.extend(
             _string_list_payload(event.get("commit_operation_ids"))
         )
+    for snapshot in mutation_snapshots or []:
+        isolation = snapshot.get("staged_isolation")
+        if not isinstance(isolation, dict):
+            continue
+        isolation_status = _string_payload_value(isolation.get("status"))
+        if isolation_status:
+            staged_isolation_statuses.append(isolation_status)
+        if isolation.get("workspace_restored") is True:
+            staged_workspace_restore_statuses.append("restored")
+        elif isolation.get("workspace_restored") is False:
+            staged_workspace_restore_statuses.append("not_restored")
+        staged_baseline_paths.extend(
+            _string_list_payload(isolation.get("baseline_paths"))
+        )
     if boundary_error_reasons:
         boundary_error_count = max(
             boundary_error_count,
@@ -764,6 +803,16 @@ def _generic_edit_transaction_batch_contract(
         )
     if commit_operation_ids:
         contract["commit_operation_ids"] = list(dict.fromkeys(commit_operation_ids))
+    if staged_isolation_statuses:
+        contract["staged_isolation_statuses"] = list(
+            dict.fromkeys(staged_isolation_statuses)
+        )
+    if staged_workspace_restore_statuses:
+        contract["staged_workspace_restore_statuses"] = list(
+            dict.fromkeys(staged_workspace_restore_statuses)
+        )
+    if staged_baseline_paths:
+        contract["staged_baseline_paths"] = list(dict.fromkeys(staged_baseline_paths))
     return contract
 
 
