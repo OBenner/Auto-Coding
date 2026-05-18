@@ -177,6 +177,11 @@ least one batch, `begin_batch` / `commit_batch` lifecycle actions, and a
 committed lifecycle status. Live external fault-injection against real provider
 accounts remains optional because it depends on credentials, model availability,
 and gateway behavior outside the repository.
+The same smoke output now carries `provider_autonomous_readiness`: an aggregate
+scorecard with `status`, `recommendation`, `blockers`, `warnings`, `evidence`,
+and `next_actions`. It combines provider e2e results, reliability coverage,
+persisted provider-run history, and live fault probe evidence so direct API
+providers can be promoted only when the data shows they are stable enough.
 
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
@@ -285,7 +290,7 @@ Last updated: 2026-05-18.
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
 | Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, isolated staged workspace materialization/restoration, commit-time staged postimage apply, batch boundary guards, pre-execution staged isolation guards for opaque open-batch mutations, pre-commit staged baseline drift guards, staged guard status/drift-path timeline events, staged workspace materialized/restored/batch-id recent events, mutation snapshots, committed snapshot ids, commit operation ids, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing/incomplete artifact preflight blockers, corrupt/invalid mutation-snapshot artifact health reasons, isolated staged snapshot integrity blockers, recovery-plan artifact health checks, artifact manifest transaction batches, manifest/checkpoint/event-count consistency checks, manifest recovery-timeline/resume-policy drift guards, trace/session/manifest counter drift checks, unified resume artifact consistency across trace, checkpoint, session state, manifest, mutation snapshots, and transaction batch state, and rich runtime events are implemented. | Harden non-happy-path recovery further for richer UI-driven repair/rollback workflows and broader staged-overlay edge cases. |
-| Provider reliability | Strong partial | `generic_edit`, `mini_pipeline`, `transaction_batch_probe`, and `provider_e2e` validations are wired. Provider e2e diagnostics include negative fixtures, live fault probes, reliability, live-fault history evidence, and settings UI surfaces. See [Provider reliability implementation details](#provider-reliability-implementation-details). | Add richer provider history charts from accumulated runs, then use real live-account probe data to harden provider-specific recommendations over time. |
+| Provider reliability | Strong partial | `generic_edit`, `mini_pipeline`, `transaction_batch_probe`, and `provider_e2e` validations are wired. Provider e2e diagnostics include negative fixtures, live fault probes, reliability, live-fault history evidence, the `provider_autonomous_readiness` scorecard, and settings UI surfaces. See [Provider reliability implementation details](#provider-reliability-implementation-details). | Add richer provider history charts from accumulated runs, then use real live-account probe data to harden provider-specific recommendations over time. |
 | MCP Bridge v1 | Strong partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, unavailable-tool observations, readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers, and `mcp_bridge_permission_matrix` for local/external/custom permission gates are represented. The runtime enforces `RuntimeMcpToolPolicy` before execution, writes audit artifacts, classifies mutating tools, normalizes MCP tool results into `text`, `content`, `structured_content`, and `is_error`, classifies live `tools/list` and bridged `tools/call` lifecycle failures by stage/kind, and exposes whether strict `AUTO_CODE_MCP_ALLOWED_PERMISSIONS` allowlists are configured. | Generalize live execution coverage across all registered external servers, normalize arbitrary live schemas continuously, and keep hardening external session reuse plus per-server execution smoke. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, read-only merge plans, and `runtime_subagent_mutation_policy` now exposes the gates blocking mutating children until transactional merge is ready. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, then move the mutation policy from blocked to enabled. |
 | CLI runtimes as full runtime class | Partial, stronger core | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners, `cli_runner_contract_matrix` tracks `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata for every candidate, and the generic CLI core now supplies configurable run/cancel/artifact/event parsing for planned runners. | Add runner-specific command builders, resume semantics, and live smoke/e2e coverage for Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs so they can move from generic-core partial to ready. |
@@ -320,6 +325,9 @@ suite without relying on Claude SDK semantics.
 - Provider e2e merges child results into `provider_e2e_suite`.
 - Provider e2e records negative fixtures in `provider_e2e_negative_fixtures`.
 - Provider e2e reports aggregate readiness through `provider_reliability`.
+- Provider smoke reports `provider_autonomous_readiness` with recommendation,
+  blockers, warnings, evidence, and next actions derived from e2e, reliability,
+  history, and live fault probe data.
 - Provider smoke history persists compact evidence in
   `.auto-Codex/provider-smoke-history.json`.
 - Provider smoke history reports recent-run trend, window counts, and pass/fail
@@ -340,6 +348,8 @@ suite without relying on Claude SDK semantics.
 
 - The settings UI surfaces suite status and negative fixtures.
 - The settings UI surfaces live fault probes and provider reliability.
+- The settings UI surfaces provider autonomous readiness recommendations,
+  blockers, warnings, evidence, and next actions.
 - The settings UI surfaces transaction-batch evidence.
 - The settings UI surfaces history evidence and provider trend rows.
 

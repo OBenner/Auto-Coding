@@ -505,6 +505,135 @@ def _provider_smoke_history_payload(
     }
 
 
+def _provider_autonomous_readiness_diagnostics(
+    result: ProviderSmokeResult,
+    history_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Return provider autonomous-readiness recommendation from e2e evidence."""
+    runtime_diagnostics = result.runtime_diagnostics
+    provider = result.provider
+    blockers: list[str] = []
+    warnings: list[str] = []
+    evidence: list[str] = []
+
+    _provider_readiness_suite_evidence(runtime_diagnostics, blockers, evidence)
+    _provider_readiness_reliability_evidence(runtime_diagnostics, blockers, evidence)
+    history_warning_offset = len(warnings)
+    _provider_readiness_history_evidence(history_summary, blockers, warnings, evidence)
+    history_warnings = warnings[history_warning_offset:]
+    del warnings[history_warning_offset:]
+    _provider_readiness_live_fault_evidence(history_summary, warnings, evidence)
+    warnings.extend(history_warnings)
+
+    status, recommendation = _provider_readiness_status(blockers, warnings)
+    return {
+        "status": status,
+        "provider": provider,
+        "source": "provider_autonomous_readiness",
+        "recommendation": recommendation,
+        "blockers": blockers,
+        "warnings": warnings,
+        "next_actions": _provider_readiness_next_actions(blockers, warnings),
+        "evidence": evidence,
+    }
+
+
+def _provider_readiness_suite_evidence(
+    runtime_diagnostics: dict[str, Any],
+    blockers: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply provider e2e suite evidence to readiness lists."""
+    provider_e2e_suite = runtime_diagnostics.get("provider_e2e_suite")
+    provider_e2e_suite = (
+        provider_e2e_suite if isinstance(provider_e2e_suite, dict) else {}
+    )
+    if provider_e2e_suite.get("status") == "passed":
+        evidence.append("provider_e2e_passed")
+    else:
+        blockers.append("provider_e2e_failed")
+
+
+def _provider_readiness_reliability_evidence(
+    runtime_diagnostics: dict[str, Any],
+    blockers: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply reliability coverage evidence to readiness lists."""
+    reliability = runtime_diagnostics.get("provider_reliability")
+    reliability = reliability if isinstance(reliability, dict) else {}
+    if reliability.get("status") == "complete":
+        evidence.append("provider_reliability_complete")
+    else:
+        blockers.append("provider_reliability_incomplete")
+
+
+def _provider_readiness_history_evidence(
+    history_summary: dict[str, Any],
+    blockers: list[str],
+    warnings: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply provider history trend evidence to readiness lists."""
+    if history_summary.get("last_status") != "passed":
+        blockers.append("provider_history_latest_failed")
+
+    trend = history_summary.get("trend")
+    if trend == "provider_history_stable":
+        evidence.append("provider_history_stable")
+    elif isinstance(trend, str) and trend:
+        warnings.append(trend)
+
+
+def _provider_readiness_live_fault_evidence(
+    history_summary: dict[str, Any],
+    warnings: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply live fault probe evidence to readiness lists."""
+    if history_summary.get("last_live_fault_probe_status") == "passed":
+        evidence.append("live_fault_probes_passed")
+    else:
+        warnings.append("live_fault_probe_evidence_missing")
+
+
+def _provider_readiness_status(
+    blockers: list[str],
+    warnings: list[str],
+) -> tuple[str, str]:
+    """Return readiness status and recommendation."""
+    if blockers:
+        return "blocked", "provider_e2e_required"
+    if "live_fault_probe_evidence_missing" in warnings:
+        return "needs_live_fault_evidence", "limited_autonomous_until_live_faults"
+    if warnings:
+        return "warming_up", "limited_autonomous_until_evidence_stable"
+    return "full_autonomous_candidate", "api_runtime_full_autonomous_candidate"
+
+
+def _provider_readiness_next_actions(
+    blockers: list[str],
+    warnings: list[str],
+) -> list[str]:
+    """Return ordered next actions for readiness blockers and warnings."""
+    action_by_reason = {
+        "provider_e2e_failed": "rerun_provider_e2e",
+        "provider_reliability_incomplete": "inspect_uncovered_cases",
+        "provider_history_latest_failed": "rerun_provider_e2e",
+        "live_fault_probe_evidence_missing": "enable_live_fault_probes",
+        "provider_history_warming_up": "collect_provider_history_runs",
+        "provider_history_flaky": "stabilize_provider_history",
+        "provider_history_recovering": "collect_provider_history_runs",
+        "provider_history_degraded": "stabilize_provider_history",
+    }
+    actions: list[str] = []
+    for reason in [*blockers, *warnings]:
+        action = action_by_reason.get(reason)
+        if action and action not in actions:
+            actions.append(action)
+    return actions
+
+
 def _with_provider_run_history(
     project_dir: Path,
     result: ProviderSmokeResult,
@@ -571,6 +700,10 @@ def _with_provider_run_history(
         runtime_diagnostics={
             **result.runtime_diagnostics,
             "provider_run_history": history_summary,
+            "provider_autonomous_readiness": _provider_autonomous_readiness_diagnostics(
+                result,
+                history_summary,
+            ),
         },
     )
 
@@ -3378,6 +3511,9 @@ def _print_provider_runtime_diagnostics(
     _print_provider_reliability(runtime_diagnostics.get("provider_reliability"))
     _print_provider_e2e_suite(runtime_diagnostics.get("provider_e2e_suite"))
     _print_provider_run_history(runtime_diagnostics.get("provider_run_history"))
+    _print_provider_autonomous_readiness(
+        runtime_diagnostics.get("provider_autonomous_readiness")
+    )
     _print_provider_execution_diagnostics(
         runtime_diagnostics.get("validated_runtime_execution")
     )
@@ -3489,6 +3625,22 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
     path = provider_run_history.get("path")
     if isinstance(path, str) and path:
         print_key_value("Provider history artifact", path)
+
+
+def _print_provider_autonomous_readiness(readiness: Any) -> None:
+    """Print the aggregate direct-provider autonomous readiness scorecard."""
+    if not isinstance(readiness, dict):
+        return
+    status = readiness.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Provider autonomous readiness", status)
+    recommendation = readiness.get("recommendation")
+    if isinstance(recommendation, str) and recommendation:
+        print_key_value("Autonomous recommendation", recommendation)
+    _print_string_list_line("Autonomous blockers", readiness.get("blockers"))
+    _print_string_list_line("Autonomous warnings", readiness.get("warnings"))
+    _print_string_list_line("Autonomous evidence", readiness.get("evidence"))
+    _print_string_list_line("Autonomous next actions", readiness.get("next_actions"))
 
 
 def _print_provider_execution_diagnostics(execution: Any) -> None:

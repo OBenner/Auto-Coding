@@ -26,6 +26,7 @@ import type {
   CliRunnerContractMatrixRow,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
+  ProviderAutonomousReadinessDiagnostics,
   ProviderE2eSuiteDiagnostics,
   ProviderLiveFaultProbeDiagnostics,
   ProviderNegativeFixtureDiagnostics,
@@ -212,6 +213,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   adapter_tool_missing_on_server: 'settings:aiProvider.runtimeDiagnosticValues.adapterToolMissingOnServer',
   analysis_only: 'settings:aiProvider.runtimeDiagnosticValues.analysisOnly',
   apply_patch: 'settings:aiProvider.runtimeDiagnosticValues.applyPatch',
+  api_runtime_full_autonomous_candidate:
+    'settings:aiProvider.runtimeDiagnosticValues.apiRuntimeFullAutonomousCandidate',
   batch_boundary_violation: 'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryViolation',
   begin_batch: 'settings:aiProvider.runtimeDiagnosticValues.beginBatch',
   boundary_guarded: 'settings:aiProvider.runtimeDiagnosticValues.batchBoundaryGuarded',
@@ -223,6 +226,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   coder: 'settings:aiProvider.runtimeDiagnosticValues.coder',
   codex_cli: 'settings:aiProvider.runtimeDiagnosticValues.codexCli',
   commit_batch: 'settings:aiProvider.runtimeDiagnosticValues.commitBatch',
+  collect_provider_history_runs:
+    'settings:aiProvider.runtimeDiagnosticValues.collectProviderHistoryRuns',
   configuration_blocked: 'settings:aiProvider.runtimeDiagnosticValues.configurationBlocked',
   configuration_error: 'settings:aiProvider.runtimeDiagnosticValues.configurationError',
   configure_external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.configureExternalMcpClient',
@@ -235,6 +240,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   dynamic_mutating_tool_policy:
     'settings:aiProvider.runtimeDiagnosticValues.dynamicMutatingToolPolicy',
   enforced: 'settings:aiProvider.runtimeDiagnosticValues.enforced',
+  enable_live_fault_probes:
+    'settings:aiProvider.runtimeDiagnosticValues.enableLiveFaultProbes',
   error: 'settings:aiProvider.runtimeDiagnosticValues.error',
   external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
   failed: 'settings:aiProvider.runtimeDiagnosticValues.failed',
@@ -242,6 +249,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   filesystem_edit: 'settings:aiProvider.runtimeDiagnosticValues.filesystemEdit',
   filesystem_read: 'settings:aiProvider.runtimeDiagnosticValues.filesystemRead',
   full_autonomous: 'settings:aiProvider.runtimeDiagnosticValues.fullAutonomous',
+  full_autonomous_candidate:
+    'settings:aiProvider.runtimeDiagnosticValues.fullAutonomousCandidate',
   function_tools: 'settings:aiProvider.runtimeDiagnosticValues.functionTools',
   generic_core_configurable: 'settings:aiProvider.runtimeDiagnosticValues.genericCoreConfigurable',
   generic_cli_pool: 'settings:aiProvider.runtimeDiagnosticValues.genericCliPool',
@@ -256,6 +265,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   gateway_model_probe: 'settings:aiProvider.runtimeDiagnosticValues.gatewayModelProbe',
   http_error: 'settings:aiProvider.runtimeDiagnosticValues.httpError',
   incomplete: 'settings:aiProvider.runtimeDiagnosticValues.incomplete',
+  inspect_uncovered_cases:
+    'settings:aiProvider.runtimeDiagnosticValues.inspectUncoveredCases',
   inspect_diff: 'settings:aiProvider.runtimeDiagnosticValues.inspectDiff',
   isolated: 'settings:aiProvider.runtimeDiagnosticValues.isolated',
   invalid_response: 'settings:aiProvider.runtimeDiagnosticValues.invalidResponse',
@@ -271,6 +282,14 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
   local_model_quality_varies: 'settings:aiProvider.runtimeDiagnosticValues.localModelQualityVaries',
   limited: 'settings:aiProvider.runtimeDiagnosticValues.limited',
+  limited_autonomous_until_evidence_stable:
+    'settings:aiProvider.runtimeDiagnosticValues.limitedAutonomousUntilEvidenceStable',
+  limited_autonomous_until_live_faults:
+    'settings:aiProvider.runtimeDiagnosticValues.limitedAutonomousUntilLiveFaults',
+  live_fault_probe_evidence_missing:
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeEvidenceMissing',
+  live_fault_probes_passed:
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed',
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
   model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
@@ -291,6 +310,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   native_tool_calls: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolCalls',
   native_tool_request_failed: 'settings:aiProvider.runtimeDiagnosticValues.nativeToolRequestFailed',
   needs_recovery: 'settings:aiProvider.runtimeDiagnosticValues.needsRecovery',
+  needs_live_fault_evidence:
+    'settings:aiProvider.runtimeDiagnosticValues.needsLiveFaultEvidence',
   normalized: 'settings:aiProvider.runtimeDiagnosticValues.normalized',
   no: 'settings:aiProvider.runtimeDiagnosticValues.no',
   none: 'settings:aiProvider.runtimeDiagnosticValues.none',
@@ -324,6 +345,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_adapter_negative_fixture:
     'settings:aiProvider.runtimeDiagnosticValues.providerAdapterNegativeFixture',
   provider_e2e_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eBlocked',
+  provider_e2e_failed: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eFailed',
+  provider_e2e_passed: 'settings:aiProvider.runtimeDiagnosticValues.providerE2ePassed',
   provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired',
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
   provider_live_fault_fixture:
@@ -332,10 +355,16 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
   provider_history_recovering:
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryRecovering',
+  provider_history_latest_failed:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryLatestFailed',
   provider_history_stable: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryStable',
   provider_history_unknown: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryUnknown',
   provider_history_warming_up:
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp',
+  provider_reliability_complete:
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityComplete',
+  provider_reliability_incomplete:
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityIncomplete',
   provider_smoke_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeBlocked',
   provider_smoke_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerSmokeReady',
   pre_execution_blocked: 'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked',
@@ -352,6 +381,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   recover_partial_failure: 'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure',
   recovered: 'settings:aiProvider.runtimeDiagnosticValues.recovered',
   repair_mutation: 'settings:aiProvider.runtimeDiagnosticValues.repairMutation',
+  rerun_provider_e2e: 'settings:aiProvider.runtimeDiagnosticValues.rerunProviderE2e',
   requires_resolution: 'settings:aiProvider.runtimeDiagnosticValues.requiresResolution',
   restored: 'settings:aiProvider.runtimeDiagnosticValues.restored',
   not_restored: 'settings:aiProvider.runtimeDiagnosticValues.notRestored',
@@ -375,6 +405,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   skipped: 'settings:aiProvider.runtimeDiagnosticValues.skipped',
   single_history_run: 'settings:aiProvider.runtimeDiagnosticValues.singleHistoryRun',
   smoke_not_completed: 'settings:aiProvider.runtimeDiagnosticValues.smokeNotCompleted',
+  stabilize_provider_history:
+    'settings:aiProvider.runtimeDiagnosticValues.stabilizeProviderHistory',
   consecutive_recent_failures:
     'settings:aiProvider.runtimeDiagnosticValues.consecutiveRecentFailures',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
@@ -420,6 +452,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.latestRunPassedAfterFailures',
   mixed_recent_results: 'settings:aiProvider.runtimeDiagnosticValues.mixedRecentResults',
   no_history_runs: 'settings:aiProvider.runtimeDiagnosticValues.noHistoryRuns',
+  warming_up: 'settings:aiProvider.runtimeDiagnosticValues.warmingUp',
 };
 
 type RuntimeDiagnosticTranslate = (key: string) => string;
@@ -931,6 +964,47 @@ export function buildProviderRunHistoryDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',
       value: history.path || history.reason || '',
+    },
+  ].filter((row) => row.value);
+}
+
+export function buildProviderAutonomousReadinessDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  readiness?: ProviderAutonomousReadinessDiagnostics | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!readiness) {
+    return [];
+  }
+
+  const summaryValue = [
+    formatRuntimeDiagnosticValue(translate, readiness.status),
+    formatRuntimeDiagnosticValue(translate, readiness.provider),
+  ].filter(Boolean).join(' - ');
+
+  return [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadiness',
+      value: summaryValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendation',
+      value: formatRuntimeDiagnosticValue(translate, readiness.recommendation),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessBlockers',
+      value: formatRuntimeDiagnosticList(translate, readiness.blockers),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings',
+      value: formatRuntimeDiagnosticList(translate, readiness.warnings),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence',
+      value: formatRuntimeDiagnosticList(translate, readiness.evidence),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions',
+      value: formatRuntimeDiagnosticList(translate, readiness.nextActions),
     },
   ].filter((row) => row.value);
 }
@@ -2319,6 +2393,11 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeDiagnostics?.providerRunHistory
     );
+    const providerAutonomousReadinessRows =
+      buildProviderAutonomousReadinessDiagnosticRows(
+        t,
+        runtimeDiagnostics?.providerAutonomousReadiness
+      );
     const reliabilityRows = buildProviderReliabilityDiagnosticRows(
       t,
       runtimeDiagnostics?.providerReliability
@@ -2457,6 +2536,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   label={t(row.labelKey)}
                   value={row.value}
                   breakWords={row.labelKey === 'settings:aiProvider.connectionTest.providerRunHistoryPath'}
+                />
+              ))}
+              {providerAutonomousReadinessRows.map((row) => (
+                <RuntimeDiagnosticRow
+                  key={row.labelKey}
+                  label={t(row.labelKey)}
+                  value={row.value}
                 />
               ))}
               {reliabilityRows.map((row) => (

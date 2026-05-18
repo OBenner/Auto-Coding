@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildProviderAutonomousReadinessDiagnosticRows,
   buildProviderE2eSuiteDiagnosticRows,
   buildProviderLiveFaultProbeDiagnosticRows,
   buildProviderNegativeFixtureDiagnosticRows,
@@ -80,6 +81,18 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed':
       'passed runs',
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
+    'settings:aiProvider.connectionTest.providerAutonomousReadiness':
+      'Provider autonomous readiness',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendation':
+      'Autonomous recommendation',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessBlockers':
+      'Autonomous blockers',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings':
+      'Autonomous warnings',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence':
+      'Autonomous evidence',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions':
+      'Autonomous next actions',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeCapability': 'Runtime capability',
     'settings:aiProvider.controlPlane.runtimeComparativeEval': 'Comparative evals',
@@ -121,6 +134,26 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.partialCoverage': 'Partial coverage',
     'settings:aiProvider.runtimeDiagnosticValues.preExecutionBlocked': 'Pre-execution blocked',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired': 'Provider e2e required',
+    'settings:aiProvider.runtimeDiagnosticValues.apiRuntimeFullAutonomousCandidate':
+      'API runtime full autonomous candidate',
+    'settings:aiProvider.runtimeDiagnosticValues.collectProviderHistoryRuns':
+      'Collect provider history runs',
+    'settings:aiProvider.runtimeDiagnosticValues.enableLiveFaultProbes':
+      'Enable live fault probes',
+    'settings:aiProvider.runtimeDiagnosticValues.fullAutonomousCandidate':
+      'Full autonomous candidate',
+    'settings:aiProvider.runtimeDiagnosticValues.limitedAutonomousUntilEvidenceStable':
+      'Limited autonomous until evidence stable',
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeEvidenceMissing':
+      'Live fault probe evidence missing',
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed':
+      'Live fault probes passed',
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2ePassed': 'Provider e2e passed',
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp':
+      'Provider history warming up',
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityComplete':
+      'Provider reliability complete',
+    'settings:aiProvider.runtimeDiagnosticValues.warmingUp': 'Warming up',
     'settings:aiProvider.runtimeDiagnosticValues.ready': 'Ready',
     'settings:aiProvider.runtimeDiagnosticValues.repairMutation': 'Repair mutation',
     'settings:aiProvider.runtimeDiagnosticValues.recoverPartialFailure': 'Recover partial failure',
@@ -757,6 +790,46 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',
         value: '.auto-Codex/provider-smoke-history.json',
+      },
+    ]);
+  });
+});
+
+describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
+  it('includes provider autonomous readiness recommendation evidence', () => {
+    expect(
+      buildProviderAutonomousReadinessDiagnosticRows(translate, {
+        status: 'warming_up',
+        provider: 'openai',
+        source: 'provider_autonomous_readiness',
+        recommendation: 'limited_autonomous_until_evidence_stable',
+        blockers: [],
+        warnings: ['provider_history_warming_up', 'live_fault_probe_evidence_missing'],
+        evidence: ['provider_e2e_passed', 'provider_reliability_complete'],
+        nextActions: ['collect_provider_history_runs', 'enable_live_fault_probes'],
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadiness',
+        value: 'Warming up - OpenAI',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendation',
+        value: 'Limited autonomous until evidence stable',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings',
+        value: 'Provider history warming up, Live fault probe evidence missing',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence',
+        value: 'Provider e2e passed, Provider reliability complete',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions',
+        value: 'Collect provider history runs, Enable live fault probes',
       },
     ]);
   });

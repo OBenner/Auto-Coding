@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  mapProviderAutonomousReadiness,
   mapProviderContractHealth,
   mapProviderE2eSuite,
   mapProviderLiveFaultProbes,
@@ -11,6 +12,37 @@ import {
   mapProviderTransactionBatchContract,
   mapProviderToolLoopContract
 } from './provider-smoke-diagnostics';
+
+describe('mapProviderAutonomousReadiness', () => {
+  it('maps safe provider autonomous readiness fields', () => {
+    expect(
+      mapProviderAutonomousReadiness({
+        status: 'warming_up',
+        provider: 'openai',
+        source: 'provider_autonomous_readiness',
+        recommendation: 'limited_autonomous_until_evidence_stable',
+        blockers: ['provider_e2e_failed', null],
+        warnings: ['provider_history_warming_up', 7],
+        next_actions: ['collect_provider_history_runs', null],
+        evidence: ['provider_e2e_passed', 'live_fault_probes_passed', false],
+        ignored_private_path: 'workspace-private/readiness.json',
+      })
+    ).toEqual({
+      status: 'warming_up',
+      provider: 'openai',
+      source: 'provider_autonomous_readiness',
+      recommendation: 'limited_autonomous_until_evidence_stable',
+      blockers: ['provider_e2e_failed'],
+      warnings: ['provider_history_warming_up'],
+      nextActions: ['collect_provider_history_runs'],
+      evidence: ['provider_e2e_passed', 'live_fault_probes_passed'],
+    });
+  });
+
+  it('returns undefined for empty readiness payloads', () => {
+    expect(mapProviderAutonomousReadiness({})).toBeUndefined();
+  });
+});
 
 describe('mapProviderRuntimeResumePolicy', () => {
   it('maps safe generic edit resume policy fields from provider smoke diagnostics', () => {

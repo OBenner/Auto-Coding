@@ -492,6 +492,7 @@ export interface ProviderRuntimeDiagnostics {
   providerLiveFaultProbes?: ProviderLiveFaultProbeDiagnostics;
   providerNegativeFixtures?: ProviderNegativeFixtureDiagnostics;
   providerRunHistory?: ProviderRunHistoryDiagnostics;
+  providerAutonomousReadiness?: ProviderAutonomousReadinessDiagnostics;
   providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
@@ -606,6 +607,17 @@ export interface ProviderReliabilityCase {
   case?: string;
   status?: string;
   source?: string;
+}
+
+export interface ProviderAutonomousReadinessDiagnostics {
+  status?: string;
+  provider?: string;
+  source?: string;
+  recommendation?: string;
+  blockers?: string[];
+  warnings?: string[];
+  evidence?: string[];
+  nextActions?: string[];
 }
 
 export interface ProviderE2eSuiteDiagnostics {

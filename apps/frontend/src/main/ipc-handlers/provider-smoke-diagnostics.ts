@@ -1,4 +1,5 @@
 import type {
+  ProviderAutonomousReadinessDiagnostics,
   ProviderContractHealth,
   ProviderE2eSuiteDiagnostics,
   ProviderLiveFaultProbeDiagnostics,
@@ -155,6 +156,32 @@ export function mapProviderContractHealth(
 
   return Object.values(health).some((field) => field !== undefined)
     ? health
+    : undefined;
+}
+
+export function mapProviderAutonomousReadiness(
+  value: unknown
+): ProviderAutonomousReadinessDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const readiness: ProviderAutonomousReadinessDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    provider: stringFromUnknown(payload.provider),
+    source: stringFromUnknown(payload.source),
+    recommendation: stringFromUnknown(payload.recommendation),
+    blockers: arrayFromUnknown(payload.blockers),
+    warnings: arrayFromUnknown(payload.warnings),
+    evidence: arrayFromUnknown(payload.evidence),
+    nextActions: arrayFromUnknown(payload.next_actions),
+  };
+
+  return Object.values(readiness).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? readiness
     : undefined;
 }
 
