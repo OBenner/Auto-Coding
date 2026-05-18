@@ -1122,6 +1122,8 @@
       "subagent": "Subagent",
       "subagents": "Subagents",
       "textCompletion": "Text completion",
+      "transactionBatches": "Transaction batches",
+      "transactionBatchProbe": "Transaction batch probe",
       "textCompletionReady": "Text completion ready",
       "textCompletionOnly": "Text completion only",
       "tests": "Tests",

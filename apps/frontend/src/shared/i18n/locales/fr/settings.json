@@ -1070,6 +1070,8 @@
       "subagent": "Subagent",
       "subagents": "Subagents",
       "textCompletion": "Complétion texte",
+      "transactionBatches": "Lots de transaction",
+      "transactionBatchProbe": "Probe de lot transactionnel",
       "textCompletionReady": "Complétion texte prête",
       "textCompletionOnly": "Complétion texte uniquement",
       "tests": "Tests",

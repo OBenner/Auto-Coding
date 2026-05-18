@@ -40,6 +40,12 @@ DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_PROMPT = (
     f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}, then finish with a short "
     "summary. Do not edit any other file."
 )
+DEFAULT_PROVIDER_TRANSACTION_BATCH_SMOKE_PROMPT = (
+    "Open a transaction batch with begin_batch using batch_id "
+    "`provider-batch-smoke`, overwrite provider-smoke.txt with exactly "
+    f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}, commit the batch with "
+    "commit_batch, then finish with a short summary. Do not edit any other file."
+)
 DEFAULT_PROVIDER_MINI_PIPELINE_TASK = (
     "Implement slugify(value: str) in string_tools.py."
 )
@@ -106,6 +112,7 @@ PROVIDER_SMOKE_RUNTIME_MODES = (
     "analysis_only",
     "generic_edit",
     "mini_pipeline",
+    "transaction_batch_probe",
     "provider_e2e",
 )
 PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = (
@@ -122,6 +129,7 @@ PROVIDER_RELIABILITY_CASE_ORDER = (
     "native_tool_calls",
     "tool_results",
     "recovery_loop",
+    "transaction_batches",
     "unsupported_tools",
     "gateway_model_limitations",
 )
@@ -1036,6 +1044,7 @@ def _provider_reliability_diagnostics(
         _provider_native_tool_case(runtime_diagnostics),
         _provider_tool_result_case(runtime_diagnostics),
         _provider_recovery_loop_case(runtime_diagnostics),
+        _provider_transaction_batch_case(runtime_diagnostics),
         _provider_unsupported_tools_case(
             runtime_diagnostics,
             provider_contract_health=provider_contract_health,
@@ -1258,6 +1267,60 @@ def _provider_recovery_loop_case(
             }
     return {
         "case": "recovery_loop",
+        "status": "not_covered",
+        "source": "provider_e2e_required",
+    }
+
+
+def _provider_transaction_batch_case(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    execution = runtime_diagnostics.get("validated_runtime_execution")
+    contract = (
+        execution.get("transaction_batch_contract")
+        if isinstance(execution, dict)
+        else None
+    )
+    if not isinstance(contract, dict):
+        return {
+            "case": "transaction_batches",
+            "status": "not_covered",
+            "source": "provider_e2e_required",
+        }
+
+    status = str(contract.get("status") or "")
+    lifecycle_actions = set(
+        _string_list_payload(contract.get("batch_lifecycle_actions"))
+    )
+    lifecycle_statuses = set(
+        _string_list_payload(contract.get("batch_lifecycle_statuses"))
+    )
+    transaction_batch_count = _int_payload_value(contract, "transaction_batch_count")
+    if (
+        status == "observed"
+        and transaction_batch_count > 0
+        and {"begin_batch", "commit_batch"}.issubset(lifecycle_actions)
+        and "committed" in lifecycle_statuses
+    ):
+        return {
+            "case": "transaction_batches",
+            "status": "passed",
+            "source": "transaction_batch_contract",
+        }
+    if status in {"boundary_guarded", "requires_resolution"}:
+        return {
+            "case": "transaction_batches",
+            "status": "blocked",
+            "source": "transaction_batch_contract",
+        }
+    if status and status != "not_observed":
+        return {
+            "case": "transaction_batches",
+            "status": "limited",
+            "source": "transaction_batch_contract",
+        }
+    return {
+        "case": "transaction_batches",
         "status": "not_covered",
         "source": "provider_e2e_required",
     }
@@ -1568,9 +1631,9 @@ def _provider_smoke_requirements(runtime_mode: str) -> RuntimeRequirements:
             mode="provider_e2e",
             required=RuntimeRequirements.generic_edit().required,
         )
-    if runtime_mode == "mini_pipeline":
+    if runtime_mode in {"mini_pipeline", "transaction_batch_probe"}:
         return RuntimeRequirements(
-            mode="mini_pipeline",
+            mode=runtime_mode,
             required=RuntimeRequirements.generic_edit().required,
         )
     if runtime_mode == "generic_edit":
@@ -1583,6 +1646,8 @@ def _provider_smoke_scope(runtime_mode: str) -> str:
         return "direct_api_full_autonomy_e2e"
     if runtime_mode == "mini_pipeline":
         return "mini_task_pipeline"
+    if runtime_mode == "transaction_batch_probe":
+        return "transaction_batch_probe"
     if runtime_mode == "generic_edit":
         return "generic_edit_tool_loop"
     return "text_completion_only"
@@ -1604,6 +1669,11 @@ def _provider_smoke_note(runtime_mode: str) -> str:
             "generic_edit recovery/resume loop, but it does not prove full "
             "production autonomy for arbitrary repositories."
         )
+    if runtime_mode == "transaction_batch_probe":
+        return (
+            "Provider smoke validates a temporary generic_edit transaction batch "
+            "with begin_batch, commit_batch, and committed batch diagnostics."
+        )
     if runtime_mode == "generic_edit":
         return (
             "Provider smoke validates a temporary generic_edit tool loop; full "
@@ -1620,7 +1690,7 @@ def _provider_smoke_capability_mode(runtime_mode: str) -> str:
     """Map smoke-only scopes to the runtime mode that supplies capabilities."""
     if runtime_mode == "provider_e2e":
         return "generic_edit"
-    if runtime_mode == "mini_pipeline":
+    if runtime_mode in {"mini_pipeline", "transaction_batch_probe"}:
         return "generic_edit"
     return runtime_mode
 
@@ -2059,6 +2129,11 @@ async def _complete_provider_e2e_smoke_suite(
     for child_runtime_mode, runner, child_prompt in (
         ("generic_edit", _complete_provider_generic_edit_smoke, None),
         ("mini_pipeline", _complete_provider_mini_pipeline_smoke, prompt),
+        (
+            "transaction_batch_probe",
+            _complete_provider_transaction_batch_smoke,
+            None,
+        ),
     ):
         child_diagnostics = build_provider_smoke_runtime_diagnostics(
             provider_name=provider.name,
@@ -2268,6 +2343,74 @@ async def _complete_provider_generic_edit_smoke(
         response_excerpt=_response_excerpt(response_text),
         runtime_diagnostics=_with_provider_contract_health(
             runtime_diagnostics,
+            success=True,
+        ),
+    )
+
+
+async def _complete_provider_transaction_batch_smoke(
+    *,
+    provider: Any,
+    session_config: SessionConfig,
+    prompt: str | None,
+    timeout_seconds: float,
+    model: str | None,
+    runtime_diagnostics: dict[str, Any],
+) -> ProviderSmokeResult:
+    """Run a generic_edit smoke that must exercise begin/commit batch semantics."""
+    del prompt
+    result = await _complete_provider_generic_edit_smoke(
+        provider=provider,
+        session_config=session_config,
+        prompt=DEFAULT_PROVIDER_TRANSACTION_BATCH_SMOKE_PROMPT,
+        timeout_seconds=timeout_seconds,
+        model=model,
+        runtime_diagnostics={
+            **runtime_diagnostics,
+            "smoke_scope": "transaction_batch_probe",
+        },
+    )
+    execution = result.runtime_diagnostics.get("validated_runtime_execution")
+    contract = (
+        execution.get("transaction_batch_contract")
+        if isinstance(execution, dict)
+        else None
+    )
+    case = _provider_transaction_batch_case(result.runtime_diagnostics)
+    if case.get("status") != "passed":
+        error_details = (
+            "Provider transaction batch smoke did not observe a committed batch."
+        )
+        return ProviderSmokeResult(
+            success=False,
+            provider=provider.name,
+            model=model,
+            runtime_mode="transaction_batch_probe",
+            message="Provider transaction batch smoke failed",
+            response_excerpt=result.response_excerpt,
+            error_details=error_details,
+            runtime_diagnostics=_with_provider_contract_health(
+                {
+                    **result.runtime_diagnostics,
+                    "smoke_scope": "transaction_batch_probe",
+                    "transaction_batch_contract": contract,
+                },
+                error_details=error_details,
+            ),
+        )
+
+    return ProviderSmokeResult(
+        success=True,
+        provider=provider.name,
+        model=model,
+        runtime_mode="transaction_batch_probe",
+        message="Provider transaction batch smoke passed",
+        response_excerpt=result.response_excerpt,
+        runtime_diagnostics=_with_provider_contract_health(
+            {
+                **result.runtime_diagnostics,
+                "smoke_scope": "transaction_batch_probe",
+            },
             success=True,
         ),
     )

@@ -357,6 +357,9 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   skipped: 'settings:aiProvider.runtimeDiagnosticValues.skipped',
   smoke_not_completed: 'settings:aiProvider.runtimeDiagnosticValues.smokeNotCompleted',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
+  transaction_batches: 'settings:aiProvider.runtimeDiagnosticValues.transactionBatches',
+  transaction_batch_probe:
+    'settings:aiProvider.runtimeDiagnosticValues.transactionBatchProbe',
   tool_policy_metadata: 'settings:aiProvider.runtimeDiagnosticValues.toolPolicyMetadata',
   mutating_tool_classification:
     'settings:aiProvider.runtimeDiagnosticValues.mutatingToolClassification',

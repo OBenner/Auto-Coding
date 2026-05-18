@@ -134,6 +134,9 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
     'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
+    'settings:aiProvider.runtimeDiagnosticValues.transactionBatches': 'Transaction batches',
+    'settings:aiProvider.runtimeDiagnosticValues.transactionBatchProbe':
+      'Transaction batch probe',
     'settings:aiProvider.runtimeDiagnosticValues.transactionalRecoveryRequired':
       'Transactional recovery required',
     'settings:aiProvider.runtimeDiagnosticValues.toolPolicyMetadata': 'Tool policy metadata',
@@ -489,13 +492,22 @@ describe('buildProviderReliabilityDiagnosticRows', () => {
         status: 'partial_coverage',
         observedCaseCount: 5,
         passedCaseCount: 5,
-        requiredCaseCount: 7,
-        uncoveredCases: ['unsupported_tools', 'gateway_model_limitations'],
+        requiredCaseCount: 8,
+        uncoveredCases: [
+          'transaction_batches',
+          'unsupported_tools',
+          'gateway_model_limitations',
+        ],
         cases: [
           {
             case: 'text_completion',
             status: 'passed',
             source: 'mini_pipeline',
+          },
+          {
+            case: 'transaction_batches',
+            status: 'not_covered',
+            source: 'provider_e2e_required',
           },
           {
             case: 'unsupported_tools',
@@ -515,16 +527,17 @@ describe('buildProviderReliabilityDiagnosticRows', () => {
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.reliabilityCoverage',
-        value: '5/7 passed, 5 observed',
+        value: '5/8 passed, 5 observed',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.reliabilityUncovered',
-        value: 'Unsupported tools, Gateway model limitations',
+        value: 'Transaction batches, Unsupported tools, Gateway model limitations',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.reliabilityCases',
         value: (
-          'Text completion: Passed (Mini pipeline), Unsupported tools: '
+          'Text completion: Passed (Mini pipeline), Transaction batches: '
+          + 'Not covered (Provider e2e required), Unsupported tools: '
           + 'Not covered (Provider e2e required)'
         ),
       },
@@ -550,6 +563,11 @@ describe('buildProviderE2eSuiteDiagnosticRows', () => {
             reason: 'unit_tests_failed',
           },
           {
+            runtimeMode: 'transaction_batch_probe',
+            status: 'passed',
+            message: 'transaction batch probe passed',
+          },
+          {
             runtimeMode: 'unsupported_tools_probe',
             status: 'passed',
             message: 'unsupported tools classification covered',
@@ -571,6 +589,7 @@ describe('buildProviderE2eSuiteDiagnosticRows', () => {
         value: (
           'Generic edit: Passed - generic_edit passed, '
           + 'Mini pipeline: Failed - mini_pipeline failed - unit_tests_failed'
+          + ', Transaction batch probe: Passed - transaction batch probe passed'
           + ', Unsupported tools probe: Passed - unsupported tools classification covered'
           + ', Gateway/model probe: Passed - gateway/model classification covered'
         ),

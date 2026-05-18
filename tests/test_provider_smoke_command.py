@@ -337,6 +337,44 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
             ),
         )
 
+    async def fake_transaction_batch_smoke(**kwargs):
+        provider = kwargs["provider"]
+        observed_runtime_modes.append("transaction_batch_probe")
+        return ProviderSmokeResult(
+            success=True,
+            provider=provider.name,
+            model=kwargs["model"],
+            runtime_mode="transaction_batch_probe",
+            message="transaction batch probe passed",
+            runtime_diagnostics=_with_provider_contract_health(
+                {
+                    "provider": provider.name,
+                    "smoke_scope": "transaction_batch_probe",
+                    "validated_runtime_execution": {
+                        "tool_loop_contract": {
+                            "status": "passed",
+                            "tool_call_support": "native",
+                            "tool_result_support": "normalized",
+                            "fallback": "none",
+                            "recovery_status": "not_required",
+                        },
+                        "transaction_batch_contract": {
+                            "status": "observed",
+                            "batch_boundary_guard": "observed",
+                            "transaction_batch_count": 1,
+                            "open_transaction_batch_ids": [],
+                            "batch_lifecycle_actions": [
+                                "begin_batch",
+                                "commit_batch",
+                            ],
+                            "batch_lifecycle_statuses": ["open", "committed"],
+                        },
+                    },
+                },
+                success=True,
+            ),
+        )
+
     monkeypatch.setattr(
         "cli.provider_smoke_commands._complete_provider_generic_edit_smoke",
         fake_generic_edit_smoke,
@@ -344,6 +382,10 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
     monkeypatch.setattr(
         "cli.provider_smoke_commands._complete_provider_mini_pipeline_smoke",
         fake_mini_pipeline_smoke,
+    )
+    monkeypatch.setattr(
+        "cli.provider_smoke_commands._complete_provider_transaction_batch_smoke",
+        fake_transaction_batch_smoke,
     )
 
     result = await run_provider_smoke_check(
@@ -354,7 +396,11 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
 
     assert result.success is True
     assert result.runtime_mode == "provider_e2e"
-    assert observed_runtime_modes == ["generic_edit", "mini_pipeline"]
+    assert observed_runtime_modes == [
+        "generic_edit",
+        "mini_pipeline",
+        "transaction_batch_probe",
+    ]
     assert result.runtime_diagnostics["smoke_scope"] == "direct_api_full_autonomy_e2e"
     assert result.runtime_diagnostics["provider_e2e_suite"] == {
         "status": "passed",
@@ -368,6 +414,11 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
                 "runtime_mode": "mini_pipeline",
                 "status": "passed",
                 "message": "mini_pipeline passed",
+            },
+            {
+                "runtime_mode": "transaction_batch_probe",
+                "status": "passed",
+                "message": "transaction batch probe passed",
             },
             {
                 "runtime_mode": "unsupported_tools_probe",
@@ -405,11 +456,16 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
     }
     reliability = result.runtime_diagnostics["provider_reliability"]
     assert reliability["status"] == "complete"
-    assert reliability["observed_case_count"] == 7
-    assert reliability["passed_case_count"] == 7
-    assert reliability["required_case_count"] == 7
+    assert reliability["observed_case_count"] == 8
+    assert reliability["passed_case_count"] == 8
+    assert reliability["required_case_count"] == 8
     assert reliability["uncovered_cases"] == []
     assert reliability["cases"][5:] == [
+        {
+            "case": "transaction_batches",
+            "status": "passed",
+            "source": "transaction_batch_contract",
+        },
         {
             "case": "unsupported_tools",
             "status": "passed",
@@ -466,6 +522,11 @@ def test_provider_reliability_diagnostics_marks_negative_fixtures_covered():
     reliability = diagnostics["provider_reliability"]
     assert reliability["cases"][5:] == [
         {
+            "case": "transaction_batches",
+            "status": "not_covered",
+            "source": "provider_e2e_required",
+        },
+        {
             "case": "unsupported_tools",
             "status": "passed",
             "source": "provider_adapter_negative_fixture",
@@ -501,8 +562,8 @@ def test_provider_run_history_recovers_corrupt_artifact(tmp_path: Path):
                 "provider_e2e_suite": {"status": "passed", "runs": []},
                 "provider_reliability": {
                     "status": "complete",
-                    "passed_case_count": 7,
-                    "required_case_count": 7,
+                    "passed_case_count": 8,
+                    "required_case_count": 8,
                 },
             },
         ),
@@ -1589,8 +1650,9 @@ def test_provider_reliability_diagnostics_tracks_mini_pipeline_coverage():
         "status": "partial_coverage",
         "observed_case_count": 5,
         "passed_case_count": 5,
-        "required_case_count": 7,
+        "required_case_count": 8,
         "uncovered_cases": [
+            "transaction_batches",
             "unsupported_tools",
             "gateway_model_limitations",
         ],
@@ -1619,6 +1681,11 @@ def test_provider_reliability_diagnostics_tracks_mini_pipeline_coverage():
                 "case": "recovery_loop",
                 "status": "passed",
                 "source": "mini_pipeline",
+            },
+            {
+                "case": "transaction_batches",
+                "status": "not_covered",
+                "source": "provider_e2e_required",
             },
             {
                 "case": "unsupported_tools",
@@ -1845,8 +1912,9 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
                     "status": "partial_coverage",
                     "observed_case_count": 4,
                     "passed_case_count": 3,
-                    "required_case_count": 7,
+                    "required_case_count": 8,
                     "uncovered_cases": [
+                        "transaction_batches",
                         "recovery_loop",
                         "unsupported_tools",
                     ],
@@ -1923,9 +1991,9 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     assert "Provider reliability" in output
     assert "partial_coverage" in output
     assert "Reliability coverage" in output
-    assert "3/7 passed, 4 observed" in output
+    assert "3/8 passed, 4 observed" in output
     assert "Reliability uncovered" in output
-    assert "recovery_loop, unsupported_tools" in output
+    assert "transaction_batches, recovery_loop, unsupported_tools" in output
     assert "json_actions" in output
     assert "Tool-loop contract" in output
     assert "json_fallback" in output
