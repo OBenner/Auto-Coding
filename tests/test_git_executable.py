@@ -185,7 +185,7 @@ class TestRunGit:
             assert "not found" in result.stderr
 
     def test_retries_transient_windows_git_process_start_failure(self):
-        """run_git should retry the Windows git process init failure once."""
+        """run_git should retry the Windows git process init failure."""
         first = subprocess.CompletedProcess(
             args=["git", "status"],
             returncode=3221225794,
@@ -212,6 +212,38 @@ class TestRunGit:
             assert result.stdout == "ok"
             assert mock_run.call_count == 2
             mock_sleep.assert_called_once()
+
+    def test_retries_multiple_transient_windows_git_process_start_failures(self):
+        """run_git should tolerate repeated Windows Git process init failures."""
+        failures = [
+            subprocess.CompletedProcess(
+                args=["git", "branch"],
+                returncode=3221225794,
+                stdout="",
+                stderr="",
+            )
+            for _ in range(3)
+        ]
+        success = subprocess.CompletedProcess(
+            args=["git", "branch"],
+            returncode=0,
+            stdout="ok",
+            stderr="",
+        )
+        with (
+            patch("core.git_executable.os.name", "nt"),
+            patch("core.git_executable.get_git_executable", return_value="git"),
+            patch("core.git_executable.subprocess.run") as mock_run,
+            patch("core.git_executable.time.sleep") as mock_sleep,
+        ):
+            mock_run.side_effect = [*failures, success]
+
+            result = run_git(["branch"])
+
+            assert result.returncode == 0
+            assert result.stdout == "ok"
+            assert mock_run.call_count == 4
+            assert mock_sleep.call_count == 3
 
 
 class TestGetGitExecutable:

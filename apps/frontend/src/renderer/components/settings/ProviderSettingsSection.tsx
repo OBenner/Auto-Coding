@@ -27,6 +27,7 @@ import type {
   ProviderConfigValidation,
   ProviderConnectionTestResult,
   ProviderE2eSuiteDiagnostics,
+  ProviderLiveFaultProbeDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderRunHistoryDiagnostics,
@@ -263,6 +264,9 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   inspect_runtime_mcp_support: 'settings:aiProvider.runtimeDiagnosticValues.inspectRuntimeMcpSupport',
   implement_external_mcp_transport: 'settings:aiProvider.runtimeDiagnosticValues.implementExternalMcpTransport',
   litellm: 'settings:aiProvider.runtimeDiagnosticValues.litellm',
+  live_gateway_model_probe: 'settings:aiProvider.runtimeDiagnosticValues.liveGatewayModelProbe',
+  live_unsupported_tools_probe:
+    'settings:aiProvider.runtimeDiagnosticValues.liveUnsupportedToolsProbe',
   live_provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.liveProviderE2eRequired',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
   local_model_quality_varies: 'settings:aiProvider.runtimeDiagnosticValues.localModelQualityVaries',
@@ -322,6 +326,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_e2e_blocked: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eBlocked',
   provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired',
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
+  provider_live_fault_fixture:
+    'settings:aiProvider.runtimeDiagnosticValues.providerLiveFaultFixture',
   provider_history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryDegraded',
   provider_history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
   provider_history_recovering:
@@ -805,6 +811,49 @@ export function buildProviderNegativeFixtureDiagnosticRows(
   ].filter((row) => row.value);
 }
 
+export function buildProviderLiveFaultProbeDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  probes?: ProviderLiveFaultProbeDiagnostics | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!probes) {
+    return [];
+  }
+  const status = formatRuntimeDiagnosticValue(translate, probes.status);
+  const source = formatRuntimeDiagnosticValue(translate, probes.source);
+  const summaryValue = [status, probes.provider, source].filter(Boolean).join(' - ');
+  const probeRows = probes.probes?.map((probe) => {
+    const caseName = formatRuntimeDiagnosticValue(translate, probe.case);
+    const probeStatus = formatRuntimeDiagnosticValue(translate, probe.status);
+    const reason = formatRuntimeDiagnosticValue(translate, probe.reason);
+    const details = [reason, probe.envName].filter(Boolean).join(' - ');
+    const value = [caseName, probeStatus].filter(Boolean).join(': ');
+    const detailSuffix = details ? ` (${details})` : '';
+    return {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes',
+      value: value ? `${value}${detailSuffix}` : '',
+    };
+  }) ?? [];
+  return [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbes',
+      value: summaryValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeCases',
+      value: formatRuntimeDiagnosticList(translate, probes.coveredCases),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeMissingEnv',
+      value: probes.missingEnv?.join(', ') || '',
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv',
+      value: probes.requiredEnv?.join(', ') || '',
+    },
+    ...probeRows,
+  ].filter((row) => row.value);
+}
+
 export function buildProviderRunHistoryDiagnosticRows(
   translate: RuntimeDiagnosticTranslate,
   history?: ProviderRunHistoryDiagnostics | null
@@ -845,6 +894,19 @@ export function buildProviderRunHistoryDiagnosticRows(
     formatRuntimeDiagnosticValue(translate, history.trend),
     trendCounts,
   ].filter(Boolean).join(' - ');
+  const liveFaultProbeRunCounts = [
+    typeof history.liveFaultProbeEnabledRuns === 'number'
+      ? `${history.liveFaultProbeEnabledRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbeEnabled')}`
+      : '',
+    typeof history.liveFaultProbePassedRuns === 'number'
+      ? `${history.liveFaultProbePassedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed')}`
+      : '',
+  ].filter(Boolean).join(', ');
+  const liveFaultProbeValue = [
+    formatRuntimeDiagnosticValue(translate, history.lastLiveFaultProbeStatus),
+    liveFaultProbeRunCounts,
+    formatRuntimeDiagnosticList(translate, history.liveFaultProbeCoveredCases),
+  ].filter(Boolean).join(' - ');
   return [
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistory',
@@ -861,6 +923,10 @@ export function buildProviderRunHistoryDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryTrend',
       value: trendValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
+      value: liveFaultProbeValue,
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',
@@ -2245,6 +2311,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeDiagnostics?.providerNegativeFixtures
     );
+    const providerLiveFaultProbeRows = buildProviderLiveFaultProbeDiagnosticRows(
+      t,
+      runtimeDiagnostics?.providerLiveFaultProbes
+    );
     const providerRunHistoryRows = buildProviderRunHistoryDiagnosticRows(
       t,
       runtimeDiagnostics?.providerRunHistory
@@ -2371,6 +2441,14 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   key={row.labelKey}
                   label={t(row.labelKey)}
                   value={row.value}
+                />
+              ))}
+              {providerLiveFaultProbeRows.map((row) => (
+                <RuntimeDiagnosticRow
+                  key={`${row.labelKey}-${row.value}`}
+                  label={t(row.labelKey)}
+                  value={row.value}
+                  breakWords
                 />
               ))}
               {providerRunHistoryRows.map((row) => (

@@ -285,17 +285,104 @@ Last updated: 2026-05-18.
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
 | Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, isolated staged workspace materialization/restoration, commit-time staged postimage apply, batch boundary guards, pre-execution staged isolation guards for opaque open-batch mutations, pre-commit staged baseline drift guards, staged guard status/drift-path timeline events, staged workspace materialized/restored/batch-id recent events, mutation snapshots, committed snapshot ids, commit operation ids, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing/incomplete artifact preflight blockers, corrupt/invalid mutation-snapshot artifact health reasons, isolated staged snapshot integrity blockers, recovery-plan artifact health checks, artifact manifest transaction batches, manifest/checkpoint/event-count consistency checks, manifest recovery-timeline/resume-policy drift guards, trace/session/manifest counter drift checks, unified resume artifact consistency across trace, checkpoint, session state, manifest, mutation snapshots, and transaction batch state, and rich runtime events are implemented. | Harden non-happy-path recovery further for richer UI-driven repair/rollback workflows and broader staged-overlay edge cases. |
-| Provider reliability | Strong partial | `--provider-smoke --provider-smoke-runtime generic_edit` validates the live generic-edit tool loop, classifies native tool support, JSON fallback, gateway/model limitations, unsupported tools, recovery status, resume policy, transaction batch contract, boundary guards, staged drift guard details, staged isolation/restore evidence, committed batch snapshots, commit operations, and open transaction batches. `--provider-smoke --provider-smoke-runtime mini_pipeline` runs a planner/coder/test/reviewer flow plus a checkpoint preflight/resume recovery loop and reports `recovery_loop_status`. `--provider-smoke --provider-smoke-runtime transaction_batch_probe` isolates the transaction-batch contract. `--provider-smoke --provider-smoke-runtime provider_e2e` now runs the direct-provider e2e suite, adds the transaction batch probe plus provider-specific unsupported-tool and gateway/model negative fixtures for OpenAI, Google/Gemini, OpenRouter, LiteLLM, ZhipuAI, and Ollama, merges child results into `provider_e2e_suite`, `provider_e2e_negative_fixtures`, and `provider_reliability`, persists compact provider run history in `.auto-Codex/provider-smoke-history.json`, and reports recent-run trend, window counts, and pass/fail streaks; the settings UI surfaces suite, fixtures, reliability, transaction-batch evidence, history evidence, and provider history trend rows. | Add optional live fault-injection fixtures for real external accounts/gateways when credentials are available, plus richer provider history charts from accumulated runs. |
+| Provider reliability | Strong partial | `generic_edit`, `mini_pipeline`, `transaction_batch_probe`, and `provider_e2e` validations are wired. Provider e2e diagnostics include negative fixtures, live fault probes, reliability, live-fault history evidence, and settings UI surfaces. See [Provider reliability implementation details](#provider-reliability-implementation-details). | Add richer provider history charts from accumulated runs, then use real live-account probe data to harden provider-specific recommendations over time. |
 | MCP Bridge v1 | Strong partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, unavailable-tool observations, readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers, and `mcp_bridge_permission_matrix` for local/external/custom permission gates are represented. The runtime enforces `RuntimeMcpToolPolicy` before execution, writes audit artifacts, classifies mutating tools, normalizes MCP tool results into `text`, `content`, `structured_content`, and `is_error`, classifies live `tools/list` and bridged `tools/call` lifecycle failures by stage/kind, and exposes whether strict `AUTO_CODE_MCP_ALLOWED_PERMISSIONS` allowlists are configured. | Generalize live execution coverage across all registered external servers, normalize arbitrary live schemas continuously, and keep hardening external session reuse plus per-server execution smoke. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, read-only merge plans, and `runtime_subagent_mutation_policy` now exposes the gates blocking mutating children until transactional merge is ready. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, then move the mutation policy from blocked to enabled. |
 | CLI runtimes as full runtime class | Partial, stronger core | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners, `cli_runner_contract_matrix` tracks `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata for every candidate, and the generic CLI core now supplies configurable run/cancel/artifact/event parsing for planned runners. | Add runner-specific command builders, resume semantics, and live smoke/e2e coverage for Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs so they can move from generic-core partial to ready. |
-| Frontend runtime control plane | Strong partial | Provider settings show runtime diagnostics, MCP bridge status, MCP permission gates, provider smoke results, tool-loop contract, transaction batch contract, committed batch snapshots, commit operations, resume policy, transaction batches in Generic Edit artifacts, staged batch mutation/path/lifecycle counts, batch lifecycle rows, boundary blocker rows, required next actions, resolution strategies, staged workspace materialized/restored recent-event metadata, recovery timeline, open-batch resume state, provider e2e negative fixtures, provider run history/trend rows, runtime policy/eval rows, consolidated runtime capability readiness/blockers/warnings, runtime eval history, CLI runner contract status, and mutating-subagent gates. | Add cost estimates, richer history charts, deeper provider controls, and deeper artifact drilldowns into one operator-grade surface. |
+| Frontend runtime control plane | Strong partial | Provider settings show runtime diagnostics, provider smoke/e2e status, MCP status and permission gates, Generic Edit recovery/batch evidence, policy/eval rows, CLI runner status, and mutating-subagent gates. See [Frontend control plane implementation details](#frontend-control-plane-implementation-details). | Add cost estimates, richer history charts, deeper provider controls, and deeper artifact drilldowns into one operator-grade surface. |
 | Policy and evals | Strong partial | Runtime recommendations, compatibility diagnostics, `runtime_policy_matrix` for planner/coder/QA phase selection, `runtime_eval_matrix` for provider e2e, generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts, CLI full-runtime artifacts, `runtime_eval_history` from persisted provider smoke evidence, and `runtime_comparative_eval_matrix` for Claude/Codex/OpenAI/Gemini/Ollama quality/cost/safety comparison are implemented. | Add real cost/quality/safety metrics from live eval runs instead of mostly presence/status evidence, plus richer comparative reporting over time. |
 
 The practical rule remains: a direct API provider is not `full_autonomous` until
 it can reliably run the whole tool loop, preserve transactional recovery state,
 execute the required MCP/subagent surfaces, and pass the provider reliability
 suite without relying on Claude SDK semantics.
+
+### Provider reliability implementation details
+
+#### Runtime validation scopes
+
+- `generic_edit` validates the live tool loop, native tools, JSON fallback, and
+  provider limitation handling.
+- `generic_edit` reports recovery status, resume policy, transaction batches,
+  boundary guards, staged drift guards, and commit operations.
+- `mini_pipeline` runs the planner/coder/test/reviewer flow with checkpoint
+  preflight and resume recovery.
+- `mini_pipeline` reports `recovery_loop_status`.
+- `transaction_batch_probe` isolates the transaction-batch contract.
+- `provider_e2e` runs the direct-provider e2e suite.
+- `provider_e2e` adds transaction-batch coverage plus provider-specific
+  unsupported-tool and gateway/model negative fixtures.
+- The provider e2e suite covers OpenAI, Google/Gemini, OpenRouter, LiteLLM,
+  ZhipuAI, and Ollama.
+
+#### Results and persistence
+
+- Provider e2e merges child results into `provider_e2e_suite`.
+- Provider e2e records negative fixtures in `provider_e2e_negative_fixtures`.
+- Provider e2e reports aggregate readiness through `provider_reliability`.
+- Provider smoke history persists compact evidence in
+  `.auto-Codex/provider-smoke-history.json`.
+- Provider smoke history reports recent-run trend, window counts, and pass/fail
+  streaks.
+
+#### Live fault probes
+
+- Live fault probes are enabled with
+  `AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES=true` or `=1`.
+- A truthy opt-in must be paired with captured provider error fixture env vars.
+- Fixture env vars cover unsupported-tool and gateway/model cases.
+- Provider history persists live fault probe status, enabled/pass counts, and
+  covered live-fault cases.
+- Repeated real-account e2e runs can influence readiness recommendations over
+  time.
+
+#### UI surfaces
+
+- The settings UI surfaces suite status and negative fixtures.
+- The settings UI surfaces live fault probes and provider reliability.
+- The settings UI surfaces transaction-batch evidence.
+- The settings UI surfaces history evidence and provider trend rows.
+
+### Frontend control plane implementation details
+
+#### Runtime diagnostics
+
+- Runtime diagnostics show provider smoke results.
+- Runtime diagnostics show the tool-loop contract.
+- Runtime diagnostics show transaction batches and committed snapshots.
+- Runtime diagnostics show commit operations and resume policy.
+
+#### MCP diagnostics
+
+- MCP diagnostics show bridge status.
+- MCP diagnostics show permission gates.
+
+#### Generic Edit diagnostics
+
+- Generic Edit diagnostics show artifact transaction batches.
+- Generic Edit diagnostics show staged batch mutation, path, and lifecycle
+  counts.
+- Generic Edit diagnostics show batch lifecycle rows.
+- Generic Edit diagnostics show boundary blockers and required next actions.
+- Generic Edit diagnostics show resolution strategies.
+- Generic Edit diagnostics show staged workspace materialized/restored event
+  metadata.
+- Generic Edit diagnostics show recovery timeline and open-batch resume state.
+
+#### Provider reliability diagnostics
+
+- Provider diagnostics show e2e negative fixtures.
+- Provider diagnostics show e2e live fault probes.
+- Provider diagnostics show run history and trend rows.
+
+#### Runtime governance diagnostics
+
+- Runtime governance diagnostics show policy/eval rows.
+- Runtime governance diagnostics show capability readiness, blockers, and
+  warnings.
+- Runtime governance diagnostics show runtime eval history.
+- Runtime governance diagnostics show CLI runner contract status.
+- Runtime governance diagnostics show mutating-subagent gates.
 
 ## Generic Edit Contract
 

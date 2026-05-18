@@ -489,6 +489,7 @@ export interface ProviderRuntimeDiagnostics {
   validatedRuntimeExecution?: ProviderValidatedRuntimeExecution | null;
   miniPipeline?: ProviderMiniPipelineDiagnostics | null;
   providerE2eSuite?: ProviderE2eSuiteDiagnostics;
+  providerLiveFaultProbes?: ProviderLiveFaultProbeDiagnostics;
   providerNegativeFixtures?: ProviderNegativeFixtureDiagnostics;
   providerRunHistory?: ProviderRunHistoryDiagnostics;
   providerReliability?: ProviderReliabilityDiagnostics;
@@ -626,6 +627,25 @@ export interface ProviderNegativeFixtureDiagnostics {
   coveredCases?: string[];
 }
 
+export interface ProviderLiveFaultProbeDiagnostics {
+  status?: string;
+  provider?: string;
+  source?: string;
+  enabled?: boolean;
+  coveredCases?: string[];
+  requiredEnv?: string[];
+  missingEnv?: string[];
+  probes?: ProviderLiveFaultProbeCase[];
+}
+
+export interface ProviderLiveFaultProbeCase {
+  case?: string;
+  status?: string;
+  source?: string;
+  reason?: string;
+  envName?: string;
+}
+
 export interface ProviderRunHistoryDiagnostics {
   status?: string;
   provider?: string;
@@ -636,6 +656,10 @@ export interface ProviderRunHistoryDiagnostics {
   lastStatus?: string;
   lastReliabilityStatus?: string;
   lastProviderE2eStatus?: string;
+  lastLiveFaultProbeStatus?: string;
+  liveFaultProbeEnabledRuns?: number;
+  liveFaultProbePassedRuns?: number;
+  liveFaultProbeCoveredCases?: string[];
   trend?: string;
   trendReason?: string;
   recentWindow?: number;

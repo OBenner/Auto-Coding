@@ -1,6 +1,7 @@
 import type {
   ProviderContractHealth,
   ProviderE2eSuiteDiagnostics,
+  ProviderLiveFaultProbeDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderRunHistoryDiagnostics,
@@ -250,6 +251,48 @@ export function mapProviderNegativeFixtures(
     : undefined;
 }
 
+export function mapProviderLiveFaultProbes(
+  value: unknown
+): ProviderLiveFaultProbeDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const probes =
+    payload.probes && typeof payload.probes === 'object' && !Array.isArray(payload.probes)
+      ? Object.entries(payload.probes)
+        .filter(
+          (entry): entry is [string, Record<string, unknown>] =>
+            Boolean(entry[1]) && typeof entry[1] === 'object' && !Array.isArray(entry[1])
+        )
+        .map(([caseName, probe]) => ({
+          case: caseName,
+          status: stringFromUnknown(probe.status),
+          source: stringFromUnknown(probe.source),
+          reason: stringFromUnknown(probe.reason),
+          envName: stringFromUnknown(probe.env_name),
+        }))
+        .filter((item) => Object.values(item).some((field) => field !== undefined))
+      : undefined;
+  const diagnostics: ProviderLiveFaultProbeDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    provider: stringFromUnknown(payload.provider),
+    source: stringFromUnknown(payload.source),
+    enabled: booleanFromUnknown(payload.enabled),
+    coveredCases: arrayFromUnknown(payload.covered_cases),
+    requiredEnv: arrayFromUnknown(payload.required_env),
+    missingEnv: arrayFromUnknown(payload.missing_env),
+    probes: probes?.length ? probes : undefined,
+  };
+
+  return Object.values(diagnostics).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? diagnostics
+    : undefined;
+}
+
 export function mapProviderRunHistory(
   value: unknown
 ): ProviderRunHistoryDiagnostics | undefined {
@@ -268,6 +311,10 @@ export function mapProviderRunHistory(
     lastStatus: stringFromUnknown(payload.last_status),
     lastReliabilityStatus: stringFromUnknown(payload.last_reliability_status),
     lastProviderE2eStatus: stringFromUnknown(payload.last_provider_e2e_status),
+    lastLiveFaultProbeStatus: stringFromUnknown(payload.last_live_fault_probe_status),
+    liveFaultProbeEnabledRuns: numberFromUnknown(payload.live_fault_probe_enabled_runs),
+    liveFaultProbePassedRuns: numberFromUnknown(payload.live_fault_probe_passed_runs),
+    liveFaultProbeCoveredCases: arrayFromUnknown(payload.live_fault_probe_covered_cases),
     trend: stringFromUnknown(payload.trend),
     trendReason: stringFromUnknown(payload.trend_reason),
     recentWindow: numberFromUnknown(payload.recent_window),
@@ -279,7 +326,9 @@ export function mapProviderRunHistory(
     reason: stringFromUnknown(payload.reason),
   };
 
-  return Object.values(history).some((field) => field !== undefined)
+  return Object.values(history).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
     ? history
     : undefined;
 }

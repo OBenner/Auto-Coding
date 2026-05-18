@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   mapProviderContractHealth,
   mapProviderE2eSuite,
+  mapProviderLiveFaultProbes,
   mapProviderNegativeFixtures,
   mapProviderReliability,
   mapProviderRunHistory,
@@ -278,6 +279,52 @@ describe('mapProviderNegativeFixtures', () => {
   });
 });
 
+describe('mapProviderLiveFaultProbes', () => {
+  it('maps safe provider live fault probe fields', () => {
+    expect(
+      mapProviderLiveFaultProbes({
+        status: 'passed',
+        provider: 'openai',
+        source: 'provider_live_fault_fixture',
+        enabled: true,
+        covered_cases: ['unsupported_tools', 'gateway_model_limitations', null],
+        required_env: ['AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES'],
+        missing_env: ['AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR'],
+        probes: {
+          unsupported_tools: {
+            status: 'passed',
+            source: 'provider_live_fault_fixture',
+            reason: 'unsupported_tools',
+            env_name: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR',
+          },
+        },
+        ignored_private_path: 'workspace-private/provider-live-fixture.json',
+      })
+    ).toEqual({
+      status: 'passed',
+      provider: 'openai',
+      source: 'provider_live_fault_fixture',
+      enabled: true,
+      coveredCases: ['unsupported_tools', 'gateway_model_limitations'],
+      requiredEnv: ['AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES'],
+      missingEnv: ['AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR'],
+      probes: [
+        {
+          case: 'unsupported_tools',
+          status: 'passed',
+          source: 'provider_live_fault_fixture',
+          reason: 'unsupported_tools',
+          envName: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR',
+        },
+      ],
+    });
+  });
+
+  it('returns undefined for empty provider live fault probe payloads', () => {
+    expect(mapProviderLiveFaultProbes({})).toBeUndefined();
+  });
+});
+
 describe('mapProviderRunHistory', () => {
   it('maps safe persisted provider run history fields', () => {
     expect(
@@ -291,6 +338,10 @@ describe('mapProviderRunHistory', () => {
         last_status: 'passed',
         last_reliability_status: 'complete',
         last_provider_e2e_status: 'passed',
+        last_live_fault_probe_status: 'passed',
+        live_fault_probe_enabled_runs: 2,
+        live_fault_probe_passed_runs: 2,
+        live_fault_probe_covered_cases: ['unsupported_tools', 'gateway_model_limitations', null],
         trend: 'provider_history_stable',
         trend_reason: 'recent_runs_all_passed',
         recent_window: 3,
@@ -311,6 +362,10 @@ describe('mapProviderRunHistory', () => {
       lastStatus: 'passed',
       lastReliabilityStatus: 'complete',
       lastProviderE2eStatus: 'passed',
+      lastLiveFaultProbeStatus: 'passed',
+      liveFaultProbeEnabledRuns: 2,
+      liveFaultProbePassedRuns: 2,
+      liveFaultProbeCoveredCases: ['unsupported_tools', 'gateway_model_limitations'],
       trend: 'provider_history_stable',
       trendReason: 'recent_runs_all_passed',
       recentWindow: 3,

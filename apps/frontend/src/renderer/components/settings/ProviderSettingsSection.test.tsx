@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildProviderE2eSuiteDiagnosticRows,
+  buildProviderLiveFaultProbeDiagnosticRows,
   buildProviderNegativeFixtureDiagnosticRows,
   buildProviderReliabilityDiagnosticRows,
   buildProviderResumePolicyDiagnosticRows,
@@ -58,6 +59,11 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerE2eRuns': 'Provider e2e runs',
     'settings:aiProvider.connectionTest.providerNegativeFixtures': 'Provider negative fixtures',
     'settings:aiProvider.connectionTest.providerNegativeFixtureCases': 'Negative fixture cases',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbes': 'Provider live fault probes',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbeCases': 'Live fault probe cases',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes': 'Live fault probe outcomes',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbeMissingEnv': 'Missing live fault env',
+    'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv': 'Required live fault env',
     'settings:aiProvider.connectionTest.providerRunHistory': 'Provider run history',
     'settings:aiProvider.connectionTest.providerRunHistoryRuns': 'Provider history runs',
     'settings:aiProvider.connectionTest.providerRunHistoryLast': 'Provider history latest',
@@ -67,6 +73,12 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryTrendPassed': 'passed',
     'settings:aiProvider.connectionTest.providerRunHistoryTrendPassStreak': 'pass streak',
     'settings:aiProvider.connectionTest.providerRunHistoryTrendWindow': 'run window',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes':
+      'Provider history live fault probes',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbeEnabled':
+      'enabled runs',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed':
+      'passed runs',
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeCapability': 'Runtime capability',
@@ -85,6 +97,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.coder': 'Coder',
     'settings:aiProvider.runtimeDiagnosticValues.commitBatch': 'Commit batch',
     'settings:aiProvider.runtimeDiagnosticValues.complete': 'Complete',
+    'settings:aiProvider.runtimeDiagnosticValues.configurationBlocked': 'Configuration blocked',
     'settings:aiProvider.runtimeDiagnosticValues.denyBeforeExecution': 'Deny before execution',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
     'settings:aiProvider.runtimeDiagnosticValues.directFullAutonomousBlocked':
@@ -138,6 +151,8 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.genericEditRecovery': 'Generic edit recovery',
     'settings:aiProvider.runtimeDiagnosticValues.providerAdapterNegativeFixture':
       'Provider adapter negative fixture',
+    'settings:aiProvider.runtimeDiagnosticValues.providerLiveFaultFixture':
+      'Provider live fault fixture',
     'settings:aiProvider.runtimeDiagnosticValues.codexCli': 'Codex CLI',
     'settings:aiProvider.runtimeDiagnosticValues.mustUseFullRuntime': 'Must use full runtime',
     'settings:aiProvider.runtimeDiagnosticValues.preferGenericEdit': 'Prefer generic edit',
@@ -145,6 +160,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryStable': 'Stable history',
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
+    'settings:aiProvider.runtimeDiagnosticValues.skipped': 'Skipped',
     'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatches': 'Transaction batches',
@@ -633,6 +649,63 @@ describe('buildProviderNegativeFixtureDiagnosticRows', () => {
   });
 });
 
+describe('buildProviderLiveFaultProbeDiagnosticRows', () => {
+  it('includes live fault opt-in probe status and env evidence', () => {
+    expect(
+      buildProviderLiveFaultProbeDiagnosticRows(translate, {
+        status: 'configuration_blocked',
+        provider: 'openai',
+        source: 'provider_live_fault_fixture',
+        enabled: true,
+        coveredCases: ['unsupported_tools'],
+        requiredEnv: [
+          'AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES',
+          'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR',
+        ],
+        missingEnv: ['AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR'],
+        probes: [
+          {
+            case: 'unsupported_tools',
+            status: 'passed',
+            reason: 'unsupported_tools',
+            envName: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR',
+          },
+          {
+            case: 'gateway_model_limitations',
+            status: 'skipped',
+            reason: 'missing_live_fault_fixture',
+          },
+        ],
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbes',
+        value: 'Configuration blocked - openai - Provider live fault fixture',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeCases',
+        value: 'Unsupported tools',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeMissingEnv',
+        value: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv',
+        value: 'AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES, AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes',
+        value: 'Unsupported tools: Passed (Unsupported tools - AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR)',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes',
+        value: 'Gateway model limitations: Skipped (missing live fault fixture)',
+      },
+    ]);
+  });
+});
+
 describe('buildProviderRunHistoryDiagnosticRows', () => {
   it('includes persisted provider run history evidence', () => {
     expect(
@@ -646,6 +719,10 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
         lastStatus: 'passed',
         lastReliabilityStatus: 'complete',
         lastProviderE2eStatus: 'passed',
+        lastLiveFaultProbeStatus: 'passed',
+        liveFaultProbeEnabledRuns: 2,
+        liveFaultProbePassedRuns: 2,
+        liveFaultProbeCoveredCases: ['gateway_model_limitations', 'unsupported_tools'],
         trend: 'provider_history_stable',
         trendReason: 'recent_runs_all_passed',
         recentWindow: 3,
@@ -671,6 +748,11 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryTrend',
         value: 'Stable history - 3 run window, 3 passed, 0 failed, 3 pass streak',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
+        value:
+          'Passed - 2 enabled runs, 2 passed runs - Gateway model limitations, Unsupported tools',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',

@@ -37,6 +37,7 @@ import { getCodexProfileManager } from '../codex-profile-manager';
 import {
   mapProviderContractHealth,
   mapProviderE2eSuite,
+  mapProviderLiveFaultProbes,
   mapProviderNegativeFixtures,
   mapProviderReliability,
   mapProviderRunHistory,
@@ -396,6 +397,7 @@ type ProviderSmokeCliResult = {
       phases?: unknown;
     } | null;
     provider_e2e_suite?: unknown;
+    provider_e2e_live_fault_probes?: unknown;
     provider_e2e_negative_fixtures?: unknown;
     provider_run_history?: unknown;
     provider_reliability?: unknown;
@@ -587,6 +589,9 @@ function mapProviderRuntimeDiagnostics(
     validatedRuntimeExecution: mapValidatedRuntimeExecution(diagnostics.validated_runtime_execution),
     miniPipeline: mapMiniPipelineDiagnostics(diagnostics.mini_pipeline),
     providerE2eSuite: mapProviderE2eSuite(diagnostics.provider_e2e_suite),
+    providerLiveFaultProbes: mapProviderLiveFaultProbes(
+      diagnostics.provider_e2e_live_fault_probes
+    ),
     providerNegativeFixtures: mapProviderNegativeFixtures(
       diagnostics.provider_e2e_negative_fixtures
     ),
