@@ -555,6 +555,21 @@ def _provider_autonomous_readiness_diagnostics(
     """Return provider autonomous-readiness recommendation from e2e evidence."""
     runtime_diagnostics = result.runtime_diagnostics
     provider = result.provider
+    if provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return {
+            "status": "not_required",
+            "provider": provider,
+            "source": "provider_autonomous_readiness",
+            "recommendation": "not_required",
+            "recommendation_reasons": [],
+            "blockers": [],
+            "warnings": [],
+            "next_actions": [],
+            "requirements": {},
+            "missing_requirements": [],
+            "evidence": [],
+        }
+
     blockers: list[str] = []
     warnings: list[str] = []
     evidence: list[str] = []
@@ -629,6 +644,14 @@ def _provider_readiness_history_evidence(
     evidence: list[str],
 ) -> None:
     """Apply provider history trend evidence to readiness lists."""
+    if (
+        history_summary.get("status") == "record_failed"
+        or "last_status" not in history_summary
+        or history_summary.get("last_status") is None
+    ):
+        warnings.append("provider_history_unknown")
+        return
+
     if history_summary.get("last_status") != "passed":
         blockers.append("provider_history_latest_failed")
 
@@ -796,6 +819,7 @@ def _provider_readiness_next_actions(
         "provider_e2e_failed": "rerun_provider_e2e",
         "provider_reliability_incomplete": "inspect_uncovered_cases",
         "provider_history_latest_failed": "rerun_provider_e2e",
+        "provider_history_unknown": "collect_provider_history_runs",
         "live_fault_probe_evidence_missing": "enable_live_fault_probes",
         "live_fault_probe_coverage_incomplete": "enable_live_fault_probes",
         "provider_history_insufficient_runs": "collect_provider_history_runs",

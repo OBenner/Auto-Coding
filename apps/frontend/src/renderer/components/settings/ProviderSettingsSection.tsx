@@ -1060,6 +1060,11 @@ export function buildProviderAutonomousReadinessDiagnosticRows(
       value: formatRuntimeDiagnosticList(translate, readiness.warnings),
     },
     {
+      labelKey:
+        'settings:aiProvider.connectionTest.providerAutonomousReadinessMissingRequirements',
+      value: formatRuntimeDiagnosticList(translate, readiness.missingRequirements),
+    },
+    {
       labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence',
       value: formatRuntimeDiagnosticList(translate, readiness.evidence),
     },

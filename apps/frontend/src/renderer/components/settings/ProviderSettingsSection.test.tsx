@@ -93,6 +93,8 @@ const translate = (key: string) =>
       'Autonomous blockers',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings':
       'Autonomous warnings',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessMissingRequirements':
+      'Autonomous missing requirements',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence':
       'Autonomous evidence',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions':
@@ -915,6 +917,7 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
         recommendationReasons: ['history_warming_up', 'live_fault_probe_missing'],
         blockers: [],
         warnings: ['provider_history_warming_up', 'live_fault_probe_evidence_missing'],
+        missingRequirements: ['stable_history_runs', 'live_fault_case_coverage'],
         evidence: ['provider_e2e_passed', 'provider_reliability_complete'],
         nextActions: ['collect_provider_history_runs', 'enable_live_fault_probes'],
       })
@@ -936,6 +939,11 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings',
         value: 'Provider history warming up, Live fault probe evidence missing',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousReadinessMissingRequirements',
+        value: 'Stable history runs, Live fault case coverage',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence',

@@ -1707,8 +1707,9 @@ def handle_generic_edit_resume_preflight_command(
     return payload
 
 
-def format_runtime_modes_text() -> str:
+def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
     """Format runtime compatibility guidance for humans."""
+    payload = payload or build_runtime_modes_payload()
     mode_rows = [
         [mode.mode, mode.purpose, mode.capabilities] for mode in RUNTIME_MODE_INFO
     ]
@@ -1850,7 +1851,7 @@ def format_runtime_modes_text() -> str:
             row["reason"],
             ", ".join(row["runner_candidates"]) or "none",
         ]
-        for row in build_runtime_policy_matrix()
+        for row in payload["runtime_policy_matrix"]
         if row["provider"] in {"claude", "codex", "openai", "google", "ollama"}
     ]
     runtime_capability_rows = [
@@ -1865,7 +1866,7 @@ def format_runtime_modes_text() -> str:
             ", ".join(row["warnings"]) or "none",
             ", ".join(row["cli_runner_candidates"]) or "none",
         ]
-        for row in build_runtime_capability_matrix()
+        for row in payload["runtime_capability_matrix"]
     ]
     runtime_eval_rows = [
         [
@@ -1887,7 +1888,7 @@ def format_runtime_modes_text() -> str:
             ", ".join(row["missing_providers"]) or "none",
             row["history_path"],
         ]
-        for row in build_runtime_eval_history()
+        for row in payload["runtime_eval_history"]
     ]
     runtime_comparative_eval_rows = [
         [
@@ -1899,7 +1900,7 @@ def format_runtime_modes_text() -> str:
             ", ".join(row["blockers"]) or "none",
             row["evidence_source"],
         ]
-        for row in build_runtime_comparative_eval_matrix()
+        for row in payload["runtime_comparative_eval_matrix"]
     ]
 
     return "\n\n".join(
@@ -2118,5 +2119,5 @@ def handle_runtime_modes_command(*, output_json: bool = False) -> dict[str, Any]
     if output_json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
-        print(format_runtime_modes_text())
+        print(format_runtime_modes_text(payload))
     return payload

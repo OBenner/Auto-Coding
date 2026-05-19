@@ -1318,6 +1318,7 @@
       "providerAutonomousReadinessRecommendationReasons": "Raisons de la recommandation autonome",
       "providerAutonomousReadinessBlockers": "Blocages autonomes",
       "providerAutonomousReadinessWarnings": "Avertissements autonomes",
+      "providerAutonomousReadinessMissingRequirements": "Exigences autonomes manquantes",
       "providerAutonomousReadinessEvidence": "Preuves autonomes",
       "providerAutonomousReadinessNextActions": "Actions autonomes suivantes",
       "noneMissing": "Aucun",

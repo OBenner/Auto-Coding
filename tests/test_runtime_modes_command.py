@@ -112,11 +112,12 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert payload["providers"][0]["provider"] == "claude"
 
 
-def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
+def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
     from agents.runtime import EXTERNAL_MCP_CLIENT_ENV
     from cli.runtime_commands import handle_runtime_modes_command
 
     monkeypatch.delenv(EXTERNAL_MCP_CLIENT_ENV, raising=False)
+    monkeypatch.chdir(tmp_path)
 
     handle_runtime_modes_command(output_json=True)
     output = capsys.readouterr().out
@@ -573,7 +574,11 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     monkeypatch,
     capsys,
 ):
-    from cli.runtime_commands import handle_runtime_modes_command
+    from cli.runtime_commands import (
+        build_runtime_modes_payload,
+        format_runtime_modes_text,
+        handle_runtime_modes_command,
+    )
 
     history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
     history_path.parent.mkdir(parents=True)
@@ -681,6 +686,11 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
         "limited_autonomous_until_live_faults"
     )
     assert policy_rows[("coder", "google")]["autonomous_policy_gate"] == "blocked"
+
+    text_payload = build_runtime_modes_payload(project_dir=tmp_path)
+    text_output = format_runtime_modes_text(text_payload)
+    assert "api_runtime_full_autonomous_candidate" in text_output
+    assert "limited_autonomous_until_live_faults" in text_output
 
 
 def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_coverage(

@@ -1370,6 +1370,7 @@
       "providerAutonomousReadinessRecommendationReasons": "Autonomous recommendation reasons",
       "providerAutonomousReadinessBlockers": "Autonomous blockers",
       "providerAutonomousReadinessWarnings": "Autonomous warnings",
+      "providerAutonomousReadinessMissingRequirements": "Autonomous missing requirements",
       "providerAutonomousReadinessEvidence": "Autonomous evidence",
       "providerAutonomousReadinessNextActions": "Autonomous next actions",
       "noneMissing": "None",

@@ -832,24 +832,25 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
         _with_provider_run_history,
     )
 
-    base_diagnostics = {
-        "provider_e2e_suite": {"status": "passed", "runs": []},
-        "provider_reliability": {
-            "status": "complete",
-            "observed_case_count": 8,
-            "passed_case_count": 8,
-            "required_case_count": 8,
-            "uncovered_cases": [],
-        },
-        "provider_e2e_live_fault_probes": {
-            "status": "passed",
-            "enabled": True,
-            "covered_cases": [
-                "unsupported_tools",
-                "gateway_model_limitations",
-            ],
-        },
-    }
+    def build_base_diagnostics() -> dict[str, object]:
+        return {
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+            "provider_e2e_live_fault_probes": {
+                "status": "passed",
+                "enabled": True,
+                "covered_cases": [
+                    "unsupported_tools",
+                    "gateway_model_limitations",
+                ],
+            },
+        }
 
     first_result = _with_provider_run_history(
         tmp_path,
@@ -859,7 +860,7 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
             model="gpt-4o",
             runtime_mode="provider_e2e",
             message="Provider e2e smoke suite passed",
-            runtime_diagnostics=base_diagnostics,
+            runtime_diagnostics=build_base_diagnostics(),
         ),
     )
 
@@ -905,7 +906,7 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
                 model="gpt-4o",
                 runtime_mode="provider_e2e",
                 message="Provider e2e smoke suite passed",
-                runtime_diagnostics=base_diagnostics,
+                runtime_diagnostics=build_base_diagnostics(),
             ),
         )
 
@@ -1054,6 +1055,110 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
             "provider_reliability_complete",
             "provider_history_stable",
             "live_fault_probes_passed",
+        ],
+    }
+
+
+def test_provider_autonomous_readiness_skips_non_direct_providers():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="claude",
+        model="claude-sonnet-4-5-20250929",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+        },
+    )
+
+    assert _provider_autonomous_readiness_diagnostics(result, {}) == {
+        "status": "not_required",
+        "provider": "claude",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "not_required",
+        "recommendation_reasons": [],
+        "blockers": [],
+        "warnings": [],
+        "next_actions": [],
+        "requirements": {},
+        "missing_requirements": [],
+        "evidence": [],
+    }
+
+
+def test_provider_autonomous_readiness_treats_missing_history_as_unknown():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+        },
+    )
+
+    assert _provider_autonomous_readiness_diagnostics(
+        result,
+        {"status": "record_failed", "reason": "permission denied"},
+    ) == {
+        "status": "needs_live_fault_evidence",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "limited_autonomous_until_live_faults",
+        "recommendation_reasons": [
+            "live_fault_probe_missing",
+            "history_missing",
+        ],
+        "blockers": [],
+        "warnings": [
+            "live_fault_probe_evidence_missing",
+            "provider_history_unknown",
+        ],
+        "next_actions": [
+            "enable_live_fault_probes",
+            "collect_provider_history_runs",
+        ],
+        "requirements": {
+            "min_stable_runs": 3,
+            "observed_recent_window": 0,
+            "observed_consecutive_passes": 0,
+            "history_stability_complete": False,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [],
+            "live_fault_missing_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_coverage_complete": False,
+        },
+        "missing_requirements": [
+            "stable_history_runs",
+            "live_fault_case_coverage",
+        ],
+        "evidence": [
+            "provider_e2e_passed",
+            "provider_reliability_complete",
         ],
     }
 
