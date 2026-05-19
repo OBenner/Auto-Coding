@@ -1021,8 +1021,19 @@ export function buildRuntimePolicyDiagnosticRows(
       const phase = formatRuntimeDiagnosticValue(translate, row.phase);
       const selected = formatRuntimeDiagnosticValue(translate, row.selected_runtime_mode);
       const policy = formatRuntimeDiagnosticValue(translate, row.policy);
+      const autonomousGate = formatRuntimeDiagnosticValue(
+        translate,
+        row.autonomous_policy_gate
+      );
+      const autonomousRecommendation = formatRuntimeDiagnosticValue(
+        translate,
+        row.autonomous_readiness_recommendation
+      );
       const runners = formatRuntimeDiagnosticList(translate, row.runner_candidates);
-      const suffix = [policy, runners].filter(Boolean).join(', ');
+      const autonomousSuffix = row.autonomous_readiness_required
+        ? [autonomousGate, autonomousRecommendation].filter(Boolean).join(', ')
+        : '';
+      const suffix = [policy, autonomousSuffix, runners].filter(Boolean).join(', ');
       return `${phase}: ${selected}${suffix ? ` (${suffix})` : ''}`;
     })
     .join('; ');
@@ -1051,11 +1062,24 @@ export function buildRuntimeCapabilityDiagnosticRows(
       );
       const blockers = formatRuntimeDiagnosticList(translate, row.blockers);
       const warnings = formatRuntimeDiagnosticList(translate, row.warnings);
+      const autonomousGate = formatRuntimeDiagnosticValue(
+        translate,
+        row.autonomous_policy_gate
+      );
+      const autonomousRecommendation = formatRuntimeDiagnosticValue(
+        translate,
+        row.autonomous_readiness_recommendation
+      );
+      const autonomousSuffix = row.autonomous_readiness_required
+        ? [autonomousGate, autonomousRecommendation].filter(Boolean).join(', ')
+        : '';
       const runners = formatRuntimeDiagnosticList(
         translate,
         row.cli_runner_candidates
       );
-      const suffix = [blockers, warnings, runners].filter(Boolean).join('; ');
+      const suffix = [autonomousSuffix, blockers, warnings, runners]
+        .filter(Boolean)
+        .join('; ');
       return `${provider}: ${readiness} -> ${recommended}${suffix ? ` (${suffix})` : ''}`;
     })
     .join('; ');

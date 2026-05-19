@@ -847,6 +847,12 @@ export interface RuntimePolicyMatrixRow {
   runner_candidates: string[];
   policy: string;
   reason: string;
+  autonomous_readiness_required?: boolean;
+  autonomous_policy_gate?: string;
+  autonomous_readiness_status?: string;
+  autonomous_readiness_recommendation?: string;
+  autonomous_readiness_blockers?: string[];
+  autonomous_readiness_warnings?: string[];
 }
 
 export interface RuntimeCapabilityMatrixRow {
@@ -861,6 +867,14 @@ export interface RuntimeCapabilityMatrixRow {
   mcp_tools: string;
   subagents: string;
   cli_runner_candidates: string[];
+  autonomous_readiness_required?: boolean;
+  autonomous_policy_gate?: string;
+  autonomous_readiness_status?: string;
+  autonomous_readiness_recommendation?: string;
+  autonomous_readiness_blockers?: string[];
+  autonomous_readiness_warnings?: string[];
+  autonomous_readiness_evidence?: string[];
+  autonomous_readiness_next_actions?: string[];
   blockers: string[];
   warnings: string[];
   notes: string;

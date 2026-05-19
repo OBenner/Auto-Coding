@@ -142,17 +142,26 @@ const translate = (key: string) =>
       'Enable live fault probes',
     'settings:aiProvider.runtimeDiagnosticValues.fullAutonomousCandidate':
       'Full autonomous candidate',
+    'settings:aiProvider.runtimeDiagnosticValues.limitedAutonomousUntilLiveFaults':
+      'Limited autonomous until live faults',
     'settings:aiProvider.runtimeDiagnosticValues.limitedAutonomousUntilEvidenceStable':
       'Limited autonomous until evidence stable',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeEvidenceMissing':
       'Live fault probe evidence missing',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed':
       'Live fault probes passed',
+    'settings:aiProvider.runtimeDiagnosticValues.needsLiveFaultEvidence':
+      'Needs live fault evidence',
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2eFailed': 'Provider e2e failed',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2ePassed': 'Provider e2e passed',
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryLatestFailed':
+      'Provider history latest failed',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp':
       'Provider history warming up',
     'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityComplete':
       'Provider reliability complete',
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityIncomplete':
+      'Provider reliability incomplete',
     'settings:aiProvider.runtimeDiagnosticValues.warmingUp': 'Warming up',
     'settings:aiProvider.runtimeDiagnosticValues.ready': 'Ready',
     'settings:aiProvider.runtimeDiagnosticValues.repairMutation': 'Repair mutation',
@@ -161,6 +170,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.gatewayModelLimitations': 'Gateway model limitations',
     'settings:aiProvider.runtimeDiagnosticValues.gatewayModelProbe': 'Gateway/model probe',
     'settings:aiProvider.runtimeDiagnosticValues.genericEdit': 'Generic edit',
+    'settings:aiProvider.runtimeDiagnosticValues.google': 'Google',
     'settings:aiProvider.runtimeDiagnosticValues.liveProviderE2eRequired':
       'Live provider e2e required',
     'settings:aiProvider.runtimeDiagnosticValues.localModelQualityVaries':
@@ -176,6 +186,8 @@ const translate = (key: string) =>
       'Permission allowlist check',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2e': 'Provider e2e',
     'settings:aiProvider.runtimeDiagnosticValues.policyGated': 'Policy gated',
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryUnknown':
+      'Unknown provider history',
     'settings:aiProvider.runtimeDiagnosticValues.notRecorded': 'Not recorded',
     'settings:aiProvider.runtimeDiagnosticValues.notObserved': 'Not observed',
     'settings:aiProvider.runtimeDiagnosticValues.notRestored': 'Not restored',
@@ -333,6 +345,54 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
           'OpenAI: Limited -> Generic edit '
           + '(Missing full autonomous runtime, Live provider e2e required, '
           + 'Transactional recovery required; Direct full autonomous blocked; Codex CLI)'
+        ),
+      },
+    ]);
+  });
+
+  it('includes autonomous readiness gate status and recommendation', () => {
+    expect(
+      buildRuntimeCapabilityDiagnosticRows(translate, [
+        {
+          provider: 'google',
+          readiness: 'needs_live_fault_evidence',
+          full_autonomous_ready: false,
+          direct_full_autonomous: 'no',
+          recommended_runtime_mode: 'generic_edit',
+          generic_edit: 'experimental',
+          analysis_only: 'yes',
+          patch_proposal: 'limited',
+          mcp_tools: 'local_bridge',
+          subagents: 'orchestrated',
+          cli_runner_candidates: ['codex_cli'],
+          autonomous_readiness_required: true,
+          autonomous_policy_gate: 'blocked',
+          autonomous_readiness_status: 'needs_live_fault_evidence',
+          autonomous_readiness_recommendation: 'limited_autonomous_until_live_faults',
+          autonomous_readiness_blockers: [],
+          autonomous_readiness_warnings: [
+            'provider_history_warming_up',
+            'live_fault_probe_evidence_missing',
+          ],
+          autonomous_readiness_evidence: [
+            'provider_e2e_passed',
+            'provider_reliability_complete',
+          ],
+          blockers: [],
+          warnings: [
+            'provider_history_warming_up',
+            'live_fault_probe_evidence_missing',
+          ],
+          notes: 'Gemini can use local actions with Gemini-compatible tool schemas.',
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.runtimeCapability',
+        value: (
+          'Google: Needs live fault evidence -> Generic edit '
+          + '(Blocked, Limited autonomous until live faults; '
+          + 'Provider history warming up, Live fault probe evidence missing; Codex CLI)'
         ),
       },
     ]);

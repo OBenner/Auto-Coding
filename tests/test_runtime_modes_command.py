@@ -99,6 +99,8 @@ def test_runtime_modes_command_outputs_text(capsys):
     assert "Subagent Orchestrator Matrix" in output
     assert "Mutating Subagent Policy" in output
     assert "Runtime Policy Matrix" in output
+    assert "Autonomous gate" in output
+    assert "Autonomy recommendation" in output
     assert "Runtime Eval Matrix" in output
     assert "Runtime Eval History" in output
     assert "Runtime Comparative Eval Matrix" in output
@@ -180,15 +182,26 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     }
     assert capability_rows["claude"]["readiness"] == "ready"
     assert capability_rows["claude"]["blockers"] == []
-    assert capability_rows["openai"]["readiness"] == "limited"
+    assert capability_rows["openai"]["readiness"] == "blocked"
     assert capability_rows["openai"]["recommended_runtime_mode"] == "generic_edit"
     assert "codex_cli" in capability_rows["openai"]["cli_runner_candidates"]
     assert capability_rows["openai"]["blockers"] == [
         "missing_full_autonomous_runtime",
         "live_provider_e2e_required",
         "transactional_recovery_required",
+        "provider_e2e_failed",
+        "provider_reliability_incomplete",
+        "provider_history_latest_failed",
     ]
-    assert "direct_full_autonomous_blocked" in capability_rows["openai"]["warnings"]
+    assert capability_rows["openai"]["warnings"] == [
+        "direct_full_autonomous_blocked",
+        "provider_history_unknown",
+        "live_fault_probe_evidence_missing",
+    ]
+    assert capability_rows["openai"]["autonomous_policy_gate"] == "blocked"
+    assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
+        "provider_e2e_required"
+    )
     selection_rows = payload["cli_runner_selection"]
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
         "codex_cli",
@@ -203,6 +216,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert "external_mcp_smoke" in payload["recommendations"]
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
+    assert "provider_autonomous_readiness" in payload["recommendations"]
     policy_rows = {
         (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
     }
@@ -222,8 +236,23 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
         ],
         "policy": "must_use_full_runtime",
         "reason": "planner_requires_workspace_tools",
+        "autonomous_readiness_required": True,
+        "autonomous_policy_gate": "blocked",
+        "autonomous_readiness_status": "blocked",
+        "autonomous_readiness_recommendation": "provider_e2e_required",
+        "autonomous_readiness_blockers": [
+            "provider_e2e_failed",
+            "provider_reliability_incomplete",
+            "provider_history_latest_failed",
+        ],
+        "autonomous_readiness_warnings": [
+            "provider_history_unknown",
+            "live_fault_probe_evidence_missing",
+        ],
     }
     assert policy_rows[("coder", "openai")]["selected_runtime_mode"] == "generic_edit"
+    assert policy_rows[("coder", "openai")]["policy"] == "provider_e2e_required"
+    assert policy_rows[("coder", "openai")]["autonomous_policy_gate"] == "blocked"
     assert (
         policy_rows[("qa_reviewer", "openai")]["selected_runtime_mode"]
         == "analysis_only"
@@ -477,6 +506,97 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["google"]["quality_status"] == "failed"
     assert comparative_rows["ollama"]["quality_status"] == "not_observed"
     assert comparative_rows["claude"]["safety_status"] == "native_runtime_policy"
+
+
+def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    from cli.runtime_commands import handle_runtime_modes_command
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {
+                    "openai": {
+                        "total_runs": 3,
+                        "passed_runs": 3,
+                        "failed_runs": 0,
+                        "last_status": "passed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-18T00:00:00Z",
+                        "last_reliability_status": "complete",
+                        "last_provider_e2e_status": "passed",
+                        "last_live_fault_probe_status": "passed",
+                        "live_fault_probe_enabled_runs": 3,
+                        "live_fault_probe_passed_runs": 3,
+                        "live_fault_probe_covered_cases": [
+                            "gateway_model_limitations",
+                            "unsupported_tools",
+                        ],
+                        "trend": "provider_history_stable",
+                    },
+                    "google": {
+                        "total_runs": 1,
+                        "passed_runs": 1,
+                        "failed_runs": 0,
+                        "last_status": "passed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-18T00:01:00Z",
+                        "last_reliability_status": "complete",
+                        "last_provider_e2e_status": "passed",
+                        "last_live_fault_probe_status": None,
+                        "trend": "provider_history_warming_up",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    handle_runtime_modes_command(output_json=True)
+    payload = json.loads(capsys.readouterr().out)
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+
+    assert capability_rows["openai"]["readiness"] == "full_autonomous_candidate"
+    assert capability_rows["openai"]["autonomous_policy_gate"] == "passed"
+    assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
+        "api_runtime_full_autonomous_candidate"
+    )
+    assert capability_rows["openai"]["autonomous_readiness_blockers"] == []
+    assert capability_rows["openai"]["autonomous_readiness_warnings"] == []
+    assert capability_rows["openai"]["autonomous_readiness_evidence"] == [
+        "provider_e2e_passed",
+        "provider_reliability_complete",
+        "provider_history_stable",
+        "live_fault_probes_passed",
+    ]
+    assert policy_rows[("coder", "openai")]["autonomous_policy_gate"] == "passed"
+    assert policy_rows[("coder", "openai")]["policy"] == "prefer_generic_edit"
+
+    assert capability_rows["google"]["readiness"] == "needs_live_fault_evidence"
+    assert capability_rows["google"]["autonomous_policy_gate"] == "blocked"
+    assert capability_rows["google"]["autonomous_readiness_recommendation"] == (
+        "limited_autonomous_until_live_faults"
+    )
+    assert capability_rows["google"]["autonomous_readiness_warnings"] == [
+        "provider_history_warming_up",
+        "live_fault_probe_evidence_missing",
+    ]
+    assert policy_rows[("coder", "google")]["policy"] == (
+        "limited_autonomous_until_live_faults"
+    )
+    assert policy_rows[("coder", "google")]["autonomous_policy_gate"] == "blocked"
 
 
 def test_runtime_modes_command_marks_context7_available_when_external_client_enabled(

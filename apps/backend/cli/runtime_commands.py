@@ -527,16 +527,24 @@ def build_runtime_subagent_mutation_policy() -> list[dict[str, Any]]:
     return matrix
 
 
-def build_runtime_policy_matrix() -> list[dict[str, Any]]:
+def build_runtime_policy_matrix(
+    *,
+    project_dir: Path | None = None,
+) -> list[dict[str, Any]]:
     """Build phase/provider runtime policy diagnostics."""
     full_runtime_runner_candidates = list(
         select_cli_runner_profiles(
             runtime_mode="full_autonomous",
         ).selected_runner_ids
     )
+    readiness_by_provider = _runtime_provider_autonomous_readiness_by_name(
+        project_dir=project_dir,
+    )
     matrix: list[dict[str, Any]] = []
     for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
         has_full_runtime = provider_row.full_autonomous == "yes"
+        readiness = readiness_by_provider.get(provider_row.provider)
+        readiness_required = readiness is not None
         for phase_policy in RUNTIME_POLICY_PHASES:
             phase = str(phase_policy["phase"])
             selected_mode = (
@@ -546,6 +554,42 @@ def build_runtime_policy_matrix() -> list[dict[str, Any]]:
             )
             requires_full_autonomous = bool(phase_policy["requires_full_autonomous"])
             requires_cli_runner = requires_full_autonomous and not has_full_runtime
+            policy = (
+                str(phase_policy["policy"])
+                if not has_full_runtime
+                else "use_full_runtime"
+            )
+            reason = (
+                str(phase_policy["reason"])
+                if not has_full_runtime
+                else "provider_has_full_runtime"
+            )
+            if (
+                readiness_required
+                and readiness["policy_gate"] != "passed"
+                and phase in {"coder", "qa_fixer"}
+            ):
+                policy = str(readiness["recommendation"])
+                reason = str(readiness["status"])
+            readiness_fields = (
+                {
+                    "autonomous_readiness_required": True,
+                    "autonomous_policy_gate": readiness["policy_gate"],
+                    "autonomous_readiness_status": readiness["status"],
+                    "autonomous_readiness_recommendation": readiness["recommendation"],
+                    "autonomous_readiness_blockers": readiness["blockers"],
+                    "autonomous_readiness_warnings": readiness["warnings"],
+                }
+                if readiness_required and readiness is not None
+                else {
+                    "autonomous_readiness_required": False,
+                    "autonomous_policy_gate": "not_required",
+                    "autonomous_readiness_status": "not_required",
+                    "autonomous_readiness_recommendation": "not_required",
+                    "autonomous_readiness_blockers": [],
+                    "autonomous_readiness_warnings": [],
+                }
+            )
             matrix.append(
                 {
                     "phase": phase,
@@ -564,31 +608,44 @@ def build_runtime_policy_matrix() -> list[dict[str, Any]]:
                     "runner_candidates": full_runtime_runner_candidates
                     if requires_cli_runner
                     else [],
-                    "policy": str(phase_policy["policy"])
-                    if not has_full_runtime
-                    else "use_full_runtime",
-                    "reason": str(phase_policy["reason"])
-                    if not has_full_runtime
-                    else "provider_has_full_runtime",
+                    "policy": policy,
+                    "reason": reason,
+                    **readiness_fields,
                 }
             )
     return matrix
 
 
-def build_runtime_capability_matrix() -> list[dict[str, Any]]:
+def _extend_unique(target: list[str], values: list[str]) -> None:
+    """Append non-empty unique values to a diagnostic list."""
+    for value in values:
+        if value and value not in target:
+            target.append(value)
+
+
+def build_runtime_capability_matrix(
+    *,
+    project_dir: Path | None = None,
+) -> list[dict[str, Any]]:
     """Build consolidated provider readiness diagnostics for the control plane."""
     full_runtime_runner_candidates = list(
         select_cli_runner_profiles(
             runtime_mode="full_autonomous",
         ).selected_runner_ids
     )
+    readiness_by_provider = _runtime_provider_autonomous_readiness_by_name(
+        project_dir=project_dir,
+    )
     gateway_providers = {"litellm", "openrouter"}
     matrix: list[dict[str, Any]] = []
     for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
         has_full_runtime = provider_row.full_autonomous == "yes"
+        readiness = readiness_by_provider.get(provider_row.provider)
         blockers: list[str] = []
         warnings: list[str] = []
-        if not has_full_runtime:
+        if not has_full_runtime and (
+            readiness is None or readiness["policy_gate"] != "passed"
+        ):
             blockers.extend(
                 [
                     "missing_full_autonomous_runtime",
@@ -601,12 +658,21 @@ def build_runtime_capability_matrix() -> list[dict[str, Any]]:
             warnings.append("gateway_model_limitations")
         if provider_row.provider == "ollama":
             warnings.append("local_model_quality_varies")
+        if readiness is not None:
+            _extend_unique(blockers, readiness["blockers"])
+            _extend_unique(warnings, readiness["warnings"])
 
         matrix.append(
             {
                 "provider": provider_row.provider,
-                "readiness": "ready" if has_full_runtime else "limited",
-                "full_autonomous_ready": has_full_runtime,
+                "readiness": "ready"
+                if has_full_runtime
+                else str(readiness["status"] if readiness is not None else "limited"),
+                "full_autonomous_ready": has_full_runtime
+                or (
+                    readiness is not None
+                    and readiness["status"] == "full_autonomous_candidate"
+                ),
                 "direct_full_autonomous": provider_row.full_autonomous,
                 "recommended_runtime_mode": (
                     "full_autonomous" if has_full_runtime else "generic_edit"
@@ -619,6 +685,28 @@ def build_runtime_capability_matrix() -> list[dict[str, Any]]:
                 "cli_runner_candidates": []
                 if has_full_runtime
                 else full_runtime_runner_candidates,
+                "autonomous_readiness_required": readiness is not None,
+                "autonomous_policy_gate": readiness["policy_gate"]
+                if readiness is not None
+                else "not_required",
+                "autonomous_readiness_status": readiness["status"]
+                if readiness is not None
+                else "not_required",
+                "autonomous_readiness_recommendation": readiness["recommendation"]
+                if readiness is not None
+                else "not_required",
+                "autonomous_readiness_blockers": readiness["blockers"]
+                if readiness is not None
+                else [],
+                "autonomous_readiness_warnings": readiness["warnings"]
+                if readiness is not None
+                else [],
+                "autonomous_readiness_evidence": readiness["evidence"]
+                if readiness is not None
+                else [],
+                "autonomous_readiness_next_actions": readiness["next_actions"]
+                if readiness is not None
+                else [],
                 "blockers": blockers,
                 "warnings": warnings,
                 "notes": provider_row.notes,
@@ -708,6 +796,129 @@ def _runtime_eval_history_status(provider_rows: list[dict[str, Any]]) -> str:
 def _runtime_eval_int_stat(value: Any) -> int:
     """Return a safe integer stat from persisted history payloads."""
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _runtime_provider_history_stats_by_name(
+    *,
+    project_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Return persisted provider smoke history stats keyed by provider."""
+    history_path = (project_dir or Path.cwd()) / PROVIDER_SMOKE_HISTORY_RELATIVE_PATH
+    if not history_path.exists():
+        return {}
+    try:
+        payload = json.loads(history_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict) or not isinstance(payload.get("providers"), dict):
+        return {}
+    return payload["providers"]
+
+
+def _runtime_provider_readiness_next_actions(
+    blockers: list[str],
+    warnings: list[str],
+) -> list[str]:
+    """Return ordered next actions for provider autonomous-readiness gates."""
+    action_by_reason = {
+        "provider_e2e_failed": "rerun_provider_e2e",
+        "provider_reliability_incomplete": "inspect_uncovered_cases",
+        "provider_history_latest_failed": "rerun_provider_e2e",
+        "provider_history_unknown": "collect_provider_history_runs",
+        "provider_history_warming_up": "collect_provider_history_runs",
+        "provider_history_flaky": "stabilize_provider_history",
+        "provider_history_recovering": "collect_provider_history_runs",
+        "provider_history_degraded": "stabilize_provider_history",
+        "live_fault_probe_evidence_missing": "enable_live_fault_probes",
+    }
+    actions: list[str] = []
+    for reason in [*blockers, *warnings]:
+        action = action_by_reason.get(reason)
+        if action and action not in actions:
+            actions.append(action)
+    return actions
+
+
+def _runtime_provider_autonomous_readiness_from_history(
+    provider: str,
+    provider_stats: dict[str, Any],
+) -> dict[str, Any]:
+    """Classify direct-provider autonomous readiness from persisted e2e history."""
+    blockers: list[str] = []
+    warnings: list[str] = []
+    evidence: list[str] = []
+
+    if (
+        provider_stats.get("last_status") == "passed"
+        and provider_stats.get("last_provider_e2e_status") == "passed"
+    ):
+        evidence.append("provider_e2e_passed")
+    else:
+        blockers.append("provider_e2e_failed")
+
+    if provider_stats.get("last_reliability_status") == "complete":
+        evidence.append("provider_reliability_complete")
+    else:
+        blockers.append("provider_reliability_incomplete")
+
+    if provider_stats.get("last_status") != "passed":
+        blockers.append("provider_history_latest_failed")
+
+    trend = provider_stats.get("trend")
+    if trend == "provider_history_stable":
+        evidence.append("provider_history_stable")
+    elif isinstance(trend, str) and trend:
+        warnings.append(trend)
+    else:
+        warnings.append("provider_history_unknown")
+
+    if provider_stats.get("last_live_fault_probe_status") == "passed":
+        evidence.append("live_fault_probes_passed")
+    else:
+        warnings.append("live_fault_probe_evidence_missing")
+
+    if blockers:
+        status = "blocked"
+        recommendation = "provider_e2e_required"
+    elif "live_fault_probe_evidence_missing" in warnings:
+        status = "needs_live_fault_evidence"
+        recommendation = "limited_autonomous_until_live_faults"
+    elif warnings:
+        status = "warming_up"
+        recommendation = "limited_autonomous_until_evidence_stable"
+    else:
+        status = "full_autonomous_candidate"
+        recommendation = "api_runtime_full_autonomous_candidate"
+
+    return {
+        "provider": provider,
+        "status": status,
+        "recommendation": recommendation,
+        "policy_gate": "passed" if status == "full_autonomous_candidate" else "blocked",
+        "blockers": blockers,
+        "warnings": warnings,
+        "evidence": evidence,
+        "next_actions": _runtime_provider_readiness_next_actions(blockers, warnings),
+    }
+
+
+def _runtime_provider_autonomous_readiness_by_name(
+    *,
+    project_dir: Path | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Return direct-provider autonomous-readiness gates keyed by provider."""
+    provider_stats_by_name = _runtime_provider_history_stats_by_name(
+        project_dir=project_dir,
+    )
+    return {
+        provider: _runtime_provider_autonomous_readiness_from_history(
+            provider,
+            provider_stats_by_name.get(provider)
+            if isinstance(provider_stats_by_name.get(provider), dict)
+            else {},
+        )
+        for provider in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS
+    }
 
 
 def build_runtime_eval_history(
@@ -839,7 +1050,10 @@ def build_runtime_comparative_eval_matrix(
     return matrix
 
 
-def build_runtime_modes_payload() -> dict[str, Any]:
+def build_runtime_modes_payload(
+    *,
+    project_dir: Path | None = None,
+) -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
     cli_runner_selection = {
         mode.mode: select_cli_runner_profiles(runtime_mode=mode.mode).to_dict(
@@ -863,11 +1077,15 @@ def build_runtime_modes_payload() -> dict[str, Any]:
         ),
         "runtime_subagent_matrix": build_runtime_subagent_matrix(),
         "runtime_subagent_mutation_policy": build_runtime_subagent_mutation_policy(),
-        "runtime_policy_matrix": build_runtime_policy_matrix(),
-        "runtime_capability_matrix": build_runtime_capability_matrix(),
+        "runtime_policy_matrix": build_runtime_policy_matrix(project_dir=project_dir),
+        "runtime_capability_matrix": build_runtime_capability_matrix(
+            project_dir=project_dir,
+        ),
         "runtime_eval_matrix": build_runtime_eval_matrix(),
-        "runtime_eval_history": build_runtime_eval_history(),
-        "runtime_comparative_eval_matrix": build_runtime_comparative_eval_matrix(),
+        "runtime_eval_history": build_runtime_eval_history(project_dir=project_dir),
+        "runtime_comparative_eval_matrix": build_runtime_comparative_eval_matrix(
+            project_dir=project_dir,
+        ),
         "recommendations": {
             "full_autonomous": "Use provider=claude.",
             "generic_edit": (
@@ -901,6 +1119,12 @@ def build_runtime_modes_payload() -> dict[str, Any]:
             "external_mcp_client": (
                 f"Set {EXTERNAL_MCP_CLIENT_ENV}=true only when you are ready "
                 "to enable the provider-neutral external MCP client bridge."
+            ),
+            "provider_autonomous_readiness": (
+                "Run --provider-smoke --provider-smoke-runtime provider_e2e "
+                "until provider_autonomous_readiness.status is "
+                "full_autonomous_candidate before treating a direct API "
+                "provider as autonomous."
             ),
         },
     }
@@ -1442,6 +1666,8 @@ def format_runtime_modes_text() -> str:
             row["selected_runtime_mode"],
             "yes" if row["fallback_allowed"] else "no",
             row["policy"],
+            row["autonomous_policy_gate"],
+            row["autonomous_readiness_recommendation"],
             row["reason"],
             ", ".join(row["runner_candidates"]) or "none",
         ]
@@ -1453,6 +1679,8 @@ def format_runtime_modes_text() -> str:
             row["provider"],
             row["readiness"],
             row["recommended_runtime_mode"],
+            row["autonomous_policy_gate"],
+            row["autonomous_readiness_recommendation"],
             ", ".join(row["blockers"]) or "none",
             ", ".join(row["warnings"]) or "none",
             ", ".join(row["cli_runner_candidates"]) or "none",
@@ -1629,6 +1857,8 @@ def format_runtime_modes_text() -> str:
                     "Selected",
                     "Fallback",
                     "Policy",
+                    "Autonomous gate",
+                    "Autonomy recommendation",
                     "Reason",
                     "Runner candidates",
                 ],
@@ -1640,6 +1870,8 @@ def format_runtime_modes_text() -> str:
                     "Provider",
                     "Readiness",
                     "Recommended runtime",
+                    "Autonomous gate",
+                    "Autonomy recommendation",
                     "Blockers",
                     "Warnings",
                     "CLI candidates",
