@@ -1,5 +1,6 @@
 import type {
   ProviderAutonomousReadinessDiagnostics,
+  ProviderAutonomousReadinessRequirements,
   ProviderContractHealth,
   ProviderE2eSuiteDiagnostics,
   ProviderLiveFaultProbeDiagnostics,
@@ -27,6 +28,38 @@ function booleanFromUnknown(value: unknown): boolean | undefined {
 
 function numberFromUnknown(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function providerReadinessRequirementsFromUnknown(
+  value: unknown
+): ProviderAutonomousReadinessRequirements | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const requirements: ProviderAutonomousReadinessRequirements = {
+    minStableRuns: numberFromUnknown(payload.min_stable_runs),
+    observedRecentWindow: numberFromUnknown(payload.observed_recent_window),
+    observedConsecutivePasses: numberFromUnknown(
+      payload.observed_consecutive_passes
+    ),
+    historyStabilityComplete: booleanFromUnknown(
+      payload.history_stability_complete
+    ),
+    requiredLiveFaultCases: arrayFromUnknown(payload.required_live_fault_cases),
+    liveFaultCoveredCases: arrayFromUnknown(payload.live_fault_covered_cases),
+    liveFaultMissingCases: arrayFromUnknown(payload.live_fault_missing_cases),
+    liveFaultCoverageComplete: booleanFromUnknown(
+      payload.live_fault_coverage_complete
+    ),
+  };
+
+  return Object.values(requirements).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? requirements
+    : undefined;
 }
 
 export function mapProviderRuntimeResumePolicy(
@@ -175,6 +208,8 @@ export function mapProviderAutonomousReadiness(
     blockers: arrayFromUnknown(payload.blockers),
     warnings: arrayFromUnknown(payload.warnings),
     evidence: arrayFromUnknown(payload.evidence),
+    requirements: providerReadinessRequirementsFromUnknown(payload.requirements),
+    missingRequirements: arrayFromUnknown(payload.missing_requirements),
     nextActions: arrayFromUnknown(payload.next_actions),
   };
 

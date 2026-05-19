@@ -829,6 +829,23 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
         "blockers": [],
         "warnings": ["provider_history_warming_up"],
         "next_actions": ["collect_provider_history_runs"],
+        "requirements": {
+            "min_stable_runs": 3,
+            "observed_recent_window": 1,
+            "observed_consecutive_passes": 1,
+            "history_stability_complete": False,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_missing_cases": [],
+            "live_fault_coverage_complete": True,
+        },
+        "missing_requirements": ["stable_history_runs"],
         "evidence": [
             "provider_e2e_passed",
             "provider_reliability_complete",
@@ -857,6 +874,23 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
         "blockers": [],
         "warnings": [],
         "next_actions": [],
+        "requirements": {
+            "min_stable_runs": 3,
+            "observed_recent_window": 3,
+            "observed_consecutive_passes": 3,
+            "history_stability_complete": True,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_missing_cases": [],
+            "live_fault_coverage_complete": True,
+        },
+        "missing_requirements": [],
         "evidence": [
             "provider_e2e_passed",
             "provider_reliability_complete",
@@ -912,6 +946,23 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "blockers": [],
         "warnings": ["provider_history_insufficient_runs"],
         "next_actions": ["collect_provider_history_runs"],
+        "requirements": {
+            "min_stable_runs": 3,
+            "observed_recent_window": 2,
+            "observed_consecutive_passes": 2,
+            "history_stability_complete": False,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_missing_cases": [],
+            "live_fault_coverage_complete": True,
+        },
+        "missing_requirements": ["stable_history_runs"],
         "evidence": [
             "provider_e2e_passed",
             "provider_reliability_complete",
@@ -938,6 +989,20 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "blockers": [],
         "warnings": ["live_fault_probe_coverage_incomplete"],
         "next_actions": ["enable_live_fault_probes"],
+        "requirements": {
+            "min_stable_runs": 3,
+            "observed_recent_window": 3,
+            "observed_consecutive_passes": 3,
+            "history_stability_complete": True,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": ["unsupported_tools"],
+            "live_fault_missing_cases": ["gateway_model_limitations"],
+            "live_fault_coverage_complete": False,
+        },
+        "missing_requirements": ["live_fault_case_coverage"],
         "evidence": [
             "provider_e2e_passed",
             "provider_reliability_complete",
@@ -993,6 +1058,29 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
             "inspect_uncovered_cases",
             "enable_live_fault_probes",
             "collect_provider_history_runs",
+        ],
+        "requirements": {
+            "min_stable_runs": 3,
+            "observed_recent_window": 1,
+            "observed_consecutive_passes": 0,
+            "history_stability_complete": False,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [],
+            "live_fault_missing_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_coverage_complete": False,
+        },
+        "missing_requirements": [
+            "provider_e2e",
+            "provider_reliability",
+            "latest_provider_e2e_pass",
+            "stable_history_runs",
+            "live_fault_case_coverage",
         ],
         "evidence": [],
     }

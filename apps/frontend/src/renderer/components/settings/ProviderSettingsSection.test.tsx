@@ -150,8 +150,12 @@ const translate = (key: string) =>
       'Live fault probe evidence missing',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCoverageIncomplete':
       'Live fault probe coverage incomplete',
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultCaseCoverage':
+      'Live fault case coverage',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed':
       'Live fault probes passed',
+    'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2ePass':
+      'Latest provider e2e pass',
     'settings:aiProvider.runtimeDiagnosticValues.needsLiveFaultEvidence':
       'Needs live fault evidence',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eFailed': 'Provider e2e failed',
@@ -166,6 +170,8 @@ const translate = (key: string) =>
       'Provider reliability complete',
     'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityIncomplete':
       'Provider reliability incomplete',
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliability':
+      'Provider reliability',
     'settings:aiProvider.runtimeDiagnosticValues.warmingUp': 'Warming up',
     'settings:aiProvider.runtimeDiagnosticValues.ready': 'Ready',
     'settings:aiProvider.runtimeDiagnosticValues.repairMutation': 'Repair mutation',
@@ -207,6 +213,8 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.preferGenericEdit': 'Prefer generic edit',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eSuite': 'Provider e2e suite',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryStable': 'Stable history',
+    'settings:aiProvider.runtimeDiagnosticValues.stableHistoryRuns':
+      'Stable history runs',
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
     'settings:aiProvider.runtimeDiagnosticValues.skipped': 'Skipped',
@@ -418,7 +426,7 @@ describe('buildRuntimeEvalDiagnosticRows', () => {
     ).toEqual([
       {
         labelKey: 'settings:aiProvider.controlPlane.runtimeEval',
-        value: 'Provider e2e: Provider e2e (Provider e2e suite, provider reliability)',
+        value: 'Provider e2e: Provider e2e (Provider e2e suite, Provider reliability)',
       },
     ]);
   });

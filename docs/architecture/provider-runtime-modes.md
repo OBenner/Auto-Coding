@@ -179,12 +179,17 @@ accounts remains optional because it depends on credentials, model availability,
 and gateway behavior outside the repository.
 The same smoke output now carries `provider_autonomous_readiness`: an aggregate
 scorecard with `status`, `recommendation`, `blockers`, `warnings`, `evidence`,
-and `next_actions`. It combines provider e2e results, reliability coverage,
-persisted provider-run history, and live fault probe evidence so direct API
-providers can be promoted only when the data shows they are stable enough. A
-direct provider needs at least three stable recent provider e2e runs, a matching
-consecutive pass streak, and live fault probe coverage for every required
-negative case before the scorecard can become `full_autonomous_candidate`.
+`requirements`, `missing_requirements`, and `next_actions`. It combines provider
+e2e results, reliability coverage, persisted provider-run history, and live fault
+probe evidence so direct API providers can be promoted only when the data shows
+they are stable enough. A direct provider needs at least three stable recent
+provider e2e runs, a matching consecutive pass streak, and live fault probe
+coverage for every required negative case before the scorecard can become
+`full_autonomous_candidate`. The structured requirements payload exposes the
+minimum stable-run threshold, observed recent window, observed consecutive-pass
+streak, required/covered/missing live fault cases, and booleans for history and
+live-fault completion so backend automation and UI surfaces do not need to parse
+free-form warning strings.
 
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
@@ -334,8 +339,9 @@ even when `generic_edit` can still run.
 - Provider e2e records negative fixtures in `provider_e2e_negative_fixtures`.
 - Provider e2e reports aggregate readiness through `provider_reliability`.
 - Provider smoke reports `provider_autonomous_readiness` with recommendation,
-  blockers, warnings, evidence, and next actions derived from e2e, reliability,
-  history, and live fault probe data.
+  blockers, warnings, structured requirements, missing requirement ids,
+  evidence, and next actions derived from e2e, reliability, history, and live
+  fault probe data.
 - Provider smoke history persists compact evidence in
   `.auto-Codex/provider-smoke-history.json`.
 - Provider smoke history reports recent-run trend, window counts, and pass/fail
@@ -345,8 +351,8 @@ even when `generic_edit` can still run.
   required provider negative cases.
 - Runtime diagnostics read the same persisted history and attach
   `autonomous_policy_gate`, readiness status, recommendation, blockers,
-  warnings, evidence, and next actions to the runtime policy and capability
-  matrices.
+  warnings, structured requirements, missing requirement ids, evidence, and next
+  actions to the runtime policy and capability matrices.
 - Direct-provider coder and QA fixer policies are downgraded to the readiness
   recommendation while the autonomous gate is blocked.
 
@@ -366,7 +372,7 @@ even when `generic_edit` can still run.
 - The settings UI surfaces suite status and negative fixtures.
 - The settings UI surfaces live fault probes and provider reliability.
 - The settings UI surfaces provider autonomous readiness recommendations,
-  blockers, warnings, evidence, and next actions.
+  blockers, warnings, missing requirements, evidence, and next actions.
 - The settings UI surfaces autonomous policy gate and recommendation text in
   runtime governance diagnostics.
 - The settings UI surfaces transaction-batch evidence.
@@ -411,6 +417,7 @@ even when `generic_edit` can still run.
   warnings.
 - Runtime governance diagnostics show the direct-provider autonomous policy gate
   and readiness recommendation.
+- Runtime governance diagnostics show structured missing readiness requirements.
 - Runtime governance diagnostics show runtime eval history.
 - Runtime governance diagnostics show CLI runner contract status.
 - Runtime governance diagnostics show mutating-subagent gates.

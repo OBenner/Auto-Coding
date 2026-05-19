@@ -25,6 +25,18 @@ describe('mapProviderAutonomousReadiness', () => {
         warnings: ['provider_history_warming_up', 7],
         next_actions: ['collect_provider_history_runs', null],
         evidence: ['provider_e2e_passed', 'live_fault_probes_passed', false],
+        requirements: {
+          min_stable_runs: 3,
+          observed_recent_window: 2,
+          observed_consecutive_passes: 2,
+          history_stability_complete: false,
+          required_live_fault_cases: ['gateway_model_limitations', 42],
+          live_fault_covered_cases: ['unsupported_tools'],
+          live_fault_missing_cases: ['gateway_model_limitations'],
+          live_fault_coverage_complete: false,
+          ignored_private_path: 'workspace-private/requirements.json',
+        },
+        missing_requirements: ['stable_history_runs', null],
         ignored_private_path: 'workspace-private/readiness.json',
       })
     ).toEqual({
@@ -36,6 +48,17 @@ describe('mapProviderAutonomousReadiness', () => {
       warnings: ['provider_history_warming_up'],
       nextActions: ['collect_provider_history_runs'],
       evidence: ['provider_e2e_passed', 'live_fault_probes_passed'],
+      requirements: {
+        minStableRuns: 3,
+        observedRecentWindow: 2,
+        observedConsecutivePasses: 2,
+        historyStabilityComplete: false,
+        requiredLiveFaultCases: ['gateway_model_limitations'],
+        liveFaultCoveredCases: ['unsupported_tools'],
+        liveFaultMissingCases: ['gateway_model_limitations'],
+        liveFaultCoverageComplete: false,
+      },
+      missingRequirements: ['stable_history_runs'],
     });
   });
 

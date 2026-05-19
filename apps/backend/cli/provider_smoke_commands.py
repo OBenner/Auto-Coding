@@ -530,6 +530,7 @@ def _provider_autonomous_readiness_diagnostics(
     warnings.extend(history_warnings)
 
     status, recommendation = _provider_readiness_status(blockers, warnings)
+    requirements = _provider_readiness_requirements(history_summary)
     return {
         "status": status,
         "provider": provider,
@@ -538,6 +539,11 @@ def _provider_autonomous_readiness_diagnostics(
         "blockers": blockers,
         "warnings": warnings,
         "next_actions": _provider_readiness_next_actions(blockers, warnings),
+        "requirements": requirements,
+        "missing_requirements": _provider_readiness_missing_requirements(
+            blockers,
+            requirements,
+        ),
         "evidence": evidence,
     }
 
@@ -596,15 +602,11 @@ def _provider_readiness_history_is_stable_enough(
     history_summary: dict[str, Any],
 ) -> bool:
     """Return whether persisted history has enough stable runs for promotion."""
-    recent_window = _int_payload_value(history_summary, "recent_window")
-    if recent_window == 0:
-        recent_window = _int_payload_value(history_summary, "total_runs")
-    consecutive_passes = _int_payload_value(history_summary, "consecutive_passes")
-    if consecutive_passes == 0:
-        consecutive_passes = _int_payload_value(history_summary, "passed_runs")
     return (
-        recent_window >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
-        and consecutive_passes >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+        _provider_readiness_recent_window(history_summary)
+        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+        and _provider_readiness_consecutive_passes(history_summary)
+        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
     )
 
 
@@ -633,6 +635,76 @@ def _provider_readiness_live_fault_coverage_complete(
         required_case in covered_cases
         for required_case in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
     )
+
+
+def _provider_readiness_requirements(
+    history_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Return structured readiness requirement evidence for operators."""
+    recent_window = _provider_readiness_recent_window(history_summary)
+    consecutive_passes = _provider_readiness_consecutive_passes(history_summary)
+    required_live_fault_cases = sorted(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
+    live_fault_covered_cases = sorted(
+        _string_list_payload(history_summary.get("live_fault_probe_covered_cases"))
+    )
+    live_fault_missing_cases = [
+        required_case
+        for required_case in required_live_fault_cases
+        if required_case not in live_fault_covered_cases
+    ]
+    live_fault_coverage_complete = (
+        history_summary.get("last_live_fault_probe_status") == "passed"
+        and not live_fault_missing_cases
+    )
+    return {
+        "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
+        "observed_recent_window": recent_window,
+        "observed_consecutive_passes": consecutive_passes,
+        "history_stability_complete": _provider_readiness_history_is_stable_enough(
+            history_summary,
+        ),
+        "required_live_fault_cases": required_live_fault_cases,
+        "live_fault_covered_cases": live_fault_covered_cases,
+        "live_fault_missing_cases": live_fault_missing_cases,
+        "live_fault_coverage_complete": live_fault_coverage_complete,
+    }
+
+
+def _provider_readiness_recent_window(history_summary: dict[str, Any]) -> int:
+    """Return observed recent-window count from provider history."""
+    recent_window = _int_payload_value(history_summary, "recent_window")
+    if recent_window == 0:
+        recent_window = _int_payload_value(history_summary, "total_runs")
+    return recent_window
+
+
+def _provider_readiness_consecutive_passes(history_summary: dict[str, Any]) -> int:
+    """Return observed consecutive-pass count from provider history."""
+    consecutive_passes = _int_payload_value(history_summary, "consecutive_passes")
+    if consecutive_passes == 0:
+        consecutive_passes = _int_payload_value(history_summary, "passed_runs")
+    return consecutive_passes
+
+
+def _provider_readiness_missing_requirements(
+    blockers: list[str],
+    requirements: dict[str, Any],
+) -> list[str]:
+    """Return stable missing requirement ids for readiness automation."""
+    missing: list[str] = []
+    if "provider_e2e_failed" in blockers:
+        missing.append("provider_e2e")
+    if "provider_reliability_incomplete" in blockers:
+        missing.append("provider_reliability")
+    if "provider_history_latest_failed" in blockers:
+        missing.append("latest_provider_e2e_pass")
+    if requirements.get("history_stability_complete") is not True:
+        missing.append("stable_history_runs")
+    if requirements.get("live_fault_coverage_complete") is not True:
+        missing.append("live_fault_case_coverage")
+    return missing
 
 
 def _provider_readiness_status(

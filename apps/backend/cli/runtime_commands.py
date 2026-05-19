@@ -581,6 +581,10 @@ def build_runtime_policy_matrix(
                     "autonomous_readiness_recommendation": readiness["recommendation"],
                     "autonomous_readiness_blockers": readiness["blockers"],
                     "autonomous_readiness_warnings": readiness["warnings"],
+                    "autonomous_readiness_requirements": readiness["requirements"],
+                    "autonomous_readiness_missing_requirements": readiness[
+                        "missing_requirements"
+                    ],
                 }
                 if readiness_required and readiness is not None
                 else {
@@ -590,6 +594,8 @@ def build_runtime_policy_matrix(
                     "autonomous_readiness_recommendation": "not_required",
                     "autonomous_readiness_blockers": [],
                     "autonomous_readiness_warnings": [],
+                    "autonomous_readiness_requirements": {},
+                    "autonomous_readiness_missing_requirements": [],
                 }
             )
             matrix.append(
@@ -704,6 +710,14 @@ def build_runtime_capability_matrix(
                 if readiness is not None
                 else [],
                 "autonomous_readiness_evidence": readiness["evidence"]
+                if readiness is not None
+                else [],
+                "autonomous_readiness_requirements": readiness["requirements"]
+                if readiness is not None
+                else {},
+                "autonomous_readiness_missing_requirements": readiness[
+                    "missing_requirements"
+                ]
                 if readiness is not None
                 else [],
                 "autonomous_readiness_next_actions": readiness["next_actions"]
@@ -902,6 +916,7 @@ def _runtime_provider_autonomous_readiness_from_history(
         status = "full_autonomous_candidate"
         recommendation = "api_runtime_full_autonomous_candidate"
 
+    requirements = _runtime_provider_readiness_requirements(provider_stats)
     return {
         "provider": provider,
         "status": status,
@@ -910,6 +925,11 @@ def _runtime_provider_autonomous_readiness_from_history(
         "blockers": blockers,
         "warnings": warnings,
         "evidence": evidence,
+        "requirements": requirements,
+        "missing_requirements": _runtime_provider_missing_requirements(
+            blockers,
+            requirements,
+        ),
         "next_actions": _runtime_provider_readiness_next_actions(blockers, warnings),
     }
 
@@ -918,18 +938,32 @@ def _runtime_provider_readiness_history_is_stable_enough(
     provider_stats: dict[str, Any],
 ) -> bool:
     """Return whether persisted provider history has enough stable runs."""
+    return (
+        _runtime_provider_readiness_recent_window(provider_stats)
+        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+        and _runtime_provider_readiness_consecutive_passes(provider_stats)
+        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+    )
+
+
+def _runtime_provider_readiness_recent_window(provider_stats: dict[str, Any]) -> int:
+    """Return observed recent-window count from provider history."""
     recent_window = _runtime_eval_int_stat(provider_stats.get("recent_window"))
     if recent_window == 0:
         recent_window = _runtime_eval_int_stat(provider_stats.get("total_runs"))
+    return recent_window
+
+
+def _runtime_provider_readiness_consecutive_passes(
+    provider_stats: dict[str, Any],
+) -> int:
+    """Return observed consecutive-pass count from provider history."""
     consecutive_passes = _runtime_eval_int_stat(
         provider_stats.get("consecutive_passes")
     )
     if consecutive_passes == 0:
         consecutive_passes = _runtime_eval_int_stat(provider_stats.get("passed_runs"))
-    return (
-        recent_window >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
-        and consecutive_passes >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
-    )
+    return consecutive_passes
 
 
 def _runtime_string_list_payload(value: Any) -> list[str]:
@@ -952,6 +986,64 @@ def _runtime_provider_live_fault_coverage_complete(
         required_case in covered_cases
         for required_case in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
     )
+
+
+def _runtime_provider_readiness_requirements(
+    provider_stats: dict[str, Any],
+) -> dict[str, Any]:
+    """Return structured readiness requirement evidence for runtime diagnostics."""
+    required_live_fault_cases = sorted(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
+    live_fault_covered_cases = sorted(
+        _runtime_string_list_payload(
+            provider_stats.get("live_fault_probe_covered_cases")
+        )
+    )
+    live_fault_missing_cases = [
+        required_case
+        for required_case in required_live_fault_cases
+        if required_case not in live_fault_covered_cases
+    ]
+    live_fault_coverage_complete = (
+        provider_stats.get("last_live_fault_probe_status") == "passed"
+        and not live_fault_missing_cases
+    )
+    return {
+        "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
+        "observed_recent_window": _runtime_provider_readiness_recent_window(
+            provider_stats
+        ),
+        "observed_consecutive_passes": _runtime_provider_readiness_consecutive_passes(
+            provider_stats
+        ),
+        "history_stability_complete": _runtime_provider_readiness_history_is_stable_enough(
+            provider_stats
+        ),
+        "required_live_fault_cases": required_live_fault_cases,
+        "live_fault_covered_cases": live_fault_covered_cases,
+        "live_fault_missing_cases": live_fault_missing_cases,
+        "live_fault_coverage_complete": live_fault_coverage_complete,
+    }
+
+
+def _runtime_provider_missing_requirements(
+    blockers: list[str],
+    requirements: dict[str, Any],
+) -> list[str]:
+    """Return stable missing requirement ids for runtime automation."""
+    missing: list[str] = []
+    if "provider_e2e_failed" in blockers:
+        missing.append("provider_e2e")
+    if "provider_reliability_incomplete" in blockers:
+        missing.append("provider_reliability")
+    if "provider_history_latest_failed" in blockers:
+        missing.append("latest_provider_e2e_pass")
+    if requirements.get("history_stability_complete") is not True:
+        missing.append("stable_history_runs")
+    if requirements.get("live_fault_coverage_complete") is not True:
+        missing.append("live_fault_case_coverage")
+    return missing
 
 
 def _runtime_provider_autonomous_readiness_by_name(

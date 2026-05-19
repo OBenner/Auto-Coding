@@ -202,6 +202,29 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
         "provider_e2e_required"
     )
+    assert capability_rows["openai"]["autonomous_readiness_requirements"] == {
+        "min_stable_runs": 3,
+        "observed_recent_window": 0,
+        "observed_consecutive_passes": 0,
+        "history_stability_complete": False,
+        "required_live_fault_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "live_fault_covered_cases": [],
+        "live_fault_missing_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "live_fault_coverage_complete": False,
+    }
+    assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == [
+        "provider_e2e",
+        "provider_reliability",
+        "latest_provider_e2e_pass",
+        "stable_history_runs",
+        "live_fault_case_coverage",
+    ]
     selection_rows = payload["cli_runner_selection"]
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
         "codex_cli",
@@ -248,6 +271,29 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
         "autonomous_readiness_warnings": [
             "provider_history_unknown",
             "live_fault_probe_evidence_missing",
+        ],
+        "autonomous_readiness_requirements": {
+            "min_stable_runs": 3,
+            "observed_recent_window": 0,
+            "observed_consecutive_passes": 0,
+            "history_stability_complete": False,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [],
+            "live_fault_missing_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_coverage_complete": False,
+        },
+        "autonomous_readiness_missing_requirements": [
+            "provider_e2e",
+            "provider_reliability",
+            "latest_provider_e2e_pass",
+            "stable_history_runs",
+            "live_fault_case_coverage",
         ],
     }
     assert policy_rows[("coder", "openai")]["selected_runtime_mode"] == "generic_edit"
@@ -581,6 +627,23 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
         "provider_history_stable",
         "live_fault_probes_passed",
     ]
+    assert capability_rows["openai"]["autonomous_readiness_requirements"] == {
+        "min_stable_runs": 3,
+        "observed_recent_window": 3,
+        "observed_consecutive_passes": 3,
+        "history_stability_complete": True,
+        "required_live_fault_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "live_fault_covered_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "live_fault_missing_cases": [],
+        "live_fault_coverage_complete": True,
+    }
+    assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == []
     assert policy_rows[("coder", "openai")]["autonomous_policy_gate"] == "passed"
     assert policy_rows[("coder", "openai")]["policy"] == "prefer_generic_edit"
 
@@ -674,6 +737,25 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
     assert capability_rows["openai"]["autonomous_readiness_next_actions"] == [
         "collect_provider_history_runs"
     ]
+    assert capability_rows["openai"]["autonomous_readiness_requirements"] == {
+        "min_stable_runs": 3,
+        "observed_recent_window": 2,
+        "observed_consecutive_passes": 2,
+        "history_stability_complete": False,
+        "required_live_fault_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "live_fault_covered_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "live_fault_missing_cases": [],
+        "live_fault_coverage_complete": True,
+    }
+    assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == [
+        "stable_history_runs"
+    ]
     assert policy_rows[("coder", "openai")]["policy"] == (
         "limited_autonomous_until_evidence_stable"
     )
@@ -685,6 +767,22 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
     ]
     assert capability_rows["google"]["autonomous_readiness_next_actions"] == [
         "enable_live_fault_probes"
+    ]
+    assert capability_rows["google"]["autonomous_readiness_requirements"] == {
+        "min_stable_runs": 3,
+        "observed_recent_window": 3,
+        "observed_consecutive_passes": 3,
+        "history_stability_complete": True,
+        "required_live_fault_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "live_fault_covered_cases": ["unsupported_tools"],
+        "live_fault_missing_cases": ["gateway_model_limitations"],
+        "live_fault_coverage_complete": False,
+    }
+    assert capability_rows["google"]["autonomous_readiness_missing_requirements"] == [
+        "live_fault_case_coverage"
     ]
     assert policy_rows[("coder", "google")]["policy"] == (
         "limited_autonomous_until_live_faults"

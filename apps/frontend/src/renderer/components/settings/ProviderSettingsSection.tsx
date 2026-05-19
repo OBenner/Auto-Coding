@@ -290,8 +290,12 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeEvidenceMissing',
   live_fault_probe_coverage_incomplete:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCoverageIncomplete',
+  live_fault_case_coverage:
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultCaseCoverage',
   live_fault_probes_passed:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed',
+  latest_provider_e2e_pass:
+    'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2ePass',
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
   model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
@@ -353,6 +357,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
   provider_live_fault_fixture:
     'settings:aiProvider.runtimeDiagnosticValues.providerLiveFaultFixture',
+  provider_reliability: 'settings:aiProvider.runtimeDiagnosticValues.providerReliability',
   provider_history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryDegraded',
   provider_history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
   provider_history_recovering:
@@ -411,6 +416,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   smoke_not_completed: 'settings:aiProvider.runtimeDiagnosticValues.smokeNotCompleted',
   stabilize_provider_history:
     'settings:aiProvider.runtimeDiagnosticValues.stabilizeProviderHistory',
+  stable_history_runs:
+    'settings:aiProvider.runtimeDiagnosticValues.stableHistoryRuns',
   consecutive_recent_failures:
     'settings:aiProvider.runtimeDiagnosticValues.consecutiveRecentFailures',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
@@ -1037,7 +1044,13 @@ export function buildRuntimePolicyDiagnosticRows(
       const autonomousSuffix = row.autonomous_readiness_required
         ? [autonomousGate, autonomousRecommendation].filter(Boolean).join(', ')
         : '';
-      const suffix = [policy, autonomousSuffix, runners].filter(Boolean).join(', ');
+      const missingRequirements = formatRuntimeDiagnosticList(
+        translate,
+        row.autonomous_readiness_missing_requirements
+      );
+      const suffix = [policy, autonomousSuffix, missingRequirements, runners]
+        .filter(Boolean)
+        .join(', ');
       return `${phase}: ${selected}${suffix ? ` (${suffix})` : ''}`;
     })
     .join('; ');
@@ -1077,11 +1090,21 @@ export function buildRuntimeCapabilityDiagnosticRows(
       const autonomousSuffix = row.autonomous_readiness_required
         ? [autonomousGate, autonomousRecommendation].filter(Boolean).join(', ')
         : '';
+      const missingRequirements = formatRuntimeDiagnosticList(
+        translate,
+        row.autonomous_readiness_missing_requirements
+      );
       const runners = formatRuntimeDiagnosticList(
         translate,
         row.cli_runner_candidates
       );
-      const suffix = [autonomousSuffix, blockers, warnings, runners]
+      const suffix = [
+        autonomousSuffix,
+        blockers,
+        warnings,
+        missingRequirements,
+        runners
+      ]
         .filter(Boolean)
         .join('; ');
       return `${provider}: ${readiness} -> ${recommended}${suffix ? ` (${suffix})` : ''}`;
