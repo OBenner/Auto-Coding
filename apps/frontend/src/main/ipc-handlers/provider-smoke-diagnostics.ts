@@ -6,6 +6,7 @@ import type {
   ProviderLiveFaultProbeDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
+  ProviderRunHistoryRecentRun,
   ProviderRunHistoryDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
@@ -60,6 +61,39 @@ function providerReadinessRequirementsFromUnknown(
   )
     ? requirements
     : undefined;
+}
+
+function providerRunHistoryRecentRunFromUnknown(
+  value: unknown
+): ProviderRunHistoryRecentRun | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const run: ProviderRunHistoryRecentRun = {
+    timestamp: stringFromUnknown(payload.timestamp),
+    status: stringFromUnknown(payload.status),
+    runtimeMode: stringFromUnknown(payload.runtime_mode),
+    model: stringFromUnknown(payload.model),
+    reliabilityStatus: stringFromUnknown(payload.reliability_status),
+    providerE2eStatus: stringFromUnknown(payload.provider_e2e_status),
+    liveFaultProbeStatus: stringFromUnknown(payload.live_fault_probe_status),
+  };
+
+  return Object.values(run).some((field) => field !== undefined) ? run : undefined;
+}
+
+function providerRunHistoryRecentRunsFromUnknown(
+  value: unknown
+): ProviderRunHistoryRecentRun[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const runs = value
+    .map(providerRunHistoryRecentRunFromUnknown)
+    .filter((run): run is ProviderRunHistoryRecentRun => Boolean(run));
+  return runs.length ? runs : undefined;
 }
 
 export function mapProviderRuntimeResumePolicy(
@@ -382,6 +416,7 @@ export function mapProviderRunHistory(
     recentWindow: numberFromUnknown(payload.recent_window),
     recentPassedRuns: numberFromUnknown(payload.recent_passed_runs),
     recentFailedRuns: numberFromUnknown(payload.recent_failed_runs),
+    recentRuns: providerRunHistoryRecentRunsFromUnknown(payload.recent_runs),
     consecutivePasses: numberFromUnknown(payload.consecutive_passes),
     consecutiveFailures: numberFromUnknown(payload.consecutive_failures),
     path: stringFromUnknown(payload.path),

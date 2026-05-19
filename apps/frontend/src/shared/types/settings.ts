@@ -690,10 +690,21 @@ export interface ProviderRunHistoryDiagnostics {
   recentWindow?: number;
   recentPassedRuns?: number;
   recentFailedRuns?: number;
+  recentRuns?: ProviderRunHistoryRecentRun[];
   consecutivePasses?: number;
   consecutiveFailures?: number;
   path?: string;
   reason?: string;
+}
+
+export interface ProviderRunHistoryRecentRun {
+  timestamp?: string;
+  status?: string;
+  runtimeMode?: string;
+  model?: string;
+  reliabilityStatus?: string;
+  providerE2eStatus?: string;
+  liveFaultProbeStatus?: string;
 }
 
 export interface ProviderConnectionTestResult {

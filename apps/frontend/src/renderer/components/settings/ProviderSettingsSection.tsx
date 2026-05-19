@@ -938,6 +938,34 @@ export function buildProviderRunHistoryDiagnosticRows(
     formatRuntimeDiagnosticValue(translate, history.trend),
     trendCounts,
   ].filter(Boolean).join(' - ');
+  const recentRunsValue = history.recentRuns
+    ?.map((run) => {
+      const status = formatRuntimeDiagnosticValue(translate, run.status);
+      const runtimeMode = formatRuntimeDiagnosticValue(translate, run.runtimeMode);
+      const reliability = formatRuntimeDiagnosticValue(
+        translate,
+        run.reliabilityStatus
+      );
+      const providerE2e = formatRuntimeDiagnosticValue(
+        translate,
+        run.providerE2eStatus
+      );
+      const liveFault = formatRuntimeDiagnosticValue(
+        translate,
+        run.liveFaultProbeStatus
+      );
+      const runParts = [
+        status,
+        runtimeMode,
+        run.model,
+        reliability,
+        providerE2e,
+        liveFault
+      ].filter(Boolean).join(' / ');
+      return [run.timestamp, runParts].filter(Boolean).join(': ');
+    })
+    .filter(Boolean)
+    .join(' -> ');
   const liveFaultProbeRunCounts = [
     typeof history.liveFaultProbeEnabledRuns === 'number'
       ? `${history.liveFaultProbeEnabledRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbeEnabled')}`
@@ -967,6 +995,10 @@ export function buildProviderRunHistoryDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryTrend',
       value: trendValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRecentRuns',
+      value: recentRunsValue || '',
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',

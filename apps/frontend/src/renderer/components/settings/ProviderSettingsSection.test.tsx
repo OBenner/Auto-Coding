@@ -74,6 +74,8 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryTrendPassed': 'passed',
     'settings:aiProvider.connectionTest.providerRunHistoryTrendPassStreak': 'pass streak',
     'settings:aiProvider.connectionTest.providerRunHistoryTrendWindow': 'run window',
+    'settings:aiProvider.connectionTest.providerRunHistoryRecentRuns':
+      'Provider history recent runs',
     'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes':
       'Provider history live fault probes',
     'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbeEnabled':
@@ -833,6 +835,23 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
         recentWindow: 3,
         recentPassedRuns: 3,
         recentFailedRuns: 0,
+        recentRuns: [
+          {
+            timestamp: '2026-05-18T09:00:00Z',
+            status: 'failed',
+            runtimeMode: 'provider_e2e',
+            model: 'gpt-4o',
+          },
+          {
+            timestamp: '2026-05-18T09:05:00Z',
+            status: 'passed',
+            runtimeMode: 'provider_e2e',
+            model: 'gpt-4o',
+            reliabilityStatus: 'complete',
+            providerE2eStatus: 'passed',
+            liveFaultProbeStatus: 'passed',
+          },
+        ],
         consecutivePasses: 3,
         consecutiveFailures: 0,
         path: '.auto-Codex/provider-smoke-history.json',
@@ -853,6 +872,11 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryTrend',
         value: 'Stable history - 3 run window, 3 passed, 0 failed, 3 pass streak',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRecentRuns',
+        value:
+          '2026-05-18T09:00:00Z: Failed / Provider e2e / gpt-4o -> 2026-05-18T09:05:00Z: Passed / Provider e2e / gpt-4o / Complete / Passed / Passed',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',

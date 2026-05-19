@@ -412,7 +412,33 @@ def _provider_smoke_history_trend(
         "recent_failed_runs": recent_failed_runs,
         "consecutive_passes": consecutive_passes,
         "consecutive_failures": consecutive_failures,
+        "recent_runs": _provider_smoke_history_recent_runs(recent_runs),
     }
+
+
+def _provider_smoke_history_recent_runs(
+    runs: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    """Return a compact normalized timeline for the latest provider runs."""
+    timeline: list[dict[str, str]] = []
+    fields = (
+        "timestamp",
+        "status",
+        "runtime_mode",
+        "model",
+        "reliability_status",
+        "provider_e2e_status",
+        "live_fault_probe_status",
+    )
+    for run in runs:
+        item = {
+            field: value
+            for field in fields
+            if isinstance((value := run.get(field)), str) and value
+        }
+        if item:
+            timeline.append(item)
+    return timeline
 
 
 def _provider_smoke_history_provider_stats(
@@ -799,6 +825,7 @@ def _with_provider_run_history(
             "recent_failed_runs": provider_stats.get("recent_failed_runs"),
             "consecutive_passes": provider_stats.get("consecutive_passes"),
             "consecutive_failures": provider_stats.get("consecutive_failures"),
+            "recent_runs": provider_stats.get("recent_runs", []),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }
     except Exception as e:
@@ -3737,9 +3764,41 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
     trend_summary = ", ".join(part for part in trend_parts if part)
     if trend_summary:
         print_key_value("Provider history trend", trend_summary)
+    recent_runs = provider_run_history.get("recent_runs")
+    recent_run_parts = (
+        [
+            _provider_run_history_recent_run_summary(run)
+            for run in recent_runs
+            if isinstance(run, dict)
+        ]
+        if isinstance(recent_runs, list)
+        else []
+    )
+    recent_run_summary = " -> ".join(part for part in recent_run_parts if part)
+    if recent_run_summary:
+        print_key_value("Provider history recent runs", recent_run_summary)
     path = provider_run_history.get("path")
     if isinstance(path, str) and path:
         print_key_value("Provider history artifact", path)
+
+
+def _provider_run_history_recent_run_summary(run: dict[str, Any]) -> str:
+    """Return one compact provider history run summary for CLI output."""
+    timestamp = run.get("timestamp")
+    prefix = f"{timestamp}: " if isinstance(timestamp, str) and timestamp else ""
+    parts = [
+        str(run.get(field))
+        for field in (
+            "status",
+            "runtime_mode",
+            "model",
+            "reliability_status",
+            "provider_e2e_status",
+            "live_fault_probe_status",
+        )
+        if isinstance(run.get(field), str) and run.get(field)
+    ]
+    return f"{prefix}{' / '.join(parts)}" if parts else prefix.rstrip(": ")
 
 
 def _print_provider_autonomous_readiness(readiness: Any) -> None:

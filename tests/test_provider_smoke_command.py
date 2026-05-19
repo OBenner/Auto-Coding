@@ -530,7 +530,22 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
             "source": "provider_adapter_negative_fixture",
         },
     ]
-    assert result.runtime_diagnostics["provider_run_history"] == {
+    provider_run_history = dict(result.runtime_diagnostics["provider_run_history"])
+    recent_runs = provider_run_history.pop("recent_runs")
+    assert len(recent_runs) == 1
+    assert recent_runs[0]["timestamp"].endswith("Z")
+    recent_run_without_timestamp = {
+        key: value for key, value in recent_runs[0].items() if key != "timestamp"
+    }
+    assert recent_run_without_timestamp == {
+        "status": "passed",
+        "runtime_mode": "provider_e2e",
+        "model": "gpt-4o",
+        "reliability_status": "complete",
+        "provider_e2e_status": "passed",
+        "live_fault_probe_status": "passed",
+    }
+    assert provider_run_history == {
         "status": "recorded",
         "provider": "openai",
         "runtime_mode": "provider_e2e",
@@ -701,12 +716,39 @@ def test_provider_run_history_reports_recent_trend(tmp_path: Path):
     assert history_summary["recent_failed_runs"] == 2
     assert history_summary["consecutive_passes"] == 1
     assert history_summary["consecutive_failures"] == 0
+    assert history_summary["recent_runs"][:2] == [
+        {
+            "timestamp": "2026-05-18T09:00:00Z",
+            "status": "failed",
+            "runtime_mode": "provider_e2e",
+            "model": "gpt-4o",
+        },
+        {
+            "timestamp": "2026-05-18T09:05:00Z",
+            "status": "failed",
+            "runtime_mode": "provider_e2e",
+            "model": "gpt-4o",
+        },
+    ]
+    latest_run = history_summary["recent_runs"][2]
+    assert latest_run["timestamp"].endswith("Z")
+    latest_run_without_timestamp = {
+        key: value for key, value in latest_run.items() if key != "timestamp"
+    }
+    assert latest_run_without_timestamp == {
+        "status": "passed",
+        "runtime_mode": "provider_e2e",
+        "model": "gpt-4o",
+        "reliability_status": "complete",
+        "provider_e2e_status": "passed",
+    }
 
     history = json.loads(history_path.read_text(encoding="utf-8"))
     provider_stats = history["providers"]["openai"]
     assert provider_stats["trend"] == "provider_history_recovering"
     assert provider_stats["recent_failed_runs"] == 2
     assert provider_stats["consecutive_passes"] == 1
+    assert provider_stats["recent_runs"] == history_summary["recent_runs"]
 
 
 def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):

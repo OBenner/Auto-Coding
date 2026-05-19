@@ -1305,6 +1305,7 @@
       "providerRunHistoryTrendFailed": "échouées",
       "providerRunHistoryTrendPassStreak": "série de réussites",
       "providerRunHistoryTrendFailStreak": "série d'échecs",
+      "providerRunHistoryRecentRuns": "Exécutions récentes de l'historique fournisseur",
       "providerRunHistoryLiveFaultProbes": "Historique des probes live de panne",
       "providerRunHistoryLiveFaultProbeEnabled": "exécutions activées",
       "providerRunHistoryLiveFaultProbePassed": "exécutions réussies",

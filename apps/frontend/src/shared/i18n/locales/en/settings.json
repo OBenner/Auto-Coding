@@ -1357,6 +1357,7 @@
       "providerRunHistoryTrendFailed": "failed",
       "providerRunHistoryTrendPassStreak": "pass streak",
       "providerRunHistoryTrendFailStreak": "fail streak",
+      "providerRunHistoryRecentRuns": "Provider history recent runs",
       "providerRunHistoryLiveFaultProbes": "Provider history live fault probes",
       "providerRunHistoryLiveFaultProbeEnabled": "enabled runs",
       "providerRunHistoryLiveFaultProbePassed": "passed runs",
