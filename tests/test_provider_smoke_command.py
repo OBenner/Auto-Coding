@@ -831,6 +831,57 @@ def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):
     assert resumed_history["live_fault_probe_passed_runs"] == 1
 
 
+def test_provider_run_history_record_failed_preserves_live_fault_evidence(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    (tmp_path / ".auto-Codex").write_text("not a directory", encoding="utf-8")
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {
+                    "status": "complete",
+                    "observed_case_count": 8,
+                    "passed_case_count": 8,
+                    "required_case_count": 8,
+                    "uncovered_cases": [],
+                },
+                "provider_e2e_live_fault_probes": {
+                    "status": "passed",
+                    "covered_cases": [
+                        "unsupported_tools",
+                        "gateway_model_limitations",
+                    ],
+                },
+            },
+        ),
+    )
+
+    history = result.runtime_diagnostics["provider_run_history"]
+    assert history["status"] == "record_failed"
+    assert history["last_live_fault_probe_status"] == "passed"
+    assert history["live_fault_probe_covered_cases"] == [
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
+    readiness = result.runtime_diagnostics["provider_autonomous_readiness"]
+    assert "live_fault_probe_evidence_missing" not in readiness["warnings"]
+    assert "live_fault_probe_missing" not in readiness["recommendation_reasons"]
+    assert "live_fault_probes_passed" in readiness["evidence"]
+
+
 def test_provider_run_history_reports_quality_and_safety_metrics(tmp_path: Path):
     from cli.provider_smoke_commands import (
         ProviderSmokeResult,
@@ -2823,6 +2874,40 @@ def test_handle_provider_smoke_command_outputs_json(
     assert payload["provider"] == "openai"
     assert payload["response_excerpt"] == "ok"
     assert payload["runtime_diagnostics"] == {}
+
+
+def test_print_provider_run_history_includes_quality_and_safety_percentages(
+    capsys: pytest.CaptureFixture[str],
+):
+    from cli.provider_smoke_commands import _print_provider_run_history
+
+    _print_provider_run_history(
+        {
+            "status": "recorded",
+            "total_runs": 4,
+            "passed_runs": 3,
+            "failed_runs": 1,
+            "trend": "provider_history_stable",
+            "recent_window": 4,
+            "recent_passed_runs": 3,
+            "recent_failed_runs": 1,
+            "pass_rate_percent": 75,
+            "recent_pass_rate_percent": 75,
+            "live_fault_probe_case_coverage_percent": 50,
+            "observed_live_fault_case_count": 1,
+            "required_live_fault_case_count": 2,
+            "recent_runs": [],
+            "path": ".auto-Codex/provider-smoke-history.json",
+        }
+    )
+
+    output = capsys.readouterr().out
+
+    assert "Provider history pass rate" in output
+    assert "75%" in output
+    assert "Provider history recent pass rate" in output
+    assert "Provider history live-fault coverage" in output
+    assert "50% (1/2)" in output
 
 
 def test_handle_provider_smoke_command_prints_generic_edit_execution(

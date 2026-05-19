@@ -855,6 +855,11 @@ def _runtime_provider_history_stats_by_name(
     try:
         payload = json.loads(history_path.read_text(encoding="utf-8"))
     except Exception:
+        logger.debug(
+            "Could not load provider history from %s",
+            history_path,
+            exc_info=True,
+        )
         return {}
     if not isinstance(payload, dict) or not isinstance(payload.get("providers"), dict):
         return {}

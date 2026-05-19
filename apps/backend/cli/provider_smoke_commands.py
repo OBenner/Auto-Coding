@@ -943,11 +943,24 @@ def _with_provider_run_history(
         }
     except Exception as e:
         logger.debug("Provider smoke history persistence failed", exc_info=True)
+        live_fault_probes = result.runtime_diagnostics.get(
+            "provider_e2e_live_fault_probes"
+        )
+        live_fault_probes = (
+            live_fault_probes if isinstance(live_fault_probes, dict) else {}
+        )
+        live_fault_probe_status = live_fault_probes.get("status")
         history_summary = {
             "status": "record_failed",
             "provider": result.provider,
             "runtime_mode": result.runtime_mode,
             "reason": str(e),
+            "last_live_fault_probe_status": live_fault_probe_status
+            if isinstance(live_fault_probe_status, str) and live_fault_probe_status
+            else None,
+            "live_fault_probe_covered_cases": _string_list_payload(
+                live_fault_probes.get("covered_cases")
+            ),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }
     return replace(
@@ -3877,6 +3890,40 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
     trend_summary = ", ".join(part for part in trend_parts if part)
     if trend_summary:
         print_key_value("Provider history trend", trend_summary)
+    pass_rate_percent = provider_run_history.get("pass_rate_percent")
+    if isinstance(pass_rate_percent, int) and not isinstance(pass_rate_percent, bool):
+        print_key_value("Provider history pass rate", f"{pass_rate_percent}%")
+    recent_pass_rate_percent = provider_run_history.get("recent_pass_rate_percent")
+    if isinstance(recent_pass_rate_percent, int) and not isinstance(
+        recent_pass_rate_percent,
+        bool,
+    ):
+        print_key_value(
+            "Provider history recent pass rate",
+            f"{recent_pass_rate_percent}%",
+        )
+    live_fault_coverage_percent = provider_run_history.get(
+        "live_fault_probe_case_coverage_percent"
+    )
+    observed_live_fault_cases = provider_run_history.get(
+        "observed_live_fault_case_count"
+    )
+    required_live_fault_cases = provider_run_history.get(
+        "required_live_fault_case_count"
+    )
+    if (
+        isinstance(live_fault_coverage_percent, int)
+        and not isinstance(live_fault_coverage_percent, bool)
+        and isinstance(observed_live_fault_cases, int)
+        and not isinstance(observed_live_fault_cases, bool)
+        and isinstance(required_live_fault_cases, int)
+        and not isinstance(required_live_fault_cases, bool)
+    ):
+        print_key_value(
+            "Provider history live-fault coverage",
+            f"{live_fault_coverage_percent}% "
+            f"({observed_live_fault_cases}/{required_live_fault_cases})",
+        )
     recent_runs = provider_run_history.get("recent_runs")
     recent_run_parts = (
         [

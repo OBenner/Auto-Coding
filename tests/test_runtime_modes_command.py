@@ -593,6 +593,22 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["claude"]["safety_status"] == "native_runtime_policy"
 
 
+def test_runtime_provider_history_logs_corrupt_artifact(
+    tmp_path: Path,
+    caplog,
+):
+    from cli.runtime_commands import _runtime_provider_history_stats_by_name
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text("{", encoding="utf-8")
+
+    with caplog.at_level(logging.DEBUG, logger="cli.runtime_commands"):
+        assert _runtime_provider_history_stats_by_name(project_dir=tmp_path) == {}
+
+    assert "Could not load provider history from" in caplog.text
+
+
 def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     tmp_path: Path,
     monkeypatch,
