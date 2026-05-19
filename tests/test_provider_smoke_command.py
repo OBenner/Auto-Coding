@@ -866,6 +866,87 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
     }
 
 
+def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_coverage():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+        },
+    )
+
+    two_run_history = {
+        "last_status": "passed",
+        "trend": "provider_history_stable",
+        "recent_window": 2,
+        "consecutive_passes": 2,
+        "last_live_fault_probe_status": "passed",
+        "live_fault_probe_covered_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+    }
+    assert _provider_autonomous_readiness_diagnostics(
+        result,
+        two_run_history,
+    ) == {
+        "status": "warming_up",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "limited_autonomous_until_evidence_stable",
+        "blockers": [],
+        "warnings": ["provider_history_insufficient_runs"],
+        "next_actions": ["collect_provider_history_runs"],
+        "evidence": [
+            "provider_e2e_passed",
+            "provider_reliability_complete",
+            "live_fault_probes_passed",
+        ],
+    }
+
+    partial_live_fault_history = {
+        "last_status": "passed",
+        "trend": "provider_history_stable",
+        "recent_window": 3,
+        "consecutive_passes": 3,
+        "last_live_fault_probe_status": "passed",
+        "live_fault_probe_covered_cases": ["unsupported_tools"],
+    }
+    assert _provider_autonomous_readiness_diagnostics(
+        result,
+        partial_live_fault_history,
+    ) == {
+        "status": "needs_live_fault_evidence",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "limited_autonomous_until_live_faults",
+        "blockers": [],
+        "warnings": ["live_fault_probe_coverage_incomplete"],
+        "next_actions": ["enable_live_fault_probes"],
+        "evidence": [
+            "provider_e2e_passed",
+            "provider_reliability_complete",
+            "provider_history_stable",
+            "live_fault_probes_passed",
+        ],
+    }
+
+
 def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
     from cli.provider_smoke_commands import (
         ProviderSmokeResult,

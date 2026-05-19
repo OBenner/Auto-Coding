@@ -148,6 +148,8 @@ const translate = (key: string) =>
       'Limited autonomous until evidence stable',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeEvidenceMissing':
       'Live fault probe evidence missing',
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCoverageIncomplete':
+      'Live fault probe coverage incomplete',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed':
       'Live fault probes passed',
     'settings:aiProvider.runtimeDiagnosticValues.needsLiveFaultEvidence':
@@ -156,6 +158,8 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.providerE2ePassed': 'Provider e2e passed',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryLatestFailed':
       'Provider history latest failed',
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryInsufficientRuns':
+      'Provider history insufficient runs',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp':
       'Provider history warming up',
     'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityComplete':

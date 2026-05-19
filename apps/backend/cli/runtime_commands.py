@@ -52,6 +52,8 @@ from agents.runtime.subagents import (
     resolve_runtime_subagent_support,
 )
 from cli.provider_smoke_commands import (
+    PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
+    PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES,
     PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
     PROVIDER_SMOKE_HISTORY_RELATIVE_PATH,
 )
@@ -829,7 +831,9 @@ def _runtime_provider_readiness_next_actions(
         "provider_history_flaky": "stabilize_provider_history",
         "provider_history_recovering": "collect_provider_history_runs",
         "provider_history_degraded": "stabilize_provider_history",
+        "provider_history_insufficient_runs": "collect_provider_history_runs",
         "live_fault_probe_evidence_missing": "enable_live_fault_probes",
+        "live_fault_probe_coverage_incomplete": "enable_live_fault_probes",
     }
     actions: list[str] = []
     for reason in [*blockers, *warnings]:
@@ -866,7 +870,10 @@ def _runtime_provider_autonomous_readiness_from_history(
 
     trend = provider_stats.get("trend")
     if trend == "provider_history_stable":
-        evidence.append("provider_history_stable")
+        if _runtime_provider_readiness_history_is_stable_enough(provider_stats):
+            evidence.append("provider_history_stable")
+        else:
+            warnings.append("provider_history_insufficient_runs")
     elif isinstance(trend, str) and trend:
         warnings.append(trend)
     else:
@@ -874,13 +881,18 @@ def _runtime_provider_autonomous_readiness_from_history(
 
     if provider_stats.get("last_live_fault_probe_status") == "passed":
         evidence.append("live_fault_probes_passed")
+        if not _runtime_provider_live_fault_coverage_complete(provider_stats):
+            warnings.append("live_fault_probe_coverage_incomplete")
     else:
         warnings.append("live_fault_probe_evidence_missing")
 
     if blockers:
         status = "blocked"
         recommendation = "provider_e2e_required"
-    elif "live_fault_probe_evidence_missing" in warnings:
+    elif (
+        "live_fault_probe_evidence_missing" in warnings
+        or "live_fault_probe_coverage_incomplete" in warnings
+    ):
         status = "needs_live_fault_evidence"
         recommendation = "limited_autonomous_until_live_faults"
     elif warnings:
@@ -900,6 +912,46 @@ def _runtime_provider_autonomous_readiness_from_history(
         "evidence": evidence,
         "next_actions": _runtime_provider_readiness_next_actions(blockers, warnings),
     }
+
+
+def _runtime_provider_readiness_history_is_stable_enough(
+    provider_stats: dict[str, Any],
+) -> bool:
+    """Return whether persisted provider history has enough stable runs."""
+    recent_window = _runtime_eval_int_stat(provider_stats.get("recent_window"))
+    if recent_window == 0:
+        recent_window = _runtime_eval_int_stat(provider_stats.get("total_runs"))
+    consecutive_passes = _runtime_eval_int_stat(
+        provider_stats.get("consecutive_passes")
+    )
+    if consecutive_passes == 0:
+        consecutive_passes = _runtime_eval_int_stat(provider_stats.get("passed_runs"))
+    return (
+        recent_window >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+        and consecutive_passes >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+    )
+
+
+def _runtime_string_list_payload(value: Any) -> list[str]:
+    """Return a safe string list from a persisted diagnostics payload."""
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value[:20] if isinstance(item, str) and item]
+
+
+def _runtime_provider_live_fault_coverage_complete(
+    provider_stats: dict[str, Any],
+) -> bool:
+    """Return whether live fault history covered every required fault case."""
+    covered_cases = set(
+        _runtime_string_list_payload(
+            provider_stats.get("live_fault_probe_covered_cases")
+        )
+    )
+    return all(
+        required_case in covered_cases
+        for required_case in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
 
 
 def _runtime_provider_autonomous_readiness_by_name(

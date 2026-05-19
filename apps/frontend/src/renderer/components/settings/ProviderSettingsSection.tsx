@@ -288,6 +288,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.limitedAutonomousUntilLiveFaults',
   live_fault_probe_evidence_missing:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeEvidenceMissing',
+  live_fault_probe_coverage_incomplete:
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCoverageIncomplete',
   live_fault_probes_passed:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed',
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
@@ -357,6 +359,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryRecovering',
   provider_history_latest_failed:
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryLatestFailed',
+  provider_history_insufficient_runs:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryInsufficientRuns',
   provider_history_stable: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryStable',
   provider_history_unknown: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryUnknown',
   provider_history_warming_up:

@@ -599,6 +599,98 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert policy_rows[("coder", "google")]["autonomous_policy_gate"] == "blocked"
 
 
+def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_coverage(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    from cli.runtime_commands import handle_runtime_modes_command
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {
+                    "openai": {
+                        "total_runs": 2,
+                        "passed_runs": 2,
+                        "failed_runs": 0,
+                        "last_status": "passed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-18T00:00:00Z",
+                        "last_reliability_status": "complete",
+                        "last_provider_e2e_status": "passed",
+                        "last_live_fault_probe_status": "passed",
+                        "live_fault_probe_enabled_runs": 2,
+                        "live_fault_probe_passed_runs": 2,
+                        "live_fault_probe_covered_cases": [
+                            "gateway_model_limitations",
+                            "unsupported_tools",
+                        ],
+                        "trend": "provider_history_stable",
+                        "recent_window": 2,
+                        "consecutive_passes": 2,
+                    },
+                    "google": {
+                        "total_runs": 3,
+                        "passed_runs": 3,
+                        "failed_runs": 0,
+                        "last_status": "passed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-18T00:01:00Z",
+                        "last_reliability_status": "complete",
+                        "last_provider_e2e_status": "passed",
+                        "last_live_fault_probe_status": "passed",
+                        "live_fault_probe_enabled_runs": 3,
+                        "live_fault_probe_passed_runs": 3,
+                        "live_fault_probe_covered_cases": ["unsupported_tools"],
+                        "trend": "provider_history_stable",
+                        "recent_window": 3,
+                        "consecutive_passes": 3,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    handle_runtime_modes_command(output_json=True)
+    payload = json.loads(capsys.readouterr().out)
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+
+    assert capability_rows["openai"]["readiness"] == "warming_up"
+    assert capability_rows["openai"]["autonomous_policy_gate"] == "blocked"
+    assert capability_rows["openai"]["autonomous_readiness_warnings"] == [
+        "provider_history_insufficient_runs"
+    ]
+    assert capability_rows["openai"]["autonomous_readiness_next_actions"] == [
+        "collect_provider_history_runs"
+    ]
+    assert policy_rows[("coder", "openai")]["policy"] == (
+        "limited_autonomous_until_evidence_stable"
+    )
+
+    assert capability_rows["google"]["readiness"] == "needs_live_fault_evidence"
+    assert capability_rows["google"]["autonomous_policy_gate"] == "blocked"
+    assert capability_rows["google"]["autonomous_readiness_warnings"] == [
+        "live_fault_probe_coverage_incomplete"
+    ]
+    assert capability_rows["google"]["autonomous_readiness_next_actions"] == [
+        "enable_live_fault_probes"
+    ]
+    assert policy_rows[("coder", "google")]["policy"] == (
+        "limited_autonomous_until_live_faults"
+    )
+
+
 def test_runtime_modes_command_marks_context7_available_when_external_client_enabled(
     monkeypatch,
 ):

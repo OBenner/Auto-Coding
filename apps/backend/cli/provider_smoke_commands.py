@@ -230,6 +230,10 @@ PROVIDER_E2E_LIVE_FAULT_CASES = {
         "failed_message": "Live gateway/model fault probe failed",
     },
 }
+PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = 3
+PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
+    PROVIDER_E2E_LIVE_FAULT_CASES
+)
 
 
 @dataclass(frozen=True)
@@ -580,9 +584,28 @@ def _provider_readiness_history_evidence(
 
     trend = history_summary.get("trend")
     if trend == "provider_history_stable":
-        evidence.append("provider_history_stable")
+        if _provider_readiness_history_is_stable_enough(history_summary):
+            evidence.append("provider_history_stable")
+        else:
+            warnings.append("provider_history_insufficient_runs")
     elif isinstance(trend, str) and trend:
         warnings.append(trend)
+
+
+def _provider_readiness_history_is_stable_enough(
+    history_summary: dict[str, Any],
+) -> bool:
+    """Return whether persisted history has enough stable runs for promotion."""
+    recent_window = _int_payload_value(history_summary, "recent_window")
+    if recent_window == 0:
+        recent_window = _int_payload_value(history_summary, "total_runs")
+    consecutive_passes = _int_payload_value(history_summary, "consecutive_passes")
+    if consecutive_passes == 0:
+        consecutive_passes = _int_payload_value(history_summary, "passed_runs")
+    return (
+        recent_window >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+        and consecutive_passes >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+    )
 
 
 def _provider_readiness_live_fault_evidence(
@@ -593,8 +616,23 @@ def _provider_readiness_live_fault_evidence(
     """Apply live fault probe evidence to readiness lists."""
     if history_summary.get("last_live_fault_probe_status") == "passed":
         evidence.append("live_fault_probes_passed")
+        if not _provider_readiness_live_fault_coverage_complete(history_summary):
+            warnings.append("live_fault_probe_coverage_incomplete")
     else:
         warnings.append("live_fault_probe_evidence_missing")
+
+
+def _provider_readiness_live_fault_coverage_complete(
+    history_summary: dict[str, Any],
+) -> bool:
+    """Return whether live fault probes covered every required provider fault."""
+    covered_cases = set(
+        _string_list_payload(history_summary.get("live_fault_probe_covered_cases"))
+    )
+    return all(
+        required_case in covered_cases
+        for required_case in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
 
 
 def _provider_readiness_status(
@@ -604,7 +642,10 @@ def _provider_readiness_status(
     """Return readiness status and recommendation."""
     if blockers:
         return "blocked", "provider_e2e_required"
-    if "live_fault_probe_evidence_missing" in warnings:
+    if (
+        "live_fault_probe_evidence_missing" in warnings
+        or "live_fault_probe_coverage_incomplete" in warnings
+    ):
         return "needs_live_fault_evidence", "limited_autonomous_until_live_faults"
     if warnings:
         return "warming_up", "limited_autonomous_until_evidence_stable"
@@ -621,6 +662,8 @@ def _provider_readiness_next_actions(
         "provider_reliability_incomplete": "inspect_uncovered_cases",
         "provider_history_latest_failed": "rerun_provider_e2e",
         "live_fault_probe_evidence_missing": "enable_live_fault_probes",
+        "live_fault_probe_coverage_incomplete": "enable_live_fault_probes",
+        "provider_history_insufficient_runs": "collect_provider_history_runs",
         "provider_history_warming_up": "collect_provider_history_runs",
         "provider_history_flaky": "stabilize_provider_history",
         "provider_history_recovering": "collect_provider_history_runs",
