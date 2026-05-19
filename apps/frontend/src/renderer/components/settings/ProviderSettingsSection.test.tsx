@@ -82,6 +82,11 @@ const translate = (key: string) =>
       'enabled runs',
     'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed':
       'passed runs',
+    'settings:aiProvider.connectionTest.providerRunHistoryPassRate': 'pass rate',
+    'settings:aiProvider.connectionTest.providerRunHistoryRecentPassRate':
+      'recent pass rate',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage':
+      'live-fault coverage',
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.connectionTest.providerAutonomousReadiness':
       'Provider autonomous readiness',
@@ -208,6 +213,7 @@ const translate = (key: string) =>
       'Permission allowlist check',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2e': 'Provider e2e',
     'settings:aiProvider.runtimeDiagnosticValues.policyGated': 'Policy gated',
+    'settings:aiProvider.runtimeDiagnosticValues.qualityScore': 'Quality',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryUnknown':
       'Unknown provider history',
     'settings:aiProvider.runtimeDiagnosticValues.notRecorded': 'Not recorded',
@@ -229,7 +235,9 @@ const translate = (key: string) =>
       'Stable history runs',
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
+    'settings:aiProvider.runtimeDiagnosticValues.safetyScore': 'Safety',
     'settings:aiProvider.runtimeDiagnosticValues.skipped': 'Skipped',
+    'settings:aiProvider.runtimeDiagnosticValues.stabilityScore': 'Stability',
     'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatches': 'Transaction batches',
@@ -485,8 +493,11 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
           provider: 'openai',
           runtime_path: 'generic_edit',
           quality_status: 'passed',
+          quality_score: 75,
+          stability_score: 75,
           cost_status: 'not_recorded',
           safety_status: 'policy_gated',
+          safety_score: 50,
           evidence_source: '.auto-Codex/provider-smoke-history.json',
           required_before_full_autonomous: true,
           blockers: ['provider_e2e', 'generic_edit_recovery', 'mcp_bridge_contract'],
@@ -497,7 +508,8 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
         labelKey: 'settings:aiProvider.controlPlane.runtimeComparativeEval',
         value: (
           'OpenAI: Passed / Not recorded / Policy gated '
-          + '(Provider e2e, Generic edit recovery, MCP bridge contract)'
+          + '(Quality 75%, Stability 75%, Safety 50%; '
+          + 'Provider e2e, Generic edit recovery, MCP bridge contract)'
         ),
       },
     ]);
@@ -845,6 +857,11 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
         liveFaultProbeEnabledRuns: 2,
         liveFaultProbePassedRuns: 2,
         liveFaultProbeCoveredCases: ['gateway_model_limitations', 'unsupported_tools'],
+        passRatePercent: 67,
+        recentPassRatePercent: 100,
+        observedLiveFaultCaseCount: 2,
+        requiredLiveFaultCaseCount: 2,
+        liveFaultProbeCaseCoveragePercent: 100,
         trend: 'provider_history_stable',
         trendReason: 'recent_runs_all_passed',
         recentWindow: 3,
@@ -878,7 +895,7 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRuns',
-        value: '3 total, 2 passed, 1 failed',
+        value: '3 total, 2 passed, 1 failed, pass rate 67%, recent pass rate 100%',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLast',
@@ -896,7 +913,7 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
         value:
-          'Passed - 2 enabled runs, 2 passed runs - Gateway model limitations, Unsupported tools',
+          'Passed - 2 enabled runs, 2 passed runs - Gateway model limitations, Unsupported tools - live-fault coverage 100%',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',

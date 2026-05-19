@@ -471,6 +471,7 @@ def _provider_smoke_history_provider_stats(
             stats["live_fault_probe_covered_cases"]
         )
         stats.update(_provider_smoke_history_trend(provider_runs.get(provider, [])))
+        stats.update(_provider_smoke_history_metrics(stats))
     return providers
 
 
@@ -534,6 +535,46 @@ def _provider_smoke_history_apply_live_fault_stats(
     for covered_case in _string_list_payload(run.get("live_fault_probe_covered_cases")):
         if covered_case not in existing_cases:
             existing_cases.append(covered_case)
+
+
+def _provider_smoke_percent_metric(
+    numerator: int,
+    denominator: int,
+) -> int | None:
+    """Return a rounded percentage metric when a denominator is available."""
+    if denominator <= 0:
+        return None
+    return round((numerator / denominator) * 100)
+
+
+def _provider_smoke_history_metrics(stats: dict[str, Any]) -> dict[str, Any]:
+    """Return quality and live-safety metrics from provider smoke history."""
+    total_runs = int(stats.get("total_runs") or 0)
+    passed_runs = int(stats.get("passed_runs") or 0)
+    recent_window = int(stats.get("recent_window") or 0)
+    recent_passed_runs = int(stats.get("recent_passed_runs") or 0)
+    required_live_fault_case_count = len(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
+    observed_live_fault_case_count = len(
+        _string_list_payload(stats.get("live_fault_probe_covered_cases"))
+    )
+    return {
+        "pass_rate_percent": _provider_smoke_percent_metric(
+            passed_runs,
+            total_runs,
+        ),
+        "recent_pass_rate_percent": _provider_smoke_percent_metric(
+            recent_passed_runs,
+            recent_window,
+        ),
+        "observed_live_fault_case_count": observed_live_fault_case_count,
+        "required_live_fault_case_count": required_live_fault_case_count,
+        "live_fault_probe_case_coverage_percent": _provider_smoke_percent_metric(
+            observed_live_fault_case_count,
+            required_live_fault_case_count,
+        ),
+    }
 
 
 def _provider_smoke_history_payload(
@@ -886,6 +927,17 @@ def _with_provider_run_history(
             "recent_failed_runs": provider_stats.get("recent_failed_runs"),
             "consecutive_passes": provider_stats.get("consecutive_passes"),
             "consecutive_failures": provider_stats.get("consecutive_failures"),
+            "pass_rate_percent": provider_stats.get("pass_rate_percent"),
+            "recent_pass_rate_percent": provider_stats.get("recent_pass_rate_percent"),
+            "observed_live_fault_case_count": provider_stats.get(
+                "observed_live_fault_case_count",
+            ),
+            "required_live_fault_case_count": provider_stats.get(
+                "required_live_fault_case_count",
+            ),
+            "live_fault_probe_case_coverage_percent": provider_stats.get(
+                "live_fault_probe_case_coverage_percent",
+            ),
             "recent_runs": provider_stats.get("recent_runs", []),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }

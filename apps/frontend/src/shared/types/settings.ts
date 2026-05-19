@@ -686,6 +686,11 @@ export interface ProviderRunHistoryDiagnostics {
   liveFaultProbeEnabledRuns?: number;
   liveFaultProbePassedRuns?: number;
   liveFaultProbeCoveredCases?: string[];
+  passRatePercent?: number | null;
+  recentPassRatePercent?: number | null;
+  observedLiveFaultCaseCount?: number;
+  requiredLiveFaultCaseCount?: number;
+  liveFaultProbeCaseCoveragePercent?: number | null;
   trend?: string;
   trendReason?: string;
   recentWindow?: number;
@@ -925,6 +930,11 @@ export interface RuntimeEvalHistoryProviderRow {
   total_runs: number;
   passed_runs: number;
   failed_runs: number;
+  pass_rate_percent?: number | null;
+  recent_pass_rate_percent?: number | null;
+  observed_live_fault_case_count?: number;
+  required_live_fault_case_count?: number;
+  live_fault_probe_case_coverage_percent?: number | null;
   last_status?: string | null;
   last_reliability_status?: string | null;
   last_provider_e2e_status?: string | null;
@@ -947,8 +957,11 @@ export interface RuntimeComparativeEvalMatrixRow {
   provider: string;
   runtime_path: string;
   quality_status: string;
+  quality_score?: number | null;
+  stability_score?: number | null;
   cost_status: string;
   safety_status: string;
+  safety_score?: number | null;
   evidence_source: string;
   required_before_full_autonomous: boolean;
   blockers: string[];

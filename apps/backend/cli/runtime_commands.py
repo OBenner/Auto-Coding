@@ -166,6 +166,13 @@ def _format_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join([header, divider, *body])
 
 
+def _format_optional_percent(value: Any) -> str:
+    """Format optional percent metrics for text diagnostics."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return f"{value}%"
+    return "n/a"
+
+
 def _runner_candidate_ids_by_mode(
     runner_candidates: dict[str, Any] | None,
 ) -> dict[str, list[str]]:
@@ -824,6 +831,16 @@ def _runtime_eval_int_stat(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
+def _runtime_eval_percent_metric(
+    numerator: int,
+    denominator: int,
+) -> int | None:
+    """Return a rounded percentage metric when a denominator is available."""
+    if denominator <= 0:
+        return None
+    return round((numerator / denominator) * 100)
+
+
 def _runtime_provider_history_stats_by_name(
     *,
     project_dir: Path | None = None,
@@ -988,6 +1005,67 @@ def _runtime_string_list_payload(value: Any) -> list[str]:
     return [str(item) for item in value[:20] if isinstance(item, str) and item]
 
 
+def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, Any]:
+    """Return quality/stability/safety metrics from provider smoke history."""
+    if not provider_stats:
+        return {
+            "pass_rate_percent": None,
+            "recent_pass_rate_percent": None,
+            "observed_live_fault_case_count": 0,
+            "required_live_fault_case_count": len(
+                PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+            ),
+            "live_fault_probe_case_coverage_percent": None,
+        }
+
+    total_runs = _runtime_eval_int_stat(provider_stats.get("total_runs"))
+    passed_runs = _runtime_eval_int_stat(provider_stats.get("passed_runs"))
+    recent_window = _runtime_eval_int_stat(provider_stats.get("recent_window"))
+    if recent_window == 0:
+        recent_window = total_runs
+    recent_passed_runs = _runtime_eval_int_stat(
+        provider_stats.get("recent_passed_runs")
+    )
+    if recent_passed_runs == 0 and recent_window == total_runs:
+        recent_passed_runs = passed_runs
+    required_live_fault_case_count = _runtime_eval_int_stat(
+        provider_stats.get("required_live_fault_case_count")
+    ) or len(PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES)
+    observed_live_fault_case_count = _runtime_eval_int_stat(
+        provider_stats.get("observed_live_fault_case_count")
+    )
+    if observed_live_fault_case_count == 0:
+        observed_live_fault_case_count = len(
+            _runtime_string_list_payload(
+                provider_stats.get("live_fault_probe_covered_cases")
+            )
+        )
+    pass_rate_percent = provider_stats.get("pass_rate_percent")
+    recent_pass_rate_percent = provider_stats.get("recent_pass_rate_percent")
+    live_fault_probe_case_coverage_percent = provider_stats.get(
+        "live_fault_probe_case_coverage_percent"
+    )
+    return {
+        "pass_rate_percent": pass_rate_percent
+        if isinstance(pass_rate_percent, int)
+        and not isinstance(pass_rate_percent, bool)
+        else _runtime_eval_percent_metric(passed_runs, total_runs),
+        "recent_pass_rate_percent": recent_pass_rate_percent
+        if isinstance(recent_pass_rate_percent, int)
+        and not isinstance(recent_pass_rate_percent, bool)
+        else _runtime_eval_percent_metric(recent_passed_runs, recent_window),
+        "observed_live_fault_case_count": observed_live_fault_case_count,
+        "required_live_fault_case_count": required_live_fault_case_count,
+        "live_fault_probe_case_coverage_percent": live_fault_probe_case_coverage_percent
+        if isinstance(live_fault_probe_case_coverage_percent, int)
+        and not isinstance(live_fault_probe_case_coverage_percent, bool)
+        else _runtime_eval_percent_metric(
+            observed_live_fault_case_count,
+            required_live_fault_case_count,
+        ),
+    }
+
+
 def _runtime_provider_live_fault_coverage_complete(
     provider_stats: dict[str, Any],
 ) -> bool:
@@ -1131,6 +1209,7 @@ def build_runtime_eval_history(
         provider_total_runs = _runtime_eval_int_stat(provider_stats.get("total_runs"))
         provider_passed_runs = _runtime_eval_int_stat(provider_stats.get("passed_runs"))
         provider_failed_runs = _runtime_eval_int_stat(provider_stats.get("failed_runs"))
+        provider_metrics = _runtime_provider_eval_metrics(provider_stats)
         total_runs += provider_total_runs
         passed_runs += provider_passed_runs
         failed_runs += provider_failed_runs
@@ -1149,6 +1228,7 @@ def build_runtime_eval_history(
                     "last_provider_e2e_status",
                 ),
                 "last_run_at": provider_stats.get("last_run_at"),
+                **provider_metrics,
             }
         )
 
@@ -1196,6 +1276,7 @@ def build_runtime_comparative_eval_matrix(
         provider_row = compatibility[provider]
         has_full_runtime = provider_row.full_autonomous == "yes"
         provider_stats = provider_history.get(provider, {})
+        provider_metrics = _runtime_provider_eval_metrics(provider_stats)
         quality_status = (
             "not_recorded"
             if has_full_runtime
@@ -1208,10 +1289,19 @@ def build_runtime_comparative_eval_matrix(
                 if has_full_runtime
                 else "generic_edit",
                 "quality_status": quality_status,
+                "quality_score": None
+                if has_full_runtime
+                else provider_metrics["pass_rate_percent"],
+                "stability_score": None
+                if has_full_runtime
+                else provider_metrics["recent_pass_rate_percent"],
                 "cost_status": "not_recorded",
                 "safety_status": "native_runtime_policy"
                 if has_full_runtime
                 else "policy_gated",
+                "safety_score": None
+                if has_full_runtime
+                else provider_metrics["live_fault_probe_case_coverage_percent"],
                 "evidence_source": "native_runtime"
                 if has_full_runtime
                 else str(history_path),
@@ -1895,8 +1985,11 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
             row["provider"],
             row["runtime_path"],
             row["quality_status"],
+            _format_optional_percent(row.get("quality_score")),
+            _format_optional_percent(row.get("stability_score")),
             row["cost_status"],
             row["safety_status"],
+            _format_optional_percent(row.get("safety_score")),
             ", ".join(row["blockers"]) or "none",
             row["evidence_source"],
         ]
@@ -2091,8 +2184,11 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
                     "Provider",
                     "Runtime path",
                     "Quality",
+                    "Quality score",
+                    "Stability score",
                     "Cost",
                     "Safety",
+                    "Safety score",
                     "Blockers",
                     "Evidence",
                 ],

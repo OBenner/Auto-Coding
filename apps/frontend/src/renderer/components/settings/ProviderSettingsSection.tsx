@@ -370,6 +370,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
   provider_live_fault_fixture:
     'settings:aiProvider.runtimeDiagnosticValues.providerLiveFaultFixture',
+  quality_score: 'settings:aiProvider.runtimeDiagnosticValues.qualityScore',
   provider_reliability: 'settings:aiProvider.runtimeDiagnosticValues.providerReliability',
   provider_history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryDegraded',
   provider_history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
@@ -411,6 +412,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   register_or_remove_unsupported_servers: 'settings:aiProvider.runtimeDiagnosticValues.registerOrRemoveUnsupportedServers',
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
   reviewer: 'settings:aiProvider.runtimeDiagnosticValues.reviewer',
+  safety_score: 'settings:aiProvider.runtimeDiagnosticValues.safetyScore',
   sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
   runtime_blocked: 'settings:aiProvider.runtimeDiagnosticValues.runtimeBlocked',
   server_disabled: 'settings:aiProvider.runtimeDiagnosticValues.serverDisabled',
@@ -431,6 +433,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.stabilizeProviderHistory',
   stable_history_runs:
     'settings:aiProvider.runtimeDiagnosticValues.stableHistoryRuns',
+  stability_score: 'settings:aiProvider.runtimeDiagnosticValues.stabilityScore',
   consecutive_recent_failures:
     'settings:aiProvider.runtimeDiagnosticValues.consecutiveRecentFailures',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
@@ -685,6 +688,17 @@ function formatRuntimeDiagnosticList(
     .join(', ');
 }
 
+function formatRuntimePercentMetric(
+  translate: RuntimeDiagnosticTranslate,
+  key: string,
+  value?: number | null
+): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '';
+  }
+  return `${formatRuntimeDiagnosticValue(translate, key)} ${value}%`;
+}
+
 function formatRuntimeDiagnosticBoolean(
   translate: RuntimeDiagnosticTranslate,
   value?: boolean | null
@@ -927,6 +941,12 @@ export function buildProviderRunHistoryDiagnosticRows(
     typeof history.totalRuns === 'number' ? `${history.totalRuns} total` : '',
     typeof history.passedRuns === 'number' ? `${history.passedRuns} passed` : '',
     typeof history.failedRuns === 'number' ? `${history.failedRuns} failed` : '',
+    typeof history.passRatePercent === 'number'
+      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryPassRate')} ${history.passRatePercent}%`
+      : '',
+    typeof history.recentPassRatePercent === 'number'
+      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryRecentPassRate')} ${history.recentPassRatePercent}%`
+      : '',
   ].filter(Boolean).join(', ');
   const lastValue = [
     formatRuntimeDiagnosticValue(translate, history.lastStatus),
@@ -991,6 +1011,9 @@ export function buildProviderRunHistoryDiagnosticRows(
     formatRuntimeDiagnosticValue(translate, history.lastLiveFaultProbeStatus),
     liveFaultProbeRunCounts,
     formatRuntimeDiagnosticList(translate, history.liveFaultProbeCoveredCases),
+    typeof history.liveFaultProbeCaseCoveragePercent === 'number'
+      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage')} ${history.liveFaultProbeCaseCoveragePercent}%`
+      : '',
   ].filter(Boolean).join(' - ');
   return [
     {
@@ -1258,7 +1281,13 @@ export function buildRuntimeComparativeEvalDiagnosticRows(
       const cost = formatRuntimeDiagnosticValue(translate, row.cost_status);
       const safety = formatRuntimeDiagnosticValue(translate, row.safety_status);
       const blockers = formatRuntimeDiagnosticList(translate, row.blockers);
-      const suffix = blockers ? ` (${blockers})` : '';
+      const metrics = [
+        formatRuntimePercentMetric(translate, 'quality_score', row.quality_score),
+        formatRuntimePercentMetric(translate, 'stability_score', row.stability_score),
+        formatRuntimePercentMetric(translate, 'safety_score', row.safety_score),
+      ].filter(Boolean).join(', ');
+      const suffixParts = [metrics, blockers].filter(Boolean);
+      const suffix = suffixParts.length ? ` (${suffixParts.join('; ')})` : '';
       return `${provider}: ${quality} / ${cost} / ${safety}${suffix}`;
     })
     .join('; ');

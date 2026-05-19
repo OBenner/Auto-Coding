@@ -412,6 +412,17 @@ export function mapProviderRunHistory(
     liveFaultProbeEnabledRuns: numberFromUnknown(payload.live_fault_probe_enabled_runs),
     liveFaultProbePassedRuns: numberFromUnknown(payload.live_fault_probe_passed_runs),
     liveFaultProbeCoveredCases: arrayFromUnknown(payload.live_fault_probe_covered_cases),
+    passRatePercent: numberFromUnknown(payload.pass_rate_percent),
+    recentPassRatePercent: numberFromUnknown(payload.recent_pass_rate_percent),
+    observedLiveFaultCaseCount: numberFromUnknown(
+      payload.observed_live_fault_case_count
+    ),
+    requiredLiveFaultCaseCount: numberFromUnknown(
+      payload.required_live_fault_case_count
+    ),
+    liveFaultProbeCaseCoveragePercent: numberFromUnknown(
+      payload.live_fault_probe_case_coverage_percent
+    ),
     trend: stringFromUnknown(payload.trend),
     trendReason: stringFromUnknown(payload.trend_reason),
     recentWindow: numberFromUnknown(payload.recent_window),

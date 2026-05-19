@@ -569,6 +569,11 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "recent_failed_runs": 0,
         "consecutive_passes": 1,
         "consecutive_failures": 0,
+        "pass_rate_percent": 100,
+        "recent_pass_rate_percent": 100,
+        "observed_live_fault_case_count": 2,
+        "required_live_fault_case_count": 2,
+        "live_fault_probe_case_coverage_percent": 100,
         "path": ".auto-Codex/provider-smoke-history.json",
     }
     history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
@@ -824,6 +829,64 @@ def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):
     assert resumed_history["last_live_fault_probe_status"] is None
     assert resumed_history["live_fault_probe_enabled_runs"] == 1
     assert resumed_history["live_fault_probe_passed_runs"] == 1
+
+
+def test_provider_run_history_reports_quality_and_safety_metrics(tmp_path: Path):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=False,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite failed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "failed", "runs": []},
+                "provider_reliability": {"status": "partial"},
+            },
+        ),
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+                "provider_e2e_live_fault_probes": {
+                    "status": "passed",
+                    "enabled": True,
+                    "covered_cases": ["unsupported_tools"],
+                },
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["pass_rate_percent"] == 50
+    assert history_summary["recent_pass_rate_percent"] == 50
+    assert history_summary["observed_live_fault_case_count"] == 1
+    assert history_summary["required_live_fault_case_count"] == 2
+    assert history_summary["live_fault_probe_case_coverage_percent"] == 50
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    provider_stats = history["providers"]["openai"]
+    assert provider_stats["pass_rate_percent"] == 50
+    assert provider_stats["recent_pass_rate_percent"] == 50
+    assert provider_stats["observed_live_fault_case_count"] == 1
+    assert provider_stats["required_live_fault_case_count"] == 2
+    assert provider_stats["live_fault_probe_case_coverage_percent"] == 50
 
 
 def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):

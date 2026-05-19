@@ -511,14 +511,17 @@ def test_runtime_modes_command_reports_provider_eval_history(
                 "schema_version": 1,
                 "providers": {
                     "openai": {
-                        "total_runs": 2,
-                        "passed_runs": 2,
-                        "failed_runs": 0,
+                        "total_runs": 4,
+                        "passed_runs": 3,
+                        "failed_runs": 1,
+                        "recent_window": 4,
+                        "recent_passed_runs": 3,
                         "last_status": "passed",
                         "last_runtime_mode": "provider_e2e",
                         "last_run_at": "2026-05-17T00:00:00Z",
                         "last_reliability_status": "complete",
                         "last_provider_e2e_status": "passed",
+                        "live_fault_probe_covered_cases": ["unsupported_tools"],
                     },
                     "google": {
                         "total_runs": 1,
@@ -544,9 +547,9 @@ def test_runtime_modes_command_reports_provider_eval_history(
 
     assert provider_e2e["status"] == "partial"
     assert provider_e2e["history_path"] == ".auto-Codex/provider-smoke-history.json"
-    assert provider_e2e["total_runs"] == 3
-    assert provider_e2e["passed_runs"] == 2
-    assert provider_e2e["failed_runs"] == 1
+    assert provider_e2e["total_runs"] == 5
+    assert provider_e2e["passed_runs"] == 3
+    assert provider_e2e["failed_runs"] == 2
     assert provider_e2e["missing_providers"] == [
         "openrouter",
         "litellm",
@@ -555,17 +558,27 @@ def test_runtime_modes_command_reports_provider_eval_history(
     ]
     provider_rows = {row["provider"]: row for row in provider_e2e["providers"]}
     assert provider_rows["openai"]["status"] == "passed"
+    assert provider_rows["openai"]["pass_rate_percent"] == 75
+    assert provider_rows["openai"]["recent_pass_rate_percent"] == 75
+    assert provider_rows["openai"]["observed_live_fault_case_count"] == 1
+    assert provider_rows["openai"]["required_live_fault_case_count"] == 2
+    assert provider_rows["openai"]["live_fault_probe_case_coverage_percent"] == 50
     assert provider_rows["google"]["status"] == "failed"
     assert provider_rows["openrouter"]["status"] == "not_observed"
     comparative_rows = {
         row["provider"]: row for row in payload["runtime_comparative_eval_matrix"]
     }
     assert comparative_rows["openai"]["quality_status"] == "passed"
+    assert comparative_rows["openai"]["quality_score"] == 75
+    assert comparative_rows["openai"]["stability_score"] == 75
+    assert comparative_rows["openai"]["safety_score"] == 50
     assert comparative_rows["openai"]["evidence_source"] == (
         ".auto-Codex/provider-smoke-history.json"
     )
     assert comparative_rows["google"]["quality_status"] == "failed"
+    assert comparative_rows["google"]["quality_score"] == 0
     assert comparative_rows["ollama"]["quality_status"] == "not_observed"
+    assert comparative_rows["ollama"]["quality_score"] is None
     assert comparative_rows["claude"]["safety_status"] == "native_runtime_policy"
 
 
