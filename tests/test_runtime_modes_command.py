@@ -4,6 +4,8 @@ import logging
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def test_parse_args_with_runtime_modes():
     from cli.main import parse_args
@@ -589,7 +591,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["openai"]["safety_score"] == 50
     assert comparative_rows["openai"]["cost_status"] == "recorded"
     assert comparative_rows["openai"]["cost_pricing_model"] == "gpt-4o"
-    assert comparative_rows["openai"]["cost_actual_usd"] == 0.0075
+    assert comparative_rows["openai"]["cost_actual_usd"] == pytest.approx(0.0075)
     assert comparative_rows["openai"]["cost_actual_formatted"] == "$0.0075"
     assert comparative_rows["openai"]["cost_actual_input_tokens"] == 1000
     assert comparative_rows["openai"]["cost_actual_output_tokens"] == 500

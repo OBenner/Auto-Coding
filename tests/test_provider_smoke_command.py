@@ -970,9 +970,9 @@ def test_provider_run_history_records_actual_cost_metrics(tmp_path: Path):
     assert history_summary["cost_observed_run_count"] == 1
     assert history_summary["cost_total_input_tokens"] == 1000
     assert history_summary["cost_total_output_tokens"] == 500
-    assert history_summary["cost_total_usd"] == 0.0075
+    assert history_summary["cost_total_usd"] == pytest.approx(0.0075)
     assert history_summary["cost_total_formatted"] == "$0.0075"
-    assert history_summary["cost_last_usd"] == 0.0075
+    assert history_summary["cost_last_usd"] == pytest.approx(0.0075)
     assert history_summary["cost_last_formatted"] == "$0.0075"
     assert history_summary["cost_last_input_tokens"] == 1000
     assert history_summary["cost_last_output_tokens"] == 500
@@ -986,7 +986,7 @@ def test_provider_run_history_records_actual_cost_metrics(tmp_path: Path):
     assert record["cost_source"] == "token_usage"
     assert record["cost_input_tokens"] == 1000
     assert record["cost_output_tokens"] == 500
-    assert record["cost_usd"] == 0.0075
+    assert record["cost_usd"] == pytest.approx(0.0075)
     assert record["cost_formatted"] == "$0.0075"
     assert record["cost_pricing_model"] == "gpt-4o"
     assert record["cost_pricing_provider"] == "openai"

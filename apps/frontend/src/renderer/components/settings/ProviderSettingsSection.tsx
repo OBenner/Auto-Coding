@@ -941,6 +941,116 @@ export function buildProviderLiveFaultProbeDiagnosticRows(
   ].filter((row) => row.value);
 }
 
+function isRuntimeDiagnosticNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function formatProviderRunHistorySummary(
+  translate: RuntimeDiagnosticTranslate,
+  history: ProviderRunHistoryDiagnostics
+): string {
+  return [
+    formatRuntimeDiagnosticValue(translate, history.status),
+    history.provider,
+    formatRuntimeDiagnosticValue(translate, history.runtimeMode),
+  ].filter(Boolean).join(' - ');
+}
+
+function formatProviderRunHistoryRuns(
+  translate: RuntimeDiagnosticTranslate,
+  history: ProviderRunHistoryDiagnostics
+): string {
+  return [
+    isRuntimeDiagnosticNumber(history.totalRuns) ? `${history.totalRuns} total` : '',
+    isRuntimeDiagnosticNumber(history.passedRuns) ? `${history.passedRuns} passed` : '',
+    isRuntimeDiagnosticNumber(history.failedRuns) ? `${history.failedRuns} failed` : '',
+    isRuntimeDiagnosticNumber(history.passRatePercent)
+      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryPassRate')} ${history.passRatePercent}%`
+      : '',
+    isRuntimeDiagnosticNumber(history.recentPassRatePercent)
+      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryRecentPassRate')} ${history.recentPassRatePercent}%`
+      : '',
+  ].filter(Boolean).join(', ');
+}
+
+function formatProviderRunHistoryLast(
+  translate: RuntimeDiagnosticTranslate,
+  history: ProviderRunHistoryDiagnostics
+): string {
+  return [
+    formatRuntimeDiagnosticValue(translate, history.lastStatus),
+    formatRuntimeDiagnosticValue(translate, history.lastReliabilityStatus),
+    formatRuntimeDiagnosticValue(translate, history.lastProviderE2eStatus),
+  ].filter(Boolean).join(', ');
+}
+
+function formatProviderRunHistoryTrend(
+  translate: RuntimeDiagnosticTranslate,
+  history: ProviderRunHistoryDiagnostics
+): string {
+  const trendCounts = [
+    isRuntimeDiagnosticNumber(history.recentWindow)
+      ? `${history.recentWindow} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendWindow')}`
+      : '',
+    isRuntimeDiagnosticNumber(history.recentPassedRuns) &&
+    isRuntimeDiagnosticNumber(history.recentFailedRuns)
+      ? `${history.recentPassedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendPassed')}, ${history.recentFailedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendFailed')}`
+      : '',
+    isRuntimeDiagnosticNumber(history.consecutivePasses) && history.consecutivePasses > 0
+      ? `${history.consecutivePasses} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendPassStreak')}`
+      : '',
+    isRuntimeDiagnosticNumber(history.consecutiveFailures) && history.consecutiveFailures > 0
+      ? `${history.consecutiveFailures} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendFailStreak')}`
+      : '',
+  ].filter(Boolean).join(', ');
+  return [
+    formatRuntimeDiagnosticValue(translate, history.trend),
+    trendCounts,
+  ].filter(Boolean).join(' - ');
+}
+
+function formatProviderRunHistoryRecentRuns(
+  translate: RuntimeDiagnosticTranslate,
+  history: ProviderRunHistoryDiagnostics
+): string {
+  return history.recentRuns
+    ?.map((run) => {
+      const runParts = [
+        formatRuntimeDiagnosticValue(translate, run.status),
+        formatRuntimeDiagnosticValue(translate, run.runtimeMode),
+        run.model,
+        formatRuntimeDiagnosticValue(translate, run.reliabilityStatus),
+        formatRuntimeDiagnosticValue(translate, run.providerE2eStatus),
+        formatRuntimeDiagnosticValue(translate, run.liveFaultProbeStatus)
+      ].filter(Boolean).join(' / ');
+      return [run.timestamp, runParts].filter(Boolean).join(': ');
+    })
+    .filter(Boolean)
+    .join(' -> ') || '';
+}
+
+function formatProviderRunHistoryLiveFaultProbes(
+  translate: RuntimeDiagnosticTranslate,
+  history: ProviderRunHistoryDiagnostics
+): string {
+  const runCounts = [
+    isRuntimeDiagnosticNumber(history.liveFaultProbeEnabledRuns)
+      ? `${history.liveFaultProbeEnabledRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbeEnabled')}`
+      : '',
+    isRuntimeDiagnosticNumber(history.liveFaultProbePassedRuns)
+      ? `${history.liveFaultProbePassedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed')}`
+      : '',
+  ].filter(Boolean).join(', ');
+  return [
+    formatRuntimeDiagnosticValue(translate, history.lastLiveFaultProbeStatus),
+    runCounts,
+    formatRuntimeDiagnosticList(translate, history.liveFaultProbeCoveredCases),
+    isRuntimeDiagnosticNumber(history.liveFaultProbeCaseCoveragePercent)
+      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage')} ${history.liveFaultProbeCaseCoveragePercent}%`
+      : '',
+  ].filter(Boolean).join(' - ');
+}
+
 export function buildProviderRunHistoryDiagnosticRows(
   translate: RuntimeDiagnosticTranslate,
   history?: ProviderRunHistoryDiagnostics | null
@@ -948,113 +1058,30 @@ export function buildProviderRunHistoryDiagnosticRows(
   if (!history) {
     return [];
   }
-  const summaryValue = [
-    formatRuntimeDiagnosticValue(translate, history.status),
-    history.provider,
-    formatRuntimeDiagnosticValue(translate, history.runtimeMode),
-  ].filter(Boolean).join(' - ');
-  const runsValue = [
-    typeof history.totalRuns === 'number' ? `${history.totalRuns} total` : '',
-    typeof history.passedRuns === 'number' ? `${history.passedRuns} passed` : '',
-    typeof history.failedRuns === 'number' ? `${history.failedRuns} failed` : '',
-    typeof history.passRatePercent === 'number'
-      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryPassRate')} ${history.passRatePercent}%`
-      : '',
-    typeof history.recentPassRatePercent === 'number'
-      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryRecentPassRate')} ${history.recentPassRatePercent}%`
-      : '',
-  ].filter(Boolean).join(', ');
-  const lastValue = [
-    formatRuntimeDiagnosticValue(translate, history.lastStatus),
-    formatRuntimeDiagnosticValue(translate, history.lastReliabilityStatus),
-    formatRuntimeDiagnosticValue(translate, history.lastProviderE2eStatus),
-  ].filter(Boolean).join(', ');
-  const trendCounts = [
-    typeof history.recentWindow === 'number'
-      ? `${history.recentWindow} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendWindow')}`
-      : '',
-    typeof history.recentPassedRuns === 'number' && typeof history.recentFailedRuns === 'number'
-      ? `${history.recentPassedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendPassed')}, ${history.recentFailedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendFailed')}`
-      : '',
-    typeof history.consecutivePasses === 'number' && history.consecutivePasses > 0
-      ? `${history.consecutivePasses} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendPassStreak')}`
-      : '',
-    typeof history.consecutiveFailures === 'number' && history.consecutiveFailures > 0
-      ? `${history.consecutiveFailures} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTrendFailStreak')}`
-      : '',
-  ].filter(Boolean).join(', ');
-  const trendValue = [
-    formatRuntimeDiagnosticValue(translate, history.trend),
-    trendCounts,
-  ].filter(Boolean).join(' - ');
-  const recentRunsValue = history.recentRuns
-    ?.map((run) => {
-      const status = formatRuntimeDiagnosticValue(translate, run.status);
-      const runtimeMode = formatRuntimeDiagnosticValue(translate, run.runtimeMode);
-      const reliability = formatRuntimeDiagnosticValue(
-        translate,
-        run.reliabilityStatus
-      );
-      const providerE2e = formatRuntimeDiagnosticValue(
-        translate,
-        run.providerE2eStatus
-      );
-      const liveFault = formatRuntimeDiagnosticValue(
-        translate,
-        run.liveFaultProbeStatus
-      );
-      const runParts = [
-        status,
-        runtimeMode,
-        run.model,
-        reliability,
-        providerE2e,
-        liveFault
-      ].filter(Boolean).join(' / ');
-      return [run.timestamp, runParts].filter(Boolean).join(': ');
-    })
-    .filter(Boolean)
-    .join(' -> ');
-  const liveFaultProbeRunCounts = [
-    typeof history.liveFaultProbeEnabledRuns === 'number'
-      ? `${history.liveFaultProbeEnabledRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbeEnabled')}`
-      : '',
-    typeof history.liveFaultProbePassedRuns === 'number'
-      ? `${history.liveFaultProbePassedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed')}`
-      : '',
-  ].filter(Boolean).join(', ');
-  const liveFaultProbeValue = [
-    formatRuntimeDiagnosticValue(translate, history.lastLiveFaultProbeStatus),
-    liveFaultProbeRunCounts,
-    formatRuntimeDiagnosticList(translate, history.liveFaultProbeCoveredCases),
-    typeof history.liveFaultProbeCaseCoveragePercent === 'number'
-      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage')} ${history.liveFaultProbeCaseCoveragePercent}%`
-      : '',
-  ].filter(Boolean).join(' - ');
   return [
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistory',
-      value: summaryValue,
+      value: formatProviderRunHistorySummary(translate, history),
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRuns',
-      value: runsValue,
+      value: formatProviderRunHistoryRuns(translate, history),
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLast',
-      value: lastValue,
+      value: formatProviderRunHistoryLast(translate, history),
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryTrend',
-      value: trendValue,
+      value: formatProviderRunHistoryTrend(translate, history),
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRecentRuns',
-      value: recentRunsValue || '',
+      value: formatProviderRunHistoryRecentRuns(translate, history),
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
-      value: liveFaultProbeValue,
+      value: formatProviderRunHistoryLiveFaultProbes(translate, history),
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',

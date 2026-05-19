@@ -540,6 +540,100 @@ def build_runtime_subagent_mutation_policy() -> list[dict[str, Any]]:
     return matrix
 
 
+def _runtime_policy_readiness_fields(
+    readiness: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return readiness fields shared by runtime policy rows."""
+    if readiness is None:
+        return {
+            "autonomous_readiness_required": False,
+            "autonomous_policy_gate": "not_required",
+            "autonomous_readiness_status": "not_required",
+            "autonomous_readiness_recommendation": "not_required",
+            "autonomous_readiness_recommendation_reasons": [],
+            "autonomous_readiness_blockers": [],
+            "autonomous_readiness_warnings": [],
+            "autonomous_readiness_requirements": {},
+            "autonomous_readiness_missing_requirements": [],
+        }
+    return {
+        "autonomous_readiness_required": True,
+        "autonomous_policy_gate": readiness["policy_gate"],
+        "autonomous_readiness_status": readiness["status"],
+        "autonomous_readiness_recommendation": readiness["recommendation"],
+        "autonomous_readiness_recommendation_reasons": readiness[
+            "recommendation_reasons"
+        ],
+        "autonomous_readiness_blockers": readiness["blockers"],
+        "autonomous_readiness_warnings": readiness["warnings"],
+        "autonomous_readiness_requirements": readiness["requirements"],
+        "autonomous_readiness_missing_requirements": readiness["missing_requirements"],
+    }
+
+
+def _runtime_policy_decision(
+    phase: str,
+    phase_policy: Mapping[str, Any],
+    has_full_runtime: bool,
+    readiness: dict[str, Any] | None,
+) -> tuple[str, str]:
+    """Return policy/reason after applying direct-provider readiness gates."""
+    if has_full_runtime:
+        return "use_full_runtime", "provider_has_full_runtime"
+    if (
+        readiness is not None
+        and readiness["policy_gate"] != "passed"
+        and phase in {"coder", "qa_fixer"}
+    ):
+        return str(readiness["recommendation"]), str(readiness["status"])
+    return str(phase_policy["policy"]), str(phase_policy["reason"])
+
+
+def _runtime_policy_row(
+    provider_row: Any,
+    phase_policy: Mapping[str, Any],
+    full_runtime_runner_candidates: list[str],
+    readiness: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build one phase/provider runtime policy row."""
+    phase = str(phase_policy["phase"])
+    has_full_runtime = provider_row.full_autonomous == "yes"
+    selected_mode = (
+        "full_autonomous"
+        if has_full_runtime
+        else str(phase_policy["direct_provider_mode"])
+    )
+    requires_full_autonomous = bool(phase_policy["requires_full_autonomous"])
+    requires_cli_runner = requires_full_autonomous and not has_full_runtime
+    policy, reason = _runtime_policy_decision(
+        phase,
+        phase_policy,
+        has_full_runtime,
+        readiness,
+    )
+    return {
+        "phase": phase,
+        "provider": provider_row.provider,
+        "required_runtime_mode": (
+            "full_autonomous" if requires_full_autonomous else selected_mode
+        ),
+        "selected_runtime_mode": selected_mode,
+        "fallback_allowed": bool(phase_policy["fallback_allowed"])
+        and selected_mode != "blocked",
+        "fallback_modes": (
+            list(phase_policy["fallback_modes"]) if selected_mode != "blocked" else []
+        ),
+        "requires_full_autonomous": requires_full_autonomous,
+        "requires_cli_runner": requires_cli_runner,
+        "runner_candidates": (
+            full_runtime_runner_candidates if requires_cli_runner else []
+        ),
+        "policy": policy,
+        "reason": reason,
+        **_runtime_policy_readiness_fields(readiness),
+    }
+
+
 def build_runtime_policy_matrix(
     *,
     project_dir: Path | None = None,
@@ -553,90 +647,16 @@ def build_runtime_policy_matrix(
     readiness_by_provider = _runtime_provider_autonomous_readiness_by_name(
         project_dir=project_dir,
     )
-    matrix: list[dict[str, Any]] = []
-    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
-        has_full_runtime = provider_row.full_autonomous == "yes"
-        readiness = readiness_by_provider.get(provider_row.provider)
-        readiness_required = readiness is not None
-        for phase_policy in RUNTIME_POLICY_PHASES:
-            phase = str(phase_policy["phase"])
-            selected_mode = (
-                "full_autonomous"
-                if has_full_runtime
-                else str(phase_policy["direct_provider_mode"])
-            )
-            requires_full_autonomous = bool(phase_policy["requires_full_autonomous"])
-            requires_cli_runner = requires_full_autonomous and not has_full_runtime
-            policy = (
-                str(phase_policy["policy"])
-                if not has_full_runtime
-                else "use_full_runtime"
-            )
-            reason = (
-                str(phase_policy["reason"])
-                if not has_full_runtime
-                else "provider_has_full_runtime"
-            )
-            if (
-                readiness_required
-                and readiness["policy_gate"] != "passed"
-                and phase in {"coder", "qa_fixer"}
-            ):
-                policy = str(readiness["recommendation"])
-                reason = str(readiness["status"])
-            readiness_fields = (
-                {
-                    "autonomous_readiness_required": True,
-                    "autonomous_policy_gate": readiness["policy_gate"],
-                    "autonomous_readiness_status": readiness["status"],
-                    "autonomous_readiness_recommendation": readiness["recommendation"],
-                    "autonomous_readiness_recommendation_reasons": readiness[
-                        "recommendation_reasons"
-                    ],
-                    "autonomous_readiness_blockers": readiness["blockers"],
-                    "autonomous_readiness_warnings": readiness["warnings"],
-                    "autonomous_readiness_requirements": readiness["requirements"],
-                    "autonomous_readiness_missing_requirements": readiness[
-                        "missing_requirements"
-                    ],
-                }
-                if readiness_required and readiness is not None
-                else {
-                    "autonomous_readiness_required": False,
-                    "autonomous_policy_gate": "not_required",
-                    "autonomous_readiness_status": "not_required",
-                    "autonomous_readiness_recommendation": "not_required",
-                    "autonomous_readiness_recommendation_reasons": [],
-                    "autonomous_readiness_blockers": [],
-                    "autonomous_readiness_warnings": [],
-                    "autonomous_readiness_requirements": {},
-                    "autonomous_readiness_missing_requirements": [],
-                }
-            )
-            matrix.append(
-                {
-                    "phase": phase,
-                    "provider": provider_row.provider,
-                    "required_runtime_mode": "full_autonomous"
-                    if requires_full_autonomous
-                    else selected_mode,
-                    "selected_runtime_mode": selected_mode,
-                    "fallback_allowed": bool(phase_policy["fallback_allowed"])
-                    and selected_mode != "blocked",
-                    "fallback_modes": list(phase_policy["fallback_modes"])
-                    if selected_mode != "blocked"
-                    else [],
-                    "requires_full_autonomous": requires_full_autonomous,
-                    "requires_cli_runner": requires_cli_runner,
-                    "runner_candidates": full_runtime_runner_candidates
-                    if requires_cli_runner
-                    else [],
-                    "policy": policy,
-                    "reason": reason,
-                    **readiness_fields,
-                }
-            )
-    return matrix
+    return [
+        _runtime_policy_row(
+            provider_row,
+            phase_policy,
+            full_runtime_runner_candidates,
+            readiness_by_provider.get(provider_row.provider),
+        )
+        for provider_row in PROVIDER_RUNTIME_COMPATIBILITY
+        for phase_policy in RUNTIME_POLICY_PHASES
+    ]
 
 
 def _extend_unique(target: list[str], values: list[str]) -> None:
@@ -644,6 +664,110 @@ def _extend_unique(target: list[str], values: list[str]) -> None:
     for value in values:
         if value and value not in target:
             target.append(value)
+
+
+def _runtime_capability_readiness_fields(
+    readiness: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return autonomous readiness fields for capability diagnostics."""
+    if readiness is None:
+        return {
+            "autonomous_readiness_required": False,
+            "autonomous_policy_gate": "not_required",
+            "autonomous_readiness_status": "not_required",
+            "autonomous_readiness_recommendation": "not_required",
+            "autonomous_readiness_recommendation_reasons": [],
+            "autonomous_readiness_blockers": [],
+            "autonomous_readiness_warnings": [],
+            "autonomous_readiness_evidence": [],
+            "autonomous_readiness_requirements": {},
+            "autonomous_readiness_missing_requirements": [],
+            "autonomous_readiness_next_actions": [],
+        }
+    return {
+        "autonomous_readiness_required": True,
+        "autonomous_policy_gate": readiness["policy_gate"],
+        "autonomous_readiness_status": readiness["status"],
+        "autonomous_readiness_recommendation": readiness["recommendation"],
+        "autonomous_readiness_recommendation_reasons": readiness[
+            "recommendation_reasons"
+        ],
+        "autonomous_readiness_blockers": readiness["blockers"],
+        "autonomous_readiness_warnings": readiness["warnings"],
+        "autonomous_readiness_evidence": readiness["evidence"],
+        "autonomous_readiness_requirements": readiness["requirements"],
+        "autonomous_readiness_missing_requirements": readiness["missing_requirements"],
+        "autonomous_readiness_next_actions": readiness["next_actions"],
+    }
+
+
+def _runtime_capability_blockers_and_warnings(
+    provider_row: Any,
+    has_full_runtime: bool,
+    readiness: dict[str, Any] | None,
+) -> tuple[list[str], list[str]]:
+    """Return capability blockers/warnings after provider readiness gates."""
+    blockers: list[str] = []
+    warnings: list[str] = []
+    gate_passed = readiness is not None and readiness["policy_gate"] == "passed"
+    if not has_full_runtime and not gate_passed:
+        blockers.extend(
+            [
+                "missing_full_autonomous_runtime",
+                "live_provider_e2e_required",
+                "transactional_recovery_required",
+            ]
+        )
+        warnings.append("direct_full_autonomous_blocked")
+    if provider_row.provider in {"litellm", "openrouter"}:
+        warnings.append("gateway_model_limitations")
+    if provider_row.provider == "ollama":
+        warnings.append("local_model_quality_varies")
+    if readiness is not None:
+        _extend_unique(blockers, readiness["blockers"])
+        _extend_unique(warnings, readiness["warnings"])
+    return blockers, warnings
+
+
+def _runtime_capability_row(
+    provider_row: Any,
+    full_runtime_runner_candidates: list[str],
+    readiness: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build one provider capability row."""
+    has_full_runtime = provider_row.full_autonomous == "yes"
+    readiness_status = "ready" if has_full_runtime else "limited"
+    if not has_full_runtime and readiness is not None:
+        readiness_status = str(readiness["status"])
+    blockers, warnings = _runtime_capability_blockers_and_warnings(
+        provider_row,
+        has_full_runtime,
+        readiness,
+    )
+    full_autonomous_ready = has_full_runtime or (
+        readiness is not None and readiness["status"] == "full_autonomous_candidate"
+    )
+    return {
+        "provider": provider_row.provider,
+        "readiness": readiness_status,
+        "full_autonomous_ready": full_autonomous_ready,
+        "direct_full_autonomous": provider_row.full_autonomous,
+        "recommended_runtime_mode": (
+            "full_autonomous" if has_full_runtime else "generic_edit"
+        ),
+        "generic_edit": provider_row.generic_edit,
+        "analysis_only": provider_row.analysis_only,
+        "patch_proposal": provider_row.patch_proposal,
+        "mcp_tools": provider_row.mcp_tools,
+        "subagents": provider_row.subagents,
+        "cli_runner_candidates": (
+            [] if has_full_runtime else full_runtime_runner_candidates
+        ),
+        **_runtime_capability_readiness_fields(readiness),
+        "blockers": blockers,
+        "warnings": warnings,
+        "notes": provider_row.notes,
+    }
 
 
 def build_runtime_capability_matrix(
@@ -659,96 +783,14 @@ def build_runtime_capability_matrix(
     readiness_by_provider = _runtime_provider_autonomous_readiness_by_name(
         project_dir=project_dir,
     )
-    gateway_providers = {"litellm", "openrouter"}
-    matrix: list[dict[str, Any]] = []
-    for provider_row in PROVIDER_RUNTIME_COMPATIBILITY:
-        has_full_runtime = provider_row.full_autonomous == "yes"
-        readiness = readiness_by_provider.get(provider_row.provider)
-        blockers: list[str] = []
-        warnings: list[str] = []
-        if not has_full_runtime and (
-            readiness is None or readiness["policy_gate"] != "passed"
-        ):
-            blockers.extend(
-                [
-                    "missing_full_autonomous_runtime",
-                    "live_provider_e2e_required",
-                    "transactional_recovery_required",
-                ]
-            )
-            warnings.append("direct_full_autonomous_blocked")
-        if provider_row.provider in gateway_providers:
-            warnings.append("gateway_model_limitations")
-        if provider_row.provider == "ollama":
-            warnings.append("local_model_quality_varies")
-        if readiness is not None:
-            _extend_unique(blockers, readiness["blockers"])
-            _extend_unique(warnings, readiness["warnings"])
-
-        matrix.append(
-            {
-                "provider": provider_row.provider,
-                "readiness": "ready"
-                if has_full_runtime
-                else str(readiness["status"] if readiness is not None else "limited"),
-                "full_autonomous_ready": has_full_runtime
-                or (
-                    readiness is not None
-                    and readiness["status"] == "full_autonomous_candidate"
-                ),
-                "direct_full_autonomous": provider_row.full_autonomous,
-                "recommended_runtime_mode": (
-                    "full_autonomous" if has_full_runtime else "generic_edit"
-                ),
-                "generic_edit": provider_row.generic_edit,
-                "analysis_only": provider_row.analysis_only,
-                "patch_proposal": provider_row.patch_proposal,
-                "mcp_tools": provider_row.mcp_tools,
-                "subagents": provider_row.subagents,
-                "cli_runner_candidates": []
-                if has_full_runtime
-                else full_runtime_runner_candidates,
-                "autonomous_readiness_required": readiness is not None,
-                "autonomous_policy_gate": readiness["policy_gate"]
-                if readiness is not None
-                else "not_required",
-                "autonomous_readiness_status": readiness["status"]
-                if readiness is not None
-                else "not_required",
-                "autonomous_readiness_recommendation": readiness["recommendation"]
-                if readiness is not None
-                else "not_required",
-                "autonomous_readiness_recommendation_reasons": readiness[
-                    "recommendation_reasons"
-                ]
-                if readiness is not None
-                else [],
-                "autonomous_readiness_blockers": readiness["blockers"]
-                if readiness is not None
-                else [],
-                "autonomous_readiness_warnings": readiness["warnings"]
-                if readiness is not None
-                else [],
-                "autonomous_readiness_evidence": readiness["evidence"]
-                if readiness is not None
-                else [],
-                "autonomous_readiness_requirements": readiness["requirements"]
-                if readiness is not None
-                else {},
-                "autonomous_readiness_missing_requirements": readiness[
-                    "missing_requirements"
-                ]
-                if readiness is not None
-                else [],
-                "autonomous_readiness_next_actions": readiness["next_actions"]
-                if readiness is not None
-                else [],
-                "blockers": blockers,
-                "warnings": warnings,
-                "notes": provider_row.notes,
-            }
+    return [
+        _runtime_capability_row(
+            provider_row,
+            full_runtime_runner_candidates,
+            readiness_by_provider.get(provider_row.provider),
         )
-    return matrix
+        for provider_row in PROVIDER_RUNTIME_COMPATIBILITY
+    ]
 
 
 def build_runtime_eval_matrix() -> list[dict[str, Any]]:
@@ -899,11 +941,30 @@ def _runtime_provider_readiness_next_actions(
     return actions
 
 
-def _runtime_provider_autonomous_readiness_from_history(
-    provider: str,
+def _runtime_provider_readiness_status(
+    blockers: list[str],
+    warnings: list[str],
+) -> tuple[str, str]:
+    """Return readiness status/recommendation for accumulated gate signals."""
+    if blockers:
+        return "blocked", "provider_e2e_required"
+    if any(
+        signal in warnings
+        for signal in (
+            "live_fault_probe_evidence_missing",
+            "live_fault_probe_coverage_incomplete",
+        )
+    ):
+        return "needs_live_fault_evidence", "limited_autonomous_until_live_faults"
+    if warnings:
+        return "warming_up", "limited_autonomous_until_evidence_stable"
+    return "full_autonomous_candidate", "api_runtime_full_autonomous_candidate"
+
+
+def _runtime_provider_readiness_signals(
     provider_stats: dict[str, Any],
-) -> dict[str, Any]:
-    """Classify direct-provider autonomous readiness from persisted e2e history."""
+) -> tuple[list[str], list[str], list[str]]:
+    """Collect blockers, warnings, and evidence from provider history."""
     blockers: list[str] = []
     warnings: list[str] = []
     evidence: list[str] = []
@@ -942,21 +1003,16 @@ def _runtime_provider_autonomous_readiness_from_history(
     else:
         warnings.append("live_fault_probe_evidence_missing")
 
-    if blockers:
-        status = "blocked"
-        recommendation = "provider_e2e_required"
-    elif (
-        "live_fault_probe_evidence_missing" in warnings
-        or "live_fault_probe_coverage_incomplete" in warnings
-    ):
-        status = "needs_live_fault_evidence"
-        recommendation = "limited_autonomous_until_live_faults"
-    elif warnings:
-        status = "warming_up"
-        recommendation = "limited_autonomous_until_evidence_stable"
-    else:
-        status = "full_autonomous_candidate"
-        recommendation = "api_runtime_full_autonomous_candidate"
+    return blockers, warnings, evidence
+
+
+def _runtime_provider_autonomous_readiness_from_history(
+    provider: str,
+    provider_stats: dict[str, Any],
+) -> dict[str, Any]:
+    """Classify direct-provider autonomous readiness from persisted e2e history."""
+    blockers, warnings, evidence = _runtime_provider_readiness_signals(provider_stats)
+    status, recommendation = _runtime_provider_readiness_status(blockers, warnings)
 
     requirements = _runtime_provider_readiness_requirements(provider_stats)
     return {
@@ -1367,92 +1423,96 @@ def build_runtime_eval_history(
     ]
 
 
+def _runtime_full_runtime_cost_fields() -> dict[str, Any]:
+    """Return empty cost fields for native full-runtime providers."""
+    return {
+        "cost_status": "not_recorded",
+        "cost_pricing_model": None,
+        "cost_pricing_provider": None,
+        "cost_actual_usd": None,
+        "cost_actual_formatted": None,
+        "cost_actual_input_tokens": None,
+        "cost_actual_output_tokens": None,
+        "cost_observed_run_count": None,
+        "cost_estimate_usd": None,
+        "cost_estimate_formatted": None,
+        "cost_estimate_input_tokens": None,
+        "cost_estimate_output_tokens": None,
+    }
+
+
+def _runtime_comparative_eval_row(
+    provider: str,
+    provider_row: Any,
+    provider_stats: dict[str, Any],
+    history_path: Any,
+) -> dict[str, Any]:
+    """Build one runtime comparative eval row."""
+    has_full_runtime = provider_row.full_autonomous == "yes"
+    provider_metrics = _runtime_provider_eval_metrics(provider_stats)
+    cost_fields = (
+        _runtime_full_runtime_cost_fields()
+        if has_full_runtime
+        else _runtime_provider_cost_estimate(provider_stats)
+    )
+    return {
+        "provider": provider,
+        "runtime_path": "full_autonomous" if has_full_runtime else "generic_edit",
+        "quality_status": (
+            "not_recorded"
+            if has_full_runtime
+            else str(provider_stats.get("status") or "not_observed")
+        ),
+        "quality_score": (
+            None if has_full_runtime else provider_metrics["pass_rate_percent"]
+        ),
+        "stability_score": (
+            None if has_full_runtime else provider_metrics["recent_pass_rate_percent"]
+        ),
+        **cost_fields,
+        "safety_status": "native_runtime_policy"
+        if has_full_runtime
+        else "policy_gated",
+        "safety_score": (
+            None
+            if has_full_runtime
+            else provider_metrics["live_fault_probe_case_coverage_percent"]
+        ),
+        "evidence_source": "native_runtime" if has_full_runtime else str(history_path),
+        "required_before_full_autonomous": not has_full_runtime,
+        "blockers": (
+            []
+            if has_full_runtime
+            else ["provider_e2e", "generic_edit_recovery", "mcp_bridge_contract"]
+        ),
+    }
+
+
 def build_runtime_comparative_eval_matrix(
     *,
     project_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Build provider comparison rows for quality/cost/safety eval evidence."""
     eval_history = build_runtime_eval_history(project_dir=project_dir)
-    provider_history = (
-        {
-            row["provider"]: row
-            for row in eval_history[0].get("providers", [])
-            if isinstance(row, dict)
-        }
-        if eval_history
-        else {}
-    )
+    provider_rows = eval_history[0].get("providers", []) if eval_history else []
+    provider_history = {
+        row["provider"]: row for row in provider_rows if isinstance(row, dict)
+    }
     history_path = (
         eval_history[0].get("history_path")
         if eval_history
         else PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix()
     )
     compatibility = {row.provider: row for row in PROVIDER_RUNTIME_COMPATIBILITY}
-    comparison_providers = ("claude", "codex", "openai", "google", "ollama")
-    matrix: list[dict[str, Any]] = []
-    for provider in comparison_providers:
-        provider_row = compatibility[provider]
-        has_full_runtime = provider_row.full_autonomous == "yes"
-        provider_stats = provider_history.get(provider, {})
-        provider_metrics = _runtime_provider_eval_metrics(provider_stats)
-        provider_cost = _runtime_provider_cost_estimate(provider_stats)
-        quality_status = (
-            "not_recorded"
-            if has_full_runtime
-            else str(provider_stats.get("status") or "not_observed")
+    return [
+        _runtime_comparative_eval_row(
+            provider,
+            compatibility[provider],
+            provider_history.get(provider, {}),
+            history_path,
         )
-        cost_fields = (
-            {
-                "cost_status": "not_recorded",
-                "cost_pricing_model": None,
-                "cost_pricing_provider": None,
-                "cost_actual_usd": None,
-                "cost_actual_formatted": None,
-                "cost_actual_input_tokens": None,
-                "cost_actual_output_tokens": None,
-                "cost_observed_run_count": None,
-                "cost_estimate_usd": None,
-                "cost_estimate_formatted": None,
-                "cost_estimate_input_tokens": None,
-                "cost_estimate_output_tokens": None,
-            }
-            if has_full_runtime
-            else provider_cost
-        )
-        matrix.append(
-            {
-                "provider": provider,
-                "runtime_path": "full_autonomous"
-                if has_full_runtime
-                else "generic_edit",
-                "quality_status": quality_status,
-                "quality_score": None
-                if has_full_runtime
-                else provider_metrics["pass_rate_percent"],
-                "stability_score": None
-                if has_full_runtime
-                else provider_metrics["recent_pass_rate_percent"],
-                **cost_fields,
-                "safety_status": "native_runtime_policy"
-                if has_full_runtime
-                else "policy_gated",
-                "safety_score": None
-                if has_full_runtime
-                else provider_metrics["live_fault_probe_case_coverage_percent"],
-                "evidence_source": "native_runtime"
-                if has_full_runtime
-                else str(history_path),
-                "required_before_full_autonomous": not has_full_runtime,
-                "blockers": []
-                if has_full_runtime
-                else [
-                    "provider_e2e",
-                    "generic_edit_recovery",
-                    "mcp_bridge_contract",
-                ],
-            }
-        )
-    return matrix
+        for provider in ("claude", "codex", "openai", "google", "ollama")
+    ]
 
 
 def build_runtime_modes_payload(
@@ -1934,13 +1994,12 @@ def handle_generic_edit_resume_preflight_command(
     return payload
 
 
-def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
-    """Format runtime compatibility guidance for humans."""
-    payload = payload or build_runtime_modes_payload()
-    mode_rows = [
-        [mode.mode, mode.purpose, mode.capabilities] for mode in RUNTIME_MODE_INFO
-    ]
-    provider_rows = [
+def _runtime_mode_text_rows() -> list[list[str]]:
+    return [[mode.mode, mode.purpose, mode.capabilities] for mode in RUNTIME_MODE_INFO]
+
+
+def _runtime_provider_text_rows() -> list[list[str]]:
+    return [
         [
             row.provider,
             row.full_autonomous,
@@ -1953,7 +2012,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for row in PROVIDER_RUNTIME_COMPATIBILITY
     ]
-    cli_runner_rows = [
+
+
+def _runtime_cli_runner_text_rows() -> list[list[str]]:
+    return [
         [
             profile.runner_id,
             profile.tier,
@@ -1967,7 +2029,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for profile in CLI_RUNNER_PROFILES
     ]
-    cli_runner_selection_rows = [
+
+
+def _runtime_cli_runner_selection_text_rows() -> list[list[str]]:
+    return [
         [
             mode.mode,
             ", ".join(
@@ -1977,7 +2042,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for mode in RUNTIME_MODE_INFO
     ]
-    cli_runner_contract_rows = [
+
+
+def _runtime_cli_runner_contract_text_rows() -> list[list[str]]:
+    return [
         [
             row["runner_id"],
             row["runner_status"],
@@ -1987,7 +2055,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for row in build_cli_runner_contract_matrix()
     ]
-    runtime_fallback_rows = [
+
+
+def _runtime_fallback_text_rows() -> list[list[str]]:
+    return [
         [
             row["provider"],
             row["requested_mode"],
@@ -1999,7 +2070,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         for row in build_runtime_fallback_matrix()
         if row["requested_mode"] == "full_autonomous" or row["missing_capabilities"]
     ]
-    mcp_bridge_rows = [
+
+
+def _runtime_mcp_bridge_text_rows() -> list[list[str]]:
+    return [
         [
             row["provider"],
             row["runtime_mode"],
@@ -2013,7 +2087,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         for row in build_mcp_bridge_plan_matrix()
         if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
     ]
-    external_mcp_health_rows = [
+
+
+def _runtime_external_mcp_health_text_rows() -> list[list[str]]:
+    return [
         [
             row["server"],
             row["status"],
@@ -2027,7 +2104,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         )
         if row["bridgeable"]
     ]
-    mcp_permission_rows = [
+
+
+def _runtime_mcp_permission_text_rows() -> list[list[str]]:
+    return [
         [
             row["server"],
             row["bridge_path"],
@@ -2039,7 +2119,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for row in build_mcp_bridge_permission_matrix()
     ]
-    subagent_rows = [
+
+
+def _runtime_subagent_text_rows() -> list[list[str]]:
+    return [
         [
             row["provider"],
             row["runtime_mode"],
@@ -2052,7 +2135,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         for row in build_runtime_subagent_matrix()
         if row["runtime_mode"] in {"full_autonomous", "generic_edit"}
     ]
-    mutating_subagent_rows = [
+
+
+def _runtime_mutating_subagent_text_rows() -> list[list[str]]:
+    return [
         [
             row["provider"],
             row["runtime_mode"],
@@ -2064,7 +2150,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         for row in build_runtime_subagent_mutation_policy()
         if row["provider"] in {"claude", "codex", "openai", "google", "ollama"}
     ]
-    runtime_policy_rows = [
+
+
+def _runtime_policy_text_rows(payload: dict[str, Any]) -> list[list[str]]:
+    return [
         [
             row["phase"],
             row["provider"],
@@ -2081,7 +2170,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         for row in payload["runtime_policy_matrix"]
         if row["provider"] in {"claude", "codex", "openai", "google", "ollama"}
     ]
-    runtime_capability_rows = [
+
+
+def _runtime_capability_text_rows(payload: dict[str, Any]) -> list[list[str]]:
+    return [
         [
             row["provider"],
             row["readiness"],
@@ -2095,7 +2187,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for row in payload["runtime_capability_matrix"]
     ]
-    runtime_eval_rows = [
+
+
+def _runtime_eval_text_rows() -> list[list[str]]:
+    return [
         [
             row["case_id"],
             row["runtime_mode"],
@@ -2105,7 +2200,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for row in build_runtime_eval_matrix()
     ]
-    runtime_eval_history_rows = [
+
+
+def _runtime_eval_history_text_rows(payload: dict[str, Any]) -> list[list[str]]:
+    return [
         [
             row["case_id"],
             row["status"],
@@ -2117,7 +2215,10 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for row in payload["runtime_eval_history"]
     ]
-    runtime_comparative_eval_rows = [
+
+
+def _runtime_comparative_eval_text_rows(payload: dict[str, Any]) -> list[list[str]]:
+    return [
         [
             row["provider"],
             row["runtime_path"],
@@ -2136,6 +2237,27 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
         ]
         for row in payload["runtime_comparative_eval_matrix"]
     ]
+
+
+def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
+    """Format runtime compatibility guidance for humans."""
+    payload = payload or build_runtime_modes_payload()
+    mode_rows = _runtime_mode_text_rows()
+    provider_rows = _runtime_provider_text_rows()
+    cli_runner_rows = _runtime_cli_runner_text_rows()
+    cli_runner_selection_rows = _runtime_cli_runner_selection_text_rows()
+    cli_runner_contract_rows = _runtime_cli_runner_contract_text_rows()
+    runtime_fallback_rows = _runtime_fallback_text_rows()
+    mcp_bridge_rows = _runtime_mcp_bridge_text_rows()
+    external_mcp_health_rows = _runtime_external_mcp_health_text_rows()
+    mcp_permission_rows = _runtime_mcp_permission_text_rows()
+    subagent_rows = _runtime_subagent_text_rows()
+    mutating_subagent_rows = _runtime_mutating_subagent_text_rows()
+    runtime_policy_rows = _runtime_policy_text_rows(payload)
+    runtime_capability_rows = _runtime_capability_text_rows(payload)
+    runtime_eval_rows = _runtime_eval_text_rows()
+    runtime_eval_history_rows = _runtime_eval_history_text_rows(payload)
+    runtime_comparative_eval_rows = _runtime_comparative_eval_text_rows(payload)
 
     return "\n\n".join(
         [
