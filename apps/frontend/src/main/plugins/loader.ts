@@ -374,6 +374,7 @@ export function registerPluginHandlers(): void {
           data: {
             agent_type: result.agent_type,
             spec_dir: result.spec_dir,
+            runtime_plugins: result.runtime_plugins || [],
             contributions: result.contributions || [],
             preview: result.preview || ''
           }

@@ -114,6 +114,9 @@ export function PluginManager({ projectPath }: PluginManagerProps) {
   const translateCapability = (capability: string) =>
     t(`plugins:capabilities.${capability}`, { defaultValue: capability });
 
+  const translatePluginType = (pluginType: string) =>
+    t(`plugins:types.${pluginType}`, { defaultValue: pluginType });
+
   const openPermissionReview = async (
     pluginName: string,
     enableAfterConfirm: boolean
@@ -586,6 +589,50 @@ export function PluginManager({ projectPath }: PluginManagerProps) {
           </DialogHeader>
 
           <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium mb-2">
+                {t('plugins:contextPreview.runtimePlugins')}
+              </p>
+              {previewView && previewView.result.runtime_plugins.length > 0 ? (
+                <div className="space-y-2">
+                  {previewView.result.runtime_plugins.map((plugin) => (
+                    <div
+                      key={plugin.plugin_name}
+                      className="rounded-md border border-border bg-muted/20 p-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">{plugin.plugin_name}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {translatePluginType(plugin.plugin_type)}
+                        </Badge>
+                        <Badge
+                          variant={plugin.contributed ? 'secondary' : 'outline'}
+                          className="text-xs"
+                        >
+                          {plugin.contributed
+                            ? t('plugins:contextPreview.contributed')
+                            : t('plugins:contextPreview.noPromptContribution')}
+                        </Badge>
+                      </div>
+                      {plugin.capabilities.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {plugin.capabilities.map((capability) => (
+                            <Badge key={capability} variant="outline" className="text-xs">
+                              {translateCapability(capability)}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {t('plugins:contextPreview.noRuntimePlugins')}
+                </p>
+              )}
+            </div>
+
             <div>
               <p className="text-sm font-medium mb-2">
                 {t('plugins:contextPreview.contributions')}

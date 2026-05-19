@@ -341,6 +341,20 @@ describe('plugin IPC handlers', () => {
     const previewPayload = {
       agent_type: 'coder',
       spec_dir: '/repo/.auto-claude/plugin-preview',
+      runtime_plugins: [
+        {
+          plugin_name: 'rules-steering-compiler',
+          plugin_type: 'integration',
+          capabilities: ['analysis_only'],
+          contributed: true
+        },
+        {
+          plugin_name: 'skill-pack-runtime',
+          plugin_type: 'integration',
+          capabilities: ['analysis_only', 'generic_edit'],
+          contributed: false
+        }
+      ],
       contributions: [
         {
           plugin_name: 'rules-steering-compiler',

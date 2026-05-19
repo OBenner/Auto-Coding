@@ -70,6 +70,10 @@
   "contextPreview": {
     "title": "Aperçu du Prompt",
     "description": "Contexte des extensions activées pour {{agent}} lors de l'inspection de {{plugin}}.",
+    "runtimePlugins": "Extensions runtime",
+    "noRuntimePlugins": "Aucune extension runtime activée.",
+    "contributed": "Contribution",
+    "noPromptContribution": "Aucun prompt",
     "contributions": "Contributions",
     "noContributions": "Aucune contribution d'extension activée.",
     "empty": "Aucun aperçu de prompt disponible."

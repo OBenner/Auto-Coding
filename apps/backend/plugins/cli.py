@@ -1263,6 +1263,7 @@ def cmd_preview_context(args: argparse.Namespace) -> int:
             build_agent_context,
             collect_prompt_augmentations,
             load_enabled_runtime_plugins,
+            plugin_capabilities,
         )
 
         project_dir = Path.cwd()
@@ -1284,11 +1285,26 @@ def cmd_preview_context(args: argparse.Namespace) -> int:
             metadata=metadata,
         )
         contributions = collect_prompt_augmentations(plugins, context)
+        contributing_plugins = {
+            contribution.plugin_name for contribution in contributions
+        }
         preview = append_prompt_augmentations("", contributions).strip()
         payload = {
             "success": True,
             "agent_type": args.agent_type,
             "spec_dir": str(spec_dir),
+            "runtime_plugins": [
+                {
+                    "plugin_name": plugin.name,
+                    "plugin_type": _enum_value(plugin.plugin_type),
+                    "capabilities": [
+                        _enum_value(capability)
+                        for capability in plugin_capabilities(plugin)
+                    ],
+                    "contributed": plugin.name in contributing_plugins,
+                }
+                for plugin in sorted(plugins, key=lambda plugin: plugin.name)
+            ],
             "contributions": [
                 {
                     "plugin_name": contribution.plugin_name,
