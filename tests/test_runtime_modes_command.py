@@ -518,6 +518,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
                         "recent_passed_runs": 3,
                         "last_status": "passed",
                         "last_runtime_mode": "provider_e2e",
+                        "last_model": "gpt-4o",
                         "last_run_at": "2026-05-17T00:00:00Z",
                         "last_reliability_status": "complete",
                         "last_provider_e2e_status": "passed",
@@ -529,6 +530,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
                         "failed_runs": 1,
                         "last_status": "failed",
                         "last_runtime_mode": "provider_e2e",
+                        "last_model": "gemini-2.0-flash",
                         "last_run_at": "2026-05-17T00:01:00Z",
                         "last_reliability_status": "partial_coverage",
                         "last_provider_e2e_status": "failed",
@@ -558,6 +560,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
     ]
     provider_rows = {row["provider"]: row for row in provider_e2e["providers"]}
     assert provider_rows["openai"]["status"] == "passed"
+    assert provider_rows["openai"]["last_model"] == "gpt-4o"
     assert provider_rows["openai"]["pass_rate_percent"] == 75
     assert provider_rows["openai"]["recent_pass_rate_percent"] == 75
     assert provider_rows["openai"]["observed_live_fault_case_count"] == 1
@@ -572,13 +575,21 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["openai"]["quality_score"] == 75
     assert comparative_rows["openai"]["stability_score"] == 75
     assert comparative_rows["openai"]["safety_score"] == 50
+    assert comparative_rows["openai"]["cost_status"] == "estimated"
+    assert comparative_rows["openai"]["cost_pricing_model"] == "gpt-4o"
+    assert comparative_rows["openai"]["cost_estimate_usd"] == 0.045
+    assert comparative_rows["openai"]["cost_estimate_formatted"] == "$0.0450"
+    assert comparative_rows["openai"]["cost_estimate_input_tokens"] == 10000
+    assert comparative_rows["openai"]["cost_estimate_output_tokens"] == 2000
     assert comparative_rows["openai"]["evidence_source"] == (
         ".auto-Codex/provider-smoke-history.json"
     )
     assert comparative_rows["google"]["quality_status"] == "failed"
     assert comparative_rows["google"]["quality_score"] == 0
+    assert comparative_rows["google"]["cost_status"] == "estimated"
     assert comparative_rows["ollama"]["quality_status"] == "not_observed"
     assert comparative_rows["ollama"]["quality_score"] is None
+    assert comparative_rows["ollama"]["cost_status"] == "not_recorded"
     assert comparative_rows["claude"]["safety_status"] == "native_runtime_policy"
 
 

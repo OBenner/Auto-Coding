@@ -58,6 +58,7 @@ from cli.provider_smoke_commands import (
     PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
     PROVIDER_SMOKE_HISTORY_RELATIVE_PATH,
 )
+from core.providers.cost_calculator import MODEL_PRICING, estimate_session_cost
 
 DEFAULT_MCP_DIAGNOSTIC_SERVERS = tuple(MCP_SERVER_CATALOG)
 DEFAULT_EXTERNAL_MCP_SMOKE_SERVERS = registered_external_mcp_servers()
@@ -111,6 +112,8 @@ MCP_PERMISSION_REQUIRED_GATES = (
     "audit_artifact",
     "mutating_tool_classification",
 )
+RUNTIME_COMPARATIVE_COST_ESTIMATE_INPUT_TOKENS = 10_000
+RUNTIME_COMPARATIVE_COST_ESTIMATE_OUTPUT_TOKENS = 2_000
 
 RUNTIME_POLICY_PHASES = (
     {
@@ -1066,6 +1069,54 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
     }
 
 
+def _runtime_provider_cost_pricing_model(model: Any) -> str | None:
+    """Return a known pricing model from direct provider history."""
+    if not isinstance(model, str):
+        return None
+    trimmed = model.strip()
+    if not trimmed:
+        return None
+    if trimmed in MODEL_PRICING and trimmed != "default":
+        return trimmed
+    for segment in reversed(trimmed.split("/")):
+        if segment in MODEL_PRICING and segment != "default":
+            return segment
+    return None
+
+
+def _runtime_provider_cost_estimate(provider_stats: dict[str, Any]) -> dict[str, Any]:
+    """Return cost estimate evidence from the latest observed provider model."""
+    pricing_model = _runtime_provider_cost_pricing_model(
+        provider_stats.get("last_model")
+    )
+    if not pricing_model:
+        return {
+            "cost_status": "not_recorded",
+            "cost_pricing_model": None,
+            "cost_pricing_provider": None,
+            "cost_estimate_usd": None,
+            "cost_estimate_formatted": None,
+            "cost_estimate_input_tokens": RUNTIME_COMPARATIVE_COST_ESTIMATE_INPUT_TOKENS,
+            "cost_estimate_output_tokens": RUNTIME_COMPARATIVE_COST_ESTIMATE_OUTPUT_TOKENS,
+        }
+
+    estimate = estimate_session_cost(
+        pricing_model,
+        RUNTIME_COMPARATIVE_COST_ESTIMATE_INPUT_TOKENS,
+        RUNTIME_COMPARATIVE_COST_ESTIMATE_OUTPUT_TOKENS,
+    )
+    estimated_cost = estimate["estimated_cost"]
+    return {
+        "cost_status": "local_zero_cost" if estimated_cost == 0 else "estimated",
+        "cost_pricing_model": pricing_model,
+        "cost_pricing_provider": estimate.get("provider"),
+        "cost_estimate_usd": estimated_cost,
+        "cost_estimate_formatted": estimate["formatted"],
+        "cost_estimate_input_tokens": estimate["input_tokens"],
+        "cost_estimate_output_tokens": estimate["output_tokens"],
+    }
+
+
 def _runtime_provider_live_fault_coverage_complete(
     provider_stats: dict[str, Any],
 ) -> bool:
@@ -1227,6 +1278,7 @@ def build_runtime_eval_history(
                 "last_provider_e2e_status": provider_stats.get(
                     "last_provider_e2e_status",
                 ),
+                "last_model": provider_stats.get("last_model"),
                 "last_run_at": provider_stats.get("last_run_at"),
                 **provider_metrics,
             }
@@ -1277,10 +1329,24 @@ def build_runtime_comparative_eval_matrix(
         has_full_runtime = provider_row.full_autonomous == "yes"
         provider_stats = provider_history.get(provider, {})
         provider_metrics = _runtime_provider_eval_metrics(provider_stats)
+        provider_cost = _runtime_provider_cost_estimate(provider_stats)
         quality_status = (
             "not_recorded"
             if has_full_runtime
             else str(provider_stats.get("status") or "not_observed")
+        )
+        cost_fields = (
+            {
+                "cost_status": "not_recorded",
+                "cost_pricing_model": None,
+                "cost_pricing_provider": None,
+                "cost_estimate_usd": None,
+                "cost_estimate_formatted": None,
+                "cost_estimate_input_tokens": None,
+                "cost_estimate_output_tokens": None,
+            }
+            if has_full_runtime
+            else provider_cost
         )
         matrix.append(
             {
@@ -1295,7 +1361,7 @@ def build_runtime_comparative_eval_matrix(
                 "stability_score": None
                 if has_full_runtime
                 else provider_metrics["recent_pass_rate_percent"],
-                "cost_status": "not_recorded",
+                **cost_fields,
                 "safety_status": "native_runtime_policy"
                 if has_full_runtime
                 else "policy_gated",
@@ -1988,6 +2054,8 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
             _format_optional_percent(row.get("quality_score")),
             _format_optional_percent(row.get("stability_score")),
             row["cost_status"],
+            row.get("cost_estimate_formatted") or "n/a",
+            row.get("cost_pricing_model") or "n/a",
             row["safety_status"],
             _format_optional_percent(row.get("safety_score")),
             ", ".join(row["blockers"]) or "none",
@@ -2187,6 +2255,8 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
                     "Quality score",
                     "Stability score",
                     "Cost",
+                    "Cost estimate",
+                    "Pricing model",
                     "Safety",
                     "Safety score",
                     "Blockers",

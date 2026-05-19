@@ -938,6 +938,7 @@ export interface RuntimeEvalHistoryProviderRow {
   last_status?: string | null;
   last_reliability_status?: string | null;
   last_provider_e2e_status?: string | null;
+  last_model?: string | null;
   last_run_at?: string | null;
 }
 
@@ -960,6 +961,12 @@ export interface RuntimeComparativeEvalMatrixRow {
   quality_score?: number | null;
   stability_score?: number | null;
   cost_status: string;
+  cost_pricing_model?: string | null;
+  cost_pricing_provider?: string | null;
+  cost_estimate_usd?: number | null;
+  cost_estimate_formatted?: string | null;
+  cost_estimate_input_tokens?: number | null;
+  cost_estimate_output_tokens?: number | null;
   safety_status: string;
   safety_score?: number | null;
   evidence_source: string;

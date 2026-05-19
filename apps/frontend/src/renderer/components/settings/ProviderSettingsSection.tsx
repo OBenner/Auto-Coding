@@ -243,6 +243,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   enable_live_fault_probes:
     'settings:aiProvider.runtimeDiagnosticValues.enableLiveFaultProbes',
   error: 'settings:aiProvider.runtimeDiagnosticValues.error',
+  estimated: 'settings:aiProvider.runtimeDiagnosticValues.estimated',
   external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
   failed: 'settings:aiProvider.runtimeDiagnosticValues.failed',
   fallback_active: 'settings:aiProvider.runtimeDiagnosticValues.fallbackActive',
@@ -290,6 +291,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   live_provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.liveProviderE2eRequired',
   local_bridge: 'settings:aiProvider.runtimeDiagnosticValues.localBridge',
   local_model_quality_varies: 'settings:aiProvider.runtimeDiagnosticValues.localModelQualityVaries',
+  local_zero_cost: 'settings:aiProvider.runtimeDiagnosticValues.localZeroCost',
   limited: 'settings:aiProvider.runtimeDiagnosticValues.limited',
   limited_autonomous_until_evidence_stable:
     'settings:aiProvider.runtimeDiagnosticValues.limitedAutonomousUntilEvidenceStable',
@@ -697,6 +699,17 @@ function formatRuntimePercentMetric(
     return '';
   }
   return `${formatRuntimeDiagnosticValue(translate, key)} ${value}%`;
+}
+
+function formatRuntimeComparativeEvalCost(
+  translate: RuntimeDiagnosticTranslate,
+  row: RuntimeComparativeEvalMatrixRow
+): string {
+  const status = formatRuntimeDiagnosticValue(translate, row.cost_status);
+  const details = [row.cost_estimate_formatted, row.cost_pricing_model]
+    .filter((value): value is string => Boolean(value))
+    .join(' ');
+  return [status, details].filter(Boolean).join(' ');
 }
 
 function formatRuntimeDiagnosticBoolean(
@@ -1278,7 +1291,7 @@ export function buildRuntimeComparativeEvalDiagnosticRows(
     .map((row) => {
       const provider = formatRuntimeDiagnosticValue(translate, row.provider);
       const quality = formatRuntimeDiagnosticValue(translate, row.quality_status);
-      const cost = formatRuntimeDiagnosticValue(translate, row.cost_status);
+      const cost = formatRuntimeComparativeEvalCost(translate, row);
       const safety = formatRuntimeDiagnosticValue(translate, row.safety_status);
       const blockers = formatRuntimeDiagnosticList(translate, row.blockers);
       const metrics = [

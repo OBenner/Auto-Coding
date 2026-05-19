@@ -132,6 +132,7 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.dynamicMutatingToolPolicy':
       'Dynamic mutating tool policy',
     'settings:aiProvider.runtimeDiagnosticValues.enforced': 'Enforced',
+    'settings:aiProvider.runtimeDiagnosticValues.estimated': 'Estimated',
     'settings:aiProvider.runtimeDiagnosticValues.failed': 'Failed',
     'settings:aiProvider.runtimeDiagnosticValues.inspectDiff': 'Inspect diff',
     'settings:aiProvider.runtimeDiagnosticValues.isolated': 'Isolated',
@@ -202,6 +203,7 @@ const translate = (key: string) =>
       'Live provider e2e required',
     'settings:aiProvider.runtimeDiagnosticValues.localModelQualityVaries':
       'Local model quality varies',
+    'settings:aiProvider.runtimeDiagnosticValues.localZeroCost': 'Local zero cost',
     'settings:aiProvider.runtimeDiagnosticValues.limited': 'Limited',
     'settings:aiProvider.runtimeDiagnosticValues.missingFullAutonomousRuntime':
       'Missing full autonomous runtime',
@@ -495,7 +497,12 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
           quality_status: 'passed',
           quality_score: 75,
           stability_score: 75,
-          cost_status: 'not_recorded',
+          cost_status: 'estimated',
+          cost_estimate_usd: 0.045,
+          cost_estimate_formatted: '$0.0450',
+          cost_pricing_model: 'gpt-4o',
+          cost_estimate_input_tokens: 10000,
+          cost_estimate_output_tokens: 2000,
           safety_status: 'policy_gated',
           safety_score: 50,
           evidence_source: '.auto-Codex/provider-smoke-history.json',
@@ -507,7 +514,7 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.controlPlane.runtimeComparativeEval',
         value: (
-          'OpenAI: Passed / Not recorded / Policy gated '
+          'OpenAI: Passed / Estimated $0.0450 gpt-4o / Policy gated '
           + '(Quality 75%, Stability 75%, Safety 50%; '
           + 'Provider e2e, Generic edit recovery, MCP bridge contract)'
         ),
