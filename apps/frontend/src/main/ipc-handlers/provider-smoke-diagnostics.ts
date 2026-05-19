@@ -239,6 +239,7 @@ export function mapProviderAutonomousReadiness(
     provider: stringFromUnknown(payload.provider),
     source: stringFromUnknown(payload.source),
     recommendation: stringFromUnknown(payload.recommendation),
+    recommendationReasons: arrayFromUnknown(payload.recommendation_reasons),
     blockers: arrayFromUnknown(payload.blockers),
     warnings: arrayFromUnknown(payload.warnings),
     evidence: arrayFromUnknown(payload.evidence),

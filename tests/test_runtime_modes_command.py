@@ -202,6 +202,13 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
     assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
         "provider_e2e_required"
     )
+    assert capability_rows["openai"]["autonomous_readiness_recommendation_reasons"] == [
+        "provider_e2e_failed",
+        "provider_reliability_incomplete",
+        "latest_provider_e2e_failed",
+        "history_missing",
+        "live_fault_probe_missing",
+    ]
     assert capability_rows["openai"]["autonomous_readiness_requirements"] == {
         "min_stable_runs": 3,
         "observed_recent_window": 0,
@@ -263,6 +270,13 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch):
         "autonomous_policy_gate": "blocked",
         "autonomous_readiness_status": "blocked",
         "autonomous_readiness_recommendation": "provider_e2e_required",
+        "autonomous_readiness_recommendation_reasons": [
+            "provider_e2e_failed",
+            "provider_reliability_incomplete",
+            "latest_provider_e2e_failed",
+            "history_missing",
+            "live_fault_probe_missing",
+        ],
         "autonomous_readiness_blockers": [
             "provider_e2e_failed",
             "provider_reliability_incomplete",
@@ -619,6 +633,9 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
         "api_runtime_full_autonomous_candidate"
     )
+    assert capability_rows["openai"]["autonomous_readiness_recommendation_reasons"] == [
+        "full_autonomy_candidate"
+    ]
     assert capability_rows["openai"]["autonomous_readiness_blockers"] == []
     assert capability_rows["openai"]["autonomous_readiness_warnings"] == []
     assert capability_rows["openai"]["autonomous_readiness_evidence"] == [
@@ -652,6 +669,10 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert capability_rows["google"]["autonomous_readiness_recommendation"] == (
         "limited_autonomous_until_live_faults"
     )
+    assert capability_rows["google"]["autonomous_readiness_recommendation_reasons"] == [
+        "history_warming_up",
+        "live_fault_probe_missing",
+    ]
     assert capability_rows["google"]["autonomous_readiness_warnings"] == [
         "provider_history_warming_up",
         "live_fault_probe_evidence_missing",
@@ -734,6 +755,9 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
     assert capability_rows["openai"]["autonomous_readiness_warnings"] == [
         "provider_history_insufficient_runs"
     ]
+    assert capability_rows["openai"]["autonomous_readiness_recommendation_reasons"] == [
+        "history_insufficient_runs"
+    ]
     assert capability_rows["openai"]["autonomous_readiness_next_actions"] == [
         "collect_provider_history_runs"
     ]
@@ -764,6 +788,9 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
     assert capability_rows["google"]["autonomous_policy_gate"] == "blocked"
     assert capability_rows["google"]["autonomous_readiness_warnings"] == [
         "live_fault_probe_coverage_incomplete"
+    ]
+    assert capability_rows["google"]["autonomous_readiness_recommendation_reasons"] == [
+        "live_fault_coverage_incomplete"
     ]
     assert capability_rows["google"]["autonomous_readiness_next_actions"] == [
         "enable_live_fault_probes"

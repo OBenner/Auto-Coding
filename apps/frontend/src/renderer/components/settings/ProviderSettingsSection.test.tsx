@@ -87,6 +87,8 @@ const translate = (key: string) =>
       'Provider autonomous readiness',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendation':
       'Autonomous recommendation',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendationReasons':
+      'Autonomous recommendation reasons',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessBlockers':
       'Autonomous blockers',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings':
@@ -150,6 +152,8 @@ const translate = (key: string) =>
       'Limited autonomous until evidence stable',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeEvidenceMissing':
       'Live fault probe evidence missing',
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeMissing':
+      'Live fault probe missing',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCoverageIncomplete':
       'Live fault probe coverage incomplete',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultCaseCoverage':
@@ -158,6 +162,10 @@ const translate = (key: string) =>
       'Live fault probes passed',
     'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2ePass':
       'Latest provider e2e pass',
+    'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2eFailed':
+      'Latest provider e2e failed',
+    'settings:aiProvider.runtimeDiagnosticValues.historyMissing':
+      'Missing provider history',
     'settings:aiProvider.runtimeDiagnosticValues.needsLiveFaultEvidence':
       'Needs live fault evidence',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eFailed': 'Provider e2e failed',
@@ -383,6 +391,10 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
           autonomous_policy_gate: 'blocked',
           autonomous_readiness_status: 'needs_live_fault_evidence',
           autonomous_readiness_recommendation: 'limited_autonomous_until_live_faults',
+          autonomous_readiness_recommendation_reasons: [
+            'history_warming_up',
+            'live_fault_probe_missing',
+          ],
           autonomous_readiness_blockers: [],
           autonomous_readiness_warnings: [
             'provider_history_warming_up',
@@ -405,7 +417,8 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
         labelKey: 'settings:aiProvider.controlPlane.runtimeCapability',
         value: (
           'Google: Needs live fault evidence -> Generic edit '
-          + '(Blocked, Limited autonomous until live faults; '
+          + '(Blocked, Limited autonomous until live faults, '
+          + 'Provider history warming up, Live fault probe missing; '
           + 'Provider history warming up, Live fault probe evidence missing; Codex CLI)'
         ),
       },
@@ -899,6 +912,7 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
         provider: 'openai',
         source: 'provider_autonomous_readiness',
         recommendation: 'limited_autonomous_until_evidence_stable',
+        recommendationReasons: ['history_warming_up', 'live_fault_probe_missing'],
         blockers: [],
         warnings: ['provider_history_warming_up', 'live_fault_probe_evidence_missing'],
         evidence: ['provider_e2e_passed', 'provider_reliability_complete'],
@@ -913,6 +927,11 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
         labelKey:
           'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendation',
         value: 'Limited autonomous until evidence stable',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendationReasons',
+        value: 'Provider history warming up, Live fault probe missing',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings',

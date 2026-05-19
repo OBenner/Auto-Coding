@@ -53,6 +53,7 @@ from agents.runtime.subagents import (
 )
 from cli.provider_smoke_commands import (
     PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
+    PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL,
     PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES,
     PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
     PROVIDER_SMOKE_HISTORY_RELATIVE_PATH,
@@ -579,6 +580,9 @@ def build_runtime_policy_matrix(
                     "autonomous_policy_gate": readiness["policy_gate"],
                     "autonomous_readiness_status": readiness["status"],
                     "autonomous_readiness_recommendation": readiness["recommendation"],
+                    "autonomous_readiness_recommendation_reasons": readiness[
+                        "recommendation_reasons"
+                    ],
                     "autonomous_readiness_blockers": readiness["blockers"],
                     "autonomous_readiness_warnings": readiness["warnings"],
                     "autonomous_readiness_requirements": readiness["requirements"],
@@ -592,6 +596,7 @@ def build_runtime_policy_matrix(
                     "autonomous_policy_gate": "not_required",
                     "autonomous_readiness_status": "not_required",
                     "autonomous_readiness_recommendation": "not_required",
+                    "autonomous_readiness_recommendation_reasons": [],
                     "autonomous_readiness_blockers": [],
                     "autonomous_readiness_warnings": [],
                     "autonomous_readiness_requirements": {},
@@ -703,6 +708,11 @@ def build_runtime_capability_matrix(
                 "autonomous_readiness_recommendation": readiness["recommendation"]
                 if readiness is not None
                 else "not_required",
+                "autonomous_readiness_recommendation_reasons": readiness[
+                    "recommendation_reasons"
+                ]
+                if readiness is not None
+                else [],
                 "autonomous_readiness_blockers": readiness["blockers"]
                 if readiness is not None
                 else [],
@@ -921,6 +931,11 @@ def _runtime_provider_autonomous_readiness_from_history(
         "provider": provider,
         "status": status,
         "recommendation": recommendation,
+        "recommendation_reasons": _runtime_provider_readiness_recommendation_reasons(
+            status,
+            blockers,
+            warnings,
+        ),
         "policy_gate": "passed" if status == "full_autonomous_candidate" else "blocked",
         "blockers": blockers,
         "warnings": warnings,
@@ -1044,6 +1059,25 @@ def _runtime_provider_missing_requirements(
     if requirements.get("live_fault_coverage_complete") is not True:
         missing.append("live_fault_case_coverage")
     return missing
+
+
+def _runtime_provider_readiness_recommendation_reasons(
+    status: str,
+    blockers: list[str],
+    warnings: list[str],
+) -> list[str]:
+    """Return stable reason ids behind a provider readiness recommendation."""
+    if status == "full_autonomous_candidate":
+        return ["full_autonomy_candidate"]
+
+    reasons: list[str] = []
+    for signal in [*blockers, *warnings]:
+        reason = PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL.get(
+            signal
+        )
+        if reason and reason not in reasons:
+            reasons.append(reason)
+    return reasons
 
 
 def _runtime_provider_autonomous_readiness_by_name(
@@ -1812,6 +1846,7 @@ def format_runtime_modes_text() -> str:
             row["policy"],
             row["autonomous_policy_gate"],
             row["autonomous_readiness_recommendation"],
+            ", ".join(row["autonomous_readiness_recommendation_reasons"]) or "none",
             row["reason"],
             ", ".join(row["runner_candidates"]) or "none",
         ]
@@ -1825,6 +1860,7 @@ def format_runtime_modes_text() -> str:
             row["recommended_runtime_mode"],
             row["autonomous_policy_gate"],
             row["autonomous_readiness_recommendation"],
+            ", ".join(row["autonomous_readiness_recommendation_reasons"]) or "none",
             ", ".join(row["blockers"]) or "none",
             ", ".join(row["warnings"]) or "none",
             ", ".join(row["cli_runner_candidates"]) or "none",
@@ -2003,6 +2039,7 @@ def format_runtime_modes_text() -> str:
                     "Policy",
                     "Autonomous gate",
                     "Autonomy recommendation",
+                    "Recommendation reasons",
                     "Reason",
                     "Runner candidates",
                 ],
@@ -2016,6 +2053,7 @@ def format_runtime_modes_text() -> str:
                     "Recommended runtime",
                     "Autonomous gate",
                     "Autonomy recommendation",
+                    "Recommendation reasons",
                     "Blockers",
                     "Warnings",
                     "CLI candidates",

@@ -234,6 +234,19 @@ PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = 3
 PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
     PROVIDER_E2E_LIVE_FAULT_CASES
 )
+PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
+    "provider_e2e_failed": "provider_e2e_failed",
+    "provider_reliability_incomplete": "provider_reliability_incomplete",
+    "provider_history_latest_failed": "latest_provider_e2e_failed",
+    "provider_history_unknown": "history_missing",
+    "provider_history_warming_up": "history_warming_up",
+    "provider_history_flaky": "history_flaky",
+    "provider_history_recovering": "history_recovering",
+    "provider_history_degraded": "history_degraded",
+    "provider_history_insufficient_runs": "history_insufficient_runs",
+    "live_fault_probe_evidence_missing": "live_fault_probe_missing",
+    "live_fault_probe_coverage_incomplete": "live_fault_coverage_incomplete",
+}
 
 
 @dataclass(frozen=True)
@@ -562,6 +575,11 @@ def _provider_autonomous_readiness_diagnostics(
         "provider": provider,
         "source": "provider_autonomous_readiness",
         "recommendation": recommendation,
+        "recommendation_reasons": _provider_readiness_recommendation_reasons(
+            status,
+            blockers,
+            warnings,
+        ),
         "blockers": blockers,
         "warnings": warnings,
         "next_actions": _provider_readiness_next_actions(blockers, warnings),
@@ -748,6 +766,25 @@ def _provider_readiness_status(
     if warnings:
         return "warming_up", "limited_autonomous_until_evidence_stable"
     return "full_autonomous_candidate", "api_runtime_full_autonomous_candidate"
+
+
+def _provider_readiness_recommendation_reasons(
+    status: str,
+    blockers: list[str],
+    warnings: list[str],
+) -> list[str]:
+    """Return stable, UI-facing reason ids behind the readiness recommendation."""
+    if status == "full_autonomous_candidate":
+        return ["full_autonomy_candidate"]
+
+    reasons: list[str] = []
+    for signal in [*blockers, *warnings]:
+        reason = PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL.get(
+            signal
+        )
+        if reason and reason not in reasons:
+            reasons.append(reason)
+    return reasons
 
 
 def _provider_readiness_next_actions(
@@ -3811,6 +3848,10 @@ def _print_provider_autonomous_readiness(readiness: Any) -> None:
     recommendation = readiness.get("recommendation")
     if isinstance(recommendation, str) and recommendation:
         print_key_value("Autonomous recommendation", recommendation)
+    _print_string_list_line(
+        "Autonomous recommendation reasons",
+        readiness.get("recommendation_reasons"),
+    )
     _print_string_list_line("Autonomous blockers", readiness.get("blockers"))
     _print_string_list_line("Autonomous warnings", readiness.get("warnings"))
     _print_string_list_line("Autonomous evidence", readiness.get("evidence"))

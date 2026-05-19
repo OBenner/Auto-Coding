@@ -614,6 +614,7 @@ export interface ProviderAutonomousReadinessDiagnostics {
   provider?: string;
   source?: string;
   recommendation?: string;
+  recommendationReasons?: string[];
   blockers?: string[];
   warnings?: string[];
   evidence?: string[];
@@ -875,6 +876,7 @@ export interface RuntimePolicyMatrixRow {
   autonomous_policy_gate?: string;
   autonomous_readiness_status?: string;
   autonomous_readiness_recommendation?: string;
+  autonomous_readiness_recommendation_reasons?: string[];
   autonomous_readiness_blockers?: string[];
   autonomous_readiness_warnings?: string[];
   autonomous_readiness_requirements?: Record<string, unknown>;
@@ -897,6 +899,7 @@ export interface RuntimeCapabilityMatrixRow {
   autonomous_policy_gate?: string;
   autonomous_readiness_status?: string;
   autonomous_readiness_recommendation?: string;
+  autonomous_readiness_recommendation_reasons?: string[];
   autonomous_readiness_blockers?: string[];
   autonomous_readiness_warnings?: string[];
   autonomous_readiness_evidence?: string[];

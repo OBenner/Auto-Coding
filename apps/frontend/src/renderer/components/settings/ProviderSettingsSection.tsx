@@ -251,6 +251,15 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   full_autonomous: 'settings:aiProvider.runtimeDiagnosticValues.fullAutonomous',
   full_autonomous_candidate:
     'settings:aiProvider.runtimeDiagnosticValues.fullAutonomousCandidate',
+  history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryDegraded',
+  history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
+  history_insufficient_runs:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryInsufficientRuns',
+  history_missing: 'settings:aiProvider.runtimeDiagnosticValues.historyMissing',
+  history_recovering:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryRecovering',
+  history_warming_up:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp',
   function_tools: 'settings:aiProvider.runtimeDiagnosticValues.functionTools',
   generic_core_configurable: 'settings:aiProvider.runtimeDiagnosticValues.genericCoreConfigurable',
   generic_cli_pool: 'settings:aiProvider.runtimeDiagnosticValues.genericCliPool',
@@ -290,12 +299,16 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeEvidenceMissing',
   live_fault_probe_coverage_incomplete:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCoverageIncomplete',
+  live_fault_probe_missing:
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeMissing',
   live_fault_case_coverage:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultCaseCoverage',
   live_fault_probes_passed:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed',
   latest_provider_e2e_pass:
     'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2ePass',
+  latest_provider_e2e_failed:
+    'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2eFailed',
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
   model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
@@ -1034,6 +1047,11 @@ export function buildProviderAutonomousReadinessDiagnosticRows(
       value: formatRuntimeDiagnosticValue(translate, readiness.recommendation),
     },
     {
+      labelKey:
+        'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendationReasons',
+      value: formatRuntimeDiagnosticList(translate, readiness.recommendationReasons),
+    },
+    {
       labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessBlockers',
       value: formatRuntimeDiagnosticList(translate, readiness.blockers),
     },
@@ -1072,9 +1090,15 @@ export function buildRuntimePolicyDiagnosticRows(
         translate,
         row.autonomous_readiness_recommendation
       );
+      const autonomousRecommendationReasons = formatRuntimeDiagnosticList(
+        translate,
+        row.autonomous_readiness_recommendation_reasons
+      );
       const runners = formatRuntimeDiagnosticList(translate, row.runner_candidates);
       const autonomousSuffix = row.autonomous_readiness_required
-        ? [autonomousGate, autonomousRecommendation].filter(Boolean).join(', ')
+        ? [autonomousGate, autonomousRecommendation, autonomousRecommendationReasons]
+          .filter(Boolean)
+          .join(', ')
         : '';
       const missingRequirements = formatRuntimeDiagnosticList(
         translate,
@@ -1119,8 +1143,14 @@ export function buildRuntimeCapabilityDiagnosticRows(
         translate,
         row.autonomous_readiness_recommendation
       );
+      const autonomousRecommendationReasons = formatRuntimeDiagnosticList(
+        translate,
+        row.autonomous_readiness_recommendation_reasons
+      );
       const autonomousSuffix = row.autonomous_readiness_required
-        ? [autonomousGate, autonomousRecommendation].filter(Boolean).join(', ')
+        ? [autonomousGate, autonomousRecommendation, autonomousRecommendationReasons]
+          .filter(Boolean)
+          .join(', ')
         : '';
       const missingRequirements = formatRuntimeDiagnosticList(
         translate,
