@@ -381,6 +381,54 @@ def test_preview_context_command_reports_enabled_runtime_plugin_inventory(
     }
 
 
+def test_preview_context_command_prints_runtime_inventory_in_text_mode(
+    tmp_path, capsys
+):
+    """CLI text preview shows which enabled runtime plugins contributed."""
+    system_plugins = tmp_path / "system"
+    project_dir = tmp_path / "project"
+    _write_agent_plugin(
+        system_plugins,
+        "preview-agent",
+        capabilities=[PluginCapability.ANALYSIS_ONLY.value],
+        prompt="PREVIEW_AGENT_CONTEXT",
+    )
+    _write_integration_plugin(
+        system_plugins,
+        "silent-integration",
+        prompt=None,
+    )
+    PluginRegistry.get_instance(
+        user_plugins_dir=project_dir / ".auto-claude" / "plugins" / "user",
+        system_plugins_dir=system_plugins,
+        project_dir=project_dir,
+    )
+
+    result = plugin_cli.cmd_preview_context(
+        argparse.Namespace(
+            agent_type="coder",
+            spec_dir=None,
+            task="inspect runtime plugins",
+            files=[],
+            json=False,
+        )
+    )
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "Runtime plugins:" in output
+    assert (
+        "- preview-agent [agent; capabilities: analysis_only; contributed: yes]"
+        in output
+    )
+    assert (
+        "- silent-integration [integration; capabilities: analysis_only; "
+        "contributed: no]"
+    ) in output
+    assert "Prompt preview:" in output
+    assert "PREVIEW_AGENT_CONTEXT for coder" in output
+
+
 def test_system_plugins_smoke_load_together(tmp_path):
     """The merged system plugins can be loaded together by the control plane."""
     project_root = Path(__file__).resolve().parent.parent

@@ -1288,23 +1288,24 @@ def cmd_preview_context(args: argparse.Namespace) -> int:
         contributing_plugins = {
             contribution.plugin_name for contribution in contributions
         }
+        runtime_plugins = [
+            {
+                "plugin_name": plugin.name,
+                "plugin_type": _enum_value(plugin.plugin_type),
+                "capabilities": [
+                    _enum_value(capability)
+                    for capability in plugin_capabilities(plugin)
+                ],
+                "contributed": plugin.name in contributing_plugins,
+            }
+            for plugin in sorted(plugins, key=lambda plugin: plugin.name)
+        ]
         preview = append_prompt_augmentations("", contributions).strip()
         payload = {
             "success": True,
             "agent_type": args.agent_type,
             "spec_dir": str(spec_dir),
-            "runtime_plugins": [
-                {
-                    "plugin_name": plugin.name,
-                    "plugin_type": _enum_value(plugin.plugin_type),
-                    "capabilities": [
-                        _enum_value(capability)
-                        for capability in plugin_capabilities(plugin)
-                    ],
-                    "contributed": plugin.name in contributing_plugins,
-                }
-                for plugin in sorted(plugins, key=lambda plugin: plugin.name)
-            ],
+            "runtime_plugins": runtime_plugins,
             "contributions": [
                 {
                     "plugin_name": contribution.plugin_name,
@@ -1320,7 +1321,20 @@ def cmd_preview_context(args: argparse.Namespace) -> int:
             _emit_json(payload)
             return 0
 
-        print(preview)
+        print("Runtime plugins:")
+        if runtime_plugins:
+            for plugin in runtime_plugins:
+                capabilities = ", ".join(plugin["capabilities"]) or "none"
+                contributed = "yes" if plugin["contributed"] else "no"
+                print(
+                    f"- {plugin['plugin_name']} "
+                    f"[{plugin['plugin_type']}; capabilities: {capabilities}; "
+                    f"contributed: {contributed}]"
+                )
+        else:
+            print("- none")
+        print("\nPrompt preview:")
+        print(preview or "(empty)")
         return 0
     except Exception:
         logger.exception("Failed to preview plugin runtime context")
