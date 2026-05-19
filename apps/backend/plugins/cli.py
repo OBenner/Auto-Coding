@@ -403,7 +403,7 @@ Examples:
     # Runtime context preview command
     preview_parser = subparsers.add_parser(
         "preview-context",
-        help="Preview enabled agent plugin prompt augmentations",
+        help="Preview enabled runtime plugin prompt augmentations, including integrations",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     preview_parser.add_argument(
@@ -1256,7 +1256,7 @@ def cmd_traces(args: argparse.Namespace) -> int:
 
 
 def cmd_preview_context(args: argparse.Namespace) -> int:
-    """Preview enabled agent plugin prompt augmentations."""
+    """Preview enabled runtime plugin prompt augmentations, including integrations."""
     try:
         from plugins.runtime import (
             append_prompt_augmentations,
