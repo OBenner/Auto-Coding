@@ -682,6 +682,14 @@ export interface ProviderRunHistoryDiagnostics {
   lastStatus?: string;
   lastReliabilityStatus?: string;
   lastProviderE2eStatus?: string;
+  e2eCaseCount?: number;
+  e2ePassedCaseCount?: number;
+  e2eFailedCaseCount?: number;
+  e2eCasePassRatePercent?: number | null;
+  reliabilityObservedCaseCount?: number;
+  reliabilityPassedCaseCount?: number;
+  reliabilityRequiredCaseCount?: number;
+  reliabilityCasePassRatePercent?: number | null;
   lastLiveFaultProbeStatus?: string;
   liveFaultProbeEnabledRuns?: number;
   liveFaultProbePassedRuns?: number;
@@ -932,6 +940,14 @@ export interface RuntimeEvalHistoryProviderRow {
   failed_runs: number;
   pass_rate_percent?: number | null;
   recent_pass_rate_percent?: number | null;
+  e2e_case_count?: number;
+  e2e_passed_case_count?: number;
+  e2e_failed_case_count?: number;
+  e2e_case_pass_rate_percent?: number | null;
+  reliability_observed_case_count?: number;
+  reliability_passed_case_count?: number;
+  reliability_required_case_count?: number;
+  reliability_case_pass_rate_percent?: number | null;
   observed_live_fault_case_count?: number;
   required_live_fault_case_count?: number;
   live_fault_probe_case_coverage_percent?: number | null;
@@ -959,6 +975,7 @@ export interface RuntimeComparativeEvalMatrixRow {
   runtime_path: string;
   quality_status: string;
   quality_score?: number | null;
+  quality_score_source?: string | null;
   stability_score?: number | null;
   cost_status: string;
   cost_pricing_model?: string | null;
@@ -974,6 +991,7 @@ export interface RuntimeComparativeEvalMatrixRow {
   cost_estimate_output_tokens?: number | null;
   safety_status: string;
   safety_score?: number | null;
+  safety_score_source?: string | null;
   evidence_source: string;
   required_before_full_autonomous: boolean;
   blockers: string[];

@@ -408,6 +408,24 @@ export function mapProviderRunHistory(
     lastStatus: stringFromUnknown(payload.last_status),
     lastReliabilityStatus: stringFromUnknown(payload.last_reliability_status),
     lastProviderE2eStatus: stringFromUnknown(payload.last_provider_e2e_status),
+    e2eCaseCount: numberFromUnknown(payload.e2e_case_count),
+    e2ePassedCaseCount: numberFromUnknown(payload.e2e_passed_case_count),
+    e2eFailedCaseCount: numberFromUnknown(payload.e2e_failed_case_count),
+    e2eCasePassRatePercent: numberFromUnknown(
+      payload.e2e_case_pass_rate_percent
+    ),
+    reliabilityObservedCaseCount: numberFromUnknown(
+      payload.reliability_observed_case_count
+    ),
+    reliabilityPassedCaseCount: numberFromUnknown(
+      payload.reliability_passed_case_count
+    ),
+    reliabilityRequiredCaseCount: numberFromUnknown(
+      payload.reliability_required_case_count
+    ),
+    reliabilityCasePassRatePercent: numberFromUnknown(
+      payload.reliability_case_pass_rate_percent
+    ),
     lastLiveFaultProbeStatus: stringFromUnknown(payload.last_live_fault_probe_status),
     liveFaultProbeEnabledRuns: numberFromUnknown(payload.live_fault_probe_enabled_runs),
     liveFaultProbePassedRuns: numberFromUnknown(payload.live_fault_probe_passed_runs),

@@ -524,7 +524,18 @@ def test_runtime_modes_command_reports_provider_eval_history(
                         "last_run_at": "2026-05-17T00:00:00Z",
                         "last_reliability_status": "complete",
                         "last_provider_e2e_status": "passed",
-                        "live_fault_probe_covered_cases": ["unsupported_tools"],
+                        "e2e_case_count": 10,
+                        "e2e_passed_case_count": 9,
+                        "e2e_failed_case_count": 1,
+                        "e2e_case_pass_rate_percent": 90,
+                        "reliability_observed_case_count": 8,
+                        "reliability_passed_case_count": 7,
+                        "reliability_required_case_count": 8,
+                        "reliability_case_pass_rate_percent": 88,
+                        "live_fault_probe_covered_cases": [
+                            "unsupported_tools",
+                            "gateway_model_limitations",
+                        ],
                         "cost_status": "recorded",
                         "cost_observed_run_count": 1,
                         "cost_total_input_tokens": 1000,
@@ -577,18 +588,26 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert provider_rows["openai"]["last_model"] == "gpt-4o"
     assert provider_rows["openai"]["pass_rate_percent"] == 75
     assert provider_rows["openai"]["recent_pass_rate_percent"] == 75
-    assert provider_rows["openai"]["observed_live_fault_case_count"] == 1
+    assert provider_rows["openai"]["e2e_case_pass_rate_percent"] == 90
+    assert provider_rows["openai"]["reliability_case_pass_rate_percent"] == 88
+    assert provider_rows["openai"]["observed_live_fault_case_count"] == 2
     assert provider_rows["openai"]["required_live_fault_case_count"] == 2
-    assert provider_rows["openai"]["live_fault_probe_case_coverage_percent"] == 50
+    assert provider_rows["openai"]["live_fault_probe_case_coverage_percent"] == 100
     assert provider_rows["google"]["status"] == "failed"
     assert provider_rows["openrouter"]["status"] == "not_observed"
     comparative_rows = {
         row["provider"]: row for row in payload["runtime_comparative_eval_matrix"]
     }
     assert comparative_rows["openai"]["quality_status"] == "passed"
-    assert comparative_rows["openai"]["quality_score"] == 75
+    assert comparative_rows["openai"]["quality_score"] == 90
+    assert comparative_rows["openai"]["quality_score_source"] == (
+        "provider_e2e_case_pass_rate"
+    )
     assert comparative_rows["openai"]["stability_score"] == 75
-    assert comparative_rows["openai"]["safety_score"] == 50
+    assert comparative_rows["openai"]["safety_score"] == 88
+    assert comparative_rows["openai"]["safety_score_source"] == (
+        "provider_reliability_and_live_fault_coverage"
+    )
     assert comparative_rows["openai"]["cost_status"] == "recorded"
     assert comparative_rows["openai"]["cost_pricing_model"] == "gpt-4o"
     assert comparative_rows["openai"]["cost_actual_usd"] == pytest.approx(0.0075)

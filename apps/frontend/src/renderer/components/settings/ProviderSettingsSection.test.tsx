@@ -85,6 +85,10 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryPassRate': 'pass rate',
     'settings:aiProvider.connectionTest.providerRunHistoryRecentPassRate':
       'recent pass rate',
+    'settings:aiProvider.connectionTest.providerRunHistoryE2eCasePassRate':
+      'e2e case pass rate',
+    'settings:aiProvider.connectionTest.providerRunHistoryReliabilityCasePassRate':
+      'reliability case pass rate',
     'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage':
       'live-fault coverage',
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
@@ -109,6 +113,7 @@ const translate = (key: string) =>
     'settings:aiProvider.controlPlane.runtimeComparativeEval': 'Comparative evals',
     'settings:aiProvider.controlPlane.runtimeEval': 'Runtime evals',
     'settings:aiProvider.controlPlane.runtimeEvalHistory': 'Runtime eval history',
+    'settings:aiProvider.controlPlane.scoreSource': 'source',
     'settings:aiProvider.controlPlane.cliRunnerContracts': 'CLI runner contracts',
     'settings:aiProvider.controlPlane.mcpPermissions': 'MCP permissions',
     'settings:aiProvider.controlPlane.mutatingSubagentPolicy': 'Mutating subagent policy',
@@ -166,6 +171,8 @@ const translate = (key: string) =>
       'Live fault probe coverage incomplete',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultCaseCoverage':
       'Live fault case coverage',
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCaseCoverage':
+      'Live fault probe case coverage',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed':
       'Live fault probes passed',
     'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2ePass':
@@ -178,8 +185,12 @@ const translate = (key: string) =>
       'Needs live fault evidence',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eFailed': 'Provider e2e failed',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2ePassed': 'Provider e2e passed',
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2eCasePassRate':
+      'Provider e2e case pass rate',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryLatestFailed':
       'Provider history latest failed',
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryPassRate':
+      'Provider history pass rate',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryInsufficientRuns':
       'Provider history insufficient runs',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp':
@@ -190,6 +201,10 @@ const translate = (key: string) =>
       'Provider reliability incomplete',
     'settings:aiProvider.runtimeDiagnosticValues.providerReliability':
       'Provider reliability',
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityAndLiveFaultCoverage':
+      'Provider reliability and live-fault coverage',
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityCasePassRate':
+      'Provider reliability case pass rate',
     'settings:aiProvider.runtimeDiagnosticValues.warmingUp': 'Warming up',
     'settings:aiProvider.runtimeDiagnosticValues.ready': 'Ready',
     'settings:aiProvider.runtimeDiagnosticValues.repairMutation': 'Repair mutation',
@@ -472,7 +487,26 @@ describe('buildRuntimeEvalHistoryDiagnosticRows', () => {
           passed_runs: 2,
           failed_runs: 1,
           missing_providers: ['openrouter', 'litellm'],
-          providers: [],
+          providers: [
+            {
+              provider: 'openai',
+              status: 'passed',
+              total_runs: 2,
+              passed_runs: 2,
+              failed_runs: 0,
+              e2e_case_count: 7,
+              e2e_passed_case_count: 7,
+              e2e_failed_case_count: 0,
+              e2e_case_pass_rate_percent: 100,
+              reliability_observed_case_count: 8,
+              reliability_passed_case_count: 7,
+              reliability_required_case_count: 8,
+              reliability_case_pass_rate_percent: 88,
+              observed_live_fault_case_count: 2,
+              required_live_fault_case_count: 2,
+              live_fault_probe_case_coverage_percent: 100,
+            },
+          ],
         },
       ])
     ).toEqual([
@@ -480,6 +514,8 @@ describe('buildRuntimeEvalHistoryDiagnosticRows', () => {
         labelKey: 'settings:aiProvider.controlPlane.runtimeEvalHistory',
         value: (
           'Provider e2e: Partial (3 total, 2 passed, 1 failed; '
+          + 'OpenAI: Passed (e2e case pass rate 100% (7/7), '
+          + 'reliability case pass rate 88% (7/8), live-fault coverage 100% (2/2)); '
           + 'missing OpenRouter, LiteLLM; .auto-Codex/provider-smoke-history.json)'
         ),
       },
@@ -496,6 +532,7 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
           runtime_path: 'generic_edit',
           quality_status: 'passed',
           quality_score: 75,
+          quality_score_source: 'provider_e2e_case_pass_rate',
           stability_score: 75,
           cost_status: 'estimated',
           cost_estimate_usd: 0.045,
@@ -505,6 +542,7 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
           cost_estimate_output_tokens: 2000,
           safety_status: 'policy_gated',
           safety_score: 50,
+          safety_score_source: 'provider_reliability_and_live_fault_coverage',
           evidence_source: '.auto-Codex/provider-smoke-history.json',
           required_before_full_autonomous: true,
           blockers: ['provider_e2e', 'generic_edit_recovery', 'mcp_bridge_contract'],
@@ -515,7 +553,8 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
         labelKey: 'settings:aiProvider.controlPlane.runtimeComparativeEval',
         value: (
           'OpenAI: Passed / Estimated $0.0450 gpt-4o / Policy gated '
-          + '(Quality 75%, Stability 75%, Safety 50%; '
+          + '(Quality 75% (source Provider e2e case pass rate), Stability 75%, '
+          + 'Safety 50% (source Provider reliability and live-fault coverage); '
           + 'Provider e2e, Generic edit recovery, MCP bridge contract)'
         ),
       },
@@ -888,6 +927,14 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
         lastStatus: 'passed',
         lastReliabilityStatus: 'complete',
         lastProviderE2eStatus: 'passed',
+        e2eCaseCount: 7,
+        e2ePassedCaseCount: 7,
+        e2eFailedCaseCount: 0,
+        e2eCasePassRatePercent: 100,
+        reliabilityObservedCaseCount: 8,
+        reliabilityPassedCaseCount: 8,
+        reliabilityRequiredCaseCount: 8,
+        reliabilityCasePassRatePercent: 100,
         lastLiveFaultProbeStatus: 'passed',
         liveFaultProbeEnabledRuns: 2,
         liveFaultProbePassedRuns: 2,
@@ -930,7 +977,10 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRuns',
-        value: '3 total, 2 passed, 1 failed, pass rate 67%, recent pass rate 100%',
+        value: (
+          '3 total, 2 passed, 1 failed, pass rate 67%, recent pass rate 100%, '
+          + 'e2e case pass rate 100% (7/7), reliability case pass rate 100% (8/8)'
+        ),
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLast',

@@ -39,6 +39,7 @@ import type {
   RuntimeComparativeEvalMatrixRow,
   RuntimeControlPlaneDiagnostics,
   RuntimeEvalHistoryRow,
+  RuntimeEvalHistoryProviderRow,
   RuntimeExternalMcpSmokeResult,
   RuntimeExternalMcpHealthRow,
   RuntimeEvalMatrixRow,
@@ -370,10 +371,18 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_e2e_passed: 'settings:aiProvider.runtimeDiagnosticValues.providerE2ePassed',
   provider_e2e_required: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eRequired',
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
+  provider_e2e_case_pass_rate:
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2eCasePassRate',
+  provider_history_pass_rate:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryPassRate',
   provider_live_fault_fixture:
     'settings:aiProvider.runtimeDiagnosticValues.providerLiveFaultFixture',
   quality_score: 'settings:aiProvider.runtimeDiagnosticValues.qualityScore',
   provider_reliability: 'settings:aiProvider.runtimeDiagnosticValues.providerReliability',
+  provider_reliability_and_live_fault_coverage:
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityAndLiveFaultCoverage',
+  provider_reliability_case_pass_rate:
+    'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityCasePassRate',
   provider_history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryDegraded',
   provider_history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
   provider_history_recovering:
@@ -425,6 +434,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   staged_batch_drift: 'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift',
   streaming_text: 'settings:aiProvider.runtimeDiagnosticValues.streamingText',
   structured_output: 'settings:aiProvider.runtimeDiagnosticValues.structuredOutput',
+  live_fault_probe_case_coverage:
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCaseCoverage',
   recent_runs_all_passed: 'settings:aiProvider.runtimeDiagnosticValues.recentRunsAllPassed',
   subagent: 'settings:aiProvider.runtimeDiagnosticValues.subagent',
   subagents: 'settings:aiProvider.runtimeDiagnosticValues.subagents',
@@ -701,6 +712,20 @@ function formatRuntimePercentMetric(
   return `${formatRuntimeDiagnosticValue(translate, key)} ${value}%`;
 }
 
+function formatRuntimePercentMetricWithSource(
+  translate: RuntimeDiagnosticTranslate,
+  key: string,
+  value?: number | null,
+  source?: string | null
+): string {
+  const metric = formatRuntimePercentMetric(translate, key, value);
+  const sourceLabel = formatRuntimeDiagnosticValue(translate, source);
+  if (!metric || !sourceLabel) {
+    return metric;
+  }
+  return `${metric} (${translate('settings:aiProvider.controlPlane.scoreSource')} ${sourceLabel})`;
+}
+
 function formatRuntimeComparativeEvalCost(
   translate: RuntimeDiagnosticTranslate,
   row: RuntimeComparativeEvalMatrixRow
@@ -956,6 +981,23 @@ function formatProviderRunHistorySummary(
   ].filter(Boolean).join(' - ');
 }
 
+function formatProviderRunHistoryCaseCoverage(
+  translate: RuntimeDiagnosticTranslate,
+  labelKey: string,
+  percent?: number | null,
+  passed?: number,
+  required?: number
+): string {
+  if (
+    !isRuntimeDiagnosticNumber(percent) ||
+    !isRuntimeDiagnosticNumber(passed) ||
+    !isRuntimeDiagnosticNumber(required)
+  ) {
+    return '';
+  }
+  return `${translate(labelKey)} ${percent}% (${passed}/${required})`;
+}
+
 function formatProviderRunHistoryRuns(
   translate: RuntimeDiagnosticTranslate,
   history: ProviderRunHistoryDiagnostics
@@ -970,6 +1012,20 @@ function formatProviderRunHistoryRuns(
     isRuntimeDiagnosticNumber(history.recentPassRatePercent)
       ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryRecentPassRate')} ${history.recentPassRatePercent}%`
       : '',
+    formatProviderRunHistoryCaseCoverage(
+      translate,
+      'settings:aiProvider.connectionTest.providerRunHistoryE2eCasePassRate',
+      history.e2eCasePassRatePercent,
+      history.e2ePassedCaseCount,
+      history.e2eCaseCount
+    ),
+    formatProviderRunHistoryCaseCoverage(
+      translate,
+      'settings:aiProvider.connectionTest.providerRunHistoryReliabilityCasePassRate',
+      history.reliabilityCasePassRatePercent,
+      history.reliabilityPassedCaseCount,
+      history.reliabilityRequiredCaseCount
+    ),
   ].filter(Boolean).join(', ');
 }
 
@@ -1274,6 +1330,55 @@ export function buildRuntimeEvalDiagnosticRows(
   ];
 }
 
+function formatRuntimeEvalHistoryCaseCoverage(
+  translate: RuntimeDiagnosticTranslate,
+  labelKey: string,
+  percent?: number | null,
+  passed?: number,
+  required?: number
+): string {
+  if (
+    !isRuntimeDiagnosticNumber(percent) ||
+    !isRuntimeDiagnosticNumber(passed) ||
+    !isRuntimeDiagnosticNumber(required)
+  ) {
+    return '';
+  }
+  return `${translate(labelKey)} ${percent}% (${passed}/${required})`;
+}
+
+function formatRuntimeEvalHistoryProvider(
+  translate: RuntimeDiagnosticTranslate,
+  provider: RuntimeEvalHistoryProviderRow
+): string {
+  const providerName = formatRuntimeDiagnosticValue(translate, provider.provider);
+  const status = formatRuntimeDiagnosticValue(translate, provider.status);
+  const coverage = [
+    formatRuntimeEvalHistoryCaseCoverage(
+      translate,
+      'settings:aiProvider.connectionTest.providerRunHistoryE2eCasePassRate',
+      provider.e2e_case_pass_rate_percent,
+      provider.e2e_passed_case_count,
+      provider.e2e_case_count
+    ),
+    formatRuntimeEvalHistoryCaseCoverage(
+      translate,
+      'settings:aiProvider.connectionTest.providerRunHistoryReliabilityCasePassRate',
+      provider.reliability_case_pass_rate_percent,
+      provider.reliability_passed_case_count,
+      provider.reliability_required_case_count
+    ),
+    formatRuntimeEvalHistoryCaseCoverage(
+      translate,
+      'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage',
+      provider.live_fault_probe_case_coverage_percent,
+      provider.observed_live_fault_case_count,
+      provider.required_live_fault_case_count
+    ),
+  ].filter(Boolean).join(', ');
+  return `${providerName}: ${status}${coverage ? ` (${coverage})` : ''}`;
+}
+
 export function buildRuntimeEvalHistoryDiagnosticRows(
   translate: RuntimeDiagnosticTranslate,
   rows?: RuntimeEvalHistoryRow[] | null
@@ -1294,8 +1399,13 @@ export function buildRuntimeEvalHistoryDiagnosticRows(
         translate,
         row.missing_providers
       );
+      const providerDetails = row.providers
+        .map((provider) => formatRuntimeEvalHistoryProvider(translate, provider))
+        .filter(Boolean)
+        .join(', ');
       const details = [
         runSummary,
+        providerDetails,
         missing ? `missing ${missing}` : '',
         row.history_path,
       ].filter(Boolean).join('; ');
@@ -1325,9 +1435,19 @@ export function buildRuntimeComparativeEvalDiagnosticRows(
       const safety = formatRuntimeDiagnosticValue(translate, row.safety_status);
       const blockers = formatRuntimeDiagnosticList(translate, row.blockers);
       const metrics = [
-        formatRuntimePercentMetric(translate, 'quality_score', row.quality_score),
+        formatRuntimePercentMetricWithSource(
+          translate,
+          'quality_score',
+          row.quality_score,
+          row.quality_score_source
+        ),
         formatRuntimePercentMetric(translate, 'stability_score', row.stability_score),
-        formatRuntimePercentMetric(translate, 'safety_score', row.safety_score),
+        formatRuntimePercentMetricWithSource(
+          translate,
+          'safety_score',
+          row.safety_score,
+          row.safety_score_source
+        ),
       ].filter(Boolean).join(', ');
       const suffixParts = [metrics, blockers].filter(Boolean);
       const suffix = suffixParts.length ? ` (${suffixParts.join('; ')})` : '';

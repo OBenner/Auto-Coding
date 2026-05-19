@@ -310,6 +310,7 @@ def _provider_smoke_history_record(
         provider_e2e_suite if isinstance(provider_e2e_suite, dict) else {}
     )
     suite_runs = provider_e2e_suite.get("runs")
+    e2e_case_counts = _provider_e2e_suite_case_counts(suite_runs)
     failed_suite_runs = (
         [
             str(run.get("runtime_mode") or "unknown")
@@ -319,6 +320,7 @@ def _provider_smoke_history_record(
         if isinstance(suite_runs, list)
         else []
     )
+    reliability_case_counts = _provider_reliability_case_counts(reliability)
     live_fault_probes = runtime_diagnostics.get("provider_e2e_live_fault_probes")
     live_fault_probes = live_fault_probes if isinstance(live_fault_probes, dict) else {}
     live_fault_probe_status = live_fault_probes.get("status")
@@ -341,6 +343,8 @@ def _provider_smoke_history_record(
         "passed_case_count": reliability.get("passed_case_count"),
         "required_case_count": reliability.get("required_case_count"),
         "provider_e2e_status": provider_e2e_suite.get("status"),
+        **e2e_case_counts,
+        **reliability_case_counts,
         "failed_suite_runs": failed_suite_runs,
     }
     if isinstance(live_fault_probe_status, str) and live_fault_probe_status:
@@ -357,6 +361,46 @@ def _provider_smoke_history_record(
     if result.error_details:
         record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
     return record
+
+
+def _provider_e2e_suite_case_counts(suite_runs: Any) -> dict[str, int]:
+    """Return per-run e2e case counters from a provider e2e suite."""
+    if not isinstance(suite_runs, list):
+        return {}
+    case_count = 0
+    passed_case_count = 0
+    failed_case_count = 0
+    for run in suite_runs:
+        if not isinstance(run, dict):
+            continue
+        case_count += 1
+        if run.get("status") == "passed":
+            passed_case_count += 1
+        else:
+            failed_case_count += 1
+    return {
+        "e2e_case_count": case_count,
+        "e2e_passed_case_count": passed_case_count,
+        "e2e_failed_case_count": failed_case_count,
+    }
+
+
+def _provider_reliability_case_counts(reliability: dict[str, Any]) -> dict[str, int]:
+    """Return direct-provider reliability case counters from diagnostics."""
+    return {
+        "reliability_observed_case_count": _int_payload_value(
+            reliability,
+            "observed_case_count",
+        ),
+        "reliability_passed_case_count": _int_payload_value(
+            reliability,
+            "passed_case_count",
+        ),
+        "reliability_required_case_count": _int_payload_value(
+            reliability,
+            "required_case_count",
+        ),
+    }
 
 
 def _provider_smoke_cost_record(result: ProviderSmokeResult) -> dict[str, Any]:
@@ -587,6 +631,12 @@ def _provider_smoke_empty_provider_stats() -> dict[str, Any]:
         "last_run_at": None,
         "last_reliability_status": None,
         "last_provider_e2e_status": None,
+        "e2e_case_count": 0,
+        "e2e_passed_case_count": 0,
+        "e2e_failed_case_count": 0,
+        "reliability_observed_case_count": 0,
+        "reliability_passed_case_count": 0,
+        "reliability_required_case_count": 0,
         "last_live_fault_probe_status": None,
         "live_fault_probe_enabled_runs": 0,
         "live_fault_probe_passed_runs": 0,
@@ -612,8 +662,25 @@ def _provider_smoke_history_apply_run_stats(
     stats["last_run_at"] = run.get("timestamp")
     stats["last_reliability_status"] = run.get("reliability_status")
     stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
+    _provider_smoke_history_apply_case_stats(stats, run)
     _provider_smoke_history_apply_live_fault_stats(stats, run)
     _provider_smoke_history_apply_cost_stats(stats, run)
+
+
+def _provider_smoke_history_apply_case_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+) -> None:
+    """Apply granular e2e and reliability case counters from one run."""
+    for key in (
+        "e2e_case_count",
+        "e2e_passed_case_count",
+        "e2e_failed_case_count",
+        "reliability_observed_case_count",
+        "reliability_passed_case_count",
+        "reliability_required_case_count",
+    ):
+        stats[key] = _int_payload_value(stats, key) + _int_payload_value(run, key)
 
 
 def _provider_smoke_history_apply_live_fault_stats(
@@ -691,6 +758,16 @@ def _provider_smoke_history_metrics(stats: dict[str, Any]) -> dict[str, Any]:
     passed_runs = int(stats.get("passed_runs") or 0)
     recent_window = int(stats.get("recent_window") or 0)
     recent_passed_runs = int(stats.get("recent_passed_runs") or 0)
+    e2e_case_count = _int_payload_value(stats, "e2e_case_count")
+    e2e_passed_case_count = _int_payload_value(stats, "e2e_passed_case_count")
+    reliability_required_case_count = _int_payload_value(
+        stats,
+        "reliability_required_case_count",
+    )
+    reliability_passed_case_count = _int_payload_value(
+        stats,
+        "reliability_passed_case_count",
+    )
     required_live_fault_case_count = len(
         PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
     )
@@ -705,6 +782,14 @@ def _provider_smoke_history_metrics(stats: dict[str, Any]) -> dict[str, Any]:
         "recent_pass_rate_percent": _provider_smoke_percent_metric(
             recent_passed_runs,
             recent_window,
+        ),
+        "e2e_case_pass_rate_percent": _provider_smoke_percent_metric(
+            e2e_passed_case_count,
+            e2e_case_count,
+        ),
+        "reliability_case_pass_rate_percent": _provider_smoke_percent_metric(
+            reliability_passed_case_count,
+            reliability_required_case_count,
         ),
         "observed_live_fault_case_count": observed_live_fault_case_count,
         "required_live_fault_case_count": required_live_fault_case_count,
@@ -1043,6 +1128,21 @@ def _with_provider_run_history(
             "last_status": provider_stats.get("last_status", "unknown"),
             "last_reliability_status": provider_stats.get("last_reliability_status"),
             "last_provider_e2e_status": provider_stats.get("last_provider_e2e_status"),
+            "e2e_case_count": provider_stats.get("e2e_case_count", 0),
+            "e2e_passed_case_count": provider_stats.get("e2e_passed_case_count", 0),
+            "e2e_failed_case_count": provider_stats.get("e2e_failed_case_count", 0),
+            "reliability_observed_case_count": provider_stats.get(
+                "reliability_observed_case_count",
+                0,
+            ),
+            "reliability_passed_case_count": provider_stats.get(
+                "reliability_passed_case_count",
+                0,
+            ),
+            "reliability_required_case_count": provider_stats.get(
+                "reliability_required_case_count",
+                0,
+            ),
             "last_live_fault_probe_status": provider_stats.get(
                 "last_live_fault_probe_status"
             ),
@@ -1067,6 +1167,12 @@ def _with_provider_run_history(
             "consecutive_failures": provider_stats.get("consecutive_failures"),
             "pass_rate_percent": provider_stats.get("pass_rate_percent"),
             "recent_pass_rate_percent": provider_stats.get("recent_pass_rate_percent"),
+            "e2e_case_pass_rate_percent": provider_stats.get(
+                "e2e_case_pass_rate_percent"
+            ),
+            "reliability_case_pass_rate_percent": provider_stats.get(
+                "reliability_case_pass_rate_percent"
+            ),
             "observed_live_fault_case_count": provider_stats.get(
                 "observed_live_fault_case_count",
             ),
@@ -4063,6 +4169,20 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
             "Provider history recent pass rate",
             f"{recent_pass_rate_percent}%",
         )
+    _print_provider_history_case_coverage(
+        provider_run_history,
+        label="Provider history e2e case pass rate",
+        percent_key="e2e_case_pass_rate_percent",
+        passed_key="e2e_passed_case_count",
+        required_key="e2e_case_count",
+    )
+    _print_provider_history_case_coverage(
+        provider_run_history,
+        label="Provider history reliability case pass rate",
+        percent_key="reliability_case_pass_rate_percent",
+        passed_key="reliability_passed_case_count",
+        required_key="reliability_required_case_count",
+    )
     live_fault_coverage_percent = provider_run_history.get(
         "live_fault_probe_case_coverage_percent"
     )
@@ -4130,6 +4250,29 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
     path = provider_run_history.get("path")
     if isinstance(path, str) and path:
         print_key_value("Provider history artifact", path)
+
+
+def _print_provider_history_case_coverage(
+    provider_run_history: dict[str, Any],
+    *,
+    label: str,
+    percent_key: str,
+    passed_key: str,
+    required_key: str,
+) -> None:
+    """Print a provider history case-rate metric when all fields exist."""
+    percent = provider_run_history.get(percent_key)
+    passed = provider_run_history.get(passed_key)
+    required = provider_run_history.get(required_key)
+    if (
+        isinstance(percent, int)
+        and not isinstance(percent, bool)
+        and isinstance(passed, int)
+        and not isinstance(passed, bool)
+        and isinstance(required, int)
+        and not isinstance(required, bool)
+    ):
+        print_key_value(label, f"{percent}% ({passed}/{required})")
 
 
 def _provider_run_history_recent_run_summary(run: dict[str, Any]) -> str:

@@ -555,6 +555,12 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "last_status": "passed",
         "last_reliability_status": "complete",
         "last_provider_e2e_status": "passed",
+        "e2e_case_count": 7,
+        "e2e_passed_case_count": 7,
+        "e2e_failed_case_count": 0,
+        "reliability_observed_case_count": 8,
+        "reliability_passed_case_count": 8,
+        "reliability_required_case_count": 8,
         "last_live_fault_probe_status": "passed",
         "live_fault_probe_enabled_runs": 1,
         "live_fault_probe_passed_runs": 1,
@@ -571,6 +577,8 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "consecutive_failures": 0,
         "pass_rate_percent": 100,
         "recent_pass_rate_percent": 100,
+        "e2e_case_pass_rate_percent": 100,
+        "reliability_case_pass_rate_percent": 100,
         "observed_live_fault_case_count": 2,
         "required_live_fault_case_count": 2,
         "live_fault_probe_case_coverage_percent": 100,
@@ -585,8 +593,16 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
     assert history["runs"][0]["status"] == "passed"
     assert history["runs"][0]["reliability_status"] == "complete"
     assert history["runs"][0]["provider_e2e_status"] == "passed"
+    assert history["runs"][0]["e2e_case_count"] == 7
+    assert history["runs"][0]["e2e_passed_case_count"] == 7
+    assert history["runs"][0]["e2e_failed_case_count"] == 0
+    assert history["runs"][0]["reliability_observed_case_count"] == 8
+    assert history["runs"][0]["reliability_passed_case_count"] == 8
+    assert history["runs"][0]["reliability_required_case_count"] == 8
     assert history["providers"]["openai"]["total_runs"] == 1
     assert history["providers"]["openai"]["last_reliability_status"] == "complete"
+    assert history["providers"]["openai"]["e2e_case_pass_rate_percent"] == 100
+    assert history["providers"]["openai"]["reliability_case_pass_rate_percent"] == 100
 
 
 def test_provider_reliability_diagnostics_marks_negative_fixtures_covered():
@@ -2945,6 +2961,14 @@ def test_print_provider_run_history_includes_quality_and_safety_percentages(
             "recent_failed_runs": 1,
             "pass_rate_percent": 75,
             "recent_pass_rate_percent": 75,
+            "e2e_case_count": 7,
+            "e2e_passed_case_count": 6,
+            "e2e_failed_case_count": 1,
+            "e2e_case_pass_rate_percent": 86,
+            "reliability_observed_case_count": 8,
+            "reliability_passed_case_count": 7,
+            "reliability_required_case_count": 8,
+            "reliability_case_pass_rate_percent": 88,
             "live_fault_probe_case_coverage_percent": 50,
             "observed_live_fault_case_count": 1,
             "required_live_fault_case_count": 2,
@@ -2965,6 +2989,10 @@ def test_print_provider_run_history_includes_quality_and_safety_percentages(
     assert "Provider history pass rate" in output
     assert "75%" in output
     assert "Provider history recent pass rate" in output
+    assert "Provider history e2e case pass rate" in output
+    assert "86% (6/7)" in output
+    assert "Provider history reliability case pass rate" in output
+    assert "88% (7/8)" in output
     assert "Provider history live-fault coverage" in output
     assert "50% (1/2)" in output
     assert "Provider history cost" in output

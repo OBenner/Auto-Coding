@@ -893,6 +893,25 @@ def _runtime_eval_percent_metric(
     return round((numerator / denominator) * 100)
 
 
+def _runtime_eval_percent_stat(provider_stats: dict[str, Any], key: str) -> int | None:
+    """Return a safe persisted percentage stat."""
+    value = provider_stats.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _runtime_eval_percent_stat_or_metric(
+    provider_stats: dict[str, Any],
+    key: str,
+    numerator: int,
+    denominator: int,
+) -> int | None:
+    """Return a persisted percentage stat, preserving zero, or compute it."""
+    persisted = _runtime_eval_percent_stat(provider_stats, key)
+    if persisted is not None:
+        return persisted
+    return _runtime_eval_percent_metric(numerator, denominator)
+
+
 def _runtime_provider_history_stats_by_name(
     *,
     project_dir: Path | None = None,
@@ -1082,11 +1101,23 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
         return {
             "pass_rate_percent": None,
             "recent_pass_rate_percent": None,
+            "e2e_case_count": 0,
+            "e2e_passed_case_count": 0,
+            "e2e_failed_case_count": 0,
+            "e2e_case_pass_rate_percent": None,
+            "reliability_observed_case_count": 0,
+            "reliability_passed_case_count": 0,
+            "reliability_required_case_count": 0,
+            "reliability_case_pass_rate_percent": None,
+            "quality_score": None,
+            "quality_score_source": "not_recorded",
             "observed_live_fault_case_count": 0,
             "required_live_fault_case_count": len(
                 PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
             ),
             "live_fault_probe_case_coverage_percent": None,
+            "safety_score": None,
+            "safety_score_source": "not_recorded",
         }
 
     total_runs = _runtime_eval_int_stat(provider_stats.get("total_runs"))
@@ -1099,6 +1130,22 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
     )
     if recent_passed_runs == 0 and recent_window == total_runs:
         recent_passed_runs = passed_runs
+    e2e_case_count = _runtime_eval_int_stat(provider_stats.get("e2e_case_count"))
+    e2e_passed_case_count = _runtime_eval_int_stat(
+        provider_stats.get("e2e_passed_case_count")
+    )
+    e2e_failed_case_count = _runtime_eval_int_stat(
+        provider_stats.get("e2e_failed_case_count")
+    )
+    reliability_observed_case_count = _runtime_eval_int_stat(
+        provider_stats.get("reliability_observed_case_count")
+    )
+    reliability_passed_case_count = _runtime_eval_int_stat(
+        provider_stats.get("reliability_passed_case_count")
+    )
+    reliability_required_case_count = _runtime_eval_int_stat(
+        provider_stats.get("reliability_required_case_count")
+    )
     required_live_fault_case_count = _runtime_eval_int_stat(
         provider_stats.get("required_live_fault_case_count")
     ) or len(PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES)
@@ -1111,30 +1158,133 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
                 provider_stats.get("live_fault_probe_covered_cases")
             )
         )
-    pass_rate_percent = provider_stats.get("pass_rate_percent")
-    recent_pass_rate_percent = provider_stats.get("recent_pass_rate_percent")
-    live_fault_probe_case_coverage_percent = provider_stats.get(
-        "live_fault_probe_case_coverage_percent"
+    pass_rate_percent = _runtime_eval_percent_stat_or_metric(
+        provider_stats,
+        "pass_rate_percent",
+        passed_runs,
+        total_runs,
+    )
+    recent_pass_rate_percent = _runtime_eval_percent_stat_or_metric(
+        provider_stats,
+        "recent_pass_rate_percent",
+        recent_passed_runs,
+        recent_window,
+    )
+    e2e_case_pass_rate_percent = _runtime_eval_percent_stat_or_metric(
+        provider_stats,
+        "e2e_case_pass_rate_percent",
+        e2e_passed_case_count,
+        e2e_case_count,
+    )
+    reliability_case_pass_rate_percent = _runtime_eval_percent_stat_or_metric(
+        provider_stats,
+        "reliability_case_pass_rate_percent",
+        reliability_passed_case_count,
+        reliability_required_case_count,
+    )
+    live_fault_probe_case_coverage_percent = _runtime_eval_percent_stat_or_metric(
+        provider_stats,
+        "live_fault_probe_case_coverage_percent",
+        observed_live_fault_case_count,
+        required_live_fault_case_count,
+    )
+    quality_score = _runtime_provider_quality_score(
+        e2e_case_pass_rate_percent,
+        pass_rate_percent,
+    )
+    quality_score_source = _runtime_provider_quality_score_source(
+        e2e_case_pass_rate_percent,
+        pass_rate_percent,
+    )
+    safety_score = _runtime_provider_safety_score(
+        reliability_passed_case_count,
+        reliability_required_case_count,
+        reliability_case_pass_rate_percent,
+        live_fault_probe_case_coverage_percent,
+    )
+    safety_score_source = _runtime_provider_safety_score_source(
+        reliability_case_pass_rate_percent,
+        live_fault_probe_case_coverage_percent,
     )
     return {
-        "pass_rate_percent": pass_rate_percent
-        if isinstance(pass_rate_percent, int)
-        and not isinstance(pass_rate_percent, bool)
-        else _runtime_eval_percent_metric(passed_runs, total_runs),
-        "recent_pass_rate_percent": recent_pass_rate_percent
-        if isinstance(recent_pass_rate_percent, int)
-        and not isinstance(recent_pass_rate_percent, bool)
-        else _runtime_eval_percent_metric(recent_passed_runs, recent_window),
+        "pass_rate_percent": pass_rate_percent,
+        "recent_pass_rate_percent": recent_pass_rate_percent,
+        "e2e_case_count": e2e_case_count,
+        "e2e_passed_case_count": e2e_passed_case_count,
+        "e2e_failed_case_count": e2e_failed_case_count,
+        "e2e_case_pass_rate_percent": e2e_case_pass_rate_percent,
+        "reliability_observed_case_count": reliability_observed_case_count,
+        "reliability_passed_case_count": reliability_passed_case_count,
+        "reliability_required_case_count": reliability_required_case_count,
+        "reliability_case_pass_rate_percent": reliability_case_pass_rate_percent,
+        "quality_score": quality_score,
+        "quality_score_source": quality_score_source,
         "observed_live_fault_case_count": observed_live_fault_case_count,
         "required_live_fault_case_count": required_live_fault_case_count,
-        "live_fault_probe_case_coverage_percent": live_fault_probe_case_coverage_percent
-        if isinstance(live_fault_probe_case_coverage_percent, int)
-        and not isinstance(live_fault_probe_case_coverage_percent, bool)
-        else _runtime_eval_percent_metric(
-            observed_live_fault_case_count,
-            required_live_fault_case_count,
-        ),
+        "live_fault_probe_case_coverage_percent": live_fault_probe_case_coverage_percent,
+        "safety_score": safety_score,
+        "safety_score_source": safety_score_source,
     }
+
+
+def _runtime_provider_quality_score(
+    e2e_case_pass_rate_percent: int | None,
+    pass_rate_percent: int | None,
+) -> int | None:
+    """Return the provider quality score from the strongest available evidence."""
+    if e2e_case_pass_rate_percent is not None:
+        return e2e_case_pass_rate_percent
+    return pass_rate_percent
+
+
+def _runtime_provider_quality_score_source(
+    e2e_case_pass_rate_percent: int | None,
+    pass_rate_percent: int | None,
+) -> str:
+    """Return the evidence source used by the provider quality score."""
+    if e2e_case_pass_rate_percent is not None:
+        return "provider_e2e_case_pass_rate"
+    if pass_rate_percent is not None:
+        return "provider_history_pass_rate"
+    return "not_recorded"
+
+
+def _runtime_provider_safety_score(
+    reliability_passed_case_count: int,
+    reliability_required_case_count: int,
+    reliability_case_pass_rate_percent: int | None,
+    live_fault_probe_case_coverage_percent: int | None,
+) -> int | None:
+    """Return the strictest provider safety score from reliability evidence."""
+    reliability_score = reliability_case_pass_rate_percent
+    if reliability_score is None:
+        reliability_score = _runtime_eval_percent_metric(
+            reliability_passed_case_count,
+            reliability_required_case_count,
+        )
+    safety_candidates = [
+        score
+        for score in (reliability_score, live_fault_probe_case_coverage_percent)
+        if score is not None
+    ]
+    return min(safety_candidates) if safety_candidates else None
+
+
+def _runtime_provider_safety_score_source(
+    reliability_case_pass_rate_percent: int | None,
+    live_fault_probe_case_coverage_percent: int | None,
+) -> str:
+    """Return the evidence source used by the provider safety score."""
+    if (
+        reliability_case_pass_rate_percent is not None
+        and live_fault_probe_case_coverage_percent is not None
+    ):
+        return "provider_reliability_and_live_fault_coverage"
+    if reliability_case_pass_rate_percent is not None:
+        return "provider_reliability_case_pass_rate"
+    if live_fault_probe_case_coverage_percent is not None:
+        return "live_fault_probe_case_coverage"
+    return "not_recorded"
 
 
 def _runtime_provider_cost_pricing_model(model: Any) -> str | None:
@@ -1464,7 +1614,12 @@ def _runtime_comparative_eval_row(
             else str(provider_stats.get("status") or "not_observed")
         ),
         "quality_score": (
-            None if has_full_runtime else provider_metrics["pass_rate_percent"]
+            None if has_full_runtime else provider_metrics["quality_score"]
+        ),
+        "quality_score_source": (
+            "native_runtime_policy"
+            if has_full_runtime
+            else provider_metrics["quality_score_source"]
         ),
         "stability_score": (
             None if has_full_runtime else provider_metrics["recent_pass_rate_percent"]
@@ -1474,9 +1629,12 @@ def _runtime_comparative_eval_row(
         if has_full_runtime
         else "policy_gated",
         "safety_score": (
-            None
+            None if has_full_runtime else provider_metrics["safety_score"]
+        ),
+        "safety_score_source": (
+            "native_runtime_policy"
             if has_full_runtime
-            else provider_metrics["live_fault_probe_case_coverage_percent"]
+            else provider_metrics["safety_score_source"]
         ),
         "evidence_source": "native_runtime" if has_full_runtime else str(history_path),
         "required_before_full_autonomous": not has_full_runtime,
