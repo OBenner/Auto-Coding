@@ -521,6 +521,34 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
       },
     ]);
   });
+
+  it('prefers recorded actual cost over benchmark estimates', () => {
+    expect(
+      buildRuntimeComparativeEvalDiagnosticRows(translate, [
+        {
+          provider: 'openai',
+          runtime_path: 'generic_edit',
+          quality_status: 'passed',
+          cost_status: 'recorded',
+          cost_actual_usd: 0.0075,
+          cost_actual_formatted: '$0.0075',
+          cost_actual_input_tokens: 1000,
+          cost_actual_output_tokens: 500,
+          cost_pricing_model: 'gpt-4o',
+          cost_estimate_formatted: '$0.0450',
+          safety_status: 'policy_gated',
+          evidence_source: '.auto-Codex/provider-smoke-history.json',
+          required_before_full_autonomous: true,
+          blockers: [],
+        },
+      ])
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.controlPlane.runtimeComparativeEval',
+        value: 'OpenAI: Passed / Recorded $0.0075 gpt-4o / Policy gated',
+      },
+    ]);
+  });
 });
 
 describe('buildCliRunnerContractDiagnosticRows', () => {

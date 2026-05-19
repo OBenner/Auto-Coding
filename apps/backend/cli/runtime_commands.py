@@ -834,6 +834,13 @@ def _runtime_eval_int_stat(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
+def _runtime_eval_float_stat(value: Any) -> float | None:
+    """Return a safe float stat from persisted history payloads."""
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
 def _runtime_eval_percent_metric(
     numerator: int,
     denominator: int,
@@ -1091,6 +1098,30 @@ def _runtime_provider_cost_pricing_model(model: Any) -> str | None:
 
 def _runtime_provider_cost_estimate(provider_stats: dict[str, Any]) -> dict[str, Any]:
     """Return cost estimate evidence from the latest observed provider model."""
+    actual_cost_usd = _runtime_eval_float_stat(provider_stats.get("cost_last_usd"))
+    if provider_stats.get("cost_status") == "recorded" and actual_cost_usd is not None:
+        return {
+            "cost_status": "recorded",
+            "cost_pricing_model": provider_stats.get("cost_pricing_model"),
+            "cost_pricing_provider": provider_stats.get("cost_pricing_provider"),
+            "cost_actual_usd": actual_cost_usd,
+            "cost_actual_formatted": provider_stats.get("cost_last_formatted")
+            or f"${actual_cost_usd:.4f}",
+            "cost_actual_input_tokens": _runtime_eval_int_stat(
+                provider_stats.get("cost_last_input_tokens")
+            ),
+            "cost_actual_output_tokens": _runtime_eval_int_stat(
+                provider_stats.get("cost_last_output_tokens")
+            ),
+            "cost_observed_run_count": _runtime_eval_int_stat(
+                provider_stats.get("cost_observed_run_count")
+            ),
+            "cost_estimate_usd": None,
+            "cost_estimate_formatted": None,
+            "cost_estimate_input_tokens": None,
+            "cost_estimate_output_tokens": None,
+        }
+
     pricing_model = _runtime_provider_cost_pricing_model(
         provider_stats.get("last_model")
     )
@@ -1099,6 +1130,11 @@ def _runtime_provider_cost_estimate(provider_stats: dict[str, Any]) -> dict[str,
             "cost_status": "not_recorded",
             "cost_pricing_model": None,
             "cost_pricing_provider": None,
+            "cost_actual_usd": None,
+            "cost_actual_formatted": None,
+            "cost_actual_input_tokens": None,
+            "cost_actual_output_tokens": None,
+            "cost_observed_run_count": None,
             "cost_estimate_usd": None,
             "cost_estimate_formatted": None,
             "cost_estimate_input_tokens": RUNTIME_COMPARATIVE_COST_ESTIMATE_INPUT_TOKENS,
@@ -1115,6 +1151,11 @@ def _runtime_provider_cost_estimate(provider_stats: dict[str, Any]) -> dict[str,
         "cost_status": "local_zero_cost" if estimated_cost == 0 else "estimated",
         "cost_pricing_model": pricing_model,
         "cost_pricing_provider": estimate.get("provider"),
+        "cost_actual_usd": None,
+        "cost_actual_formatted": None,
+        "cost_actual_input_tokens": None,
+        "cost_actual_output_tokens": None,
+        "cost_observed_run_count": None,
         "cost_estimate_usd": estimated_cost,
         "cost_estimate_formatted": estimate["formatted"],
         "cost_estimate_input_tokens": estimate["input_tokens"],
@@ -1285,6 +1326,26 @@ def build_runtime_eval_history(
                 ),
                 "last_model": provider_stats.get("last_model"),
                 "last_run_at": provider_stats.get("last_run_at"),
+                "cost_status": provider_stats.get("cost_status"),
+                "cost_observed_run_count": provider_stats.get(
+                    "cost_observed_run_count"
+                ),
+                "cost_total_input_tokens": provider_stats.get(
+                    "cost_total_input_tokens"
+                ),
+                "cost_total_output_tokens": provider_stats.get(
+                    "cost_total_output_tokens"
+                ),
+                "cost_total_usd": provider_stats.get("cost_total_usd"),
+                "cost_total_formatted": provider_stats.get("cost_total_formatted"),
+                "cost_last_input_tokens": provider_stats.get("cost_last_input_tokens"),
+                "cost_last_output_tokens": provider_stats.get(
+                    "cost_last_output_tokens"
+                ),
+                "cost_last_usd": provider_stats.get("cost_last_usd"),
+                "cost_last_formatted": provider_stats.get("cost_last_formatted"),
+                "cost_pricing_model": provider_stats.get("cost_pricing_model"),
+                "cost_pricing_provider": provider_stats.get("cost_pricing_provider"),
                 **provider_metrics,
             }
         )
@@ -1345,6 +1406,11 @@ def build_runtime_comparative_eval_matrix(
                 "cost_status": "not_recorded",
                 "cost_pricing_model": None,
                 "cost_pricing_provider": None,
+                "cost_actual_usd": None,
+                "cost_actual_formatted": None,
+                "cost_actual_input_tokens": None,
+                "cost_actual_output_tokens": None,
+                "cost_observed_run_count": None,
                 "cost_estimate_usd": None,
                 "cost_estimate_formatted": None,
                 "cost_estimate_input_tokens": None,
@@ -2059,7 +2125,9 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
             _format_optional_percent(row.get("quality_score")),
             _format_optional_percent(row.get("stability_score")),
             row["cost_status"],
-            row.get("cost_estimate_formatted") or "n/a",
+            row.get("cost_actual_formatted")
+            or row.get("cost_estimate_formatted")
+            or "n/a",
             row.get("cost_pricing_model") or "n/a",
             row["safety_status"],
             _format_optional_percent(row.get("safety_score")),

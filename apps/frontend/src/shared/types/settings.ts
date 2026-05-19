@@ -963,6 +963,11 @@ export interface RuntimeComparativeEvalMatrixRow {
   cost_status: string;
   cost_pricing_model?: string | null;
   cost_pricing_provider?: string | null;
+  cost_actual_usd?: number | null;
+  cost_actual_formatted?: string | null;
+  cost_actual_input_tokens?: number | null;
+  cost_actual_output_tokens?: number | null;
+  cost_observed_run_count?: number | null;
   cost_estimate_usd?: number | null;
   cost_estimate_formatted?: string | null;
   cost_estimate_input_tokens?: number | null;

@@ -706,7 +706,10 @@ function formatRuntimeComparativeEvalCost(
   row: RuntimeComparativeEvalMatrixRow
 ): string {
   const status = formatRuntimeDiagnosticValue(translate, row.cost_status);
-  const details = [row.cost_estimate_formatted, row.cost_pricing_model]
+  const details = [
+    row.cost_actual_formatted || row.cost_estimate_formatted,
+    row.cost_pricing_model,
+  ]
     .filter((value): value is string => Boolean(value))
     .join(' ');
   return [status, details].filter(Boolean).join(' ');

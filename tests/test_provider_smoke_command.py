@@ -940,6 +940,58 @@ def test_provider_run_history_reports_quality_and_safety_metrics(tmp_path: Path)
     assert provider_stats["live_fault_probe_case_coverage_percent"] == 50
 
 
+def test_provider_run_history_records_actual_cost_metrics(tmp_path: Path):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+                "token_usage": {
+                    "input_tokens": 1000,
+                    "output_tokens": 500,
+                },
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["cost_status"] == "recorded"
+    assert history_summary["cost_observed_run_count"] == 1
+    assert history_summary["cost_total_input_tokens"] == 1000
+    assert history_summary["cost_total_output_tokens"] == 500
+    assert history_summary["cost_total_usd"] == 0.0075
+    assert history_summary["cost_total_formatted"] == "$0.0075"
+    assert history_summary["cost_last_usd"] == 0.0075
+    assert history_summary["cost_last_formatted"] == "$0.0075"
+    assert history_summary["cost_last_input_tokens"] == 1000
+    assert history_summary["cost_last_output_tokens"] == 500
+    assert history_summary["cost_pricing_model"] == "gpt-4o"
+    assert history_summary["cost_pricing_provider"] == "openai"
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    record = history["runs"][0]
+    assert record["cost_status"] == "recorded"
+    assert record["cost_source"] == "token_usage"
+    assert record["cost_input_tokens"] == 1000
+    assert record["cost_output_tokens"] == 500
+    assert record["cost_usd"] == 0.0075
+    assert record["cost_formatted"] == "$0.0075"
+    assert record["cost_pricing_model"] == "gpt-4o"
+    assert record["cost_pricing_provider"] == "openai"
+
+
 def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
     from cli.provider_smoke_commands import (
         ProviderSmokeResult,
@@ -2896,6 +2948,13 @@ def test_print_provider_run_history_includes_quality_and_safety_percentages(
             "live_fault_probe_case_coverage_percent": 50,
             "observed_live_fault_case_count": 1,
             "required_live_fault_case_count": 2,
+            "cost_status": "recorded",
+            "cost_observed_run_count": 2,
+            "cost_total_input_tokens": 3000,
+            "cost_total_output_tokens": 1500,
+            "cost_total_formatted": "$0.0225",
+            "cost_last_formatted": "$0.0075",
+            "cost_pricing_model": "gpt-4o",
             "recent_runs": [],
             "path": ".auto-Codex/provider-smoke-history.json",
         }
@@ -2908,6 +2967,11 @@ def test_print_provider_run_history_includes_quality_and_safety_percentages(
     assert "Provider history recent pass rate" in output
     assert "Provider history live-fault coverage" in output
     assert "50% (1/2)" in output
+    assert "Provider history cost" in output
+    assert (
+        "$0.0225 total, $0.0075 latest, 2 recorded runs, 3000 input, 1500 output, gpt-4o"
+        in output
+    )
 
 
 def test_handle_provider_smoke_command_prints_generic_edit_execution(

@@ -27,6 +27,12 @@ from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_art
 from agents.runtime.fallback import capabilities_for_runtime_mode
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
+from core.providers.cost_calculator import (
+    MODEL_PRICING,
+    calculate_cost,
+    format_cost,
+    get_model_pricing,
+)
 from core.providers.factory import create_engine_provider
 from task_logger import LogPhase
 from ui import print_key_value, print_status
@@ -345,9 +351,103 @@ def _provider_smoke_history_record(
         record["live_fault_probe_covered_cases"] = live_fault_probe_covered_cases
     if live_fault_probe_missing_env:
         record["live_fault_probe_missing_env_count"] = len(live_fault_probe_missing_env)
+    cost_record = _provider_smoke_cost_record(result)
+    if cost_record:
+        record.update(cost_record)
     if result.error_details:
         record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
     return record
+
+
+def _provider_smoke_cost_record(result: ProviderSmokeResult) -> dict[str, Any]:
+    """Return actual token/cost evidence for a provider smoke run when available."""
+    pricing_model = _provider_smoke_cost_pricing_model(result.model)
+    token_usage = _provider_smoke_token_usage_payload(result.runtime_diagnostics)
+    if not pricing_model or token_usage is None:
+        return {}
+
+    input_tokens = token_usage["input_tokens"]
+    output_tokens = token_usage["output_tokens"]
+    cost_usd = calculate_cost(pricing_model, input_tokens, output_tokens)
+    pricing = get_model_pricing(pricing_model)
+    return {
+        "cost_status": "recorded",
+        "cost_source": token_usage["source"],
+        "cost_input_tokens": input_tokens,
+        "cost_output_tokens": output_tokens,
+        "cost_usd": cost_usd,
+        "cost_formatted": format_cost(cost_usd),
+        "cost_pricing_model": pricing_model,
+        "cost_pricing_provider": pricing.get("provider"),
+    }
+
+
+def _provider_smoke_cost_pricing_model(model: Any) -> str | None:
+    """Return a known pricing model from provider smoke evidence."""
+    if not isinstance(model, str):
+        return None
+    trimmed = model.strip()
+    if not trimmed:
+        return None
+    if trimmed in MODEL_PRICING and trimmed != "default":
+        return trimmed
+    for segment in reversed(trimmed.split("/")):
+        if segment in MODEL_PRICING and segment != "default":
+            return segment
+    return None
+
+
+def _provider_smoke_token_usage_payload(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, int | str] | None:
+    """Return normalized token usage evidence from smoke diagnostics."""
+    candidates: list[tuple[str, Any]] = [
+        ("token_usage", runtime_diagnostics.get("token_usage")),
+        ("usage", runtime_diagnostics.get("usage")),
+    ]
+    execution = runtime_diagnostics.get("validated_runtime_execution")
+    if isinstance(execution, dict):
+        candidates.extend(
+            [
+                (
+                    "validated_runtime_execution.token_usage",
+                    execution.get("token_usage"),
+                ),
+                ("validated_runtime_execution.usage", execution.get("usage")),
+            ]
+        )
+
+    for source, payload in candidates:
+        if not isinstance(payload, dict):
+            continue
+        input_tokens = _int_payload_value_from_keys(
+            payload,
+            ("input_tokens", "prompt_tokens"),
+        )
+        output_tokens = _int_payload_value_from_keys(
+            payload,
+            ("output_tokens", "completion_tokens"),
+        )
+        if input_tokens is None or output_tokens is None:
+            continue
+        return {
+            "source": source,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+        }
+    return None
+
+
+def _int_payload_value_from_keys(
+    payload: dict[str, Any],
+    keys: tuple[str, ...],
+) -> int | None:
+    """Return the first non-negative integer value from any candidate key."""
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    return None
 
 
 def _load_provider_smoke_history(
@@ -513,6 +613,7 @@ def _provider_smoke_history_apply_run_stats(
     stats["last_reliability_status"] = run.get("reliability_status")
     stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
     _provider_smoke_history_apply_live_fault_stats(stats, run)
+    _provider_smoke_history_apply_cost_stats(stats, run)
 
 
 def _provider_smoke_history_apply_live_fault_stats(
@@ -535,6 +636,43 @@ def _provider_smoke_history_apply_live_fault_stats(
     for covered_case in _string_list_payload(run.get("live_fault_probe_covered_cases")):
         if covered_case not in existing_cases:
             existing_cases.append(covered_case)
+
+
+def _provider_smoke_history_apply_cost_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+) -> None:
+    """Apply actual token/cost evidence from one persisted run."""
+    if run.get("cost_status") != "recorded":
+        return
+
+    input_tokens = _int_payload_value(run, "cost_input_tokens")
+    output_tokens = _int_payload_value(run, "cost_output_tokens")
+    cost_usd = _float_payload_value(run, "cost_usd")
+    if cost_usd is None:
+        return
+
+    stats["cost_status"] = "recorded"
+    stats["cost_observed_run_count"] = (
+        _int_payload_value(stats, "cost_observed_run_count") + 1
+    )
+    stats["cost_total_input_tokens"] = (
+        _int_payload_value(stats, "cost_total_input_tokens") + input_tokens
+    )
+    stats["cost_total_output_tokens"] = (
+        _int_payload_value(stats, "cost_total_output_tokens") + output_tokens
+    )
+    stats["cost_total_usd"] = round(
+        float(stats.get("cost_total_usd") or 0.0) + cost_usd,
+        10,
+    )
+    stats["cost_total_formatted"] = format_cost(stats["cost_total_usd"])
+    stats["cost_last_input_tokens"] = input_tokens
+    stats["cost_last_output_tokens"] = output_tokens
+    stats["cost_last_usd"] = cost_usd
+    stats["cost_last_formatted"] = format_cost(cost_usd)
+    stats["cost_pricing_model"] = run.get("cost_pricing_model")
+    stats["cost_pricing_provider"] = run.get("cost_pricing_provider")
 
 
 def _provider_smoke_percent_metric(
@@ -941,6 +1079,22 @@ def _with_provider_run_history(
             "recent_runs": provider_stats.get("recent_runs", []),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }
+        for cost_key in (
+            "cost_status",
+            "cost_observed_run_count",
+            "cost_total_input_tokens",
+            "cost_total_output_tokens",
+            "cost_total_usd",
+            "cost_total_formatted",
+            "cost_last_input_tokens",
+            "cost_last_output_tokens",
+            "cost_last_usd",
+            "cost_last_formatted",
+            "cost_pricing_model",
+            "cost_pricing_provider",
+        ):
+            if cost_key in provider_stats:
+                history_summary[cost_key] = provider_stats[cost_key]
     except Exception as e:
         logger.debug("Provider smoke history persistence failed", exc_info=True)
         live_fault_probes = result.runtime_diagnostics.get(
@@ -1537,6 +1691,13 @@ def _int_payload_value(payload: dict[str, Any], key: str) -> int:
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     return 0
+
+
+def _float_payload_value(payload: dict[str, Any], key: str) -> float | None:
+    value = payload.get(key)
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+    return None
 
 
 def _number_record_payload(value: Any) -> dict[str, int]:
@@ -3924,6 +4085,35 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
             f"{live_fault_coverage_percent}% "
             f"({observed_live_fault_cases}/{required_live_fault_cases})",
         )
+    cost_parts = [
+        f"{provider_run_history['cost_total_formatted']} total"
+        if isinstance(provider_run_history.get("cost_total_formatted"), str)
+        and provider_run_history.get("cost_total_formatted")
+        else "",
+        f"{provider_run_history['cost_last_formatted']} latest"
+        if isinstance(provider_run_history.get("cost_last_formatted"), str)
+        and provider_run_history.get("cost_last_formatted")
+        else "",
+        f"{provider_run_history['cost_observed_run_count']} recorded runs"
+        if isinstance(provider_run_history.get("cost_observed_run_count"), int)
+        and not isinstance(provider_run_history.get("cost_observed_run_count"), bool)
+        else "",
+        f"{provider_run_history['cost_total_input_tokens']} input"
+        if isinstance(provider_run_history.get("cost_total_input_tokens"), int)
+        and not isinstance(provider_run_history.get("cost_total_input_tokens"), bool)
+        else "",
+        f"{provider_run_history['cost_total_output_tokens']} output"
+        if isinstance(provider_run_history.get("cost_total_output_tokens"), int)
+        and not isinstance(provider_run_history.get("cost_total_output_tokens"), bool)
+        else "",
+        str(provider_run_history.get("cost_pricing_model"))
+        if isinstance(provider_run_history.get("cost_pricing_model"), str)
+        and provider_run_history.get("cost_pricing_model")
+        else "",
+    ]
+    cost_summary = ", ".join(part for part in cost_parts if part)
+    if cost_summary:
+        print_key_value("Provider history cost", cost_summary)
     recent_runs = provider_run_history.get("recent_runs")
     recent_run_parts = (
         [

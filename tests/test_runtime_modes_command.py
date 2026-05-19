@@ -523,6 +523,18 @@ def test_runtime_modes_command_reports_provider_eval_history(
                         "last_reliability_status": "complete",
                         "last_provider_e2e_status": "passed",
                         "live_fault_probe_covered_cases": ["unsupported_tools"],
+                        "cost_status": "recorded",
+                        "cost_observed_run_count": 1,
+                        "cost_total_input_tokens": 1000,
+                        "cost_total_output_tokens": 500,
+                        "cost_total_usd": 0.0075,
+                        "cost_total_formatted": "$0.0075",
+                        "cost_last_input_tokens": 1000,
+                        "cost_last_output_tokens": 500,
+                        "cost_last_usd": 0.0075,
+                        "cost_last_formatted": "$0.0075",
+                        "cost_pricing_model": "gpt-4o",
+                        "cost_pricing_provider": "openai",
                     },
                     "google": {
                         "total_runs": 1,
@@ -575,12 +587,13 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["openai"]["quality_score"] == 75
     assert comparative_rows["openai"]["stability_score"] == 75
     assert comparative_rows["openai"]["safety_score"] == 50
-    assert comparative_rows["openai"]["cost_status"] == "estimated"
+    assert comparative_rows["openai"]["cost_status"] == "recorded"
     assert comparative_rows["openai"]["cost_pricing_model"] == "gpt-4o"
-    assert comparative_rows["openai"]["cost_estimate_usd"] == 0.045
-    assert comparative_rows["openai"]["cost_estimate_formatted"] == "$0.0450"
-    assert comparative_rows["openai"]["cost_estimate_input_tokens"] == 10000
-    assert comparative_rows["openai"]["cost_estimate_output_tokens"] == 2000
+    assert comparative_rows["openai"]["cost_actual_usd"] == 0.0075
+    assert comparative_rows["openai"]["cost_actual_formatted"] == "$0.0075"
+    assert comparative_rows["openai"]["cost_actual_input_tokens"] == 1000
+    assert comparative_rows["openai"]["cost_actual_output_tokens"] == 500
+    assert comparative_rows["openai"]["cost_observed_run_count"] == 1
     assert comparative_rows["openai"]["evidence_source"] == (
         ".auto-Codex/provider-smoke-history.json"
     )
