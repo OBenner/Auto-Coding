@@ -814,6 +814,14 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     text_output = format_runtime_modes_text(text_payload)
     assert "api_runtime_full_autonomous_candidate" in text_output
     assert "limited_autonomous_until_live_faults" in text_output
+    assert "Autonomy requirements" in text_output
+    assert "stable runs 3/3" in text_output
+    assert "consecutive passes 3/3" in text_output
+    assert f"last run {openai_run_at}" in text_output
+    assert "max age 604800s" in text_output
+    assert "live fault coverage yes" in text_output
+    assert "live fault coverage no" in text_output
+    assert "missing gateway_model_limitations, unsupported_tools" in text_output
     assert "--provider-smoke-runtime provider_e2e" in text_output
 
 

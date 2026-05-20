@@ -411,6 +411,8 @@ even when `generic_edit` can still run.
 - The settings UI surfaces autonomous policy gate, recommendation text, and
   recommendation reasons in runtime governance diagnostics, including the same
   compact structured requirement evidence in policy/capability rows.
+- The CLI `--runtime-modes` text tables also include autonomy requirement
+  summaries beside the policy/capability recommendations.
 - The settings UI surfaces comparative eval quality, stability, safety, pricing
   model, score sources, recorded actual cost when available, and estimated
   benchmark cost fallback alongside provider quality/cost/safety status.
