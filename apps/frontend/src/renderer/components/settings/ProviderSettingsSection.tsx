@@ -259,12 +259,17 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   full_autonomous: 'settings:aiProvider.runtimeDiagnosticValues.fullAutonomous',
   full_autonomous_candidate:
     'settings:aiProvider.runtimeDiagnosticValues.fullAutonomousCandidate',
+  fresh_provider_history:
+    'settings:aiProvider.runtimeDiagnosticValues.freshProviderHistory',
   history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.historyDegraded',
   history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.historyFlaky',
+  history_freshness_unknown:
+    'settings:aiProvider.runtimeDiagnosticValues.historyFreshnessUnknown',
   history_insufficient_runs:
     'settings:aiProvider.runtimeDiagnosticValues.historyInsufficientRuns',
   history_missing: 'settings:aiProvider.runtimeDiagnosticValues.historyMissing',
   history_recovering: 'settings:aiProvider.runtimeDiagnosticValues.historyRecovering',
+  history_stale: 'settings:aiProvider.runtimeDiagnosticValues.historyStale',
   history_warming_up: 'settings:aiProvider.runtimeDiagnosticValues.historyWarmingUp',
   function_tools: 'settings:aiProvider.runtimeDiagnosticValues.functionTools',
   generic_core_configurable: 'settings:aiProvider.runtimeDiagnosticValues.genericCoreConfigurable',
@@ -398,8 +403,11 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityCasePassRate',
   provider_history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryDegraded',
   provider_history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
+  provider_history_freshness_unknown:
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFreshnessUnknown',
   provider_history_recovering:
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryRecovering',
+  provider_history_stale: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryStale',
   provider_history_latest_failed:
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryLatestFailed',
   provider_history_insufficient_runs:

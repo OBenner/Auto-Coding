@@ -10,7 +10,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -239,6 +239,7 @@ PROVIDER_E2E_LIVE_FAULT_CASES = {
     },
 }
 PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = 3
+PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = 7 * 24 * 60 * 60
 PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
     PROVIDER_E2E_LIVE_FAULT_CASES
 )
@@ -252,6 +253,8 @@ PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
     "provider_history_recovering": "history_recovering",
     "provider_history_degraded": "history_degraded",
     "provider_history_insufficient_runs": "history_insufficient_runs",
+    "provider_history_stale": "history_stale",
+    "provider_history_freshness_unknown": "history_freshness_unknown",
     "live_fault_probe_evidence_missing": "live_fault_probe_missing",
     "live_fault_probe_coverage_incomplete": "live_fault_coverage_incomplete",
     "quality_trend_degrading": "quality_trend_degrading",
@@ -1123,6 +1126,8 @@ def _provider_readiness_history_evidence(
     elif isinstance(trend, str) and trend:
         warnings.append(trend)
 
+    _provider_readiness_history_freshness_evidence(history_summary, warnings)
+
 
 def _provider_readiness_history_is_stable_enough(
     history_summary: dict[str, Any],
@@ -1134,6 +1139,20 @@ def _provider_readiness_history_is_stable_enough(
         and _provider_readiness_consecutive_passes(history_summary)
         >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
     )
+
+
+def _provider_readiness_history_freshness_evidence(
+    history_summary: dict[str, Any],
+    warnings: list[str],
+) -> None:
+    """Apply provider history freshness evidence to readiness warnings."""
+    freshness = _provider_readiness_history_freshness_complete(history_summary)
+    if freshness is True:
+        return
+    if _provider_readiness_last_run_at(history_summary) is None:
+        warnings.append("provider_history_freshness_unknown")
+    else:
+        warnings.append("provider_history_stale")
 
 
 def _provider_readiness_live_fault_evidence(
@@ -1199,7 +1218,7 @@ def _provider_readiness_requirements(
         history_summary.get("last_live_fault_probe_status") == "passed"
         and not live_fault_missing_cases
     )
-    return {
+    requirements = {
         "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
         "observed_recent_window": recent_window,
         "observed_consecutive_passes": consecutive_passes,
@@ -1211,6 +1230,53 @@ def _provider_readiness_requirements(
         "live_fault_missing_cases": live_fault_missing_cases,
         "live_fault_coverage_complete": live_fault_coverage_complete,
     }
+    last_run_at = _provider_readiness_last_run_at(history_summary)
+    if last_run_at is not None:
+        requirements.update(
+            {
+                "last_run_at": last_run_at,
+                "max_history_age_seconds": (
+                    PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
+                ),
+                "history_freshness_complete": (
+                    _provider_readiness_history_freshness_complete(history_summary)
+                ),
+            }
+        )
+    return requirements
+
+
+def _provider_readiness_last_run_at(history_summary: dict[str, Any]) -> str | None:
+    """Return the persisted latest provider smoke timestamp."""
+    last_run_at = history_summary.get("last_run_at")
+    return last_run_at if isinstance(last_run_at, str) and last_run_at else None
+
+
+def _provider_readiness_last_run_datetime(
+    history_summary: dict[str, Any],
+) -> datetime | None:
+    """Return a normalized latest provider smoke timestamp when parseable."""
+    last_run_at = _provider_readiness_last_run_at(history_summary)
+    if last_run_at is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(last_run_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _provider_readiness_history_freshness_complete(
+    history_summary: dict[str, Any],
+) -> bool:
+    """Return whether latest provider smoke evidence is recent enough."""
+    last_run_at = _provider_readiness_last_run_datetime(history_summary)
+    if last_run_at is None:
+        return False
+    max_age = timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
+    return datetime.now(timezone.utc) - last_run_at <= max_age
 
 
 def _provider_readiness_recent_window(history_summary: dict[str, Any]) -> int:
@@ -1244,6 +1310,11 @@ def _provider_readiness_missing_requirements(
         missing.append("latest_provider_e2e_pass")
     if requirements.get("history_stability_complete") is not True:
         missing.append("stable_history_runs")
+    if (
+        requirements.get("last_run_at") is not None
+        and requirements.get("history_freshness_complete") is not True
+    ):
+        missing.append("fresh_provider_history")
     if requirements.get("live_fault_coverage_complete") is not True:
         missing.append("live_fault_case_coverage")
     if any(warning.endswith("_trend_degrading") for warning in warnings):
@@ -1304,6 +1375,8 @@ def _provider_readiness_next_actions(
         "provider_history_flaky": "stabilize_provider_history",
         "provider_history_recovering": "collect_provider_history_runs",
         "provider_history_degraded": "stabilize_provider_history",
+        "provider_history_stale": "rerun_provider_e2e",
+        "provider_history_freshness_unknown": "rerun_provider_e2e",
         "quality_trend_degrading": "stabilize_provider_history",
         "stability_trend_degrading": "stabilize_provider_history",
         "safety_trend_degrading": "stabilize_provider_history",
@@ -1344,6 +1417,7 @@ def _with_provider_run_history(
             "last_status": provider_stats.get("last_status", "unknown"),
             "last_reliability_status": provider_stats.get("last_reliability_status"),
             "last_provider_e2e_status": provider_stats.get("last_provider_e2e_status"),
+            "last_run_at": provider_stats.get("last_run_at"),
             "e2e_case_count": provider_stats.get("e2e_case_count", 0),
             "e2e_passed_case_count": provider_stats.get("e2e_passed_case_count", 0),
             "e2e_failed_case_count": provider_stats.get("e2e_failed_case_count", 0),

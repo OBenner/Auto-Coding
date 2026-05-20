@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Mapping
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,7 @@ from agents.runtime.subagents import (
     resolve_runtime_subagent_support,
 )
 from cli.provider_smoke_commands import (
+    PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS,
     PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
     PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL,
     PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES,
@@ -958,6 +960,8 @@ def _runtime_provider_readiness_next_actions(
         "provider_history_recovering": "collect_provider_history_runs",
         "provider_history_degraded": "stabilize_provider_history",
         "provider_history_insufficient_runs": "collect_provider_history_runs",
+        "provider_history_stale": "rerun_provider_e2e",
+        "provider_history_freshness_unknown": "rerun_provider_e2e",
         "live_fault_probe_evidence_missing": "enable_live_fault_probes",
         "live_fault_probe_coverage_incomplete": "enable_live_fault_probes",
         "quality_trend_degrading": "stabilize_provider_history",
@@ -1046,7 +1050,23 @@ def _runtime_provider_history_trend_signals(
     elif isinstance(trend, str) and trend:
         warnings.append(trend)
 
+    _runtime_provider_history_freshness_signals(provider_stats, warnings)
+
     return blockers, warnings, evidence
+
+
+def _runtime_provider_history_freshness_signals(
+    provider_stats: dict[str, Any],
+    warnings: list[str],
+) -> None:
+    """Append provider history freshness warnings when evidence is stale."""
+    freshness = _runtime_provider_readiness_history_freshness_complete(provider_stats)
+    if freshness is True:
+        return
+    if _runtime_provider_readiness_last_run_at(provider_stats) is None:
+        warnings.append("provider_history_freshness_unknown")
+    else:
+        warnings.append("provider_history_stale")
 
 
 def _runtime_provider_live_fault_signals(
@@ -1175,6 +1195,41 @@ def _runtime_provider_readiness_consecutive_passes(
     if consecutive_passes == 0:
         consecutive_passes = _runtime_eval_int_stat(provider_stats.get("passed_runs"))
     return consecutive_passes
+
+
+def _runtime_provider_readiness_last_run_at(
+    provider_stats: dict[str, Any],
+) -> str | None:
+    """Return the persisted latest provider smoke timestamp."""
+    last_run_at = provider_stats.get("last_run_at")
+    return last_run_at if isinstance(last_run_at, str) and last_run_at else None
+
+
+def _runtime_provider_readiness_last_run_datetime(
+    provider_stats: dict[str, Any],
+) -> datetime | None:
+    """Return a normalized latest provider smoke timestamp when parseable."""
+    last_run_at = _runtime_provider_readiness_last_run_at(provider_stats)
+    if last_run_at is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(last_run_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _runtime_provider_readiness_history_freshness_complete(
+    provider_stats: dict[str, Any],
+) -> bool:
+    """Return whether latest provider smoke evidence is recent enough."""
+    last_run_at = _runtime_provider_readiness_last_run_datetime(provider_stats)
+    if last_run_at is None:
+        return False
+    max_age = timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
+    return datetime.now(timezone.utc) - last_run_at <= max_age
 
 
 def _runtime_string_list_payload(value: Any) -> list[str]:
@@ -1563,7 +1618,7 @@ def _runtime_provider_readiness_requirements(
         provider_stats.get("last_live_fault_probe_status") == "passed"
         and not live_fault_missing_cases
     )
-    return {
+    requirements = {
         "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
         "observed_recent_window": _runtime_provider_readiness_recent_window(
             provider_stats
@@ -1579,6 +1634,22 @@ def _runtime_provider_readiness_requirements(
         "live_fault_missing_cases": live_fault_missing_cases,
         "live_fault_coverage_complete": live_fault_coverage_complete,
     }
+    last_run_at = _runtime_provider_readiness_last_run_at(provider_stats)
+    if last_run_at is not None:
+        requirements.update(
+            {
+                "last_run_at": last_run_at,
+                "max_history_age_seconds": (
+                    PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
+                ),
+                "history_freshness_complete": (
+                    _runtime_provider_readiness_history_freshness_complete(
+                        provider_stats
+                    )
+                ),
+            }
+        )
+    return requirements
 
 
 def _runtime_provider_missing_requirements(
@@ -1596,6 +1667,11 @@ def _runtime_provider_missing_requirements(
         missing.append("latest_provider_smoke_pass")
     if requirements.get("history_stability_complete") is not True:
         missing.append("stable_history_runs")
+    if (
+        requirements.get("last_run_at") is not None
+        and requirements.get("history_freshness_complete") is not True
+    ):
+        missing.append("fresh_provider_history")
     if requirements.get("live_fault_coverage_complete") is not True:
         missing.append("live_fault_case_coverage")
     if any(warning.endswith("_trend_degrading") for warning in warnings):

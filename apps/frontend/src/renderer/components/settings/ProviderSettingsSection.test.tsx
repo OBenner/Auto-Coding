@@ -205,12 +205,17 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Missing provider history',
     'settings:aiProvider.runtimeDiagnosticValues.historyDegraded': 'Degraded history',
     'settings:aiProvider.runtimeDiagnosticValues.historyFlaky': 'Flaky history',
+    'settings:aiProvider.runtimeDiagnosticValues.historyFreshnessUnknown':
+      'History freshness unknown',
     'settings:aiProvider.runtimeDiagnosticValues.historyInsufficientRuns':
       'Insufficient stable history',
     'settings:aiProvider.runtimeDiagnosticValues.historyRecovering':
       'Recovering history',
+    'settings:aiProvider.runtimeDiagnosticValues.historyStale': 'Stale history',
     'settings:aiProvider.runtimeDiagnosticValues.historyWarmingUp':
       'Warming up history',
+    'settings:aiProvider.runtimeDiagnosticValues.freshProviderHistory':
+      'Fresh provider history',
     'settings:aiProvider.runtimeDiagnosticValues.needsLiveFaultEvidence':
       'Needs live fault evidence',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eFailed': 'Provider e2e failed',
@@ -221,8 +226,12 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Provider history latest failed',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryPassRate':
       'Provider history pass rate',
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFreshnessUnknown':
+      'Provider history freshness unknown',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryInsufficientRuns':
       'Provider history insufficient runs',
+    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryStale':
+      'Stale provider history',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp':
       'Provider history warming up',
     'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityComplete':
@@ -1076,10 +1085,22 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
         provider: 'openai',
         source: 'provider_autonomous_readiness',
         recommendation: 'limited_autonomous_until_evidence_stable',
-        recommendationReasons: ['history_warming_up', 'live_fault_probe_missing'],
+        recommendationReasons: [
+          'history_warming_up',
+          'history_stale',
+          'live_fault_probe_missing',
+        ],
         blockers: [],
-        warnings: ['provider_history_warming_up', 'live_fault_probe_evidence_missing'],
-        missingRequirements: ['stable_history_runs', 'live_fault_case_coverage'],
+        warnings: [
+          'provider_history_warming_up',
+          'provider_history_stale',
+          'live_fault_probe_evidence_missing',
+        ],
+        missingRequirements: [
+          'stable_history_runs',
+          'fresh_provider_history',
+          'live_fault_case_coverage',
+        ],
         evidence: ['provider_e2e_passed', 'provider_reliability_complete'],
         nextActions: ['collect_provider_history_runs', 'enable_live_fault_probes'],
       })
@@ -1096,16 +1117,17 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
       {
         labelKey:
           'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendationReasons',
-        value: 'Warming up history, Live fault probe missing',
+        value: 'Warming up history, Stale history, Live fault probe missing',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings',
-        value: 'Provider history warming up, Live fault probe evidence missing',
+        value:
+          'Provider history warming up, Stale provider history, Live fault probe evidence missing',
       },
       {
         labelKey:
           'settings:aiProvider.connectionTest.providerAutonomousReadinessMissingRequirements',
-        value: 'Stable history runs, Live fault case coverage',
+        value: 'Stable history runs, Fresh provider history, Live fault case coverage',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence',

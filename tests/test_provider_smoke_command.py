@@ -3,12 +3,18 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from agents.runtime.local_actions import local_action_tool_schemas
 from core.providers.base import ProviderToolCall, ProviderToolCallResponse
 from core.providers.config import ProviderConfig
+
+
+def _provider_smoke_run_at(*, days_ago: int = 0) -> str:
+    timestamp = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    return timestamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 class _FakeSmokeProvider:
@@ -531,6 +537,8 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         },
     ]
     provider_run_history = dict(result.runtime_diagnostics["provider_run_history"])
+    last_run_at = provider_run_history.pop("last_run_at")
+    assert last_run_at.endswith("Z")
     recent_runs = provider_run_history.pop("recent_runs")
     assert len(recent_runs) == 1
     assert recent_runs[0]["timestamp"].endswith("Z")
@@ -1288,6 +1296,7 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
             runtime_diagnostics=build_base_diagnostics(),
         ),
     )
+    first_history = first_result.runtime_diagnostics["provider_run_history"]
 
     assert first_result.runtime_diagnostics["provider_autonomous_readiness"] == {
         "status": "warming_up",
@@ -1300,9 +1309,12 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
         "next_actions": ["collect_provider_history_runs"],
         "requirements": {
             "min_stable_runs": 3,
+            "last_run_at": first_history["last_run_at"],
+            "max_history_age_seconds": 604800,
             "observed_recent_window": 1,
             "observed_consecutive_passes": 1,
             "history_stability_complete": False,
+            "history_freshness_complete": True,
             "required_live_fault_cases": [
                 "gateway_model_limitations",
                 "unsupported_tools",
@@ -1334,6 +1346,7 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
                 runtime_diagnostics=build_base_diagnostics(),
             ),
         )
+    stable_history = stable_result.runtime_diagnostics["provider_run_history"]
 
     assert stable_result.runtime_diagnostics["provider_autonomous_readiness"] == {
         "status": "full_autonomous_candidate",
@@ -1346,9 +1359,12 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
         "next_actions": [],
         "requirements": {
             "min_stable_runs": 3,
+            "last_run_at": stable_history["last_run_at"],
+            "max_history_age_seconds": 604800,
             "observed_recent_window": 3,
             "observed_consecutive_passes": 3,
             "history_stability_complete": True,
+            "history_freshness_complete": True,
             "required_live_fault_cases": [
                 "gateway_model_limitations",
                 "unsupported_tools",
@@ -1399,6 +1415,7 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "trend": "provider_history_stable",
         "recent_window": 2,
         "consecutive_passes": 2,
+        "last_run_at": _provider_smoke_run_at(),
         "last_live_fault_probe_status": "passed",
         "live_fault_probe_covered_cases": [
             "gateway_model_limitations",
@@ -1419,9 +1436,12 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "next_actions": ["collect_provider_history_runs"],
         "requirements": {
             "min_stable_runs": 3,
+            "last_run_at": two_run_history["last_run_at"],
+            "max_history_age_seconds": 604800,
             "observed_recent_window": 2,
             "observed_consecutive_passes": 2,
             "history_stability_complete": False,
+            "history_freshness_complete": True,
             "required_live_fault_cases": [
                 "gateway_model_limitations",
                 "unsupported_tools",
@@ -1446,6 +1466,7 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "trend": "provider_history_stable",
         "recent_window": 3,
         "consecutive_passes": 3,
+        "last_run_at": _provider_smoke_run_at(),
         "last_live_fault_probe_status": "passed",
         "live_fault_probe_covered_cases": ["unsupported_tools"],
     }
@@ -1463,9 +1484,12 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "next_actions": ["enable_live_fault_probes"],
         "requirements": {
             "min_stable_runs": 3,
+            "last_run_at": partial_live_fault_history["last_run_at"],
+            "max_history_age_seconds": 604800,
             "observed_recent_window": 3,
             "observed_consecutive_passes": 3,
             "history_stability_complete": True,
+            "history_freshness_complete": True,
             "required_live_fault_cases": [
                 "gateway_model_limitations",
                 "unsupported_tools",
@@ -1515,6 +1539,7 @@ def test_provider_autonomous_readiness_warns_on_degrading_eval_trends():
             "trend": "provider_history_stable",
             "recent_window": 3,
             "consecutive_passes": 3,
+            "last_run_at": _provider_smoke_run_at(),
             "last_live_fault_probe_status": "passed",
             "live_fault_probe_covered_cases": [
                 "gateway_model_limitations",
@@ -1545,6 +1570,58 @@ def test_provider_autonomous_readiness_warns_on_degrading_eval_trends():
         "provider_history_stable",
         "live_fault_probes_passed",
     ]
+
+
+def test_provider_autonomous_readiness_warns_on_stale_history():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+        },
+    )
+    stale_run_at = _provider_smoke_run_at(days_ago=30)
+
+    readiness = _provider_autonomous_readiness_diagnostics(
+        result,
+        {
+            "last_status": "passed",
+            "trend": "provider_history_stable",
+            "recent_window": 3,
+            "consecutive_passes": 3,
+            "last_run_at": stale_run_at,
+            "last_live_fault_probe_status": "passed",
+            "live_fault_probe_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+        },
+    )
+
+    assert readiness["status"] == "warming_up"
+    assert readiness["recommendation"] == "limited_autonomous_until_evidence_stable"
+    assert readiness["recommendation_reasons"] == ["history_stale"]
+    assert readiness["warnings"] == ["provider_history_stale"]
+    assert readiness["missing_requirements"] == ["fresh_provider_history"]
+    assert readiness["next_actions"] == ["rerun_provider_e2e"]
+    assert readiness["requirements"]["last_run_at"] == stale_run_at
+    assert readiness["requirements"]["max_history_age_seconds"] == 604800
+    assert readiness["requirements"]["history_freshness_complete"] is False
 
 
 def test_provider_autonomous_readiness_skips_non_direct_providers():
@@ -1677,6 +1754,7 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
             },
         ),
     )
+    history_summary = result.runtime_diagnostics["provider_run_history"]
 
     assert result.runtime_diagnostics["provider_autonomous_readiness"] == {
         "status": "blocked",
@@ -1707,9 +1785,12 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
         ],
         "requirements": {
             "min_stable_runs": 3,
+            "last_run_at": history_summary["last_run_at"],
+            "max_history_age_seconds": 604800,
             "observed_recent_window": 1,
             "observed_consecutive_passes": 0,
             "history_stability_complete": False,
+            "history_freshness_complete": True,
             "required_live_fault_cases": [
                 "gateway_model_limitations",
                 "unsupported_tools",
