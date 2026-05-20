@@ -253,15 +253,13 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   full_autonomous: 'settings:aiProvider.runtimeDiagnosticValues.fullAutonomous',
   full_autonomous_candidate:
     'settings:aiProvider.runtimeDiagnosticValues.fullAutonomousCandidate',
-  history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryDegraded',
-  history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.providerHistoryFlaky',
+  history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.historyDegraded',
+  history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.historyFlaky',
   history_insufficient_runs:
-    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryInsufficientRuns',
+    'settings:aiProvider.runtimeDiagnosticValues.historyInsufficientRuns',
   history_missing: 'settings:aiProvider.runtimeDiagnosticValues.historyMissing',
-  history_recovering:
-    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryRecovering',
-  history_warming_up:
-    'settings:aiProvider.runtimeDiagnosticValues.providerHistoryWarmingUp',
+  history_recovering: 'settings:aiProvider.runtimeDiagnosticValues.historyRecovering',
+  history_warming_up: 'settings:aiProvider.runtimeDiagnosticValues.historyWarmingUp',
   function_tools: 'settings:aiProvider.runtimeDiagnosticValues.functionTools',
   generic_core_configurable: 'settings:aiProvider.runtimeDiagnosticValues.genericCoreConfigurable',
   generic_cli_pool: 'settings:aiProvider.runtimeDiagnosticValues.genericCliPool',
@@ -306,6 +304,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeMissing',
   live_fault_case_coverage:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultCaseCoverage',
+  live_fault_coverage_incomplete:
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultCoverageIncomplete',
   live_fault_probes_passed:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed',
   latest_provider_e2e_pass:
@@ -1003,9 +1003,15 @@ function formatProviderRunHistoryRuns(
   history: ProviderRunHistoryDiagnostics
 ): string {
   return [
-    isRuntimeDiagnosticNumber(history.totalRuns) ? `${history.totalRuns} total` : '',
-    isRuntimeDiagnosticNumber(history.passedRuns) ? `${history.passedRuns} passed` : '',
-    isRuntimeDiagnosticNumber(history.failedRuns) ? `${history.failedRuns} failed` : '',
+    isRuntimeDiagnosticNumber(history.totalRuns)
+      ? `${history.totalRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTotalRuns')}`
+      : '',
+    isRuntimeDiagnosticNumber(history.passedRuns)
+      ? `${history.passedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryPassedRuns')}`
+      : '',
+    isRuntimeDiagnosticNumber(history.failedRuns)
+      ? `${history.failedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryFailedRuns')}`
+      : '',
     isRuntimeDiagnosticNumber(history.passRatePercent)
       ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryPassRate')} ${history.passRatePercent}%`
       : '',

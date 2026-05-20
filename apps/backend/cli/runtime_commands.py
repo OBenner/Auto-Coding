@@ -988,12 +988,10 @@ def _runtime_provider_readiness_signals(
     warnings: list[str] = []
     evidence: list[str] = []
 
-    if (
-        provider_stats.get("last_status") == "passed"
-        and provider_stats.get("last_provider_e2e_status") == "passed"
-    ):
+    provider_e2e_status = provider_stats.get("last_provider_e2e_status")
+    if provider_e2e_status == "passed":
         evidence.append("provider_e2e_passed")
-    else:
+    elif provider_e2e_status == "failed":
         blockers.append("provider_e2e_failed")
 
     if provider_stats.get("last_reliability_status") == "complete":
@@ -1154,8 +1152,10 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
     )
     if observed_live_fault_case_count == 0:
         observed_live_fault_case_count = len(
-            _runtime_string_list_payload(
-                provider_stats.get("live_fault_probe_covered_cases")
+            set(
+                _runtime_string_list_payload(
+                    provider_stats.get("live_fault_probe_covered_cases")
+                )
             )
         )
     pass_rate_percent = _runtime_eval_percent_stat_or_metric(
@@ -1392,8 +1392,10 @@ def _runtime_provider_readiness_requirements(
         PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
     )
     live_fault_covered_cases = sorted(
-        _runtime_string_list_payload(
-            provider_stats.get("live_fault_probe_covered_cases")
+        set(
+            _runtime_string_list_payload(
+                provider_stats.get("live_fault_probe_covered_cases")
+            )
         )
     )
     live_fault_missing_cases = [
@@ -2625,6 +2627,8 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
             "  Runtime fallback: AUTO_CODE_RUNTIME_FALLBACK=true python run.py --spec 001 --provider openai",
             "  Runner router:   AUTO_CODE_CLI_RUNNER_ROUTER=true python run.py --spec 001 --provider openai",
             "  Provider smoke:  python run.py --provider openai --provider-smoke",
+            "  Readiness:       python run.py --provider openai --provider-smoke "
+            "--provider-smoke-runtime provider_e2e",
             "  Resume preflight: python run.py --generic-edit-resume-preflight "
             ".auto-Codex/specs/001/artifacts/generic_edit_recovery_checkpoint.json",
             "  External MCP:    python run.py --external-mcp-smoke --json",

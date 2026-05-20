@@ -192,7 +192,6 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "missing_full_autonomous_runtime",
         "live_provider_e2e_required",
         "transactional_recovery_required",
-        "provider_e2e_failed",
         "provider_reliability_incomplete",
         "provider_history_latest_failed",
     ]
@@ -206,7 +205,6 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "provider_e2e_required"
     )
     assert capability_rows["openai"]["autonomous_readiness_recommendation_reasons"] == [
-        "provider_e2e_failed",
         "provider_reliability_incomplete",
         "latest_provider_e2e_failed",
         "history_missing",
@@ -229,7 +227,6 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "live_fault_coverage_complete": False,
     }
     assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == [
-        "provider_e2e",
         "provider_reliability",
         "latest_provider_e2e_pass",
         "stable_history_runs",
@@ -274,14 +271,12 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "autonomous_readiness_status": "blocked",
         "autonomous_readiness_recommendation": "provider_e2e_required",
         "autonomous_readiness_recommendation_reasons": [
-            "provider_e2e_failed",
             "provider_reliability_incomplete",
             "latest_provider_e2e_failed",
             "history_missing",
             "live_fault_probe_missing",
         ],
         "autonomous_readiness_blockers": [
-            "provider_e2e_failed",
             "provider_reliability_incomplete",
             "provider_history_latest_failed",
         ],
@@ -306,7 +301,6 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
             "live_fault_coverage_complete": False,
         },
         "autonomous_readiness_missing_requirements": [
-            "provider_e2e",
             "provider_reliability",
             "latest_provider_e2e_pass",
             "stable_history_runs",
@@ -533,6 +527,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
                         "reliability_required_case_count": 8,
                         "reliability_case_pass_rate_percent": 88,
                         "live_fault_probe_covered_cases": [
+                            "unsupported_tools",
                             "unsupported_tools",
                             "gateway_model_limitations",
                         ],
@@ -765,6 +760,42 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     text_output = format_runtime_modes_text(text_payload)
     assert "api_runtime_full_autonomous_candidate" in text_output
     assert "limited_autonomous_until_live_faults" in text_output
+    assert "--provider-smoke-runtime provider_e2e" in text_output
+
+
+def test_runtime_provider_readiness_decouples_e2e_from_aggregate_status():
+    from cli.runtime_commands import _runtime_provider_autonomous_readiness_from_history
+
+    readiness = _runtime_provider_autonomous_readiness_from_history(
+        "openai",
+        {
+            "total_runs": 3,
+            "passed_runs": 2,
+            "failed_runs": 1,
+            "last_status": "failed",
+            "last_reliability_status": "complete",
+            "last_provider_e2e_status": "passed",
+            "last_live_fault_probe_status": "passed",
+            "live_fault_probe_covered_cases": [
+                "unsupported_tools",
+                "unsupported_tools",
+                "gateway_model_limitations",
+            ],
+            "trend": "provider_history_stable",
+            "recent_window": 3,
+            "consecutive_passes": 3,
+        },
+    )
+
+    assert "provider_e2e_passed" in readiness["evidence"]
+    assert "provider_e2e_failed" not in readiness["blockers"]
+    assert readiness["requirements"]["live_fault_covered_cases"] == [
+        "gateway_model_limitations",
+        "unsupported_tools",
+    ]
+    assert readiness["requirements"]["live_fault_coverage_complete"] is True
+    assert readiness["missing_requirements"] == ["latest_provider_e2e_pass"]
+    assert readiness["blockers"] == ["provider_history_latest_failed"]
 
 
 def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_coverage(

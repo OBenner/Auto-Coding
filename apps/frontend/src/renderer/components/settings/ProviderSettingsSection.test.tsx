@@ -67,6 +67,9 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv': 'Required live fault env',
     'settings:aiProvider.connectionTest.providerRunHistory': 'Provider run history',
     'settings:aiProvider.connectionTest.providerRunHistoryRuns': 'Provider history runs',
+    'settings:aiProvider.connectionTest.providerRunHistoryTotalRuns': 'total',
+    'settings:aiProvider.connectionTest.providerRunHistoryPassedRuns': 'passed',
+    'settings:aiProvider.connectionTest.providerRunHistoryFailedRuns': 'failed',
     'settings:aiProvider.connectionTest.providerRunHistoryLast': 'Provider history latest',
     'settings:aiProvider.connectionTest.providerRunHistoryTrend': 'Provider history trend',
     'settings:aiProvider.connectionTest.providerRunHistoryTrendFailed': 'failed',
@@ -171,6 +174,8 @@ const translate = (key: string) =>
       'Live fault probe coverage incomplete',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultCaseCoverage':
       'Live fault case coverage',
+    'settings:aiProvider.runtimeDiagnosticValues.liveFaultCoverageIncomplete':
+      'Live fault coverage incomplete',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCaseCoverage':
       'Live fault probe case coverage',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed':
@@ -181,6 +186,14 @@ const translate = (key: string) =>
       'Latest provider e2e failed',
     'settings:aiProvider.runtimeDiagnosticValues.historyMissing':
       'Missing provider history',
+    'settings:aiProvider.runtimeDiagnosticValues.historyDegraded': 'Degraded history',
+    'settings:aiProvider.runtimeDiagnosticValues.historyFlaky': 'Flaky history',
+    'settings:aiProvider.runtimeDiagnosticValues.historyInsufficientRuns':
+      'Provider history insufficient runs',
+    'settings:aiProvider.runtimeDiagnosticValues.historyRecovering':
+      'Recovering history',
+    'settings:aiProvider.runtimeDiagnosticValues.historyWarmingUp':
+      'Provider history warming up',
     'settings:aiProvider.runtimeDiagnosticValues.needsLiveFaultEvidence':
       'Needs live fault evidence',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eFailed': 'Provider e2e failed',

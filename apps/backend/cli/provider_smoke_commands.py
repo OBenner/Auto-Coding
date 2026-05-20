@@ -58,6 +58,8 @@ DEFAULT_PROVIDER_MINI_PIPELINE_TASK = (
     "Implement slugify(value: str) in string_tools.py."
 )
 DEFAULT_PROVIDER_MINI_PIPELINE_TEST_COMMAND = "python -m unittest -q"
+PROVIDER_SMOKE_COST_ESTIMATE_INPUT_TOKENS = 10_000
+PROVIDER_SMOKE_COST_ESTIMATE_OUTPUT_TOKENS = 2_000
 DEFAULT_PROVIDER_MINI_PIPELINE_PLANNER_PROMPT = (
     "Plan a tiny Auto Code readiness task for a provider pipeline smoke check.\n\n"
     "Task: {task}\n\n"
@@ -406,17 +408,26 @@ def _provider_reliability_case_counts(reliability: dict[str, Any]) -> dict[str, 
 def _provider_smoke_cost_record(result: ProviderSmokeResult) -> dict[str, Any]:
     """Return actual token/cost evidence for a provider smoke run when available."""
     pricing_model = _provider_smoke_cost_pricing_model(result.model)
-    token_usage = _provider_smoke_token_usage_payload(result.runtime_diagnostics)
-    if not pricing_model or token_usage is None:
+    if not pricing_model:
         return {}
 
-    input_tokens = token_usage["input_tokens"]
-    output_tokens = token_usage["output_tokens"]
+    token_usage = _provider_smoke_token_usage_payload(result.runtime_diagnostics)
+    cost_source = "token_usage"
+    cost_status = "recorded"
+    if token_usage is None:
+        input_tokens = PROVIDER_SMOKE_COST_ESTIMATE_INPUT_TOKENS
+        output_tokens = PROVIDER_SMOKE_COST_ESTIMATE_OUTPUT_TOKENS
+        cost_source = "fixed_token_estimate"
+        cost_status = "estimated"
+    else:
+        input_tokens = token_usage["input_tokens"]
+        output_tokens = token_usage["output_tokens"]
+        cost_source = token_usage["source"]
     cost_usd = calculate_cost(pricing_model, input_tokens, output_tokens)
     pricing = get_model_pricing(pricing_model)
     return {
-        "cost_status": "recorded",
-        "cost_source": token_usage["source"],
+        "cost_status": cost_status,
+        "cost_source": cost_source,
         "cost_input_tokens": input_tokens,
         "cost_output_tokens": output_tokens,
         "cost_usd": cost_usd,
@@ -709,9 +720,14 @@ def _provider_smoke_history_apply_cost_stats(
     stats: dict[str, Any],
     run: dict[str, Any],
 ) -> None:
-    """Apply actual token/cost evidence from one persisted run."""
-    if run.get("cost_status") != "recorded":
+    """Apply token/cost evidence from one persisted run."""
+    cost_status = run.get("cost_status")
+    if cost_status not in {"recorded", "estimated"}:
         return
+    if cost_status == "estimated" and stats.get("cost_status") == "recorded":
+        return
+    if cost_status == "recorded" and stats.get("cost_status") == "estimated":
+        _provider_smoke_history_reset_cost_stats(stats)
 
     input_tokens = _int_payload_value(run, "cost_input_tokens")
     output_tokens = _int_payload_value(run, "cost_output_tokens")
@@ -719,7 +735,8 @@ def _provider_smoke_history_apply_cost_stats(
     if cost_usd is None:
         return
 
-    stats["cost_status"] = "recorded"
+    if stats.get("cost_status") != "recorded":
+        stats["cost_status"] = cost_status
     stats["cost_observed_run_count"] = (
         _int_payload_value(stats, "cost_observed_run_count") + 1
     )
@@ -740,6 +757,25 @@ def _provider_smoke_history_apply_cost_stats(
     stats["cost_last_formatted"] = format_cost(cost_usd)
     stats["cost_pricing_model"] = run.get("cost_pricing_model")
     stats["cost_pricing_provider"] = run.get("cost_pricing_provider")
+
+
+def _provider_smoke_history_reset_cost_stats(stats: dict[str, Any]) -> None:
+    """Clear estimated cost totals before recorded usage takes precedence."""
+    for key in (
+        "cost_status",
+        "cost_observed_run_count",
+        "cost_total_input_tokens",
+        "cost_total_output_tokens",
+        "cost_total_usd",
+        "cost_total_formatted",
+        "cost_last_input_tokens",
+        "cost_last_output_tokens",
+        "cost_last_usd",
+        "cost_last_formatted",
+        "cost_pricing_model",
+        "cost_pricing_provider",
+    ):
+        stats.pop(key, None)
 
 
 def _provider_smoke_percent_metric(
@@ -4205,6 +4241,8 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
             f"{live_fault_coverage_percent}% "
             f"({observed_live_fault_cases}/{required_live_fault_cases})",
         )
+    cost_status = provider_run_history.get("cost_status")
+    cost_run_label = "estimated runs" if cost_status == "estimated" else "recorded runs"
     cost_parts = [
         f"{provider_run_history['cost_total_formatted']} total"
         if isinstance(provider_run_history.get("cost_total_formatted"), str)
@@ -4214,7 +4252,7 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
         if isinstance(provider_run_history.get("cost_last_formatted"), str)
         and provider_run_history.get("cost_last_formatted")
         else "",
-        f"{provider_run_history['cost_observed_run_count']} recorded runs"
+        f"{provider_run_history['cost_observed_run_count']} {cost_run_label}"
         if isinstance(provider_run_history.get("cost_observed_run_count"), int)
         and not isinstance(provider_run_history.get("cost_observed_run_count"), bool)
         else "",
@@ -4310,6 +4348,10 @@ def _print_provider_autonomous_readiness(readiness: Any) -> None:
     )
     _print_string_list_line("Autonomous blockers", readiness.get("blockers"))
     _print_string_list_line("Autonomous warnings", readiness.get("warnings"))
+    _print_string_list_line(
+        "Autonomous missing requirements",
+        readiness.get("missing_requirements"),
+    )
     _print_string_list_line("Autonomous evidence", readiness.get("evidence"))
     _print_string_list_line("Autonomous next actions", readiness.get("next_actions"))
 

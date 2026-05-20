@@ -582,6 +582,18 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "observed_live_fault_case_count": 2,
         "required_live_fault_case_count": 2,
         "live_fault_probe_case_coverage_percent": 100,
+        "cost_status": "estimated",
+        "cost_observed_run_count": 1,
+        "cost_total_input_tokens": 10_000,
+        "cost_total_output_tokens": 2_000,
+        "cost_total_usd": pytest.approx(0.045),
+        "cost_total_formatted": "$0.0450",
+        "cost_last_input_tokens": 10_000,
+        "cost_last_output_tokens": 2_000,
+        "cost_last_usd": pytest.approx(0.045),
+        "cost_last_formatted": "$0.0450",
+        "cost_pricing_model": "gpt-4o",
+        "cost_pricing_provider": "openai",
         "path": ".auto-Codex/provider-smoke-history.json",
     }
     history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
@@ -1006,6 +1018,109 @@ def test_provider_run_history_records_actual_cost_metrics(tmp_path: Path):
     assert record["cost_formatted"] == "$0.0075"
     assert record["cost_pricing_model"] == "gpt-4o"
     assert record["cost_pricing_provider"] == "openai"
+
+
+def test_provider_run_history_records_estimated_cost_when_usage_missing(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["cost_status"] == "estimated"
+    assert history_summary["cost_observed_run_count"] == 1
+    assert history_summary["cost_total_input_tokens"] == 10_000
+    assert history_summary["cost_total_output_tokens"] == 2_000
+    assert history_summary["cost_total_usd"] == pytest.approx(0.045)
+    assert history_summary["cost_total_formatted"] == "$0.0450"
+    assert history_summary["cost_last_usd"] == pytest.approx(0.045)
+    assert history_summary["cost_last_formatted"] == "$0.0450"
+    assert history_summary["cost_last_input_tokens"] == 10_000
+    assert history_summary["cost_last_output_tokens"] == 2_000
+    assert history_summary["cost_pricing_model"] == "gpt-4o"
+    assert history_summary["cost_pricing_provider"] == "openai"
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    record = history["runs"][0]
+    assert record["cost_status"] == "estimated"
+    assert record["cost_source"] == "fixed_token_estimate"
+    assert record["cost_input_tokens"] == 10_000
+    assert record["cost_output_tokens"] == 2_000
+    assert record["cost_usd"] == pytest.approx(0.045)
+    assert record["cost_formatted"] == "$0.0450"
+    assert record["cost_pricing_model"] == "gpt-4o"
+    assert record["cost_pricing_provider"] == "openai"
+
+
+def test_provider_run_history_prefers_recorded_cost_after_estimate(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+            },
+        ),
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+                "token_usage": {
+                    "input_tokens": 1000,
+                    "output_tokens": 500,
+                },
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["cost_status"] == "recorded"
+    assert history_summary["cost_observed_run_count"] == 1
+    assert history_summary["cost_total_input_tokens"] == 1000
+    assert history_summary["cost_total_output_tokens"] == 500
+    assert history_summary["cost_total_usd"] == pytest.approx(0.0075)
+    assert history_summary["cost_total_formatted"] == "$0.0075"
+    assert history_summary["cost_last_usd"] == pytest.approx(0.0075)
+    assert history_summary["cost_last_formatted"] == "$0.0075"
 
 
 def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
@@ -3000,6 +3115,29 @@ def test_print_provider_run_history_includes_quality_and_safety_percentages(
         "$0.0225 total, $0.0075 latest, 2 recorded runs, 3000 input, 1500 output, gpt-4o"
         in output
     )
+
+
+def test_print_provider_autonomous_readiness_includes_missing_requirements(
+    capsys: pytest.CaptureFixture[str],
+):
+    from cli.provider_smoke_commands import _print_provider_autonomous_readiness
+
+    _print_provider_autonomous_readiness(
+        {
+            "status": "warming_up",
+            "recommendation": "limited_autonomous_until_evidence_stable",
+            "recommendation_reasons": ["history_insufficient_runs"],
+            "blockers": [],
+            "warnings": ["provider_history_insufficient_runs"],
+            "missing_requirements": ["stable_history_runs"],
+            "evidence": ["provider_e2e_passed"],
+            "next_actions": ["collect_provider_history_runs"],
+        }
+    )
+
+    output = capsys.readouterr().out
+    assert "Autonomous missing requirements" in output
+    assert "stable_history_runs" in output
 
 
 def test_handle_provider_smoke_command_prints_generic_edit_execution(
