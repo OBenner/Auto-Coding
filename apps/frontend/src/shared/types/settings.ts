@@ -632,6 +632,9 @@ export interface ProviderAutonomousReadinessRequirements {
   liveFaultCoveredCases?: string[];
   liveFaultMissingCases?: string[];
   liveFaultCoverageComplete?: boolean;
+  lastRunAt?: string;
+  maxHistoryAgeSeconds?: number;
+  historyFreshnessComplete?: boolean;
 }
 
 export interface ProviderE2eSuiteDiagnostics {

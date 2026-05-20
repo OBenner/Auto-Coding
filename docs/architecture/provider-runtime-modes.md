@@ -194,10 +194,12 @@ structured reasons payload exposes stable ids such as `history_missing`,
 `latest_provider_smoke_failed` so UI and policy surfaces can explain the chosen
 recommendation without reverse-engineering blockers. The structured requirements
 payload exposes the minimum stable-run threshold, observed recent window,
-observed consecutive-pass streak, required/covered/missing live fault cases, and
-booleans for history and
-live-fault completion so backend automation and UI surfaces do not need to parse
-free-form warning strings.
+observed consecutive-pass streak, `last_run_at`, the maximum accepted evidence
+age, history freshness, required/covered/missing live fault cases, and booleans
+for history and live-fault completion so backend automation and UI surfaces do
+not need to parse free-form warning strings. Text CLI output and the Electron
+provider diagnostics UI render those requirements as a compact operator summary
+next to the stable missing requirement ids.
 
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
@@ -312,7 +314,7 @@ Last updated: 2026-05-19.
 | MCP Bridge v1 | Strong partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, unavailable-tool observations, readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers, and `mcp_bridge_permission_matrix` for local/external/custom permission gates are represented. The runtime enforces `RuntimeMcpToolPolicy` before execution, writes audit artifacts, classifies mutating tools, normalizes MCP tool results into `text`, `content`, `structured_content`, and `is_error`, classifies live `tools/list` and bridged `tools/call` lifecycle failures by stage/kind, and exposes whether strict `AUTO_CODE_MCP_ALLOWED_PERMISSIONS` allowlists are configured. | Generalize live execution coverage across all registered external servers, normalize arbitrary live schemas continuously, and keep hardening external session reuse plus per-server execution smoke. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, read-only merge plans, and `runtime_subagent_mutation_policy` now exposes the gates blocking mutating children until transactional merge is ready. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, then move the mutation policy from blocked to enabled. |
 | CLI runtimes as full runtime class | Partial, stronger core | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners, `cli_runner_contract_matrix` tracks `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata for every candidate, and the generic CLI core now supplies configurable run/cancel/artifact/event parsing for planned runners. | Add runner-specific command builders, resume semantics, and live smoke/e2e coverage for Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs so they can move from generic-core partial to ready. |
-| Frontend runtime control plane | Strong partial | Provider settings show runtime diagnostics, provider smoke/e2e status, granular provider e2e/reliability history coverage, MCP status and permission gates, Generic Edit recovery/batch evidence, policy/eval rows with comparative cost estimates, CLI runner status, and mutating-subagent gates. See [Frontend control plane implementation details](#frontend-control-plane-implementation-details). | Add richer history charts, deeper provider controls, and deeper artifact drilldowns into one operator-grade surface. |
+| Frontend runtime control plane | Strong partial | Provider settings show runtime diagnostics, provider smoke/e2e status, granular provider e2e/reliability history coverage, autonomous-readiness requirements including stable runs, consecutive passes, freshness, and live-fault coverage, MCP status and permission gates, Generic Edit recovery/batch evidence, policy/eval rows with comparative cost estimates, CLI runner status, and mutating-subagent gates. See [Frontend control plane implementation details](#frontend-control-plane-implementation-details). | Add richer history charts, deeper provider controls, and deeper artifact drilldowns into one operator-grade surface. |
 | Policy and evals | Strong partial | Runtime recommendations, compatibility diagnostics, `runtime_policy_matrix` for planner/coder/QA phase selection, direct-provider autonomous readiness gates, `runtime_eval_matrix` for provider e2e, generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts, CLI full-runtime artifacts, `runtime_eval_history` from persisted provider smoke evidence, and `runtime_comparative_eval_matrix` for Claude/Codex/OpenAI/Gemini/Ollama quality/cost/safety comparison are implemented. Comparative rows now prefer granular provider e2e case pass-rate for quality, use the stricter reliability/live-fault coverage score for safety, expose score source ids, include stability score, latest pricing model, recorded actual cost from provider smoke token usage when available, use fixed-token cost estimates as fallback, and surface quality/stability/safety/cost trend ids plus deltas for the UI and text control plane. | Calibrate quality/safety scoring against broader live eval tasks and add richer trend visualizations. |
 
 The practical rule remains: a direct API provider is not `full_autonomous` until
@@ -404,8 +406,8 @@ even when `generic_edit` can still run.
 - The settings UI surfaces suite status and negative fixtures.
 - The settings UI surfaces live fault probes and provider reliability.
 - The settings UI surfaces provider autonomous readiness recommendations,
-  recommendation reasons, blockers, warnings, missing requirements, evidence,
-  and next actions.
+  recommendation reasons, blockers, warnings, missing requirements, compact
+  structured requirement evidence, evidence, and next actions.
 - The settings UI surfaces autonomous policy gate, recommendation text, and
   recommendation reasons in runtime governance diagnostics.
 - The settings UI surfaces comparative eval quality, stability, safety, pricing

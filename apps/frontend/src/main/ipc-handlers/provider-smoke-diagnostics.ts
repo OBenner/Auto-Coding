@@ -54,6 +54,11 @@ function providerReadinessRequirementsFromUnknown(
     liveFaultCoverageComplete: booleanFromUnknown(
       payload.live_fault_coverage_complete
     ),
+    lastRunAt: stringFromUnknown(payload.last_run_at),
+    maxHistoryAgeSeconds: numberFromUnknown(payload.max_history_age_seconds),
+    historyFreshnessComplete: booleanFromUnknown(
+      payload.history_freshness_complete
+    ),
   };
 
   return Object.values(requirements).some((field) =>

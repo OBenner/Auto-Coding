@@ -3404,12 +3404,36 @@ def test_print_provider_autonomous_readiness_includes_missing_requirements(
             "missing_requirements": ["stable_history_runs"],
             "evidence": ["provider_e2e_passed"],
             "next_actions": ["collect_provider_history_runs"],
+            "requirements": {
+                "min_stable_runs": 3,
+                "observed_recent_window": 2,
+                "observed_consecutive_passes": 2,
+                "history_stability_complete": False,
+                "last_run_at": "2026-05-01T00:00:00Z",
+                "max_history_age_seconds": 604800,
+                "history_freshness_complete": False,
+                "required_live_fault_cases": [
+                    "gateway_model_limitations",
+                    "unsupported_tools",
+                ],
+                "live_fault_covered_cases": ["unsupported_tools"],
+                "live_fault_missing_cases": ["gateway_model_limitations"],
+                "live_fault_coverage_complete": False,
+            },
         }
     )
 
     output = capsys.readouterr().out
     assert "Autonomous missing requirements" in output
     assert "stable_history_runs" in output
+    assert "Autonomous requirements" in output
+    assert "stable runs 2/3" in output
+    assert "consecutive passes 2/3" in output
+    assert "history fresh no" in output
+    assert "last run 2026-05-01T00:00:00Z" in output
+    assert "max age 604800s" in output
+    assert "live fault coverage no" in output
+    assert "missing gateway_model_limitations" in output
 
 
 def test_handle_provider_smoke_command_prints_generic_edit_execution(

@@ -825,6 +825,71 @@ function formatRuntimeDiagnosticBoolean(
   return formatRuntimeDiagnosticValue(translate, value ? 'yes' : 'no');
 }
 
+function formatProviderAutonomousReadinessRequirements(
+  translate: RuntimeDiagnosticTranslate,
+  requirements?: ProviderAutonomousReadinessDiagnostics['requirements']
+): string {
+  if (!requirements) {
+    return '';
+  }
+
+  const parts: string[] = [];
+  if (
+    isRuntimeDiagnosticNumber(requirements.observedRecentWindow)
+    && isRuntimeDiagnosticNumber(requirements.minStableRuns)
+  ) {
+    parts.push(
+      `${formatRuntimeDiagnosticValue(translate, 'stable_history_runs')} ${requirements.observedRecentWindow}/${requirements.minStableRuns}`
+    );
+  }
+  if (
+    isRuntimeDiagnosticNumber(requirements.observedConsecutivePasses)
+    && isRuntimeDiagnosticNumber(requirements.minStableRuns)
+  ) {
+    parts.push(
+      `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessConsecutivePasses')} ${requirements.observedConsecutivePasses}/${requirements.minStableRuns}`
+    );
+  }
+
+  const historyFreshness = formatRuntimeDiagnosticBoolean(
+    translate,
+    requirements.historyFreshnessComplete
+  );
+  if (historyFreshness) {
+    const details = [
+      requirements.lastRunAt
+        ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessLastRun')} ${requirements.lastRunAt}`
+        : '',
+      isRuntimeDiagnosticNumber(requirements.maxHistoryAgeSeconds)
+        ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMaxAge')} ${requirements.maxHistoryAgeSeconds}s`
+        : '',
+    ].filter(Boolean).join(', ');
+    const detailSuffix = details ? ` (${details})` : '';
+    parts.push(
+      `${formatRuntimeDiagnosticValue(translate, 'fresh_provider_history')}: ${historyFreshness}${detailSuffix}`
+    );
+  }
+
+  const liveFaultCoverage = formatRuntimeDiagnosticBoolean(
+    translate,
+    requirements.liveFaultCoverageComplete
+  );
+  if (liveFaultCoverage) {
+    const missingCases = formatRuntimeDiagnosticList(
+      translate,
+      requirements.liveFaultMissingCases
+    );
+    const missingSuffix = missingCases
+      ? ` (${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMissingCases')} ${missingCases})`
+      : '';
+    parts.push(
+      `${formatRuntimeDiagnosticValue(translate, 'live_fault_case_coverage')}: ${liveFaultCoverage}${missingSuffix}`
+    );
+  }
+
+  return parts.join(', ');
+}
+
 export function buildProviderResumePolicyDiagnosticRows(
   translate: RuntimeDiagnosticTranslate,
   resumePolicy?: ProviderValidatedRuntimeResumePolicy | null
@@ -1272,6 +1337,14 @@ export function buildProviderAutonomousReadinessDiagnosticRows(
       labelKey:
         'settings:aiProvider.connectionTest.providerAutonomousReadinessMissingRequirements',
       value: formatRuntimeDiagnosticList(translate, readiness.missingRequirements),
+    },
+    {
+      labelKey:
+        'settings:aiProvider.connectionTest.providerAutonomousReadinessRequirements',
+      value: formatProviderAutonomousReadinessRequirements(
+        translate,
+        readiness.requirements
+      ),
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence',

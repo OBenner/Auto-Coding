@@ -114,6 +114,16 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Autonomous warnings',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessMissingRequirements':
       'Autonomous missing requirements',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessRequirements':
+      'Autonomous requirements',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessConsecutivePasses':
+      'Consecutive passes',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessLastRun':
+      'last run',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessMaxAge':
+      'max age',
+    'settings:aiProvider.connectionTest.providerAutonomousReadinessMissingCases':
+      'missing',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence':
       'Autonomous evidence',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions':
@@ -1079,31 +1089,49 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
 
 describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
   it('includes provider autonomous readiness recommendation evidence', () => {
+    const readiness = {
+      status: 'warming_up',
+      provider: 'openai',
+      source: 'provider_autonomous_readiness',
+      recommendation: 'limited_autonomous_until_evidence_stable',
+      recommendationReasons: [
+        'history_warming_up',
+        'history_stale',
+        'live_fault_probe_missing',
+      ],
+      blockers: [],
+      warnings: [
+        'provider_history_warming_up',
+        'provider_history_stale',
+        'live_fault_probe_evidence_missing',
+      ],
+      missingRequirements: [
+        'stable_history_runs',
+        'fresh_provider_history',
+        'live_fault_case_coverage',
+      ],
+      evidence: ['provider_e2e_passed', 'provider_reliability_complete'],
+      nextActions: ['collect_provider_history_runs', 'enable_live_fault_probes'],
+      requirements: {
+        minStableRuns: 3,
+        observedRecentWindow: 2,
+        observedConsecutivePasses: 2,
+        historyStabilityComplete: false,
+        lastRunAt: '2026-05-01T00:00:00Z',
+        maxHistoryAgeSeconds: 604800,
+        historyFreshnessComplete: false,
+        requiredLiveFaultCases: [
+          'gateway_model_limitations',
+          'unsupported_tools',
+        ],
+        liveFaultCoveredCases: ['unsupported_tools'],
+        liveFaultMissingCases: ['gateway_model_limitations'],
+        liveFaultCoverageComplete: false,
+      },
+    };
+
     expect(
-      buildProviderAutonomousReadinessDiagnosticRows(translate, {
-        status: 'warming_up',
-        provider: 'openai',
-        source: 'provider_autonomous_readiness',
-        recommendation: 'limited_autonomous_until_evidence_stable',
-        recommendationReasons: [
-          'history_warming_up',
-          'history_stale',
-          'live_fault_probe_missing',
-        ],
-        blockers: [],
-        warnings: [
-          'provider_history_warming_up',
-          'provider_history_stale',
-          'live_fault_probe_evidence_missing',
-        ],
-        missingRequirements: [
-          'stable_history_runs',
-          'fresh_provider_history',
-          'live_fault_case_coverage',
-        ],
-        evidence: ['provider_e2e_passed', 'provider_reliability_complete'],
-        nextActions: ['collect_provider_history_runs', 'enable_live_fault_probes'],
-      })
+      buildProviderAutonomousReadinessDiagnosticRows(translate, readiness)
     ).toEqual([
       {
         labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadiness',
@@ -1128,6 +1156,12 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
         labelKey:
           'settings:aiProvider.connectionTest.providerAutonomousReadinessMissingRequirements',
         value: 'Stable history runs, Fresh provider history, Live fault case coverage',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousReadinessRequirements',
+        value:
+          'Stable history runs 2/3, Consecutive passes 2/3, Fresh provider history: No (last run 2026-05-01T00:00:00Z, max age 604800s), Live fault case coverage: No (missing Gateway model limitations)',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessEvidence',
