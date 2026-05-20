@@ -245,7 +245,7 @@ PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
 PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
     "provider_e2e_failed": "provider_e2e_failed",
     "provider_reliability_incomplete": "provider_reliability_incomplete",
-    "provider_history_latest_failed": "latest_provider_e2e_failed",
+    "provider_history_latest_failed": "latest_provider_smoke_failed",
     "provider_history_unknown": "history_missing",
     "provider_history_warming_up": "history_warming_up",
     "provider_history_flaky": "history_flaky",
@@ -412,8 +412,6 @@ def _provider_smoke_cost_record(result: ProviderSmokeResult) -> dict[str, Any]:
         return {}
 
     token_usage = _provider_smoke_token_usage_payload(result.runtime_diagnostics)
-    cost_source = "token_usage"
-    cost_status = "recorded"
     if token_usage is None:
         input_tokens = PROVIDER_SMOKE_COST_ESTIMATE_INPUT_TOKENS
         output_tokens = PROVIDER_SMOKE_COST_ESTIMATE_OUTPUT_TOKENS
@@ -423,6 +421,7 @@ def _provider_smoke_cost_record(result: ProviderSmokeResult) -> dict[str, Any]:
         input_tokens = token_usage["input_tokens"]
         output_tokens = token_usage["output_tokens"]
         cost_source = token_usage["source"]
+        cost_status = "recorded"
     cost_usd = calculate_cost(pricing_model, input_tokens, output_tokens)
     pricing = get_model_pricing(pricing_model)
     return {
@@ -724,16 +723,24 @@ def _provider_smoke_history_apply_cost_stats(
     cost_status = run.get("cost_status")
     if cost_status not in {"recorded", "estimated"}:
         return
-    if cost_status == "estimated" and stats.get("cost_status") == "recorded":
-        return
-    if cost_status == "recorded" and stats.get("cost_status") == "estimated":
-        _provider_smoke_history_reset_cost_stats(stats)
-
     input_tokens = _int_payload_value(run, "cost_input_tokens")
     output_tokens = _int_payload_value(run, "cost_output_tokens")
     cost_usd = _float_payload_value(run, "cost_usd")
     if cost_usd is None:
         return
+
+    if cost_status == "estimated" and stats.get("cost_status") == "recorded":
+        _provider_smoke_history_apply_latest_cost_stats(
+            stats,
+            run,
+            cost_status=cost_status,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+        )
+        return
+    if cost_status == "recorded" and stats.get("cost_status") == "estimated":
+        _provider_smoke_history_reset_cost_stats(stats)
 
     if stats.get("cost_status") != "recorded":
         stats["cost_status"] = cost_status
@@ -751,12 +758,36 @@ def _provider_smoke_history_apply_cost_stats(
         10,
     )
     stats["cost_total_formatted"] = format_cost(stats["cost_total_usd"])
+    _provider_smoke_history_apply_latest_cost_stats(
+        stats,
+        run,
+        cost_status=cost_status,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost_usd,
+    )
+    stats["cost_pricing_model"] = run.get("cost_pricing_model")
+    stats["cost_pricing_provider"] = run.get("cost_pricing_provider")
+
+
+def _provider_smoke_history_apply_latest_cost_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+    *,
+    cost_status: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+) -> None:
+    """Apply latest-run cost evidence without necessarily changing totals."""
+    stats["cost_last_status"] = cost_status
+    stats["cost_last_source"] = run.get("cost_source")
     stats["cost_last_input_tokens"] = input_tokens
     stats["cost_last_output_tokens"] = output_tokens
     stats["cost_last_usd"] = cost_usd
     stats["cost_last_formatted"] = format_cost(cost_usd)
-    stats["cost_pricing_model"] = run.get("cost_pricing_model")
-    stats["cost_pricing_provider"] = run.get("cost_pricing_provider")
+    stats["cost_last_pricing_model"] = run.get("cost_pricing_model")
+    stats["cost_last_pricing_provider"] = run.get("cost_pricing_provider")
 
 
 def _provider_smoke_history_reset_cost_stats(stats: dict[str, Any]) -> None:
@@ -768,10 +799,14 @@ def _provider_smoke_history_reset_cost_stats(stats: dict[str, Any]) -> None:
         "cost_total_output_tokens",
         "cost_total_usd",
         "cost_total_formatted",
+        "cost_last_status",
+        "cost_last_source",
         "cost_last_input_tokens",
         "cost_last_output_tokens",
         "cost_last_usd",
         "cost_last_formatted",
+        "cost_last_pricing_model",
+        "cost_last_pricing_provider",
         "cost_pricing_model",
         "cost_pricing_provider",
     ):
@@ -1228,10 +1263,14 @@ def _with_provider_run_history(
             "cost_total_output_tokens",
             "cost_total_usd",
             "cost_total_formatted",
+            "cost_last_status",
+            "cost_last_source",
             "cost_last_input_tokens",
             "cost_last_output_tokens",
             "cost_last_usd",
             "cost_last_formatted",
+            "cost_last_pricing_model",
+            "cost_last_pricing_provider",
             "cost_pricing_model",
             "cost_pricing_provider",
         ):

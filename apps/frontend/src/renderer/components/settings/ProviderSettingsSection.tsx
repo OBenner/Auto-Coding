@@ -312,6 +312,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2ePass',
   latest_provider_e2e_failed:
     'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2eFailed',
+  latest_provider_smoke_pass:
+    'settings:aiProvider.runtimeDiagnosticValues.latestProviderSmokePass',
+  latest_provider_smoke_failed:
+    'settings:aiProvider.runtimeDiagnosticValues.latestProviderSmokeFailed',
   model_blocked: 'settings:aiProvider.runtimeDiagnosticValues.modelBlocked',
   model_unavailable: 'settings:aiProvider.runtimeDiagnosticValues.modelUnavailable',
   missing_configuration: 'settings:aiProvider.runtimeDiagnosticValues.missingConfiguration',
@@ -495,7 +499,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   warming_up: 'settings:aiProvider.runtimeDiagnosticValues.warmingUp',
 };
 
-type RuntimeDiagnosticTranslate = (key: string) => string;
+type RuntimeDiagnosticTranslate = (
+  key: string,
+  options?: Record<string, unknown>
+) => string;
 
 export type ProviderResumePolicyDiagnosticRow = {
   labelKey: string;
@@ -1004,13 +1011,19 @@ function formatProviderRunHistoryRuns(
 ): string {
   return [
     isRuntimeDiagnosticNumber(history.totalRuns)
-      ? `${history.totalRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryTotalRuns')}`
+      ? translate('settings:aiProvider.connectionTest.providerRunHistoryTotalRunsValue', {
+          count: history.totalRuns
+        })
       : '',
     isRuntimeDiagnosticNumber(history.passedRuns)
-      ? `${history.passedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryPassedRuns')}`
+      ? translate('settings:aiProvider.connectionTest.providerRunHistoryPassedRunsValue', {
+          count: history.passedRuns
+        })
       : '',
     isRuntimeDiagnosticNumber(history.failedRuns)
-      ? `${history.failedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryFailedRuns')}`
+      ? translate('settings:aiProvider.connectionTest.providerRunHistoryFailedRunsValue', {
+          count: history.failedRuns
+        })
       : '',
     isRuntimeDiagnosticNumber(history.passRatePercent)
       ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryPassRate')} ${history.passRatePercent}%`

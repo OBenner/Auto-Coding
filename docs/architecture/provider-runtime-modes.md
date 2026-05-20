@@ -188,7 +188,7 @@ consecutive pass streak, and live fault probe coverage for every required
 negative case before the scorecard can become `full_autonomous_candidate`. The
 structured reasons payload exposes stable ids such as `history_missing`,
 `history_insufficient_runs`, `live_fault_probe_missing`, and
-`latest_provider_e2e_failed` so UI and policy surfaces can explain the chosen
+`latest_provider_smoke_failed` so UI and policy surfaces can explain the chosen
 recommendation without reverse-engineering blockers. The structured requirements
 payload exposes the minimum stable-run threshold, observed recent window,
 observed consecutive-pass streak, required/covered/missing live fault cases, and

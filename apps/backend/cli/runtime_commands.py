@@ -94,6 +94,10 @@ CLI_RUNNER_GENERIC_CORE_FACETS = {
     "event_parser": "generic_jsonl_core",
     "cost_account": "generic_jsonl_core",
 }
+RUNTIME_PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
+    **PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL,
+    "provider_history_latest_failed": "latest_provider_smoke_failed",
+}
 MUTATING_SUBAGENT_REQUIRED_GATES = (
     "isolated_child_contexts",
     "transaction_boundaries",
@@ -988,30 +992,39 @@ def _runtime_provider_readiness_signals(
     warnings: list[str] = []
     evidence: list[str] = []
 
-    provider_e2e_status = provider_stats.get("last_provider_e2e_status")
-    if provider_e2e_status == "passed":
-        evidence.append("provider_e2e_passed")
-    elif provider_e2e_status == "failed":
-        blockers.append("provider_e2e_failed")
+    last_status = provider_stats.get("last_status")
+    trend = provider_stats.get("trend")
+    history_unknown = not (
+        isinstance(last_status, str)
+        and last_status
+        and isinstance(trend, str)
+        and trend
+    )
+    if history_unknown:
+        warnings.append("provider_history_unknown")
+    else:
+        provider_e2e_status = provider_stats.get("last_provider_e2e_status")
+        if provider_e2e_status == "passed":
+            evidence.append("provider_e2e_passed")
+        elif provider_e2e_status == "failed":
+            blockers.append("provider_e2e_failed")
 
     if provider_stats.get("last_reliability_status") == "complete":
         evidence.append("provider_reliability_complete")
     else:
         blockers.append("provider_reliability_incomplete")
 
-    if provider_stats.get("last_status") != "passed":
+    if not history_unknown and last_status != "passed":
         blockers.append("provider_history_latest_failed")
 
-    trend = provider_stats.get("trend")
-    if trend == "provider_history_stable":
-        if _runtime_provider_readiness_history_is_stable_enough(provider_stats):
-            evidence.append("provider_history_stable")
-        else:
-            warnings.append("provider_history_insufficient_runs")
-    elif isinstance(trend, str) and trend:
-        warnings.append(trend)
-    else:
-        warnings.append("provider_history_unknown")
+    if not history_unknown:
+        if trend == "provider_history_stable":
+            if _runtime_provider_readiness_history_is_stable_enough(provider_stats):
+                evidence.append("provider_history_stable")
+            else:
+                warnings.append("provider_history_insufficient_runs")
+        elif isinstance(trend, str) and trend:
+            warnings.append(trend)
 
     if provider_stats.get("last_live_fault_probe_status") == "passed":
         evidence.append("live_fault_probes_passed")
@@ -1305,11 +1318,16 @@ def _runtime_provider_cost_pricing_model(model: Any) -> str | None:
 def _runtime_provider_cost_estimate(provider_stats: dict[str, Any]) -> dict[str, Any]:
     """Return cost estimate evidence from the latest observed provider model."""
     actual_cost_usd = _runtime_eval_float_stat(provider_stats.get("cost_last_usd"))
-    if provider_stats.get("cost_status") == "recorded" and actual_cost_usd is not None:
+    latest_cost_status = provider_stats.get("cost_last_status") or provider_stats.get(
+        "cost_status"
+    )
+    if latest_cost_status == "recorded" and actual_cost_usd is not None:
         return {
             "cost_status": "recorded",
-            "cost_pricing_model": provider_stats.get("cost_pricing_model"),
-            "cost_pricing_provider": provider_stats.get("cost_pricing_provider"),
+            "cost_pricing_model": provider_stats.get("cost_last_pricing_model")
+            or provider_stats.get("cost_pricing_model"),
+            "cost_pricing_provider": provider_stats.get("cost_last_pricing_provider")
+            or provider_stats.get("cost_pricing_provider"),
             "cost_actual_usd": actual_cost_usd,
             "cost_actual_formatted": provider_stats.get("cost_last_formatted")
             or f"${actual_cost_usd:.4f}",
@@ -1326,6 +1344,30 @@ def _runtime_provider_cost_estimate(provider_stats: dict[str, Any]) -> dict[str,
             "cost_estimate_formatted": None,
             "cost_estimate_input_tokens": None,
             "cost_estimate_output_tokens": None,
+        }
+    if latest_cost_status == "estimated" and actual_cost_usd is not None:
+        return {
+            "cost_status": "estimated",
+            "cost_pricing_model": provider_stats.get("cost_last_pricing_model")
+            or provider_stats.get("cost_pricing_model"),
+            "cost_pricing_provider": provider_stats.get("cost_last_pricing_provider")
+            or provider_stats.get("cost_pricing_provider"),
+            "cost_actual_usd": None,
+            "cost_actual_formatted": None,
+            "cost_actual_input_tokens": None,
+            "cost_actual_output_tokens": None,
+            "cost_observed_run_count": _runtime_eval_int_stat(
+                provider_stats.get("cost_observed_run_count")
+            ),
+            "cost_estimate_usd": actual_cost_usd,
+            "cost_estimate_formatted": provider_stats.get("cost_last_formatted")
+            or f"${actual_cost_usd:.4f}",
+            "cost_estimate_input_tokens": _runtime_eval_int_stat(
+                provider_stats.get("cost_last_input_tokens")
+            ),
+            "cost_estimate_output_tokens": _runtime_eval_int_stat(
+                provider_stats.get("cost_last_output_tokens")
+            ),
         }
 
     pricing_model = _runtime_provider_cost_pricing_model(
@@ -1436,7 +1478,7 @@ def _runtime_provider_missing_requirements(
     if "provider_reliability_incomplete" in blockers:
         missing.append("provider_reliability")
     if "provider_history_latest_failed" in blockers:
-        missing.append("latest_provider_e2e_pass")
+        missing.append("latest_provider_smoke_pass")
     if requirements.get("history_stability_complete") is not True:
         missing.append("stable_history_runs")
     if requirements.get("live_fault_coverage_complete") is not True:
@@ -1455,8 +1497,10 @@ def _runtime_provider_readiness_recommendation_reasons(
 
     reasons: list[str] = []
     for signal in [*blockers, *warnings]:
-        reason = PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL.get(
-            signal
+        reason = (
+            RUNTIME_PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL.get(
+                signal
+            )
         )
         if reason and reason not in reasons:
             reasons.append(reason)
@@ -1546,12 +1590,20 @@ def build_runtime_eval_history(
                 ),
                 "cost_total_usd": provider_stats.get("cost_total_usd"),
                 "cost_total_formatted": provider_stats.get("cost_total_formatted"),
+                "cost_last_status": provider_stats.get("cost_last_status"),
+                "cost_last_source": provider_stats.get("cost_last_source"),
                 "cost_last_input_tokens": provider_stats.get("cost_last_input_tokens"),
                 "cost_last_output_tokens": provider_stats.get(
                     "cost_last_output_tokens"
                 ),
                 "cost_last_usd": provider_stats.get("cost_last_usd"),
                 "cost_last_formatted": provider_stats.get("cost_last_formatted"),
+                "cost_last_pricing_model": provider_stats.get(
+                    "cost_last_pricing_model"
+                ),
+                "cost_last_pricing_provider": provider_stats.get(
+                    "cost_last_pricing_provider"
+                ),
                 "cost_pricing_model": provider_stats.get("cost_pricing_model"),
                 "cost_pricing_provider": provider_stats.get("cost_pricing_provider"),
                 **provider_metrics,
@@ -2627,8 +2679,8 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
             "  Runtime fallback: AUTO_CODE_RUNTIME_FALLBACK=true python run.py --spec 001 --provider openai",
             "  Runner router:   AUTO_CODE_CLI_RUNNER_ROUTER=true python run.py --spec 001 --provider openai",
             "  Provider smoke:  python run.py --provider openai --provider-smoke",
-            "  Readiness:       python run.py --provider openai --provider-smoke "
-            "--provider-smoke-runtime provider_e2e",
+            "  Readiness:       "
+            + "python run.py --provider openai --provider-smoke --provider-smoke-runtime provider_e2e",
             "  Resume preflight: python run.py --generic-edit-resume-preflight "
             ".auto-Codex/specs/001/artifacts/generic_edit_recovery_checkpoint.json",
             "  External MCP:    python run.py --external-mcp-smoke --json",

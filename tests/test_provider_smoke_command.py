@@ -588,10 +588,14 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "cost_total_output_tokens": 2_000,
         "cost_total_usd": pytest.approx(0.045),
         "cost_total_formatted": "$0.0450",
+        "cost_last_status": "estimated",
+        "cost_last_source": "fixed_token_estimate",
         "cost_last_input_tokens": 10_000,
         "cost_last_output_tokens": 2_000,
         "cost_last_usd": pytest.approx(0.045),
         "cost_last_formatted": "$0.0450",
+        "cost_last_pricing_model": "gpt-4o",
+        "cost_last_pricing_provider": "openai",
         "cost_pricing_model": "gpt-4o",
         "cost_pricing_provider": "openai",
         "path": ".auto-Codex/provider-smoke-history.json",
@@ -1000,10 +1004,14 @@ def test_provider_run_history_records_actual_cost_metrics(tmp_path: Path):
     assert history_summary["cost_total_output_tokens"] == 500
     assert history_summary["cost_total_usd"] == pytest.approx(0.0075)
     assert history_summary["cost_total_formatted"] == "$0.0075"
+    assert history_summary["cost_last_status"] == "recorded"
+    assert history_summary["cost_last_source"] == "token_usage"
     assert history_summary["cost_last_usd"] == pytest.approx(0.0075)
     assert history_summary["cost_last_formatted"] == "$0.0075"
     assert history_summary["cost_last_input_tokens"] == 1000
     assert history_summary["cost_last_output_tokens"] == 500
+    assert history_summary["cost_last_pricing_model"] == "gpt-4o"
+    assert history_summary["cost_last_pricing_provider"] == "openai"
     assert history_summary["cost_pricing_model"] == "gpt-4o"
     assert history_summary["cost_pricing_provider"] == "openai"
 
@@ -1050,10 +1058,14 @@ def test_provider_run_history_records_estimated_cost_when_usage_missing(
     assert history_summary["cost_total_output_tokens"] == 2_000
     assert history_summary["cost_total_usd"] == pytest.approx(0.045)
     assert history_summary["cost_total_formatted"] == "$0.0450"
+    assert history_summary["cost_last_status"] == "estimated"
+    assert history_summary["cost_last_source"] == "fixed_token_estimate"
     assert history_summary["cost_last_usd"] == pytest.approx(0.045)
     assert history_summary["cost_last_formatted"] == "$0.0450"
     assert history_summary["cost_last_input_tokens"] == 10_000
     assert history_summary["cost_last_output_tokens"] == 2_000
+    assert history_summary["cost_last_pricing_model"] == "gpt-4o"
+    assert history_summary["cost_last_pricing_provider"] == "openai"
     assert history_summary["cost_pricing_model"] == "gpt-4o"
     assert history_summary["cost_pricing_provider"] == "openai"
 
@@ -1119,8 +1131,66 @@ def test_provider_run_history_prefers_recorded_cost_after_estimate(
     assert history_summary["cost_total_output_tokens"] == 500
     assert history_summary["cost_total_usd"] == pytest.approx(0.0075)
     assert history_summary["cost_total_formatted"] == "$0.0075"
+    assert history_summary["cost_last_status"] == "recorded"
     assert history_summary["cost_last_usd"] == pytest.approx(0.0075)
     assert history_summary["cost_last_formatted"] == "$0.0075"
+
+
+def test_provider_run_history_updates_latest_estimate_after_recorded_cost(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+                "token_usage": {
+                    "input_tokens": 1000,
+                    "output_tokens": 500,
+                },
+            },
+        ),
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["cost_status"] == "recorded"
+    assert history_summary["cost_observed_run_count"] == 1
+    assert history_summary["cost_total_input_tokens"] == 1000
+    assert history_summary["cost_total_output_tokens"] == 500
+    assert history_summary["cost_total_usd"] == pytest.approx(0.0075)
+    assert history_summary["cost_total_formatted"] == "$0.0075"
+    assert history_summary["cost_last_status"] == "estimated"
+    assert history_summary["cost_last_source"] == "fixed_token_estimate"
+    assert history_summary["cost_last_input_tokens"] == 10_000
+    assert history_summary["cost_last_output_tokens"] == 2_000
+    assert history_summary["cost_last_usd"] == pytest.approx(0.045)
+    assert history_summary["cost_last_formatted"] == "$0.0450"
 
 
 def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
@@ -1495,7 +1565,7 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
         "recommendation_reasons": [
             "provider_e2e_failed",
             "provider_reliability_incomplete",
-            "latest_provider_e2e_failed",
+            "latest_provider_smoke_failed",
             "live_fault_probe_missing",
             "history_warming_up",
         ],

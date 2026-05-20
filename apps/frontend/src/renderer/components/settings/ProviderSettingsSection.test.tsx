@@ -22,8 +22,9 @@ import {
   buildRuntimePolicyDiagnosticRows
 } from './ProviderSettingsSection';
 
-const translate = (key: string) =>
-  ({
+const translate = (key: string, options?: Record<string, unknown>) => {
+  const value =
+    ({
     'settings:aiProvider.connectionTest.resumePolicy': 'Resume policy',
     'settings:aiProvider.connectionTest.resumeStrategy': 'Resume strategy',
     'settings:aiProvider.connectionTest.resumeCanResume': 'Can resume',
@@ -70,6 +71,12 @@ const translate = (key: string) =>
     'settings:aiProvider.connectionTest.providerRunHistoryTotalRuns': 'total',
     'settings:aiProvider.connectionTest.providerRunHistoryPassedRuns': 'passed',
     'settings:aiProvider.connectionTest.providerRunHistoryFailedRuns': 'failed',
+    'settings:aiProvider.connectionTest.providerRunHistoryTotalRunsValue':
+      '{{count}} total',
+    'settings:aiProvider.connectionTest.providerRunHistoryPassedRunsValue':
+      '{{count}} passed',
+    'settings:aiProvider.connectionTest.providerRunHistoryFailedRunsValue':
+      '{{count}} failed',
     'settings:aiProvider.connectionTest.providerRunHistoryLast': 'Provider history latest',
     'settings:aiProvider.connectionTest.providerRunHistoryTrend': 'Provider history trend',
     'settings:aiProvider.connectionTest.providerRunHistoryTrendFailed': 'failed',
@@ -184,16 +191,20 @@ const translate = (key: string) =>
       'Latest provider e2e pass',
     'settings:aiProvider.runtimeDiagnosticValues.latestProviderE2eFailed':
       'Latest provider e2e failed',
+    'settings:aiProvider.runtimeDiagnosticValues.latestProviderSmokeFailed':
+      'Latest provider smoke failed',
+    'settings:aiProvider.runtimeDiagnosticValues.latestProviderSmokePass':
+      'Latest provider smoke pass',
     'settings:aiProvider.runtimeDiagnosticValues.historyMissing':
       'Missing provider history',
     'settings:aiProvider.runtimeDiagnosticValues.historyDegraded': 'Degraded history',
     'settings:aiProvider.runtimeDiagnosticValues.historyFlaky': 'Flaky history',
     'settings:aiProvider.runtimeDiagnosticValues.historyInsufficientRuns':
-      'Provider history insufficient runs',
+      'Insufficient stable history',
     'settings:aiProvider.runtimeDiagnosticValues.historyRecovering':
       'Recovering history',
     'settings:aiProvider.runtimeDiagnosticValues.historyWarmingUp':
-      'Provider history warming up',
+      'Warming up history',
     'settings:aiProvider.runtimeDiagnosticValues.needsLiveFaultEvidence':
       'Needs live fault evidence',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eFailed': 'Provider e2e failed',
@@ -282,7 +293,9 @@ const translate = (key: string) =>
     'settings:aiProvider.runtimeDiagnosticValues.unsupportedToolsProbe': 'Unsupported tools probe',
     'settings:aiProvider.runtimeDiagnosticValues.no': 'No',
     'settings:aiProvider.runtimeDiagnosticValues.yes': 'Yes',
-  })[key] ?? key;
+    })[key] ?? key;
+  return value.replace('{{count}}', String(options?.count ?? ''));
+};
 
 describe('buildProviderResumePolicyDiagnosticRows', () => {
   it('includes resume gates and iteration metadata from provider diagnostics', () => {
@@ -458,7 +471,7 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
         value: (
           'Google: Needs live fault evidence -> Generic edit '
           + '(Blocked, Limited autonomous until live faults, '
-          + 'Provider history warming up, Live fault probe missing; '
+          + 'Warming up history, Live fault probe missing; '
           + 'Provider history warming up, Live fault probe evidence missing; Codex CLI)'
         ),
       },
@@ -1049,7 +1062,7 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
       {
         labelKey:
           'settings:aiProvider.connectionTest.providerAutonomousReadinessRecommendationReasons',
-        value: 'Provider history warming up, Live fault probe missing',
+        value: 'Warming up history, Live fault probe missing',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessWarnings',

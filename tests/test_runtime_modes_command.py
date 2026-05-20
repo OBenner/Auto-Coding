@@ -193,7 +193,6 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "live_provider_e2e_required",
         "transactional_recovery_required",
         "provider_reliability_incomplete",
-        "provider_history_latest_failed",
     ]
     assert capability_rows["openai"]["warnings"] == [
         "direct_full_autonomous_blocked",
@@ -206,7 +205,6 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
     )
     assert capability_rows["openai"]["autonomous_readiness_recommendation_reasons"] == [
         "provider_reliability_incomplete",
-        "latest_provider_e2e_failed",
         "history_missing",
         "live_fault_probe_missing",
     ]
@@ -228,7 +226,6 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
     }
     assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == [
         "provider_reliability",
-        "latest_provider_e2e_pass",
         "stable_history_runs",
         "live_fault_case_coverage",
     ]
@@ -272,13 +269,11 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "autonomous_readiness_recommendation": "provider_e2e_required",
         "autonomous_readiness_recommendation_reasons": [
             "provider_reliability_incomplete",
-            "latest_provider_e2e_failed",
             "history_missing",
             "live_fault_probe_missing",
         ],
         "autonomous_readiness_blockers": [
             "provider_reliability_incomplete",
-            "provider_history_latest_failed",
         ],
         "autonomous_readiness_warnings": [
             "provider_history_unknown",
@@ -302,7 +297,6 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         },
         "autonomous_readiness_missing_requirements": [
             "provider_reliability",
-            "latest_provider_e2e_pass",
             "stable_history_runs",
             "live_fault_case_coverage",
         ],
@@ -638,6 +632,35 @@ def test_runtime_provider_history_logs_corrupt_artifact(
     assert "Could not load provider history from" in caplog.text
 
 
+def test_runtime_provider_cost_estimate_uses_latest_estimate_after_recorded_total():
+    from cli.runtime_commands import _runtime_provider_cost_estimate
+
+    cost = _runtime_provider_cost_estimate(
+        {
+            "cost_status": "recorded",
+            "cost_observed_run_count": 1,
+            "cost_total_usd": 0.0075,
+            "cost_last_status": "estimated",
+            "cost_last_input_tokens": 10_000,
+            "cost_last_output_tokens": 2_000,
+            "cost_last_usd": 0.045,
+            "cost_last_formatted": "$0.0450",
+            "cost_last_pricing_model": "gpt-4o",
+            "cost_last_pricing_provider": "openai",
+            "cost_pricing_model": "gpt-4o",
+            "cost_pricing_provider": "openai",
+        }
+    )
+
+    assert cost["cost_status"] == "estimated"
+    assert cost["cost_actual_usd"] is None
+    assert cost["cost_estimate_usd"] == pytest.approx(0.045)
+    assert cost["cost_estimate_formatted"] == "$0.0450"
+    assert cost["cost_estimate_input_tokens"] == 10_000
+    assert cost["cost_estimate_output_tokens"] == 2_000
+    assert cost["cost_observed_run_count"] == 1
+
+
 def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     tmp_path: Path,
     monkeypatch,
@@ -794,7 +817,8 @@ def test_runtime_provider_readiness_decouples_e2e_from_aggregate_status():
         "unsupported_tools",
     ]
     assert readiness["requirements"]["live_fault_coverage_complete"] is True
-    assert readiness["missing_requirements"] == ["latest_provider_e2e_pass"]
+    assert readiness["recommendation_reasons"] == ["latest_provider_smoke_failed"]
+    assert readiness["missing_requirements"] == ["latest_provider_smoke_pass"]
     assert readiness["blockers"] == ["provider_history_latest_failed"]
 
 
