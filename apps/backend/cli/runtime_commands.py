@@ -52,6 +52,7 @@ from agents.runtime.subagents import (
     DEFAULT_SUBAGENT_MERGE_POLICY,
     resolve_runtime_subagent_support,
 )
+from cli.autonomous_readiness_text import format_autonomous_readiness_requirements
 from cli.provider_smoke_commands import (
     PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS,
     PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
@@ -2575,70 +2576,6 @@ def _runtime_mutating_subagent_text_rows() -> list[list[str]]:
     ]
 
 
-def _runtime_autonomous_requirement_int(value: Any) -> int | None:
-    """Return a non-bool integer autonomous-readiness requirement value."""
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-
-def _runtime_autonomous_requirement_bool(value: Any) -> str | None:
-    """Return a compact yes/no autonomous-readiness requirement value."""
-    if not isinstance(value, bool):
-        return None
-    return "yes" if value else "no"
-
-
-def _runtime_autonomous_readiness_requirements_text(requirements: Any) -> str:
-    """Return compact autonomous-readiness requirement evidence for text tables."""
-    if not isinstance(requirements, dict):
-        return "none"
-
-    parts: list[str] = []
-    min_stable_runs = _runtime_autonomous_requirement_int(
-        requirements.get("min_stable_runs")
-    )
-    observed_recent_window = _runtime_autonomous_requirement_int(
-        requirements.get("observed_recent_window")
-    )
-    if min_stable_runs is not None and observed_recent_window is not None:
-        parts.append(f"stable runs {observed_recent_window}/{min_stable_runs}")
-
-    observed_consecutive_passes = _runtime_autonomous_requirement_int(
-        requirements.get("observed_consecutive_passes")
-    )
-    if min_stable_runs is not None and observed_consecutive_passes is not None:
-        parts.append(
-            f"consecutive passes {observed_consecutive_passes}/{min_stable_runs}"
-        )
-
-    history_fresh = _runtime_autonomous_requirement_bool(
-        requirements.get("history_freshness_complete")
-    )
-    if history_fresh is not None:
-        details: list[str] = []
-        last_run_at = requirements.get("last_run_at")
-        if isinstance(last_run_at, str) and last_run_at:
-            details.append(f"last run {last_run_at}")
-        max_age = _runtime_autonomous_requirement_int(
-            requirements.get("max_history_age_seconds")
-        )
-        if max_age is not None:
-            details.append(f"max age {max_age}s")
-        suffix = f" ({', '.join(details)})" if details else ""
-        parts.append(f"history fresh {history_fresh}{suffix}")
-
-    live_fault_coverage = _runtime_autonomous_requirement_bool(
-        requirements.get("live_fault_coverage_complete")
-    )
-    if live_fault_coverage is not None:
-        missing_cases = _runtime_string_list_payload(
-            requirements.get("live_fault_missing_cases")
-        )
-        suffix = f" (missing {', '.join(missing_cases)})" if missing_cases else ""
-        parts.append(f"live fault coverage {live_fault_coverage}{suffix}")
-
-    return ", ".join(parts) or "none"
-
-
 def _runtime_policy_text_rows(payload: dict[str, Any]) -> list[list[str]]:
     return [
         [
@@ -2651,8 +2588,9 @@ def _runtime_policy_text_rows(payload: dict[str, Any]) -> list[list[str]]:
             row["autonomous_policy_gate"],
             row["autonomous_readiness_recommendation"],
             ", ".join(row["autonomous_readiness_recommendation_reasons"]) or "none",
-            _runtime_autonomous_readiness_requirements_text(
-                row.get("autonomous_readiness_requirements")
+            format_autonomous_readiness_requirements(
+                row.get("autonomous_readiness_requirements"),
+                empty="none",
             ),
             row["reason"],
             ", ".join(row["runner_candidates"]) or "none",
@@ -2671,8 +2609,9 @@ def _runtime_capability_text_rows(payload: dict[str, Any]) -> list[list[str]]:
             row["autonomous_policy_gate"],
             row["autonomous_readiness_recommendation"],
             ", ".join(row["autonomous_readiness_recommendation_reasons"]) or "none",
-            _runtime_autonomous_readiness_requirements_text(
-                row.get("autonomous_readiness_requirements")
+            format_autonomous_readiness_requirements(
+                row.get("autonomous_readiness_requirements"),
+                empty="none",
             ),
             ", ".join(row["blockers"]) or "none",
             ", ".join(row["warnings"]) or "none",

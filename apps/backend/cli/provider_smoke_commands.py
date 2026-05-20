@@ -25,6 +25,7 @@ from agents.runtime import (
 from agents.runtime.adapters.completion import CompletionRuntimeSession
 from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_artifacts
 from agents.runtime.fallback import capabilities_for_runtime_mode
+from cli.autonomous_readiness_text import format_autonomous_readiness_requirements
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.cost_calculator import (
@@ -4599,70 +4600,6 @@ def _provider_run_history_recent_run_summary(run: dict[str, Any]) -> str:
     return f"{prefix}{' / '.join(parts)}" if parts else prefix.rstrip(": ")
 
 
-def _provider_autonomous_requirement_int(value: Any) -> int | None:
-    """Return a non-bool integer readiness requirement value."""
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-
-def _provider_autonomous_requirement_bool(value: Any) -> str | None:
-    """Return a compact yes/no readiness requirement value."""
-    if not isinstance(value, bool):
-        return None
-    return "yes" if value else "no"
-
-
-def _provider_autonomous_readiness_requirements_summary(requirements: Any) -> str:
-    """Return compact provider autonomous-readiness requirement evidence."""
-    if not isinstance(requirements, dict):
-        return ""
-
-    parts: list[str] = []
-    min_stable_runs = _provider_autonomous_requirement_int(
-        requirements.get("min_stable_runs")
-    )
-    observed_recent_window = _provider_autonomous_requirement_int(
-        requirements.get("observed_recent_window")
-    )
-    if min_stable_runs is not None and observed_recent_window is not None:
-        parts.append(f"stable runs {observed_recent_window}/{min_stable_runs}")
-
-    observed_consecutive_passes = _provider_autonomous_requirement_int(
-        requirements.get("observed_consecutive_passes")
-    )
-    if min_stable_runs is not None and observed_consecutive_passes is not None:
-        parts.append(
-            f"consecutive passes {observed_consecutive_passes}/{min_stable_runs}"
-        )
-
-    history_fresh = _provider_autonomous_requirement_bool(
-        requirements.get("history_freshness_complete")
-    )
-    if history_fresh is not None:
-        details: list[str] = []
-        last_run_at = requirements.get("last_run_at")
-        if isinstance(last_run_at, str) and last_run_at:
-            details.append(f"last run {last_run_at}")
-        max_age = _provider_autonomous_requirement_int(
-            requirements.get("max_history_age_seconds")
-        )
-        if max_age is not None:
-            details.append(f"max age {max_age}s")
-        suffix = f" ({', '.join(details)})" if details else ""
-        parts.append(f"history fresh {history_fresh}{suffix}")
-
-    live_fault_coverage = _provider_autonomous_requirement_bool(
-        requirements.get("live_fault_coverage_complete")
-    )
-    if live_fault_coverage is not None:
-        missing_cases = _string_list_payload(
-            requirements.get("live_fault_missing_cases")
-        )
-        suffix = f" (missing {', '.join(missing_cases)})" if missing_cases else ""
-        parts.append(f"live fault coverage {live_fault_coverage}{suffix}")
-
-    return ", ".join(parts)
-
-
 def _print_provider_autonomous_readiness(readiness: Any) -> None:
     """Print the aggregate direct-provider autonomous readiness scorecard."""
     if not isinstance(readiness, dict):
@@ -4683,7 +4620,7 @@ def _print_provider_autonomous_readiness(readiness: Any) -> None:
         "Autonomous missing requirements",
         readiness.get("missing_requirements"),
     )
-    requirements = _provider_autonomous_readiness_requirements_summary(
+    requirements = format_autonomous_readiness_requirements(
         readiness.get("requirements")
     )
     if requirements:
