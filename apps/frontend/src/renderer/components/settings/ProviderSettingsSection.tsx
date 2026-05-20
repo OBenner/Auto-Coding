@@ -387,6 +387,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryPassRate',
   provider_live_fault_fixture:
     'settings:aiProvider.runtimeDiagnosticValues.providerLiveFaultFixture',
+  quality_trend_degrading:
+    'settings:aiProvider.runtimeDiagnosticValues.qualityTrendDegrading',
   quality_score: 'settings:aiProvider.runtimeDiagnosticValues.qualityScore',
   quality_trend: 'settings:aiProvider.runtimeDiagnosticValues.qualityTrend',
   provider_reliability: 'settings:aiProvider.runtimeDiagnosticValues.providerReliability',
@@ -435,6 +437,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
   reviewer: 'settings:aiProvider.runtimeDiagnosticValues.reviewer',
   safety_score: 'settings:aiProvider.runtimeDiagnosticValues.safetyScore',
+  safety_trend_degrading:
+    'settings:aiProvider.runtimeDiagnosticValues.safetyTrendDegrading',
   safety_trend: 'settings:aiProvider.runtimeDiagnosticValues.safetyTrend',
   sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
   runtime_blocked: 'settings:aiProvider.runtimeDiagnosticValues.runtimeBlocked',
@@ -461,7 +465,11 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.stabilizeProviderHistory',
   stable_history_runs:
     'settings:aiProvider.runtimeDiagnosticValues.stableHistoryRuns',
+  stable_eval_trends:
+    'settings:aiProvider.runtimeDiagnosticValues.stableEvalTrends',
   stability_score: 'settings:aiProvider.runtimeDiagnosticValues.stabilityScore',
+  stability_trend_degrading:
+    'settings:aiProvider.runtimeDiagnosticValues.stabilityTrendDegrading',
   stability_trend: 'settings:aiProvider.runtimeDiagnosticValues.stabilityTrend',
   trend_insufficient_data:
     'settings:aiProvider.runtimeDiagnosticValues.trendInsufficientData',

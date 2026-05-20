@@ -254,6 +254,9 @@ PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
     "provider_history_insufficient_runs": "history_insufficient_runs",
     "live_fault_probe_evidence_missing": "live_fault_probe_missing",
     "live_fault_probe_coverage_incomplete": "live_fault_coverage_incomplete",
+    "quality_trend_degrading": "quality_trend_degrading",
+    "stability_trend_degrading": "stability_trend_degrading",
+    "safety_trend_degrading": "safety_trend_degrading",
 }
 
 
@@ -1036,6 +1039,7 @@ def _provider_autonomous_readiness_diagnostics(
     del warnings[history_warning_offset:]
     _provider_readiness_live_fault_evidence(history_summary, warnings, evidence)
     warnings.extend(history_warnings)
+    _provider_readiness_eval_trend_evidence(history_summary, warnings)
 
     status, recommendation = _provider_readiness_status(blockers, warnings)
     requirements = _provider_readiness_requirements(history_summary)
@@ -1055,6 +1059,7 @@ def _provider_autonomous_readiness_diagnostics(
         "requirements": requirements,
         "missing_requirements": _provider_readiness_missing_requirements(
             blockers,
+            warnings,
             requirements,
         ),
         "evidence": evidence,
@@ -1158,6 +1163,21 @@ def _provider_readiness_live_fault_coverage_complete(
     )
 
 
+def _provider_readiness_eval_trend_evidence(
+    history_summary: dict[str, Any],
+    warnings: list[str],
+) -> None:
+    """Apply recent eval trend warnings to readiness lists."""
+    trend_fields = {
+        "quality_trend": "quality_trend_degrading",
+        "stability_trend": "stability_trend_degrading",
+        "safety_trend": "safety_trend_degrading",
+    }
+    for trend_field, warning in trend_fields.items():
+        if history_summary.get(trend_field) == "score_degrading":
+            warnings.append(warning)
+
+
 def _provider_readiness_requirements(
     history_summary: dict[str, Any],
 ) -> dict[str, Any]:
@@ -1211,6 +1231,7 @@ def _provider_readiness_consecutive_passes(history_summary: dict[str, Any]) -> i
 
 def _provider_readiness_missing_requirements(
     blockers: list[str],
+    warnings: list[str],
     requirements: dict[str, Any],
 ) -> list[str]:
     """Return stable missing requirement ids for readiness automation."""
@@ -1225,6 +1246,8 @@ def _provider_readiness_missing_requirements(
         missing.append("stable_history_runs")
     if requirements.get("live_fault_coverage_complete") is not True:
         missing.append("live_fault_case_coverage")
+    if any(warning.endswith("_trend_degrading") for warning in warnings):
+        missing.append("stable_eval_trends")
     return missing
 
 
@@ -1281,6 +1304,9 @@ def _provider_readiness_next_actions(
         "provider_history_flaky": "stabilize_provider_history",
         "provider_history_recovering": "collect_provider_history_runs",
         "provider_history_degraded": "stabilize_provider_history",
+        "quality_trend_degrading": "stabilize_provider_history",
+        "stability_trend_degrading": "stabilize_provider_history",
+        "safety_trend_degrading": "stabilize_provider_history",
     }
     actions: list[str] = []
     for reason in [*blockers, *warnings]:

@@ -804,6 +804,87 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert "--provider-smoke-runtime provider_e2e" in text_output
 
 
+def test_runtime_modes_policy_gate_warns_on_degrading_eval_trends(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    from cli.runtime_commands import handle_runtime_modes_command
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {
+                    "openai": {
+                        "total_runs": 3,
+                        "passed_runs": 3,
+                        "failed_runs": 0,
+                        "recent_window": 3,
+                        "consecutive_passes": 3,
+                        "last_status": "passed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": "2026-05-18T00:00:00Z",
+                        "last_reliability_status": "complete",
+                        "last_provider_e2e_status": "passed",
+                        "last_live_fault_probe_status": "passed",
+                        "live_fault_probe_enabled_runs": 3,
+                        "live_fault_probe_passed_runs": 3,
+                        "live_fault_probe_covered_cases": [
+                            "gateway_model_limitations",
+                            "unsupported_tools",
+                        ],
+                        "trend": "provider_history_stable",
+                        "quality_trend": "score_degrading",
+                        "quality_delta_percent": -25,
+                        "stability_trend": "score_stable",
+                        "stability_delta_percent": 0,
+                        "safety_trend": "score_degrading",
+                        "safety_delta_percent": -50,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    handle_runtime_modes_command(output_json=True)
+    payload = json.loads(capsys.readouterr().out)
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+
+    assert capability_rows["openai"]["readiness"] == "warming_up"
+    assert capability_rows["openai"]["autonomous_policy_gate"] == "blocked"
+    assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
+        "limited_autonomous_until_evidence_stable"
+    )
+    assert capability_rows["openai"]["autonomous_readiness_recommendation_reasons"] == [
+        "quality_trend_degrading",
+        "safety_trend_degrading",
+    ]
+    assert capability_rows["openai"]["autonomous_readiness_warnings"] == [
+        "quality_trend_degrading",
+        "safety_trend_degrading",
+    ]
+    assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == [
+        "stable_eval_trends",
+    ]
+    assert capability_rows["openai"]["autonomous_readiness_next_actions"] == [
+        "stabilize_provider_history",
+    ]
+    assert policy_rows[("coder", "openai")]["policy"] == (
+        "limited_autonomous_until_evidence_stable"
+    )
+    assert policy_rows[("coder", "openai")]["autonomous_policy_gate"] == "blocked"
+
+
 def test_runtime_provider_readiness_decouples_e2e_from_aggregate_status():
     from cli.runtime_commands import _runtime_provider_autonomous_readiness_from_history
 

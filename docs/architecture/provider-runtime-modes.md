@@ -360,6 +360,9 @@ even when `generic_edit` can still run.
 - Provider history computes recent-run quality, stability, safety, and cost
   trend ids plus deltas so operator surfaces can distinguish improving,
   degrading, stable, and insufficient-data evidence.
+- Degrading quality, stability, or safety trends now feed the autonomous
+  readiness gate as evidence-stability warnings, keeping direct-provider coder
+  and fixer policy limited until the trend recovers.
 - Comparative eval rows prefer granular provider e2e case pass-rate for
   quality, use the stricter reliability/live-fault coverage score for safety,
   expose score source ids, prefer recorded actual provider cost, carry trend

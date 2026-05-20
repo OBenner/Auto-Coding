@@ -262,6 +262,8 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.runtimeDiagnosticValues.policyGated': 'Policy gated',
     'settings:aiProvider.runtimeDiagnosticValues.qualityScore': 'Quality',
     'settings:aiProvider.runtimeDiagnosticValues.qualityTrend': 'Quality trend',
+    'settings:aiProvider.runtimeDiagnosticValues.qualityTrendDegrading':
+      'Quality trend degrading',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryUnknown':
       'Unknown provider history',
     'settings:aiProvider.runtimeDiagnosticValues.notRecorded': 'Not recorded',
@@ -285,12 +287,18 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
     'settings:aiProvider.runtimeDiagnosticValues.safetyScore': 'Safety',
     'settings:aiProvider.runtimeDiagnosticValues.safetyTrend': 'Safety trend',
+    'settings:aiProvider.runtimeDiagnosticValues.safetyTrendDegrading':
+      'Safety trend degrading',
     'settings:aiProvider.runtimeDiagnosticValues.skipped': 'Skipped',
     'settings:aiProvider.runtimeDiagnosticValues.scoreDegrading': 'Degrading',
     'settings:aiProvider.runtimeDiagnosticValues.scoreImproving': 'Improving',
     'settings:aiProvider.runtimeDiagnosticValues.scoreStable': 'Stable',
+    'settings:aiProvider.runtimeDiagnosticValues.stableEvalTrends':
+      'Stable eval trends',
     'settings:aiProvider.runtimeDiagnosticValues.stabilityScore': 'Stability',
     'settings:aiProvider.runtimeDiagnosticValues.stabilityTrend': 'Stability trend',
+    'settings:aiProvider.runtimeDiagnosticValues.stabilityTrendDegrading':
+      'Stability trend degrading',
     'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatches': 'Transaction batches',

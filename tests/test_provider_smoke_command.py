@@ -1484,6 +1484,69 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
     }
 
 
+def test_provider_autonomous_readiness_warns_on_degrading_eval_trends():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+        },
+    )
+
+    readiness = _provider_autonomous_readiness_diagnostics(
+        result,
+        {
+            "last_status": "passed",
+            "trend": "provider_history_stable",
+            "recent_window": 3,
+            "consecutive_passes": 3,
+            "last_live_fault_probe_status": "passed",
+            "live_fault_probe_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "quality_trend": "score_degrading",
+            "quality_delta_percent": -25,
+            "safety_trend": "score_degrading",
+            "safety_delta_percent": -50,
+        },
+    )
+
+    assert readiness["status"] == "warming_up"
+    assert readiness["recommendation"] == "limited_autonomous_until_evidence_stable"
+    assert readiness["recommendation_reasons"] == [
+        "quality_trend_degrading",
+        "safety_trend_degrading",
+    ]
+    assert readiness["warnings"] == [
+        "quality_trend_degrading",
+        "safety_trend_degrading",
+    ]
+    assert readiness["missing_requirements"] == ["stable_eval_trends"]
+    assert readiness["next_actions"] == ["stabilize_provider_history"]
+    assert readiness["evidence"] == [
+        "provider_e2e_passed",
+        "provider_reliability_complete",
+        "provider_history_stable",
+        "live_fault_probes_passed",
+    ]
+
+
 def test_provider_autonomous_readiness_skips_non_direct_providers():
     from cli.provider_smoke_commands import (
         ProviderSmokeResult,

@@ -960,6 +960,9 @@ def _runtime_provider_readiness_next_actions(
         "provider_history_insufficient_runs": "collect_provider_history_runs",
         "live_fault_probe_evidence_missing": "enable_live_fault_probes",
         "live_fault_probe_coverage_incomplete": "enable_live_fault_probes",
+        "quality_trend_degrading": "stabilize_provider_history",
+        "stability_trend_degrading": "stabilize_provider_history",
+        "safety_trend_degrading": "stabilize_provider_history",
     }
     actions: list[str] = []
     for reason in [*blockers, *warnings]:
@@ -1057,6 +1060,20 @@ def _runtime_provider_live_fault_signals(
     return [], ["live_fault_probes_passed"]
 
 
+def _runtime_provider_eval_trend_warnings(provider_stats: dict[str, Any]) -> list[str]:
+    """Return readiness warnings for degrading eval trends."""
+    trend_fields = {
+        "quality_trend": "quality_trend_degrading",
+        "stability_trend": "stability_trend_degrading",
+        "safety_trend": "safety_trend_degrading",
+    }
+    return [
+        warning
+        for field, warning in trend_fields.items()
+        if provider_stats.get(field) == "score_degrading"
+    ]
+
+
 def _runtime_provider_readiness_signals(
     provider_stats: dict[str, Any],
 ) -> tuple[list[str], list[str], list[str]]:
@@ -1090,6 +1107,7 @@ def _runtime_provider_readiness_signals(
         provider_stats
     )
     warnings.extend(live_fault_warnings)
+    warnings.extend(_runtime_provider_eval_trend_warnings(provider_stats))
     evidence.extend(live_fault_evidence)
 
     return blockers, warnings, evidence
@@ -1120,6 +1138,7 @@ def _runtime_provider_autonomous_readiness_from_history(
         "requirements": requirements,
         "missing_requirements": _runtime_provider_missing_requirements(
             blockers,
+            warnings,
             requirements,
         ),
         "next_actions": _runtime_provider_readiness_next_actions(blockers, warnings),
@@ -1564,6 +1583,7 @@ def _runtime_provider_readiness_requirements(
 
 def _runtime_provider_missing_requirements(
     blockers: list[str],
+    warnings: list[str],
     requirements: dict[str, Any],
 ) -> list[str]:
     """Return stable missing requirement ids for runtime automation."""
@@ -1578,6 +1598,8 @@ def _runtime_provider_missing_requirements(
         missing.append("stable_history_runs")
     if requirements.get("live_fault_coverage_complete") is not True:
         missing.append("live_fault_case_coverage")
+    if any(warning.endswith("_trend_degrading") for warning in warnings):
+        missing.append("stable_eval_trends")
     return missing
 
 
