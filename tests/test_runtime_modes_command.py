@@ -13,6 +13,43 @@ def _provider_smoke_run_at(*, days_ago: int = 0) -> str:
     return timestamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _stable_provider_history(run_at: str) -> dict[str, object]:
+    return {
+        "total_runs": 3,
+        "passed_runs": 3,
+        "failed_runs": 0,
+        "recent_window": 3,
+        "consecutive_passes": 3,
+        "last_status": "passed",
+        "last_runtime_mode": "provider_e2e",
+        "last_run_at": run_at,
+        "last_reliability_status": "complete",
+        "last_provider_e2e_status": "passed",
+        "last_live_fault_probe_status": "passed",
+        "live_fault_probe_enabled_runs": 3,
+        "live_fault_probe_passed_runs": 3,
+        "live_fault_probe_covered_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "trend": "provider_history_stable",
+    }
+
+
+def _write_provider_history(tmp_path: Path, provider_stats: dict[str, object]) -> None:
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {"openai": provider_stats},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_parse_args_with_runtime_modes():
     from cli.main import parse_args
 
@@ -833,43 +870,17 @@ def test_runtime_modes_policy_gate_warns_on_degrading_eval_trends(
     from cli.runtime_commands import handle_runtime_modes_command
 
     openai_run_at = _provider_smoke_run_at()
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
-    history_path.parent.mkdir(parents=True)
-    history_path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "providers": {
-                    "openai": {
-                        "total_runs": 3,
-                        "passed_runs": 3,
-                        "failed_runs": 0,
-                        "recent_window": 3,
-                        "consecutive_passes": 3,
-                        "last_status": "passed",
-                        "last_runtime_mode": "provider_e2e",
-                        "last_run_at": openai_run_at,
-                        "last_reliability_status": "complete",
-                        "last_provider_e2e_status": "passed",
-                        "last_live_fault_probe_status": "passed",
-                        "live_fault_probe_enabled_runs": 3,
-                        "live_fault_probe_passed_runs": 3,
-                        "live_fault_probe_covered_cases": [
-                            "gateway_model_limitations",
-                            "unsupported_tools",
-                        ],
-                        "trend": "provider_history_stable",
-                        "quality_trend": "score_degrading",
-                        "quality_delta_percent": -25,
-                        "stability_trend": "score_stable",
-                        "stability_delta_percent": 0,
-                        "safety_trend": "score_degrading",
-                        "safety_delta_percent": -50,
-                    },
-                },
-            }
-        ),
-        encoding="utf-8",
+    _write_provider_history(
+        tmp_path,
+        _stable_provider_history(openai_run_at)
+        | {
+            "quality_trend": "score_degrading",
+            "quality_delta_percent": -25,
+            "stability_trend": "score_stable",
+            "stability_delta_percent": 0,
+            "safety_trend": "score_degrading",
+            "safety_delta_percent": -50,
+        },
     )
     monkeypatch.chdir(tmp_path)
 
@@ -915,38 +926,7 @@ def test_runtime_modes_policy_gate_warns_on_stale_provider_history(
     from cli.runtime_commands import handle_runtime_modes_command
 
     stale_run_at = _provider_smoke_run_at(days_ago=30)
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
-    history_path.parent.mkdir(parents=True)
-    history_path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "providers": {
-                    "openai": {
-                        "total_runs": 3,
-                        "passed_runs": 3,
-                        "failed_runs": 0,
-                        "recent_window": 3,
-                        "consecutive_passes": 3,
-                        "last_status": "passed",
-                        "last_runtime_mode": "provider_e2e",
-                        "last_run_at": stale_run_at,
-                        "last_reliability_status": "complete",
-                        "last_provider_e2e_status": "passed",
-                        "last_live_fault_probe_status": "passed",
-                        "live_fault_probe_enabled_runs": 3,
-                        "live_fault_probe_passed_runs": 3,
-                        "live_fault_probe_covered_cases": [
-                            "gateway_model_limitations",
-                            "unsupported_tools",
-                        ],
-                        "trend": "provider_history_stable",
-                    },
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+    _write_provider_history(tmp_path, _stable_provider_history(stale_run_at))
     monkeypatch.chdir(tmp_path)
 
     handle_runtime_modes_command(output_json=True)

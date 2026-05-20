@@ -17,6 +17,26 @@ def _provider_smoke_run_at(*, days_ago: int = 0) -> str:
     return timestamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _provider_e2e_smoke_result(*, token_usage: dict[str, int] | None = None):
+    from cli.provider_smoke_commands import ProviderSmokeResult
+
+    runtime_diagnostics = {
+        "provider_e2e_suite": {"status": "passed", "runs": []},
+        "provider_reliability": {"status": "complete"},
+    }
+    if token_usage is not None:
+        runtime_diagnostics["token_usage"] = token_usage
+
+    return ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics=runtime_diagnostics,
+    )
+
+
 class _FakeSmokeProvider:
     name = "openai"
 
@@ -1031,25 +1051,15 @@ def test_provider_run_history_reports_quality_and_safety_metrics(tmp_path: Path)
 
 def test_provider_run_history_records_actual_cost_metrics(tmp_path: Path):
     from cli.provider_smoke_commands import (
-        ProviderSmokeResult,
         _with_provider_run_history,
     )
 
     result = _with_provider_run_history(
         tmp_path,
-        ProviderSmokeResult(
-            success=True,
-            provider="openai",
-            model="gpt-4o",
-            runtime_mode="provider_e2e",
-            message="Provider e2e smoke suite passed",
-            runtime_diagnostics={
-                "provider_e2e_suite": {"status": "passed", "runs": []},
-                "provider_reliability": {"status": "complete"},
-                "token_usage": {
-                    "input_tokens": 1000,
-                    "output_tokens": 500,
-                },
+        _provider_e2e_smoke_result(
+            token_usage={
+                "input_tokens": 1000,
+                "output_tokens": 500,
             },
         ),
     )
@@ -1089,23 +1099,12 @@ def test_provider_run_history_records_estimated_cost_when_usage_missing(
     tmp_path: Path,
 ):
     from cli.provider_smoke_commands import (
-        ProviderSmokeResult,
         _with_provider_run_history,
     )
 
     result = _with_provider_run_history(
         tmp_path,
-        ProviderSmokeResult(
-            success=True,
-            provider="openai",
-            model="gpt-4o",
-            runtime_mode="provider_e2e",
-            message="Provider e2e smoke suite passed",
-            runtime_diagnostics={
-                "provider_e2e_suite": {"status": "passed", "runs": []},
-                "provider_reliability": {"status": "complete"},
-            },
-        ),
+        _provider_e2e_smoke_result(),
     )
 
     history_summary = result.runtime_diagnostics["provider_run_history"]
@@ -1143,40 +1142,20 @@ def test_provider_run_history_prefers_recorded_cost_after_estimate(
     tmp_path: Path,
 ):
     from cli.provider_smoke_commands import (
-        ProviderSmokeResult,
         _with_provider_run_history,
     )
 
     _with_provider_run_history(
         tmp_path,
-        ProviderSmokeResult(
-            success=True,
-            provider="openai",
-            model="gpt-4o",
-            runtime_mode="provider_e2e",
-            message="Provider e2e smoke suite passed",
-            runtime_diagnostics={
-                "provider_e2e_suite": {"status": "passed", "runs": []},
-                "provider_reliability": {"status": "complete"},
-            },
-        ),
+        _provider_e2e_smoke_result(),
     )
 
     result = _with_provider_run_history(
         tmp_path,
-        ProviderSmokeResult(
-            success=True,
-            provider="openai",
-            model="gpt-4o",
-            runtime_mode="provider_e2e",
-            message="Provider e2e smoke suite passed",
-            runtime_diagnostics={
-                "provider_e2e_suite": {"status": "passed", "runs": []},
-                "provider_reliability": {"status": "complete"},
-                "token_usage": {
-                    "input_tokens": 1000,
-                    "output_tokens": 500,
-                },
+        _provider_e2e_smoke_result(
+            token_usage={
+                "input_tokens": 1000,
+                "output_tokens": 500,
             },
         ),
     )
