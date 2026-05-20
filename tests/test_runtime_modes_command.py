@@ -525,6 +525,12 @@ def test_runtime_modes_command_reports_provider_eval_history(
                             "unsupported_tools",
                             "gateway_model_limitations",
                         ],
+                        "quality_trend": "score_improving",
+                        "quality_delta_percent": 15,
+                        "stability_trend": "score_stable",
+                        "stability_delta_percent": 0,
+                        "safety_trend": "score_degrading",
+                        "safety_delta_percent": -5,
                         "cost_status": "recorded",
                         "cost_observed_run_count": 1,
                         "cost_total_input_tokens": 1000,
@@ -537,6 +543,9 @@ def test_runtime_modes_command_reports_provider_eval_history(
                         "cost_last_formatted": "$0.0075",
                         "cost_pricing_model": "gpt-4o",
                         "cost_pricing_provider": "openai",
+                        "cost_trend": "cost_decreasing",
+                        "cost_delta_usd": -0.0025,
+                        "cost_delta_formatted": "-$0.0025",
                     },
                     "google": {
                         "total_runs": 1,
@@ -592,11 +601,17 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["openai"]["quality_score_source"] == (
         "provider_e2e_case_pass_rate"
     )
+    assert comparative_rows["openai"]["quality_trend"] == "score_improving"
+    assert comparative_rows["openai"]["quality_delta_percent"] == 15
     assert comparative_rows["openai"]["stability_score"] == 75
+    assert comparative_rows["openai"]["stability_trend"] == "score_stable"
+    assert comparative_rows["openai"]["stability_delta_percent"] == 0
     assert comparative_rows["openai"]["safety_score"] == 88
     assert comparative_rows["openai"]["safety_score_source"] == (
         "provider_reliability_and_live_fault_coverage"
     )
+    assert comparative_rows["openai"]["safety_trend"] == "score_degrading"
+    assert comparative_rows["openai"]["safety_delta_percent"] == -5
     assert comparative_rows["openai"]["cost_status"] == "recorded"
     assert comparative_rows["openai"]["cost_pricing_model"] == "gpt-4o"
     assert comparative_rows["openai"]["cost_actual_usd"] == pytest.approx(0.0075)
@@ -604,6 +619,9 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["openai"]["cost_actual_input_tokens"] == 1000
     assert comparative_rows["openai"]["cost_actual_output_tokens"] == 500
     assert comparative_rows["openai"]["cost_observed_run_count"] == 1
+    assert comparative_rows["openai"]["cost_trend"] == "cost_decreasing"
+    assert comparative_rows["openai"]["cost_delta_usd"] == pytest.approx(-0.0025)
+    assert comparative_rows["openai"]["cost_delta_formatted"] == "-$0.0025"
     assert comparative_rows["openai"]["evidence_source"] == (
         ".auto-Codex/provider-smoke-history.json"
     )

@@ -137,6 +137,12 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.runtimeDiagnosticValues.commitBatch': 'Commit batch',
     'settings:aiProvider.runtimeDiagnosticValues.complete': 'Complete',
     'settings:aiProvider.runtimeDiagnosticValues.configurationBlocked': 'Configuration blocked',
+    'settings:aiProvider.runtimeDiagnosticValues.costDecreasing': 'Decreasing',
+    'settings:aiProvider.runtimeDiagnosticValues.costIncreasing': 'Increasing',
+    'settings:aiProvider.runtimeDiagnosticValues.costInsufficientData':
+      'Insufficient data',
+    'settings:aiProvider.runtimeDiagnosticValues.costStable': 'Stable',
+    'settings:aiProvider.runtimeDiagnosticValues.costTrend': 'Cost trend',
     'settings:aiProvider.runtimeDiagnosticValues.denyBeforeExecution': 'Deny before execution',
     'settings:aiProvider.runtimeDiagnosticValues.directApiFullAutonomy': 'Direct API full autonomy',
     'settings:aiProvider.runtimeDiagnosticValues.directFullAutonomousBlocked':
@@ -255,6 +261,7 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.runtimeDiagnosticValues.providerE2e': 'Provider e2e',
     'settings:aiProvider.runtimeDiagnosticValues.policyGated': 'Policy gated',
     'settings:aiProvider.runtimeDiagnosticValues.qualityScore': 'Quality',
+    'settings:aiProvider.runtimeDiagnosticValues.qualityTrend': 'Quality trend',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryUnknown':
       'Unknown provider history',
     'settings:aiProvider.runtimeDiagnosticValues.notRecorded': 'Not recorded',
@@ -277,8 +284,13 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.runtimeDiagnosticValues.planner': 'Planner',
     'settings:aiProvider.runtimeDiagnosticValues.recorded': 'Recorded',
     'settings:aiProvider.runtimeDiagnosticValues.safetyScore': 'Safety',
+    'settings:aiProvider.runtimeDiagnosticValues.safetyTrend': 'Safety trend',
     'settings:aiProvider.runtimeDiagnosticValues.skipped': 'Skipped',
+    'settings:aiProvider.runtimeDiagnosticValues.scoreDegrading': 'Degrading',
+    'settings:aiProvider.runtimeDiagnosticValues.scoreImproving': 'Improving',
+    'settings:aiProvider.runtimeDiagnosticValues.scoreStable': 'Stable',
     'settings:aiProvider.runtimeDiagnosticValues.stabilityScore': 'Stability',
+    'settings:aiProvider.runtimeDiagnosticValues.stabilityTrend': 'Stability trend',
     'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatches': 'Transaction batches',
@@ -286,6 +298,8 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Transaction batch probe',
     'settings:aiProvider.runtimeDiagnosticValues.transactionalRecoveryRequired':
       'Transactional recovery required',
+    'settings:aiProvider.runtimeDiagnosticValues.trendInsufficientData':
+      'Insufficient data',
     'settings:aiProvider.runtimeDiagnosticValues.toolPolicyMetadata': 'Tool policy metadata',
     'settings:aiProvider.runtimeDiagnosticValues.mutatingToolClassification':
       'Mutating tool classification',
@@ -559,16 +573,24 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
           quality_status: 'passed',
           quality_score: 75,
           quality_score_source: 'provider_e2e_case_pass_rate',
+          quality_trend: 'score_improving',
+          quality_delta_percent: 25,
           stability_score: 75,
+          stability_trend: 'score_stable',
+          stability_delta_percent: 0,
           cost_status: 'estimated',
           cost_estimate_usd: 0.045,
           cost_estimate_formatted: '$0.0450',
           cost_pricing_model: 'gpt-4o',
           cost_estimate_input_tokens: 10000,
           cost_estimate_output_tokens: 2000,
+          cost_trend: 'cost_increasing',
+          cost_delta_formatted: '+$0.0200',
           safety_status: 'policy_gated',
           safety_score: 50,
           safety_score_source: 'provider_reliability_and_live_fault_coverage',
+          safety_trend: 'score_degrading',
+          safety_delta_percent: -10,
           evidence_source: '.auto-Codex/provider-smoke-history.json',
           required_before_full_autonomous: true,
           blockers: ['provider_e2e', 'generic_edit_recovery', 'mcp_bridge_contract'],
@@ -579,8 +601,11 @@ describe('buildRuntimeComparativeEvalDiagnosticRows', () => {
         labelKey: 'settings:aiProvider.controlPlane.runtimeComparativeEval',
         value: (
           'OpenAI: Passed / Estimated $0.0450 gpt-4o / Policy gated '
-          + '(Quality 75% (source Provider e2e case pass rate), Stability 75%, '
-          + 'Safety 50% (source Provider reliability and live-fault coverage); '
+          + '(Quality 75% (source Provider e2e case pass rate), '
+          + 'Quality trend Improving (+25pp), Stability 75%, '
+          + 'Stability trend Stable (0pp), Safety 50% '
+          + '(source Provider reliability and live-fault coverage), '
+          + 'Safety trend Degrading (-10pp), Cost trend Increasing (+$0.0200); '
           + 'Provider e2e, Generic edit recovery, MCP bridge contract)'
         ),
       },

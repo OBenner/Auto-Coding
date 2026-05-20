@@ -976,7 +976,11 @@ export interface RuntimeComparativeEvalMatrixRow {
   quality_status: string;
   quality_score?: number | null;
   quality_score_source?: string | null;
+  quality_trend?: string | null;
+  quality_delta_percent?: number | null;
   stability_score?: number | null;
+  stability_trend?: string | null;
+  stability_delta_percent?: number | null;
   cost_status: string;
   cost_pricing_model?: string | null;
   cost_pricing_provider?: string | null;
@@ -989,9 +993,14 @@ export interface RuntimeComparativeEvalMatrixRow {
   cost_estimate_formatted?: string | null;
   cost_estimate_input_tokens?: number | null;
   cost_estimate_output_tokens?: number | null;
+  cost_trend?: string | null;
+  cost_delta_usd?: number | null;
+  cost_delta_formatted?: string | null;
   safety_status: string;
   safety_score?: number | null;
   safety_score_source?: string | null;
+  safety_trend?: string | null;
+  safety_delta_percent?: number | null;
   evidence_source: string;
   required_before_full_autonomous: boolean;
   blockers: string[];

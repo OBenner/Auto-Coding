@@ -245,6 +245,12 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.enableLiveFaultProbes',
   error: 'settings:aiProvider.runtimeDiagnosticValues.error',
   estimated: 'settings:aiProvider.runtimeDiagnosticValues.estimated',
+  cost_decreasing: 'settings:aiProvider.runtimeDiagnosticValues.costDecreasing',
+  cost_increasing: 'settings:aiProvider.runtimeDiagnosticValues.costIncreasing',
+  cost_insufficient_data:
+    'settings:aiProvider.runtimeDiagnosticValues.costInsufficientData',
+  cost_stable: 'settings:aiProvider.runtimeDiagnosticValues.costStable',
+  cost_trend: 'settings:aiProvider.runtimeDiagnosticValues.costTrend',
   external_mcp_client: 'settings:aiProvider.runtimeDiagnosticValues.externalMcpClient',
   failed: 'settings:aiProvider.runtimeDiagnosticValues.failed',
   fallback_active: 'settings:aiProvider.runtimeDiagnosticValues.fallbackActive',
@@ -382,6 +388,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_live_fault_fixture:
     'settings:aiProvider.runtimeDiagnosticValues.providerLiveFaultFixture',
   quality_score: 'settings:aiProvider.runtimeDiagnosticValues.qualityScore',
+  quality_trend: 'settings:aiProvider.runtimeDiagnosticValues.qualityTrend',
   provider_reliability: 'settings:aiProvider.runtimeDiagnosticValues.providerReliability',
   provider_reliability_and_live_fault_coverage:
     'settings:aiProvider.runtimeDiagnosticValues.providerReliabilityAndLiveFaultCoverage',
@@ -428,6 +435,7 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   review_only: 'settings:aiProvider.runtimeDiagnosticValues.reviewOnly',
   reviewer: 'settings:aiProvider.runtimeDiagnosticValues.reviewer',
   safety_score: 'settings:aiProvider.runtimeDiagnosticValues.safetyScore',
+  safety_trend: 'settings:aiProvider.runtimeDiagnosticValues.safetyTrend',
   sandbox: 'settings:aiProvider.runtimeDiagnosticValues.sandbox',
   runtime_blocked: 'settings:aiProvider.runtimeDiagnosticValues.runtimeBlocked',
   server_disabled: 'settings:aiProvider.runtimeDiagnosticValues.serverDisabled',
@@ -446,11 +454,17 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   skipped: 'settings:aiProvider.runtimeDiagnosticValues.skipped',
   single_history_run: 'settings:aiProvider.runtimeDiagnosticValues.singleHistoryRun',
   smoke_not_completed: 'settings:aiProvider.runtimeDiagnosticValues.smokeNotCompleted',
+  score_degrading: 'settings:aiProvider.runtimeDiagnosticValues.scoreDegrading',
+  score_improving: 'settings:aiProvider.runtimeDiagnosticValues.scoreImproving',
+  score_stable: 'settings:aiProvider.runtimeDiagnosticValues.scoreStable',
   stabilize_provider_history:
     'settings:aiProvider.runtimeDiagnosticValues.stabilizeProviderHistory',
   stable_history_runs:
     'settings:aiProvider.runtimeDiagnosticValues.stableHistoryRuns',
   stability_score: 'settings:aiProvider.runtimeDiagnosticValues.stabilityScore',
+  stability_trend: 'settings:aiProvider.runtimeDiagnosticValues.stabilityTrend',
+  trend_insufficient_data:
+    'settings:aiProvider.runtimeDiagnosticValues.trendInsufficientData',
   consecutive_recent_failures:
     'settings:aiProvider.runtimeDiagnosticValues.consecutiveRecentFailures',
   text_completion: 'settings:aiProvider.runtimeDiagnosticValues.textCompletion',
@@ -731,6 +745,42 @@ function formatRuntimePercentMetricWithSource(
     return metric;
   }
   return `${metric} (${translate('settings:aiProvider.controlPlane.scoreSource')} ${sourceLabel})`;
+}
+
+function formatSignedPercentDelta(value?: number | null): string {
+  if (!isRuntimeDiagnosticNumber(value)) {
+    return '';
+  }
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value}pp`;
+}
+
+function formatRuntimeScoreTrendMetric(
+  translate: RuntimeDiagnosticTranslate,
+  labelKey: string,
+  trend?: string | null,
+  delta?: number | null
+): string {
+  const label = formatRuntimeDiagnosticValue(translate, labelKey);
+  const trendLabel = formatRuntimeDiagnosticValue(translate, trend);
+  if (!label || !trendLabel) {
+    return '';
+  }
+  const deltaLabel = formatSignedPercentDelta(delta);
+  return `${label} ${trendLabel}${deltaLabel ? ` (${deltaLabel})` : ''}`;
+}
+
+function formatRuntimeCostTrendMetric(
+  translate: RuntimeDiagnosticTranslate,
+  trend?: string | null,
+  deltaFormatted?: string | null
+): string {
+  const label = formatRuntimeDiagnosticValue(translate, 'cost_trend');
+  const trendLabel = formatRuntimeDiagnosticValue(translate, trend);
+  if (!label || !trendLabel) {
+    return '';
+  }
+  return `${label} ${trendLabel}${deltaFormatted ? ` (${deltaFormatted})` : ''}`;
 }
 
 function formatRuntimeComparativeEvalCost(
@@ -1460,12 +1510,35 @@ export function buildRuntimeComparativeEvalDiagnosticRows(
           row.quality_score,
           row.quality_score_source
         ),
+        formatRuntimeScoreTrendMetric(
+          translate,
+          'quality_trend',
+          row.quality_trend,
+          row.quality_delta_percent
+        ),
         formatRuntimePercentMetric(translate, 'stability_score', row.stability_score),
+        formatRuntimeScoreTrendMetric(
+          translate,
+          'stability_trend',
+          row.stability_trend,
+          row.stability_delta_percent
+        ),
         formatRuntimePercentMetricWithSource(
           translate,
           'safety_score',
           row.safety_score,
           row.safety_score_source
+        ),
+        formatRuntimeScoreTrendMetric(
+          translate,
+          'safety_trend',
+          row.safety_trend,
+          row.safety_delta_percent
+        ),
+        formatRuntimeCostTrendMetric(
+          translate,
+          row.cost_trend,
+          row.cost_delta_formatted
         ),
       ].filter(Boolean).join(', ');
       const suffixParts = [metrics, blockers].filter(Boolean);

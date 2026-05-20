@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -580,6 +580,7 @@ def _provider_smoke_history_trend(
         "consecutive_passes": consecutive_passes,
         "consecutive_failures": consecutive_failures,
         "recent_runs": _provider_smoke_history_recent_runs(recent_runs),
+        **_provider_smoke_history_eval_trends(recent_runs),
     }
 
 
@@ -821,6 +822,120 @@ def _provider_smoke_percent_metric(
     if denominator <= 0:
         return None
     return round((numerator / denominator) * 100)
+
+
+def _provider_smoke_history_eval_trends(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return score and cost trend deltas from the two latest usable runs."""
+    quality_trend, quality_delta = _provider_smoke_history_score_trend(
+        runs,
+        _provider_smoke_run_quality_score,
+    )
+    stability_trend, stability_delta = _provider_smoke_history_score_trend(
+        runs,
+        _provider_smoke_run_stability_score,
+    )
+    safety_trend, safety_delta = _provider_smoke_history_score_trend(
+        runs,
+        _provider_smoke_run_safety_score,
+    )
+    cost_trend, cost_delta = _provider_smoke_history_cost_trend(runs)
+    cost_delta_formatted = _provider_smoke_signed_cost_delta(cost_delta)
+    return {
+        "quality_trend": quality_trend,
+        "quality_delta_percent": quality_delta,
+        "stability_trend": stability_trend,
+        "stability_delta_percent": stability_delta,
+        "safety_trend": safety_trend,
+        "safety_delta_percent": safety_delta,
+        "cost_trend": cost_trend,
+        "cost_delta_usd": cost_delta,
+        "cost_delta_formatted": cost_delta_formatted,
+    }
+
+
+def _provider_smoke_history_score_trend(
+    runs: list[dict[str, Any]],
+    score_getter: Callable[[dict[str, Any]], int | None],
+) -> tuple[str, int | None]:
+    """Return improving/degrading/stable trend from the latest two score values."""
+    scores = [score for run in runs if (score := score_getter(run)) is not None]
+    if len(scores) < 2:
+        return "trend_insufficient_data", None
+    delta = scores[-1] - scores[-2]
+    if delta > 0:
+        return "score_improving", delta
+    if delta < 0:
+        return "score_degrading", delta
+    return "score_stable", 0
+
+
+def _provider_smoke_run_quality_score(run: dict[str, Any]) -> int | None:
+    """Return a per-run quality score from e2e cases or pass/fail status."""
+    e2e_score = _provider_smoke_percent_metric(
+        _int_payload_value(run, "e2e_passed_case_count"),
+        _int_payload_value(run, "e2e_case_count"),
+    )
+    if e2e_score is not None:
+        return e2e_score
+    return _provider_smoke_run_status_score(run)
+
+
+def _provider_smoke_run_stability_score(run: dict[str, Any]) -> int | None:
+    """Return a per-run stability score from the latest run status."""
+    return _provider_smoke_run_status_score(run)
+
+
+def _provider_smoke_run_status_score(run: dict[str, Any]) -> int | None:
+    """Return a simple pass/fail score for one persisted run."""
+    status = run.get("status")
+    if status == "passed":
+        return 100
+    if status == "failed":
+        return 0
+    return None
+
+
+def _provider_smoke_run_safety_score(run: dict[str, Any]) -> int | None:
+    """Return the strictest per-run safety score from reliability/live-fault data."""
+    reliability_score = _provider_smoke_percent_metric(
+        _int_payload_value(run, "reliability_passed_case_count"),
+        _int_payload_value(run, "reliability_required_case_count"),
+    )
+    live_fault_score = _provider_smoke_percent_metric(
+        len(set(_string_list_payload(run.get("live_fault_probe_covered_cases")))),
+        len(PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES),
+    )
+    scores = [
+        score for score in (reliability_score, live_fault_score) if score is not None
+    ]
+    return min(scores) if scores else None
+
+
+def _provider_smoke_history_cost_trend(
+    runs: list[dict[str, Any]],
+) -> tuple[str, float | None]:
+    """Return cost trend from the latest two per-run cost values."""
+    costs = [
+        cost
+        for run in runs
+        if (cost := _float_payload_value(run, "cost_usd")) is not None
+    ]
+    if len(costs) < 2:
+        return "cost_insufficient_data", None
+    delta = round(costs[-1] - costs[-2], 10)
+    if delta > 0:
+        return "cost_increasing", delta
+    if delta < 0:
+        return "cost_decreasing", delta
+    return "cost_stable", 0.0
+
+
+def _provider_smoke_signed_cost_delta(delta: float | None) -> str | None:
+    """Return a signed human-readable cost delta."""
+    if delta is None:
+        return None
+    sign = "+" if delta > 0 else "-" if delta < 0 else ""
+    return f"{sign}{format_cost(abs(delta))}"
 
 
 def _provider_smoke_history_metrics(stats: dict[str, Any]) -> dict[str, Any]:
@@ -1253,6 +1368,15 @@ def _with_provider_run_history(
             "live_fault_probe_case_coverage_percent": provider_stats.get(
                 "live_fault_probe_case_coverage_percent",
             ),
+            "quality_trend": provider_stats.get("quality_trend"),
+            "quality_delta_percent": provider_stats.get("quality_delta_percent"),
+            "stability_trend": provider_stats.get("stability_trend"),
+            "stability_delta_percent": provider_stats.get("stability_delta_percent"),
+            "safety_trend": provider_stats.get("safety_trend"),
+            "safety_delta_percent": provider_stats.get("safety_delta_percent"),
+            "cost_trend": provider_stats.get("cost_trend"),
+            "cost_delta_usd": provider_stats.get("cost_delta_usd"),
+            "cost_delta_formatted": provider_stats.get("cost_delta_formatted"),
             "recent_runs": provider_stats.get("recent_runs", []),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }

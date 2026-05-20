@@ -887,6 +887,11 @@ def _runtime_eval_float_stat(value: Any) -> float | None:
     return None
 
 
+def _runtime_eval_string_stat(value: Any, *, default: str = "not_recorded") -> str:
+    """Return a safe string stat from persisted history payloads."""
+    return value if isinstance(value, str) and value else default
+
+
 def _runtime_eval_percent_metric(
     numerator: int,
     denominator: int,
@@ -1129,6 +1134,15 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
             "live_fault_probe_case_coverage_percent": None,
             "safety_score": None,
             "safety_score_source": "not_recorded",
+            "quality_trend": "not_recorded",
+            "quality_delta_percent": None,
+            "stability_trend": "not_recorded",
+            "stability_delta_percent": None,
+            "safety_trend": "not_recorded",
+            "safety_delta_percent": None,
+            "cost_trend": "not_recorded",
+            "cost_delta_usd": None,
+            "cost_delta_formatted": None,
         }
 
     total_runs = _runtime_eval_int_stat(provider_stats.get("total_runs"))
@@ -1237,6 +1251,33 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
         "live_fault_probe_case_coverage_percent": live_fault_probe_case_coverage_percent,
         "safety_score": safety_score,
         "safety_score_source": safety_score_source,
+        "quality_trend": _runtime_eval_string_stat(provider_stats.get("quality_trend")),
+        "quality_delta_percent": _runtime_eval_int_stat(
+            provider_stats.get("quality_delta_percent")
+        )
+        if provider_stats.get("quality_delta_percent") is not None
+        else None,
+        "stability_trend": _runtime_eval_string_stat(
+            provider_stats.get("stability_trend")
+        ),
+        "stability_delta_percent": _runtime_eval_int_stat(
+            provider_stats.get("stability_delta_percent")
+        )
+        if provider_stats.get("stability_delta_percent") is not None
+        else None,
+        "safety_trend": _runtime_eval_string_stat(provider_stats.get("safety_trend")),
+        "safety_delta_percent": _runtime_eval_int_stat(
+            provider_stats.get("safety_delta_percent")
+        )
+        if provider_stats.get("safety_delta_percent") is not None
+        else None,
+        "cost_trend": _runtime_eval_string_stat(provider_stats.get("cost_trend")),
+        "cost_delta_usd": _runtime_eval_float_stat(
+            provider_stats.get("cost_delta_usd")
+        ),
+        "cost_delta_formatted": provider_stats.get("cost_delta_formatted")
+        if isinstance(provider_stats.get("cost_delta_formatted"), str)
+        else None,
     }
 
 
@@ -1675,10 +1716,29 @@ def _runtime_comparative_eval_row(
             if has_full_runtime
             else provider_metrics["quality_score_source"]
         ),
+        "quality_trend": None
+        if has_full_runtime
+        else provider_metrics["quality_trend"],
+        "quality_delta_percent": (
+            None if has_full_runtime else provider_metrics["quality_delta_percent"]
+        ),
         "stability_score": (
             None if has_full_runtime else provider_metrics["recent_pass_rate_percent"]
         ),
+        "stability_trend": (
+            None if has_full_runtime else provider_metrics["stability_trend"]
+        ),
+        "stability_delta_percent": (
+            None if has_full_runtime else provider_metrics["stability_delta_percent"]
+        ),
         **cost_fields,
+        "cost_trend": None if has_full_runtime else provider_metrics["cost_trend"],
+        "cost_delta_usd": None
+        if has_full_runtime
+        else provider_metrics["cost_delta_usd"],
+        "cost_delta_formatted": (
+            None if has_full_runtime else provider_metrics["cost_delta_formatted"]
+        ),
         "safety_status": "native_runtime_policy"
         if has_full_runtime
         else "policy_gated",
@@ -1689,6 +1749,10 @@ def _runtime_comparative_eval_row(
             "native_runtime_policy"
             if has_full_runtime
             else provider_metrics["safety_score_source"]
+        ),
+        "safety_trend": None if has_full_runtime else provider_metrics["safety_trend"],
+        "safety_delta_percent": (
+            None if has_full_runtime else provider_metrics["safety_delta_percent"]
         ),
         "evidence_source": "native_runtime" if has_full_runtime else str(history_path),
         "required_before_full_autonomous": not has_full_runtime,
@@ -2429,6 +2493,29 @@ def _runtime_eval_history_text_rows(payload: dict[str, Any]) -> list[list[str]]:
     ]
 
 
+def _format_optional_delta_percent(value: Any) -> str:
+    """Format a signed optional percentage-point delta."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        sign = "+" if value > 0 else ""
+        return f"{sign}{value}pp"
+    return "n/a"
+
+
+def _runtime_comparative_eval_trend_text(row: dict[str, Any]) -> str:
+    """Return compact comparative trend text for human diagnostics."""
+    trend_parts = [
+        f"quality={row.get('quality_trend') or 'n/a'} "
+        f"{_format_optional_delta_percent(row.get('quality_delta_percent'))}",
+        f"stability={row.get('stability_trend') or 'n/a'} "
+        f"{_format_optional_delta_percent(row.get('stability_delta_percent'))}",
+        f"safety={row.get('safety_trend') or 'n/a'} "
+        f"{_format_optional_delta_percent(row.get('safety_delta_percent'))}",
+        f"cost={row.get('cost_trend') or 'n/a'} "
+        f"{row.get('cost_delta_formatted') or 'n/a'}",
+    ]
+    return ", ".join(trend_parts)
+
+
 def _runtime_comparative_eval_text_rows(payload: dict[str, Any]) -> list[list[str]]:
     return [
         [
@@ -2444,6 +2531,7 @@ def _runtime_comparative_eval_text_rows(payload: dict[str, Any]) -> list[list[st
             row.get("cost_pricing_model") or "n/a",
             row["safety_status"],
             _format_optional_percent(row.get("safety_score")),
+            _runtime_comparative_eval_trend_text(row),
             ", ".join(row["blockers"]) or "none",
             row["evidence_source"],
         ]
@@ -2666,6 +2754,7 @@ def format_runtime_modes_text(payload: dict[str, Any] | None = None) -> str:
                     "Pricing model",
                     "Safety",
                     "Safety score",
+                    "Trends",
                     "Blockers",
                     "Evidence",
                 ],

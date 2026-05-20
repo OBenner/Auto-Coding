@@ -582,6 +582,15 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "observed_live_fault_case_count": 2,
         "required_live_fault_case_count": 2,
         "live_fault_probe_case_coverage_percent": 100,
+        "quality_trend": "trend_insufficient_data",
+        "quality_delta_percent": None,
+        "stability_trend": "trend_insufficient_data",
+        "stability_delta_percent": None,
+        "safety_trend": "trend_insufficient_data",
+        "safety_delta_percent": None,
+        "cost_trend": "cost_insufficient_data",
+        "cost_delta_usd": None,
+        "cost_delta_formatted": None,
         "cost_status": "estimated",
         "cost_observed_run_count": 1,
         "cost_total_input_tokens": 10_000,
@@ -786,6 +795,46 @@ def test_provider_run_history_reports_recent_trend(tmp_path: Path):
     assert provider_stats["recent_failed_runs"] == 2
     assert provider_stats["consecutive_passes"] == 1
     assert provider_stats["recent_runs"] == history_summary["recent_runs"]
+
+
+def test_provider_run_history_reports_eval_trends_from_recent_runs():
+    from cli.provider_smoke_commands import _provider_smoke_history_eval_trends
+
+    trends = _provider_smoke_history_eval_trends(
+        [
+            {
+                "status": "failed",
+                "e2e_case_count": 4,
+                "e2e_passed_case_count": 2,
+                "reliability_required_case_count": 8,
+                "reliability_passed_case_count": 4,
+                "live_fault_probe_covered_cases": ["unsupported_tools"],
+                "cost_usd": 0.1,
+            },
+            {
+                "status": "passed",
+                "e2e_case_count": 4,
+                "e2e_passed_case_count": 4,
+                "reliability_required_case_count": 8,
+                "reliability_passed_case_count": 8,
+                "live_fault_probe_covered_cases": [
+                    "unsupported_tools",
+                    "gateway_model_limitations",
+                ],
+                "cost_usd": 0.05,
+            },
+        ]
+    )
+
+    assert trends["quality_trend"] == "score_improving"
+    assert trends["quality_delta_percent"] == 50
+    assert trends["stability_trend"] == "score_improving"
+    assert trends["stability_delta_percent"] == 100
+    assert trends["safety_trend"] == "score_improving"
+    assert trends["safety_delta_percent"] == 50
+    assert trends["cost_trend"] == "cost_decreasing"
+    assert trends["cost_delta_usd"] == pytest.approx(-0.05)
+    assert trends["cost_delta_formatted"] == "-$0.0500"
 
 
 def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):
@@ -1191,6 +1240,15 @@ def test_provider_run_history_updates_latest_estimate_after_recorded_cost(
     assert history_summary["cost_last_output_tokens"] == 2_000
     assert history_summary["cost_last_usd"] == pytest.approx(0.045)
     assert history_summary["cost_last_formatted"] == "$0.0450"
+    assert history_summary["quality_trend"] == "score_stable"
+    assert history_summary["quality_delta_percent"] == 0
+    assert history_summary["stability_trend"] == "score_stable"
+    assert history_summary["stability_delta_percent"] == 0
+    assert history_summary["safety_trend"] == "score_stable"
+    assert history_summary["safety_delta_percent"] == 0
+    assert history_summary["cost_trend"] == "cost_increasing"
+    assert history_summary["cost_delta_usd"] == pytest.approx(0.0375)
+    assert history_summary["cost_delta_formatted"] == "+$0.0375"
 
 
 def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
