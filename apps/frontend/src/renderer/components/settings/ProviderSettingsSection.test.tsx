@@ -403,6 +403,23 @@ describe('buildRuntimePolicyDiagnosticRows', () => {
           runner_candidates: ['codex_cli'],
           policy: 'must_use_full_runtime',
           reason: 'planner_requires_workspace_tools',
+          autonomous_readiness_required: true,
+          autonomous_policy_gate: 'blocked',
+          autonomous_readiness_recommendation:
+            'limited_autonomous_until_evidence_stable',
+          autonomous_readiness_recommendation_reasons: ['history_stale'],
+          autonomous_readiness_requirements: {
+            min_stable_runs: 3,
+            observed_recent_window: 2,
+            observed_consecutive_passes: 2,
+            history_stability_complete: false,
+            last_run_at: '2026-05-01T00:00:00Z',
+            max_history_age_seconds: 604800,
+            history_freshness_complete: false,
+            live_fault_missing_cases: ['gateway_model_limitations'],
+            live_fault_coverage_complete: false,
+          },
+          autonomous_readiness_missing_requirements: ['fresh_provider_history'],
         },
         {
           phase: 'coder',
@@ -422,7 +439,13 @@ describe('buildRuntimePolicyDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.controlPlane.runtimePolicy',
         value: (
-          'Planner: Blocked (Must use full runtime, Codex CLI); '
+          'Planner: Blocked (Must use full runtime, Blocked, '
+          + 'Limited autonomous until evidence stable, Stale history, '
+          + 'Fresh provider history, Stable history runs 2/3, '
+          + 'Consecutive passes 2/3, Fresh provider history: No '
+          + '(last run 2026-05-01T00:00:00Z, max age 604800s), '
+          + 'Live fault case coverage: No (missing Gateway model limitations), '
+          + 'Codex CLI); '
           + 'Coder: Generic edit (Prefer generic edit)'
         ),
       },
@@ -499,6 +522,18 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
             'provider_e2e_passed',
             'provider_reliability_complete',
           ],
+          autonomous_readiness_requirements: {
+            min_stable_runs: 3,
+            observed_recent_window: 2,
+            observed_consecutive_passes: 2,
+            history_stability_complete: false,
+            last_run_at: '2026-05-01T00:00:00Z',
+            max_history_age_seconds: 604800,
+            history_freshness_complete: false,
+            live_fault_missing_cases: ['gateway_model_limitations'],
+            live_fault_coverage_complete: false,
+          },
+          autonomous_readiness_missing_requirements: ['fresh_provider_history'],
           blockers: [],
           warnings: [
             'provider_history_warming_up',
@@ -514,7 +549,12 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
           'Google: Needs live fault evidence -> Generic edit '
           + '(Blocked, Limited autonomous until live faults, '
           + 'Warming up history, Live fault probe missing; '
-          + 'Provider history warming up, Live fault probe evidence missing; Codex CLI)'
+          + 'Provider history warming up, Live fault probe evidence missing; '
+          + 'Fresh provider history; Stable history runs 2/3, '
+          + 'Consecutive passes 2/3, Fresh provider history: No '
+          + '(last run 2026-05-01T00:00:00Z, max age 604800s), '
+          + 'Live fault case coverage: No (missing Gateway model limitations); '
+          + 'Codex CLI)'
         ),
       },
     ]);

@@ -637,6 +637,24 @@ export interface ProviderAutonomousReadinessRequirements {
   historyFreshnessComplete?: boolean;
 }
 
+export interface ProviderAutonomousReadinessRequirementsSnake {
+  min_stable_runs?: number;
+  observed_recent_window?: number;
+  observed_consecutive_passes?: number;
+  history_stability_complete?: boolean;
+  required_live_fault_cases?: string[];
+  live_fault_covered_cases?: string[];
+  live_fault_missing_cases?: string[];
+  live_fault_coverage_complete?: boolean;
+  last_run_at?: string;
+  max_history_age_seconds?: number;
+  history_freshness_complete?: boolean;
+}
+
+export type ProviderAutonomousReadinessRequirementsPayload =
+  | ProviderAutonomousReadinessRequirements
+  | ProviderAutonomousReadinessRequirementsSnake;
+
 export interface ProviderE2eSuiteDiagnostics {
   status?: string;
   runs?: ProviderE2eSuiteRun[];
@@ -895,7 +913,7 @@ export interface RuntimePolicyMatrixRow {
   autonomous_readiness_recommendation_reasons?: string[];
   autonomous_readiness_blockers?: string[];
   autonomous_readiness_warnings?: string[];
-  autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirements;
+  autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirementsPayload;
   autonomous_readiness_missing_requirements?: string[];
 }
 
@@ -919,7 +937,7 @@ export interface RuntimeCapabilityMatrixRow {
   autonomous_readiness_blockers?: string[];
   autonomous_readiness_warnings?: string[];
   autonomous_readiness_evidence?: string[];
-  autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirements;
+  autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirementsPayload;
   autonomous_readiness_missing_requirements?: string[];
   autonomous_readiness_next_actions?: string[];
   blockers: string[];

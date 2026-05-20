@@ -27,6 +27,7 @@ import type {
   ProviderConfigValidation,
   ProviderConnectionTestResult,
   ProviderAutonomousReadinessDiagnostics,
+  ProviderAutonomousReadinessRequirementsPayload,
   ProviderE2eSuiteDiagnostics,
   ProviderLiveFaultProbeDiagnostics,
   ProviderNegativeFixtureDiagnostics,
@@ -825,43 +826,123 @@ function formatRuntimeDiagnosticBoolean(
   return formatRuntimeDiagnosticValue(translate, value ? 'yes' : 'no');
 }
 
+function autonomousRequirementValue(
+  requirements: ProviderAutonomousReadinessRequirementsPayload,
+  camelKey: string,
+  snakeKey: string
+): unknown {
+  const payload = requirements as Record<string, unknown>;
+  return payload[camelKey] ?? payload[snakeKey];
+}
+
+function autonomousRequirementNumber(
+  requirements: ProviderAutonomousReadinessRequirementsPayload,
+  camelKey: string,
+  snakeKey: string
+): number | undefined {
+  const value = autonomousRequirementValue(requirements, camelKey, snakeKey);
+  return isRuntimeDiagnosticNumber(value) ? value : undefined;
+}
+
+function autonomousRequirementBoolean(
+  requirements: ProviderAutonomousReadinessRequirementsPayload,
+  camelKey: string,
+  snakeKey: string
+): boolean | undefined {
+  const value = autonomousRequirementValue(requirements, camelKey, snakeKey);
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function autonomousRequirementString(
+  requirements: ProviderAutonomousReadinessRequirementsPayload,
+  camelKey: string,
+  snakeKey: string
+): string | undefined {
+  const value = autonomousRequirementValue(requirements, camelKey, snakeKey);
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function autonomousRequirementStringList(
+  requirements: ProviderAutonomousReadinessRequirementsPayload,
+  camelKey: string,
+  snakeKey: string
+): string[] | undefined {
+  const value = autonomousRequirementValue(requirements, camelKey, snakeKey);
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const values = value.filter(
+    (item): item is string => typeof item === 'string' && item.length > 0
+  );
+  return values.length > 0 ? values : undefined;
+}
+
 function formatProviderAutonomousReadinessRequirements(
   translate: RuntimeDiagnosticTranslate,
-  requirements?: ProviderAutonomousReadinessDiagnostics['requirements']
+  requirements?: ProviderAutonomousReadinessRequirementsPayload | null
 ): string {
   if (!requirements) {
     return '';
   }
 
   const parts: string[] = [];
+  const minStableRuns = autonomousRequirementNumber(
+    requirements,
+    'minStableRuns',
+    'min_stable_runs'
+  );
+  const observedRecentWindow = autonomousRequirementNumber(
+    requirements,
+    'observedRecentWindow',
+    'observed_recent_window'
+  );
   if (
-    isRuntimeDiagnosticNumber(requirements.observedRecentWindow)
-    && isRuntimeDiagnosticNumber(requirements.minStableRuns)
+    isRuntimeDiagnosticNumber(observedRecentWindow)
+    && isRuntimeDiagnosticNumber(minStableRuns)
   ) {
     parts.push(
-      `${formatRuntimeDiagnosticValue(translate, 'stable_history_runs')} ${requirements.observedRecentWindow}/${requirements.minStableRuns}`
+      `${formatRuntimeDiagnosticValue(translate, 'stable_history_runs')} ${observedRecentWindow}/${minStableRuns}`
     );
   }
+  const observedConsecutivePasses = autonomousRequirementNumber(
+    requirements,
+    'observedConsecutivePasses',
+    'observed_consecutive_passes'
+  );
   if (
-    isRuntimeDiagnosticNumber(requirements.observedConsecutivePasses)
-    && isRuntimeDiagnosticNumber(requirements.minStableRuns)
+    isRuntimeDiagnosticNumber(observedConsecutivePasses)
+    && isRuntimeDiagnosticNumber(minStableRuns)
   ) {
     parts.push(
-      `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessConsecutivePasses')} ${requirements.observedConsecutivePasses}/${requirements.minStableRuns}`
+      `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessConsecutivePasses')} ${observedConsecutivePasses}/${minStableRuns}`
     );
   }
 
   const historyFreshness = formatRuntimeDiagnosticBoolean(
     translate,
-    requirements.historyFreshnessComplete
+    autonomousRequirementBoolean(
+      requirements,
+      'historyFreshnessComplete',
+      'history_freshness_complete'
+    )
   );
   if (historyFreshness) {
+    const lastRunAt = autonomousRequirementString(
+      requirements,
+      'lastRunAt',
+      'last_run_at'
+    );
+    const maxHistoryAgeSeconds = autonomousRequirementNumber(
+      requirements,
+      'maxHistoryAgeSeconds',
+      'max_history_age_seconds'
+    );
     const details = [
-      requirements.lastRunAt
-        ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessLastRun')} ${requirements.lastRunAt}`
+      lastRunAt
+        ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessLastRun')} ${lastRunAt}`
         : '',
-      isRuntimeDiagnosticNumber(requirements.maxHistoryAgeSeconds)
-        ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMaxAge')} ${requirements.maxHistoryAgeSeconds}s`
+      isRuntimeDiagnosticNumber(maxHistoryAgeSeconds)
+        ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMaxAge')} ${maxHistoryAgeSeconds}s`
         : '',
     ].filter(Boolean).join(', ');
     const detailSuffix = details ? ` (${details})` : '';
@@ -872,12 +953,20 @@ function formatProviderAutonomousReadinessRequirements(
 
   const liveFaultCoverage = formatRuntimeDiagnosticBoolean(
     translate,
-    requirements.liveFaultCoverageComplete
+    autonomousRequirementBoolean(
+      requirements,
+      'liveFaultCoverageComplete',
+      'live_fault_coverage_complete'
+    )
   );
   if (liveFaultCoverage) {
     const missingCases = formatRuntimeDiagnosticList(
       translate,
-      requirements.liveFaultMissingCases
+      autonomousRequirementStringList(
+        requirements,
+        'liveFaultMissingCases',
+        'live_fault_missing_cases'
+      )
     );
     const missingSuffix = missingCases
       ? ` (${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMissingCases')} ${missingCases})`
@@ -1391,7 +1480,18 @@ export function buildRuntimePolicyDiagnosticRows(
         translate,
         row.autonomous_readiness_missing_requirements
       );
-      const suffix = [policy, autonomousSuffix, missingRequirements, runners]
+      const autonomousRequirements =
+        formatProviderAutonomousReadinessRequirements(
+          translate,
+          row.autonomous_readiness_requirements
+        );
+      const suffix = [
+        policy,
+        autonomousSuffix,
+        missingRequirements,
+        autonomousRequirements,
+        runners
+      ]
         .filter(Boolean)
         .join(', ');
       return `${phase}: ${selected}${suffix ? ` (${suffix})` : ''}`;
@@ -1443,6 +1543,11 @@ export function buildRuntimeCapabilityDiagnosticRows(
         translate,
         row.autonomous_readiness_missing_requirements
       );
+      const autonomousRequirements =
+        formatProviderAutonomousReadinessRequirements(
+          translate,
+          row.autonomous_readiness_requirements
+        );
       const runners = formatRuntimeDiagnosticList(
         translate,
         row.cli_runner_candidates
@@ -1452,6 +1557,7 @@ export function buildRuntimeCapabilityDiagnosticRows(
         blockers,
         warnings,
         missingRequirements,
+        autonomousRequirements,
         runners
       ]
         .filter(Boolean)

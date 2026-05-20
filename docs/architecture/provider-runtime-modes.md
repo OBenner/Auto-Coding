@@ -409,7 +409,8 @@ even when `generic_edit` can still run.
   recommendation reasons, blockers, warnings, missing requirements, compact
   structured requirement evidence, evidence, and next actions.
 - The settings UI surfaces autonomous policy gate, recommendation text, and
-  recommendation reasons in runtime governance diagnostics.
+  recommendation reasons in runtime governance diagnostics, including the same
+  compact structured requirement evidence in policy/capability rows.
 - The settings UI surfaces comparative eval quality, stability, safety, pricing
   model, score sources, recorded actual cost when available, and estimated
   benchmark cost fallback alongside provider quality/cost/safety status.
