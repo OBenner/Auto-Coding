@@ -308,7 +308,8 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.runtimeDiagnosticValues.no': 'No',
     'settings:aiProvider.runtimeDiagnosticValues.yes': 'Yes',
     })[key] ?? key;
-  return value.replace('{{count}}', String(options?.count ?? ''));
+  const count = typeof options?.count === 'number' ? String(options.count) : '';
+  return value.replace('{{count}}', count);
 };
 
 describe('buildProviderResumePolicyDiagnosticRows', () => {

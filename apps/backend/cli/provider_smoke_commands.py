@@ -934,7 +934,11 @@ def _provider_smoke_signed_cost_delta(delta: float | None) -> str | None:
     """Return a signed human-readable cost delta."""
     if delta is None:
         return None
-    sign = "+" if delta > 0 else "-" if delta < 0 else ""
+    sign = ""
+    if delta > 0:
+        sign = "+"
+    elif delta < 0:
+        sign = "-"
     return f"{sign}{format_cost(abs(delta))}"
 
 

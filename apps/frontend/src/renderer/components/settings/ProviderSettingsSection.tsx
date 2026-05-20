@@ -767,7 +767,8 @@ function formatRuntimeScoreTrendMetric(
     return '';
   }
   const deltaLabel = formatSignedPercentDelta(delta);
-  return `${label} ${trendLabel}${deltaLabel ? ` (${deltaLabel})` : ''}`;
+  const deltaSuffix = deltaLabel ? ` (${deltaLabel})` : '';
+  return `${label} ${trendLabel}${deltaSuffix}`;
 }
 
 function formatRuntimeCostTrendMetric(
@@ -780,7 +781,8 @@ function formatRuntimeCostTrendMetric(
   if (!label || !trendLabel) {
     return '';
   }
-  return `${label} ${trendLabel}${deltaFormatted ? ` (${deltaFormatted})` : ''}`;
+  const deltaSuffix = deltaFormatted ? ` (${deltaFormatted})` : '';
+  return `${label} ${trendLabel}${deltaSuffix}`;
 }
 
 function formatRuntimeComparativeEvalCost(
@@ -1038,7 +1040,7 @@ function formatProviderRunHistorySummary(
   ].filter(Boolean).join(' - ');
 }
 
-function formatProviderRunHistoryCaseCoverage(
+function formatRuntimeCaseCoverage(
   translate: RuntimeDiagnosticTranslate,
   labelKey: string,
   percent?: number | null,
@@ -1081,14 +1083,14 @@ function formatProviderRunHistoryRuns(
     isRuntimeDiagnosticNumber(history.recentPassRatePercent)
       ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryRecentPassRate')} ${history.recentPassRatePercent}%`
       : '',
-    formatProviderRunHistoryCaseCoverage(
+    formatRuntimeCaseCoverage(
       translate,
       'settings:aiProvider.connectionTest.providerRunHistoryE2eCasePassRate',
       history.e2eCasePassRatePercent,
       history.e2ePassedCaseCount,
       history.e2eCaseCount
     ),
-    formatProviderRunHistoryCaseCoverage(
+    formatRuntimeCaseCoverage(
       translate,
       'settings:aiProvider.connectionTest.providerRunHistoryReliabilityCasePassRate',
       history.reliabilityCasePassRatePercent,
@@ -1388,7 +1390,8 @@ export function buildRuntimeEvalDiagnosticRows(
       const caseId = formatRuntimeDiagnosticValue(translate, row.case_id);
       const runtime = formatRuntimeDiagnosticValue(translate, row.runtime_mode);
       const artifacts = formatRuntimeDiagnosticList(translate, row.required_artifacts);
-      return `${caseId}: ${runtime}${artifacts ? ` (${artifacts})` : ''}`;
+      const artifactSuffix = artifacts ? ` (${artifacts})` : '';
+      return `${caseId}: ${runtime}${artifactSuffix}`;
     })
     .join('; ');
   return [
@@ -1399,23 +1402,6 @@ export function buildRuntimeEvalDiagnosticRows(
   ];
 }
 
-function formatRuntimeEvalHistoryCaseCoverage(
-  translate: RuntimeDiagnosticTranslate,
-  labelKey: string,
-  percent?: number | null,
-  passed?: number,
-  required?: number
-): string {
-  if (
-    !isRuntimeDiagnosticNumber(percent) ||
-    !isRuntimeDiagnosticNumber(passed) ||
-    !isRuntimeDiagnosticNumber(required)
-  ) {
-    return '';
-  }
-  return `${translate(labelKey)} ${percent}% (${passed}/${required})`;
-}
-
 function formatRuntimeEvalHistoryProvider(
   translate: RuntimeDiagnosticTranslate,
   provider: RuntimeEvalHistoryProviderRow
@@ -1423,21 +1409,21 @@ function formatRuntimeEvalHistoryProvider(
   const providerName = formatRuntimeDiagnosticValue(translate, provider.provider);
   const status = formatRuntimeDiagnosticValue(translate, provider.status);
   const coverage = [
-    formatRuntimeEvalHistoryCaseCoverage(
+    formatRuntimeCaseCoverage(
       translate,
       'settings:aiProvider.connectionTest.providerRunHistoryE2eCasePassRate',
       provider.e2e_case_pass_rate_percent,
       provider.e2e_passed_case_count,
       provider.e2e_case_count
     ),
-    formatRuntimeEvalHistoryCaseCoverage(
+    formatRuntimeCaseCoverage(
       translate,
       'settings:aiProvider.connectionTest.providerRunHistoryReliabilityCasePassRate',
       provider.reliability_case_pass_rate_percent,
       provider.reliability_passed_case_count,
       provider.reliability_required_case_count
     ),
-    formatRuntimeEvalHistoryCaseCoverage(
+    formatRuntimeCaseCoverage(
       translate,
       'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage',
       provider.live_fault_probe_case_coverage_percent,
@@ -1445,7 +1431,8 @@ function formatRuntimeEvalHistoryProvider(
       provider.required_live_fault_case_count
     ),
   ].filter(Boolean).join(', ');
-  return `${providerName}: ${status}${coverage ? ` (${coverage})` : ''}`;
+  const coverageSuffix = coverage ? ` (${coverage})` : '';
+  return `${providerName}: ${status}${coverageSuffix}`;
 }
 
 export function buildRuntimeEvalHistoryDiagnosticRows(

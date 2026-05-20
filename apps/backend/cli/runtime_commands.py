@@ -989,6 +989,74 @@ def _runtime_provider_readiness_status(
     return "full_autonomous_candidate", "api_runtime_full_autonomous_candidate"
 
 
+def _runtime_provider_history_unknown(provider_stats: dict[str, Any]) -> bool:
+    """Return whether provider history lacks the basic latest/trend markers."""
+    last_status = provider_stats.get("last_status")
+    trend = provider_stats.get("trend")
+    return not (
+        isinstance(last_status, str)
+        and last_status
+        and isinstance(trend, str)
+        and trend
+    )
+
+
+def _runtime_provider_e2e_signals(
+    provider_stats: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    """Return blocker/evidence signals from latest provider e2e status."""
+    provider_e2e_status = provider_stats.get("last_provider_e2e_status")
+    if provider_e2e_status == "passed":
+        return [], ["provider_e2e_passed"]
+    if provider_e2e_status == "failed":
+        return ["provider_e2e_failed"], []
+    return [], []
+
+
+def _runtime_provider_reliability_signals(
+    provider_stats: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    """Return blocker/evidence signals from latest reliability status."""
+    if provider_stats.get("last_reliability_status") == "complete":
+        return [], ["provider_reliability_complete"]
+    return ["provider_reliability_incomplete"], []
+
+
+def _runtime_provider_history_trend_signals(
+    provider_stats: dict[str, Any],
+) -> tuple[list[str], list[str], list[str]]:
+    """Return blocker/warning/evidence signals from latest history trend."""
+    last_status = provider_stats.get("last_status")
+    trend = provider_stats.get("trend")
+    blockers: list[str] = []
+    warnings: list[str] = []
+    evidence: list[str] = []
+
+    if last_status != "passed":
+        blockers.append("provider_history_latest_failed")
+
+    if trend == "provider_history_stable":
+        if _runtime_provider_readiness_history_is_stable_enough(provider_stats):
+            evidence.append("provider_history_stable")
+        else:
+            warnings.append("provider_history_insufficient_runs")
+    elif isinstance(trend, str) and trend:
+        warnings.append(trend)
+
+    return blockers, warnings, evidence
+
+
+def _runtime_provider_live_fault_signals(
+    provider_stats: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    """Return warning/evidence signals from live-fault probe coverage."""
+    if provider_stats.get("last_live_fault_probe_status") != "passed":
+        return ["live_fault_probe_evidence_missing"], []
+    if not _runtime_provider_live_fault_coverage_complete(provider_stats):
+        return ["live_fault_probe_coverage_incomplete"], ["live_fault_probes_passed"]
+    return [], ["live_fault_probes_passed"]
+
+
 def _runtime_provider_readiness_signals(
     provider_stats: dict[str, Any],
 ) -> tuple[list[str], list[str], list[str]]:
@@ -997,46 +1065,32 @@ def _runtime_provider_readiness_signals(
     warnings: list[str] = []
     evidence: list[str] = []
 
-    last_status = provider_stats.get("last_status")
-    trend = provider_stats.get("trend")
-    history_unknown = not (
-        isinstance(last_status, str)
-        and last_status
-        and isinstance(trend, str)
-        and trend
-    )
-    if history_unknown:
+    if _runtime_provider_history_unknown(provider_stats):
         warnings.append("provider_history_unknown")
     else:
-        provider_e2e_status = provider_stats.get("last_provider_e2e_status")
-        if provider_e2e_status == "passed":
-            evidence.append("provider_e2e_passed")
-        elif provider_e2e_status == "failed":
-            blockers.append("provider_e2e_failed")
+        e2e_blockers, e2e_evidence = _runtime_provider_e2e_signals(provider_stats)
+        blockers.extend(e2e_blockers)
+        evidence.extend(e2e_evidence)
 
-    if provider_stats.get("last_reliability_status") == "complete":
-        evidence.append("provider_reliability_complete")
-    else:
-        blockers.append("provider_reliability_incomplete")
+    reliability_blockers, reliability_evidence = _runtime_provider_reliability_signals(
+        provider_stats
+    )
+    blockers.extend(reliability_blockers)
+    evidence.extend(reliability_evidence)
 
-    if not history_unknown and last_status != "passed":
-        blockers.append("provider_history_latest_failed")
+    if not _runtime_provider_history_unknown(provider_stats):
+        history_blockers, history_warnings, history_evidence = (
+            _runtime_provider_history_trend_signals(provider_stats)
+        )
+        blockers.extend(history_blockers)
+        warnings.extend(history_warnings)
+        evidence.extend(history_evidence)
 
-    if not history_unknown:
-        if trend == "provider_history_stable":
-            if _runtime_provider_readiness_history_is_stable_enough(provider_stats):
-                evidence.append("provider_history_stable")
-            else:
-                warnings.append("provider_history_insufficient_runs")
-        elif isinstance(trend, str) and trend:
-            warnings.append(trend)
-
-    if provider_stats.get("last_live_fault_probe_status") == "passed":
-        evidence.append("live_fault_probes_passed")
-        if not _runtime_provider_live_fault_coverage_complete(provider_stats):
-            warnings.append("live_fault_probe_coverage_incomplete")
-    else:
-        warnings.append("live_fault_probe_evidence_missing")
+    live_fault_warnings, live_fault_evidence = _runtime_provider_live_fault_signals(
+        provider_stats
+    )
+    warnings.extend(live_fault_warnings)
+    evidence.extend(live_fault_evidence)
 
     return blockers, warnings, evidence
 
@@ -1686,6 +1740,67 @@ def _runtime_full_runtime_cost_fields() -> dict[str, Any]:
     }
 
 
+def _runtime_comparative_full_runtime_row(provider: str) -> dict[str, Any]:
+    """Return comparative eval row for native full-runtime providers."""
+    return {
+        "provider": provider,
+        "runtime_path": "full_autonomous",
+        "quality_status": "not_recorded",
+        "quality_score": None,
+        "quality_score_source": "native_runtime_policy",
+        "quality_trend": None,
+        "quality_delta_percent": None,
+        "stability_score": None,
+        "stability_trend": None,
+        "stability_delta_percent": None,
+        **_runtime_full_runtime_cost_fields(),
+        "cost_trend": None,
+        "cost_delta_usd": None,
+        "cost_delta_formatted": None,
+        "safety_status": "native_runtime_policy",
+        "safety_score": None,
+        "safety_score_source": "native_runtime_policy",
+        "safety_trend": None,
+        "safety_delta_percent": None,
+        "evidence_source": "native_runtime",
+        "required_before_full_autonomous": False,
+        "blockers": [],
+    }
+
+
+def _runtime_comparative_provider_row(
+    provider: str,
+    provider_stats: dict[str, Any],
+    history_path: Any,
+) -> dict[str, Any]:
+    """Return comparative eval row for direct-provider generic edit paths."""
+    provider_metrics = _runtime_provider_eval_metrics(provider_stats)
+    return {
+        "provider": provider,
+        "runtime_path": "generic_edit",
+        "quality_status": str(provider_stats.get("status") or "not_observed"),
+        "quality_score": provider_metrics["quality_score"],
+        "quality_score_source": provider_metrics["quality_score_source"],
+        "quality_trend": provider_metrics["quality_trend"],
+        "quality_delta_percent": provider_metrics["quality_delta_percent"],
+        "stability_score": provider_metrics["recent_pass_rate_percent"],
+        "stability_trend": provider_metrics["stability_trend"],
+        "stability_delta_percent": provider_metrics["stability_delta_percent"],
+        **_runtime_provider_cost_estimate(provider_stats),
+        "cost_trend": provider_metrics["cost_trend"],
+        "cost_delta_usd": provider_metrics["cost_delta_usd"],
+        "cost_delta_formatted": provider_metrics["cost_delta_formatted"],
+        "safety_status": "policy_gated",
+        "safety_score": provider_metrics["safety_score"],
+        "safety_score_source": provider_metrics["safety_score_source"],
+        "safety_trend": provider_metrics["safety_trend"],
+        "safety_delta_percent": provider_metrics["safety_delta_percent"],
+        "evidence_source": str(history_path),
+        "required_before_full_autonomous": True,
+        "blockers": ["provider_e2e", "generic_edit_recovery", "mcp_bridge_contract"],
+    }
+
+
 def _runtime_comparative_eval_row(
     provider: str,
     provider_row: Any,
@@ -1693,75 +1808,9 @@ def _runtime_comparative_eval_row(
     history_path: Any,
 ) -> dict[str, Any]:
     """Build one runtime comparative eval row."""
-    has_full_runtime = provider_row.full_autonomous == "yes"
-    provider_metrics = _runtime_provider_eval_metrics(provider_stats)
-    cost_fields = (
-        _runtime_full_runtime_cost_fields()
-        if has_full_runtime
-        else _runtime_provider_cost_estimate(provider_stats)
-    )
-    return {
-        "provider": provider,
-        "runtime_path": "full_autonomous" if has_full_runtime else "generic_edit",
-        "quality_status": (
-            "not_recorded"
-            if has_full_runtime
-            else str(provider_stats.get("status") or "not_observed")
-        ),
-        "quality_score": (
-            None if has_full_runtime else provider_metrics["quality_score"]
-        ),
-        "quality_score_source": (
-            "native_runtime_policy"
-            if has_full_runtime
-            else provider_metrics["quality_score_source"]
-        ),
-        "quality_trend": None
-        if has_full_runtime
-        else provider_metrics["quality_trend"],
-        "quality_delta_percent": (
-            None if has_full_runtime else provider_metrics["quality_delta_percent"]
-        ),
-        "stability_score": (
-            None if has_full_runtime else provider_metrics["recent_pass_rate_percent"]
-        ),
-        "stability_trend": (
-            None if has_full_runtime else provider_metrics["stability_trend"]
-        ),
-        "stability_delta_percent": (
-            None if has_full_runtime else provider_metrics["stability_delta_percent"]
-        ),
-        **cost_fields,
-        "cost_trend": None if has_full_runtime else provider_metrics["cost_trend"],
-        "cost_delta_usd": None
-        if has_full_runtime
-        else provider_metrics["cost_delta_usd"],
-        "cost_delta_formatted": (
-            None if has_full_runtime else provider_metrics["cost_delta_formatted"]
-        ),
-        "safety_status": "native_runtime_policy"
-        if has_full_runtime
-        else "policy_gated",
-        "safety_score": (
-            None if has_full_runtime else provider_metrics["safety_score"]
-        ),
-        "safety_score_source": (
-            "native_runtime_policy"
-            if has_full_runtime
-            else provider_metrics["safety_score_source"]
-        ),
-        "safety_trend": None if has_full_runtime else provider_metrics["safety_trend"],
-        "safety_delta_percent": (
-            None if has_full_runtime else provider_metrics["safety_delta_percent"]
-        ),
-        "evidence_source": "native_runtime" if has_full_runtime else str(history_path),
-        "required_before_full_autonomous": not has_full_runtime,
-        "blockers": (
-            []
-            if has_full_runtime
-            else ["provider_e2e", "generic_edit_recovery", "mcp_bridge_contract"]
-        ),
-    }
+    if provider_row.full_autonomous == "yes":
+        return _runtime_comparative_full_runtime_row(provider)
+    return _runtime_comparative_provider_row(provider, provider_stats, history_path)
 
 
 def build_runtime_comparative_eval_matrix(
