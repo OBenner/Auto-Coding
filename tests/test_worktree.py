@@ -19,6 +19,58 @@ from pathlib import Path
 from worktree import WorktreeInfo, WorktreeManager
 
 
+def _completed_git_process(
+    args: list[str],
+    returncode: int = 0,
+    stdout: str = "",
+    stderr: str = "",
+) -> subprocess.CompletedProcess:
+    """Return a fake completed git subprocess."""
+    return subprocess.CompletedProcess(
+        args=["git", *args],
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def _transient_branch_crash_git_runner(
+    worktree_path: Path,
+    commands: list[list[str]],
+):
+    """Return a fake git runner that crashes on branch creation once."""
+
+    def fake_run_git(
+        args: list[str], cwd: Path | None = None, timeout: int = 60
+    ) -> subprocess.CompletedProcess:
+        del cwd, timeout
+        commands.append(args)
+        if args == ["worktree", "prune"]:
+            return _completed_git_process(args)
+        if args == ["rev-parse", "--verify", "auto-claude"]:
+            return _completed_git_process(args, returncode=1)
+        if args[0:2] == ["show-ref", "--verify"]:
+            return _completed_git_process(args, returncode=1)
+        if args == ["fetch", "origin", "main"]:
+            return _completed_git_process(args, returncode=1, stderr="no origin")
+        if args == ["rev-parse", "--verify", "origin/main"]:
+            return _completed_git_process(args, returncode=1)
+        if args == ["branch", "auto-claude/test-spec", "main"]:
+            return _completed_git_process(args, returncode=3221225794)
+        if args[:3] == ["worktree", "add", "-b"]:
+            worktree_path.mkdir(parents=True, exist_ok=True)
+            return _completed_git_process(args)
+        if args == ["remote", "get-url", "origin"]:
+            return _completed_git_process(args, returncode=1)
+        return _completed_git_process(
+            args,
+            returncode=1,
+            stderr=f"unexpected git args: {args}",
+        )
+
+    return fake_run_git
+
+
 class TestWorktreeManagerInitialization:
     """Tests for WorktreeManager initialization."""
 
@@ -97,43 +149,10 @@ class TestWorktreeCreation:
         manager = WorktreeManager(temp_git_repo)
         manager.setup()
         commands: list[list[str]] = []
-
-        def completed(
-            args: list[str],
-            returncode: int = 0,
-            stdout: str = "",
-            stderr: str = "",
-        ) -> subprocess.CompletedProcess:
-            return subprocess.CompletedProcess(
-                args=["git", *args],
-                returncode=returncode,
-                stdout=stdout,
-                stderr=stderr,
-            )
-
-        def fake_run_git(
-            args: list[str], cwd: Path | None = None, timeout: int = 60
-        ) -> subprocess.CompletedProcess:
-            del cwd, timeout
-            commands.append(args)
-            if args == ["worktree", "prune"]:
-                return completed(args)
-            if args == ["rev-parse", "--verify", "auto-claude"]:
-                return completed(args, returncode=1)
-            if args[0:2] == ["show-ref", "--verify"]:
-                return completed(args, returncode=1)
-            if args == ["fetch", "origin", "main"]:
-                return completed(args, returncode=1, stderr="no origin")
-            if args == ["rev-parse", "--verify", "origin/main"]:
-                return completed(args, returncode=1)
-            if args == ["branch", "auto-claude/test-spec", "main"]:
-                return completed(args, returncode=3221225794)
-            if args[:3] == ["worktree", "add", "-b"]:
-                Path(args[4]).mkdir(parents=True, exist_ok=True)
-                return completed(args)
-            if args == ["remote", "get-url", "origin"]:
-                return completed(args, returncode=1)
-            return completed(args, returncode=1, stderr=f"unexpected git args: {args}")
+        fake_run_git = _transient_branch_crash_git_runner(
+            manager.get_worktree_path("test-spec"),
+            commands,
+        )
 
         monkeypatch.setattr(manager, "_run_git", fake_run_git)
 

@@ -24,7 +24,7 @@ vi.mock('../../../../rate-limit-detector', () => ({
   getBestAvailableProfileEnv: () => mockGetBestAvailableProfileEnv(),
 }));
 
-vi.mock('../utils', () => ({
+vi.mock('../../utils', () => ({
   getGitHubTokenForSubprocess: () => mockGetGitHubTokenForSubprocess(),
 }));
 
