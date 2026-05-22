@@ -249,6 +249,10 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.runtimeDiagnosticValues.providerE2ePassed': 'Provider e2e passed',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eCasePassRate':
       'Provider e2e case pass rate',
+    'settings:aiProvider.runtimeDiagnosticValues.providerAutonomousPromotionBlocked':
+      'Promotion blocked',
+    'settings:aiProvider.runtimeDiagnosticValues.providerAutonomousPromotionPassed':
+      'Promotion passed',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryLatestFailed':
       'Provider history latest failed',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryPassRate':
@@ -426,6 +430,10 @@ describe('buildRuntimePolicyDiagnosticRows', () => {
           autonomous_readiness_recommendation:
             'limited_autonomous_until_evidence_stable',
           autonomous_readiness_recommendation_reasons: ['history_stale'],
+          autonomous_promotion_gate: 'blocked',
+          autonomous_promotion_ready: false,
+          autonomous_promotion_missing_reliability_cases: ['native_tool_calls'],
+          autonomous_promotion_missing_e2e_runs: ['mini_pipeline'],
           autonomous_readiness_requirements: {
             min_stable_runs: 3,
             observed_recent_window: 2,
@@ -459,6 +467,7 @@ describe('buildRuntimePolicyDiagnosticRows', () => {
         value: (
           'Planner: Blocked (Must use full runtime, Blocked, '
           + 'Limited autonomous until evidence stable, Stale history, '
+          + 'Promotion blocked, Native tool calls, Mini pipeline, '
           + 'Fresh provider history, Stable history runs 2/3, '
           + 'Consecutive passes 2/3, Fresh provider history: No '
           + '(last run 2026-05-01T00:00:00Z, max age 604800s), '
@@ -540,6 +549,10 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
             'provider_e2e_passed',
             'provider_reliability_complete',
           ],
+          autonomous_promotion_gate: 'blocked',
+          autonomous_promotion_ready: false,
+          autonomous_promotion_missing_reliability_cases: ['native_tool_calls'],
+          autonomous_promotion_missing_e2e_runs: ['mini_pipeline'],
           autonomous_readiness_requirements: {
             min_stable_runs: 3,
             observed_recent_window: 2,
@@ -566,7 +579,8 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
         value: (
           'Google: Needs live fault evidence -> Generic edit '
           + '(Blocked, Limited autonomous until live faults, '
-          + 'Warming up history, Live fault probe missing; '
+          + 'Warming up history, Live fault probe missing, '
+          + 'Promotion blocked, Native tool calls, Mini pipeline; '
           + 'Provider history warming up, Live fault probe evidence missing; '
           + 'Fresh provider history; Stable history runs 2/3, '
           + 'Consecutive passes 2/3, Fresh provider history: No '

@@ -1062,6 +1062,8 @@
       "providerE2eRequired": "E2E fournisseur requis",
       "providerE2eReady": "E2E fournisseur prêt",
       "providerE2eCasePassRate": "Taux de réussite des cas E2E fournisseur",
+      "providerAutonomousPromotionBlocked": "Promotion bloquée",
+      "providerAutonomousPromotionPassed": "Promotion réussie",
       "providerLiveFaultFixture": "Fixture live de panne du fournisseur",
       "qualityScore": "Qualité",
       "qualityTrend": "Tendance qualité",

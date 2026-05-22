@@ -54,10 +54,12 @@ from agents.runtime.subagents import (
 )
 from cli.autonomous_readiness_text import format_autonomous_readiness_requirements
 from cli.provider_smoke_commands import (
+    PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS,
     PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS,
     PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
     PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL,
     PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES,
+    PROVIDER_RELIABILITY_CASE_ORDER,
     PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
     PROVIDER_SMOKE_HISTORY_RELATIVE_PATH,
 )
@@ -562,7 +564,12 @@ def _runtime_policy_readiness_fields(
             "autonomous_readiness_warnings": [],
             "autonomous_readiness_requirements": {},
             "autonomous_readiness_missing_requirements": [],
+            "autonomous_promotion_gate": "not_required",
+            "autonomous_promotion_ready": False,
+            "autonomous_promotion_missing_reliability_cases": [],
+            "autonomous_promotion_missing_e2e_runs": [],
         }
+    promotion_gate = readiness["promotion_gate"]
     return {
         "autonomous_readiness_required": True,
         "autonomous_policy_gate": readiness["policy_gate"],
@@ -575,6 +582,12 @@ def _runtime_policy_readiness_fields(
         "autonomous_readiness_warnings": readiness["warnings"],
         "autonomous_readiness_requirements": readiness["requirements"],
         "autonomous_readiness_missing_requirements": readiness["missing_requirements"],
+        "autonomous_promotion_gate": promotion_gate["status"],
+        "autonomous_promotion_ready": promotion_gate["promotion_ready"],
+        "autonomous_promotion_missing_reliability_cases": promotion_gate[
+            "missing_reliability_cases"
+        ],
+        "autonomous_promotion_missing_e2e_runs": promotion_gate["missing_e2e_runs"],
     }
 
 
@@ -592,6 +605,13 @@ def _runtime_policy_decision(
         and readiness["policy_gate"] != "passed"
         and phase in {"coder", "qa_fixer"}
     ):
+        promotion_gate = readiness.get("promotion_gate")
+        if (
+            isinstance(promotion_gate, dict)
+            and promotion_gate.get("status") == "blocked"
+            and readiness["status"] == "full_autonomous_candidate"
+        ):
+            return "provider_e2e_required", "provider_autonomous_promotion_blocked"
         return str(readiness["recommendation"]), str(readiness["status"])
     return str(phase_policy["policy"]), str(phase_policy["reason"])
 
@@ -690,7 +710,12 @@ def _runtime_capability_readiness_fields(
             "autonomous_readiness_requirements": {},
             "autonomous_readiness_missing_requirements": [],
             "autonomous_readiness_next_actions": [],
+            "autonomous_promotion_gate": "not_required",
+            "autonomous_promotion_ready": False,
+            "autonomous_promotion_missing_reliability_cases": [],
+            "autonomous_promotion_missing_e2e_runs": [],
         }
+    promotion_gate = readiness["promotion_gate"]
     return {
         "autonomous_readiness_required": True,
         "autonomous_policy_gate": readiness["policy_gate"],
@@ -705,6 +730,12 @@ def _runtime_capability_readiness_fields(
         "autonomous_readiness_requirements": readiness["requirements"],
         "autonomous_readiness_missing_requirements": readiness["missing_requirements"],
         "autonomous_readiness_next_actions": readiness["next_actions"],
+        "autonomous_promotion_gate": promotion_gate["status"],
+        "autonomous_promotion_ready": promotion_gate["promotion_ready"],
+        "autonomous_promotion_missing_reliability_cases": promotion_gate[
+            "missing_reliability_cases"
+        ],
+        "autonomous_promotion_missing_e2e_runs": promotion_gate["missing_e2e_runs"],
     }
 
 
@@ -731,6 +762,13 @@ def _runtime_capability_blockers_and_warnings(
     if provider_row.provider == "ollama":
         warnings.append("local_model_quality_varies")
     if readiness is not None:
+        promotion_gate = readiness.get("promotion_gate")
+        if (
+            isinstance(promotion_gate, dict)
+            and promotion_gate.get("status") == "blocked"
+            and readiness["status"] == "full_autonomous_candidate"
+        ):
+            _extend_unique(blockers, ["provider_autonomous_promotion_blocked"])
         _extend_unique(blockers, readiness["blockers"])
         _extend_unique(warnings, readiness["warnings"])
     return blockers, warnings
@@ -752,7 +790,9 @@ def _runtime_capability_row(
         readiness,
     )
     full_autonomous_ready = has_full_runtime or (
-        readiness is not None and readiness["status"] == "full_autonomous_candidate"
+        readiness is not None
+        and isinstance(readiness.get("promotion_gate"), dict)
+        and readiness["promotion_gate"]["promotion_ready"] is True
     )
     return {
         "provider": provider_row.provider,
@@ -1143,6 +1183,17 @@ def _runtime_provider_autonomous_readiness_from_history(
     status, recommendation = _runtime_provider_readiness_status(blockers, warnings)
 
     requirements = _runtime_provider_readiness_requirements(provider_stats)
+    missing_requirements = _runtime_provider_missing_requirements(
+        blockers,
+        warnings,
+        requirements,
+    )
+    promotion_gate = _runtime_provider_promotion_gate_from_history(
+        provider,
+        provider_stats,
+        readiness_status=status,
+        readiness_missing_requirements=missing_requirements,
+    )
     return {
         "provider": provider,
         "status": status,
@@ -1152,18 +1203,99 @@ def _runtime_provider_autonomous_readiness_from_history(
             blockers,
             warnings,
         ),
-        "policy_gate": "passed" if status == "full_autonomous_candidate" else "blocked",
+        "policy_gate": "passed" if promotion_gate["promotion_ready"] else "blocked",
         "blockers": blockers,
         "warnings": warnings,
         "evidence": evidence,
         "requirements": requirements,
-        "missing_requirements": _runtime_provider_missing_requirements(
-            blockers,
-            warnings,
-            requirements,
-        ),
+        "missing_requirements": missing_requirements,
+        "promotion_gate": promotion_gate,
         "next_actions": _runtime_provider_readiness_next_actions(blockers, warnings),
     }
+
+
+def _runtime_provider_promotion_gate_from_history(
+    provider: str,
+    provider_stats: dict[str, Any],
+    *,
+    readiness_status: str,
+    readiness_missing_requirements: list[str],
+) -> dict[str, Any]:
+    """Return the persisted direct-provider promotion gate for runtime policy."""
+    if provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return {
+            "status": "not_required",
+            "promotion_ready": False,
+            "required_reliability_cases": [],
+            "passed_reliability_cases": [],
+            "missing_reliability_cases": [],
+            "required_e2e_runs": [],
+            "passed_e2e_runs": [],
+            "missing_e2e_runs": [],
+        }
+
+    required_reliability_cases = _runtime_promotion_required_values(
+        provider_stats,
+        "promotion_required_reliability_cases",
+        PROVIDER_RELIABILITY_CASE_ORDER,
+    )
+    passed_reliability_cases = _runtime_promotion_passed_values(
+        provider_stats,
+        "promotion_passed_reliability_cases",
+        required_reliability_cases,
+    )
+    missing_reliability_cases = [
+        case
+        for case in required_reliability_cases
+        if case not in passed_reliability_cases
+    ]
+    required_e2e_runs = _runtime_promotion_required_values(
+        provider_stats,
+        "promotion_required_e2e_runs",
+        PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS,
+    )
+    passed_e2e_runs = _runtime_promotion_passed_values(
+        provider_stats,
+        "promotion_passed_e2e_runs",
+        required_e2e_runs,
+    )
+    missing_e2e_runs = [run for run in required_e2e_runs if run not in passed_e2e_runs]
+    promotion_ready = (
+        readiness_status == "full_autonomous_candidate"
+        and not readiness_missing_requirements
+        and not missing_reliability_cases
+        and not missing_e2e_runs
+    )
+    return {
+        "status": "passed" if promotion_ready else "blocked",
+        "promotion_ready": promotion_ready,
+        "required_reliability_cases": required_reliability_cases,
+        "passed_reliability_cases": passed_reliability_cases,
+        "missing_reliability_cases": missing_reliability_cases,
+        "required_e2e_runs": required_e2e_runs,
+        "passed_e2e_runs": passed_e2e_runs,
+        "missing_e2e_runs": missing_e2e_runs,
+    }
+
+
+def _runtime_promotion_required_values(
+    provider_stats: dict[str, Any],
+    key: str,
+    fallback_values: tuple[str, ...],
+) -> list[str]:
+    """Return required promotion values from history or the current contract."""
+    values = _runtime_string_list_payload(provider_stats.get(key))
+    return values or list(fallback_values)
+
+
+def _runtime_promotion_passed_values(
+    provider_stats: dict[str, Any],
+    key: str,
+    required_values: list[str],
+) -> list[str]:
+    """Return passed promotion values in required contract order."""
+    passed_values = set(_runtime_string_list_payload(provider_stats.get(key)))
+    return [value for value in required_values if value in passed_values]
 
 
 def _runtime_provider_readiness_history_is_stable_enough(

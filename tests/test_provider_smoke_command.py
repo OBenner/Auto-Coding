@@ -596,6 +596,43 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
             "gateway_model_limitations",
             "unsupported_tools",
         ],
+        "last_promotion_gate_status": "passed",
+        "promotion_required_reliability_cases": [
+            "text_completion",
+            "generic_edit_tool_loop",
+            "native_tool_calls",
+            "tool_results",
+            "recovery_loop",
+            "transaction_batches",
+            "unsupported_tools",
+            "gateway_model_limitations",
+        ],
+        "promotion_passed_reliability_cases": [
+            "text_completion",
+            "generic_edit_tool_loop",
+            "native_tool_calls",
+            "tool_results",
+            "recovery_loop",
+            "transaction_batches",
+            "unsupported_tools",
+            "gateway_model_limitations",
+        ],
+        "promotion_missing_reliability_cases": [],
+        "promotion_required_e2e_runs": [
+            "generic_edit",
+            "mini_pipeline",
+            "transaction_batch_probe",
+            "unsupported_tools_probe",
+            "gateway_model_probe",
+        ],
+        "promotion_passed_e2e_runs": [
+            "generic_edit",
+            "mini_pipeline",
+            "transaction_batch_probe",
+            "unsupported_tools_probe",
+            "gateway_model_probe",
+        ],
+        "promotion_missing_e2e_runs": [],
         "trend": "provider_history_warming_up",
         "trend_reason": "single_history_run",
         "recent_window": 1,
@@ -938,6 +975,40 @@ def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):
     assert resumed_history["last_live_fault_probe_status"] is None
     assert resumed_history["live_fault_probe_enabled_runs"] == 1
     assert resumed_history["live_fault_probe_passed_runs"] == 1
+
+
+def test_provider_run_history_promotion_stats_ignore_non_promotion_runs():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_smoke_empty_provider_stats,
+        _provider_smoke_history_apply_promotion_stats,
+        _provider_smoke_promotion_record,
+    )
+
+    stats = _provider_smoke_empty_provider_stats()
+    stats["last_promotion_gate_status"] = "passed"
+    stats["promotion_passed_e2e_runs"] = ["generic_edit"]
+
+    _provider_smoke_history_apply_promotion_stats(
+        stats,
+        {"runtime_mode": "generic_edit"},
+    )
+
+    assert stats["last_promotion_gate_status"] == "passed"
+    assert stats["promotion_passed_e2e_runs"] == ["generic_edit"]
+    assert (
+        _provider_smoke_promotion_record(
+            ProviderSmokeResult(
+                success=True,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="generic_edit",
+                message="Generic edit smoke passed",
+                runtime_diagnostics={"smoke_scope": "generic_edit_tool_loop"},
+            )
+        )
+        == {}
+    )
 
 
 def test_provider_run_history_record_failed_preserves_live_fault_evidence(
@@ -1445,6 +1516,17 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
         "readiness_status": "full_autonomous_candidate",
         "readiness_missing_requirements": [],
     }
+    assert stable_history["last_promotion_gate_status"] == "passed"
+    assert stable_history["promotion_required_reliability_cases"] == (
+        expected_reliability_cases
+    )
+    assert stable_history["promotion_passed_reliability_cases"] == (
+        expected_reliability_cases
+    )
+    assert stable_history["promotion_missing_reliability_cases"] == []
+    assert stable_history["promotion_required_e2e_runs"] == expected_e2e_runs
+    assert stable_history["promotion_passed_e2e_runs"] == expected_e2e_runs
+    assert stable_history["promotion_missing_e2e_runs"] == []
 
 
 def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_coverage():

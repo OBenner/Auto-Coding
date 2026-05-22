@@ -376,7 +376,45 @@ def _provider_smoke_history_record(
         record.update(cost_record)
     if result.error_details:
         record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
+    record.update(_provider_smoke_promotion_record(result))
     return record
+
+
+def _provider_smoke_promotion_record(result: ProviderSmokeResult) -> dict[str, Any]:
+    """Return per-run promotion evidence that can be persisted in history."""
+    if result.provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return {}
+    smoke_scope = result.runtime_diagnostics.get("smoke_scope")
+    if (
+        result.runtime_mode != "provider_e2e"
+        and smoke_scope != "direct_api_full_autonomy_e2e"
+    ):
+        return {}
+    required_reliability_cases = list(PROVIDER_RELIABILITY_CASE_ORDER)
+    passed_reliability_cases = _provider_promotion_passed_reliability_cases(
+        result.runtime_diagnostics.get("provider_reliability")
+    )
+    missing_reliability_cases = [
+        case
+        for case in required_reliability_cases
+        if case not in passed_reliability_cases
+    ]
+    required_e2e_runs = list(PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS)
+    passed_e2e_runs = _provider_promotion_passed_e2e_runs(
+        result.runtime_diagnostics.get("provider_e2e_suite")
+    )
+    missing_e2e_runs = [run for run in required_e2e_runs if run not in passed_e2e_runs]
+    return {
+        "promotion_gate_status": "passed"
+        if not missing_reliability_cases and not missing_e2e_runs
+        else "blocked",
+        "promotion_required_reliability_cases": required_reliability_cases,
+        "promotion_passed_reliability_cases": passed_reliability_cases,
+        "promotion_missing_reliability_cases": missing_reliability_cases,
+        "promotion_required_e2e_runs": required_e2e_runs,
+        "promotion_passed_e2e_runs": passed_e2e_runs,
+        "promotion_missing_e2e_runs": missing_e2e_runs,
+    }
 
 
 def _provider_e2e_suite_case_counts(suite_runs: Any) -> dict[str, int]:
@@ -666,6 +704,13 @@ def _provider_smoke_empty_provider_stats() -> dict[str, Any]:
         "live_fault_probe_enabled_runs": 0,
         "live_fault_probe_passed_runs": 0,
         "live_fault_probe_covered_cases": [],
+        "last_promotion_gate_status": None,
+        "promotion_required_reliability_cases": [],
+        "promotion_passed_reliability_cases": [],
+        "promotion_missing_reliability_cases": [],
+        "promotion_required_e2e_runs": [],
+        "promotion_passed_e2e_runs": [],
+        "promotion_missing_e2e_runs": [],
     }
 
 
@@ -689,6 +734,7 @@ def _provider_smoke_history_apply_run_stats(
     stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
     _provider_smoke_history_apply_case_stats(stats, run)
     _provider_smoke_history_apply_live_fault_stats(stats, run)
+    _provider_smoke_history_apply_promotion_stats(stats, run)
     _provider_smoke_history_apply_cost_stats(stats, run)
 
 
@@ -728,6 +774,30 @@ def _provider_smoke_history_apply_live_fault_stats(
     for covered_case in _string_list_payload(run.get("live_fault_probe_covered_cases")):
         if covered_case not in existing_cases:
             existing_cases.append(covered_case)
+
+
+def _provider_smoke_history_apply_promotion_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+) -> None:
+    """Apply latest direct-provider promotion evidence from one persisted run."""
+    if "promotion_gate_status" not in run:
+        return
+    promotion_status = run.get("promotion_gate_status")
+    stats["last_promotion_gate_status"] = (
+        promotion_status
+        if isinstance(promotion_status, str) and promotion_status
+        else None
+    )
+    for key in (
+        "promotion_required_reliability_cases",
+        "promotion_passed_reliability_cases",
+        "promotion_missing_reliability_cases",
+        "promotion_required_e2e_runs",
+        "promotion_passed_e2e_runs",
+        "promotion_missing_e2e_runs",
+    ):
+        stats[key] = _string_list_payload(run.get(key))
 
 
 def _provider_smoke_history_apply_cost_stats(
@@ -1454,6 +1524,33 @@ def _with_provider_run_history(
             ),
             "live_fault_probe_covered_cases": provider_stats.get(
                 "live_fault_probe_covered_cases",
+                [],
+            ),
+            "last_promotion_gate_status": provider_stats.get(
+                "last_promotion_gate_status"
+            ),
+            "promotion_required_reliability_cases": provider_stats.get(
+                "promotion_required_reliability_cases",
+                [],
+            ),
+            "promotion_passed_reliability_cases": provider_stats.get(
+                "promotion_passed_reliability_cases",
+                [],
+            ),
+            "promotion_missing_reliability_cases": provider_stats.get(
+                "promotion_missing_reliability_cases",
+                [],
+            ),
+            "promotion_required_e2e_runs": provider_stats.get(
+                "promotion_required_e2e_runs",
+                [],
+            ),
+            "promotion_passed_e2e_runs": provider_stats.get(
+                "promotion_passed_e2e_runs",
+                [],
+            ),
+            "promotion_missing_e2e_runs": provider_stats.get(
+                "promotion_missing_e2e_runs",
                 [],
             ),
             "trend": provider_stats.get("trend"),

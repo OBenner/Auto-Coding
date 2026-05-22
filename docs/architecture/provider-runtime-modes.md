@@ -200,6 +200,12 @@ for history and live-fault completion so backend automation and UI surfaces do
 not need to parse free-form warning strings. Text CLI output and the Electron
 provider diagnostics UI render those requirements as a compact operator summary
 next to the stable missing requirement ids.
+Provider e2e smoke output also carries `provider_autonomous_promotion_gate`;
+the persisted history stores the latest promotion status plus required, passed,
+and missing reliability cases and e2e run modes. Runtime policy and capability
+matrices consume that persisted evidence, so a direct provider with an otherwise
+green readiness score remains blocked from `full_autonomous_ready` until the
+case-level promotion gate is clean.
 
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
@@ -238,8 +244,8 @@ The same payload now includes two policy/eval contracts:
   planner, coder, QA reviewer, and QA fixer phases, whether fallback is allowed,
   and which CLI full-runtime candidates are required when a direct provider
   cannot satisfy a full-autonomous phase. For direct API providers, it also
-  carries the autonomous-readiness policy gate and recommendation derived from
-  provider e2e history.
+  carries the autonomous-readiness policy gate, autonomous-promotion gate, and
+  recommendation derived from provider e2e history.
 - `runtime_eval_matrix` lists the smoke/eval cases that must stay green before a
   runtime/provider path can be treated as full autonomous: provider e2e,
   generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts,
@@ -378,6 +384,12 @@ even when `generic_edit` can still run.
   aggregate counters from promoting a provider without explicit tool-loop,
   tool-result, recovery, transaction-batch, unsupported-tool, and
   gateway/model-limit evidence.
+- Provider smoke history persists the latest promotion gate status together
+  with required, passed, and missing reliability/e2e evidence. Runtime
+  diagnostics read those fields back into `runtime_policy_matrix` and
+  `runtime_capability_matrix`; `full_autonomous_ready` is true for direct API
+  providers only when the persisted promotion gate is ready, not merely when
+  aggregate readiness reaches `full_autonomous_candidate`.
 - Degrading quality, stability, or safety trends now feed the autonomous
   readiness gate as evidence-stability warnings, keeping direct-provider coder
   and fixer policy limited until the trend recovers.
@@ -420,6 +432,9 @@ even when `generic_edit` can still run.
 - The settings UI surfaces autonomous policy gate, recommendation text, and
   recommendation reasons in runtime governance diagnostics, including the same
   compact structured requirement evidence in policy/capability rows.
+- The settings UI surfaces autonomous promotion status and the missing
+  reliability/e2e evidence inside runtime policy and capability rows, matching
+  the backend gate that blocks direct-provider `full_autonomous_ready`.
 - The CLI `--runtime-modes` text tables also include autonomy requirement
   summaries beside the policy/capability recommendations.
 - The settings UI surfaces comparative eval quality, stability, safety, pricing

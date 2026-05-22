@@ -13,6 +13,41 @@ def _provider_smoke_run_at(*, days_ago: int = 0) -> str:
     return timestamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _promotion_reliability_cases() -> list[str]:
+    return [
+        "text_completion",
+        "generic_edit_tool_loop",
+        "native_tool_calls",
+        "tool_results",
+        "recovery_loop",
+        "transaction_batches",
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
+
+
+def _promotion_e2e_runs() -> list[str]:
+    return [
+        "generic_edit",
+        "mini_pipeline",
+        "transaction_batch_probe",
+        "unsupported_tools_probe",
+        "gateway_model_probe",
+    ]
+
+
+def _passed_promotion_history() -> dict[str, object]:
+    return {
+        "last_promotion_gate_status": "passed",
+        "promotion_required_reliability_cases": _promotion_reliability_cases(),
+        "promotion_passed_reliability_cases": _promotion_reliability_cases(),
+        "promotion_missing_reliability_cases": [],
+        "promotion_required_e2e_runs": _promotion_e2e_runs(),
+        "promotion_passed_e2e_runs": _promotion_e2e_runs(),
+        "promotion_missing_e2e_runs": [],
+    }
+
+
 def _stable_provider_history(run_at: str) -> dict[str, object]:
     return {
         "total_runs": 3,
@@ -33,6 +68,7 @@ def _stable_provider_history(run_at: str) -> dict[str, object]:
             "unsupported_tools",
         ],
         "trend": "provider_history_stable",
+        **_passed_promotion_history(),
     }
 
 
@@ -321,6 +357,25 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "autonomous_readiness_warnings": [
             "provider_history_unknown",
             "live_fault_probe_evidence_missing",
+        ],
+        "autonomous_promotion_gate": "blocked",
+        "autonomous_promotion_ready": False,
+        "autonomous_promotion_missing_reliability_cases": [
+            "text_completion",
+            "generic_edit_tool_loop",
+            "native_tool_calls",
+            "tool_results",
+            "recovery_loop",
+            "transaction_batches",
+            "unsupported_tools",
+            "gateway_model_limitations",
+        ],
+        "autonomous_promotion_missing_e2e_runs": [
+            "generic_edit",
+            "mini_pipeline",
+            "transaction_batch_probe",
+            "unsupported_tools_probe",
+            "gateway_model_probe",
         ],
         "autonomous_readiness_requirements": {
             "min_stable_runs": 3,
@@ -761,6 +816,7 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
                             "unsupported_tools",
                         ],
                         "trend": "provider_history_stable",
+                        **_passed_promotion_history(),
                     },
                     "google": {
                         "total_runs": 1,
@@ -792,6 +848,14 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
 
     assert capability_rows["openai"]["readiness"] == "full_autonomous_candidate"
     assert capability_rows["openai"]["autonomous_policy_gate"] == "passed"
+    assert capability_rows["openai"]["autonomous_promotion_gate"] == "passed"
+    assert capability_rows["openai"]["autonomous_promotion_ready"] is True
+    assert (
+        capability_rows["openai"]["autonomous_promotion_missing_reliability_cases"]
+        == []
+    )
+    assert capability_rows["openai"]["autonomous_promotion_missing_e2e_runs"] == []
+    assert capability_rows["openai"]["full_autonomous_ready"] is True
     assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
         "api_runtime_full_autonomous_candidate"
     )
@@ -827,6 +891,8 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     }
     assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == []
     assert policy_rows[("coder", "openai")]["autonomous_policy_gate"] == "passed"
+    assert policy_rows[("coder", "openai")]["autonomous_promotion_gate"] == "passed"
+    assert policy_rows[("coder", "openai")]["autonomous_promotion_ready"] is True
     assert policy_rows[("coder", "openai")]["policy"] == "prefer_generic_edit"
 
     assert capability_rows["google"]["readiness"] == "needs_live_fault_evidence"
@@ -916,6 +982,60 @@ def test_runtime_modes_policy_gate_warns_on_degrading_eval_trends(
         "limited_autonomous_until_evidence_stable"
     )
     assert policy_rows[("coder", "openai")]["autonomous_policy_gate"] == "blocked"
+
+
+def test_runtime_modes_policy_gate_blocks_missing_promotion_evidence(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    from cli.runtime_commands import handle_runtime_modes_command
+
+    openai_run_at = _provider_smoke_run_at()
+    missing_case_history = _stable_provider_history(openai_run_at) | {
+        "last_promotion_gate_status": "blocked",
+        "promotion_passed_reliability_cases": [
+            case
+            for case in _promotion_reliability_cases()
+            if case != "native_tool_calls"
+        ],
+        "promotion_missing_reliability_cases": ["native_tool_calls"],
+        "promotion_passed_e2e_runs": _promotion_e2e_runs(),
+        "promotion_missing_e2e_runs": [],
+    }
+    _write_provider_history(tmp_path, missing_case_history)
+    monkeypatch.chdir(tmp_path)
+
+    handle_runtime_modes_command(output_json=True)
+    payload = json.loads(capsys.readouterr().out)
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+
+    assert capability_rows["openai"]["readiness"] == "full_autonomous_candidate"
+    assert capability_rows["openai"]["autonomous_readiness_status"] == (
+        "full_autonomous_candidate"
+    )
+    assert capability_rows["openai"]["autonomous_policy_gate"] == "blocked"
+    assert capability_rows["openai"]["autonomous_promotion_gate"] == "blocked"
+    assert capability_rows["openai"]["autonomous_promotion_ready"] is False
+    assert capability_rows["openai"]["full_autonomous_ready"] is False
+    assert capability_rows["openai"][
+        "autonomous_promotion_missing_reliability_cases"
+    ] == [
+        "native_tool_calls",
+    ]
+    assert capability_rows["openai"]["autonomous_promotion_missing_e2e_runs"] == []
+    assert (
+        "provider_autonomous_promotion_blocked" in capability_rows["openai"]["blockers"]
+    )
+    assert policy_rows[("coder", "openai")]["policy"] == "provider_e2e_required"
+    assert policy_rows[("coder", "openai")]["reason"] == (
+        "provider_autonomous_promotion_blocked"
+    )
 
 
 def test_runtime_modes_policy_gate_warns_on_stale_provider_history(

@@ -1114,6 +1114,8 @@
       "providerE2eRequired": "Provider e2e required",
       "providerE2eReady": "Provider e2e ready",
       "providerE2eCasePassRate": "Provider e2e case pass rate",
+      "providerAutonomousPromotionBlocked": "Promotion blocked",
+      "providerAutonomousPromotionPassed": "Promotion passed",
       "providerLiveFaultFixture": "Provider live fault fixture",
       "qualityScore": "Quality",
       "qualityTrend": "Quality trend",

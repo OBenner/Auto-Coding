@@ -390,6 +390,10 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
   provider_e2e_case_pass_rate:
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eCasePassRate',
+  provider_autonomous_promotion_blocked:
+    'settings:aiProvider.runtimeDiagnosticValues.providerAutonomousPromotionBlocked',
+  provider_autonomous_promotion_passed:
+    'settings:aiProvider.runtimeDiagnosticValues.providerAutonomousPromotionPassed',
   provider_history_pass_rate:
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryPassRate',
   provider_live_fault_fixture:
@@ -1522,6 +1526,28 @@ export function buildProviderAutonomousPromotionGateDiagnosticRows(
   ].filter((row) => row.value);
 }
 
+function formatRuntimeAutonomousPromotionSummary(
+  translate: RuntimeDiagnosticTranslate,
+  gate?: string | null,
+  missingReliabilityCases?: string[] | null,
+  missingE2eRuns?: string[] | null
+): string {
+  const gateValue = formatRuntimeDiagnosticValue(
+    translate,
+    gate === 'passed'
+      ? 'provider_autonomous_promotion_passed'
+      : gate === 'blocked'
+        ? 'provider_autonomous_promotion_blocked'
+        : gate
+  );
+  const missingCases = formatRuntimeDiagnosticList(
+    translate,
+    missingReliabilityCases
+  );
+  const missingRuns = formatRuntimeDiagnosticList(translate, missingE2eRuns);
+  return [gateValue, missingCases, missingRuns].filter(Boolean).join(', ');
+}
+
 export function buildRuntimePolicyDiagnosticRows(
   translate: RuntimeDiagnosticTranslate,
   rows?: RuntimePolicyMatrixRow[] | null
@@ -1546,9 +1572,20 @@ export function buildRuntimePolicyDiagnosticRows(
         translate,
         row.autonomous_readiness_recommendation_reasons
       );
+      const autonomousPromotion = formatRuntimeAutonomousPromotionSummary(
+        translate,
+        row.autonomous_promotion_gate,
+        row.autonomous_promotion_missing_reliability_cases,
+        row.autonomous_promotion_missing_e2e_runs
+      );
       const runners = formatRuntimeDiagnosticList(translate, row.runner_candidates);
       const autonomousSuffix = row.autonomous_readiness_required
-        ? [autonomousGate, autonomousRecommendation, autonomousRecommendationReasons]
+        ? [
+          autonomousGate,
+          autonomousRecommendation,
+          autonomousRecommendationReasons,
+          autonomousPromotion,
+        ]
           .filter(Boolean)
           .join(', ')
         : '';
@@ -1610,8 +1647,19 @@ export function buildRuntimeCapabilityDiagnosticRows(
         translate,
         row.autonomous_readiness_recommendation_reasons
       );
+      const autonomousPromotion = formatRuntimeAutonomousPromotionSummary(
+        translate,
+        row.autonomous_promotion_gate,
+        row.autonomous_promotion_missing_reliability_cases,
+        row.autonomous_promotion_missing_e2e_runs
+      );
       const autonomousSuffix = row.autonomous_readiness_required
-        ? [autonomousGate, autonomousRecommendation, autonomousRecommendationReasons]
+        ? [
+          autonomousGate,
+          autonomousRecommendation,
+          autonomousRecommendationReasons,
+          autonomousPromotion,
+        ]
           .filter(Boolean)
           .join(', ')
         : '';

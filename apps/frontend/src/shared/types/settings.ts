@@ -931,6 +931,10 @@ export interface RuntimePolicyMatrixRow {
   autonomous_readiness_warnings?: string[];
   autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirementsPayload;
   autonomous_readiness_missing_requirements?: string[];
+  autonomous_promotion_gate?: string;
+  autonomous_promotion_ready?: boolean;
+  autonomous_promotion_missing_reliability_cases?: string[];
+  autonomous_promotion_missing_e2e_runs?: string[];
 }
 
 export interface RuntimeCapabilityMatrixRow {
@@ -956,6 +960,10 @@ export interface RuntimeCapabilityMatrixRow {
   autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirementsPayload;
   autonomous_readiness_missing_requirements?: string[];
   autonomous_readiness_next_actions?: string[];
+  autonomous_promotion_gate?: string;
+  autonomous_promotion_ready?: boolean;
+  autonomous_promotion_missing_reliability_cases?: string[];
+  autonomous_promotion_missing_e2e_runs?: string[];
   blockers: string[];
   warnings: string[];
   notes: string;
