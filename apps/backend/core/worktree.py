@@ -43,7 +43,12 @@ from typing import TypedDict, TypeVar
 logger = logging.getLogger(__name__)
 
 from core.gh_executable import get_gh_executable, invalidate_gh_cache
-from core.git_executable import get_git_executable, get_isolated_git_env, run_git
+from core.git_executable import (
+    WINDOWS_TRANSIENT_GIT_EXIT_CODES,
+    get_git_executable,
+    get_isolated_git_env,
+    run_git,
+)
 from debug import debug_warning
 
 T = TypeVar("T")
@@ -694,12 +699,30 @@ class WorktreeManager:
             # these commands is more reliable across Git versions/platforms than
             # combining branch creation with `git worktree add -b`.
             branch_result = self._run_git(["branch", branch_name, start_point])
-            if branch_result.returncode != 0 and not self._branch_exists(branch_name):
+            if branch_result.returncode == 0 or self._branch_exists(branch_name):
+                result = self._run_git(
+                    ["worktree", "add", str(worktree_path), branch_name]
+                )
+            elif branch_result.returncode in WINDOWS_TRANSIENT_GIT_EXIT_CODES:
+                print(
+                    "Branch creation hit a transient Windows git failure; "
+                    "retrying with git worktree add -b..."
+                )
+                result = self._run_git(
+                    [
+                        "worktree",
+                        "add",
+                        "-b",
+                        branch_name,
+                        str(worktree_path),
+                        start_point,
+                    ]
+                )
+            else:
                 raise WorktreeError(
                     f"Failed to create branch {branch_name} from {start_point}: "
                     f"{self._git_error_output(branch_result)}"
                 )
-            result = self._run_git(["worktree", "add", str(worktree_path), branch_name])
 
         if result.returncode != 0:
             raise WorktreeError(
