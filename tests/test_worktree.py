@@ -39,29 +39,30 @@ def _transient_branch_crash_git_runner(
     commands: list[list[str]],
 ):
     """Return a fake git runner that crashes on branch creation once."""
+    static_outcomes = {
+        ("worktree", "prune"): (0, "", ""),
+        ("rev-parse", "--verify", "auto-claude"): (1, "", ""),
+        ("fetch", "origin", "main"): (1, "", "no origin"),
+        ("rev-parse", "--verify", "origin/main"): (1, "", ""),
+        ("branch", "auto-claude/test-spec", "main"): (3221225794, "", ""),
+        ("remote", "get-url", "origin"): (1, "", ""),
+    }
 
     def fake_run_git(
         args: list[str], cwd: Path | None = None, timeout: int = 60
     ) -> subprocess.CompletedProcess:
         del cwd, timeout
         commands.append(args)
-        if args == ["worktree", "prune"]:
-            return _completed_git_process(args)
-        if args == ["rev-parse", "--verify", "auto-claude"]:
+
+        args_key = tuple(args)
+        if args_key in static_outcomes:
+            returncode, stdout, stderr = static_outcomes[args_key]
+            return _completed_git_process(args, returncode, stdout, stderr)
+        if args_key[:2] == ("show-ref", "--verify"):
             return _completed_git_process(args, returncode=1)
-        if args[0:2] == ["show-ref", "--verify"]:
-            return _completed_git_process(args, returncode=1)
-        if args == ["fetch", "origin", "main"]:
-            return _completed_git_process(args, returncode=1, stderr="no origin")
-        if args == ["rev-parse", "--verify", "origin/main"]:
-            return _completed_git_process(args, returncode=1)
-        if args == ["branch", "auto-claude/test-spec", "main"]:
-            return _completed_git_process(args, returncode=3221225794)
-        if args[:3] == ["worktree", "add", "-b"]:
+        if args_key[:3] == ("worktree", "add", "-b"):
             worktree_path.mkdir(parents=True, exist_ok=True)
             return _completed_git_process(args)
-        if args == ["remote", "get-url", "origin"]:
-            return _completed_git_process(args, returncode=1)
         return _completed_git_process(
             args,
             returncode=1,
