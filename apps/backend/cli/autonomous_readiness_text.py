@@ -74,6 +74,19 @@ def _live_fault_coverage_part(requirements: dict[str, Any]) -> str:
     return f"live fault coverage {live_fault_coverage}{suffix}"
 
 
+def _live_task_family_coverage_part(requirements: dict[str, Any]) -> str:
+    """Return live task-family coverage requirement summary."""
+    live_task_coverage = _requirement_bool(
+        requirements.get("live_task_family_coverage_complete")
+    )
+    if live_task_coverage is None:
+        return ""
+
+    missing_families = _string_list(requirements.get("live_task_missing_families"))
+    suffix = f" (missing {', '.join(missing_families)})" if missing_families else ""
+    return f"live task coverage {live_task_coverage}{suffix}"
+
+
 def format_autonomous_readiness_requirements(
     requirements: Any,
     *,
@@ -87,5 +100,6 @@ def format_autonomous_readiness_requirements(
         *_stable_run_parts(requirements),
         _history_freshness_part(requirements),
         _live_fault_coverage_part(requirements),
+        _live_task_family_coverage_part(requirements),
     ]
     return ", ".join(part for part in parts if part) or empty

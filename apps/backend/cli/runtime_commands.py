@@ -54,10 +54,13 @@ from agents.runtime.subagents import (
 )
 from cli.autonomous_readiness_text import format_autonomous_readiness_requirements
 from cli.provider_smoke_commands import (
+    PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS,
     PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS,
     PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
     PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL,
     PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES,
+    PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES,
+    PROVIDER_RELIABILITY_CASE_ORDER,
     PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
     PROVIDER_SMOKE_HISTORY_RELATIVE_PATH,
 )
@@ -562,7 +565,12 @@ def _runtime_policy_readiness_fields(
             "autonomous_readiness_warnings": [],
             "autonomous_readiness_requirements": {},
             "autonomous_readiness_missing_requirements": [],
+            "autonomous_promotion_gate": "not_required",
+            "autonomous_promotion_ready": False,
+            "autonomous_promotion_missing_reliability_cases": [],
+            "autonomous_promotion_missing_e2e_runs": [],
         }
+    promotion_gate = readiness["promotion_gate"]
     return {
         "autonomous_readiness_required": True,
         "autonomous_policy_gate": readiness["policy_gate"],
@@ -575,6 +583,12 @@ def _runtime_policy_readiness_fields(
         "autonomous_readiness_warnings": readiness["warnings"],
         "autonomous_readiness_requirements": readiness["requirements"],
         "autonomous_readiness_missing_requirements": readiness["missing_requirements"],
+        "autonomous_promotion_gate": promotion_gate["status"],
+        "autonomous_promotion_ready": promotion_gate["promotion_ready"],
+        "autonomous_promotion_missing_reliability_cases": promotion_gate[
+            "missing_reliability_cases"
+        ],
+        "autonomous_promotion_missing_e2e_runs": promotion_gate["missing_e2e_runs"],
     }
 
 
@@ -592,6 +606,13 @@ def _runtime_policy_decision(
         and readiness["policy_gate"] != "passed"
         and phase in {"coder", "qa_fixer"}
     ):
+        promotion_gate = readiness.get("promotion_gate")
+        if (
+            isinstance(promotion_gate, dict)
+            and promotion_gate.get("status") == "blocked"
+            and readiness["status"] == "full_autonomous_candidate"
+        ):
+            return "provider_e2e_required", "provider_autonomous_promotion_blocked"
         return str(readiness["recommendation"]), str(readiness["status"])
     return str(phase_policy["policy"]), str(phase_policy["reason"])
 
@@ -690,7 +711,12 @@ def _runtime_capability_readiness_fields(
             "autonomous_readiness_requirements": {},
             "autonomous_readiness_missing_requirements": [],
             "autonomous_readiness_next_actions": [],
+            "autonomous_promotion_gate": "not_required",
+            "autonomous_promotion_ready": False,
+            "autonomous_promotion_missing_reliability_cases": [],
+            "autonomous_promotion_missing_e2e_runs": [],
         }
+    promotion_gate = readiness["promotion_gate"]
     return {
         "autonomous_readiness_required": True,
         "autonomous_policy_gate": readiness["policy_gate"],
@@ -705,6 +731,12 @@ def _runtime_capability_readiness_fields(
         "autonomous_readiness_requirements": readiness["requirements"],
         "autonomous_readiness_missing_requirements": readiness["missing_requirements"],
         "autonomous_readiness_next_actions": readiness["next_actions"],
+        "autonomous_promotion_gate": promotion_gate["status"],
+        "autonomous_promotion_ready": promotion_gate["promotion_ready"],
+        "autonomous_promotion_missing_reliability_cases": promotion_gate[
+            "missing_reliability_cases"
+        ],
+        "autonomous_promotion_missing_e2e_runs": promotion_gate["missing_e2e_runs"],
     }
 
 
@@ -731,6 +763,13 @@ def _runtime_capability_blockers_and_warnings(
     if provider_row.provider == "ollama":
         warnings.append("local_model_quality_varies")
     if readiness is not None:
+        promotion_gate = readiness.get("promotion_gate")
+        if (
+            isinstance(promotion_gate, dict)
+            and promotion_gate.get("status") == "blocked"
+            and readiness["status"] == "full_autonomous_candidate"
+        ):
+            _extend_unique(blockers, ["provider_autonomous_promotion_blocked"])
         _extend_unique(blockers, readiness["blockers"])
         _extend_unique(warnings, readiness["warnings"])
     return blockers, warnings
@@ -752,7 +791,9 @@ def _runtime_capability_row(
         readiness,
     )
     full_autonomous_ready = has_full_runtime or (
-        readiness is not None and readiness["status"] == "full_autonomous_candidate"
+        readiness is not None
+        and isinstance(readiness.get("promotion_gate"), dict)
+        and readiness["promotion_gate"]["promotion_ready"] is True
     )
     return {
         "provider": provider_row.provider,
@@ -1081,6 +1122,17 @@ def _runtime_provider_live_fault_signals(
     return [], ["live_fault_probes_passed"]
 
 
+def _runtime_provider_live_task_family_signals(
+    provider_stats: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    """Return warning/evidence signals from live task-family coverage."""
+    if provider_stats.get("last_live_task_family_status") != "passed":
+        return ["live_task_family_evidence_missing"], []
+    if not _runtime_provider_live_task_family_coverage_complete(provider_stats):
+        return ["live_task_family_coverage_incomplete"], ["live_task_families_passed"]
+    return [], ["live_task_families_passed"]
+
+
 def _runtime_provider_eval_trend_warnings(provider_stats: dict[str, Any]) -> list[str]:
     """Return readiness warnings for degrading eval trends."""
     trend_fields = {
@@ -1128,8 +1180,13 @@ def _runtime_provider_readiness_signals(
         provider_stats
     )
     warnings.extend(live_fault_warnings)
-    warnings.extend(_runtime_provider_eval_trend_warnings(provider_stats))
     evidence.extend(live_fault_evidence)
+    live_task_warnings, live_task_evidence = _runtime_provider_live_task_family_signals(
+        provider_stats
+    )
+    warnings.extend(live_task_warnings)
+    warnings.extend(_runtime_provider_eval_trend_warnings(provider_stats))
+    evidence.extend(live_task_evidence)
 
     return blockers, warnings, evidence
 
@@ -1143,6 +1200,17 @@ def _runtime_provider_autonomous_readiness_from_history(
     status, recommendation = _runtime_provider_readiness_status(blockers, warnings)
 
     requirements = _runtime_provider_readiness_requirements(provider_stats)
+    missing_requirements = _runtime_provider_missing_requirements(
+        blockers,
+        warnings,
+        requirements,
+    )
+    promotion_gate = _runtime_provider_promotion_gate_from_history(
+        provider,
+        provider_stats,
+        readiness_status=status,
+        readiness_missing_requirements=missing_requirements,
+    )
     return {
         "provider": provider,
         "status": status,
@@ -1152,18 +1220,99 @@ def _runtime_provider_autonomous_readiness_from_history(
             blockers,
             warnings,
         ),
-        "policy_gate": "passed" if status == "full_autonomous_candidate" else "blocked",
+        "policy_gate": "passed" if promotion_gate["promotion_ready"] else "blocked",
         "blockers": blockers,
         "warnings": warnings,
         "evidence": evidence,
         "requirements": requirements,
-        "missing_requirements": _runtime_provider_missing_requirements(
-            blockers,
-            warnings,
-            requirements,
-        ),
+        "missing_requirements": missing_requirements,
+        "promotion_gate": promotion_gate,
         "next_actions": _runtime_provider_readiness_next_actions(blockers, warnings),
     }
+
+
+def _runtime_provider_promotion_gate_from_history(
+    provider: str,
+    provider_stats: dict[str, Any],
+    *,
+    readiness_status: str,
+    readiness_missing_requirements: list[str],
+) -> dict[str, Any]:
+    """Return the persisted direct-provider promotion gate for runtime policy."""
+    if provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return {
+            "status": "not_required",
+            "promotion_ready": False,
+            "required_reliability_cases": [],
+            "passed_reliability_cases": [],
+            "missing_reliability_cases": [],
+            "required_e2e_runs": [],
+            "passed_e2e_runs": [],
+            "missing_e2e_runs": [],
+        }
+
+    required_reliability_cases = _runtime_promotion_required_values(
+        provider_stats,
+        "promotion_required_reliability_cases",
+        PROVIDER_RELIABILITY_CASE_ORDER,
+    )
+    passed_reliability_cases = _runtime_promotion_passed_values(
+        provider_stats,
+        "promotion_passed_reliability_cases",
+        required_reliability_cases,
+    )
+    missing_reliability_cases = [
+        case
+        for case in required_reliability_cases
+        if case not in passed_reliability_cases
+    ]
+    required_e2e_runs = _runtime_promotion_required_values(
+        provider_stats,
+        "promotion_required_e2e_runs",
+        PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS,
+    )
+    passed_e2e_runs = _runtime_promotion_passed_values(
+        provider_stats,
+        "promotion_passed_e2e_runs",
+        required_e2e_runs,
+    )
+    missing_e2e_runs = [run for run in required_e2e_runs if run not in passed_e2e_runs]
+    promotion_ready = (
+        readiness_status == "full_autonomous_candidate"
+        and not readiness_missing_requirements
+        and not missing_reliability_cases
+        and not missing_e2e_runs
+    )
+    return {
+        "status": "passed" if promotion_ready else "blocked",
+        "promotion_ready": promotion_ready,
+        "required_reliability_cases": required_reliability_cases,
+        "passed_reliability_cases": passed_reliability_cases,
+        "missing_reliability_cases": missing_reliability_cases,
+        "required_e2e_runs": required_e2e_runs,
+        "passed_e2e_runs": passed_e2e_runs,
+        "missing_e2e_runs": missing_e2e_runs,
+    }
+
+
+def _runtime_promotion_required_values(
+    provider_stats: dict[str, Any],
+    key: str,
+    fallback_values: tuple[str, ...],
+) -> list[str]:
+    """Return required promotion values from history or the current contract."""
+    values = _runtime_string_list_payload(provider_stats.get(key))
+    return values or list(fallback_values)
+
+
+def _runtime_promotion_passed_values(
+    provider_stats: dict[str, Any],
+    key: str,
+    required_values: list[str],
+) -> list[str]:
+    """Return passed promotion values in required contract order."""
+    passed_values = set(_runtime_string_list_payload(provider_stats.get(key)))
+    return [value for value in required_values if value in passed_values]
 
 
 def _runtime_provider_readiness_history_is_stable_enough(
@@ -1344,13 +1493,47 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
         observed_live_fault_case_count,
         required_live_fault_case_count,
     )
+    live_task_family_has_evidence = any(
+        key in provider_stats
+        for key in (
+            "last_live_task_family_status",
+            "live_task_family_covered_families",
+            "observed_live_task_family_count",
+            "live_task_family_coverage_percent",
+        )
+    )
+    required_live_task_family_count = _runtime_eval_int_stat(
+        provider_stats.get("required_live_task_family_count")
+    ) or len(PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES)
+    observed_live_task_family_count = 0
+    live_task_family_coverage_percent = None
+    if live_task_family_has_evidence:
+        observed_live_task_family_count = _runtime_eval_int_stat(
+            provider_stats.get("observed_live_task_family_count")
+        )
+        if observed_live_task_family_count == 0:
+            observed_live_task_family_count = len(
+                set(
+                    _runtime_string_list_payload(
+                        provider_stats.get("live_task_family_covered_families")
+                    )
+                )
+            )
+        live_task_family_coverage_percent = _runtime_eval_percent_stat_or_metric(
+            provider_stats,
+            "live_task_family_coverage_percent",
+            observed_live_task_family_count,
+            required_live_task_family_count,
+        )
     quality_score = _runtime_provider_quality_score(
         e2e_case_pass_rate_percent,
         pass_rate_percent,
+        live_task_family_coverage_percent,
     )
     quality_score_source = _runtime_provider_quality_score_source(
         e2e_case_pass_rate_percent,
         pass_rate_percent,
+        live_task_family_coverage_percent,
     )
     safety_score = _runtime_provider_safety_score(
         reliability_passed_case_count,
@@ -1378,6 +1561,9 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
         "observed_live_fault_case_count": observed_live_fault_case_count,
         "required_live_fault_case_count": required_live_fault_case_count,
         "live_fault_probe_case_coverage_percent": live_fault_probe_case_coverage_percent,
+        "observed_live_task_family_count": observed_live_task_family_count,
+        "required_live_task_family_count": required_live_task_family_count,
+        "live_task_family_coverage_percent": live_task_family_coverage_percent,
         "safety_score": safety_score,
         "safety_score_source": safety_score_source,
         "quality_trend": _runtime_eval_string_stat(provider_stats.get("quality_trend")),
@@ -1413,18 +1599,32 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
 def _runtime_provider_quality_score(
     e2e_case_pass_rate_percent: int | None,
     pass_rate_percent: int | None,
+    live_task_family_coverage_percent: int | None,
 ) -> int | None:
     """Return the provider quality score from the strongest available evidence."""
-    if e2e_case_pass_rate_percent is not None:
-        return e2e_case_pass_rate_percent
+    quality_candidates = [
+        score
+        for score in (e2e_case_pass_rate_percent, live_task_family_coverage_percent)
+        if score is not None
+    ]
+    if quality_candidates:
+        return min(quality_candidates)
     return pass_rate_percent
 
 
 def _runtime_provider_quality_score_source(
     e2e_case_pass_rate_percent: int | None,
     pass_rate_percent: int | None,
+    live_task_family_coverage_percent: int | None,
 ) -> str:
     """Return the evidence source used by the provider quality score."""
+    if (
+        e2e_case_pass_rate_percent is not None
+        and live_task_family_coverage_percent is not None
+    ):
+        return "provider_e2e_and_live_task_coverage"
+    if live_task_family_coverage_percent is not None:
+        return "live_task_family_coverage"
     if e2e_case_pass_rate_percent is not None:
         return "provider_e2e_case_pass_rate"
     if pass_rate_percent is not None:
@@ -1596,6 +1796,21 @@ def _runtime_provider_live_fault_coverage_complete(
     )
 
 
+def _runtime_provider_live_task_family_coverage_complete(
+    provider_stats: dict[str, Any],
+) -> bool:
+    """Return whether live task history covered every required task family."""
+    covered_families = set(
+        _runtime_string_list_payload(
+            provider_stats.get("live_task_family_covered_families")
+        )
+    )
+    return all(
+        required_family in covered_families
+        for required_family in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
+
+
 def _runtime_provider_readiness_requirements(
     provider_stats: dict[str, Any],
 ) -> dict[str, Any]:
@@ -1619,6 +1834,25 @@ def _runtime_provider_readiness_requirements(
         provider_stats.get("last_live_fault_probe_status") == "passed"
         and not live_fault_missing_cases
     )
+    required_live_task_families = sorted(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
+    live_task_covered_families = sorted(
+        set(
+            _runtime_string_list_payload(
+                provider_stats.get("live_task_family_covered_families")
+            )
+        )
+    )
+    live_task_missing_families = [
+        required_family
+        for required_family in required_live_task_families
+        if required_family not in live_task_covered_families
+    ]
+    live_task_family_coverage_complete = (
+        provider_stats.get("last_live_task_family_status") == "passed"
+        and not live_task_missing_families
+    )
     requirements = {
         "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
         "observed_recent_window": _runtime_provider_readiness_recent_window(
@@ -1634,6 +1868,10 @@ def _runtime_provider_readiness_requirements(
         "live_fault_covered_cases": live_fault_covered_cases,
         "live_fault_missing_cases": live_fault_missing_cases,
         "live_fault_coverage_complete": live_fault_coverage_complete,
+        "required_live_task_families": required_live_task_families,
+        "live_task_covered_families": live_task_covered_families,
+        "live_task_missing_families": live_task_missing_families,
+        "live_task_family_coverage_complete": live_task_family_coverage_complete,
     }
     last_run_at = _runtime_provider_readiness_last_run_at(provider_stats)
     if last_run_at is not None:
@@ -1675,6 +1913,8 @@ def _runtime_provider_missing_requirements(
         missing.append("fresh_provider_history")
     if requirements.get("live_fault_coverage_complete") is not True:
         missing.append("live_fault_case_coverage")
+    if requirements.get("live_task_family_coverage_complete") is not True:
+        missing.append("live_task_family_coverage")
     if any(warning.endswith("_trend_degrading") for warning in warnings):
         missing.append("stable_eval_trends")
     return missing

@@ -19,6 +19,59 @@ from pathlib import Path
 from worktree import WorktreeInfo, WorktreeManager
 
 
+def _completed_git_process(
+    args: list[str],
+    returncode: int = 0,
+    stdout: str = "",
+    stderr: str = "",
+) -> subprocess.CompletedProcess:
+    """Return a fake completed git subprocess."""
+    return subprocess.CompletedProcess(
+        args=["git", *args],
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def _transient_branch_crash_git_runner(
+    worktree_path: Path,
+    commands: list[list[str]],
+):
+    """Return a fake git runner that crashes on branch creation once."""
+    static_outcomes = {
+        ("worktree", "prune"): (0, "", ""),
+        ("rev-parse", "--verify", "auto-claude"): (1, "", ""),
+        ("fetch", "origin", "main"): (1, "", "no origin"),
+        ("rev-parse", "--verify", "origin/main"): (1, "", ""),
+        ("branch", "auto-claude/test-spec", "main"): (3221225794, "", ""),
+        ("remote", "get-url", "origin"): (1, "", ""),
+    }
+
+    def fake_run_git(
+        args: list[str], cwd: Path | None = None, timeout: int = 60
+    ) -> subprocess.CompletedProcess:
+        del cwd, timeout
+        commands.append(args)
+
+        args_key = tuple(args)
+        if args_key in static_outcomes:
+            returncode, stdout, stderr = static_outcomes[args_key]
+            return _completed_git_process(args, returncode, stdout, stderr)
+        if args_key[:2] == ("show-ref", "--verify"):
+            return _completed_git_process(args, returncode=1)
+        if args_key[:3] == ("worktree", "add", "-b"):
+            worktree_path.mkdir(parents=True, exist_ok=True)
+            return _completed_git_process(args)
+        return _completed_git_process(
+            args,
+            returncode=1,
+            stderr=f"unexpected git args: {args}",
+        )
+
+    return fake_run_git
+
+
 class TestWorktreeManagerInitialization:
     """Tests for WorktreeManager initialization."""
 
@@ -89,6 +142,39 @@ class TestWorktreeCreation:
         assert info.branch == "auto-claude/test-spec"
         assert info.is_active is True
         assert (info.path / "README.md").exists()
+
+    def test_create_worktree_falls_back_when_branch_creation_crashes(
+        self, temp_git_repo: Path, monkeypatch
+    ):
+        """Can create a worktree when Windows git crashes during branch creation."""
+        manager = WorktreeManager(temp_git_repo)
+        manager.setup()
+        commands: list[list[str]] = []
+        fake_run_git = _transient_branch_crash_git_runner(
+            manager.get_worktree_path("test-spec"),
+            commands,
+        )
+
+        monkeypatch.setattr(manager, "_run_git", fake_run_git)
+
+        info = manager.create_worktree("test-spec")
+
+        assert info.path.exists()
+        assert info.branch == "auto-claude/test-spec"
+        assert [
+            "worktree",
+            "add",
+            "-b",
+            "auto-claude/test-spec",
+            str(info.path),
+            "main",
+        ] in commands
+        assert [
+            "worktree",
+            "add",
+            str(info.path),
+            "auto-claude/test-spec",
+        ] not in commands
 
     def test_create_worktree_with_spec_name(self, temp_git_repo: Path):
         """Worktree branch is derived from spec name."""

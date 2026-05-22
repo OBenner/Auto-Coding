@@ -221,6 +221,7 @@ PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = Path(
 PROVIDER_SMOKE_HISTORY_MAX_RUNS = 100
 PROVIDER_SMOKE_HISTORY_TREND_WINDOW = 5
 PROVIDER_E2E_LIVE_FAULT_PROBES_ENV = "AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES"
+PROVIDER_E2E_LIVE_TASKS_ENV = "AUTO_CODE_PROVIDER_E2E_LIVE_TASKS"
 PROVIDER_E2E_LIVE_FAULT_CASES = {
     "unsupported_tools": {
         "suffix": "UNSUPPORTED_TOOLS_ERROR",
@@ -239,10 +240,50 @@ PROVIDER_E2E_LIVE_FAULT_CASES = {
         "failed_message": "Live gateway/model fault probe failed",
     },
 }
+PROVIDER_E2E_LIVE_TASK_FAMILIES = {
+    "single_file_edit": {
+        "suffix": "SINGLE_FILE_EDIT_STATUS",
+        "runtime_mode": "live_task_single_file_edit",
+        "passed_message": "Live single-file edit task family passed",
+        "skipped_message": "Live single-file edit task family skipped",
+        "failed_message": "Live single-file edit task family failed",
+    },
+    "multi_step_edit": {
+        "suffix": "MULTI_STEP_EDIT_STATUS",
+        "runtime_mode": "live_task_multi_step_edit",
+        "passed_message": "Live multi-step edit task family passed",
+        "skipped_message": "Live multi-step edit task family skipped",
+        "failed_message": "Live multi-step edit task family failed",
+    },
+    "recovery_resume": {
+        "suffix": "RECOVERY_RESUME_STATUS",
+        "runtime_mode": "live_task_recovery_resume",
+        "passed_message": "Live recovery/resume task family passed",
+        "skipped_message": "Live recovery/resume task family skipped",
+        "failed_message": "Live recovery/resume task family failed",
+    },
+    "transaction_batching": {
+        "suffix": "TRANSACTION_BATCHING_STATUS",
+        "runtime_mode": "live_task_transaction_batching",
+        "passed_message": "Live transaction batching task family passed",
+        "skipped_message": "Live transaction batching task family skipped",
+        "failed_message": "Live transaction batching task family failed",
+    },
+}
 PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = 3
 PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = 7 * 24 * 60 * 60
 PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
     PROVIDER_E2E_LIVE_FAULT_CASES
+)
+PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES = tuple(
+    PROVIDER_E2E_LIVE_TASK_FAMILIES
+)
+PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS = (
+    "generic_edit",
+    "mini_pipeline",
+    "transaction_batch_probe",
+    "unsupported_tools_probe",
+    "gateway_model_probe",
 )
 PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
     "provider_e2e_failed": "provider_e2e_failed",
@@ -258,6 +299,8 @@ PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
     "provider_history_freshness_unknown": "history_freshness_unknown",
     "live_fault_probe_evidence_missing": "live_fault_probe_missing",
     "live_fault_probe_coverage_incomplete": "live_fault_coverage_incomplete",
+    "live_task_family_evidence_missing": "live_task_family_missing",
+    "live_task_family_coverage_incomplete": "live_task_family_coverage_incomplete",
     "quality_trend_degrading": "quality_trend_degrading",
     "stability_trend_degrading": "stability_trend_degrading",
     "safety_trend_degrading": "safety_trend_degrading",
@@ -312,34 +355,12 @@ def _provider_smoke_history_record(
 ) -> dict[str, Any]:
     """Build a compact persisted provider smoke evidence record."""
     runtime_diagnostics = result.runtime_diagnostics
-    reliability = runtime_diagnostics.get("provider_reliability")
-    reliability = reliability if isinstance(reliability, dict) else {}
-    provider_e2e_suite = runtime_diagnostics.get("provider_e2e_suite")
-    provider_e2e_suite = (
-        provider_e2e_suite if isinstance(provider_e2e_suite, dict) else {}
-    )
+    reliability = _dict_payload(runtime_diagnostics.get("provider_reliability"))
+    provider_e2e_suite = _dict_payload(runtime_diagnostics.get("provider_e2e_suite"))
     suite_runs = provider_e2e_suite.get("runs")
     e2e_case_counts = _provider_e2e_suite_case_counts(suite_runs)
-    failed_suite_runs = (
-        [
-            str(run.get("runtime_mode") or "unknown")
-            for run in suite_runs
-            if isinstance(run, dict) and run.get("status") != "passed"
-        ]
-        if isinstance(suite_runs, list)
-        else []
-    )
+    failed_suite_runs = _provider_e2e_failed_suite_runs(suite_runs)
     reliability_case_counts = _provider_reliability_case_counts(reliability)
-    live_fault_probes = runtime_diagnostics.get("provider_e2e_live_fault_probes")
-    live_fault_probes = live_fault_probes if isinstance(live_fault_probes, dict) else {}
-    live_fault_probe_status = live_fault_probes.get("status")
-    live_fault_probe_enabled = live_fault_probes.get("enabled")
-    live_fault_probe_covered_cases = _string_list_payload(
-        live_fault_probes.get("covered_cases")
-    )
-    live_fault_probe_missing_env = _string_list_payload(
-        live_fault_probes.get("missing_env")
-    )
     record: dict[str, Any] = {
         "timestamp": timestamp or _utc_timestamp(),
         "provider": result.provider,
@@ -356,20 +377,119 @@ def _provider_smoke_history_record(
         **reliability_case_counts,
         "failed_suite_runs": failed_suite_runs,
     }
-    if isinstance(live_fault_probe_status, str) and live_fault_probe_status:
-        record["live_fault_probe_status"] = live_fault_probe_status
-    if isinstance(live_fault_probe_enabled, bool):
-        record["live_fault_probe_enabled"] = live_fault_probe_enabled
-    if live_fault_probe_covered_cases:
-        record["live_fault_probe_covered_cases"] = live_fault_probe_covered_cases
-    if live_fault_probe_missing_env:
-        record["live_fault_probe_missing_env_count"] = len(live_fault_probe_missing_env)
+    record.update(
+        _provider_live_fault_probe_history_record(
+            _dict_payload(runtime_diagnostics.get("provider_e2e_live_fault_probes"))
+        )
+    )
+    record.update(
+        _provider_live_task_family_history_record(
+            _dict_payload(runtime_diagnostics.get("provider_e2e_live_task_families"))
+        )
+    )
     cost_record = _provider_smoke_cost_record(result)
     if cost_record:
         record.update(cost_record)
     if result.error_details:
         record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
+    record.update(_provider_smoke_promotion_record(result))
     return record
+
+
+def _dict_payload(value: Any) -> dict[str, Any]:
+    """Return a dictionary payload or an empty dictionary."""
+    return value if isinstance(value, dict) else {}
+
+
+def _provider_e2e_failed_suite_runs(suite_runs: Any) -> list[str]:
+    """Return failed provider e2e child runtime modes."""
+    if not isinstance(suite_runs, list):
+        return []
+    return [
+        str(run.get("runtime_mode") or "unknown")
+        for run in suite_runs
+        if isinstance(run, dict) and run.get("status") != "passed"
+    ]
+
+
+def _provider_live_fault_probe_history_record(
+    live_fault_probes: dict[str, Any],
+) -> dict[str, Any]:
+    """Return persisted live fault probe evidence fields."""
+    record: dict[str, Any] = {}
+    status = live_fault_probes.get("status")
+    if isinstance(status, str) and status:
+        record["live_fault_probe_status"] = status
+    enabled = live_fault_probes.get("enabled")
+    if isinstance(enabled, bool):
+        record["live_fault_probe_enabled"] = enabled
+    covered_cases = _string_list_payload(live_fault_probes.get("covered_cases"))
+    if covered_cases:
+        record["live_fault_probe_covered_cases"] = covered_cases
+    missing_env = _string_list_payload(live_fault_probes.get("missing_env"))
+    if missing_env:
+        record["live_fault_probe_missing_env_count"] = len(missing_env)
+    return record
+
+
+def _provider_live_task_family_history_record(
+    live_task_families: dict[str, Any],
+) -> dict[str, Any]:
+    """Return persisted live task-family evidence fields."""
+    record: dict[str, Any] = {}
+    status = live_task_families.get("status")
+    if isinstance(status, str) and status:
+        record["live_task_family_status"] = status
+    enabled = live_task_families.get("enabled")
+    if isinstance(enabled, bool):
+        record["live_task_family_enabled"] = enabled
+    covered_families = _string_list_payload(live_task_families.get("covered_families"))
+    if covered_families:
+        record["live_task_family_covered_families"] = covered_families
+    failed_families = _string_list_payload(live_task_families.get("failed_families"))
+    if failed_families:
+        record["live_task_family_failed_families"] = failed_families
+    missing_env = _string_list_payload(live_task_families.get("missing_env"))
+    if missing_env:
+        record["live_task_family_missing_env_count"] = len(missing_env)
+    return record
+
+
+def _provider_smoke_promotion_record(result: ProviderSmokeResult) -> dict[str, Any]:
+    """Return per-run promotion evidence that can be persisted in history."""
+    if result.provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return {}
+    smoke_scope = result.runtime_diagnostics.get("smoke_scope")
+    if (
+        result.runtime_mode != "provider_e2e"
+        and smoke_scope != "direct_api_full_autonomy_e2e"
+    ):
+        return {}
+    required_reliability_cases = list(PROVIDER_RELIABILITY_CASE_ORDER)
+    passed_reliability_cases = _provider_promotion_passed_reliability_cases(
+        result.runtime_diagnostics.get("provider_reliability")
+    )
+    missing_reliability_cases = [
+        case
+        for case in required_reliability_cases
+        if case not in passed_reliability_cases
+    ]
+    required_e2e_runs = list(PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS)
+    passed_e2e_runs = _provider_promotion_passed_e2e_runs(
+        result.runtime_diagnostics.get("provider_e2e_suite")
+    )
+    missing_e2e_runs = [run for run in required_e2e_runs if run not in passed_e2e_runs]
+    return {
+        "promotion_gate_status": "passed"
+        if not missing_reliability_cases and not missing_e2e_runs
+        else "blocked",
+        "promotion_required_reliability_cases": required_reliability_cases,
+        "promotion_passed_reliability_cases": passed_reliability_cases,
+        "promotion_missing_reliability_cases": missing_reliability_cases,
+        "promotion_required_e2e_runs": required_e2e_runs,
+        "promotion_passed_e2e_runs": passed_e2e_runs,
+        "promotion_missing_e2e_runs": missing_e2e_runs,
+    }
 
 
 def _provider_e2e_suite_case_counts(suite_runs: Any) -> dict[str, int]:
@@ -604,6 +724,7 @@ def _provider_smoke_history_recent_runs(
         "reliability_status",
         "provider_e2e_status",
         "live_fault_probe_status",
+        "live_task_family_status",
     )
     for run in runs:
         item = {
@@ -632,6 +753,12 @@ def _provider_smoke_history_provider_stats(
         stats["live_fault_probe_covered_cases"] = sorted(
             stats["live_fault_probe_covered_cases"]
         )
+        stats["live_task_family_covered_families"] = sorted(
+            stats["live_task_family_covered_families"]
+        )
+        stats["live_task_family_failed_families"] = sorted(
+            stats["live_task_family_failed_families"]
+        )
         stats.update(_provider_smoke_history_trend(provider_runs.get(provider, [])))
         stats.update(_provider_smoke_history_metrics(stats))
     return providers
@@ -659,6 +786,18 @@ def _provider_smoke_empty_provider_stats() -> dict[str, Any]:
         "live_fault_probe_enabled_runs": 0,
         "live_fault_probe_passed_runs": 0,
         "live_fault_probe_covered_cases": [],
+        "last_live_task_family_status": None,
+        "live_task_family_enabled_runs": 0,
+        "live_task_family_passed_runs": 0,
+        "live_task_family_covered_families": [],
+        "live_task_family_failed_families": [],
+        "last_promotion_gate_status": None,
+        "promotion_required_reliability_cases": [],
+        "promotion_passed_reliability_cases": [],
+        "promotion_missing_reliability_cases": [],
+        "promotion_required_e2e_runs": [],
+        "promotion_passed_e2e_runs": [],
+        "promotion_missing_e2e_runs": [],
     }
 
 
@@ -682,6 +821,8 @@ def _provider_smoke_history_apply_run_stats(
     stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
     _provider_smoke_history_apply_case_stats(stats, run)
     _provider_smoke_history_apply_live_fault_stats(stats, run)
+    _provider_smoke_history_apply_live_task_family_stats(stats, run)
+    _provider_smoke_history_apply_promotion_stats(stats, run)
     _provider_smoke_history_apply_cost_stats(stats, run)
 
 
@@ -721,6 +862,63 @@ def _provider_smoke_history_apply_live_fault_stats(
     for covered_case in _string_list_payload(run.get("live_fault_probe_covered_cases")):
         if covered_case not in existing_cases:
             existing_cases.append(covered_case)
+
+
+def _provider_smoke_history_apply_live_task_family_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+) -> None:
+    """Apply live task-family evidence from one persisted run."""
+    live_task_family_status = run.get("live_task_family_status")
+    stats["last_live_task_family_status"] = (
+        live_task_family_status
+        if isinstance(live_task_family_status, str) and live_task_family_status
+        else None
+    )
+    if run.get("live_task_family_enabled") is True:
+        stats["live_task_family_enabled_runs"] = (
+            int(stats.get("live_task_family_enabled_runs") or 0) + 1
+        )
+    if live_task_family_status == "passed":
+        stats["live_task_family_passed_runs"] = (
+            int(stats.get("live_task_family_passed_runs") or 0) + 1
+        )
+    covered_families = _string_list_payload(
+        run.get("live_task_family_covered_families")
+    )
+    existing_covered = stats["live_task_family_covered_families"]
+    for covered_family in covered_families:
+        if covered_family not in existing_covered:
+            existing_covered.append(covered_family)
+    failed_families = _string_list_payload(run.get("live_task_family_failed_families"))
+    existing_failed = stats["live_task_family_failed_families"]
+    for failed_family in failed_families:
+        if failed_family not in existing_failed:
+            existing_failed.append(failed_family)
+
+
+def _provider_smoke_history_apply_promotion_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+) -> None:
+    """Apply latest direct-provider promotion evidence from one persisted run."""
+    if "promotion_gate_status" not in run:
+        return
+    promotion_status = run.get("promotion_gate_status")
+    stats["last_promotion_gate_status"] = (
+        promotion_status
+        if isinstance(promotion_status, str) and promotion_status
+        else None
+    )
+    for key in (
+        "promotion_required_reliability_cases",
+        "promotion_passed_reliability_cases",
+        "promotion_missing_reliability_cases",
+        "promotion_required_e2e_runs",
+        "promotion_passed_e2e_runs",
+        "promotion_missing_e2e_runs",
+    ):
+        stats[key] = _string_list_payload(run.get(key))
 
 
 def _provider_smoke_history_apply_cost_stats(
@@ -882,8 +1080,26 @@ def _provider_smoke_run_quality_score(run: dict[str, Any]) -> int | None:
         _int_payload_value(run, "e2e_passed_case_count"),
         _int_payload_value(run, "e2e_case_count"),
     )
-    if e2e_score is not None:
-        return e2e_score
+    live_task_score = None
+    if any(
+        key in run
+        for key in (
+            "live_task_family_status",
+            "live_task_family_covered_families",
+            "live_task_family_missing_env_count",
+        )
+    ):
+        live_task_score = _provider_smoke_percent_metric(
+            len(
+                set(_string_list_payload(run.get("live_task_family_covered_families")))
+            ),
+            len(PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES),
+        )
+    quality_scores = [
+        score for score in (e2e_score, live_task_score) if score is not None
+    ]
+    if quality_scores:
+        return min(quality_scores)
     return _provider_smoke_run_status_score(run)
 
 
@@ -971,6 +1187,12 @@ def _provider_smoke_history_metrics(stats: dict[str, Any]) -> dict[str, Any]:
     observed_live_fault_case_count = len(
         _string_list_payload(stats.get("live_fault_probe_covered_cases"))
     )
+    required_live_task_family_count = len(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
+    observed_live_task_family_count = len(
+        _string_list_payload(stats.get("live_task_family_covered_families"))
+    )
     return {
         "pass_rate_percent": _provider_smoke_percent_metric(
             passed_runs,
@@ -993,6 +1215,12 @@ def _provider_smoke_history_metrics(stats: dict[str, Any]) -> dict[str, Any]:
         "live_fault_probe_case_coverage_percent": _provider_smoke_percent_metric(
             observed_live_fault_case_count,
             required_live_fault_case_count,
+        ),
+        "observed_live_task_family_count": observed_live_task_family_count,
+        "required_live_task_family_count": required_live_task_family_count,
+        "live_task_family_coverage_percent": _provider_smoke_percent_metric(
+            observed_live_task_family_count,
+            required_live_task_family_count,
         ),
     }
 
@@ -1042,6 +1270,11 @@ def _provider_autonomous_readiness_diagnostics(
     history_warnings = warnings[history_warning_offset:]
     del warnings[history_warning_offset:]
     _provider_readiness_live_fault_evidence(history_summary, warnings, evidence)
+    _provider_readiness_live_task_family_evidence(
+        history_summary,
+        warnings,
+        evidence,
+    )
     warnings.extend(history_warnings)
     _provider_readiness_eval_trend_evidence(history_summary, warnings)
 
@@ -1183,6 +1416,33 @@ def _provider_readiness_live_fault_coverage_complete(
     )
 
 
+def _provider_readiness_live_task_family_evidence(
+    history_summary: dict[str, Any],
+    warnings: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply live task-family evidence to readiness lists."""
+    if history_summary.get("last_live_task_family_status") == "passed":
+        evidence.append("live_task_families_passed")
+        if not _provider_readiness_live_task_family_coverage_complete(history_summary):
+            warnings.append("live_task_family_coverage_incomplete")
+    else:
+        warnings.append("live_task_family_evidence_missing")
+
+
+def _provider_readiness_live_task_family_coverage_complete(
+    history_summary: dict[str, Any],
+) -> bool:
+    """Return whether live task families covered every required provider task."""
+    covered_families = set(
+        _string_list_payload(history_summary.get("live_task_family_covered_families"))
+    )
+    return all(
+        required_family in covered_families
+        for required_family in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
+
+
 def _provider_readiness_eval_trend_evidence(
     history_summary: dict[str, Any],
     warnings: list[str],
@@ -1219,6 +1479,21 @@ def _provider_readiness_requirements(
         history_summary.get("last_live_fault_probe_status") == "passed"
         and not live_fault_missing_cases
     )
+    required_live_task_families = sorted(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
+    live_task_covered_families = sorted(
+        _string_list_payload(history_summary.get("live_task_family_covered_families"))
+    )
+    live_task_missing_families = [
+        required_family
+        for required_family in required_live_task_families
+        if required_family not in live_task_covered_families
+    ]
+    live_task_family_coverage_complete = (
+        history_summary.get("last_live_task_family_status") == "passed"
+        and not live_task_missing_families
+    )
     requirements = {
         "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
         "observed_recent_window": recent_window,
@@ -1230,6 +1505,10 @@ def _provider_readiness_requirements(
         "live_fault_covered_cases": live_fault_covered_cases,
         "live_fault_missing_cases": live_fault_missing_cases,
         "live_fault_coverage_complete": live_fault_coverage_complete,
+        "required_live_task_families": required_live_task_families,
+        "live_task_covered_families": live_task_covered_families,
+        "live_task_missing_families": live_task_missing_families,
+        "live_task_family_coverage_complete": live_task_family_coverage_complete,
     }
     last_run_at = _provider_readiness_last_run_at(history_summary)
     if last_run_at is not None:
@@ -1318,6 +1597,8 @@ def _provider_readiness_missing_requirements(
         missing.append("fresh_provider_history")
     if requirements.get("live_fault_coverage_complete") is not True:
         missing.append("live_fault_case_coverage")
+    if requirements.get("live_task_family_coverage_complete") is not True:
+        missing.append("live_task_family_coverage")
     if any(warning.endswith("_trend_degrading") for warning in warnings):
         missing.append("stable_eval_trends")
     return missing
@@ -1371,6 +1652,8 @@ def _provider_readiness_next_actions(
         "provider_history_unknown": "collect_provider_history_runs",
         "live_fault_probe_evidence_missing": "enable_live_fault_probes",
         "live_fault_probe_coverage_incomplete": "enable_live_fault_probes",
+        "live_task_family_evidence_missing": "enable_live_task_families",
+        "live_task_family_coverage_incomplete": "enable_live_task_families",
         "provider_history_insufficient_runs": "collect_provider_history_runs",
         "provider_history_warming_up": "collect_provider_history_runs",
         "provider_history_flaky": "stabilize_provider_history",
@@ -1449,6 +1732,52 @@ def _with_provider_run_history(
                 "live_fault_probe_covered_cases",
                 [],
             ),
+            "last_live_task_family_status": provider_stats.get(
+                "last_live_task_family_status"
+            ),
+            "live_task_family_enabled_runs": provider_stats.get(
+                "live_task_family_enabled_runs",
+                0,
+            ),
+            "live_task_family_passed_runs": provider_stats.get(
+                "live_task_family_passed_runs",
+                0,
+            ),
+            "live_task_family_covered_families": provider_stats.get(
+                "live_task_family_covered_families",
+                [],
+            ),
+            "live_task_family_failed_families": provider_stats.get(
+                "live_task_family_failed_families",
+                [],
+            ),
+            "last_promotion_gate_status": provider_stats.get(
+                "last_promotion_gate_status"
+            ),
+            "promotion_required_reliability_cases": provider_stats.get(
+                "promotion_required_reliability_cases",
+                [],
+            ),
+            "promotion_passed_reliability_cases": provider_stats.get(
+                "promotion_passed_reliability_cases",
+                [],
+            ),
+            "promotion_missing_reliability_cases": provider_stats.get(
+                "promotion_missing_reliability_cases",
+                [],
+            ),
+            "promotion_required_e2e_runs": provider_stats.get(
+                "promotion_required_e2e_runs",
+                [],
+            ),
+            "promotion_passed_e2e_runs": provider_stats.get(
+                "promotion_passed_e2e_runs",
+                [],
+            ),
+            "promotion_missing_e2e_runs": provider_stats.get(
+                "promotion_missing_e2e_runs",
+                [],
+            ),
             "trend": provider_stats.get("trend"),
             "trend_reason": provider_stats.get("trend_reason"),
             "recent_window": provider_stats.get("recent_window"),
@@ -1472,6 +1801,15 @@ def _with_provider_run_history(
             ),
             "live_fault_probe_case_coverage_percent": provider_stats.get(
                 "live_fault_probe_case_coverage_percent",
+            ),
+            "observed_live_task_family_count": provider_stats.get(
+                "observed_live_task_family_count",
+            ),
+            "required_live_task_family_count": provider_stats.get(
+                "required_live_task_family_count",
+            ),
+            "live_task_family_coverage_percent": provider_stats.get(
+                "live_task_family_coverage_percent",
             ),
             "quality_trend": provider_stats.get("quality_trend"),
             "quality_delta_percent": provider_stats.get("quality_delta_percent"),
@@ -1527,17 +1865,115 @@ def _with_provider_run_history(
             ),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }
+    readiness = _provider_autonomous_readiness_diagnostics(
+        result,
+        history_summary,
+    )
     return replace(
         result,
         runtime_diagnostics={
             **result.runtime_diagnostics,
             "provider_run_history": history_summary,
-            "provider_autonomous_readiness": _provider_autonomous_readiness_diagnostics(
-                result,
-                history_summary,
+            "provider_autonomous_readiness": readiness,
+            "provider_autonomous_promotion_gate": (
+                _provider_autonomous_promotion_gate(
+                    result,
+                    readiness,
+                )
             ),
         },
     )
+
+
+def _provider_autonomous_promotion_gate(
+    result: ProviderSmokeResult,
+    readiness: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the direct-provider full-autonomy promotion contract."""
+    provider = result.provider
+    if provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return {
+            "status": "not_required",
+            "provider": provider,
+            "source": "provider_autonomous_promotion_gate",
+            "promotion_ready": False,
+            "required_reliability_cases": [],
+            "passed_reliability_cases": [],
+            "missing_reliability_cases": [],
+            "required_e2e_runs": [],
+            "observed_e2e_runs": [],
+            "missing_e2e_runs": [],
+            "readiness_status": str(readiness.get("status") or "not_required"),
+            "readiness_missing_requirements": [],
+        }
+
+    required_cases = list(PROVIDER_RELIABILITY_CASE_ORDER)
+    passed_cases = _provider_promotion_passed_reliability_cases(
+        result.runtime_diagnostics.get("provider_reliability"),
+    )
+    missing_cases = [case for case in required_cases if case not in passed_cases]
+    required_e2e_runs = list(PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS)
+    observed_e2e_runs = _provider_promotion_passed_e2e_runs(
+        result.runtime_diagnostics.get("provider_e2e_suite"),
+    )
+    missing_e2e_runs = [
+        run for run in required_e2e_runs if run not in observed_e2e_runs
+    ]
+    readiness_missing_requirements = _string_list_payload(
+        readiness.get("missing_requirements")
+    )
+    promotion_ready = (
+        readiness.get("status") == "full_autonomous_candidate"
+        and not missing_cases
+        and not missing_e2e_runs
+        and not readiness_missing_requirements
+    )
+    return {
+        "status": "passed" if promotion_ready else "blocked",
+        "provider": provider,
+        "source": "provider_autonomous_promotion_gate",
+        "promotion_ready": promotion_ready,
+        "required_reliability_cases": required_cases,
+        "passed_reliability_cases": passed_cases,
+        "missing_reliability_cases": missing_cases,
+        "required_e2e_runs": required_e2e_runs,
+        "observed_e2e_runs": observed_e2e_runs,
+        "missing_e2e_runs": missing_e2e_runs,
+        "readiness_status": str(readiness.get("status") or "unknown"),
+        "readiness_missing_requirements": readiness_missing_requirements,
+    }
+
+
+def _provider_promotion_passed_reliability_cases(reliability: Any) -> list[str]:
+    """Return required reliability cases that passed in canonical order."""
+    if not isinstance(reliability, dict):
+        return []
+    cases = reliability.get("cases")
+    if not isinstance(cases, list):
+        return []
+    passed = {
+        str(case.get("case") or "")
+        for case in cases
+        if isinstance(case, dict) and case.get("status") == "passed"
+    }
+    return [case for case in PROVIDER_RELIABILITY_CASE_ORDER if case in passed]
+
+
+def _provider_promotion_passed_e2e_runs(provider_e2e_suite: Any) -> list[str]:
+    """Return required provider e2e run modes that passed in canonical order."""
+    if not isinstance(provider_e2e_suite, dict):
+        return []
+    runs = provider_e2e_suite.get("runs")
+    if not isinstance(runs, list):
+        return []
+    passed = {
+        str(run.get("runtime_mode") or "")
+        for run in runs
+        if isinstance(run, dict) and run.get("status") == "passed"
+    }
+    return [
+        run for run in PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS if run in passed
+    ]
 
 
 def _response_excerpt(response_text: str, max_chars: int = 500) -> str:
@@ -3513,6 +3949,314 @@ def _provider_e2e_live_fault_probe_runs(
     return runs
 
 
+def _provider_live_task_required_env(provider: str) -> list[str]:
+    """Return the opt-in env contract for provider live task-family fixtures."""
+    provider_token = _provider_live_fault_env_provider(provider)
+    required_env = [PROVIDER_E2E_LIVE_TASKS_ENV]
+    for family_config in PROVIDER_E2E_LIVE_TASK_FAMILIES.values():
+        suffix = str(family_config["suffix"])
+        required_env.append(
+            " or ".join(
+                [
+                    f"AUTO_CODE_PROVIDER_E2E_LIVE_{provider_token}_{suffix}",
+                    f"AUTO_CODE_PROVIDER_E2E_LIVE_{suffix}",
+                ]
+            )
+        )
+    return required_env
+
+
+def _provider_live_task_status_env_names(provider: str, suffix: str) -> list[str]:
+    """Return provider-specific then generic live task-family env names."""
+    provider_token = _provider_live_fault_env_provider(provider)
+    return [
+        f"AUTO_CODE_PROVIDER_E2E_LIVE_{provider_token}_{suffix}",
+        f"AUTO_CODE_PROVIDER_E2E_LIVE_{suffix}",
+    ]
+
+
+def _provider_live_task_status_from_env(
+    env: Mapping[str, str],
+    *,
+    provider: str,
+    suffix: str,
+) -> tuple[str | None, str | None, str]:
+    """Return a live task-family status, source env, and required label."""
+    env_names = _provider_live_task_status_env_names(provider, suffix)
+    for env_name in env_names:
+        value = env.get(env_name)
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower(), env_name, " or ".join(env_names)
+    return None, None, " or ".join(env_names)
+
+
+def _provider_live_task_enabled(env: Mapping[str, str]) -> bool:
+    """Return whether live task-family fixtures are explicitly enabled."""
+    value = env.get(PROVIDER_E2E_LIVE_TASKS_ENV)
+    return isinstance(value, str) and value.strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _provider_e2e_live_task_family_payload(
+    provider: str,
+    *,
+    env: Mapping[str, str] | None = None,
+    child_results: list[ProviderSmokeResult] | None = None,
+) -> dict[str, Any]:
+    """Return opt-in live task-family diagnostics for provider e2e."""
+    normalized_provider = provider.lower()
+    live_env = os.environ if env is None else env
+    required_env = _provider_live_task_required_env(normalized_provider)
+    if not _provider_live_task_enabled(live_env):
+        if child_results is not None:
+            return _provider_e2e_live_task_family_runner_payload(
+                normalized_provider,
+                child_results,
+            )
+        return {
+            "status": "not_configured",
+            "provider": normalized_provider,
+            "source": "provider_live_task_fixture",
+            "enabled": False,
+            "required_env": required_env,
+            "covered_families": [],
+            "failed_families": [],
+        }
+
+    families: dict[str, dict[str, str]] = {}
+    missing_env: list[str] = []
+    covered_families: list[str] = []
+    failed_families: list[str] = []
+    for family_name, family_config in PROVIDER_E2E_LIVE_TASK_FAMILIES.items():
+        family_result = _provider_e2e_live_task_family_case(
+            provider=normalized_provider,
+            suffix=str(family_config["suffix"]),
+            env=live_env,
+        )
+        families[family_name] = family_result["family"]
+        if family_result["missing_env"]:
+            missing_env.append(str(family_result["missing_env"]))
+        if family_result["covered"]:
+            covered_families.append(family_name)
+        elif family_result["failed"]:
+            failed_families.append(family_name)
+
+    payload: dict[str, Any] = {
+        "status": _provider_e2e_live_task_family_status(
+            missing_env=missing_env,
+            failed_families=failed_families,
+            covered_families=covered_families,
+        ),
+        "provider": normalized_provider,
+        "source": "provider_live_task_fixture",
+        "enabled": True,
+        "required_env": required_env,
+        "covered_families": covered_families,
+        "failed_families": failed_families,
+        "families": families,
+    }
+    if missing_env:
+        payload["missing_env"] = missing_env
+    return payload
+
+
+def _provider_e2e_live_task_family_runner_payload(
+    provider: str,
+    child_results: list[ProviderSmokeResult],
+) -> dict[str, Any]:
+    """Return live task-family diagnostics from real provider e2e child runs."""
+    child_by_runtime = {result.runtime_mode: result for result in child_results}
+    families = {
+        "single_file_edit": _provider_e2e_live_task_runner_case(
+            child_by_runtime.get("generic_edit"),
+            runtime_mode="generic_edit",
+            reason="generic_edit_failed",
+        ),
+        "multi_step_edit": _provider_e2e_live_task_runner_case(
+            child_by_runtime.get("mini_pipeline"),
+            runtime_mode="mini_pipeline",
+            reason="mini_pipeline_failed",
+        ),
+        "recovery_resume": _provider_e2e_live_task_runner_recovery_case(
+            child_by_runtime.get("mini_pipeline"),
+        ),
+        "transaction_batching": _provider_e2e_live_task_runner_case(
+            child_by_runtime.get("transaction_batch_probe"),
+            runtime_mode="transaction_batch_probe",
+            reason="transaction_batch_probe_failed",
+        ),
+    }
+    covered_families = [
+        family_name
+        for family_name, family in families.items()
+        if family.get("status") == "passed"
+    ]
+    failed_families = [
+        family_name
+        for family_name, family in families.items()
+        if family.get("status") != "passed"
+    ]
+    return {
+        "status": "passed" if not failed_families else "failed",
+        "provider": provider,
+        "source": "provider_live_task_runner",
+        "enabled": True,
+        "covered_families": covered_families,
+        "failed_families": failed_families,
+        "families": families,
+    }
+
+
+def _provider_e2e_live_task_runner_case(
+    result: ProviderSmokeResult | None,
+    *,
+    runtime_mode: str,
+    reason: str,
+) -> dict[str, str]:
+    """Return one task-family outcome from a provider e2e child result."""
+    if result is None:
+        return {
+            "status": "skipped",
+            "source": "provider_live_task_runner",
+            "runtime_mode": runtime_mode,
+            "reason": "child_run_missing",
+        }
+    if result.success:
+        return {
+            "status": "passed",
+            "source": "provider_live_task_runner",
+            "runtime_mode": runtime_mode,
+        }
+    return {
+        "status": "failed",
+        "source": "provider_live_task_runner",
+        "runtime_mode": runtime_mode,
+        "reason": reason,
+    }
+
+
+def _provider_e2e_live_task_runner_recovery_case(
+    result: ProviderSmokeResult | None,
+) -> dict[str, str]:
+    """Return the recovery/resume task-family outcome from mini-pipeline evidence."""
+    base_case = _provider_e2e_live_task_runner_case(
+        result,
+        runtime_mode="mini_pipeline",
+        reason="mini_pipeline_failed",
+    )
+    if base_case.get("status") != "passed":
+        return base_case
+
+    mini_pipeline = result.runtime_diagnostics.get("mini_pipeline") if result else None
+    recovery_loop = (
+        mini_pipeline.get("recovery_loop") if isinstance(mini_pipeline, dict) else None
+    )
+    if isinstance(recovery_loop, dict) and recovery_loop.get("status") == "passed":
+        return base_case
+    return {
+        "status": "failed",
+        "source": "provider_live_task_runner",
+        "runtime_mode": "mini_pipeline",
+        "reason": "recovery_loop_failed",
+    }
+
+
+def _provider_e2e_live_task_family_case(
+    *,
+    provider: str,
+    suffix: str,
+    env: Mapping[str, str],
+) -> dict[str, Any]:
+    """Return one live task-family fixture outcome."""
+    status, env_name, required_label = _provider_live_task_status_from_env(
+        env,
+        provider=provider,
+        suffix=suffix,
+    )
+    if status is None:
+        return {
+            "covered": False,
+            "failed": False,
+            "missing_env": required_label,
+            "family": {
+                "status": "skipped",
+                "source": "provider_live_task_fixture",
+                "reason": "missing_live_task_fixture",
+                "fixture_provider": provider,
+            },
+        }
+
+    passed = status == "passed"
+    family_payload = {
+        "status": "passed" if passed else "failed",
+        "source": "provider_live_task_fixture",
+        "fixture_provider": provider,
+        "env_name": str(env_name),
+    }
+    if not passed:
+        family_payload["reason"] = status or "live_task_failed"
+    return {
+        "covered": passed,
+        "failed": not passed,
+        "missing_env": None,
+        "family": family_payload,
+    }
+
+
+def _provider_e2e_live_task_family_status(
+    *,
+    missing_env: list[str],
+    failed_families: list[str],
+    covered_families: list[str],
+) -> str:
+    """Return aggregate live task-family status from case outcomes."""
+    if missing_env:
+        return "configuration_blocked"
+    if failed_families:
+        return "failed"
+    if len(covered_families) == len(PROVIDER_E2E_LIVE_TASK_FAMILIES):
+        return "passed"
+    return "failed"
+
+
+def _provider_e2e_live_task_family_runs(
+    live_task_families: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Return provider e2e child-run summaries for live task families."""
+    if live_task_families.get("status") == "not_configured":
+        return []
+    families = live_task_families.get("families")
+    if not isinstance(families, dict):
+        return []
+    runs: list[dict[str, str]] = []
+    for family_name, family_config in PROVIDER_E2E_LIVE_TASK_FAMILIES.items():
+        family = families.get(family_name)
+        if not isinstance(family, dict):
+            continue
+        family_status = str(family.get("status") or "failed")
+        passed = family_status == "passed"
+        if passed:
+            message = str(family_config["passed_message"])
+        elif family_status == "skipped":
+            message = str(family_config["skipped_message"])
+        else:
+            message = str(family_config["failed_message"])
+        run_payload = {
+            "runtime_mode": str(family_config["runtime_mode"]),
+            "status": family_status,
+            "message": message,
+        }
+        reason = family.get("reason")
+        if not passed and isinstance(reason, str) and reason:
+            run_payload["reason"] = reason
+        runs.append(run_payload)
+    return runs
+
+
 async def _complete_provider_e2e_smoke_suite(
     *,
     provider: Any,
@@ -3587,8 +4331,14 @@ async def _complete_provider_e2e_smoke_suite(
     negative_probe_runs = _provider_e2e_negative_probe_runs(negative_probes)
     live_fault_probes = _provider_e2e_live_fault_probe_payload(provider.name)
     live_fault_probe_runs = _provider_e2e_live_fault_probe_runs(live_fault_probes)
+    live_task_families = _provider_e2e_live_task_family_payload(
+        provider.name,
+        child_results=child_results,
+    )
+    live_task_family_runs = _provider_e2e_live_task_family_runs(live_task_families)
     suite_runs.extend(negative_probe_runs)
     suite_runs.extend(live_fault_probe_runs)
+    suite_runs.extend(live_task_family_runs)
     negative_probe_success = all(
         run.get("status") == "passed" for run in negative_probe_runs
     )
@@ -3596,10 +4346,15 @@ async def _complete_provider_e2e_smoke_suite(
         "not_configured",
         "passed",
     }
+    live_task_family_success = live_task_families.get("status") in {
+        "not_configured",
+        "passed",
+    }
     success = (
         all(child.success for child in child_results)
         and negative_probe_success
         and live_fault_probe_success
+        and live_task_family_success
     )
     suite_status = "passed" if success else "failed"
     reliability = _merge_provider_reliability_diagnostics(
@@ -3619,6 +4374,7 @@ async def _complete_provider_e2e_smoke_suite(
         "provider_e2e_negative_probes": negative_probes,
         "provider_e2e_negative_fixtures": negative_fixture_summary,
         "provider_e2e_live_fault_probes": live_fault_probes,
+        "provider_e2e_live_task_families": live_task_families,
     }
     if reliability is not None:
         next_diagnostics["provider_reliability"] = reliability
@@ -4353,6 +5109,9 @@ def _print_provider_runtime_diagnostics(
     _print_provider_autonomous_readiness(
         runtime_diagnostics.get("provider_autonomous_readiness")
     )
+    _print_provider_autonomous_promotion_gate(
+        runtime_diagnostics.get("provider_autonomous_promotion_gate")
+    )
     _print_provider_execution_diagnostics(
         runtime_diagnostics.get("validated_runtime_execution")
     )
@@ -4627,6 +5386,23 @@ def _print_provider_autonomous_readiness(readiness: Any) -> None:
         print_key_value("Autonomous requirements", requirements)
     _print_string_list_line("Autonomous evidence", readiness.get("evidence"))
     _print_string_list_line("Autonomous next actions", readiness.get("next_actions"))
+
+
+def _print_provider_autonomous_promotion_gate(promotion_gate: Any) -> None:
+    """Print the explicit full-autonomy promotion contract gate."""
+    if not isinstance(promotion_gate, dict):
+        return
+    status = promotion_gate.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Autonomous promotion gate", status)
+    _print_string_list_line(
+        "Autonomous promotion missing cases",
+        promotion_gate.get("missing_reliability_cases"),
+    )
+    _print_string_list_line(
+        "Autonomous promotion missing e2e runs",
+        promotion_gate.get("missing_e2e_runs"),
+    )
 
 
 def _print_provider_execution_diagnostics(execution: Any) -> None:

@@ -4,9 +4,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildProviderAutonomousPromotionGateDiagnosticRows,
   buildProviderAutonomousReadinessDiagnosticRows,
   buildProviderE2eSuiteDiagnosticRows,
   buildProviderLiveFaultProbeDiagnosticRows,
+  buildProviderLiveTaskFamilyDiagnosticRows,
   buildProviderNegativeFixtureDiagnosticRows,
   buildProviderReliabilityDiagnosticRows,
   buildProviderResumePolicyDiagnosticRows,
@@ -66,6 +68,12 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.connectionTest.providerLiveFaultProbeOutcomes': 'Live fault probe outcomes',
     'settings:aiProvider.connectionTest.providerLiveFaultProbeMissingEnv': 'Missing live fault env',
     'settings:aiProvider.connectionTest.providerLiveFaultProbeRequiredEnv': 'Required live fault env',
+    'settings:aiProvider.connectionTest.providerLiveTaskFamilies': 'Provider live task families',
+    'settings:aiProvider.connectionTest.providerLiveTaskFamilyCovered': 'Covered live task families',
+    'settings:aiProvider.connectionTest.providerLiveTaskFamilyFailed': 'Failed live task families',
+    'settings:aiProvider.connectionTest.providerLiveTaskFamilyOutcomes': 'Live task family outcomes',
+    'settings:aiProvider.connectionTest.providerLiveTaskFamilyMissingEnv': 'Missing live task env',
+    'settings:aiProvider.connectionTest.providerLiveTaskFamilyRequiredEnv': 'Required live task env',
     'settings:aiProvider.connectionTest.providerRunHistory': 'Provider run history',
     'settings:aiProvider.connectionTest.providerRunHistoryRuns': 'Provider history runs',
     'settings:aiProvider.connectionTest.providerRunHistoryTotalRuns': 'total',
@@ -92,6 +100,14 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'enabled runs',
     'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbePassed':
       'passed runs',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilies':
+      'Provider history live task families',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyEnabled':
+      'enabled runs',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyPassed':
+      'passed runs',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyFailed':
+      'failed families',
     'settings:aiProvider.connectionTest.providerRunHistoryPassRate': 'pass rate',
     'settings:aiProvider.connectionTest.providerRunHistoryRecentPassRate':
       'recent pass rate',
@@ -101,6 +117,8 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'reliability case pass rate',
     'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage':
       'live-fault coverage',
+    'settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyCoverage':
+      'live-task coverage',
     'settings:aiProvider.connectionTest.providerRunHistoryPath': 'Provider history artifact',
     'settings:aiProvider.connectionTest.providerAutonomousReadiness':
       'Provider autonomous readiness',
@@ -128,6 +146,22 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Autonomous evidence',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions':
       'Autonomous next actions',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionGate':
+      'Autonomous promotion gate',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionReliabilityCases':
+      'Promotion reliability cases',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionE2eRuns':
+      'Promotion e2e runs',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionReadiness':
+      'Promotion readiness',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionMissingRequirements':
+      'Promotion missing requirements',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionPassed':
+      'passed',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionObserved':
+      'observed',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionMissing':
+      'missing',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeCapability': 'Runtime capability',
     'settings:aiProvider.controlPlane.runtimeComparativeEval': 'Comparative evals',
@@ -199,6 +233,28 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Live fault case coverage',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultCoverageIncomplete':
       'Live fault coverage incomplete',
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamilyCoverage':
+      'Live task family coverage',
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamilyCoverageIncomplete':
+      'Live task family coverage incomplete',
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamilyEvidenceMissing':
+      'Live task family evidence missing',
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamilyMissing':
+      'Live task family missing',
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamiliesPassed':
+      'Live task families passed',
+    'settings:aiProvider.runtimeDiagnosticValues.providerLiveTaskFixture':
+      'Provider live task fixture',
+    'settings:aiProvider.runtimeDiagnosticValues.providerLiveTaskRunner':
+      'Provider live task runner',
+    'settings:aiProvider.runtimeDiagnosticValues.singleFileEdit':
+      'Single file edit',
+    'settings:aiProvider.runtimeDiagnosticValues.multiStepEdit':
+      'Multi-step edit',
+    'settings:aiProvider.runtimeDiagnosticValues.recoveryResume':
+      'Recovery/resume',
+    'settings:aiProvider.runtimeDiagnosticValues.transactionBatching':
+      'Transaction batching',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbeCaseCoverage':
       'Live fault probe case coverage',
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed':
@@ -232,6 +288,12 @@ const translate = (key: string, options?: Record<string, unknown>) => {
     'settings:aiProvider.runtimeDiagnosticValues.providerE2ePassed': 'Provider e2e passed',
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eCasePassRate':
       'Provider e2e case pass rate',
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2eAndLiveTaskCoverage':
+      'Provider e2e and live-task coverage',
+    'settings:aiProvider.runtimeDiagnosticValues.providerAutonomousPromotionBlocked':
+      'Promotion blocked',
+    'settings:aiProvider.runtimeDiagnosticValues.providerAutonomousPromotionPassed':
+      'Promotion passed',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryLatestFailed':
       'Provider history latest failed',
     'settings:aiProvider.runtimeDiagnosticValues.providerHistoryPassRate':
@@ -320,6 +382,7 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Stability trend degrading',
     'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
+    'settings:aiProvider.runtimeDiagnosticValues.nativeToolCalls': 'Native tool calls',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatches': 'Transaction batches',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatchProbe':
       'Transaction batch probe',
@@ -408,6 +471,10 @@ describe('buildRuntimePolicyDiagnosticRows', () => {
           autonomous_readiness_recommendation:
             'limited_autonomous_until_evidence_stable',
           autonomous_readiness_recommendation_reasons: ['history_stale'],
+          autonomous_promotion_gate: 'blocked',
+          autonomous_promotion_ready: false,
+          autonomous_promotion_missing_reliability_cases: ['native_tool_calls'],
+          autonomous_promotion_missing_e2e_runs: ['mini_pipeline'],
           autonomous_readiness_requirements: {
             min_stable_runs: 3,
             observed_recent_window: 2,
@@ -418,8 +485,13 @@ describe('buildRuntimePolicyDiagnosticRows', () => {
             history_freshness_complete: false,
             live_fault_missing_cases: ['gateway_model_limitations'],
             live_fault_coverage_complete: false,
+            live_task_missing_families: ['single_file_edit'],
+            live_task_family_coverage_complete: false,
           },
-          autonomous_readiness_missing_requirements: ['fresh_provider_history'],
+          autonomous_readiness_missing_requirements: [
+            'fresh_provider_history',
+            'live_task_family_coverage',
+          ],
         },
         {
           phase: 'coder',
@@ -441,10 +513,12 @@ describe('buildRuntimePolicyDiagnosticRows', () => {
         value: (
           'Planner: Blocked (Must use full runtime, Blocked, '
           + 'Limited autonomous until evidence stable, Stale history, '
-          + 'Fresh provider history, Stable history runs 2/3, '
+          + 'Promotion blocked, Native tool calls, Mini pipeline, '
+          + 'Fresh provider history, Live task family coverage, Stable history runs 2/3, '
           + 'Consecutive passes 2/3, Fresh provider history: No '
           + '(last run 2026-05-01T00:00:00Z, max age 604800s), '
           + 'Live fault case coverage: No (missing Gateway model limitations), '
+          + 'Live task family coverage: No (missing Single file edit), '
           + 'Codex CLI); '
           + 'Coder: Generic edit (Prefer generic edit)'
         ),
@@ -512,16 +586,22 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
           autonomous_readiness_recommendation_reasons: [
             'history_warming_up',
             'live_fault_probe_missing',
+            'live_task_family_missing',
           ],
           autonomous_readiness_blockers: [],
           autonomous_readiness_warnings: [
             'provider_history_warming_up',
             'live_fault_probe_evidence_missing',
+            'live_task_family_evidence_missing',
           ],
           autonomous_readiness_evidence: [
             'provider_e2e_passed',
             'provider_reliability_complete',
           ],
+          autonomous_promotion_gate: 'blocked',
+          autonomous_promotion_ready: false,
+          autonomous_promotion_missing_reliability_cases: ['native_tool_calls'],
+          autonomous_promotion_missing_e2e_runs: ['mini_pipeline'],
           autonomous_readiness_requirements: {
             min_stable_runs: 3,
             observed_recent_window: 2,
@@ -532,12 +612,18 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
             history_freshness_complete: false,
             live_fault_missing_cases: ['gateway_model_limitations'],
             live_fault_coverage_complete: false,
+            live_task_missing_families: ['single_file_edit'],
+            live_task_family_coverage_complete: false,
           },
-          autonomous_readiness_missing_requirements: ['fresh_provider_history'],
+          autonomous_readiness_missing_requirements: [
+            'fresh_provider_history',
+            'live_task_family_coverage',
+          ],
           blockers: [],
           warnings: [
             'provider_history_warming_up',
             'live_fault_probe_evidence_missing',
+            'live_task_family_evidence_missing',
           ],
           notes: 'Gemini can use local actions with Gemini-compatible tool schemas.',
         },
@@ -548,12 +634,16 @@ describe('buildRuntimeCapabilityDiagnosticRows', () => {
         value: (
           'Google: Needs live fault evidence -> Generic edit '
           + '(Blocked, Limited autonomous until live faults, '
-          + 'Warming up history, Live fault probe missing; '
-          + 'Provider history warming up, Live fault probe evidence missing; '
-          + 'Fresh provider history; Stable history runs 2/3, '
+          + 'Warming up history, Live fault probe missing, '
+          + 'Live task family missing, '
+          + 'Promotion blocked, Native tool calls, Mini pipeline; '
+          + 'Provider history warming up, Live fault probe evidence missing, '
+          + 'Live task family evidence missing; '
+          + 'Fresh provider history, Live task family coverage; Stable history runs 2/3, '
           + 'Consecutive passes 2/3, Fresh provider history: No '
           + '(last run 2026-05-01T00:00:00Z, max age 604800s), '
-          + 'Live fault case coverage: No (missing Gateway model limitations); '
+          + 'Live fault case coverage: No (missing Gateway model limitations), '
+          + 'Live task family coverage: No (missing Single file edit); '
           + 'Codex CLI)'
         ),
       },
@@ -613,6 +703,9 @@ describe('buildRuntimeEvalHistoryDiagnosticRows', () => {
               observed_live_fault_case_count: 2,
               required_live_fault_case_count: 2,
               live_fault_probe_case_coverage_percent: 100,
+              observed_live_task_family_count: 4,
+              required_live_task_family_count: 4,
+              live_task_family_coverage_percent: 100,
             },
           ],
         },
@@ -623,7 +716,8 @@ describe('buildRuntimeEvalHistoryDiagnosticRows', () => {
         value: (
           'Provider e2e: Partial (3 total, 2 passed, 1 failed; '
           + 'OpenAI: Passed (e2e case pass rate 100% (7/7), '
-          + 'reliability case pass rate 88% (7/8), live-fault coverage 100% (2/2)); '
+          + 'reliability case pass rate 88% (7/8), live-fault coverage 100% (2/2), '
+          + 'live-task coverage 100% (4/4)); '
           + 'missing OpenRouter, LiteLLM; .auto-Codex/provider-smoke-history.json)'
         ),
       },
@@ -1033,6 +1127,73 @@ describe('buildProviderLiveFaultProbeDiagnosticRows', () => {
   });
 });
 
+describe('buildProviderLiveTaskFamilyDiagnosticRows', () => {
+  it('includes live task family opt-in status and env evidence', () => {
+    expect(
+      buildProviderLiveTaskFamilyDiagnosticRows(translate, {
+        status: 'configuration_blocked',
+        provider: 'openai',
+        source: 'provider_live_task_fixture',
+        enabled: true,
+        coveredFamilies: ['single_file_edit'],
+        failedFamilies: ['multi_step_edit'],
+        requiredEnv: [
+          'AUTO_CODE_PROVIDER_E2E_LIVE_TASKS',
+          'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS',
+        ],
+        missingEnv: [
+          'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS',
+        ],
+        families: [
+          {
+            family: 'single_file_edit',
+            status: 'passed',
+            runtimeMode: 'generic_edit',
+            reason: 'passed',
+            envName: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS',
+          },
+          {
+            family: 'multi_step_edit',
+            status: 'skipped',
+            reason: 'missing_live_task_fixture',
+          },
+        ],
+      })
+    ).toEqual([
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilies',
+        value: 'Configuration blocked - openai - Provider live task fixture',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyCovered',
+        value: 'Single file edit',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyFailed',
+        value: 'Multi-step edit',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyMissingEnv',
+        value: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyRequiredEnv',
+        value:
+          'AUTO_CODE_PROVIDER_E2E_LIVE_TASKS, AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyOutcomes',
+        value:
+          'Single file edit: Passed (Generic edit - Passed - AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS)',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyOutcomes',
+        value: 'Multi-step edit: Skipped (missing live task fixture)',
+      },
+    ]);
+  });
+});
+
 describe('buildProviderRunHistoryDiagnosticRows', () => {
   it('includes persisted provider run history evidence', () => {
     expect(
@@ -1058,11 +1219,19 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
         liveFaultProbeEnabledRuns: 2,
         liveFaultProbePassedRuns: 2,
         liveFaultProbeCoveredCases: ['gateway_model_limitations', 'unsupported_tools'],
+        lastLiveTaskFamilyStatus: 'passed',
+        liveTaskFamilyEnabledRuns: 2,
+        liveTaskFamilyPassedRuns: 2,
+        liveTaskFamilyCoveredFamilies: ['single_file_edit', 'multi_step_edit'],
+        liveTaskFamilyFailedFamilies: ['transaction_batching'],
         passRatePercent: 67,
         recentPassRatePercent: 100,
         observedLiveFaultCaseCount: 2,
         requiredLiveFaultCaseCount: 2,
         liveFaultProbeCaseCoveragePercent: 100,
+        observedLiveTaskFamilyCount: 2,
+        requiredLiveTaskFamilyCount: 4,
+        liveTaskFamilyCoveragePercent: 50,
         trend: 'provider_history_stable',
         trendReason: 'recent_runs_all_passed',
         recentWindow: 3,
@@ -1083,6 +1252,7 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
             reliabilityStatus: 'complete',
             providerE2eStatus: 'passed',
             liveFaultProbeStatus: 'passed',
+            liveTaskFamilyStatus: 'passed',
           },
         ],
         consecutivePasses: 3,
@@ -1112,12 +1282,17 @@ describe('buildProviderRunHistoryDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryRecentRuns',
         value:
-          '2026-05-18T09:00:00Z: Failed / Provider e2e / gpt-4o -> 2026-05-18T09:05:00Z: Passed / Provider e2e / gpt-4o / Complete / Passed / Passed',
+          '2026-05-18T09:00:00Z: Failed / Provider e2e / gpt-4o -> 2026-05-18T09:05:00Z: Passed / Provider e2e / gpt-4o / Complete / Passed / Passed / Passed',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
         value:
           'Passed - 2 enabled runs, 2 passed runs - Gateway model limitations, Unsupported tools - live-fault coverage 100%',
+      },
+      {
+        labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilies',
+        value:
+          'Passed - 2 enabled runs, 2 passed runs - Single file edit, Multi-step edit - failed families Transaction batching - live-task coverage 50%',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',
@@ -1211,6 +1386,54 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
         labelKey:
           'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions',
         value: 'Collect provider history runs, Enable live fault probes',
+      },
+    ]);
+  });
+});
+
+describe('buildProviderAutonomousPromotionGateDiagnosticRows', () => {
+  it('includes provider autonomous promotion gate blockers', () => {
+    expect(
+      buildProviderAutonomousPromotionGateDiagnosticRows(translate, {
+        status: 'blocked',
+        provider: 'openai',
+        promotionReady: false,
+        requiredReliabilityCases: ['text_completion', 'native_tool_calls'],
+        passedReliabilityCases: ['text_completion'],
+        missingReliabilityCases: ['native_tool_calls'],
+        requiredE2eRuns: ['generic_edit', 'mini_pipeline'],
+        observedE2eRuns: ['generic_edit'],
+        missingE2eRuns: ['mini_pipeline'],
+        readinessStatus: 'warming_up',
+        readinessMissingRequirements: ['stable_history_runs'],
+      })
+    ).toEqual([
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionGate',
+        value: 'Blocked - OpenAI - No',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionReliabilityCases',
+        value:
+          'Text completion, Native tool calls - passed Text completion - missing Native tool calls',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionE2eRuns',
+        value:
+          'Generic edit, Mini pipeline - observed Generic edit - missing Mini pipeline',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionReadiness',
+        value: 'Warming up',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionMissingRequirements',
+        value: 'Stable history runs',
       },
     ]);
   });

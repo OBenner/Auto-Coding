@@ -490,9 +490,11 @@ export interface ProviderRuntimeDiagnostics {
   miniPipeline?: ProviderMiniPipelineDiagnostics | null;
   providerE2eSuite?: ProviderE2eSuiteDiagnostics;
   providerLiveFaultProbes?: ProviderLiveFaultProbeDiagnostics;
+  providerLiveTaskFamilies?: ProviderLiveTaskFamilyDiagnostics;
   providerNegativeFixtures?: ProviderNegativeFixtureDiagnostics;
   providerRunHistory?: ProviderRunHistoryDiagnostics;
   providerAutonomousReadiness?: ProviderAutonomousReadinessDiagnostics;
+  providerAutonomousPromotionGate?: ProviderAutonomousPromotionGateDiagnostics;
   providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
@@ -632,6 +634,10 @@ export interface ProviderAutonomousReadinessRequirements {
   liveFaultCoveredCases?: string[];
   liveFaultMissingCases?: string[];
   liveFaultCoverageComplete?: boolean;
+  requiredLiveTaskFamilies?: string[];
+  liveTaskCoveredFamilies?: string[];
+  liveTaskMissingFamilies?: string[];
+  liveTaskFamilyCoverageComplete?: boolean;
   lastRunAt?: string;
   maxHistoryAgeSeconds?: number;
   historyFreshnessComplete?: boolean;
@@ -646,6 +652,10 @@ export interface ProviderAutonomousReadinessRequirementsSnake {
   live_fault_covered_cases?: string[];
   live_fault_missing_cases?: string[];
   live_fault_coverage_complete?: boolean;
+  required_live_task_families?: string[];
+  live_task_covered_families?: string[];
+  live_task_missing_families?: string[];
+  live_task_family_coverage_complete?: boolean;
   last_run_at?: string;
   max_history_age_seconds?: number;
   history_freshness_complete?: boolean;
@@ -654,6 +664,21 @@ export interface ProviderAutonomousReadinessRequirementsSnake {
 export type ProviderAutonomousReadinessRequirementsPayload =
   | ProviderAutonomousReadinessRequirements
   | ProviderAutonomousReadinessRequirementsSnake;
+
+export interface ProviderAutonomousPromotionGateDiagnostics {
+  status?: string;
+  provider?: string;
+  source?: string;
+  promotionReady?: boolean;
+  requiredReliabilityCases?: string[];
+  passedReliabilityCases?: string[];
+  missingReliabilityCases?: string[];
+  requiredE2eRuns?: string[];
+  observedE2eRuns?: string[];
+  missingE2eRuns?: string[];
+  readinessStatus?: string;
+  readinessMissingRequirements?: string[];
+}
 
 export interface ProviderE2eSuiteDiagnostics {
   status?: string;
@@ -693,6 +718,27 @@ export interface ProviderLiveFaultProbeCase {
   envName?: string;
 }
 
+export interface ProviderLiveTaskFamilyDiagnostics {
+  status?: string;
+  provider?: string;
+  source?: string;
+  enabled?: boolean;
+  coveredFamilies?: string[];
+  failedFamilies?: string[];
+  requiredEnv?: string[];
+  missingEnv?: string[];
+  families?: ProviderLiveTaskFamilyCase[];
+}
+
+export interface ProviderLiveTaskFamilyCase {
+  family?: string;
+  status?: string;
+  source?: string;
+  reason?: string;
+  runtimeMode?: string;
+  envName?: string;
+}
+
 export interface ProviderRunHistoryDiagnostics {
   status?: string;
   provider?: string;
@@ -715,11 +761,19 @@ export interface ProviderRunHistoryDiagnostics {
   liveFaultProbeEnabledRuns?: number;
   liveFaultProbePassedRuns?: number;
   liveFaultProbeCoveredCases?: string[];
+  lastLiveTaskFamilyStatus?: string;
+  liveTaskFamilyEnabledRuns?: number;
+  liveTaskFamilyPassedRuns?: number;
+  liveTaskFamilyCoveredFamilies?: string[];
+  liveTaskFamilyFailedFamilies?: string[];
   passRatePercent?: number | null;
   recentPassRatePercent?: number | null;
   observedLiveFaultCaseCount?: number;
   requiredLiveFaultCaseCount?: number;
   liveFaultProbeCaseCoveragePercent?: number | null;
+  observedLiveTaskFamilyCount?: number;
+  requiredLiveTaskFamilyCount?: number;
+  liveTaskFamilyCoveragePercent?: number | null;
   trend?: string;
   trendReason?: string;
   recentWindow?: number;
@@ -740,6 +794,7 @@ export interface ProviderRunHistoryRecentRun {
   reliabilityStatus?: string;
   providerE2eStatus?: string;
   liveFaultProbeStatus?: string;
+  liveTaskFamilyStatus?: string;
 }
 
 export interface ProviderConnectionTestResult {
@@ -915,6 +970,10 @@ export interface RuntimePolicyMatrixRow {
   autonomous_readiness_warnings?: string[];
   autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirementsPayload;
   autonomous_readiness_missing_requirements?: string[];
+  autonomous_promotion_gate?: string;
+  autonomous_promotion_ready?: boolean;
+  autonomous_promotion_missing_reliability_cases?: string[];
+  autonomous_promotion_missing_e2e_runs?: string[];
 }
 
 export interface RuntimeCapabilityMatrixRow {
@@ -940,6 +999,10 @@ export interface RuntimeCapabilityMatrixRow {
   autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirementsPayload;
   autonomous_readiness_missing_requirements?: string[];
   autonomous_readiness_next_actions?: string[];
+  autonomous_promotion_gate?: string;
+  autonomous_promotion_ready?: boolean;
+  autonomous_promotion_missing_reliability_cases?: string[];
+  autonomous_promotion_missing_e2e_runs?: string[];
   blockers: string[];
   warnings: string[];
   notes: string;
@@ -972,6 +1035,9 @@ export interface RuntimeEvalHistoryProviderRow {
   observed_live_fault_case_count?: number;
   required_live_fault_case_count?: number;
   live_fault_probe_case_coverage_percent?: number | null;
+  observed_live_task_family_count?: number;
+  required_live_task_family_count?: number;
+  live_task_family_coverage_percent?: number | null;
   last_status?: string | null;
   last_reliability_status?: string | null;
   last_provider_e2e_status?: string | null;

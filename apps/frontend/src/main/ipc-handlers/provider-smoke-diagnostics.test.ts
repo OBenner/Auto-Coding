@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  mapProviderAutonomousPromotionGate,
   mapProviderAutonomousReadiness,
   mapProviderContractHealth,
   mapProviderE2eSuite,
   mapProviderLiveFaultProbes,
+  mapProviderLiveTaskFamilies,
   mapProviderNegativeFixtures,
   mapProviderReliability,
   mapProviderRunHistory,
@@ -12,6 +14,45 @@ import {
   mapProviderTransactionBatchContract,
   mapProviderToolLoopContract
 } from './provider-smoke-diagnostics';
+
+describe('mapProviderAutonomousPromotionGate', () => {
+  it('maps safe provider autonomous promotion gate fields', () => {
+    expect(
+      mapProviderAutonomousPromotionGate({
+        status: 'blocked',
+        provider: 'openai',
+        source: 'provider_autonomous_promotion_gate',
+        promotion_ready: false,
+        required_reliability_cases: ['text_completion', 'native_tool_calls', 42],
+        passed_reliability_cases: ['text_completion', null],
+        missing_reliability_cases: ['native_tool_calls', null],
+        required_e2e_runs: ['generic_edit', 'mini_pipeline', false],
+        observed_e2e_runs: ['generic_edit'],
+        missing_e2e_runs: ['mini_pipeline'],
+        readiness_status: 'warming_up',
+        readiness_missing_requirements: ['stable_history_runs', null],
+        ignored_private_path: 'workspace-private/provider-gate.json',
+      })
+    ).toEqual({
+      status: 'blocked',
+      provider: 'openai',
+      source: 'provider_autonomous_promotion_gate',
+      promotionReady: false,
+      requiredReliabilityCases: ['text_completion', 'native_tool_calls'],
+      passedReliabilityCases: ['text_completion'],
+      missingReliabilityCases: ['native_tool_calls'],
+      requiredE2eRuns: ['generic_edit', 'mini_pipeline'],
+      observedE2eRuns: ['generic_edit'],
+      missingE2eRuns: ['mini_pipeline'],
+      readinessStatus: 'warming_up',
+      readinessMissingRequirements: ['stable_history_runs'],
+    });
+  });
+
+  it('returns undefined for empty promotion gate payloads', () => {
+    expect(mapProviderAutonomousPromotionGate({})).toBeUndefined();
+  });
+});
 
 describe('mapProviderAutonomousReadiness', () => {
   it('maps safe provider autonomous readiness fields', () => {
@@ -35,6 +76,10 @@ describe('mapProviderAutonomousReadiness', () => {
           live_fault_covered_cases: ['unsupported_tools'],
           live_fault_missing_cases: ['gateway_model_limitations'],
           live_fault_coverage_complete: false,
+          required_live_task_families: ['single_file_edit', 42],
+          live_task_covered_families: ['multi_step_edit'],
+          live_task_missing_families: ['single_file_edit'],
+          live_task_family_coverage_complete: false,
           last_run_at: '2026-05-01T00:00:00Z',
           max_history_age_seconds: 604800,
           history_freshness_complete: false,
@@ -62,6 +107,10 @@ describe('mapProviderAutonomousReadiness', () => {
         liveFaultCoveredCases: ['unsupported_tools'],
         liveFaultMissingCases: ['gateway_model_limitations'],
         liveFaultCoverageComplete: false,
+        requiredLiveTaskFamilies: ['single_file_edit'],
+        liveTaskCoveredFamilies: ['multi_step_edit'],
+        liveTaskMissingFamilies: ['single_file_edit'],
+        liveTaskFamilyCoverageComplete: false,
         lastRunAt: '2026-05-01T00:00:00Z',
         maxHistoryAgeSeconds: 604800,
         historyFreshnessComplete: false,
@@ -388,6 +437,56 @@ describe('mapProviderLiveFaultProbes', () => {
   });
 });
 
+describe('mapProviderLiveTaskFamilies', () => {
+  it('maps safe provider live task family fields', () => {
+    expect(
+      mapProviderLiveTaskFamilies({
+        status: 'passed',
+        provider: 'openai',
+        source: 'provider_live_task_fixture',
+        enabled: true,
+        covered_families: ['single_file_edit', 'multi_step_edit', null],
+        failed_families: ['transaction_batching', 42],
+        required_env: ['AUTO_CODE_PROVIDER_E2E_LIVE_TASKS'],
+        missing_env: ['AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_RECOVERY_RESUME_STATUS'],
+        families: {
+          single_file_edit: {
+            status: 'passed',
+            source: 'provider_live_task_fixture',
+            reason: 'passed',
+            runtime_mode: 'generic_edit',
+            env_name: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS',
+          },
+        },
+        ignored_private_path: 'workspace-private/provider-live-tasks.json',
+      })
+    ).toEqual({
+      status: 'passed',
+      provider: 'openai',
+      source: 'provider_live_task_fixture',
+      enabled: true,
+      coveredFamilies: ['single_file_edit', 'multi_step_edit'],
+      failedFamilies: ['transaction_batching'],
+      requiredEnv: ['AUTO_CODE_PROVIDER_E2E_LIVE_TASKS'],
+      missingEnv: ['AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_RECOVERY_RESUME_STATUS'],
+      families: [
+        {
+          family: 'single_file_edit',
+          status: 'passed',
+          source: 'provider_live_task_fixture',
+          reason: 'passed',
+          runtimeMode: 'generic_edit',
+          envName: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS',
+        },
+      ],
+    });
+  });
+
+  it('returns undefined for empty provider live task family payloads', () => {
+    expect(mapProviderLiveTaskFamilies({})).toBeUndefined();
+  });
+});
+
 describe('mapProviderRunHistory', () => {
   it('maps safe persisted provider run history fields', () => {
     expect(
@@ -413,11 +512,19 @@ describe('mapProviderRunHistory', () => {
         live_fault_probe_enabled_runs: 2,
         live_fault_probe_passed_runs: 2,
         live_fault_probe_covered_cases: ['unsupported_tools', 'gateway_model_limitations', null],
+        last_live_task_family_status: 'passed',
+        live_task_family_enabled_runs: 2,
+        live_task_family_passed_runs: 2,
+        live_task_family_covered_families: ['single_file_edit', 'multi_step_edit', null],
+        live_task_family_failed_families: ['transaction_batching', 42],
         pass_rate_percent: 67,
         recent_pass_rate_percent: 100,
         observed_live_fault_case_count: 2,
         required_live_fault_case_count: 2,
         live_fault_probe_case_coverage_percent: 100,
+        observed_live_task_family_count: 2,
+        required_live_task_family_count: 4,
+        live_task_family_coverage_percent: 50,
         trend: 'provider_history_stable',
         trend_reason: 'recent_runs_all_passed',
         recent_window: 3,
@@ -439,6 +546,7 @@ describe('mapProviderRunHistory', () => {
             reliability_status: 'complete',
             provider_e2e_status: 'passed',
             live_fault_probe_status: 'passed',
+            live_task_family_status: 'passed',
           },
           null,
         ],
@@ -469,11 +577,19 @@ describe('mapProviderRunHistory', () => {
       liveFaultProbeEnabledRuns: 2,
       liveFaultProbePassedRuns: 2,
       liveFaultProbeCoveredCases: ['unsupported_tools', 'gateway_model_limitations'],
+      lastLiveTaskFamilyStatus: 'passed',
+      liveTaskFamilyEnabledRuns: 2,
+      liveTaskFamilyPassedRuns: 2,
+      liveTaskFamilyCoveredFamilies: ['single_file_edit', 'multi_step_edit'],
+      liveTaskFamilyFailedFamilies: ['transaction_batching'],
       passRatePercent: 67,
       recentPassRatePercent: 100,
       observedLiveFaultCaseCount: 2,
       requiredLiveFaultCaseCount: 2,
       liveFaultProbeCaseCoveragePercent: 100,
+      observedLiveTaskFamilyCount: 2,
+      requiredLiveTaskFamilyCount: 4,
+      liveTaskFamilyCoveragePercent: 50,
       trend: 'provider_history_stable',
       trendReason: 'recent_runs_all_passed',
       recentWindow: 3,
@@ -494,6 +610,7 @@ describe('mapProviderRunHistory', () => {
           reliabilityStatus: 'complete',
           providerE2eStatus: 'passed',
           liveFaultProbeStatus: 'passed',
+          liveTaskFamilyStatus: 'passed',
         },
       ],
       consecutivePasses: 3,
