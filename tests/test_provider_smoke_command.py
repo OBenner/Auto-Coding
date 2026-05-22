@@ -39,6 +39,44 @@ def _complete_live_task_history() -> dict[str, object]:
     }
 
 
+def _passed_live_task_family_payload(provider: str = "openai") -> dict[str, object]:
+    return {
+        "status": "passed",
+        "provider": provider,
+        "source": "provider_live_task_runner",
+        "enabled": True,
+        "covered_families": [
+            "single_file_edit",
+            "multi_step_edit",
+            "recovery_resume",
+            "transaction_batching",
+        ],
+        "failed_families": [],
+        "families": {
+            "single_file_edit": {
+                "status": "passed",
+                "source": "provider_live_task_runner",
+                "runtime_mode": "generic_edit",
+            },
+            "multi_step_edit": {
+                "status": "passed",
+                "source": "provider_live_task_runner",
+                "runtime_mode": "mini_pipeline",
+            },
+            "recovery_resume": {
+                "status": "passed",
+                "source": "provider_live_task_runner",
+                "runtime_mode": "mini_pipeline",
+            },
+            "transaction_batching": {
+                "status": "passed",
+                "source": "provider_live_task_runner",
+                "runtime_mode": "transaction_batch_probe",
+            },
+        },
+    }
+
+
 def _provider_e2e_smoke_result(*, token_usage: dict[str, int] | None = None):
     from cli.provider_smoke_commands import ProviderSmokeResult
 
@@ -520,41 +558,10 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
             },
         ],
     }
-    assert result.runtime_diagnostics["provider_e2e_live_task_families"] == {
-        "status": "passed",
-        "provider": "openai",
-        "source": "provider_live_task_runner",
-        "enabled": True,
-        "covered_families": [
-            "single_file_edit",
-            "multi_step_edit",
-            "recovery_resume",
-            "transaction_batching",
-        ],
-        "failed_families": [],
-        "families": {
-            "single_file_edit": {
-                "status": "passed",
-                "source": "provider_live_task_runner",
-                "runtime_mode": "generic_edit",
-            },
-            "multi_step_edit": {
-                "status": "passed",
-                "source": "provider_live_task_runner",
-                "runtime_mode": "mini_pipeline",
-            },
-            "recovery_resume": {
-                "status": "passed",
-                "source": "provider_live_task_runner",
-                "runtime_mode": "mini_pipeline",
-            },
-            "transaction_batching": {
-                "status": "passed",
-                "source": "provider_live_task_runner",
-                "runtime_mode": "transaction_batch_probe",
-            },
-        },
-    }
+    assert (
+        result.runtime_diagnostics["provider_e2e_live_task_families"]
+        == _passed_live_task_family_payload()
+    )
     assert result.runtime_diagnostics["provider_e2e_live_fault_probes"] == {
         "status": "passed",
         "provider": "openai",
@@ -2466,41 +2473,7 @@ def test_provider_e2e_live_task_families_derive_from_child_runs(
         ],
     )
 
-    assert payload == {
-        "status": "passed",
-        "provider": "openai",
-        "source": "provider_live_task_runner",
-        "enabled": True,
-        "covered_families": [
-            "single_file_edit",
-            "multi_step_edit",
-            "recovery_resume",
-            "transaction_batching",
-        ],
-        "failed_families": [],
-        "families": {
-            "single_file_edit": {
-                "status": "passed",
-                "source": "provider_live_task_runner",
-                "runtime_mode": "generic_edit",
-            },
-            "multi_step_edit": {
-                "status": "passed",
-                "source": "provider_live_task_runner",
-                "runtime_mode": "mini_pipeline",
-            },
-            "recovery_resume": {
-                "status": "passed",
-                "source": "provider_live_task_runner",
-                "runtime_mode": "mini_pipeline",
-            },
-            "transaction_batching": {
-                "status": "passed",
-                "source": "provider_live_task_runner",
-                "runtime_mode": "transaction_batch_probe",
-            },
-        },
-    }
+    assert payload == _passed_live_task_family_payload()
 
 
 def test_provider_e2e_live_task_families_report_child_failures(
