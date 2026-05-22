@@ -735,6 +735,7 @@ export interface ProviderLiveTaskFamilyCase {
   status?: string;
   source?: string;
   reason?: string;
+  runtimeMode?: string;
   envName?: string;
 }
 

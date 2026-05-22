@@ -337,6 +337,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamiliesPassed',
   provider_live_task_fixture:
     'settings:aiProvider.runtimeDiagnosticValues.providerLiveTaskFixture',
+  provider_live_task_runner:
+    'settings:aiProvider.runtimeDiagnosticValues.providerLiveTaskRunner',
   live_fault_probes_passed:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed',
   latest_provider_e2e_pass:
@@ -1259,7 +1261,8 @@ export function buildProviderLiveTaskFamilyDiagnosticRows(
     const familyName = formatRuntimeDiagnosticValue(translate, family.family);
     const familyStatus = formatRuntimeDiagnosticValue(translate, family.status);
     const reason = formatRuntimeDiagnosticValue(translate, family.reason);
-    const details = [reason, family.envName].filter(Boolean).join(' - ');
+    const runtimeMode = formatRuntimeDiagnosticValue(translate, family.runtimeMode);
+    const details = [runtimeMode, reason, family.envName].filter(Boolean).join(' - ');
     const value = [familyName, familyStatus].filter(Boolean).join(': ');
     const detailSuffix = details ? ` (${details})` : '';
     return {

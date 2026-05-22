@@ -1072,6 +1072,7 @@
       "providerAutonomousPromotionPassed": "Promotion réussie",
       "providerLiveFaultFixture": "Fixture live de panne du fournisseur",
       "providerLiveTaskFixture": "Fixture live de tâche du fournisseur",
+      "providerLiveTaskRunner": "Runner live de tâche du fournisseur",
       "qualityScore": "Qualité",
       "qualityTrend": "Tendance qualité",
       "qualityTrendDegrading": "Tendance qualité en dégradation",

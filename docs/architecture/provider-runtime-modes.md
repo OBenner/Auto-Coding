@@ -160,12 +160,12 @@ and now adds a recovery exercise: it creates a recoverable partial edit, checks
 the resume preflight, resumes from the generated checkpoint, and requires the
 recovery result to resolve cleanly before reporting `mini_pipeline_ready`.
 `provider_e2e` runs the direct-provider e2e suite: the `generic_edit` smoke,
-the mini pipeline smoke, the `transaction_batch_probe`, provider-specific
-negative fixtures for unsupported tools plus gateway/model limitations, and
-optional live task-family calibration for the configured provider are executed,
-then merged into one `provider_e2e_suite`,
-`provider_e2e_negative_fixtures`, `provider_e2e_live_task_families`, and
-`provider_reliability` payload.
+the mini pipeline smoke, the `transaction_batch_probe`, and provider-specific
+negative fixtures for unsupported tools plus gateway/model limitations are
+executed for the configured provider. The suite also derives live task-family
+calibration from those real child runs, then merges everything into one
+`provider_e2e_suite`, `provider_e2e_negative_fixtures`,
+`provider_e2e_live_task_families`, and `provider_reliability` payload.
 The JSON diagnostics also include `provider_reliability`: a direct-provider
 coverage matrix for the full-autonomy e2e cases. It marks observed cases such
 as text completion, generic edit tool loop, native tool calls, tool results,
@@ -321,7 +321,7 @@ Last updated: 2026-05-22.
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. Provider e2e history now also emits `provider_autonomous_promotion_gate`, a per-case promotion contract for required reliability cases and required e2e run modes. | Prove direct providers across real models/gateways with repeated live e2e promotion-gate passes before marking any direct API provider full autonomous. |
 | Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, isolated staged workspace materialization/restoration, commit-time staged postimage apply, batch boundary guards, pre-execution staged isolation guards for opaque open-batch mutations, pre-commit staged baseline drift guards, staged guard status/drift-path timeline events, staged workspace materialized/restored/batch-id recent events, mutation snapshots, committed snapshot ids, commit operation ids, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing/incomplete artifact preflight blockers, corrupt/invalid mutation-snapshot artifact health reasons, isolated staged snapshot integrity blockers, recovery-plan artifact health checks, artifact manifest transaction batches, manifest/checkpoint/event-count consistency checks, manifest recovery-timeline/resume-policy drift guards, trace/session/manifest counter drift checks, unified resume artifact consistency across trace, checkpoint, session state, manifest, mutation snapshots, and transaction batch state, and rich runtime events are implemented. | Harden non-happy-path recovery further for richer UI-driven repair/rollback workflows and broader staged-overlay edge cases. |
-| Provider reliability | Strong partial | `generic_edit`, `mini_pipeline`, `transaction_batch_probe`, and `provider_e2e` validations are wired. Provider e2e diagnostics include negative fixtures, live fault probes, live task-family calibration, reliability, live-fault/task-family history evidence, recent-run history timelines, granular e2e and reliability case pass-rate metrics, live-fault case coverage metrics, live task-family coverage metrics, actual per-run cost accounting when token usage is observed, fixed-token per-run estimates when usage telemetry is missing, fixed benchmark cost estimates when actual cost is unavailable, quality/stability/safety/cost trend deltas from recent runs, freshness gating for stale provider-smoke evidence, the `provider_autonomous_readiness` scorecard, structured recommendation reasons, settings UI surfaces, and a runtime policy gate that blocks direct-provider coder/fixer autonomy until the evidence is strong enough. The gate now requires enough stable history, fresh latest evidence, full live-fault coverage, and full live task-family coverage, not just a green latest run. See [Provider reliability implementation details](#provider-reliability-implementation-details). | Use real live-account probe data to calibrate provider-specific recommendations and broaden the trend signals across more provider-specific task families. |
+| Provider reliability | Strong partial | `generic_edit`, `mini_pipeline`, `transaction_batch_probe`, and `provider_e2e` validations are wired. Provider e2e diagnostics include negative fixtures, live fault probes, automatic live task-family calibration derived from real child runs, reliability, live-fault/task-family history evidence, recent-run history timelines, granular e2e and reliability case pass-rate metrics, live-fault case coverage metrics, live task-family coverage metrics, actual per-run cost accounting when token usage is observed, fixed-token per-run estimates when usage telemetry is missing, fixed benchmark cost estimates when actual cost is unavailable, quality/stability/safety/cost trend deltas from recent runs, freshness gating for stale provider-smoke evidence, the `provider_autonomous_readiness` scorecard, structured recommendation reasons, settings UI surfaces, and a runtime policy gate that blocks direct-provider coder/fixer autonomy until the evidence is strong enough. The gate now requires enough stable history, fresh latest evidence, full live-fault coverage, and full live task-family coverage, not just a green latest run. See [Provider reliability implementation details](#provider-reliability-implementation-details). | Use real live-account fault probe data to calibrate provider-specific recommendations and broaden trend signals across more provider-specific task families. |
 | MCP Bridge v1 | Strong partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, unavailable-tool observations, readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers, and `mcp_bridge_permission_matrix` for local/external/custom permission gates are represented. The runtime enforces `RuntimeMcpToolPolicy` before execution, writes audit artifacts, classifies mutating tools, normalizes MCP tool results into `text`, `content`, `structured_content`, and `is_error`, classifies live `tools/list` and bridged `tools/call` lifecycle failures by stage/kind, and exposes whether strict `AUTO_CODE_MCP_ALLOWED_PERMISSIONS` allowlists are configured. | Generalize live execution coverage across all registered external servers, normalize arbitrary live schemas continuously, and keep hardening external session reuse plus per-server execution smoke. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, read-only merge plans, and `runtime_subagent_mutation_policy` now exposes the gates blocking mutating children until transactional merge is ready. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, then move the mutation policy from blocked to enabled. |
 | CLI runtimes as full runtime class | Partial, stronger core | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners, `cli_runner_contract_matrix` tracks `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata for every candidate, and the generic CLI core now supplies configurable run/cancel/artifact/event parsing for planned runners. | Add runner-specific command builders, resume semantics, and live smoke/e2e coverage for Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs so they can move from generic-core partial to ready. |
@@ -351,9 +351,10 @@ even when `generic_edit` can still run.
 - `provider_e2e` runs the direct-provider e2e suite.
 - `provider_e2e` adds transaction-batch coverage plus provider-specific
   unsupported-tool and gateway/model negative fixtures.
-- `provider_e2e` can add opt-in live task-family calibration for
+- `provider_e2e` automatically derives live task-family calibration for
   `single_file_edit`, `multi_step_edit`, `recovery_resume`, and
-  `transaction_batching`.
+  `transaction_batching` from its real `generic_edit`, `mini_pipeline`, and
+  `transaction_batch_probe` child runs.
 - The provider e2e suite covers OpenAI, Google/Gemini, OpenRouter, LiteLLM,
   ZhipuAI, and Ollama.
 
@@ -434,10 +435,16 @@ even when `generic_edit` can still run.
 
 #### Live task-family calibration
 
-- Live task-family calibration is enabled with
-  `AUTO_CODE_PROVIDER_E2E_LIVE_TASKS=true` or `=1`.
-- A truthy opt-in must be paired with status env vars for every required task
-  family, either provider-specific or generic.
+- Live task-family calibration is automatic for `provider_e2e`: it maps the
+  real child-run outcomes to required task families.
+- `generic_edit` covers `single_file_edit`.
+- `mini_pipeline` covers `multi_step_edit` and, when its recovery loop passes,
+  `recovery_resume`.
+- `transaction_batch_probe` covers `transaction_batching`.
+- `AUTO_CODE_PROVIDER_E2E_LIVE_TASKS=true` or `=1` remains available as a manual
+  fixture override for externally captured task-family status.
+- When the manual fixture override is enabled, it must be paired with status env
+  vars for every required task family, either provider-specific or generic.
 - Provider-specific status env vars use this shape:
   `AUTO_CODE_PROVIDER_E2E_LIVE_<PROVIDER>_<TASK>_STATUS`.
 - Generic fallback status env vars use this shape:

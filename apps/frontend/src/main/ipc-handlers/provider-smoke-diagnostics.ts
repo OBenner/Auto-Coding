@@ -462,6 +462,7 @@ export function mapProviderLiveTaskFamilies(
           status: stringFromUnknown(family.status),
           source: stringFromUnknown(family.source),
           reason: stringFromUnknown(family.reason),
+          runtimeMode: stringFromUnknown(family.runtime_mode),
           envName: stringFromUnknown(family.env_name),
         }))
         .filter((item) => Object.values(item).some((field) => field !== undefined))

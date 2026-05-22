@@ -245,6 +245,8 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Live task families passed',
     'settings:aiProvider.runtimeDiagnosticValues.providerLiveTaskFixture':
       'Provider live task fixture',
+    'settings:aiProvider.runtimeDiagnosticValues.providerLiveTaskRunner':
+      'Provider live task runner',
     'settings:aiProvider.runtimeDiagnosticValues.singleFileEdit':
       'Single file edit',
     'settings:aiProvider.runtimeDiagnosticValues.multiStepEdit':
@@ -1146,6 +1148,7 @@ describe('buildProviderLiveTaskFamilyDiagnosticRows', () => {
           {
             family: 'single_file_edit',
             status: 'passed',
+            runtimeMode: 'generic_edit',
             reason: 'passed',
             envName: 'AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS',
           },
@@ -1181,7 +1184,7 @@ describe('buildProviderLiveTaskFamilyDiagnosticRows', () => {
       {
         labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyOutcomes',
         value:
-          'Single file edit: Passed (Passed - AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS)',
+          'Single file edit: Passed (Generic edit - Passed - AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS)',
       },
       {
         labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyOutcomes',

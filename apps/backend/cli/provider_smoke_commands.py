@@ -3991,12 +3991,18 @@ def _provider_e2e_live_task_family_payload(
     provider: str,
     *,
     env: Mapping[str, str] | None = None,
+    child_results: list[ProviderSmokeResult] | None = None,
 ) -> dict[str, Any]:
     """Return opt-in live task-family diagnostics for provider e2e."""
     normalized_provider = provider.lower()
     live_env = os.environ if env is None else env
     required_env = _provider_live_task_required_env(normalized_provider)
     if not _provider_live_task_enabled(live_env):
+        if child_results is not None:
+            return _provider_e2e_live_task_family_runner_payload(
+                normalized_provider,
+                child_results,
+            )
         return {
             "status": "not_configured",
             "provider": normalized_provider,
@@ -4043,6 +4049,107 @@ def _provider_e2e_live_task_family_payload(
     if missing_env:
         payload["missing_env"] = missing_env
     return payload
+
+
+def _provider_e2e_live_task_family_runner_payload(
+    provider: str,
+    child_results: list[ProviderSmokeResult],
+) -> dict[str, Any]:
+    """Return live task-family diagnostics from real provider e2e child runs."""
+    child_by_runtime = {result.runtime_mode: result for result in child_results}
+    families = {
+        "single_file_edit": _provider_e2e_live_task_runner_case(
+            child_by_runtime.get("generic_edit"),
+            runtime_mode="generic_edit",
+            reason="generic_edit_failed",
+        ),
+        "multi_step_edit": _provider_e2e_live_task_runner_case(
+            child_by_runtime.get("mini_pipeline"),
+            runtime_mode="mini_pipeline",
+            reason="mini_pipeline_failed",
+        ),
+        "recovery_resume": _provider_e2e_live_task_runner_recovery_case(
+            child_by_runtime.get("mini_pipeline"),
+        ),
+        "transaction_batching": _provider_e2e_live_task_runner_case(
+            child_by_runtime.get("transaction_batch_probe"),
+            runtime_mode="transaction_batch_probe",
+            reason="transaction_batch_probe_failed",
+        ),
+    }
+    covered_families = [
+        family_name
+        for family_name, family in families.items()
+        if family.get("status") == "passed"
+    ]
+    failed_families = [
+        family_name
+        for family_name, family in families.items()
+        if family.get("status") != "passed"
+    ]
+    return {
+        "status": "passed" if not failed_families else "failed",
+        "provider": provider,
+        "source": "provider_live_task_runner",
+        "enabled": True,
+        "covered_families": covered_families,
+        "failed_families": failed_families,
+        "families": families,
+    }
+
+
+def _provider_e2e_live_task_runner_case(
+    result: ProviderSmokeResult | None,
+    *,
+    runtime_mode: str,
+    reason: str,
+) -> dict[str, str]:
+    """Return one task-family outcome from a provider e2e child result."""
+    if result is None:
+        return {
+            "status": "skipped",
+            "source": "provider_live_task_runner",
+            "runtime_mode": runtime_mode,
+            "reason": "child_run_missing",
+        }
+    if result.success:
+        return {
+            "status": "passed",
+            "source": "provider_live_task_runner",
+            "runtime_mode": runtime_mode,
+        }
+    return {
+        "status": "failed",
+        "source": "provider_live_task_runner",
+        "runtime_mode": runtime_mode,
+        "reason": reason,
+    }
+
+
+def _provider_e2e_live_task_runner_recovery_case(
+    result: ProviderSmokeResult | None,
+) -> dict[str, str]:
+    """Return the recovery/resume task-family outcome from mini-pipeline evidence."""
+    base_case = _provider_e2e_live_task_runner_case(
+        result,
+        runtime_mode="mini_pipeline",
+        reason="mini_pipeline_failed",
+    )
+    if base_case.get("status") != "passed":
+        return base_case
+
+    mini_pipeline = result.runtime_diagnostics.get("mini_pipeline") if result else None
+    recovery_loop = (
+        mini_pipeline.get("recovery_loop") if isinstance(mini_pipeline, dict) else None
+    )
+    if isinstance(recovery_loop, dict) and recovery_loop.get("status") == "passed":
+        return base_case
+    return {
+        "status": "failed",
+        "source": "provider_live_task_runner",
+        "runtime_mode": "mini_pipeline",
+        "reason": "recovery_loop_failed",
+    }
 
 
 def _provider_e2e_live_task_family_case(
@@ -4212,7 +4319,10 @@ async def _complete_provider_e2e_smoke_suite(
     negative_probe_runs = _provider_e2e_negative_probe_runs(negative_probes)
     live_fault_probes = _provider_e2e_live_fault_probe_payload(provider.name)
     live_fault_probe_runs = _provider_e2e_live_fault_probe_runs(live_fault_probes)
-    live_task_families = _provider_e2e_live_task_family_payload(provider.name)
+    live_task_families = _provider_e2e_live_task_family_payload(
+        provider.name,
+        child_results=child_results,
+    )
     live_task_family_runs = _provider_e2e_live_task_family_runs(live_task_families)
     suite_runs.extend(negative_probe_runs)
     suite_runs.extend(live_fault_probe_runs)

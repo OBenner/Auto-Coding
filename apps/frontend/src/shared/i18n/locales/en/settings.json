@@ -1124,6 +1124,7 @@
       "providerAutonomousPromotionPassed": "Promotion passed",
       "providerLiveFaultFixture": "Provider live fault fixture",
       "providerLiveTaskFixture": "Provider live task fixture",
+      "providerLiveTaskRunner": "Provider live task runner",
       "qualityScore": "Quality",
       "qualityTrend": "Quality trend",
       "qualityTrendDegrading": "Quality trend degrading",

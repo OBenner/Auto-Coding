@@ -444,23 +444,7 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
         "OpenAI returned 502 bad gateway from the upstream provider.",
     )
-    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_TASKS", "true")
-    monkeypatch.setenv(
-        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS",
-        "passed",
-    )
-    monkeypatch.setenv(
-        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS",
-        "passed",
-    )
-    monkeypatch.setenv(
-        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_RECOVERY_RESUME_STATUS",
-        "passed",
-    )
-    monkeypatch.setenv(
-        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_TRANSACTION_BATCHING_STATUS",
-        "passed",
-    )
+    monkeypatch.delenv("AUTO_CODE_PROVIDER_E2E_LIVE_TASKS", raising=False)
 
     result = await run_provider_smoke_check(
         project_dir=tmp_path,
@@ -539,27 +523,8 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
     assert result.runtime_diagnostics["provider_e2e_live_task_families"] == {
         "status": "passed",
         "provider": "openai",
-        "source": "provider_live_task_fixture",
+        "source": "provider_live_task_runner",
         "enabled": True,
-        "required_env": [
-            "AUTO_CODE_PROVIDER_E2E_LIVE_TASKS",
-            (
-                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS "
-                "or AUTO_CODE_PROVIDER_E2E_LIVE_SINGLE_FILE_EDIT_STATUS"
-            ),
-            (
-                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS "
-                "or AUTO_CODE_PROVIDER_E2E_LIVE_MULTI_STEP_EDIT_STATUS"
-            ),
-            (
-                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_RECOVERY_RESUME_STATUS "
-                "or AUTO_CODE_PROVIDER_E2E_LIVE_RECOVERY_RESUME_STATUS"
-            ),
-            (
-                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_TRANSACTION_BATCHING_STATUS "
-                "or AUTO_CODE_PROVIDER_E2E_LIVE_TRANSACTION_BATCHING_STATUS"
-            ),
-        ],
         "covered_families": [
             "single_file_edit",
             "multi_step_edit",
@@ -570,35 +535,23 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "families": {
             "single_file_edit": {
                 "status": "passed",
-                "source": "provider_live_task_fixture",
-                "fixture_provider": "openai",
-                "env_name": (
-                    "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS"
-                ),
+                "source": "provider_live_task_runner",
+                "runtime_mode": "generic_edit",
             },
             "multi_step_edit": {
                 "status": "passed",
-                "source": "provider_live_task_fixture",
-                "fixture_provider": "openai",
-                "env_name": (
-                    "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS"
-                ),
+                "source": "provider_live_task_runner",
+                "runtime_mode": "mini_pipeline",
             },
             "recovery_resume": {
                 "status": "passed",
-                "source": "provider_live_task_fixture",
-                "fixture_provider": "openai",
-                "env_name": (
-                    "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_RECOVERY_RESUME_STATUS"
-                ),
+                "source": "provider_live_task_runner",
+                "runtime_mode": "mini_pipeline",
             },
             "transaction_batching": {
                 "status": "passed",
-                "source": "provider_live_task_fixture",
-                "fixture_provider": "openai",
-                "env_name": (
-                    "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_TRANSACTION_BATCHING_STATUS"
-                ),
+                "source": "provider_live_task_runner",
+                "runtime_mode": "transaction_batch_probe",
             },
         },
     }
@@ -2467,6 +2420,144 @@ def test_provider_e2e_live_fault_probes_accept_model_limitations(
         "reason": "model_unavailable",
         "fixture_provider": "openai",
         "env_name": "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+    }
+
+
+def test_provider_e2e_live_task_families_derive_from_child_runs(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_e2e_live_task_family_payload,
+    )
+
+    monkeypatch.delenv("AUTO_CODE_PROVIDER_E2E_LIVE_TASKS", raising=False)
+
+    payload = _provider_e2e_live_task_family_payload(
+        "openai",
+        child_results=[
+            ProviderSmokeResult(
+                success=True,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="generic_edit",
+                message="generic_edit passed",
+            ),
+            ProviderSmokeResult(
+                success=True,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="mini_pipeline",
+                message="mini_pipeline passed",
+                runtime_diagnostics={
+                    "mini_pipeline": {
+                        "status": "passed",
+                        "recovery_loop": {"status": "passed"},
+                    },
+                },
+            ),
+            ProviderSmokeResult(
+                success=True,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="transaction_batch_probe",
+                message="transaction batch probe passed",
+            ),
+        ],
+    )
+
+    assert payload == {
+        "status": "passed",
+        "provider": "openai",
+        "source": "provider_live_task_runner",
+        "enabled": True,
+        "covered_families": [
+            "single_file_edit",
+            "multi_step_edit",
+            "recovery_resume",
+            "transaction_batching",
+        ],
+        "failed_families": [],
+        "families": {
+            "single_file_edit": {
+                "status": "passed",
+                "source": "provider_live_task_runner",
+                "runtime_mode": "generic_edit",
+            },
+            "multi_step_edit": {
+                "status": "passed",
+                "source": "provider_live_task_runner",
+                "runtime_mode": "mini_pipeline",
+            },
+            "recovery_resume": {
+                "status": "passed",
+                "source": "provider_live_task_runner",
+                "runtime_mode": "mini_pipeline",
+            },
+            "transaction_batching": {
+                "status": "passed",
+                "source": "provider_live_task_runner",
+                "runtime_mode": "transaction_batch_probe",
+            },
+        },
+    }
+
+
+def test_provider_e2e_live_task_families_report_child_failures(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_e2e_live_task_family_payload,
+    )
+
+    monkeypatch.delenv("AUTO_CODE_PROVIDER_E2E_LIVE_TASKS", raising=False)
+
+    payload = _provider_e2e_live_task_family_payload(
+        "openai",
+        child_results=[
+            ProviderSmokeResult(
+                success=True,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="generic_edit",
+                message="generic_edit passed",
+            ),
+            ProviderSmokeResult(
+                success=False,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="mini_pipeline",
+                message="mini_pipeline failed",
+                error_details="unit_tests_failed",
+            ),
+            ProviderSmokeResult(
+                success=True,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="transaction_batch_probe",
+                message="transaction batch probe passed",
+            ),
+        ],
+    )
+
+    assert payload["status"] == "failed"
+    assert payload["covered_families"] == [
+        "single_file_edit",
+        "transaction_batching",
+    ]
+    assert payload["failed_families"] == ["multi_step_edit", "recovery_resume"]
+    assert payload["families"]["multi_step_edit"] == {
+        "status": "failed",
+        "source": "provider_live_task_runner",
+        "runtime_mode": "mini_pipeline",
+        "reason": "mini_pipeline_failed",
+    }
+    assert payload["families"]["recovery_resume"] == {
+        "status": "failed",
+        "source": "provider_live_task_runner",
+        "runtime_mode": "mini_pipeline",
+        "reason": "mini_pipeline_failed",
     }
 
 
