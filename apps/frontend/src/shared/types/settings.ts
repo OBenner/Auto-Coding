@@ -493,6 +493,7 @@ export interface ProviderRuntimeDiagnostics {
   providerNegativeFixtures?: ProviderNegativeFixtureDiagnostics;
   providerRunHistory?: ProviderRunHistoryDiagnostics;
   providerAutonomousReadiness?: ProviderAutonomousReadinessDiagnostics;
+  providerAutonomousPromotionGate?: ProviderAutonomousPromotionGateDiagnostics;
   providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
@@ -654,6 +655,21 @@ export interface ProviderAutonomousReadinessRequirementsSnake {
 export type ProviderAutonomousReadinessRequirementsPayload =
   | ProviderAutonomousReadinessRequirements
   | ProviderAutonomousReadinessRequirementsSnake;
+
+export interface ProviderAutonomousPromotionGateDiagnostics {
+  status?: string;
+  provider?: string;
+  source?: string;
+  promotionReady?: boolean;
+  requiredReliabilityCases?: string[];
+  passedReliabilityCases?: string[];
+  missingReliabilityCases?: string[];
+  requiredE2eRuns?: string[];
+  observedE2eRuns?: string[];
+  missingE2eRuns?: string[];
+  readinessStatus?: string;
+  readinessMissingRequirements?: string[];
+}
 
 export interface ProviderE2eSuiteDiagnostics {
   status?: string;

@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildProviderAutonomousPromotionGateDiagnosticRows,
   buildProviderAutonomousReadinessDiagnosticRows,
   buildProviderE2eSuiteDiagnosticRows,
   buildProviderLiveFaultProbeDiagnosticRows,
@@ -128,6 +129,22 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Autonomous evidence',
     'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions':
       'Autonomous next actions',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionGate':
+      'Autonomous promotion gate',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionReliabilityCases':
+      'Promotion reliability cases',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionE2eRuns':
+      'Promotion e2e runs',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionReadiness':
+      'Promotion readiness',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionMissingRequirements':
+      'Promotion missing requirements',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionPassed':
+      'passed',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionObserved':
+      'observed',
+    'settings:aiProvider.connectionTest.providerAutonomousPromotionMissing':
+      'missing',
     'settings:aiProvider.controlPlane.runtimePolicy': 'Runtime policy',
     'settings:aiProvider.controlPlane.runtimeCapability': 'Runtime capability',
     'settings:aiProvider.controlPlane.runtimeComparativeEval': 'Comparative evals',
@@ -320,6 +337,7 @@ const translate = (key: string, options?: Record<string, unknown>) => {
       'Stability trend degrading',
     'settings:aiProvider.runtimeDiagnosticValues.stagedBatchDrift': 'Staged batch drift',
     'settings:aiProvider.runtimeDiagnosticValues.textCompletion': 'Text completion',
+    'settings:aiProvider.runtimeDiagnosticValues.nativeToolCalls': 'Native tool calls',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatches': 'Transaction batches',
     'settings:aiProvider.runtimeDiagnosticValues.transactionBatchProbe':
       'Transaction batch probe',
@@ -1211,6 +1229,54 @@ describe('buildProviderAutonomousReadinessDiagnosticRows', () => {
         labelKey:
           'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions',
         value: 'Collect provider history runs, Enable live fault probes',
+      },
+    ]);
+  });
+});
+
+describe('buildProviderAutonomousPromotionGateDiagnosticRows', () => {
+  it('includes provider autonomous promotion gate blockers', () => {
+    expect(
+      buildProviderAutonomousPromotionGateDiagnosticRows(translate, {
+        status: 'blocked',
+        provider: 'openai',
+        promotionReady: false,
+        requiredReliabilityCases: ['text_completion', 'native_tool_calls'],
+        passedReliabilityCases: ['text_completion'],
+        missingReliabilityCases: ['native_tool_calls'],
+        requiredE2eRuns: ['generic_edit', 'mini_pipeline'],
+        observedE2eRuns: ['generic_edit'],
+        missingE2eRuns: ['mini_pipeline'],
+        readinessStatus: 'warming_up',
+        readinessMissingRequirements: ['stable_history_runs'],
+      })
+    ).toEqual([
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionGate',
+        value: 'Blocked - OpenAI - No',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionReliabilityCases',
+        value:
+          'Text completion, Native tool calls - passed Text completion - missing Native tool calls',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionE2eRuns',
+        value:
+          'Generic edit, Mini pipeline - observed Generic edit - missing Mini pipeline',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionReadiness',
+        value: 'Warming up',
+      },
+      {
+        labelKey:
+          'settings:aiProvider.connectionTest.providerAutonomousPromotionMissingRequirements',
+        value: 'Stable history runs',
       },
     ]);
   });

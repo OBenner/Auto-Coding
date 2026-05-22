@@ -26,6 +26,7 @@ import type {
   CliRunnerContractMatrixRow,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
+  ProviderAutonomousPromotionGateDiagnostics,
   ProviderAutonomousReadinessDiagnostics,
   ProviderAutonomousReadinessRequirementsPayload,
   ProviderE2eSuiteDiagnostics,
@@ -1442,6 +1443,81 @@ export function buildProviderAutonomousReadinessDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.providerAutonomousReadinessNextActions',
       value: formatRuntimeDiagnosticList(translate, readiness.nextActions),
+    },
+  ].filter((row) => row.value);
+}
+
+function formatProviderAutonomousPromotionCoverage(
+  translate: RuntimeDiagnosticTranslate,
+  requiredValues?: string[] | null,
+  observedValues?: string[] | null,
+  missingValues?: string[] | null,
+  observedLabelKey = 'settings:aiProvider.connectionTest.providerAutonomousPromotionObserved'
+): string {
+  const required = formatRuntimeDiagnosticList(translate, requiredValues);
+  const observed = formatRuntimeDiagnosticList(translate, observedValues);
+  const missing = formatRuntimeDiagnosticList(translate, missingValues);
+
+  return [
+    required,
+    observed ? `${translate(observedLabelKey)} ${observed}` : '',
+    missing
+      ? `${translate('settings:aiProvider.connectionTest.providerAutonomousPromotionMissing')} ${missing}`
+      : '',
+  ].filter(Boolean).join(' - ');
+}
+
+export function buildProviderAutonomousPromotionGateDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  gate?: ProviderAutonomousPromotionGateDiagnostics | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!gate) {
+    return [];
+  }
+
+  const summaryValue = [
+    formatRuntimeDiagnosticValue(translate, gate.status),
+    formatRuntimeDiagnosticValue(translate, gate.provider),
+    formatRuntimeDiagnosticBoolean(translate, gate.promotionReady),
+  ].filter(Boolean).join(' - ');
+
+  return [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerAutonomousPromotionGate',
+      value: summaryValue,
+    },
+    {
+      labelKey:
+        'settings:aiProvider.connectionTest.providerAutonomousPromotionReliabilityCases',
+      value: formatProviderAutonomousPromotionCoverage(
+        translate,
+        gate.requiredReliabilityCases,
+        gate.passedReliabilityCases,
+        gate.missingReliabilityCases,
+        'settings:aiProvider.connectionTest.providerAutonomousPromotionPassed'
+      ),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerAutonomousPromotionE2eRuns',
+      value: formatProviderAutonomousPromotionCoverage(
+        translate,
+        gate.requiredE2eRuns,
+        gate.observedE2eRuns,
+        gate.missingE2eRuns
+      ),
+    },
+    {
+      labelKey:
+        'settings:aiProvider.connectionTest.providerAutonomousPromotionReadiness',
+      value: formatRuntimeDiagnosticValue(translate, gate.readinessStatus),
+    },
+    {
+      labelKey:
+        'settings:aiProvider.connectionTest.providerAutonomousPromotionMissingRequirements',
+      value: formatRuntimeDiagnosticList(
+        translate,
+        gate.readinessMissingRequirements
+      ),
     },
   ].filter((row) => row.value);
 }
@@ -2982,6 +3058,11 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
         t,
         runtimeDiagnostics?.providerAutonomousReadiness
       );
+    const providerAutonomousPromotionGateRows =
+      buildProviderAutonomousPromotionGateDiagnosticRows(
+        t,
+        runtimeDiagnostics?.providerAutonomousPromotionGate
+      );
     const reliabilityRows = buildProviderReliabilityDiagnosticRows(
       t,
       runtimeDiagnostics?.providerReliability
@@ -3123,6 +3204,13 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 />
               ))}
               {providerAutonomousReadinessRows.map((row) => (
+                <RuntimeDiagnosticRow
+                  key={row.labelKey}
+                  label={t(row.labelKey)}
+                  value={row.value}
+                />
+              ))}
+              {providerAutonomousPromotionGateRows.map((row) => (
                 <RuntimeDiagnosticRow
                   key={row.labelKey}
                   label={t(row.labelKey)}

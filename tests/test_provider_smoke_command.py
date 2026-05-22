@@ -1246,13 +1246,64 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
 
     def build_base_diagnostics() -> dict[str, object]:
         return {
-            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_e2e_suite": {
+                "status": "passed",
+                "runs": [
+                    {"runtime_mode": "generic_edit", "status": "passed"},
+                    {"runtime_mode": "mini_pipeline", "status": "passed"},
+                    {"runtime_mode": "transaction_batch_probe", "status": "passed"},
+                    {"runtime_mode": "unsupported_tools_probe", "status": "passed"},
+                    {"runtime_mode": "gateway_model_probe", "status": "passed"},
+                ],
+            },
             "provider_reliability": {
                 "status": "complete",
                 "observed_case_count": 8,
                 "passed_case_count": 8,
                 "required_case_count": 8,
                 "uncovered_cases": [],
+                "cases": [
+                    {
+                        "case": "text_completion",
+                        "status": "passed",
+                        "source": "provider_e2e_suite",
+                    },
+                    {
+                        "case": "generic_edit_tool_loop",
+                        "status": "passed",
+                        "source": "tool_loop_contract",
+                    },
+                    {
+                        "case": "native_tool_calls",
+                        "status": "passed",
+                        "source": "tool_loop_contract",
+                    },
+                    {
+                        "case": "tool_results",
+                        "status": "passed",
+                        "source": "tool_loop_contract",
+                    },
+                    {
+                        "case": "recovery_loop",
+                        "status": "passed",
+                        "source": "mini_pipeline",
+                    },
+                    {
+                        "case": "transaction_batches",
+                        "status": "passed",
+                        "source": "transaction_batch_contract",
+                    },
+                    {
+                        "case": "unsupported_tools",
+                        "status": "passed",
+                        "source": "provider_adapter_negative_fixture",
+                    },
+                    {
+                        "case": "gateway_model_limitations",
+                        "status": "passed",
+                        "source": "provider_adapter_negative_fixture",
+                    },
+                ],
             },
             "provider_e2e_live_fault_probes": {
                 "status": "passed",
@@ -1326,6 +1377,23 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
             ),
         )
     stable_history = stable_result.runtime_diagnostics["provider_run_history"]
+    expected_reliability_cases = [
+        "text_completion",
+        "generic_edit_tool_loop",
+        "native_tool_calls",
+        "tool_results",
+        "recovery_loop",
+        "transaction_batches",
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
+    expected_e2e_runs = [
+        "generic_edit",
+        "mini_pipeline",
+        "transaction_batch_probe",
+        "unsupported_tools_probe",
+        "gateway_model_probe",
+    ]
 
     assert stable_result.runtime_diagnostics["provider_autonomous_readiness"] == {
         "status": "full_autonomous_candidate",
@@ -1362,6 +1430,20 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
             "provider_history_stable",
             "live_fault_probes_passed",
         ],
+    }
+    assert stable_result.runtime_diagnostics["provider_autonomous_promotion_gate"] == {
+        "status": "passed",
+        "provider": "openai",
+        "source": "provider_autonomous_promotion_gate",
+        "promotion_ready": True,
+        "required_reliability_cases": expected_reliability_cases,
+        "passed_reliability_cases": expected_reliability_cases,
+        "missing_reliability_cases": [],
+        "required_e2e_runs": expected_e2e_runs,
+        "observed_e2e_runs": expected_e2e_runs,
+        "missing_e2e_runs": [],
+        "readiness_status": "full_autonomous_candidate",
+        "readiness_missing_requirements": [],
     }
 
 
@@ -3413,6 +3495,28 @@ def test_print_provider_autonomous_readiness_includes_missing_requirements(
     assert "max age 604800s" in output
     assert "live fault coverage no" in output
     assert "missing gateway_model_limitations" in output
+
+
+def test_print_provider_autonomous_promotion_gate_includes_blockers(
+    capsys: pytest.CaptureFixture[str],
+):
+    from cli.provider_smoke_commands import _print_provider_autonomous_promotion_gate
+
+    _print_provider_autonomous_promotion_gate(
+        {
+            "status": "blocked",
+            "missing_reliability_cases": ["native_tool_calls"],
+            "missing_e2e_runs": ["mini_pipeline"],
+        }
+    )
+
+    output = capsys.readouterr().out
+    assert "Autonomous promotion gate" in output
+    assert "blocked" in output
+    assert "Autonomous promotion missing cases" in output
+    assert "native_tool_calls" in output
+    assert "Autonomous promotion missing e2e runs" in output
+    assert "mini_pipeline" in output
 
 
 def test_handle_provider_smoke_command_prints_generic_edit_execution(

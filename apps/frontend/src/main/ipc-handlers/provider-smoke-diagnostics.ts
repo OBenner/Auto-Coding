@@ -1,4 +1,5 @@
 import type {
+  ProviderAutonomousPromotionGateDiagnostics,
   ProviderAutonomousReadinessDiagnostics,
   ProviderAutonomousReadinessRequirements,
   ProviderContractHealth,
@@ -257,6 +258,38 @@ export function mapProviderAutonomousReadiness(
     Array.isArray(field) ? field.length > 0 : field !== undefined
   )
     ? readiness
+    : undefined;
+}
+
+export function mapProviderAutonomousPromotionGate(
+  value: unknown
+): ProviderAutonomousPromotionGateDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const gate: ProviderAutonomousPromotionGateDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    provider: stringFromUnknown(payload.provider),
+    source: stringFromUnknown(payload.source),
+    promotionReady: booleanFromUnknown(payload.promotion_ready),
+    requiredReliabilityCases: arrayFromUnknown(payload.required_reliability_cases),
+    passedReliabilityCases: arrayFromUnknown(payload.passed_reliability_cases),
+    missingReliabilityCases: arrayFromUnknown(payload.missing_reliability_cases),
+    requiredE2eRuns: arrayFromUnknown(payload.required_e2e_runs),
+    observedE2eRuns: arrayFromUnknown(payload.observed_e2e_runs),
+    missingE2eRuns: arrayFromUnknown(payload.missing_e2e_runs),
+    readinessStatus: stringFromUnknown(payload.readiness_status),
+    readinessMissingRequirements: arrayFromUnknown(
+      payload.readiness_missing_requirements
+    ),
+  };
+
+  return Object.values(gate).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? gate
     : undefined;
 }
 

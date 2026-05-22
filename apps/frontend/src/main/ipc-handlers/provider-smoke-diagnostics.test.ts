@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  mapProviderAutonomousPromotionGate,
   mapProviderAutonomousReadiness,
   mapProviderContractHealth,
   mapProviderE2eSuite,
@@ -12,6 +13,45 @@ import {
   mapProviderTransactionBatchContract,
   mapProviderToolLoopContract
 } from './provider-smoke-diagnostics';
+
+describe('mapProviderAutonomousPromotionGate', () => {
+  it('maps safe provider autonomous promotion gate fields', () => {
+    expect(
+      mapProviderAutonomousPromotionGate({
+        status: 'blocked',
+        provider: 'openai',
+        source: 'provider_autonomous_promotion_gate',
+        promotion_ready: false,
+        required_reliability_cases: ['text_completion', 'native_tool_calls', 42],
+        passed_reliability_cases: ['text_completion', null],
+        missing_reliability_cases: ['native_tool_calls', null],
+        required_e2e_runs: ['generic_edit', 'mini_pipeline', false],
+        observed_e2e_runs: ['generic_edit'],
+        missing_e2e_runs: ['mini_pipeline'],
+        readiness_status: 'warming_up',
+        readiness_missing_requirements: ['stable_history_runs', null],
+        ignored_private_path: 'workspace-private/provider-gate.json',
+      })
+    ).toEqual({
+      status: 'blocked',
+      provider: 'openai',
+      source: 'provider_autonomous_promotion_gate',
+      promotionReady: false,
+      requiredReliabilityCases: ['text_completion', 'native_tool_calls'],
+      passedReliabilityCases: ['text_completion'],
+      missingReliabilityCases: ['native_tool_calls'],
+      requiredE2eRuns: ['generic_edit', 'mini_pipeline'],
+      observedE2eRuns: ['generic_edit'],
+      missingE2eRuns: ['mini_pipeline'],
+      readinessStatus: 'warming_up',
+      readinessMissingRequirements: ['stable_history_runs'],
+    });
+  });
+
+  it('returns undefined for empty promotion gate payloads', () => {
+    expect(mapProviderAutonomousPromotionGate({})).toBeUndefined();
+  });
+});
 
 describe('mapProviderAutonomousReadiness', () => {
   it('maps safe provider autonomous readiness fields', () => {

@@ -244,6 +244,13 @@ PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = 7 * 24 * 60 * 60
 PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
     PROVIDER_E2E_LIVE_FAULT_CASES
 )
+PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS = (
+    "generic_edit",
+    "mini_pipeline",
+    "transaction_batch_probe",
+    "unsupported_tools_probe",
+    "gateway_model_probe",
+)
 PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
     "provider_e2e_failed": "provider_e2e_failed",
     "provider_reliability_incomplete": "provider_reliability_incomplete",
@@ -1527,17 +1534,115 @@ def _with_provider_run_history(
             ),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }
+    readiness = _provider_autonomous_readiness_diagnostics(
+        result,
+        history_summary,
+    )
     return replace(
         result,
         runtime_diagnostics={
             **result.runtime_diagnostics,
             "provider_run_history": history_summary,
-            "provider_autonomous_readiness": _provider_autonomous_readiness_diagnostics(
-                result,
-                history_summary,
+            "provider_autonomous_readiness": readiness,
+            "provider_autonomous_promotion_gate": (
+                _provider_autonomous_promotion_gate(
+                    result,
+                    readiness,
+                )
             ),
         },
     )
+
+
+def _provider_autonomous_promotion_gate(
+    result: ProviderSmokeResult,
+    readiness: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the direct-provider full-autonomy promotion contract."""
+    provider = result.provider
+    if provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return {
+            "status": "not_required",
+            "provider": provider,
+            "source": "provider_autonomous_promotion_gate",
+            "promotion_ready": False,
+            "required_reliability_cases": [],
+            "passed_reliability_cases": [],
+            "missing_reliability_cases": [],
+            "required_e2e_runs": [],
+            "observed_e2e_runs": [],
+            "missing_e2e_runs": [],
+            "readiness_status": str(readiness.get("status") or "not_required"),
+            "readiness_missing_requirements": [],
+        }
+
+    required_cases = list(PROVIDER_RELIABILITY_CASE_ORDER)
+    passed_cases = _provider_promotion_passed_reliability_cases(
+        result.runtime_diagnostics.get("provider_reliability"),
+    )
+    missing_cases = [case for case in required_cases if case not in passed_cases]
+    required_e2e_runs = list(PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS)
+    observed_e2e_runs = _provider_promotion_passed_e2e_runs(
+        result.runtime_diagnostics.get("provider_e2e_suite"),
+    )
+    missing_e2e_runs = [
+        run for run in required_e2e_runs if run not in observed_e2e_runs
+    ]
+    readiness_missing_requirements = _string_list_payload(
+        readiness.get("missing_requirements")
+    )
+    promotion_ready = (
+        readiness.get("status") == "full_autonomous_candidate"
+        and not missing_cases
+        and not missing_e2e_runs
+        and not readiness_missing_requirements
+    )
+    return {
+        "status": "passed" if promotion_ready else "blocked",
+        "provider": provider,
+        "source": "provider_autonomous_promotion_gate",
+        "promotion_ready": promotion_ready,
+        "required_reliability_cases": required_cases,
+        "passed_reliability_cases": passed_cases,
+        "missing_reliability_cases": missing_cases,
+        "required_e2e_runs": required_e2e_runs,
+        "observed_e2e_runs": observed_e2e_runs,
+        "missing_e2e_runs": missing_e2e_runs,
+        "readiness_status": str(readiness.get("status") or "unknown"),
+        "readiness_missing_requirements": readiness_missing_requirements,
+    }
+
+
+def _provider_promotion_passed_reliability_cases(reliability: Any) -> list[str]:
+    """Return required reliability cases that passed in canonical order."""
+    if not isinstance(reliability, dict):
+        return []
+    cases = reliability.get("cases")
+    if not isinstance(cases, list):
+        return []
+    passed = {
+        str(case.get("case") or "")
+        for case in cases
+        if isinstance(case, dict) and case.get("status") == "passed"
+    }
+    return [case for case in PROVIDER_RELIABILITY_CASE_ORDER if case in passed]
+
+
+def _provider_promotion_passed_e2e_runs(provider_e2e_suite: Any) -> list[str]:
+    """Return required provider e2e run modes that passed in canonical order."""
+    if not isinstance(provider_e2e_suite, dict):
+        return []
+    runs = provider_e2e_suite.get("runs")
+    if not isinstance(runs, list):
+        return []
+    passed = {
+        str(run.get("runtime_mode") or "")
+        for run in runs
+        if isinstance(run, dict) and run.get("status") == "passed"
+    }
+    return [
+        run for run in PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS if run in passed
+    ]
 
 
 def _response_excerpt(response_text: str, max_chars: int = 500) -> str:
@@ -4353,6 +4458,9 @@ def _print_provider_runtime_diagnostics(
     _print_provider_autonomous_readiness(
         runtime_diagnostics.get("provider_autonomous_readiness")
     )
+    _print_provider_autonomous_promotion_gate(
+        runtime_diagnostics.get("provider_autonomous_promotion_gate")
+    )
     _print_provider_execution_diagnostics(
         runtime_diagnostics.get("validated_runtime_execution")
     )
@@ -4627,6 +4735,23 @@ def _print_provider_autonomous_readiness(readiness: Any) -> None:
         print_key_value("Autonomous requirements", requirements)
     _print_string_list_line("Autonomous evidence", readiness.get("evidence"))
     _print_string_list_line("Autonomous next actions", readiness.get("next_actions"))
+
+
+def _print_provider_autonomous_promotion_gate(promotion_gate: Any) -> None:
+    """Print the explicit full-autonomy promotion contract gate."""
+    if not isinstance(promotion_gate, dict):
+        return
+    status = promotion_gate.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Autonomous promotion gate", status)
+    _print_string_list_line(
+        "Autonomous promotion missing cases",
+        promotion_gate.get("missing_reliability_cases"),
+    )
+    _print_string_list_line(
+        "Autonomous promotion missing e2e runs",
+        promotion_gate.get("missing_e2e_runs"),
+    )
 
 
 def _print_provider_execution_diagnostics(execution: Any) -> None:
