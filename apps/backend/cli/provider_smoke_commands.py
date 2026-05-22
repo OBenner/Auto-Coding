@@ -8,9 +8,9 @@ import logging
 import os
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -25,8 +25,15 @@ from agents.runtime import (
 from agents.runtime.adapters.completion import CompletionRuntimeSession
 from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_artifacts
 from agents.runtime.fallback import capabilities_for_runtime_mode
+from cli.autonomous_readiness_text import format_autonomous_readiness_requirements
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
+from core.providers.cost_calculator import (
+    MODEL_PRICING,
+    calculate_cost,
+    format_cost,
+    get_model_pricing,
+)
 from core.providers.factory import create_engine_provider
 from task_logger import LogPhase
 from ui import print_key_value, print_status
@@ -52,6 +59,8 @@ DEFAULT_PROVIDER_MINI_PIPELINE_TASK = (
     "Implement slugify(value: str) in string_tools.py."
 )
 DEFAULT_PROVIDER_MINI_PIPELINE_TEST_COMMAND = "python -m unittest -q"
+PROVIDER_SMOKE_COST_ESTIMATE_INPUT_TOKENS = 10_000
+PROVIDER_SMOKE_COST_ESTIMATE_OUTPUT_TOKENS = 2_000
 DEFAULT_PROVIDER_MINI_PIPELINE_PLANNER_PROMPT = (
     "Plan a tiny Auto Code readiness task for a provider pipeline smoke check.\n\n"
     "Task: {task}\n\n"
@@ -230,6 +239,29 @@ PROVIDER_E2E_LIVE_FAULT_CASES = {
         "failed_message": "Live gateway/model fault probe failed",
     },
 }
+PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = 3
+PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = 7 * 24 * 60 * 60
+PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
+    PROVIDER_E2E_LIVE_FAULT_CASES
+)
+PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
+    "provider_e2e_failed": "provider_e2e_failed",
+    "provider_reliability_incomplete": "provider_reliability_incomplete",
+    "provider_history_latest_failed": "latest_provider_smoke_failed",
+    "provider_history_unknown": "history_missing",
+    "provider_history_warming_up": "history_warming_up",
+    "provider_history_flaky": "history_flaky",
+    "provider_history_recovering": "history_recovering",
+    "provider_history_degraded": "history_degraded",
+    "provider_history_insufficient_runs": "history_insufficient_runs",
+    "provider_history_stale": "history_stale",
+    "provider_history_freshness_unknown": "history_freshness_unknown",
+    "live_fault_probe_evidence_missing": "live_fault_probe_missing",
+    "live_fault_probe_coverage_incomplete": "live_fault_coverage_incomplete",
+    "quality_trend_degrading": "quality_trend_degrading",
+    "stability_trend_degrading": "stability_trend_degrading",
+    "safety_trend_degrading": "safety_trend_degrading",
+}
 
 
 @dataclass(frozen=True)
@@ -287,6 +319,7 @@ def _provider_smoke_history_record(
         provider_e2e_suite if isinstance(provider_e2e_suite, dict) else {}
     )
     suite_runs = provider_e2e_suite.get("runs")
+    e2e_case_counts = _provider_e2e_suite_case_counts(suite_runs)
     failed_suite_runs = (
         [
             str(run.get("runtime_mode") or "unknown")
@@ -296,6 +329,7 @@ def _provider_smoke_history_record(
         if isinstance(suite_runs, list)
         else []
     )
+    reliability_case_counts = _provider_reliability_case_counts(reliability)
     live_fault_probes = runtime_diagnostics.get("provider_e2e_live_fault_probes")
     live_fault_probes = live_fault_probes if isinstance(live_fault_probes, dict) else {}
     live_fault_probe_status = live_fault_probes.get("status")
@@ -318,6 +352,8 @@ def _provider_smoke_history_record(
         "passed_case_count": reliability.get("passed_case_count"),
         "required_case_count": reliability.get("required_case_count"),
         "provider_e2e_status": provider_e2e_suite.get("status"),
+        **e2e_case_counts,
+        **reliability_case_counts,
         "failed_suite_runs": failed_suite_runs,
     }
     if isinstance(live_fault_probe_status, str) and live_fault_probe_status:
@@ -328,9 +364,151 @@ def _provider_smoke_history_record(
         record["live_fault_probe_covered_cases"] = live_fault_probe_covered_cases
     if live_fault_probe_missing_env:
         record["live_fault_probe_missing_env_count"] = len(live_fault_probe_missing_env)
+    cost_record = _provider_smoke_cost_record(result)
+    if cost_record:
+        record.update(cost_record)
     if result.error_details:
         record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
     return record
+
+
+def _provider_e2e_suite_case_counts(suite_runs: Any) -> dict[str, int]:
+    """Return per-run e2e case counters from a provider e2e suite."""
+    if not isinstance(suite_runs, list):
+        return {}
+    case_count = 0
+    passed_case_count = 0
+    failed_case_count = 0
+    for run in suite_runs:
+        if not isinstance(run, dict):
+            continue
+        case_count += 1
+        if run.get("status") == "passed":
+            passed_case_count += 1
+        else:
+            failed_case_count += 1
+    return {
+        "e2e_case_count": case_count,
+        "e2e_passed_case_count": passed_case_count,
+        "e2e_failed_case_count": failed_case_count,
+    }
+
+
+def _provider_reliability_case_counts(reliability: dict[str, Any]) -> dict[str, int]:
+    """Return direct-provider reliability case counters from diagnostics."""
+    return {
+        "reliability_observed_case_count": _int_payload_value(
+            reliability,
+            "observed_case_count",
+        ),
+        "reliability_passed_case_count": _int_payload_value(
+            reliability,
+            "passed_case_count",
+        ),
+        "reliability_required_case_count": _int_payload_value(
+            reliability,
+            "required_case_count",
+        ),
+    }
+
+
+def _provider_smoke_cost_record(result: ProviderSmokeResult) -> dict[str, Any]:
+    """Return actual token/cost evidence for a provider smoke run when available."""
+    pricing_model = _provider_smoke_cost_pricing_model(result.model)
+    if not pricing_model:
+        return {}
+
+    token_usage = _provider_smoke_token_usage_payload(result.runtime_diagnostics)
+    if token_usage is None:
+        input_tokens = PROVIDER_SMOKE_COST_ESTIMATE_INPUT_TOKENS
+        output_tokens = PROVIDER_SMOKE_COST_ESTIMATE_OUTPUT_TOKENS
+        cost_source = "fixed_token_estimate"
+        cost_status = "estimated"
+    else:
+        input_tokens = token_usage["input_tokens"]
+        output_tokens = token_usage["output_tokens"]
+        cost_source = token_usage["source"]
+        cost_status = "recorded"
+    cost_usd = calculate_cost(pricing_model, input_tokens, output_tokens)
+    pricing = get_model_pricing(pricing_model)
+    return {
+        "cost_status": cost_status,
+        "cost_source": cost_source,
+        "cost_input_tokens": input_tokens,
+        "cost_output_tokens": output_tokens,
+        "cost_usd": cost_usd,
+        "cost_formatted": format_cost(cost_usd),
+        "cost_pricing_model": pricing_model,
+        "cost_pricing_provider": pricing.get("provider"),
+    }
+
+
+def _provider_smoke_cost_pricing_model(model: Any) -> str | None:
+    """Return a known pricing model from provider smoke evidence."""
+    if not isinstance(model, str):
+        return None
+    trimmed = model.strip()
+    if not trimmed:
+        return None
+    if trimmed in MODEL_PRICING and trimmed != "default":
+        return trimmed
+    for segment in reversed(trimmed.split("/")):
+        if segment in MODEL_PRICING and segment != "default":
+            return segment
+    return None
+
+
+def _provider_smoke_token_usage_payload(
+    runtime_diagnostics: dict[str, Any],
+) -> dict[str, int | str] | None:
+    """Return normalized token usage evidence from smoke diagnostics."""
+    candidates: list[tuple[str, Any]] = [
+        ("token_usage", runtime_diagnostics.get("token_usage")),
+        ("usage", runtime_diagnostics.get("usage")),
+    ]
+    execution = runtime_diagnostics.get("validated_runtime_execution")
+    if isinstance(execution, dict):
+        candidates.extend(
+            [
+                (
+                    "validated_runtime_execution.token_usage",
+                    execution.get("token_usage"),
+                ),
+                ("validated_runtime_execution.usage", execution.get("usage")),
+            ]
+        )
+
+    for source, payload in candidates:
+        if not isinstance(payload, dict):
+            continue
+        input_tokens = _int_payload_value_from_keys(
+            payload,
+            ("input_tokens", "prompt_tokens"),
+        )
+        output_tokens = _int_payload_value_from_keys(
+            payload,
+            ("output_tokens", "completion_tokens"),
+        )
+        if input_tokens is None or output_tokens is None:
+            continue
+        return {
+            "source": source,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+        }
+    return None
+
+
+def _int_payload_value_from_keys(
+    payload: dict[str, Any],
+    keys: tuple[str, ...],
+) -> int | None:
+    """Return the first non-negative integer value from any candidate key."""
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    return None
 
 
 def _load_provider_smoke_history(
@@ -408,7 +586,34 @@ def _provider_smoke_history_trend(
         "recent_failed_runs": recent_failed_runs,
         "consecutive_passes": consecutive_passes,
         "consecutive_failures": consecutive_failures,
+        "recent_runs": _provider_smoke_history_recent_runs(recent_runs),
+        **_provider_smoke_history_eval_trends(recent_runs),
     }
+
+
+def _provider_smoke_history_recent_runs(
+    runs: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    """Return a compact normalized timeline for the latest provider runs."""
+    timeline: list[dict[str, str]] = []
+    fields = (
+        "timestamp",
+        "status",
+        "runtime_mode",
+        "model",
+        "reliability_status",
+        "provider_e2e_status",
+        "live_fault_probe_status",
+    )
+    for run in runs:
+        item = {
+            field: value
+            for field in fields
+            if isinstance((value := run.get(field)), str) and value
+        }
+        if item:
+            timeline.append(item)
+    return timeline
 
 
 def _provider_smoke_history_provider_stats(
@@ -428,6 +633,7 @@ def _provider_smoke_history_provider_stats(
             stats["live_fault_probe_covered_cases"]
         )
         stats.update(_provider_smoke_history_trend(provider_runs.get(provider, [])))
+        stats.update(_provider_smoke_history_metrics(stats))
     return providers
 
 
@@ -443,6 +649,12 @@ def _provider_smoke_empty_provider_stats() -> dict[str, Any]:
         "last_run_at": None,
         "last_reliability_status": None,
         "last_provider_e2e_status": None,
+        "e2e_case_count": 0,
+        "e2e_passed_case_count": 0,
+        "e2e_failed_case_count": 0,
+        "reliability_observed_case_count": 0,
+        "reliability_passed_case_count": 0,
+        "reliability_required_case_count": 0,
         "last_live_fault_probe_status": None,
         "live_fault_probe_enabled_runs": 0,
         "live_fault_probe_passed_runs": 0,
@@ -468,7 +680,25 @@ def _provider_smoke_history_apply_run_stats(
     stats["last_run_at"] = run.get("timestamp")
     stats["last_reliability_status"] = run.get("reliability_status")
     stats["last_provider_e2e_status"] = run.get("provider_e2e_status")
+    _provider_smoke_history_apply_case_stats(stats, run)
     _provider_smoke_history_apply_live_fault_stats(stats, run)
+    _provider_smoke_history_apply_cost_stats(stats, run)
+
+
+def _provider_smoke_history_apply_case_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+) -> None:
+    """Apply granular e2e and reliability case counters from one run."""
+    for key in (
+        "e2e_case_count",
+        "e2e_passed_case_count",
+        "e2e_failed_case_count",
+        "reliability_observed_case_count",
+        "reliability_passed_case_count",
+        "reliability_required_case_count",
+    ):
+        stats[key] = _int_payload_value(stats, key) + _int_payload_value(run, key)
 
 
 def _provider_smoke_history_apply_live_fault_stats(
@@ -493,6 +723,280 @@ def _provider_smoke_history_apply_live_fault_stats(
             existing_cases.append(covered_case)
 
 
+def _provider_smoke_history_apply_cost_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+) -> None:
+    """Apply token/cost evidence from one persisted run."""
+    cost_status = run.get("cost_status")
+    if cost_status not in {"recorded", "estimated"}:
+        return
+    input_tokens = _int_payload_value(run, "cost_input_tokens")
+    output_tokens = _int_payload_value(run, "cost_output_tokens")
+    cost_usd = _float_payload_value(run, "cost_usd")
+    if cost_usd is None:
+        return
+
+    if cost_status == "estimated" and stats.get("cost_status") == "recorded":
+        _provider_smoke_history_apply_latest_cost_stats(
+            stats,
+            run,
+            cost_status=cost_status,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+        )
+        return
+    if cost_status == "recorded" and stats.get("cost_status") == "estimated":
+        _provider_smoke_history_reset_cost_stats(stats)
+
+    if stats.get("cost_status") != "recorded":
+        stats["cost_status"] = cost_status
+    stats["cost_observed_run_count"] = (
+        _int_payload_value(stats, "cost_observed_run_count") + 1
+    )
+    stats["cost_total_input_tokens"] = (
+        _int_payload_value(stats, "cost_total_input_tokens") + input_tokens
+    )
+    stats["cost_total_output_tokens"] = (
+        _int_payload_value(stats, "cost_total_output_tokens") + output_tokens
+    )
+    stats["cost_total_usd"] = round(
+        float(stats.get("cost_total_usd") or 0.0) + cost_usd,
+        10,
+    )
+    stats["cost_total_formatted"] = format_cost(stats["cost_total_usd"])
+    _provider_smoke_history_apply_latest_cost_stats(
+        stats,
+        run,
+        cost_status=cost_status,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost_usd,
+    )
+    stats["cost_pricing_model"] = run.get("cost_pricing_model")
+    stats["cost_pricing_provider"] = run.get("cost_pricing_provider")
+
+
+def _provider_smoke_history_apply_latest_cost_stats(
+    stats: dict[str, Any],
+    run: dict[str, Any],
+    *,
+    cost_status: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+) -> None:
+    """Apply latest-run cost evidence without necessarily changing totals."""
+    stats["cost_last_status"] = cost_status
+    stats["cost_last_source"] = run.get("cost_source")
+    stats["cost_last_input_tokens"] = input_tokens
+    stats["cost_last_output_tokens"] = output_tokens
+    stats["cost_last_usd"] = cost_usd
+    stats["cost_last_formatted"] = format_cost(cost_usd)
+    stats["cost_last_pricing_model"] = run.get("cost_pricing_model")
+    stats["cost_last_pricing_provider"] = run.get("cost_pricing_provider")
+
+
+def _provider_smoke_history_reset_cost_stats(stats: dict[str, Any]) -> None:
+    """Clear estimated cost totals before recorded usage takes precedence."""
+    for key in (
+        "cost_status",
+        "cost_observed_run_count",
+        "cost_total_input_tokens",
+        "cost_total_output_tokens",
+        "cost_total_usd",
+        "cost_total_formatted",
+        "cost_last_status",
+        "cost_last_source",
+        "cost_last_input_tokens",
+        "cost_last_output_tokens",
+        "cost_last_usd",
+        "cost_last_formatted",
+        "cost_last_pricing_model",
+        "cost_last_pricing_provider",
+        "cost_pricing_model",
+        "cost_pricing_provider",
+    ):
+        stats.pop(key, None)
+
+
+def _provider_smoke_percent_metric(
+    numerator: int,
+    denominator: int,
+) -> int | None:
+    """Return a rounded percentage metric when a denominator is available."""
+    if denominator <= 0:
+        return None
+    return round((numerator / denominator) * 100)
+
+
+def _provider_smoke_history_eval_trends(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return score and cost trend deltas from the two latest usable runs."""
+    quality_trend, quality_delta = _provider_smoke_history_score_trend(
+        runs,
+        _provider_smoke_run_quality_score,
+    )
+    stability_trend, stability_delta = _provider_smoke_history_score_trend(
+        runs,
+        _provider_smoke_run_stability_score,
+    )
+    safety_trend, safety_delta = _provider_smoke_history_score_trend(
+        runs,
+        _provider_smoke_run_safety_score,
+    )
+    cost_trend, cost_delta = _provider_smoke_history_cost_trend(runs)
+    cost_delta_formatted = _provider_smoke_signed_cost_delta(cost_delta)
+    return {
+        "quality_trend": quality_trend,
+        "quality_delta_percent": quality_delta,
+        "stability_trend": stability_trend,
+        "stability_delta_percent": stability_delta,
+        "safety_trend": safety_trend,
+        "safety_delta_percent": safety_delta,
+        "cost_trend": cost_trend,
+        "cost_delta_usd": cost_delta,
+        "cost_delta_formatted": cost_delta_formatted,
+    }
+
+
+def _provider_smoke_history_score_trend(
+    runs: list[dict[str, Any]],
+    score_getter: Callable[[dict[str, Any]], int | None],
+) -> tuple[str, int | None]:
+    """Return improving/degrading/stable trend from the latest two score values."""
+    scores = [score for run in runs if (score := score_getter(run)) is not None]
+    if len(scores) < 2:
+        return "trend_insufficient_data", None
+    delta = scores[-1] - scores[-2]
+    if delta > 0:
+        return "score_improving", delta
+    if delta < 0:
+        return "score_degrading", delta
+    return "score_stable", 0
+
+
+def _provider_smoke_run_quality_score(run: dict[str, Any]) -> int | None:
+    """Return a per-run quality score from e2e cases or pass/fail status."""
+    e2e_score = _provider_smoke_percent_metric(
+        _int_payload_value(run, "e2e_passed_case_count"),
+        _int_payload_value(run, "e2e_case_count"),
+    )
+    if e2e_score is not None:
+        return e2e_score
+    return _provider_smoke_run_status_score(run)
+
+
+def _provider_smoke_run_stability_score(run: dict[str, Any]) -> int | None:
+    """Return a per-run stability score from the latest run status."""
+    return _provider_smoke_run_status_score(run)
+
+
+def _provider_smoke_run_status_score(run: dict[str, Any]) -> int | None:
+    """Return a simple pass/fail score for one persisted run."""
+    status = run.get("status")
+    if status == "passed":
+        return 100
+    if status == "failed":
+        return 0
+    return None
+
+
+def _provider_smoke_run_safety_score(run: dict[str, Any]) -> int | None:
+    """Return the strictest per-run safety score from reliability/live-fault data."""
+    reliability_score = _provider_smoke_percent_metric(
+        _int_payload_value(run, "reliability_passed_case_count"),
+        _int_payload_value(run, "reliability_required_case_count"),
+    )
+    live_fault_score = _provider_smoke_percent_metric(
+        len(set(_string_list_payload(run.get("live_fault_probe_covered_cases")))),
+        len(PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES),
+    )
+    scores = [
+        score for score in (reliability_score, live_fault_score) if score is not None
+    ]
+    return min(scores) if scores else None
+
+
+def _provider_smoke_history_cost_trend(
+    runs: list[dict[str, Any]],
+) -> tuple[str, float | None]:
+    """Return cost trend from the latest two per-run cost values."""
+    costs = [
+        cost
+        for run in runs
+        if (cost := _float_payload_value(run, "cost_usd")) is not None
+    ]
+    if len(costs) < 2:
+        return "cost_insufficient_data", None
+    delta = round(costs[-1] - costs[-2], 10)
+    if delta > 0:
+        return "cost_increasing", delta
+    if delta < 0:
+        return "cost_decreasing", delta
+    return "cost_stable", 0.0
+
+
+def _provider_smoke_signed_cost_delta(delta: float | None) -> str | None:
+    """Return a signed human-readable cost delta."""
+    if delta is None:
+        return None
+    sign = ""
+    if delta > 0:
+        sign = "+"
+    elif delta < 0:
+        sign = "-"
+    return f"{sign}{format_cost(abs(delta))}"
+
+
+def _provider_smoke_history_metrics(stats: dict[str, Any]) -> dict[str, Any]:
+    """Return quality and live-safety metrics from provider smoke history."""
+    total_runs = int(stats.get("total_runs") or 0)
+    passed_runs = int(stats.get("passed_runs") or 0)
+    recent_window = int(stats.get("recent_window") or 0)
+    recent_passed_runs = int(stats.get("recent_passed_runs") or 0)
+    e2e_case_count = _int_payload_value(stats, "e2e_case_count")
+    e2e_passed_case_count = _int_payload_value(stats, "e2e_passed_case_count")
+    reliability_required_case_count = _int_payload_value(
+        stats,
+        "reliability_required_case_count",
+    )
+    reliability_passed_case_count = _int_payload_value(
+        stats,
+        "reliability_passed_case_count",
+    )
+    required_live_fault_case_count = len(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
+    observed_live_fault_case_count = len(
+        _string_list_payload(stats.get("live_fault_probe_covered_cases"))
+    )
+    return {
+        "pass_rate_percent": _provider_smoke_percent_metric(
+            passed_runs,
+            total_runs,
+        ),
+        "recent_pass_rate_percent": _provider_smoke_percent_metric(
+            recent_passed_runs,
+            recent_window,
+        ),
+        "e2e_case_pass_rate_percent": _provider_smoke_percent_metric(
+            e2e_passed_case_count,
+            e2e_case_count,
+        ),
+        "reliability_case_pass_rate_percent": _provider_smoke_percent_metric(
+            reliability_passed_case_count,
+            reliability_required_case_count,
+        ),
+        "observed_live_fault_case_count": observed_live_fault_case_count,
+        "required_live_fault_case_count": required_live_fault_case_count,
+        "live_fault_probe_case_coverage_percent": _provider_smoke_percent_metric(
+            observed_live_fault_case_count,
+            required_live_fault_case_count,
+        ),
+    }
+
+
 def _provider_smoke_history_payload(
     runs: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -503,6 +1007,387 @@ def _provider_smoke_history_payload(
         "runs": bounded_runs,
         "providers": _provider_smoke_history_provider_stats(bounded_runs),
     }
+
+
+def _provider_autonomous_readiness_diagnostics(
+    result: ProviderSmokeResult,
+    history_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Return provider autonomous-readiness recommendation from e2e evidence."""
+    runtime_diagnostics = result.runtime_diagnostics
+    provider = result.provider
+    if provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
+        return {
+            "status": "not_required",
+            "provider": provider,
+            "source": "provider_autonomous_readiness",
+            "recommendation": "not_required",
+            "recommendation_reasons": [],
+            "blockers": [],
+            "warnings": [],
+            "next_actions": [],
+            "requirements": {},
+            "missing_requirements": [],
+            "evidence": [],
+        }
+
+    blockers: list[str] = []
+    warnings: list[str] = []
+    evidence: list[str] = []
+
+    _provider_readiness_suite_evidence(runtime_diagnostics, blockers, evidence)
+    _provider_readiness_reliability_evidence(runtime_diagnostics, blockers, evidence)
+    history_warning_offset = len(warnings)
+    _provider_readiness_history_evidence(history_summary, blockers, warnings, evidence)
+    history_warnings = warnings[history_warning_offset:]
+    del warnings[history_warning_offset:]
+    _provider_readiness_live_fault_evidence(history_summary, warnings, evidence)
+    warnings.extend(history_warnings)
+    _provider_readiness_eval_trend_evidence(history_summary, warnings)
+
+    status, recommendation = _provider_readiness_status(blockers, warnings)
+    requirements = _provider_readiness_requirements(history_summary)
+    return {
+        "status": status,
+        "provider": provider,
+        "source": "provider_autonomous_readiness",
+        "recommendation": recommendation,
+        "recommendation_reasons": _provider_readiness_recommendation_reasons(
+            status,
+            blockers,
+            warnings,
+        ),
+        "blockers": blockers,
+        "warnings": warnings,
+        "next_actions": _provider_readiness_next_actions(blockers, warnings),
+        "requirements": requirements,
+        "missing_requirements": _provider_readiness_missing_requirements(
+            blockers,
+            warnings,
+            requirements,
+        ),
+        "evidence": evidence,
+    }
+
+
+def _provider_readiness_suite_evidence(
+    runtime_diagnostics: dict[str, Any],
+    blockers: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply provider e2e suite evidence to readiness lists."""
+    provider_e2e_suite = runtime_diagnostics.get("provider_e2e_suite")
+    provider_e2e_suite = (
+        provider_e2e_suite if isinstance(provider_e2e_suite, dict) else {}
+    )
+    if provider_e2e_suite.get("status") == "passed":
+        evidence.append("provider_e2e_passed")
+    else:
+        blockers.append("provider_e2e_failed")
+
+
+def _provider_readiness_reliability_evidence(
+    runtime_diagnostics: dict[str, Any],
+    blockers: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply reliability coverage evidence to readiness lists."""
+    reliability = runtime_diagnostics.get("provider_reliability")
+    reliability = reliability if isinstance(reliability, dict) else {}
+    if reliability.get("status") == "complete":
+        evidence.append("provider_reliability_complete")
+    else:
+        blockers.append("provider_reliability_incomplete")
+
+
+def _provider_readiness_history_evidence(
+    history_summary: dict[str, Any],
+    blockers: list[str],
+    warnings: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply provider history trend evidence to readiness lists."""
+    if (
+        history_summary.get("status") == "record_failed"
+        or "last_status" not in history_summary
+        or history_summary.get("last_status") is None
+    ):
+        warnings.append("provider_history_unknown")
+        return
+
+    if history_summary.get("last_status") != "passed":
+        blockers.append("provider_history_latest_failed")
+
+    trend = history_summary.get("trend")
+    if trend == "provider_history_stable":
+        if _provider_readiness_history_is_stable_enough(history_summary):
+            evidence.append("provider_history_stable")
+        else:
+            warnings.append("provider_history_insufficient_runs")
+    elif isinstance(trend, str) and trend:
+        warnings.append(trend)
+
+    _provider_readiness_history_freshness_evidence(history_summary, warnings)
+
+
+def _provider_readiness_history_is_stable_enough(
+    history_summary: dict[str, Any],
+) -> bool:
+    """Return whether persisted history has enough stable runs for promotion."""
+    return (
+        _provider_readiness_recent_window(history_summary)
+        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+        and _provider_readiness_consecutive_passes(history_summary)
+        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+    )
+
+
+def _provider_readiness_history_freshness_evidence(
+    history_summary: dict[str, Any],
+    warnings: list[str],
+) -> None:
+    """Apply provider history freshness evidence to readiness warnings."""
+    freshness = _provider_readiness_history_freshness_complete(history_summary)
+    if freshness is True:
+        return
+    if _provider_readiness_last_run_at(history_summary) is None:
+        warnings.append("provider_history_freshness_unknown")
+    else:
+        warnings.append("provider_history_stale")
+
+
+def _provider_readiness_live_fault_evidence(
+    history_summary: dict[str, Any],
+    warnings: list[str],
+    evidence: list[str],
+) -> None:
+    """Apply live fault probe evidence to readiness lists."""
+    if history_summary.get("last_live_fault_probe_status") == "passed":
+        evidence.append("live_fault_probes_passed")
+        if not _provider_readiness_live_fault_coverage_complete(history_summary):
+            warnings.append("live_fault_probe_coverage_incomplete")
+    else:
+        warnings.append("live_fault_probe_evidence_missing")
+
+
+def _provider_readiness_live_fault_coverage_complete(
+    history_summary: dict[str, Any],
+) -> bool:
+    """Return whether live fault probes covered every required provider fault."""
+    covered_cases = set(
+        _string_list_payload(history_summary.get("live_fault_probe_covered_cases"))
+    )
+    return all(
+        required_case in covered_cases
+        for required_case in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
+
+
+def _provider_readiness_eval_trend_evidence(
+    history_summary: dict[str, Any],
+    warnings: list[str],
+) -> None:
+    """Apply recent eval trend warnings to readiness lists."""
+    trend_fields = {
+        "quality_trend": "quality_trend_degrading",
+        "stability_trend": "stability_trend_degrading",
+        "safety_trend": "safety_trend_degrading",
+    }
+    for trend_field, warning in trend_fields.items():
+        if history_summary.get(trend_field) == "score_degrading":
+            warnings.append(warning)
+
+
+def _provider_readiness_requirements(
+    history_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Return structured readiness requirement evidence for operators."""
+    recent_window = _provider_readiness_recent_window(history_summary)
+    consecutive_passes = _provider_readiness_consecutive_passes(history_summary)
+    required_live_fault_cases = sorted(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
+    live_fault_covered_cases = sorted(
+        _string_list_payload(history_summary.get("live_fault_probe_covered_cases"))
+    )
+    live_fault_missing_cases = [
+        required_case
+        for required_case in required_live_fault_cases
+        if required_case not in live_fault_covered_cases
+    ]
+    live_fault_coverage_complete = (
+        history_summary.get("last_live_fault_probe_status") == "passed"
+        and not live_fault_missing_cases
+    )
+    requirements = {
+        "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
+        "observed_recent_window": recent_window,
+        "observed_consecutive_passes": consecutive_passes,
+        "history_stability_complete": _provider_readiness_history_is_stable_enough(
+            history_summary,
+        ),
+        "required_live_fault_cases": required_live_fault_cases,
+        "live_fault_covered_cases": live_fault_covered_cases,
+        "live_fault_missing_cases": live_fault_missing_cases,
+        "live_fault_coverage_complete": live_fault_coverage_complete,
+    }
+    last_run_at = _provider_readiness_last_run_at(history_summary)
+    if last_run_at is not None:
+        requirements.update(
+            {
+                "last_run_at": last_run_at,
+                "max_history_age_seconds": (
+                    PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
+                ),
+                "history_freshness_complete": (
+                    _provider_readiness_history_freshness_complete(history_summary)
+                ),
+            }
+        )
+    return requirements
+
+
+def _provider_readiness_last_run_at(history_summary: dict[str, Any]) -> str | None:
+    """Return the persisted latest provider smoke timestamp."""
+    last_run_at = history_summary.get("last_run_at")
+    return last_run_at if isinstance(last_run_at, str) and last_run_at else None
+
+
+def _provider_readiness_last_run_datetime(
+    history_summary: dict[str, Any],
+) -> datetime | None:
+    """Return a normalized latest provider smoke timestamp when parseable."""
+    last_run_at = _provider_readiness_last_run_at(history_summary)
+    if last_run_at is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(last_run_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _provider_readiness_history_freshness_complete(
+    history_summary: dict[str, Any],
+) -> bool:
+    """Return whether latest provider smoke evidence is recent enough."""
+    last_run_at = _provider_readiness_last_run_datetime(history_summary)
+    if last_run_at is None:
+        return False
+    max_age = timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
+    return datetime.now(timezone.utc) - last_run_at <= max_age
+
+
+def _provider_readiness_recent_window(history_summary: dict[str, Any]) -> int:
+    """Return observed recent-window count from provider history."""
+    recent_window = _int_payload_value(history_summary, "recent_window")
+    if recent_window == 0:
+        recent_window = _int_payload_value(history_summary, "total_runs")
+    return recent_window
+
+
+def _provider_readiness_consecutive_passes(history_summary: dict[str, Any]) -> int:
+    """Return observed consecutive-pass count from provider history."""
+    consecutive_passes = _int_payload_value(history_summary, "consecutive_passes")
+    if consecutive_passes == 0:
+        consecutive_passes = _int_payload_value(history_summary, "passed_runs")
+    return consecutive_passes
+
+
+def _provider_readiness_missing_requirements(
+    blockers: list[str],
+    warnings: list[str],
+    requirements: dict[str, Any],
+) -> list[str]:
+    """Return stable missing requirement ids for readiness automation."""
+    missing: list[str] = []
+    if "provider_e2e_failed" in blockers:
+        missing.append("provider_e2e")
+    if "provider_reliability_incomplete" in blockers:
+        missing.append("provider_reliability")
+    if "provider_history_latest_failed" in blockers:
+        missing.append("latest_provider_e2e_pass")
+    if requirements.get("history_stability_complete") is not True:
+        missing.append("stable_history_runs")
+    if (
+        requirements.get("last_run_at") is not None
+        and requirements.get("history_freshness_complete") is not True
+    ):
+        missing.append("fresh_provider_history")
+    if requirements.get("live_fault_coverage_complete") is not True:
+        missing.append("live_fault_case_coverage")
+    if any(warning.endswith("_trend_degrading") for warning in warnings):
+        missing.append("stable_eval_trends")
+    return missing
+
+
+def _provider_readiness_status(
+    blockers: list[str],
+    warnings: list[str],
+) -> tuple[str, str]:
+    """Return readiness status and recommendation."""
+    if blockers:
+        return "blocked", "provider_e2e_required"
+    if (
+        "live_fault_probe_evidence_missing" in warnings
+        or "live_fault_probe_coverage_incomplete" in warnings
+    ):
+        return "needs_live_fault_evidence", "limited_autonomous_until_live_faults"
+    if warnings:
+        return "warming_up", "limited_autonomous_until_evidence_stable"
+    return "full_autonomous_candidate", "api_runtime_full_autonomous_candidate"
+
+
+def _provider_readiness_recommendation_reasons(
+    status: str,
+    blockers: list[str],
+    warnings: list[str],
+) -> list[str]:
+    """Return stable, UI-facing reason ids behind the readiness recommendation."""
+    if status == "full_autonomous_candidate":
+        return ["full_autonomy_candidate"]
+
+    reasons: list[str] = []
+    for signal in [*blockers, *warnings]:
+        reason = PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL.get(
+            signal
+        )
+        if reason and reason not in reasons:
+            reasons.append(reason)
+    return reasons
+
+
+def _provider_readiness_next_actions(
+    blockers: list[str],
+    warnings: list[str],
+) -> list[str]:
+    """Return ordered next actions for readiness blockers and warnings."""
+    action_by_reason = {
+        "provider_e2e_failed": "rerun_provider_e2e",
+        "provider_reliability_incomplete": "inspect_uncovered_cases",
+        "provider_history_latest_failed": "rerun_provider_e2e",
+        "provider_history_unknown": "collect_provider_history_runs",
+        "live_fault_probe_evidence_missing": "enable_live_fault_probes",
+        "live_fault_probe_coverage_incomplete": "enable_live_fault_probes",
+        "provider_history_insufficient_runs": "collect_provider_history_runs",
+        "provider_history_warming_up": "collect_provider_history_runs",
+        "provider_history_flaky": "stabilize_provider_history",
+        "provider_history_recovering": "collect_provider_history_runs",
+        "provider_history_degraded": "stabilize_provider_history",
+        "provider_history_stale": "rerun_provider_e2e",
+        "provider_history_freshness_unknown": "rerun_provider_e2e",
+        "quality_trend_degrading": "stabilize_provider_history",
+        "stability_trend_degrading": "stabilize_provider_history",
+        "safety_trend_degrading": "stabilize_provider_history",
+    }
+    actions: list[str] = []
+    for reason in [*blockers, *warnings]:
+        action = action_by_reason.get(reason)
+        if action and action not in actions:
+            actions.append(action)
+    return actions
 
 
 def _with_provider_run_history(
@@ -533,6 +1418,22 @@ def _with_provider_run_history(
             "last_status": provider_stats.get("last_status", "unknown"),
             "last_reliability_status": provider_stats.get("last_reliability_status"),
             "last_provider_e2e_status": provider_stats.get("last_provider_e2e_status"),
+            "last_run_at": provider_stats.get("last_run_at"),
+            "e2e_case_count": provider_stats.get("e2e_case_count", 0),
+            "e2e_passed_case_count": provider_stats.get("e2e_passed_case_count", 0),
+            "e2e_failed_case_count": provider_stats.get("e2e_failed_case_count", 0),
+            "reliability_observed_case_count": provider_stats.get(
+                "reliability_observed_case_count",
+                0,
+            ),
+            "reliability_passed_case_count": provider_stats.get(
+                "reliability_passed_case_count",
+                0,
+            ),
+            "reliability_required_case_count": provider_stats.get(
+                "reliability_required_case_count",
+                0,
+            ),
             "last_live_fault_probe_status": provider_stats.get(
                 "last_live_fault_probe_status"
             ),
@@ -555,15 +1456,75 @@ def _with_provider_run_history(
             "recent_failed_runs": provider_stats.get("recent_failed_runs"),
             "consecutive_passes": provider_stats.get("consecutive_passes"),
             "consecutive_failures": provider_stats.get("consecutive_failures"),
+            "pass_rate_percent": provider_stats.get("pass_rate_percent"),
+            "recent_pass_rate_percent": provider_stats.get("recent_pass_rate_percent"),
+            "e2e_case_pass_rate_percent": provider_stats.get(
+                "e2e_case_pass_rate_percent"
+            ),
+            "reliability_case_pass_rate_percent": provider_stats.get(
+                "reliability_case_pass_rate_percent"
+            ),
+            "observed_live_fault_case_count": provider_stats.get(
+                "observed_live_fault_case_count",
+            ),
+            "required_live_fault_case_count": provider_stats.get(
+                "required_live_fault_case_count",
+            ),
+            "live_fault_probe_case_coverage_percent": provider_stats.get(
+                "live_fault_probe_case_coverage_percent",
+            ),
+            "quality_trend": provider_stats.get("quality_trend"),
+            "quality_delta_percent": provider_stats.get("quality_delta_percent"),
+            "stability_trend": provider_stats.get("stability_trend"),
+            "stability_delta_percent": provider_stats.get("stability_delta_percent"),
+            "safety_trend": provider_stats.get("safety_trend"),
+            "safety_delta_percent": provider_stats.get("safety_delta_percent"),
+            "cost_trend": provider_stats.get("cost_trend"),
+            "cost_delta_usd": provider_stats.get("cost_delta_usd"),
+            "cost_delta_formatted": provider_stats.get("cost_delta_formatted"),
+            "recent_runs": provider_stats.get("recent_runs", []),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }
+        for cost_key in (
+            "cost_status",
+            "cost_observed_run_count",
+            "cost_total_input_tokens",
+            "cost_total_output_tokens",
+            "cost_total_usd",
+            "cost_total_formatted",
+            "cost_last_status",
+            "cost_last_source",
+            "cost_last_input_tokens",
+            "cost_last_output_tokens",
+            "cost_last_usd",
+            "cost_last_formatted",
+            "cost_last_pricing_model",
+            "cost_last_pricing_provider",
+            "cost_pricing_model",
+            "cost_pricing_provider",
+        ):
+            if cost_key in provider_stats:
+                history_summary[cost_key] = provider_stats[cost_key]
     except Exception as e:
         logger.debug("Provider smoke history persistence failed", exc_info=True)
+        live_fault_probes = result.runtime_diagnostics.get(
+            "provider_e2e_live_fault_probes"
+        )
+        live_fault_probes = (
+            live_fault_probes if isinstance(live_fault_probes, dict) else {}
+        )
+        live_fault_probe_status = live_fault_probes.get("status")
         history_summary = {
             "status": "record_failed",
             "provider": result.provider,
             "runtime_mode": result.runtime_mode,
             "reason": str(e),
+            "last_live_fault_probe_status": live_fault_probe_status
+            if isinstance(live_fault_probe_status, str) and live_fault_probe_status
+            else None,
+            "live_fault_probe_covered_cases": _string_list_payload(
+                live_fault_probes.get("covered_cases")
+            ),
             "path": PROVIDER_SMOKE_HISTORY_RELATIVE_PATH.as_posix(),
         }
     return replace(
@@ -571,6 +1532,10 @@ def _with_provider_run_history(
         runtime_diagnostics={
             **result.runtime_diagnostics,
             "provider_run_history": history_summary,
+            "provider_autonomous_readiness": _provider_autonomous_readiness_diagnostics(
+                result,
+                history_summary,
+            ),
         },
     )
 
@@ -1136,6 +2101,13 @@ def _int_payload_value(payload: dict[str, Any], key: str) -> int:
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     return 0
+
+
+def _float_payload_value(payload: dict[str, Any], key: str) -> float | None:
+    value = payload.get(key)
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+    return None
 
 
 def _number_record_payload(value: Any) -> dict[str, int]:
@@ -3378,6 +4350,9 @@ def _print_provider_runtime_diagnostics(
     _print_provider_reliability(runtime_diagnostics.get("provider_reliability"))
     _print_provider_e2e_suite(runtime_diagnostics.get("provider_e2e_suite"))
     _print_provider_run_history(runtime_diagnostics.get("provider_run_history"))
+    _print_provider_autonomous_readiness(
+        runtime_diagnostics.get("provider_autonomous_readiness")
+    )
     _print_provider_execution_diagnostics(
         runtime_diagnostics.get("validated_runtime_execution")
     )
@@ -3486,9 +4461,172 @@ def _print_provider_run_history(provider_run_history: Any) -> None:
     trend_summary = ", ".join(part for part in trend_parts if part)
     if trend_summary:
         print_key_value("Provider history trend", trend_summary)
+    pass_rate_percent = provider_run_history.get("pass_rate_percent")
+    if isinstance(pass_rate_percent, int) and not isinstance(pass_rate_percent, bool):
+        print_key_value("Provider history pass rate", f"{pass_rate_percent}%")
+    recent_pass_rate_percent = provider_run_history.get("recent_pass_rate_percent")
+    if isinstance(recent_pass_rate_percent, int) and not isinstance(
+        recent_pass_rate_percent,
+        bool,
+    ):
+        print_key_value(
+            "Provider history recent pass rate",
+            f"{recent_pass_rate_percent}%",
+        )
+    _print_provider_history_case_coverage(
+        provider_run_history,
+        label="Provider history e2e case pass rate",
+        percent_key="e2e_case_pass_rate_percent",
+        passed_key="e2e_passed_case_count",
+        required_key="e2e_case_count",
+    )
+    _print_provider_history_case_coverage(
+        provider_run_history,
+        label="Provider history reliability case pass rate",
+        percent_key="reliability_case_pass_rate_percent",
+        passed_key="reliability_passed_case_count",
+        required_key="reliability_required_case_count",
+    )
+    live_fault_coverage_percent = provider_run_history.get(
+        "live_fault_probe_case_coverage_percent"
+    )
+    observed_live_fault_cases = provider_run_history.get(
+        "observed_live_fault_case_count"
+    )
+    required_live_fault_cases = provider_run_history.get(
+        "required_live_fault_case_count"
+    )
+    if (
+        isinstance(live_fault_coverage_percent, int)
+        and not isinstance(live_fault_coverage_percent, bool)
+        and isinstance(observed_live_fault_cases, int)
+        and not isinstance(observed_live_fault_cases, bool)
+        and isinstance(required_live_fault_cases, int)
+        and not isinstance(required_live_fault_cases, bool)
+    ):
+        print_key_value(
+            "Provider history live-fault coverage",
+            f"{live_fault_coverage_percent}% "
+            f"({observed_live_fault_cases}/{required_live_fault_cases})",
+        )
+    cost_status = provider_run_history.get("cost_status")
+    cost_run_label = "estimated runs" if cost_status == "estimated" else "recorded runs"
+    cost_parts = [
+        f"{provider_run_history['cost_total_formatted']} total"
+        if isinstance(provider_run_history.get("cost_total_formatted"), str)
+        and provider_run_history.get("cost_total_formatted")
+        else "",
+        f"{provider_run_history['cost_last_formatted']} latest"
+        if isinstance(provider_run_history.get("cost_last_formatted"), str)
+        and provider_run_history.get("cost_last_formatted")
+        else "",
+        f"{provider_run_history['cost_observed_run_count']} {cost_run_label}"
+        if isinstance(provider_run_history.get("cost_observed_run_count"), int)
+        and not isinstance(provider_run_history.get("cost_observed_run_count"), bool)
+        else "",
+        f"{provider_run_history['cost_total_input_tokens']} input"
+        if isinstance(provider_run_history.get("cost_total_input_tokens"), int)
+        and not isinstance(provider_run_history.get("cost_total_input_tokens"), bool)
+        else "",
+        f"{provider_run_history['cost_total_output_tokens']} output"
+        if isinstance(provider_run_history.get("cost_total_output_tokens"), int)
+        and not isinstance(provider_run_history.get("cost_total_output_tokens"), bool)
+        else "",
+        str(provider_run_history.get("cost_pricing_model"))
+        if isinstance(provider_run_history.get("cost_pricing_model"), str)
+        and provider_run_history.get("cost_pricing_model")
+        else "",
+    ]
+    cost_summary = ", ".join(part for part in cost_parts if part)
+    if cost_summary:
+        print_key_value("Provider history cost", cost_summary)
+    recent_runs = provider_run_history.get("recent_runs")
+    recent_run_parts = (
+        [
+            _provider_run_history_recent_run_summary(run)
+            for run in recent_runs
+            if isinstance(run, dict)
+        ]
+        if isinstance(recent_runs, list)
+        else []
+    )
+    recent_run_summary = " -> ".join(part for part in recent_run_parts if part)
+    if recent_run_summary:
+        print_key_value("Provider history recent runs", recent_run_summary)
     path = provider_run_history.get("path")
     if isinstance(path, str) and path:
         print_key_value("Provider history artifact", path)
+
+
+def _print_provider_history_case_coverage(
+    provider_run_history: dict[str, Any],
+    *,
+    label: str,
+    percent_key: str,
+    passed_key: str,
+    required_key: str,
+) -> None:
+    """Print a provider history case-rate metric when all fields exist."""
+    percent = provider_run_history.get(percent_key)
+    passed = provider_run_history.get(passed_key)
+    required = provider_run_history.get(required_key)
+    if (
+        isinstance(percent, int)
+        and not isinstance(percent, bool)
+        and isinstance(passed, int)
+        and not isinstance(passed, bool)
+        and isinstance(required, int)
+        and not isinstance(required, bool)
+    ):
+        print_key_value(label, f"{percent}% ({passed}/{required})")
+
+
+def _provider_run_history_recent_run_summary(run: dict[str, Any]) -> str:
+    """Return one compact provider history run summary for CLI output."""
+    timestamp = run.get("timestamp")
+    prefix = f"{timestamp}: " if isinstance(timestamp, str) and timestamp else ""
+    parts = [
+        str(run.get(field))
+        for field in (
+            "status",
+            "runtime_mode",
+            "model",
+            "reliability_status",
+            "provider_e2e_status",
+            "live_fault_probe_status",
+        )
+        if isinstance(run.get(field), str) and run.get(field)
+    ]
+    return f"{prefix}{' / '.join(parts)}" if parts else prefix.rstrip(": ")
+
+
+def _print_provider_autonomous_readiness(readiness: Any) -> None:
+    """Print the aggregate direct-provider autonomous readiness scorecard."""
+    if not isinstance(readiness, dict):
+        return
+    status = readiness.get("status")
+    if isinstance(status, str) and status:
+        print_key_value("Provider autonomous readiness", status)
+    recommendation = readiness.get("recommendation")
+    if isinstance(recommendation, str) and recommendation:
+        print_key_value("Autonomous recommendation", recommendation)
+    _print_string_list_line(
+        "Autonomous recommendation reasons",
+        readiness.get("recommendation_reasons"),
+    )
+    _print_string_list_line("Autonomous blockers", readiness.get("blockers"))
+    _print_string_list_line("Autonomous warnings", readiness.get("warnings"))
+    _print_string_list_line(
+        "Autonomous missing requirements",
+        readiness.get("missing_requirements"),
+    )
+    requirements = format_autonomous_readiness_requirements(
+        readiness.get("requirements")
+    )
+    if requirements:
+        print_key_value("Autonomous requirements", requirements)
+    _print_string_list_line("Autonomous evidence", readiness.get("evidence"))
+    _print_string_list_line("Autonomous next actions", readiness.get("next_actions"))
 
 
 def _print_provider_execution_diagnostics(execution: Any) -> None:

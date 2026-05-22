@@ -177,6 +177,29 @@ least one batch, `begin_batch` / `commit_batch` lifecycle actions, and a
 committed lifecycle status. Live external fault-injection against real provider
 accounts remains optional because it depends on credentials, model availability,
 and gateway behavior outside the repository.
+The same smoke output now carries `provider_autonomous_readiness`: an aggregate
+scorecard with `status`, `recommendation`, `recommendation_reasons`, `blockers`,
+`warnings`, `evidence`, `requirements`, `missing_requirements`, and
+`next_actions`. It combines provider e2e results, reliability coverage,
+persisted provider-run history, and live fault probe evidence so direct API
+providers can be promoted only when the data shows they are stable enough. A
+direct provider needs at least three stable recent provider e2e runs, a matching
+consecutive pass streak, and live fault probe coverage for every required
+negative case before the scorecard can become `full_autonomous_candidate`. The
+latest provider-smoke evidence must also be fresh; stale timestamps add a
+`provider_history_stale` warning and keep the policy gate blocked until the
+provider e2e suite is rerun. The
+structured reasons payload exposes stable ids such as `history_missing`,
+`history_insufficient_runs`, `live_fault_probe_missing`, and
+`latest_provider_smoke_failed` so UI and policy surfaces can explain the chosen
+recommendation without reverse-engineering blockers. The structured requirements
+payload exposes the minimum stable-run threshold, observed recent window,
+observed consecutive-pass streak, `last_run_at`, the maximum accepted evidence
+age, history freshness, required/covered/missing live fault cases, and booleans
+for history and live-fault completion so backend automation and UI surfaces do
+not need to parse free-form warning strings. Text CLI output and the Electron
+provider diagnostics UI render those requirements as a compact operator summary
+next to the stable missing requirement ids.
 
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
@@ -214,7 +237,9 @@ The same payload now includes two policy/eval contracts:
 - `runtime_policy_matrix` states which runtime each provider may use for
   planner, coder, QA reviewer, and QA fixer phases, whether fallback is allowed,
   and which CLI full-runtime candidates are required when a direct provider
-  cannot satisfy a full-autonomous phase.
+  cannot satisfy a full-autonomous phase. For direct API providers, it also
+  carries the autonomous-readiness policy gate and recommendation derived from
+  provider e2e history.
 - `runtime_eval_matrix` lists the smoke/eval cases that must stay green before a
   runtime/provider path can be treated as full autonomous: provider e2e,
   generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts,
@@ -278,24 +303,27 @@ what is already implemented from what still blocks OpenAI, Gemini, OpenRouter,
 LiteLLM, ZhipuAI, and Ollama from being treated as full autonomous coding
 providers.
 
-Last updated: 2026-05-18.
+Last updated: 2026-05-19.
 
 | Area | Current status | Done | Remaining |
 |------|----------------|------|-----------|
 | Runtime foundation | Done | Runtime modes, capability checks, fail-fast behavior, runtime fallback diagnostics, Codex CLI as the first wired non-Claude full autonomous CLI path. | Keep compatibility metadata in sync as new CLI runners become wired. |
 | Generic autonomous runtime for API providers | Partial | `generic_edit` supports JSON and native tool-call loops, local file/patch/shell actions, transaction summaries, MCP bridge calls, bounded read-only subagents, native-tool JSON fallback, and provider smoke diagnostics. | Prove direct providers across real models/gateways with e2e tool-call, tool-result, unsupported-tool, and recovery cases before marking any direct API provider full autonomous. |
 | Generic Edit v2 core | Partial, strong core | Transaction groups, explicit `begin_batch` / `commit_batch` / `abort_batch`, batch-linked recovery outcomes, per-batch recovery policy, staged mutation metadata, isolated staged workspace materialization/restoration, commit-time staged postimage apply, batch boundary guards, pre-execution staged isolation guards for opaque open-batch mutations, pre-commit staged baseline drift guards, staged guard status/drift-path timeline events, staged workspace materialized/restored/batch-id recent events, mutation snapshots, committed snapshot ids, commit operation ids, rollback/repair actions, resumable session state, recovery checkpoints, drift guards, corrupt/missing/incomplete artifact preflight blockers, corrupt/invalid mutation-snapshot artifact health reasons, isolated staged snapshot integrity blockers, recovery-plan artifact health checks, artifact manifest transaction batches, manifest/checkpoint/event-count consistency checks, manifest recovery-timeline/resume-policy drift guards, trace/session/manifest counter drift checks, unified resume artifact consistency across trace, checkpoint, session state, manifest, mutation snapshots, and transaction batch state, and rich runtime events are implemented. | Harden non-happy-path recovery further for richer UI-driven repair/rollback workflows and broader staged-overlay edge cases. |
-| Provider reliability | Strong partial | `generic_edit`, `mini_pipeline`, `transaction_batch_probe`, and `provider_e2e` validations are wired. Provider e2e diagnostics include negative fixtures, live fault probes, reliability, live-fault history evidence, and settings UI surfaces. See [Provider reliability implementation details](#provider-reliability-implementation-details). | Add richer provider history charts from accumulated runs, then use real live-account probe data to harden provider-specific recommendations over time. |
+| Provider reliability | Strong partial | `generic_edit`, `mini_pipeline`, `transaction_batch_probe`, and `provider_e2e` validations are wired. Provider e2e diagnostics include negative fixtures, live fault probes, reliability, live-fault history evidence, recent-run history timelines, granular e2e and reliability case pass-rate metrics, live-fault case coverage metrics, actual per-run cost accounting when token usage is observed, fixed-token per-run estimates when usage telemetry is missing, fixed benchmark cost estimates when actual cost is unavailable, quality/stability/safety/cost trend deltas from recent runs, freshness gating for stale provider-smoke evidence, the `provider_autonomous_readiness` scorecard, structured recommendation reasons, settings UI surfaces, and a runtime policy gate that blocks direct-provider coder/fixer autonomy until the evidence is strong enough. The gate now requires enough stable history, fresh latest evidence, and full live-fault coverage, not just a green latest run. See [Provider reliability implementation details](#provider-reliability-implementation-details). | Use real live-account probe data to calibrate provider-specific recommendations and broaden the trend signals across more provider-specific task families. |
 | MCP Bridge v1 | Strong partial | Local MCP bridge status, Context7 external execution, server health, bridge plans, unavailable-tool observations, readiness metadata for Graphiti, Linear, Electron, Puppeteer, and custom stdio/http servers, and `mcp_bridge_permission_matrix` for local/external/custom permission gates are represented. The runtime enforces `RuntimeMcpToolPolicy` before execution, writes audit artifacts, classifies mutating tools, normalizes MCP tool results into `text`, `content`, `structured_content`, and `is_error`, classifies live `tools/list` and bridged `tools/call` lifecycle failures by stage/kind, and exposes whether strict `AUTO_CODE_MCP_ALLOWED_PERMISSIONS` allowlists are configured. | Generalize live execution coverage across all registered external servers, normalize arbitrary live schemas continuously, and keep hardening external session reuse plus per-server execution smoke. |
 | Subagent Orchestrator v2 | Partial | Orchestrated read-only child sessions have isolated prompt envelopes, explicit child context ids per attempt, bounded retries, cancellation, per-child artifacts, attempt history, read-only merge plans, and `runtime_subagent_mutation_policy` now exposes the gates blocking mutating children until transactional merge is ready. | Add transactional boundaries for mutating child sessions, conflict-aware merge protocol, parent-approved apply/abort, child artifact viewer polish, then move the mutation policy from blocked to enabled. |
 | CLI runtimes as full runtime class | Partial, stronger core | Codex CLI is wired through a full-autonomous route with event/result artifacts and runner routing diagnostics. CLI profile discovery exists for additional runners, `cli_runner_contract_matrix` tracks `run`, `cancel`, `resume`, artifacts, event parser, and cost/account metadata for every candidate, and the generic CLI core now supplies configurable run/cancel/artifact/event parsing for planned runners. | Add runner-specific command builders, resume semantics, and live smoke/e2e coverage for Aider, OpenCode, Goose, Gemini CLI, Qwen Code, and other viable CLIs so they can move from generic-core partial to ready. |
-| Frontend runtime control plane | Strong partial | Provider settings show runtime diagnostics, provider smoke/e2e status, MCP status and permission gates, Generic Edit recovery/batch evidence, policy/eval rows, CLI runner status, and mutating-subagent gates. See [Frontend control plane implementation details](#frontend-control-plane-implementation-details). | Add cost estimates, richer history charts, deeper provider controls, and deeper artifact drilldowns into one operator-grade surface. |
-| Policy and evals | Strong partial | Runtime recommendations, compatibility diagnostics, `runtime_policy_matrix` for planner/coder/QA phase selection, `runtime_eval_matrix` for provider e2e, generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts, CLI full-runtime artifacts, `runtime_eval_history` from persisted provider smoke evidence, and `runtime_comparative_eval_matrix` for Claude/Codex/OpenAI/Gemini/Ollama quality/cost/safety comparison are implemented. | Add real cost/quality/safety metrics from live eval runs instead of mostly presence/status evidence, plus richer comparative reporting over time. |
+| Frontend runtime control plane | Strong partial | Provider settings show runtime diagnostics, provider smoke/e2e status, granular provider e2e/reliability history coverage, autonomous-readiness requirements including stable runs, consecutive passes, freshness, and live-fault coverage, MCP status and permission gates, Generic Edit recovery/batch evidence, policy/eval rows with comparative cost estimates, CLI runner status, and mutating-subagent gates. See [Frontend control plane implementation details](#frontend-control-plane-implementation-details). | Add richer history charts, deeper provider controls, and deeper artifact drilldowns into one operator-grade surface. |
+| Policy and evals | Strong partial | Runtime recommendations, compatibility diagnostics, `runtime_policy_matrix` for planner/coder/QA phase selection, direct-provider autonomous readiness gates, `runtime_eval_matrix` for provider e2e, generic-edit recovery, MCP bridge contracts, subagent orchestrator artifacts, CLI full-runtime artifacts, `runtime_eval_history` from persisted provider smoke evidence, and `runtime_comparative_eval_matrix` for Claude/Codex/OpenAI/Gemini/Ollama quality/cost/safety comparison are implemented. Comparative rows now prefer granular provider e2e case pass-rate for quality, use the stricter reliability/live-fault coverage score for safety, expose score source ids, include stability score, latest pricing model, recorded actual cost from provider smoke token usage when available, use fixed-token cost estimates as fallback, and surface quality/stability/safety/cost trend ids plus deltas for the UI and text control plane. | Calibrate quality/safety scoring against broader live eval tasks and add richer trend visualizations. |
 
 The practical rule remains: a direct API provider is not `full_autonomous` until
 it can reliably run the whole tool loop, preserve transactional recovery state,
 execute the required MCP/subagent surfaces, and pass the provider reliability
-suite without relying on Claude SDK semantics.
+suite without relying on Claude SDK semantics. The `--runtime-modes` payload
+turns the provider smoke history into an autonomous-readiness policy gate; if
+that gate is blocked, direct-provider coder and QA fixer policies stay limited
+even when `generic_edit` can still run.
 
 ### Provider reliability implementation details
 
@@ -320,10 +348,47 @@ suite without relying on Claude SDK semantics.
 - Provider e2e merges child results into `provider_e2e_suite`.
 - Provider e2e records negative fixtures in `provider_e2e_negative_fixtures`.
 - Provider e2e reports aggregate readiness through `provider_reliability`.
-- Provider smoke history persists compact evidence in
-  `.auto-Codex/provider-smoke-history.json`.
-- Provider smoke history reports recent-run trend, window counts, and pass/fail
-  streaks.
+- The `provider_autonomous_readiness` scorecard reports recommendation,
+  structured recommendation reasons, blockers, warnings, structured
+  requirements, missing requirement ids, evidence, and next actions derived from
+  e2e, reliability, history, and live fault probe data.
+- Compact evidence is persisted in `.auto-Codex/provider-smoke-history.json`.
+- Recent-run trends, window counts, and pass/fail streaks are reported from
+  provider smoke history.
+- Quality and stability percentages come from total and recent pass rates,
+  granular e2e case pass-rate, reliability case pass-rate, and live-fault case
+  coverage percentages from the required provider negative cases.
+- Cost history records actual per-run usage when smoke diagnostics include
+  token usage, falls back to fixed-token estimates when usage telemetry is
+  missing, aggregates total/latest tokens and cost per provider, and surfaces
+  those totals in non-JSON CLI output.
+- Provider history computes recent-run quality, stability, safety, and cost
+  trend ids plus deltas so operator surfaces can distinguish improving,
+  degrading, stable, and insufficient-data evidence.
+- Provider autonomous readiness requires fresh latest provider-smoke evidence;
+  stale `last_run_at` timestamps surface `provider_history_stale`,
+  `history_stale`, and the `fresh_provider_history` requirement, with
+  `rerun_provider_e2e` as the next action.
+- Degrading quality, stability, or safety trends now feed the autonomous
+  readiness gate as evidence-stability warnings, keeping direct-provider coder
+  and fixer policy limited until the trend recovers.
+- Comparative eval rows prefer granular provider e2e case pass-rate for
+  quality, use the stricter reliability/live-fault coverage score for safety,
+  expose score source ids, prefer recorded actual provider cost, carry trend
+  ids/deltas, and fall back to the latest observed `last_model` using a fixed
+  10k input / 2k output token benchmark and backend pricing metadata.
+- A compact `recent_runs` timeline captures the latest accumulated runs,
+  including status, runtime mode, model, reliability, provider e2e, and
+  live-fault probe status when available.
+- Autonomous readiness requires at least three stable recent runs, a matching
+  consecutive pass streak, and complete live fault coverage across the required
+  provider negative cases.
+- Runtime diagnostics read the same persisted history and attach
+  `autonomous_policy_gate`, readiness status, recommendation, recommendation
+  reasons, blockers, warnings, structured requirements, missing requirement ids,
+  evidence, and next actions to the runtime policy and capability matrices.
+- Direct-provider coder and QA fixer policies are downgraded to the readiness
+  recommendation while the autonomous gate is blocked.
 
 #### Live fault probes
 
@@ -340,8 +405,20 @@ suite without relying on Claude SDK semantics.
 
 - The settings UI surfaces suite status and negative fixtures.
 - The settings UI surfaces live fault probes and provider reliability.
+- The settings UI surfaces provider autonomous readiness recommendations,
+  recommendation reasons, blockers, warnings, missing requirements, compact
+  structured requirement evidence, evidence, and next actions.
+- The settings UI surfaces autonomous policy gate, recommendation text, and
+  recommendation reasons in runtime governance diagnostics, including the same
+  compact structured requirement evidence in policy/capability rows.
+- The CLI `--runtime-modes` text tables also include autonomy requirement
+  summaries beside the policy/capability recommendations.
+- The settings UI surfaces comparative eval quality, stability, safety, pricing
+  model, score sources, recorded actual cost when available, and estimated
+  benchmark cost fallback alongside provider quality/cost/safety status.
 - The settings UI surfaces transaction-batch evidence.
-- The settings UI surfaces history evidence and provider trend rows.
+- The settings UI surfaces history evidence, provider trend rows, granular
+  e2e/reliability case pass-rate coverage, and recent-run timelines.
 
 ### Frontend control plane implementation details
 
@@ -372,17 +449,20 @@ suite without relying on Claude SDK semantics.
 #### Provider reliability diagnostics
 
 - Provider diagnostics show e2e negative fixtures.
-- Provider diagnostics show e2e live fault probes.
-- Provider diagnostics show run history and trend rows.
+- Live fault probes are displayed beside the e2e suite evidence.
+- Run history includes trend rows, granular e2e/reliability coverage, and
+  recent-run timelines.
 
 #### Runtime governance diagnostics
 
 - Runtime governance diagnostics show policy/eval rows.
-- Runtime governance diagnostics show capability readiness, blockers, and
-  warnings.
-- Runtime governance diagnostics show runtime eval history.
-- Runtime governance diagnostics show CLI runner contract status.
-- Runtime governance diagnostics show mutating-subagent gates.
+- Capability readiness rows include blockers and warnings.
+- The direct-provider autonomous policy gate and readiness recommendation are
+  visible in the governance panel.
+- Structured missing readiness requirements appear next to runtime eval history.
+- Comparative eval rows include quality/safety score sources.
+- CLI runner contract status and mutating-subagent gates complete the operator
+  view.
 
 ## Generic Edit Contract
 

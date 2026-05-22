@@ -492,6 +492,7 @@ export interface ProviderRuntimeDiagnostics {
   providerLiveFaultProbes?: ProviderLiveFaultProbeDiagnostics;
   providerNegativeFixtures?: ProviderNegativeFixtureDiagnostics;
   providerRunHistory?: ProviderRunHistoryDiagnostics;
+  providerAutonomousReadiness?: ProviderAutonomousReadinessDiagnostics;
   providerReliability?: ProviderReliabilityDiagnostics;
   fullAutonomousMissingCapabilities?: string[];
   note?: string;
@@ -608,6 +609,52 @@ export interface ProviderReliabilityCase {
   source?: string;
 }
 
+export interface ProviderAutonomousReadinessDiagnostics {
+  status?: string;
+  provider?: string;
+  source?: string;
+  recommendation?: string;
+  recommendationReasons?: string[];
+  blockers?: string[];
+  warnings?: string[];
+  evidence?: string[];
+  requirements?: ProviderAutonomousReadinessRequirements;
+  missingRequirements?: string[];
+  nextActions?: string[];
+}
+
+export interface ProviderAutonomousReadinessRequirements {
+  minStableRuns?: number;
+  observedRecentWindow?: number;
+  observedConsecutivePasses?: number;
+  historyStabilityComplete?: boolean;
+  requiredLiveFaultCases?: string[];
+  liveFaultCoveredCases?: string[];
+  liveFaultMissingCases?: string[];
+  liveFaultCoverageComplete?: boolean;
+  lastRunAt?: string;
+  maxHistoryAgeSeconds?: number;
+  historyFreshnessComplete?: boolean;
+}
+
+export interface ProviderAutonomousReadinessRequirementsSnake {
+  min_stable_runs?: number;
+  observed_recent_window?: number;
+  observed_consecutive_passes?: number;
+  history_stability_complete?: boolean;
+  required_live_fault_cases?: string[];
+  live_fault_covered_cases?: string[];
+  live_fault_missing_cases?: string[];
+  live_fault_coverage_complete?: boolean;
+  last_run_at?: string;
+  max_history_age_seconds?: number;
+  history_freshness_complete?: boolean;
+}
+
+export type ProviderAutonomousReadinessRequirementsPayload =
+  | ProviderAutonomousReadinessRequirements
+  | ProviderAutonomousReadinessRequirementsSnake;
+
 export interface ProviderE2eSuiteDiagnostics {
   status?: string;
   runs?: ProviderE2eSuiteRun[];
@@ -656,19 +703,43 @@ export interface ProviderRunHistoryDiagnostics {
   lastStatus?: string;
   lastReliabilityStatus?: string;
   lastProviderE2eStatus?: string;
+  e2eCaseCount?: number;
+  e2ePassedCaseCount?: number;
+  e2eFailedCaseCount?: number;
+  e2eCasePassRatePercent?: number | null;
+  reliabilityObservedCaseCount?: number;
+  reliabilityPassedCaseCount?: number;
+  reliabilityRequiredCaseCount?: number;
+  reliabilityCasePassRatePercent?: number | null;
   lastLiveFaultProbeStatus?: string;
   liveFaultProbeEnabledRuns?: number;
   liveFaultProbePassedRuns?: number;
   liveFaultProbeCoveredCases?: string[];
+  passRatePercent?: number | null;
+  recentPassRatePercent?: number | null;
+  observedLiveFaultCaseCount?: number;
+  requiredLiveFaultCaseCount?: number;
+  liveFaultProbeCaseCoveragePercent?: number | null;
   trend?: string;
   trendReason?: string;
   recentWindow?: number;
   recentPassedRuns?: number;
   recentFailedRuns?: number;
+  recentRuns?: ProviderRunHistoryRecentRun[];
   consecutivePasses?: number;
   consecutiveFailures?: number;
   path?: string;
   reason?: string;
+}
+
+export interface ProviderRunHistoryRecentRun {
+  timestamp?: string;
+  status?: string;
+  runtimeMode?: string;
+  model?: string;
+  reliabilityStatus?: string;
+  providerE2eStatus?: string;
+  liveFaultProbeStatus?: string;
 }
 
 export interface ProviderConnectionTestResult {
@@ -835,6 +906,15 @@ export interface RuntimePolicyMatrixRow {
   runner_candidates: string[];
   policy: string;
   reason: string;
+  autonomous_readiness_required?: boolean;
+  autonomous_policy_gate?: string;
+  autonomous_readiness_status?: string;
+  autonomous_readiness_recommendation?: string;
+  autonomous_readiness_recommendation_reasons?: string[];
+  autonomous_readiness_blockers?: string[];
+  autonomous_readiness_warnings?: string[];
+  autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirementsPayload;
+  autonomous_readiness_missing_requirements?: string[];
 }
 
 export interface RuntimeCapabilityMatrixRow {
@@ -849,6 +929,17 @@ export interface RuntimeCapabilityMatrixRow {
   mcp_tools: string;
   subagents: string;
   cli_runner_candidates: string[];
+  autonomous_readiness_required?: boolean;
+  autonomous_policy_gate?: string;
+  autonomous_readiness_status?: string;
+  autonomous_readiness_recommendation?: string;
+  autonomous_readiness_recommendation_reasons?: string[];
+  autonomous_readiness_blockers?: string[];
+  autonomous_readiness_warnings?: string[];
+  autonomous_readiness_evidence?: string[];
+  autonomous_readiness_requirements?: ProviderAutonomousReadinessRequirementsPayload;
+  autonomous_readiness_missing_requirements?: string[];
+  autonomous_readiness_next_actions?: string[];
   blockers: string[];
   warnings: string[];
   notes: string;
@@ -868,9 +959,23 @@ export interface RuntimeEvalHistoryProviderRow {
   total_runs: number;
   passed_runs: number;
   failed_runs: number;
+  pass_rate_percent?: number | null;
+  recent_pass_rate_percent?: number | null;
+  e2e_case_count?: number;
+  e2e_passed_case_count?: number;
+  e2e_failed_case_count?: number;
+  e2e_case_pass_rate_percent?: number | null;
+  reliability_observed_case_count?: number;
+  reliability_passed_case_count?: number;
+  reliability_required_case_count?: number;
+  reliability_case_pass_rate_percent?: number | null;
+  observed_live_fault_case_count?: number;
+  required_live_fault_case_count?: number;
+  live_fault_probe_case_coverage_percent?: number | null;
   last_status?: string | null;
   last_reliability_status?: string | null;
   last_provider_e2e_status?: string | null;
+  last_model?: string | null;
   last_run_at?: string | null;
 }
 
@@ -890,8 +995,33 @@ export interface RuntimeComparativeEvalMatrixRow {
   provider: string;
   runtime_path: string;
   quality_status: string;
+  quality_score?: number | null;
+  quality_score_source?: string | null;
+  quality_trend?: string | null;
+  quality_delta_percent?: number | null;
+  stability_score?: number | null;
+  stability_trend?: string | null;
+  stability_delta_percent?: number | null;
   cost_status: string;
+  cost_pricing_model?: string | null;
+  cost_pricing_provider?: string | null;
+  cost_actual_usd?: number | null;
+  cost_actual_formatted?: string | null;
+  cost_actual_input_tokens?: number | null;
+  cost_actual_output_tokens?: number | null;
+  cost_observed_run_count?: number | null;
+  cost_estimate_usd?: number | null;
+  cost_estimate_formatted?: string | null;
+  cost_estimate_input_tokens?: number | null;
+  cost_estimate_output_tokens?: number | null;
+  cost_trend?: string | null;
+  cost_delta_usd?: number | null;
+  cost_delta_formatted?: string | null;
   safety_status: string;
+  safety_score?: number | null;
+  safety_score_source?: string | null;
+  safety_trend?: string | null;
+  safety_delta_percent?: number | null;
   evidence_source: string;
   required_before_full_autonomous: boolean;
   blockers: string[];

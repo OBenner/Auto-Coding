@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  mapProviderAutonomousReadiness,
   mapProviderContractHealth,
   mapProviderE2eSuite,
   mapProviderLiveFaultProbes,
@@ -11,6 +12,68 @@ import {
   mapProviderTransactionBatchContract,
   mapProviderToolLoopContract
 } from './provider-smoke-diagnostics';
+
+describe('mapProviderAutonomousReadiness', () => {
+  it('maps safe provider autonomous readiness fields', () => {
+    expect(
+      mapProviderAutonomousReadiness({
+        status: 'warming_up',
+        provider: 'openai',
+        source: 'provider_autonomous_readiness',
+        recommendation: 'limited_autonomous_until_evidence_stable',
+        recommendation_reasons: ['history_warming_up', 'live_fault_probe_missing', 42],
+        blockers: ['provider_e2e_failed', null],
+        warnings: ['provider_history_warming_up', 7],
+        next_actions: ['collect_provider_history_runs', null],
+        evidence: ['provider_e2e_passed', 'live_fault_probes_passed', false],
+        requirements: {
+          min_stable_runs: 3,
+          observed_recent_window: 2,
+          observed_consecutive_passes: 2,
+          history_stability_complete: false,
+          required_live_fault_cases: ['gateway_model_limitations', 42],
+          live_fault_covered_cases: ['unsupported_tools'],
+          live_fault_missing_cases: ['gateway_model_limitations'],
+          live_fault_coverage_complete: false,
+          last_run_at: '2026-05-01T00:00:00Z',
+          max_history_age_seconds: 604800,
+          history_freshness_complete: false,
+          ignored_private_path: 'workspace-private/requirements.json',
+        },
+        missing_requirements: ['stable_history_runs', null],
+        ignored_private_path: 'workspace-private/readiness.json',
+      })
+    ).toEqual({
+      status: 'warming_up',
+      provider: 'openai',
+      source: 'provider_autonomous_readiness',
+      recommendation: 'limited_autonomous_until_evidence_stable',
+      recommendationReasons: ['history_warming_up', 'live_fault_probe_missing'],
+      blockers: ['provider_e2e_failed'],
+      warnings: ['provider_history_warming_up'],
+      nextActions: ['collect_provider_history_runs'],
+      evidence: ['provider_e2e_passed', 'live_fault_probes_passed'],
+      requirements: {
+        minStableRuns: 3,
+        observedRecentWindow: 2,
+        observedConsecutivePasses: 2,
+        historyStabilityComplete: false,
+        requiredLiveFaultCases: ['gateway_model_limitations'],
+        liveFaultCoveredCases: ['unsupported_tools'],
+        liveFaultMissingCases: ['gateway_model_limitations'],
+        liveFaultCoverageComplete: false,
+        lastRunAt: '2026-05-01T00:00:00Z',
+        maxHistoryAgeSeconds: 604800,
+        historyFreshnessComplete: false,
+      },
+      missingRequirements: ['stable_history_runs'],
+    });
+  });
+
+  it('returns undefined for empty readiness payloads', () => {
+    expect(mapProviderAutonomousReadiness({})).toBeUndefined();
+  });
+});
 
 describe('mapProviderRuntimeResumePolicy', () => {
   it('maps safe generic edit resume policy fields from provider smoke diagnostics', () => {
@@ -338,15 +401,47 @@ describe('mapProviderRunHistory', () => {
         last_status: 'passed',
         last_reliability_status: 'complete',
         last_provider_e2e_status: 'passed',
+        e2e_case_count: 7,
+        e2e_passed_case_count: 7,
+        e2e_failed_case_count: 0,
+        e2e_case_pass_rate_percent: 100,
+        reliability_observed_case_count: 8,
+        reliability_passed_case_count: 8,
+        reliability_required_case_count: 8,
+        reliability_case_pass_rate_percent: 100,
         last_live_fault_probe_status: 'passed',
         live_fault_probe_enabled_runs: 2,
         live_fault_probe_passed_runs: 2,
         live_fault_probe_covered_cases: ['unsupported_tools', 'gateway_model_limitations', null],
+        pass_rate_percent: 67,
+        recent_pass_rate_percent: 100,
+        observed_live_fault_case_count: 2,
+        required_live_fault_case_count: 2,
+        live_fault_probe_case_coverage_percent: 100,
         trend: 'provider_history_stable',
         trend_reason: 'recent_runs_all_passed',
         recent_window: 3,
         recent_passed_runs: 3,
         recent_failed_runs: 0,
+        recent_runs: [
+          {
+            timestamp: '2026-05-18T09:00:00Z',
+            status: 'failed',
+            runtime_mode: 'provider_e2e',
+            model: 'gpt-4o',
+            ignored_private_path: 'workspace-private/old-run.json',
+          },
+          {
+            timestamp: '2026-05-18T09:05:00Z',
+            status: 'passed',
+            runtime_mode: 'provider_e2e',
+            model: 'gpt-4o',
+            reliability_status: 'complete',
+            provider_e2e_status: 'passed',
+            live_fault_probe_status: 'passed',
+          },
+          null,
+        ],
         consecutive_passes: 3,
         consecutive_failures: 0,
         path: '.auto-Codex/provider-smoke-history.json',
@@ -362,15 +457,45 @@ describe('mapProviderRunHistory', () => {
       lastStatus: 'passed',
       lastReliabilityStatus: 'complete',
       lastProviderE2eStatus: 'passed',
+      e2eCaseCount: 7,
+      e2ePassedCaseCount: 7,
+      e2eFailedCaseCount: 0,
+      e2eCasePassRatePercent: 100,
+      reliabilityObservedCaseCount: 8,
+      reliabilityPassedCaseCount: 8,
+      reliabilityRequiredCaseCount: 8,
+      reliabilityCasePassRatePercent: 100,
       lastLiveFaultProbeStatus: 'passed',
       liveFaultProbeEnabledRuns: 2,
       liveFaultProbePassedRuns: 2,
       liveFaultProbeCoveredCases: ['unsupported_tools', 'gateway_model_limitations'],
+      passRatePercent: 67,
+      recentPassRatePercent: 100,
+      observedLiveFaultCaseCount: 2,
+      requiredLiveFaultCaseCount: 2,
+      liveFaultProbeCaseCoveragePercent: 100,
       trend: 'provider_history_stable',
       trendReason: 'recent_runs_all_passed',
       recentWindow: 3,
       recentPassedRuns: 3,
       recentFailedRuns: 0,
+      recentRuns: [
+        {
+          timestamp: '2026-05-18T09:00:00Z',
+          status: 'failed',
+          runtimeMode: 'provider_e2e',
+          model: 'gpt-4o',
+        },
+        {
+          timestamp: '2026-05-18T09:05:00Z',
+          status: 'passed',
+          runtimeMode: 'provider_e2e',
+          model: 'gpt-4o',
+          reliabilityStatus: 'complete',
+          providerE2eStatus: 'passed',
+          liveFaultProbeStatus: 'passed',
+        },
+      ],
       consecutivePasses: 3,
       consecutiveFailures: 0,
       path: '.auto-Codex/provider-smoke-history.json',

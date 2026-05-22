@@ -1,9 +1,12 @@
 import type {
+  ProviderAutonomousReadinessDiagnostics,
+  ProviderAutonomousReadinessRequirements,
   ProviderContractHealth,
   ProviderE2eSuiteDiagnostics,
   ProviderLiveFaultProbeDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
+  ProviderRunHistoryRecentRun,
   ProviderRunHistoryDiagnostics,
   ProviderValidatedRuntimeResumePolicy,
   ProviderValidatedTransactionBatchContract,
@@ -26,6 +29,76 @@ function booleanFromUnknown(value: unknown): boolean | undefined {
 
 function numberFromUnknown(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function providerReadinessRequirementsFromUnknown(
+  value: unknown
+): ProviderAutonomousReadinessRequirements | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const requirements: ProviderAutonomousReadinessRequirements = {
+    minStableRuns: numberFromUnknown(payload.min_stable_runs),
+    observedRecentWindow: numberFromUnknown(payload.observed_recent_window),
+    observedConsecutivePasses: numberFromUnknown(
+      payload.observed_consecutive_passes
+    ),
+    historyStabilityComplete: booleanFromUnknown(
+      payload.history_stability_complete
+    ),
+    requiredLiveFaultCases: arrayFromUnknown(payload.required_live_fault_cases),
+    liveFaultCoveredCases: arrayFromUnknown(payload.live_fault_covered_cases),
+    liveFaultMissingCases: arrayFromUnknown(payload.live_fault_missing_cases),
+    liveFaultCoverageComplete: booleanFromUnknown(
+      payload.live_fault_coverage_complete
+    ),
+    lastRunAt: stringFromUnknown(payload.last_run_at),
+    maxHistoryAgeSeconds: numberFromUnknown(payload.max_history_age_seconds),
+    historyFreshnessComplete: booleanFromUnknown(
+      payload.history_freshness_complete
+    ),
+  };
+
+  return Object.values(requirements).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? requirements
+    : undefined;
+}
+
+function providerRunHistoryRecentRunFromUnknown(
+  value: unknown
+): ProviderRunHistoryRecentRun | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const run: ProviderRunHistoryRecentRun = {
+    timestamp: stringFromUnknown(payload.timestamp),
+    status: stringFromUnknown(payload.status),
+    runtimeMode: stringFromUnknown(payload.runtime_mode),
+    model: stringFromUnknown(payload.model),
+    reliabilityStatus: stringFromUnknown(payload.reliability_status),
+    providerE2eStatus: stringFromUnknown(payload.provider_e2e_status),
+    liveFaultProbeStatus: stringFromUnknown(payload.live_fault_probe_status),
+  };
+
+  return Object.values(run).some((field) => field !== undefined) ? run : undefined;
+}
+
+function providerRunHistoryRecentRunsFromUnknown(
+  value: unknown
+): ProviderRunHistoryRecentRun[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const runs = value
+    .map(providerRunHistoryRecentRunFromUnknown)
+    .filter((run): run is ProviderRunHistoryRecentRun => Boolean(run));
+  return runs.length ? runs : undefined;
 }
 
 export function mapProviderRuntimeResumePolicy(
@@ -155,6 +228,35 @@ export function mapProviderContractHealth(
 
   return Object.values(health).some((field) => field !== undefined)
     ? health
+    : undefined;
+}
+
+export function mapProviderAutonomousReadiness(
+  value: unknown
+): ProviderAutonomousReadinessDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const readiness: ProviderAutonomousReadinessDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    provider: stringFromUnknown(payload.provider),
+    source: stringFromUnknown(payload.source),
+    recommendation: stringFromUnknown(payload.recommendation),
+    recommendationReasons: arrayFromUnknown(payload.recommendation_reasons),
+    blockers: arrayFromUnknown(payload.blockers),
+    warnings: arrayFromUnknown(payload.warnings),
+    evidence: arrayFromUnknown(payload.evidence),
+    requirements: providerReadinessRequirementsFromUnknown(payload.requirements),
+    missingRequirements: arrayFromUnknown(payload.missing_requirements),
+    nextActions: arrayFromUnknown(payload.next_actions),
+  };
+
+  return Object.values(readiness).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? readiness
     : undefined;
 }
 
@@ -311,15 +413,45 @@ export function mapProviderRunHistory(
     lastStatus: stringFromUnknown(payload.last_status),
     lastReliabilityStatus: stringFromUnknown(payload.last_reliability_status),
     lastProviderE2eStatus: stringFromUnknown(payload.last_provider_e2e_status),
+    e2eCaseCount: numberFromUnknown(payload.e2e_case_count),
+    e2ePassedCaseCount: numberFromUnknown(payload.e2e_passed_case_count),
+    e2eFailedCaseCount: numberFromUnknown(payload.e2e_failed_case_count),
+    e2eCasePassRatePercent: numberFromUnknown(
+      payload.e2e_case_pass_rate_percent
+    ),
+    reliabilityObservedCaseCount: numberFromUnknown(
+      payload.reliability_observed_case_count
+    ),
+    reliabilityPassedCaseCount: numberFromUnknown(
+      payload.reliability_passed_case_count
+    ),
+    reliabilityRequiredCaseCount: numberFromUnknown(
+      payload.reliability_required_case_count
+    ),
+    reliabilityCasePassRatePercent: numberFromUnknown(
+      payload.reliability_case_pass_rate_percent
+    ),
     lastLiveFaultProbeStatus: stringFromUnknown(payload.last_live_fault_probe_status),
     liveFaultProbeEnabledRuns: numberFromUnknown(payload.live_fault_probe_enabled_runs),
     liveFaultProbePassedRuns: numberFromUnknown(payload.live_fault_probe_passed_runs),
     liveFaultProbeCoveredCases: arrayFromUnknown(payload.live_fault_probe_covered_cases),
+    passRatePercent: numberFromUnknown(payload.pass_rate_percent),
+    recentPassRatePercent: numberFromUnknown(payload.recent_pass_rate_percent),
+    observedLiveFaultCaseCount: numberFromUnknown(
+      payload.observed_live_fault_case_count
+    ),
+    requiredLiveFaultCaseCount: numberFromUnknown(
+      payload.required_live_fault_case_count
+    ),
+    liveFaultProbeCaseCoveragePercent: numberFromUnknown(
+      payload.live_fault_probe_case_coverage_percent
+    ),
     trend: stringFromUnknown(payload.trend),
     trendReason: stringFromUnknown(payload.trend_reason),
     recentWindow: numberFromUnknown(payload.recent_window),
     recentPassedRuns: numberFromUnknown(payload.recent_passed_runs),
     recentFailedRuns: numberFromUnknown(payload.recent_failed_runs),
+    recentRuns: providerRunHistoryRecentRunsFromUnknown(payload.recent_runs),
     consecutivePasses: numberFromUnknown(payload.consecutive_passes),
     consecutiveFailures: numberFromUnknown(payload.consecutive_failures),
     path: stringFromUnknown(payload.path),

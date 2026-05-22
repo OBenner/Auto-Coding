@@ -3,12 +3,38 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from agents.runtime.local_actions import local_action_tool_schemas
 from core.providers.base import ProviderToolCall, ProviderToolCallResponse
 from core.providers.config import ProviderConfig
+
+
+def _provider_smoke_run_at(*, days_ago: int = 0) -> str:
+    timestamp = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    return timestamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _provider_e2e_smoke_result(*, token_usage: dict[str, int] | None = None):
+    from cli.provider_smoke_commands import ProviderSmokeResult
+
+    runtime_diagnostics = {
+        "provider_e2e_suite": {"status": "passed", "runs": []},
+        "provider_reliability": {"status": "complete"},
+    }
+    if token_usage is not None:
+        runtime_diagnostics["token_usage"] = token_usage
+
+    return ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics=runtime_diagnostics,
+    )
 
 
 class _FakeSmokeProvider:
@@ -530,7 +556,24 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
             "source": "provider_adapter_negative_fixture",
         },
     ]
-    assert result.runtime_diagnostics["provider_run_history"] == {
+    provider_run_history = dict(result.runtime_diagnostics["provider_run_history"])
+    last_run_at = provider_run_history.pop("last_run_at")
+    assert last_run_at.endswith("Z")
+    recent_runs = provider_run_history.pop("recent_runs")
+    assert len(recent_runs) == 1
+    assert recent_runs[0]["timestamp"].endswith("Z")
+    recent_run_without_timestamp = {
+        key: value for key, value in recent_runs[0].items() if key != "timestamp"
+    }
+    assert recent_run_without_timestamp == {
+        "status": "passed",
+        "runtime_mode": "provider_e2e",
+        "model": "gpt-4o",
+        "reliability_status": "complete",
+        "provider_e2e_status": "passed",
+        "live_fault_probe_status": "passed",
+    }
+    assert provider_run_history == {
         "status": "recorded",
         "provider": "openai",
         "runtime_mode": "provider_e2e",
@@ -540,6 +583,12 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "last_status": "passed",
         "last_reliability_status": "complete",
         "last_provider_e2e_status": "passed",
+        "e2e_case_count": 7,
+        "e2e_passed_case_count": 7,
+        "e2e_failed_case_count": 0,
+        "reliability_observed_case_count": 8,
+        "reliability_passed_case_count": 8,
+        "reliability_required_case_count": 8,
         "last_live_fault_probe_status": "passed",
         "live_fault_probe_enabled_runs": 1,
         "live_fault_probe_passed_runs": 1,
@@ -554,6 +603,38 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "recent_failed_runs": 0,
         "consecutive_passes": 1,
         "consecutive_failures": 0,
+        "pass_rate_percent": 100,
+        "recent_pass_rate_percent": 100,
+        "e2e_case_pass_rate_percent": 100,
+        "reliability_case_pass_rate_percent": 100,
+        "observed_live_fault_case_count": 2,
+        "required_live_fault_case_count": 2,
+        "live_fault_probe_case_coverage_percent": 100,
+        "quality_trend": "trend_insufficient_data",
+        "quality_delta_percent": None,
+        "stability_trend": "trend_insufficient_data",
+        "stability_delta_percent": None,
+        "safety_trend": "trend_insufficient_data",
+        "safety_delta_percent": None,
+        "cost_trend": "cost_insufficient_data",
+        "cost_delta_usd": None,
+        "cost_delta_formatted": None,
+        "cost_status": "estimated",
+        "cost_observed_run_count": 1,
+        "cost_total_input_tokens": 10_000,
+        "cost_total_output_tokens": 2_000,
+        "cost_total_usd": pytest.approx(0.045),
+        "cost_total_formatted": "$0.0450",
+        "cost_last_status": "estimated",
+        "cost_last_source": "fixed_token_estimate",
+        "cost_last_input_tokens": 10_000,
+        "cost_last_output_tokens": 2_000,
+        "cost_last_usd": pytest.approx(0.045),
+        "cost_last_formatted": "$0.0450",
+        "cost_last_pricing_model": "gpt-4o",
+        "cost_last_pricing_provider": "openai",
+        "cost_pricing_model": "gpt-4o",
+        "cost_pricing_provider": "openai",
         "path": ".auto-Codex/provider-smoke-history.json",
     }
     history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
@@ -565,8 +646,16 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
     assert history["runs"][0]["status"] == "passed"
     assert history["runs"][0]["reliability_status"] == "complete"
     assert history["runs"][0]["provider_e2e_status"] == "passed"
+    assert history["runs"][0]["e2e_case_count"] == 7
+    assert history["runs"][0]["e2e_passed_case_count"] == 7
+    assert history["runs"][0]["e2e_failed_case_count"] == 0
+    assert history["runs"][0]["reliability_observed_case_count"] == 8
+    assert history["runs"][0]["reliability_passed_case_count"] == 8
+    assert history["runs"][0]["reliability_required_case_count"] == 8
     assert history["providers"]["openai"]["total_runs"] == 1
     assert history["providers"]["openai"]["last_reliability_status"] == "complete"
+    assert history["providers"]["openai"]["e2e_case_pass_rate_percent"] == 100
+    assert history["providers"]["openai"]["reliability_case_pass_rate_percent"] == 100
 
 
 def test_provider_reliability_diagnostics_marks_negative_fixtures_covered():
@@ -701,12 +790,79 @@ def test_provider_run_history_reports_recent_trend(tmp_path: Path):
     assert history_summary["recent_failed_runs"] == 2
     assert history_summary["consecutive_passes"] == 1
     assert history_summary["consecutive_failures"] == 0
+    assert history_summary["recent_runs"][:2] == [
+        {
+            "timestamp": "2026-05-18T09:00:00Z",
+            "status": "failed",
+            "runtime_mode": "provider_e2e",
+            "model": "gpt-4o",
+        },
+        {
+            "timestamp": "2026-05-18T09:05:00Z",
+            "status": "failed",
+            "runtime_mode": "provider_e2e",
+            "model": "gpt-4o",
+        },
+    ]
+    latest_run = history_summary["recent_runs"][2]
+    assert latest_run["timestamp"].endswith("Z")
+    latest_run_without_timestamp = {
+        key: value for key, value in latest_run.items() if key != "timestamp"
+    }
+    assert latest_run_without_timestamp == {
+        "status": "passed",
+        "runtime_mode": "provider_e2e",
+        "model": "gpt-4o",
+        "reliability_status": "complete",
+        "provider_e2e_status": "passed",
+    }
 
     history = json.loads(history_path.read_text(encoding="utf-8"))
     provider_stats = history["providers"]["openai"]
     assert provider_stats["trend"] == "provider_history_recovering"
     assert provider_stats["recent_failed_runs"] == 2
     assert provider_stats["consecutive_passes"] == 1
+    assert provider_stats["recent_runs"] == history_summary["recent_runs"]
+
+
+def test_provider_run_history_reports_eval_trends_from_recent_runs():
+    from cli.provider_smoke_commands import _provider_smoke_history_eval_trends
+
+    trends = _provider_smoke_history_eval_trends(
+        [
+            {
+                "status": "failed",
+                "e2e_case_count": 4,
+                "e2e_passed_case_count": 2,
+                "reliability_required_case_count": 8,
+                "reliability_passed_case_count": 4,
+                "live_fault_probe_covered_cases": ["unsupported_tools"],
+                "cost_usd": 0.1,
+            },
+            {
+                "status": "passed",
+                "e2e_case_count": 4,
+                "e2e_passed_case_count": 4,
+                "reliability_required_case_count": 8,
+                "reliability_passed_case_count": 8,
+                "live_fault_probe_covered_cases": [
+                    "unsupported_tools",
+                    "gateway_model_limitations",
+                ],
+                "cost_usd": 0.05,
+            },
+        ]
+    )
+
+    assert trends["quality_trend"] == "score_improving"
+    assert trends["quality_delta_percent"] == 50
+    assert trends["stability_trend"] == "score_improving"
+    assert trends["stability_delta_percent"] == 100
+    assert trends["safety_trend"] == "score_improving"
+    assert trends["safety_delta_percent"] == 50
+    assert trends["cost_trend"] == "cost_decreasing"
+    assert trends["cost_delta_usd"] == pytest.approx(-0.05)
+    assert trends["cost_delta_formatted"] == "-$0.0500"
 
 
 def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):
@@ -782,6 +938,858 @@ def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):
     assert resumed_history["last_live_fault_probe_status"] is None
     assert resumed_history["live_fault_probe_enabled_runs"] == 1
     assert resumed_history["live_fault_probe_passed_runs"] == 1
+
+
+def test_provider_run_history_record_failed_preserves_live_fault_evidence(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    (tmp_path / ".auto-Codex").write_text("not a directory", encoding="utf-8")
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {
+                    "status": "complete",
+                    "observed_case_count": 8,
+                    "passed_case_count": 8,
+                    "required_case_count": 8,
+                    "uncovered_cases": [],
+                },
+                "provider_e2e_live_fault_probes": {
+                    "status": "passed",
+                    "covered_cases": [
+                        "unsupported_tools",
+                        "gateway_model_limitations",
+                    ],
+                },
+            },
+        ),
+    )
+
+    history = result.runtime_diagnostics["provider_run_history"]
+    assert history["status"] == "record_failed"
+    assert history["last_live_fault_probe_status"] == "passed"
+    assert history["live_fault_probe_covered_cases"] == [
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
+    readiness = result.runtime_diagnostics["provider_autonomous_readiness"]
+    assert "live_fault_probe_evidence_missing" not in readiness["warnings"]
+    assert "live_fault_probe_missing" not in readiness["recommendation_reasons"]
+    assert "live_fault_probes_passed" in readiness["evidence"]
+
+
+def test_provider_run_history_reports_quality_and_safety_metrics(tmp_path: Path):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=False,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite failed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "failed", "runs": []},
+                "provider_reliability": {"status": "partial"},
+            },
+        ),
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+                "provider_e2e_live_fault_probes": {
+                    "status": "passed",
+                    "enabled": True,
+                    "covered_cases": ["unsupported_tools"],
+                },
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["pass_rate_percent"] == 50
+    assert history_summary["recent_pass_rate_percent"] == 50
+    assert history_summary["observed_live_fault_case_count"] == 1
+    assert history_summary["required_live_fault_case_count"] == 2
+    assert history_summary["live_fault_probe_case_coverage_percent"] == 50
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    provider_stats = history["providers"]["openai"]
+    assert provider_stats["pass_rate_percent"] == 50
+    assert provider_stats["recent_pass_rate_percent"] == 50
+    assert provider_stats["observed_live_fault_case_count"] == 1
+    assert provider_stats["required_live_fault_case_count"] == 2
+    assert provider_stats["live_fault_probe_case_coverage_percent"] == 50
+
+
+def test_provider_run_history_records_actual_cost_metrics(tmp_path: Path):
+    from cli.provider_smoke_commands import (
+        _with_provider_run_history,
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        _provider_e2e_smoke_result(
+            token_usage={
+                "input_tokens": 1000,
+                "output_tokens": 500,
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["cost_status"] == "recorded"
+    assert history_summary["cost_observed_run_count"] == 1
+    assert history_summary["cost_total_input_tokens"] == 1000
+    assert history_summary["cost_total_output_tokens"] == 500
+    assert history_summary["cost_total_usd"] == pytest.approx(0.0075)
+    assert history_summary["cost_total_formatted"] == "$0.0075"
+    assert history_summary["cost_last_status"] == "recorded"
+    assert history_summary["cost_last_source"] == "token_usage"
+    assert history_summary["cost_last_usd"] == pytest.approx(0.0075)
+    assert history_summary["cost_last_formatted"] == "$0.0075"
+    assert history_summary["cost_last_input_tokens"] == 1000
+    assert history_summary["cost_last_output_tokens"] == 500
+    assert history_summary["cost_last_pricing_model"] == "gpt-4o"
+    assert history_summary["cost_last_pricing_provider"] == "openai"
+    assert history_summary["cost_pricing_model"] == "gpt-4o"
+    assert history_summary["cost_pricing_provider"] == "openai"
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    record = history["runs"][0]
+    assert record["cost_status"] == "recorded"
+    assert record["cost_source"] == "token_usage"
+    assert record["cost_input_tokens"] == 1000
+    assert record["cost_output_tokens"] == 500
+    assert record["cost_usd"] == pytest.approx(0.0075)
+    assert record["cost_formatted"] == "$0.0075"
+    assert record["cost_pricing_model"] == "gpt-4o"
+    assert record["cost_pricing_provider"] == "openai"
+
+
+def test_provider_run_history_records_estimated_cost_when_usage_missing(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        _with_provider_run_history,
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        _provider_e2e_smoke_result(),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["cost_status"] == "estimated"
+    assert history_summary["cost_observed_run_count"] == 1
+    assert history_summary["cost_total_input_tokens"] == 10_000
+    assert history_summary["cost_total_output_tokens"] == 2_000
+    assert history_summary["cost_total_usd"] == pytest.approx(0.045)
+    assert history_summary["cost_total_formatted"] == "$0.0450"
+    assert history_summary["cost_last_status"] == "estimated"
+    assert history_summary["cost_last_source"] == "fixed_token_estimate"
+    assert history_summary["cost_last_usd"] == pytest.approx(0.045)
+    assert history_summary["cost_last_formatted"] == "$0.0450"
+    assert history_summary["cost_last_input_tokens"] == 10_000
+    assert history_summary["cost_last_output_tokens"] == 2_000
+    assert history_summary["cost_last_pricing_model"] == "gpt-4o"
+    assert history_summary["cost_last_pricing_provider"] == "openai"
+    assert history_summary["cost_pricing_model"] == "gpt-4o"
+    assert history_summary["cost_pricing_provider"] == "openai"
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    record = history["runs"][0]
+    assert record["cost_status"] == "estimated"
+    assert record["cost_source"] == "fixed_token_estimate"
+    assert record["cost_input_tokens"] == 10_000
+    assert record["cost_output_tokens"] == 2_000
+    assert record["cost_usd"] == pytest.approx(0.045)
+    assert record["cost_formatted"] == "$0.0450"
+    assert record["cost_pricing_model"] == "gpt-4o"
+    assert record["cost_pricing_provider"] == "openai"
+
+
+def test_provider_run_history_prefers_recorded_cost_after_estimate(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        _with_provider_run_history,
+    )
+
+    _with_provider_run_history(
+        tmp_path,
+        _provider_e2e_smoke_result(),
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        _provider_e2e_smoke_result(
+            token_usage={
+                "input_tokens": 1000,
+                "output_tokens": 500,
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["cost_status"] == "recorded"
+    assert history_summary["cost_observed_run_count"] == 1
+    assert history_summary["cost_total_input_tokens"] == 1000
+    assert history_summary["cost_total_output_tokens"] == 500
+    assert history_summary["cost_total_usd"] == pytest.approx(0.0075)
+    assert history_summary["cost_total_formatted"] == "$0.0075"
+    assert history_summary["cost_last_status"] == "recorded"
+    assert history_summary["cost_last_usd"] == pytest.approx(0.0075)
+    assert history_summary["cost_last_formatted"] == "$0.0075"
+
+
+def test_provider_run_history_updates_latest_estimate_after_recorded_cost(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+                "token_usage": {
+                    "input_tokens": 1000,
+                    "output_tokens": 500,
+                },
+            },
+        ),
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "passed", "runs": []},
+                "provider_reliability": {"status": "complete"},
+            },
+        ),
+    )
+
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+    assert history_summary["cost_status"] == "recorded"
+    assert history_summary["cost_observed_run_count"] == 1
+    assert history_summary["cost_total_input_tokens"] == 1000
+    assert history_summary["cost_total_output_tokens"] == 500
+    assert history_summary["cost_total_usd"] == pytest.approx(0.0075)
+    assert history_summary["cost_total_formatted"] == "$0.0075"
+    assert history_summary["cost_last_status"] == "estimated"
+    assert history_summary["cost_last_source"] == "fixed_token_estimate"
+    assert history_summary["cost_last_input_tokens"] == 10_000
+    assert history_summary["cost_last_output_tokens"] == 2_000
+    assert history_summary["cost_last_usd"] == pytest.approx(0.045)
+    assert history_summary["cost_last_formatted"] == "$0.0450"
+    assert history_summary["quality_trend"] == "score_stable"
+    assert history_summary["quality_delta_percent"] == 0
+    assert history_summary["stability_trend"] == "score_stable"
+    assert history_summary["stability_delta_percent"] == 0
+    assert history_summary["safety_trend"] == "score_stable"
+    assert history_summary["safety_delta_percent"] == 0
+    assert history_summary["cost_trend"] == "cost_increasing"
+    assert history_summary["cost_delta_usd"] == pytest.approx(0.0375)
+    assert history_summary["cost_delta_formatted"] == "+$0.0375"
+
+
+def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    def build_base_diagnostics() -> dict[str, object]:
+        return {
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+            "provider_e2e_live_fault_probes": {
+                "status": "passed",
+                "enabled": True,
+                "covered_cases": [
+                    "unsupported_tools",
+                    "gateway_model_limitations",
+                ],
+            },
+        }
+
+    first_result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=True,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite passed",
+            runtime_diagnostics=build_base_diagnostics(),
+        ),
+    )
+    first_history = first_result.runtime_diagnostics["provider_run_history"]
+
+    assert first_result.runtime_diagnostics["provider_autonomous_readiness"] == {
+        "status": "warming_up",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "limited_autonomous_until_evidence_stable",
+        "recommendation_reasons": ["history_warming_up"],
+        "blockers": [],
+        "warnings": ["provider_history_warming_up"],
+        "next_actions": ["collect_provider_history_runs"],
+        "requirements": {
+            "min_stable_runs": 3,
+            "last_run_at": first_history["last_run_at"],
+            "max_history_age_seconds": 604800,
+            "observed_recent_window": 1,
+            "observed_consecutive_passes": 1,
+            "history_stability_complete": False,
+            "history_freshness_complete": True,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_missing_cases": [],
+            "live_fault_coverage_complete": True,
+        },
+        "missing_requirements": ["stable_history_runs"],
+        "evidence": [
+            "provider_e2e_passed",
+            "provider_reliability_complete",
+            "live_fault_probes_passed",
+        ],
+    }
+
+    for _ in range(2):
+        stable_result = _with_provider_run_history(
+            tmp_path,
+            ProviderSmokeResult(
+                success=True,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="provider_e2e",
+                message="Provider e2e smoke suite passed",
+                runtime_diagnostics=build_base_diagnostics(),
+            ),
+        )
+    stable_history = stable_result.runtime_diagnostics["provider_run_history"]
+
+    assert stable_result.runtime_diagnostics["provider_autonomous_readiness"] == {
+        "status": "full_autonomous_candidate",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "api_runtime_full_autonomous_candidate",
+        "recommendation_reasons": ["full_autonomy_candidate"],
+        "blockers": [],
+        "warnings": [],
+        "next_actions": [],
+        "requirements": {
+            "min_stable_runs": 3,
+            "last_run_at": stable_history["last_run_at"],
+            "max_history_age_seconds": 604800,
+            "observed_recent_window": 3,
+            "observed_consecutive_passes": 3,
+            "history_stability_complete": True,
+            "history_freshness_complete": True,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_missing_cases": [],
+            "live_fault_coverage_complete": True,
+        },
+        "missing_requirements": [],
+        "evidence": [
+            "provider_e2e_passed",
+            "provider_reliability_complete",
+            "provider_history_stable",
+            "live_fault_probes_passed",
+        ],
+    }
+
+
+def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_coverage():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+        },
+    )
+
+    two_run_history = {
+        "last_status": "passed",
+        "trend": "provider_history_stable",
+        "recent_window": 2,
+        "consecutive_passes": 2,
+        "last_run_at": _provider_smoke_run_at(),
+        "last_live_fault_probe_status": "passed",
+        "live_fault_probe_covered_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+    }
+    assert _provider_autonomous_readiness_diagnostics(
+        result,
+        two_run_history,
+    ) == {
+        "status": "warming_up",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "limited_autonomous_until_evidence_stable",
+        "recommendation_reasons": ["history_insufficient_runs"],
+        "blockers": [],
+        "warnings": ["provider_history_insufficient_runs"],
+        "next_actions": ["collect_provider_history_runs"],
+        "requirements": {
+            "min_stable_runs": 3,
+            "last_run_at": two_run_history["last_run_at"],
+            "max_history_age_seconds": 604800,
+            "observed_recent_window": 2,
+            "observed_consecutive_passes": 2,
+            "history_stability_complete": False,
+            "history_freshness_complete": True,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_missing_cases": [],
+            "live_fault_coverage_complete": True,
+        },
+        "missing_requirements": ["stable_history_runs"],
+        "evidence": [
+            "provider_e2e_passed",
+            "provider_reliability_complete",
+            "live_fault_probes_passed",
+        ],
+    }
+
+    partial_live_fault_history = {
+        "last_status": "passed",
+        "trend": "provider_history_stable",
+        "recent_window": 3,
+        "consecutive_passes": 3,
+        "last_run_at": _provider_smoke_run_at(),
+        "last_live_fault_probe_status": "passed",
+        "live_fault_probe_covered_cases": ["unsupported_tools"],
+    }
+    assert _provider_autonomous_readiness_diagnostics(
+        result,
+        partial_live_fault_history,
+    ) == {
+        "status": "needs_live_fault_evidence",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "limited_autonomous_until_live_faults",
+        "recommendation_reasons": ["live_fault_coverage_incomplete"],
+        "blockers": [],
+        "warnings": ["live_fault_probe_coverage_incomplete"],
+        "next_actions": ["enable_live_fault_probes"],
+        "requirements": {
+            "min_stable_runs": 3,
+            "last_run_at": partial_live_fault_history["last_run_at"],
+            "max_history_age_seconds": 604800,
+            "observed_recent_window": 3,
+            "observed_consecutive_passes": 3,
+            "history_stability_complete": True,
+            "history_freshness_complete": True,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": ["unsupported_tools"],
+            "live_fault_missing_cases": ["gateway_model_limitations"],
+            "live_fault_coverage_complete": False,
+        },
+        "missing_requirements": ["live_fault_case_coverage"],
+        "evidence": [
+            "provider_e2e_passed",
+            "provider_reliability_complete",
+            "provider_history_stable",
+            "live_fault_probes_passed",
+        ],
+    }
+
+
+def test_provider_autonomous_readiness_warns_on_degrading_eval_trends():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+        },
+    )
+
+    readiness = _provider_autonomous_readiness_diagnostics(
+        result,
+        {
+            "last_status": "passed",
+            "trend": "provider_history_stable",
+            "recent_window": 3,
+            "consecutive_passes": 3,
+            "last_run_at": _provider_smoke_run_at(),
+            "last_live_fault_probe_status": "passed",
+            "live_fault_probe_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "quality_trend": "score_degrading",
+            "quality_delta_percent": -25,
+            "safety_trend": "score_degrading",
+            "safety_delta_percent": -50,
+        },
+    )
+
+    assert readiness["status"] == "warming_up"
+    assert readiness["recommendation"] == "limited_autonomous_until_evidence_stable"
+    assert readiness["recommendation_reasons"] == [
+        "quality_trend_degrading",
+        "safety_trend_degrading",
+    ]
+    assert readiness["warnings"] == [
+        "quality_trend_degrading",
+        "safety_trend_degrading",
+    ]
+    assert readiness["missing_requirements"] == ["stable_eval_trends"]
+    assert readiness["next_actions"] == ["stabilize_provider_history"]
+    assert readiness["evidence"] == [
+        "provider_e2e_passed",
+        "provider_reliability_complete",
+        "provider_history_stable",
+        "live_fault_probes_passed",
+    ]
+
+
+def test_provider_autonomous_readiness_warns_on_stale_history():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+        },
+    )
+    stale_run_at = _provider_smoke_run_at(days_ago=30)
+
+    readiness = _provider_autonomous_readiness_diagnostics(
+        result,
+        {
+            "last_status": "passed",
+            "trend": "provider_history_stable",
+            "recent_window": 3,
+            "consecutive_passes": 3,
+            "last_run_at": stale_run_at,
+            "last_live_fault_probe_status": "passed",
+            "live_fault_probe_covered_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+        },
+    )
+
+    assert readiness["status"] == "warming_up"
+    assert readiness["recommendation"] == "limited_autonomous_until_evidence_stable"
+    assert readiness["recommendation_reasons"] == ["history_stale"]
+    assert readiness["warnings"] == ["provider_history_stale"]
+    assert readiness["missing_requirements"] == ["fresh_provider_history"]
+    assert readiness["next_actions"] == ["rerun_provider_e2e"]
+    assert readiness["requirements"]["last_run_at"] == stale_run_at
+    assert readiness["requirements"]["max_history_age_seconds"] == 604800
+    assert readiness["requirements"]["history_freshness_complete"] is False
+
+
+def test_provider_autonomous_readiness_skips_non_direct_providers():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="claude",
+        model="claude-sonnet-4-5-20250929",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+        },
+    )
+
+    assert _provider_autonomous_readiness_diagnostics(result, {}) == {
+        "status": "not_required",
+        "provider": "claude",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "not_required",
+        "recommendation_reasons": [],
+        "blockers": [],
+        "warnings": [],
+        "next_actions": [],
+        "requirements": {},
+        "missing_requirements": [],
+        "evidence": [],
+    }
+
+
+def test_provider_autonomous_readiness_treats_missing_history_as_unknown():
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _provider_autonomous_readiness_diagnostics,
+    )
+
+    result = ProviderSmokeResult(
+        success=True,
+        provider="openai",
+        model="gpt-4o",
+        runtime_mode="provider_e2e",
+        message="Provider e2e smoke suite passed",
+        runtime_diagnostics={
+            "provider_e2e_suite": {"status": "passed", "runs": []},
+            "provider_reliability": {
+                "status": "complete",
+                "observed_case_count": 8,
+                "passed_case_count": 8,
+                "required_case_count": 8,
+                "uncovered_cases": [],
+            },
+        },
+    )
+
+    assert _provider_autonomous_readiness_diagnostics(
+        result,
+        {"status": "record_failed", "reason": "permission denied"},
+    ) == {
+        "status": "needs_live_fault_evidence",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "limited_autonomous_until_live_faults",
+        "recommendation_reasons": [
+            "live_fault_probe_missing",
+            "history_missing",
+        ],
+        "blockers": [],
+        "warnings": [
+            "live_fault_probe_evidence_missing",
+            "provider_history_unknown",
+        ],
+        "next_actions": [
+            "enable_live_fault_probes",
+            "collect_provider_history_runs",
+        ],
+        "requirements": {
+            "min_stable_runs": 3,
+            "observed_recent_window": 0,
+            "observed_consecutive_passes": 0,
+            "history_stability_complete": False,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [],
+            "live_fault_missing_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_coverage_complete": False,
+        },
+        "missing_requirements": [
+            "stable_history_runs",
+            "live_fault_case_coverage",
+        ],
+        "evidence": [
+            "provider_e2e_passed",
+            "provider_reliability_complete",
+        ],
+    }
+
+
+def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    result = _with_provider_run_history(
+        tmp_path,
+        ProviderSmokeResult(
+            success=False,
+            provider="openai",
+            model="gpt-4o",
+            runtime_mode="provider_e2e",
+            message="Provider e2e smoke suite failed",
+            runtime_diagnostics={
+                "provider_e2e_suite": {"status": "failed", "runs": []},
+                "provider_reliability": {
+                    "status": "partial_coverage",
+                    "observed_case_count": 4,
+                    "passed_case_count": 4,
+                    "required_case_count": 8,
+                    "uncovered_cases": ["transaction_batches"],
+                },
+            },
+        ),
+    )
+    history_summary = result.runtime_diagnostics["provider_run_history"]
+
+    assert result.runtime_diagnostics["provider_autonomous_readiness"] == {
+        "status": "blocked",
+        "provider": "openai",
+        "source": "provider_autonomous_readiness",
+        "recommendation": "provider_e2e_required",
+        "recommendation_reasons": [
+            "provider_e2e_failed",
+            "provider_reliability_incomplete",
+            "latest_provider_smoke_failed",
+            "live_fault_probe_missing",
+            "history_warming_up",
+        ],
+        "blockers": [
+            "provider_e2e_failed",
+            "provider_reliability_incomplete",
+            "provider_history_latest_failed",
+        ],
+        "warnings": [
+            "live_fault_probe_evidence_missing",
+            "provider_history_warming_up",
+        ],
+        "next_actions": [
+            "rerun_provider_e2e",
+            "inspect_uncovered_cases",
+            "enable_live_fault_probes",
+            "collect_provider_history_runs",
+        ],
+        "requirements": {
+            "min_stable_runs": 3,
+            "last_run_at": history_summary["last_run_at"],
+            "max_history_age_seconds": 604800,
+            "observed_recent_window": 1,
+            "observed_consecutive_passes": 0,
+            "history_stability_complete": False,
+            "history_freshness_complete": True,
+            "required_live_fault_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_covered_cases": [],
+            "live_fault_missing_cases": [
+                "gateway_model_limitations",
+                "unsupported_tools",
+            ],
+            "live_fault_coverage_complete": False,
+        },
+        "missing_requirements": [
+            "provider_e2e",
+            "provider_reliability",
+            "latest_provider_e2e_pass",
+            "stable_history_runs",
+            "live_fault_case_coverage",
+        ],
+        "evidence": [],
+    }
 
 
 def test_provider_e2e_negative_fixtures_cover_all_direct_api_providers():
@@ -2300,6 +3308,111 @@ def test_handle_provider_smoke_command_outputs_json(
     assert payload["provider"] == "openai"
     assert payload["response_excerpt"] == "ok"
     assert payload["runtime_diagnostics"] == {}
+
+
+def test_print_provider_run_history_includes_quality_and_safety_percentages(
+    capsys: pytest.CaptureFixture[str],
+):
+    from cli.provider_smoke_commands import _print_provider_run_history
+
+    _print_provider_run_history(
+        {
+            "status": "recorded",
+            "total_runs": 4,
+            "passed_runs": 3,
+            "failed_runs": 1,
+            "trend": "provider_history_stable",
+            "recent_window": 4,
+            "recent_passed_runs": 3,
+            "recent_failed_runs": 1,
+            "pass_rate_percent": 75,
+            "recent_pass_rate_percent": 75,
+            "e2e_case_count": 7,
+            "e2e_passed_case_count": 6,
+            "e2e_failed_case_count": 1,
+            "e2e_case_pass_rate_percent": 86,
+            "reliability_observed_case_count": 8,
+            "reliability_passed_case_count": 7,
+            "reliability_required_case_count": 8,
+            "reliability_case_pass_rate_percent": 88,
+            "live_fault_probe_case_coverage_percent": 50,
+            "observed_live_fault_case_count": 1,
+            "required_live_fault_case_count": 2,
+            "cost_status": "recorded",
+            "cost_observed_run_count": 2,
+            "cost_total_input_tokens": 3000,
+            "cost_total_output_tokens": 1500,
+            "cost_total_formatted": "$0.0225",
+            "cost_last_formatted": "$0.0075",
+            "cost_pricing_model": "gpt-4o",
+            "recent_runs": [],
+            "path": ".auto-Codex/provider-smoke-history.json",
+        }
+    )
+
+    output = capsys.readouterr().out
+
+    assert "Provider history pass rate" in output
+    assert "75%" in output
+    assert "Provider history recent pass rate" in output
+    assert "Provider history e2e case pass rate" in output
+    assert "86% (6/7)" in output
+    assert "Provider history reliability case pass rate" in output
+    assert "88% (7/8)" in output
+    assert "Provider history live-fault coverage" in output
+    assert "50% (1/2)" in output
+    assert "Provider history cost" in output
+    assert (
+        "$0.0225 total, $0.0075 latest, 2 recorded runs, 3000 input, 1500 output, gpt-4o"
+        in output
+    )
+
+
+def test_print_provider_autonomous_readiness_includes_missing_requirements(
+    capsys: pytest.CaptureFixture[str],
+):
+    from cli.provider_smoke_commands import _print_provider_autonomous_readiness
+
+    _print_provider_autonomous_readiness(
+        {
+            "status": "warming_up",
+            "recommendation": "limited_autonomous_until_evidence_stable",
+            "recommendation_reasons": ["history_insufficient_runs"],
+            "blockers": [],
+            "warnings": ["provider_history_insufficient_runs"],
+            "missing_requirements": ["stable_history_runs"],
+            "evidence": ["provider_e2e_passed"],
+            "next_actions": ["collect_provider_history_runs"],
+            "requirements": {
+                "min_stable_runs": 3,
+                "observed_recent_window": 2,
+                "observed_consecutive_passes": 2,
+                "history_stability_complete": False,
+                "last_run_at": "2026-05-01T00:00:00Z",
+                "max_history_age_seconds": 604800,
+                "history_freshness_complete": False,
+                "required_live_fault_cases": [
+                    "gateway_model_limitations",
+                    "unsupported_tools",
+                ],
+                "live_fault_covered_cases": ["unsupported_tools"],
+                "live_fault_missing_cases": ["gateway_model_limitations"],
+                "live_fault_coverage_complete": False,
+            },
+        }
+    )
+
+    output = capsys.readouterr().out
+    assert "Autonomous missing requirements" in output
+    assert "stable_history_runs" in output
+    assert "Autonomous requirements" in output
+    assert "stable runs 2/3" in output
+    assert "consecutive passes 2/3" in output
+    assert "history fresh no" in output
+    assert "last run 2026-05-01T00:00:00Z" in output
+    assert "max age 604800s" in output
+    assert "live fault coverage no" in output
+    assert "missing gateway_model_limitations" in output
 
 
 def test_handle_provider_smoke_command_prints_generic_edit_execution(

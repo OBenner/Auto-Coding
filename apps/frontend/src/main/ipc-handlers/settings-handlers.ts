@@ -35,6 +35,7 @@ import { getBestAvailableProfileEnv } from '../rate-limit-detector';
 import { getAPIProfileEnv } from '../services/profile';
 import { getCodexProfileManager } from '../codex-profile-manager';
 import {
+  mapProviderAutonomousReadiness,
   mapProviderContractHealth,
   mapProviderE2eSuite,
   mapProviderLiveFaultProbes,
@@ -400,6 +401,7 @@ type ProviderSmokeCliResult = {
     provider_e2e_live_fault_probes?: unknown;
     provider_e2e_negative_fixtures?: unknown;
     provider_run_history?: unknown;
+    provider_autonomous_readiness?: unknown;
     provider_reliability?: unknown;
     full_autonomous_missing_capabilities?: string[];
     note?: string;
@@ -596,6 +598,9 @@ function mapProviderRuntimeDiagnostics(
       diagnostics.provider_e2e_negative_fixtures
     ),
     providerRunHistory: mapProviderRunHistory(diagnostics.provider_run_history),
+    providerAutonomousReadiness: mapProviderAutonomousReadiness(
+      diagnostics.provider_autonomous_readiness
+    ),
     providerReliability: mapProviderReliability(diagnostics.provider_reliability),
     fullAutonomousMissingCapabilities: arrayFromUnknown(diagnostics.full_autonomous_missing_capabilities),
     note: diagnostics.note
