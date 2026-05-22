@@ -36,6 +36,15 @@ def _promotion_e2e_runs() -> list[str]:
     ]
 
 
+def _live_task_families() -> list[str]:
+    return [
+        "multi_step_edit",
+        "recovery_resume",
+        "single_file_edit",
+        "transaction_batching",
+    ]
+
+
 def _passed_promotion_history() -> dict[str, object]:
     return {
         "last_promotion_gate_status": "passed",
@@ -67,6 +76,11 @@ def _stable_provider_history(run_at: str) -> dict[str, object]:
             "gateway_model_limitations",
             "unsupported_tools",
         ],
+        "last_live_task_family_status": "passed",
+        "live_task_family_enabled_runs": 3,
+        "live_task_family_passed_runs": 3,
+        "live_task_family_covered_families": _live_task_families(),
+        "live_task_family_failed_families": [],
         "trend": "provider_history_stable",
         **_passed_promotion_history(),
     }
@@ -277,6 +291,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "direct_full_autonomous_blocked",
         "provider_history_unknown",
         "live_fault_probe_evidence_missing",
+        "live_task_family_evidence_missing",
     ]
     assert capability_rows["openai"]["autonomous_policy_gate"] == "blocked"
     assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
@@ -286,6 +301,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "provider_reliability_incomplete",
         "history_missing",
         "live_fault_probe_missing",
+        "live_task_family_missing",
     ]
     assert capability_rows["openai"]["autonomous_readiness_requirements"] == {
         "min_stable_runs": 3,
@@ -302,11 +318,16 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
             "unsupported_tools",
         ],
         "live_fault_coverage_complete": False,
+        "required_live_task_families": _live_task_families(),
+        "live_task_covered_families": [],
+        "live_task_missing_families": _live_task_families(),
+        "live_task_family_coverage_complete": False,
     }
     assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == [
         "provider_reliability",
         "stable_history_runs",
         "live_fault_case_coverage",
+        "live_task_family_coverage",
     ]
     selection_rows = payload["cli_runner_selection"]
     assert selection_rows["full_autonomous"]["selected_runner_ids"] == [
@@ -350,6 +371,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
             "provider_reliability_incomplete",
             "history_missing",
             "live_fault_probe_missing",
+            "live_task_family_missing",
         ],
         "autonomous_readiness_blockers": [
             "provider_reliability_incomplete",
@@ -357,6 +379,7 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
         "autonomous_readiness_warnings": [
             "provider_history_unknown",
             "live_fault_probe_evidence_missing",
+            "live_task_family_evidence_missing",
         ],
         "autonomous_promotion_gate": "blocked",
         "autonomous_promotion_ready": False,
@@ -392,11 +415,16 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
                 "unsupported_tools",
             ],
             "live_fault_coverage_complete": False,
+            "required_live_task_families": _live_task_families(),
+            "live_task_covered_families": [],
+            "live_task_missing_families": _live_task_families(),
+            "live_task_family_coverage_complete": False,
         },
         "autonomous_readiness_missing_requirements": [
             "provider_reliability",
             "stable_history_runs",
             "live_fault_case_coverage",
+            "live_task_family_coverage",
         ],
     }
     assert policy_rows[("coder", "openai")]["selected_runtime_mode"] == "generic_edit"
@@ -625,6 +653,10 @@ def test_runtime_modes_command_reports_provider_eval_history(
                             "unsupported_tools",
                             "gateway_model_limitations",
                         ],
+                        "live_task_family_covered_families": _live_task_families(),
+                        "observed_live_task_family_count": 4,
+                        "required_live_task_family_count": 4,
+                        "live_task_family_coverage_percent": 100,
                         "quality_trend": "score_improving",
                         "quality_delta_percent": 15,
                         "stability_trend": "score_stable",
@@ -691,6 +723,9 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert provider_rows["openai"]["observed_live_fault_case_count"] == 2
     assert provider_rows["openai"]["required_live_fault_case_count"] == 2
     assert provider_rows["openai"]["live_fault_probe_case_coverage_percent"] == 100
+    assert provider_rows["openai"]["observed_live_task_family_count"] == 4
+    assert provider_rows["openai"]["required_live_task_family_count"] == 4
+    assert provider_rows["openai"]["live_task_family_coverage_percent"] == 100
     assert provider_rows["google"]["status"] == "failed"
     assert provider_rows["openrouter"]["status"] == "not_observed"
     comparative_rows = {
@@ -699,7 +734,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["openai"]["quality_status"] == "passed"
     assert comparative_rows["openai"]["quality_score"] == 90
     assert comparative_rows["openai"]["quality_score_source"] == (
-        "provider_e2e_case_pass_rate"
+        "provider_e2e_and_live_task_coverage"
     )
     assert comparative_rows["openai"]["quality_trend"] == "score_improving"
     assert comparative_rows["openai"]["quality_delta_percent"] == 15
@@ -815,6 +850,11 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
                             "gateway_model_limitations",
                             "unsupported_tools",
                         ],
+                        "last_live_task_family_status": "passed",
+                        "live_task_family_enabled_runs": 3,
+                        "live_task_family_passed_runs": 3,
+                        "live_task_family_covered_families": _live_task_families(),
+                        "live_task_family_failed_families": [],
                         "trend": "provider_history_stable",
                         **_passed_promotion_history(),
                     },
@@ -869,6 +909,7 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
         "provider_reliability_complete",
         "provider_history_stable",
         "live_fault_probes_passed",
+        "live_task_families_passed",
     ]
     assert capability_rows["openai"]["autonomous_readiness_requirements"] == {
         "min_stable_runs": 3,
@@ -888,6 +929,20 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
         ],
         "live_fault_missing_cases": [],
         "live_fault_coverage_complete": True,
+        "required_live_task_families": [
+            "multi_step_edit",
+            "recovery_resume",
+            "single_file_edit",
+            "transaction_batching",
+        ],
+        "live_task_covered_families": [
+            "multi_step_edit",
+            "recovery_resume",
+            "single_file_edit",
+            "transaction_batching",
+        ],
+        "live_task_missing_families": [],
+        "live_task_family_coverage_complete": True,
     }
     assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == []
     assert policy_rows[("coder", "openai")]["autonomous_policy_gate"] == "passed"
@@ -903,10 +958,12 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert capability_rows["google"]["autonomous_readiness_recommendation_reasons"] == [
         "history_warming_up",
         "live_fault_probe_missing",
+        "live_task_family_missing",
     ]
     assert capability_rows["google"]["autonomous_readiness_warnings"] == [
         "provider_history_warming_up",
         "live_fault_probe_evidence_missing",
+        "live_task_family_evidence_missing",
     ]
     assert policy_rows[("coder", "google")]["policy"] == (
         "limited_autonomous_until_live_faults"
@@ -924,6 +981,8 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert "max age 604800s" in text_output
     assert "live fault coverage yes" in text_output
     assert "live fault coverage no" in text_output
+    assert "live task coverage yes" in text_output
+    assert "live task coverage no" in text_output
     assert "missing gateway_model_limitations, unsupported_tools" in text_output
     assert "--provider-smoke-runtime provider_e2e" in text_output
 
@@ -1038,6 +1097,58 @@ def test_runtime_modes_policy_gate_blocks_missing_promotion_evidence(
     )
 
 
+def test_runtime_modes_policy_gate_blocks_missing_live_task_family_evidence(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    from cli.runtime_commands import handle_runtime_modes_command
+
+    openai_run_at = _provider_smoke_run_at()
+    missing_live_tasks = _stable_provider_history(openai_run_at) | {
+        "last_live_task_family_status": None,
+        "live_task_family_enabled_runs": 0,
+        "live_task_family_passed_runs": 0,
+        "live_task_family_covered_families": [],
+        "live_task_family_failed_families": [],
+    }
+    _write_provider_history(tmp_path, missing_live_tasks)
+    monkeypatch.chdir(tmp_path)
+
+    handle_runtime_modes_command(output_json=True)
+    payload = json.loads(capsys.readouterr().out)
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+
+    assert capability_rows["openai"]["readiness"] == "warming_up"
+    assert capability_rows["openai"]["autonomous_policy_gate"] == "blocked"
+    assert capability_rows["openai"]["full_autonomous_ready"] is False
+    assert capability_rows["openai"]["autonomous_readiness_recommendation"] == (
+        "limited_autonomous_until_evidence_stable"
+    )
+    assert capability_rows["openai"]["autonomous_readiness_recommendation_reasons"] == [
+        "live_task_family_missing",
+    ]
+    assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == [
+        "live_task_family_coverage",
+    ]
+    assert capability_rows["openai"]["autonomous_readiness_requirements"][
+        "live_task_missing_families"
+    ] == [
+        "multi_step_edit",
+        "recovery_resume",
+        "single_file_edit",
+        "transaction_batching",
+    ]
+    assert policy_rows[("coder", "openai")]["policy"] == (
+        "limited_autonomous_until_evidence_stable"
+    )
+
+
 def test_runtime_modes_policy_gate_warns_on_stale_provider_history(
     tmp_path: Path,
     monkeypatch,
@@ -1115,6 +1226,8 @@ def test_runtime_provider_readiness_decouples_e2e_from_aggregate_status():
                 "unsupported_tools",
                 "gateway_model_limitations",
             ],
+            "last_live_task_family_status": "passed",
+            "live_task_family_covered_families": _live_task_families(),
             "trend": "provider_history_stable",
             "recent_window": 3,
             "consecutive_passes": 3,
@@ -1166,6 +1279,11 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
                             "gateway_model_limitations",
                             "unsupported_tools",
                         ],
+                        "last_live_task_family_status": "passed",
+                        "live_task_family_enabled_runs": 2,
+                        "live_task_family_passed_runs": 2,
+                        "live_task_family_covered_families": _live_task_families(),
+                        "live_task_family_failed_families": [],
                         "trend": "provider_history_stable",
                         "recent_window": 2,
                         "consecutive_passes": 2,
@@ -1183,6 +1301,11 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
                         "live_fault_probe_enabled_runs": 3,
                         "live_fault_probe_passed_runs": 3,
                         "live_fault_probe_covered_cases": ["unsupported_tools"],
+                        "last_live_task_family_status": "passed",
+                        "live_task_family_enabled_runs": 3,
+                        "live_task_family_passed_runs": 3,
+                        "live_task_family_covered_families": _live_task_families(),
+                        "live_task_family_failed_families": [],
                         "trend": "provider_history_stable",
                         "recent_window": 3,
                         "consecutive_passes": 3,
@@ -1232,6 +1355,10 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
         ],
         "live_fault_missing_cases": [],
         "live_fault_coverage_complete": True,
+        "required_live_task_families": _live_task_families(),
+        "live_task_covered_families": _live_task_families(),
+        "live_task_missing_families": [],
+        "live_task_family_coverage_complete": True,
     }
     assert capability_rows["openai"]["autonomous_readiness_missing_requirements"] == [
         "stable_history_runs"
@@ -1266,6 +1393,10 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
         "live_fault_covered_cases": ["unsupported_tools"],
         "live_fault_missing_cases": ["gateway_model_limitations"],
         "live_fault_coverage_complete": False,
+        "required_live_task_families": _live_task_families(),
+        "live_task_covered_families": _live_task_families(),
+        "live_task_missing_families": [],
+        "live_task_family_coverage_complete": True,
     }
     assert capability_rows["google"]["autonomous_readiness_missing_requirements"] == [
         "live_fault_case_coverage"

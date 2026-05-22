@@ -31,6 +31,7 @@ import type {
   ProviderAutonomousReadinessRequirementsPayload,
   ProviderE2eSuiteDiagnostics,
   ProviderLiveFaultProbeDiagnostics,
+  ProviderLiveTaskFamilyDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderRunHistoryDiagnostics,
@@ -263,6 +264,11 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.fullAutonomousCandidate',
   fresh_provider_history:
     'settings:aiProvider.runtimeDiagnosticValues.freshProviderHistory',
+  single_file_edit: 'settings:aiProvider.runtimeDiagnosticValues.singleFileEdit',
+  multi_step_edit: 'settings:aiProvider.runtimeDiagnosticValues.multiStepEdit',
+  recovery_resume: 'settings:aiProvider.runtimeDiagnosticValues.recoveryResume',
+  transaction_batching:
+    'settings:aiProvider.runtimeDiagnosticValues.transactionBatching',
   history_degraded: 'settings:aiProvider.runtimeDiagnosticValues.historyDegraded',
   history_flaky: 'settings:aiProvider.runtimeDiagnosticValues.historyFlaky',
   history_freshness_unknown:
@@ -319,6 +325,18 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultCaseCoverage',
   live_fault_coverage_incomplete:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultCoverageIncomplete',
+  live_task_family_coverage:
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamilyCoverage',
+  live_task_family_coverage_incomplete:
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamilyCoverageIncomplete',
+  live_task_family_evidence_missing:
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamilyEvidenceMissing',
+  live_task_family_missing:
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamilyMissing',
+  live_task_families_passed:
+    'settings:aiProvider.runtimeDiagnosticValues.liveTaskFamiliesPassed',
+  provider_live_task_fixture:
+    'settings:aiProvider.runtimeDiagnosticValues.providerLiveTaskFixture',
   live_fault_probes_passed:
     'settings:aiProvider.runtimeDiagnosticValues.liveFaultProbesPassed',
   latest_provider_e2e_pass:
@@ -390,6 +408,8 @@ const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   provider_e2e_ready: 'settings:aiProvider.runtimeDiagnosticValues.providerE2eReady',
   provider_e2e_case_pass_rate:
     'settings:aiProvider.runtimeDiagnosticValues.providerE2eCasePassRate',
+  provider_e2e_and_live_task_coverage:
+    'settings:aiProvider.runtimeDiagnosticValues.providerE2eAndLiveTaskCoverage',
   provider_autonomous_promotion_blocked:
     'settings:aiProvider.runtimeDiagnosticValues.providerAutonomousPromotionBlocked',
   provider_autonomous_promotion_passed:
@@ -981,6 +1001,31 @@ function formatProviderAutonomousReadinessRequirements(
     );
   }
 
+  const liveTaskCoverage = formatRuntimeDiagnosticBoolean(
+    translate,
+    autonomousRequirementBoolean(
+      requirements,
+      'liveTaskFamilyCoverageComplete',
+      'live_task_family_coverage_complete'
+    )
+  );
+  if (liveTaskCoverage) {
+    const missingFamilies = formatRuntimeDiagnosticList(
+      translate,
+      autonomousRequirementStringList(
+        requirements,
+        'liveTaskMissingFamilies',
+        'live_task_missing_families'
+      )
+    );
+    const missingSuffix = missingFamilies
+      ? ` (${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMissingCases')} ${missingFamilies})`
+      : '';
+    parts.push(
+      `${formatRuntimeDiagnosticValue(translate, 'live_task_family_coverage')}: ${liveTaskCoverage}${missingSuffix}`
+    );
+  }
+
   return parts.join(', ');
 }
 
@@ -1200,6 +1245,53 @@ export function buildProviderLiveFaultProbeDiagnosticRows(
   ].filter((row) => row.value);
 }
 
+export function buildProviderLiveTaskFamilyDiagnosticRows(
+  translate: RuntimeDiagnosticTranslate,
+  families?: ProviderLiveTaskFamilyDiagnostics | null
+): ProviderResumePolicyDiagnosticRow[] {
+  if (!families) {
+    return [];
+  }
+  const status = formatRuntimeDiagnosticValue(translate, families.status);
+  const source = formatRuntimeDiagnosticValue(translate, families.source);
+  const summaryValue = [status, families.provider, source].filter(Boolean).join(' - ');
+  const familyRows = families.families?.map((family) => {
+    const familyName = formatRuntimeDiagnosticValue(translate, family.family);
+    const familyStatus = formatRuntimeDiagnosticValue(translate, family.status);
+    const reason = formatRuntimeDiagnosticValue(translate, family.reason);
+    const details = [reason, family.envName].filter(Boolean).join(' - ');
+    const value = [familyName, familyStatus].filter(Boolean).join(': ');
+    const detailSuffix = details ? ` (${details})` : '';
+    return {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyOutcomes',
+      value: value ? `${value}${detailSuffix}` : '',
+    };
+  }) ?? [];
+  return [
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilies',
+      value: summaryValue,
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyCovered',
+      value: formatRuntimeDiagnosticList(translate, families.coveredFamilies),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyFailed',
+      value: formatRuntimeDiagnosticList(translate, families.failedFamilies),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyMissingEnv',
+      value: families.missingEnv?.join(', ') || '',
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerLiveTaskFamilyRequiredEnv',
+      value: families.requiredEnv?.join(', ') || '',
+    },
+    ...familyRows,
+  ].filter((row) => row.value);
+}
+
 function isRuntimeDiagnosticNumber(value: unknown): value is number {
   return typeof value === 'number';
 }
@@ -1323,7 +1415,8 @@ function formatProviderRunHistoryRecentRuns(
         run.model,
         formatRuntimeDiagnosticValue(translate, run.reliabilityStatus),
         formatRuntimeDiagnosticValue(translate, run.providerE2eStatus),
-        formatRuntimeDiagnosticValue(translate, run.liveFaultProbeStatus)
+        formatRuntimeDiagnosticValue(translate, run.liveFaultProbeStatus),
+        formatRuntimeDiagnosticValue(translate, run.liveTaskFamilyStatus)
       ].filter(Boolean).join(' / ');
       return [run.timestamp, runParts].filter(Boolean).join(': ');
     })
@@ -1349,6 +1442,35 @@ function formatProviderRunHistoryLiveFaultProbes(
     formatRuntimeDiagnosticList(translate, history.liveFaultProbeCoveredCases),
     isRuntimeDiagnosticNumber(history.liveFaultProbeCaseCoveragePercent)
       ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveFaultCoverage')} ${history.liveFaultProbeCaseCoveragePercent}%`
+      : '',
+  ].filter(Boolean).join(' - ');
+}
+
+function formatProviderRunHistoryLiveTaskFamilies(
+  translate: RuntimeDiagnosticTranslate,
+  history: ProviderRunHistoryDiagnostics
+): string {
+  const runCounts = [
+    isRuntimeDiagnosticNumber(history.liveTaskFamilyEnabledRuns)
+      ? `${history.liveTaskFamilyEnabledRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyEnabled')}`
+      : '',
+    isRuntimeDiagnosticNumber(history.liveTaskFamilyPassedRuns)
+      ? `${history.liveTaskFamilyPassedRuns} ${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyPassed')}`
+      : '',
+  ].filter(Boolean).join(', ');
+  const failedFamilies = formatRuntimeDiagnosticList(
+    translate,
+    history.liveTaskFamilyFailedFamilies
+  );
+  return [
+    formatRuntimeDiagnosticValue(translate, history.lastLiveTaskFamilyStatus),
+    runCounts,
+    formatRuntimeDiagnosticList(translate, history.liveTaskFamilyCoveredFamilies),
+    failedFamilies
+      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyFailed')} ${failedFamilies}`
+      : '',
+    isRuntimeDiagnosticNumber(history.liveTaskFamilyCoveragePercent)
+      ? `${translate('settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyCoverage')} ${history.liveTaskFamilyCoveragePercent}%`
       : '',
   ].filter(Boolean).join(' - ');
 }
@@ -1384,6 +1506,10 @@ export function buildProviderRunHistoryDiagnosticRows(
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveFaultProbes',
       value: formatProviderRunHistoryLiveFaultProbes(translate, history),
+    },
+    {
+      labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilies',
+      value: formatProviderRunHistoryLiveTaskFamilies(translate, history),
     },
     {
       labelKey: 'settings:aiProvider.connectionTest.providerRunHistoryPath',
@@ -1748,6 +1874,13 @@ function formatRuntimeEvalHistoryProvider(
       provider.live_fault_probe_case_coverage_percent,
       provider.observed_live_fault_case_count,
       provider.required_live_fault_case_count
+    ),
+    formatRuntimeCaseCoverage(
+      translate,
+      'settings:aiProvider.connectionTest.providerRunHistoryLiveTaskFamilyCoverage',
+      provider.live_task_family_coverage_percent,
+      provider.observed_live_task_family_count,
+      provider.required_live_task_family_count
     ),
   ].filter(Boolean).join(', ');
   const coverageSuffix = coverage ? ` (${coverage})` : '';
@@ -3097,6 +3230,10 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
       t,
       runtimeDiagnostics?.providerLiveFaultProbes
     );
+    const providerLiveTaskFamilyRows = buildProviderLiveTaskFamilyDiagnosticRows(
+      t,
+      runtimeDiagnostics?.providerLiveTaskFamilies
+    );
     const providerRunHistoryRows = buildProviderRunHistoryDiagnosticRows(
       t,
       runtimeDiagnostics?.providerRunHistory
@@ -3236,6 +3373,14 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 />
               ))}
               {providerLiveFaultProbeRows.map((row) => (
+                <RuntimeDiagnosticRow
+                  key={`${row.labelKey}-${row.value}`}
+                  label={t(row.labelKey)}
+                  value={row.value}
+                  breakWords
+                />
+              ))}
+              {providerLiveTaskFamilyRows.map((row) => (
                 <RuntimeDiagnosticRow
                   key={`${row.labelKey}-${row.value}`}
                   label={t(row.labelKey)}

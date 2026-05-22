@@ -59,6 +59,7 @@ from cli.provider_smoke_commands import (
     PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
     PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL,
     PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES,
+    PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES,
     PROVIDER_RELIABILITY_CASE_ORDER,
     PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS,
     PROVIDER_SMOKE_HISTORY_RELATIVE_PATH,
@@ -1121,6 +1122,17 @@ def _runtime_provider_live_fault_signals(
     return [], ["live_fault_probes_passed"]
 
 
+def _runtime_provider_live_task_family_signals(
+    provider_stats: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    """Return warning/evidence signals from live task-family coverage."""
+    if provider_stats.get("last_live_task_family_status") != "passed":
+        return ["live_task_family_evidence_missing"], []
+    if not _runtime_provider_live_task_family_coverage_complete(provider_stats):
+        return ["live_task_family_coverage_incomplete"], ["live_task_families_passed"]
+    return [], ["live_task_families_passed"]
+
+
 def _runtime_provider_eval_trend_warnings(provider_stats: dict[str, Any]) -> list[str]:
     """Return readiness warnings for degrading eval trends."""
     trend_fields = {
@@ -1168,8 +1180,13 @@ def _runtime_provider_readiness_signals(
         provider_stats
     )
     warnings.extend(live_fault_warnings)
-    warnings.extend(_runtime_provider_eval_trend_warnings(provider_stats))
     evidence.extend(live_fault_evidence)
+    live_task_warnings, live_task_evidence = _runtime_provider_live_task_family_signals(
+        provider_stats
+    )
+    warnings.extend(live_task_warnings)
+    warnings.extend(_runtime_provider_eval_trend_warnings(provider_stats))
+    evidence.extend(live_task_evidence)
 
     return blockers, warnings, evidence
 
@@ -1476,13 +1493,47 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
         observed_live_fault_case_count,
         required_live_fault_case_count,
     )
+    live_task_family_has_evidence = any(
+        key in provider_stats
+        for key in (
+            "last_live_task_family_status",
+            "live_task_family_covered_families",
+            "observed_live_task_family_count",
+            "live_task_family_coverage_percent",
+        )
+    )
+    required_live_task_family_count = _runtime_eval_int_stat(
+        provider_stats.get("required_live_task_family_count")
+    ) or len(PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES)
+    observed_live_task_family_count = 0
+    live_task_family_coverage_percent = None
+    if live_task_family_has_evidence:
+        observed_live_task_family_count = _runtime_eval_int_stat(
+            provider_stats.get("observed_live_task_family_count")
+        )
+        if observed_live_task_family_count == 0:
+            observed_live_task_family_count = len(
+                set(
+                    _runtime_string_list_payload(
+                        provider_stats.get("live_task_family_covered_families")
+                    )
+                )
+            )
+        live_task_family_coverage_percent = _runtime_eval_percent_stat_or_metric(
+            provider_stats,
+            "live_task_family_coverage_percent",
+            observed_live_task_family_count,
+            required_live_task_family_count,
+        )
     quality_score = _runtime_provider_quality_score(
         e2e_case_pass_rate_percent,
         pass_rate_percent,
+        live_task_family_coverage_percent,
     )
     quality_score_source = _runtime_provider_quality_score_source(
         e2e_case_pass_rate_percent,
         pass_rate_percent,
+        live_task_family_coverage_percent,
     )
     safety_score = _runtime_provider_safety_score(
         reliability_passed_case_count,
@@ -1510,6 +1561,9 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
         "observed_live_fault_case_count": observed_live_fault_case_count,
         "required_live_fault_case_count": required_live_fault_case_count,
         "live_fault_probe_case_coverage_percent": live_fault_probe_case_coverage_percent,
+        "observed_live_task_family_count": observed_live_task_family_count,
+        "required_live_task_family_count": required_live_task_family_count,
+        "live_task_family_coverage_percent": live_task_family_coverage_percent,
         "safety_score": safety_score,
         "safety_score_source": safety_score_source,
         "quality_trend": _runtime_eval_string_stat(provider_stats.get("quality_trend")),
@@ -1545,18 +1599,32 @@ def _runtime_provider_eval_metrics(provider_stats: dict[str, Any]) -> dict[str, 
 def _runtime_provider_quality_score(
     e2e_case_pass_rate_percent: int | None,
     pass_rate_percent: int | None,
+    live_task_family_coverage_percent: int | None,
 ) -> int | None:
     """Return the provider quality score from the strongest available evidence."""
-    if e2e_case_pass_rate_percent is not None:
-        return e2e_case_pass_rate_percent
+    quality_candidates = [
+        score
+        for score in (e2e_case_pass_rate_percent, live_task_family_coverage_percent)
+        if score is not None
+    ]
+    if quality_candidates:
+        return min(quality_candidates)
     return pass_rate_percent
 
 
 def _runtime_provider_quality_score_source(
     e2e_case_pass_rate_percent: int | None,
     pass_rate_percent: int | None,
+    live_task_family_coverage_percent: int | None,
 ) -> str:
     """Return the evidence source used by the provider quality score."""
+    if (
+        e2e_case_pass_rate_percent is not None
+        and live_task_family_coverage_percent is not None
+    ):
+        return "provider_e2e_and_live_task_coverage"
+    if live_task_family_coverage_percent is not None:
+        return "live_task_family_coverage"
     if e2e_case_pass_rate_percent is not None:
         return "provider_e2e_case_pass_rate"
     if pass_rate_percent is not None:
@@ -1728,6 +1796,21 @@ def _runtime_provider_live_fault_coverage_complete(
     )
 
 
+def _runtime_provider_live_task_family_coverage_complete(
+    provider_stats: dict[str, Any],
+) -> bool:
+    """Return whether live task history covered every required task family."""
+    covered_families = set(
+        _runtime_string_list_payload(
+            provider_stats.get("live_task_family_covered_families")
+        )
+    )
+    return all(
+        required_family in covered_families
+        for required_family in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
+
+
 def _runtime_provider_readiness_requirements(
     provider_stats: dict[str, Any],
 ) -> dict[str, Any]:
@@ -1751,6 +1834,25 @@ def _runtime_provider_readiness_requirements(
         provider_stats.get("last_live_fault_probe_status") == "passed"
         and not live_fault_missing_cases
     )
+    required_live_task_families = sorted(
+        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
+    live_task_covered_families = sorted(
+        set(
+            _runtime_string_list_payload(
+                provider_stats.get("live_task_family_covered_families")
+            )
+        )
+    )
+    live_task_missing_families = [
+        required_family
+        for required_family in required_live_task_families
+        if required_family not in live_task_covered_families
+    ]
+    live_task_family_coverage_complete = (
+        provider_stats.get("last_live_task_family_status") == "passed"
+        and not live_task_missing_families
+    )
     requirements = {
         "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
         "observed_recent_window": _runtime_provider_readiness_recent_window(
@@ -1766,6 +1868,10 @@ def _runtime_provider_readiness_requirements(
         "live_fault_covered_cases": live_fault_covered_cases,
         "live_fault_missing_cases": live_fault_missing_cases,
         "live_fault_coverage_complete": live_fault_coverage_complete,
+        "required_live_task_families": required_live_task_families,
+        "live_task_covered_families": live_task_covered_families,
+        "live_task_missing_families": live_task_missing_families,
+        "live_task_family_coverage_complete": live_task_family_coverage_complete,
     }
     last_run_at = _runtime_provider_readiness_last_run_at(provider_stats)
     if last_run_at is not None:
@@ -1807,6 +1913,8 @@ def _runtime_provider_missing_requirements(
         missing.append("fresh_provider_history")
     if requirements.get("live_fault_coverage_complete") is not True:
         missing.append("live_fault_case_coverage")
+    if requirements.get("live_task_family_coverage_complete") is not True:
+        missing.append("live_task_family_coverage")
     if any(warning.endswith("_trend_degrading") for warning in warnings):
         missing.append("stable_eval_trends")
     return missing

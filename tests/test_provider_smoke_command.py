@@ -17,6 +17,28 @@ def _provider_smoke_run_at(*, days_ago: int = 0) -> str:
     return timestamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _live_task_families() -> list[str]:
+    return [
+        "multi_step_edit",
+        "recovery_resume",
+        "single_file_edit",
+        "transaction_batching",
+    ]
+
+
+def _complete_live_task_history() -> dict[str, object]:
+    return {
+        "last_live_task_family_status": "passed",
+        "live_task_family_enabled_runs": 3,
+        "live_task_family_passed_runs": 3,
+        "live_task_family_covered_families": _live_task_families(),
+        "live_task_family_failed_families": [],
+        "observed_live_task_family_count": 4,
+        "required_live_task_family_count": 4,
+        "live_task_family_coverage_percent": 100,
+    }
+
+
 def _provider_e2e_smoke_result(*, token_usage: dict[str, int] | None = None):
     from cli.provider_smoke_commands import ProviderSmokeResult
 
@@ -422,6 +444,23 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
         "OpenAI returned 502 bad gateway from the upstream provider.",
     )
+    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_TASKS", "true")
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS",
+        "passed",
+    )
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS",
+        "passed",
+    )
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_RECOVERY_RESUME_STATUS",
+        "passed",
+    )
+    monkeypatch.setenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_TRANSACTION_BATCHING_STATUS",
+        "passed",
+    )
 
     result = await run_provider_smoke_check(
         project_dir=tmp_path,
@@ -475,7 +514,93 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
                 "status": "passed",
                 "message": "Live gateway/model fault probe passed",
             },
+            {
+                "runtime_mode": "live_task_single_file_edit",
+                "status": "passed",
+                "message": "Live single-file edit task family passed",
+            },
+            {
+                "runtime_mode": "live_task_multi_step_edit",
+                "status": "passed",
+                "message": "Live multi-step edit task family passed",
+            },
+            {
+                "runtime_mode": "live_task_recovery_resume",
+                "status": "passed",
+                "message": "Live recovery/resume task family passed",
+            },
+            {
+                "runtime_mode": "live_task_transaction_batching",
+                "status": "passed",
+                "message": "Live transaction batching task family passed",
+            },
         ],
+    }
+    assert result.runtime_diagnostics["provider_e2e_live_task_families"] == {
+        "status": "passed",
+        "provider": "openai",
+        "source": "provider_live_task_fixture",
+        "enabled": True,
+        "required_env": [
+            "AUTO_CODE_PROVIDER_E2E_LIVE_TASKS",
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_SINGLE_FILE_EDIT_STATUS"
+            ),
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_MULTI_STEP_EDIT_STATUS"
+            ),
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_RECOVERY_RESUME_STATUS "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_RECOVERY_RESUME_STATUS"
+            ),
+            (
+                "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_TRANSACTION_BATCHING_STATUS "
+                "or AUTO_CODE_PROVIDER_E2E_LIVE_TRANSACTION_BATCHING_STATUS"
+            ),
+        ],
+        "covered_families": [
+            "single_file_edit",
+            "multi_step_edit",
+            "recovery_resume",
+            "transaction_batching",
+        ],
+        "failed_families": [],
+        "families": {
+            "single_file_edit": {
+                "status": "passed",
+                "source": "provider_live_task_fixture",
+                "fixture_provider": "openai",
+                "env_name": (
+                    "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_SINGLE_FILE_EDIT_STATUS"
+                ),
+            },
+            "multi_step_edit": {
+                "status": "passed",
+                "source": "provider_live_task_fixture",
+                "fixture_provider": "openai",
+                "env_name": (
+                    "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_MULTI_STEP_EDIT_STATUS"
+                ),
+            },
+            "recovery_resume": {
+                "status": "passed",
+                "source": "provider_live_task_fixture",
+                "fixture_provider": "openai",
+                "env_name": (
+                    "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_RECOVERY_RESUME_STATUS"
+                ),
+            },
+            "transaction_batching": {
+                "status": "passed",
+                "source": "provider_live_task_fixture",
+                "fixture_provider": "openai",
+                "env_name": (
+                    "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_TRANSACTION_BATCHING_STATUS"
+                ),
+            },
+        },
     }
     assert result.runtime_diagnostics["provider_e2e_live_fault_probes"] == {
         "status": "passed",
@@ -572,6 +697,7 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "reliability_status": "complete",
         "provider_e2e_status": "passed",
         "live_fault_probe_status": "passed",
+        "live_task_family_status": "passed",
     }
     assert provider_run_history == {
         "status": "recorded",
@@ -583,8 +709,8 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "last_status": "passed",
         "last_reliability_status": "complete",
         "last_provider_e2e_status": "passed",
-        "e2e_case_count": 7,
-        "e2e_passed_case_count": 7,
+        "e2e_case_count": 11,
+        "e2e_passed_case_count": 11,
         "e2e_failed_case_count": 0,
         "reliability_observed_case_count": 8,
         "reliability_passed_case_count": 8,
@@ -596,6 +722,19 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
             "gateway_model_limitations",
             "unsupported_tools",
         ],
+        "last_live_task_family_status": "passed",
+        "live_task_family_enabled_runs": 1,
+        "live_task_family_passed_runs": 1,
+        "live_task_family_covered_families": [
+            "multi_step_edit",
+            "recovery_resume",
+            "single_file_edit",
+            "transaction_batching",
+        ],
+        "live_task_family_failed_families": [],
+        "observed_live_task_family_count": 4,
+        "required_live_task_family_count": 4,
+        "live_task_family_coverage_percent": 100,
         "last_promotion_gate_status": "passed",
         "promotion_required_reliability_cases": [
             "text_completion",
@@ -683,8 +822,8 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
     assert history["runs"][0]["status"] == "passed"
     assert history["runs"][0]["reliability_status"] == "complete"
     assert history["runs"][0]["provider_e2e_status"] == "passed"
-    assert history["runs"][0]["e2e_case_count"] == 7
-    assert history["runs"][0]["e2e_passed_case_count"] == 7
+    assert history["runs"][0]["e2e_case_count"] == 11
+    assert history["runs"][0]["e2e_passed_case_count"] == 11
     assert history["runs"][0]["e2e_failed_case_count"] == 0
     assert history["runs"][0]["reliability_observed_case_count"] == 8
     assert history["runs"][0]["reliability_passed_case_count"] == 8
@@ -874,6 +1013,10 @@ def test_provider_run_history_reports_eval_trends_from_recent_runs():
                 "reliability_required_case_count": 8,
                 "reliability_passed_case_count": 4,
                 "live_fault_probe_covered_cases": ["unsupported_tools"],
+                "live_task_family_covered_families": [
+                    "single_file_edit",
+                    "multi_step_edit",
+                ],
                 "cost_usd": 0.1,
             },
             {
@@ -886,6 +1029,7 @@ def test_provider_run_history_reports_eval_trends_from_recent_runs():
                     "unsupported_tools",
                     "gateway_model_limitations",
                 ],
+                "live_task_family_covered_families": _live_task_families(),
                 "cost_usd": 0.05,
             },
         ]
@@ -1384,6 +1528,17 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
                     "gateway_model_limitations",
                 ],
             },
+            "provider_e2e_live_task_families": {
+                "status": "passed",
+                "enabled": True,
+                "covered_families": [
+                    "single_file_edit",
+                    "multi_step_edit",
+                    "recovery_resume",
+                    "transaction_batching",
+                ],
+                "failed_families": [],
+            },
         }
 
     first_result = _with_provider_run_history(
@@ -1426,12 +1581,27 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
             ],
             "live_fault_missing_cases": [],
             "live_fault_coverage_complete": True,
+            "required_live_task_families": [
+                "multi_step_edit",
+                "recovery_resume",
+                "single_file_edit",
+                "transaction_batching",
+            ],
+            "live_task_covered_families": [
+                "multi_step_edit",
+                "recovery_resume",
+                "single_file_edit",
+                "transaction_batching",
+            ],
+            "live_task_missing_families": [],
+            "live_task_family_coverage_complete": True,
         },
         "missing_requirements": ["stable_history_runs"],
         "evidence": [
             "provider_e2e_passed",
             "provider_reliability_complete",
             "live_fault_probes_passed",
+            "live_task_families_passed",
         ],
     }
 
@@ -1493,6 +1663,20 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
             ],
             "live_fault_missing_cases": [],
             "live_fault_coverage_complete": True,
+            "required_live_task_families": [
+                "multi_step_edit",
+                "recovery_resume",
+                "single_file_edit",
+                "transaction_batching",
+            ],
+            "live_task_covered_families": [
+                "multi_step_edit",
+                "recovery_resume",
+                "single_file_edit",
+                "transaction_batching",
+            ],
+            "live_task_missing_families": [],
+            "live_task_family_coverage_complete": True,
         },
         "missing_requirements": [],
         "evidence": [
@@ -1500,6 +1684,7 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
             "provider_reliability_complete",
             "provider_history_stable",
             "live_fault_probes_passed",
+            "live_task_families_passed",
         ],
     }
     assert stable_result.runtime_diagnostics["provider_autonomous_promotion_gate"] == {
@@ -1527,6 +1712,88 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
     assert stable_history["promotion_required_e2e_runs"] == expected_e2e_runs
     assert stable_history["promotion_passed_e2e_runs"] == expected_e2e_runs
     assert stable_history["promotion_missing_e2e_runs"] == []
+
+
+def test_provider_autonomous_readiness_requires_live_task_family_coverage(
+    tmp_path: Path,
+):
+    from cli.provider_smoke_commands import (
+        ProviderSmokeResult,
+        _with_provider_run_history,
+    )
+
+    for _ in range(3):
+        result = _with_provider_run_history(
+            tmp_path,
+            ProviderSmokeResult(
+                success=True,
+                provider="openai",
+                model="gpt-4o",
+                runtime_mode="provider_e2e",
+                message="Provider e2e smoke suite passed",
+                runtime_diagnostics={
+                    "provider_e2e_suite": {
+                        "status": "passed",
+                        "runs": [
+                            {"runtime_mode": "generic_edit", "status": "passed"},
+                            {"runtime_mode": "mini_pipeline", "status": "passed"},
+                            {
+                                "runtime_mode": "transaction_batch_probe",
+                                "status": "passed",
+                            },
+                            {
+                                "runtime_mode": "unsupported_tools_probe",
+                                "status": "passed",
+                            },
+                            {
+                                "runtime_mode": "gateway_model_probe",
+                                "status": "passed",
+                            },
+                        ],
+                    },
+                    "provider_reliability": {
+                        "status": "complete",
+                        "observed_case_count": 8,
+                        "passed_case_count": 8,
+                        "required_case_count": 8,
+                        "uncovered_cases": [],
+                        "cases": [
+                            {"case": case, "status": "passed", "source": "test"}
+                            for case in [
+                                "text_completion",
+                                "generic_edit_tool_loop",
+                                "native_tool_calls",
+                                "tool_results",
+                                "recovery_loop",
+                                "transaction_batches",
+                                "unsupported_tools",
+                                "gateway_model_limitations",
+                            ]
+                        ],
+                    },
+                    "provider_e2e_live_fault_probes": {
+                        "status": "passed",
+                        "enabled": True,
+                        "covered_cases": [
+                            "unsupported_tools",
+                            "gateway_model_limitations",
+                        ],
+                    },
+                },
+            ),
+        )
+
+    readiness = result.runtime_diagnostics["provider_autonomous_readiness"]
+    assert readiness["status"] == "warming_up"
+    assert readiness["recommendation_reasons"] == ["live_task_family_missing"]
+    assert readiness["warnings"] == ["live_task_family_evidence_missing"]
+    assert readiness["missing_requirements"] == ["live_task_family_coverage"]
+    assert readiness["requirements"]["live_task_missing_families"] == [
+        "multi_step_edit",
+        "recovery_resume",
+        "single_file_edit",
+        "transaction_batching",
+    ]
 
 
 def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_coverage():
@@ -1564,6 +1831,7 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
             "gateway_model_limitations",
             "unsupported_tools",
         ],
+        **_complete_live_task_history(),
     }
     assert _provider_autonomous_readiness_diagnostics(
         result,
@@ -1595,12 +1863,17 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
             ],
             "live_fault_missing_cases": [],
             "live_fault_coverage_complete": True,
+            "required_live_task_families": _live_task_families(),
+            "live_task_covered_families": _live_task_families(),
+            "live_task_missing_families": [],
+            "live_task_family_coverage_complete": True,
         },
         "missing_requirements": ["stable_history_runs"],
         "evidence": [
             "provider_e2e_passed",
             "provider_reliability_complete",
             "live_fault_probes_passed",
+            "live_task_families_passed",
         ],
     }
 
@@ -1612,6 +1885,7 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "last_run_at": _provider_smoke_run_at(),
         "last_live_fault_probe_status": "passed",
         "live_fault_probe_covered_cases": ["unsupported_tools"],
+        **_complete_live_task_history(),
     }
     assert _provider_autonomous_readiness_diagnostics(
         result,
@@ -1640,6 +1914,10 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
             "live_fault_covered_cases": ["unsupported_tools"],
             "live_fault_missing_cases": ["gateway_model_limitations"],
             "live_fault_coverage_complete": False,
+            "required_live_task_families": _live_task_families(),
+            "live_task_covered_families": _live_task_families(),
+            "live_task_missing_families": [],
+            "live_task_family_coverage_complete": True,
         },
         "missing_requirements": ["live_fault_case_coverage"],
         "evidence": [
@@ -1647,6 +1925,7 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
             "provider_reliability_complete",
             "provider_history_stable",
             "live_fault_probes_passed",
+            "live_task_families_passed",
         ],
     }
 
@@ -1688,6 +1967,7 @@ def test_provider_autonomous_readiness_warns_on_degrading_eval_trends():
                 "gateway_model_limitations",
                 "unsupported_tools",
             ],
+            **_complete_live_task_history(),
             "quality_trend": "score_degrading",
             "quality_delta_percent": -25,
             "safety_trend": "score_degrading",
@@ -1712,6 +1992,7 @@ def test_provider_autonomous_readiness_warns_on_degrading_eval_trends():
         "provider_reliability_complete",
         "provider_history_stable",
         "live_fault_probes_passed",
+        "live_task_families_passed",
     ]
 
 
@@ -1753,6 +2034,7 @@ def test_provider_autonomous_readiness_warns_on_stale_history():
                 "gateway_model_limitations",
                 "unsupported_tools",
             ],
+            **_complete_live_task_history(),
         },
     )
 
@@ -1833,15 +2115,18 @@ def test_provider_autonomous_readiness_treats_missing_history_as_unknown():
         "recommendation": "limited_autonomous_until_live_faults",
         "recommendation_reasons": [
             "live_fault_probe_missing",
+            "live_task_family_missing",
             "history_missing",
         ],
         "blockers": [],
         "warnings": [
             "live_fault_probe_evidence_missing",
+            "live_task_family_evidence_missing",
             "provider_history_unknown",
         ],
         "next_actions": [
             "enable_live_fault_probes",
+            "enable_live_task_families",
             "collect_provider_history_runs",
         ],
         "requirements": {
@@ -1859,10 +2144,15 @@ def test_provider_autonomous_readiness_treats_missing_history_as_unknown():
                 "unsupported_tools",
             ],
             "live_fault_coverage_complete": False,
+            "required_live_task_families": _live_task_families(),
+            "live_task_covered_families": [],
+            "live_task_missing_families": _live_task_families(),
+            "live_task_family_coverage_complete": False,
         },
         "missing_requirements": [
             "stable_history_runs",
             "live_fault_case_coverage",
+            "live_task_family_coverage",
         ],
         "evidence": [
             "provider_e2e_passed",
@@ -1909,6 +2199,7 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
             "provider_reliability_incomplete",
             "latest_provider_smoke_failed",
             "live_fault_probe_missing",
+            "live_task_family_missing",
             "history_warming_up",
         ],
         "blockers": [
@@ -1918,12 +2209,14 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
         ],
         "warnings": [
             "live_fault_probe_evidence_missing",
+            "live_task_family_evidence_missing",
             "provider_history_warming_up",
         ],
         "next_actions": [
             "rerun_provider_e2e",
             "inspect_uncovered_cases",
             "enable_live_fault_probes",
+            "enable_live_task_families",
             "collect_provider_history_runs",
         ],
         "requirements": {
@@ -1944,6 +2237,10 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
                 "unsupported_tools",
             ],
             "live_fault_coverage_complete": False,
+            "required_live_task_families": _live_task_families(),
+            "live_task_covered_families": [],
+            "live_task_missing_families": _live_task_families(),
+            "live_task_family_coverage_complete": False,
         },
         "missing_requirements": [
             "provider_e2e",
@@ -1951,6 +2248,7 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
             "latest_provider_e2e_pass",
             "stable_history_runs",
             "live_fault_case_coverage",
+            "live_task_family_coverage",
         ],
         "evidence": [],
     }

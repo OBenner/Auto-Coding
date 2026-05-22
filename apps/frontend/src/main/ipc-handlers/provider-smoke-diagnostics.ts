@@ -5,6 +5,7 @@ import type {
   ProviderContractHealth,
   ProviderE2eSuiteDiagnostics,
   ProviderLiveFaultProbeDiagnostics,
+  ProviderLiveTaskFamilyDiagnostics,
   ProviderNegativeFixtureDiagnostics,
   ProviderReliabilityDiagnostics,
   ProviderRunHistoryRecentRun,
@@ -55,6 +56,18 @@ function providerReadinessRequirementsFromUnknown(
     liveFaultCoverageComplete: booleanFromUnknown(
       payload.live_fault_coverage_complete
     ),
+    requiredLiveTaskFamilies: arrayFromUnknown(
+      payload.required_live_task_families
+    ),
+    liveTaskCoveredFamilies: arrayFromUnknown(
+      payload.live_task_covered_families
+    ),
+    liveTaskMissingFamilies: arrayFromUnknown(
+      payload.live_task_missing_families
+    ),
+    liveTaskFamilyCoverageComplete: booleanFromUnknown(
+      payload.live_task_family_coverage_complete
+    ),
     lastRunAt: stringFromUnknown(payload.last_run_at),
     maxHistoryAgeSeconds: numberFromUnknown(payload.max_history_age_seconds),
     historyFreshnessComplete: booleanFromUnknown(
@@ -85,6 +98,7 @@ function providerRunHistoryRecentRunFromUnknown(
     reliabilityStatus: stringFromUnknown(payload.reliability_status),
     providerE2eStatus: stringFromUnknown(payload.provider_e2e_status),
     liveFaultProbeStatus: stringFromUnknown(payload.live_fault_probe_status),
+    liveTaskFamilyStatus: stringFromUnknown(payload.live_task_family_status),
   };
 
   return Object.values(run).some((field) => field !== undefined) ? run : undefined;
@@ -428,6 +442,49 @@ export function mapProviderLiveFaultProbes(
     : undefined;
 }
 
+export function mapProviderLiveTaskFamilies(
+  value: unknown
+): ProviderLiveTaskFamilyDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const families =
+    payload.families && typeof payload.families === 'object' && !Array.isArray(payload.families)
+      ? Object.entries(payload.families)
+        .filter(
+          (entry): entry is [string, Record<string, unknown>] =>
+            Boolean(entry[1]) && typeof entry[1] === 'object' && !Array.isArray(entry[1])
+        )
+        .map(([familyName, family]) => ({
+          family: familyName,
+          status: stringFromUnknown(family.status),
+          source: stringFromUnknown(family.source),
+          reason: stringFromUnknown(family.reason),
+          envName: stringFromUnknown(family.env_name),
+        }))
+        .filter((item) => Object.values(item).some((field) => field !== undefined))
+      : undefined;
+  const diagnostics: ProviderLiveTaskFamilyDiagnostics = {
+    status: stringFromUnknown(payload.status),
+    provider: stringFromUnknown(payload.provider),
+    source: stringFromUnknown(payload.source),
+    enabled: booleanFromUnknown(payload.enabled),
+    coveredFamilies: arrayFromUnknown(payload.covered_families),
+    failedFamilies: arrayFromUnknown(payload.failed_families),
+    requiredEnv: arrayFromUnknown(payload.required_env),
+    missingEnv: arrayFromUnknown(payload.missing_env),
+    families: families?.length ? families : undefined,
+  };
+
+  return Object.values(diagnostics).some((field) =>
+    Array.isArray(field) ? field.length > 0 : field !== undefined
+  )
+    ? diagnostics
+    : undefined;
+}
+
 export function mapProviderRunHistory(
   value: unknown
 ): ProviderRunHistoryDiagnostics | undefined {
@@ -468,6 +525,21 @@ export function mapProviderRunHistory(
     liveFaultProbeEnabledRuns: numberFromUnknown(payload.live_fault_probe_enabled_runs),
     liveFaultProbePassedRuns: numberFromUnknown(payload.live_fault_probe_passed_runs),
     liveFaultProbeCoveredCases: arrayFromUnknown(payload.live_fault_probe_covered_cases),
+    lastLiveTaskFamilyStatus: stringFromUnknown(
+      payload.last_live_task_family_status
+    ),
+    liveTaskFamilyEnabledRuns: numberFromUnknown(
+      payload.live_task_family_enabled_runs
+    ),
+    liveTaskFamilyPassedRuns: numberFromUnknown(
+      payload.live_task_family_passed_runs
+    ),
+    liveTaskFamilyCoveredFamilies: arrayFromUnknown(
+      payload.live_task_family_covered_families
+    ),
+    liveTaskFamilyFailedFamilies: arrayFromUnknown(
+      payload.live_task_family_failed_families
+    ),
     passRatePercent: numberFromUnknown(payload.pass_rate_percent),
     recentPassRatePercent: numberFromUnknown(payload.recent_pass_rate_percent),
     observedLiveFaultCaseCount: numberFromUnknown(
@@ -478,6 +550,15 @@ export function mapProviderRunHistory(
     ),
     liveFaultProbeCaseCoveragePercent: numberFromUnknown(
       payload.live_fault_probe_case_coverage_percent
+    ),
+    observedLiveTaskFamilyCount: numberFromUnknown(
+      payload.observed_live_task_family_count
+    ),
+    requiredLiveTaskFamilyCount: numberFromUnknown(
+      payload.required_live_task_family_count
+    ),
+    liveTaskFamilyCoveragePercent: numberFromUnknown(
+      payload.live_task_family_coverage_percent
     ),
     trend: stringFromUnknown(payload.trend),
     trendReason: stringFromUnknown(payload.trend_reason),

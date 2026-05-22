@@ -40,6 +40,7 @@ import {
   mapProviderContractHealth,
   mapProviderE2eSuite,
   mapProviderLiveFaultProbes,
+  mapProviderLiveTaskFamilies,
   mapProviderNegativeFixtures,
   mapProviderReliability,
   mapProviderRunHistory,
@@ -400,6 +401,7 @@ type ProviderSmokeCliResult = {
     } | null;
     provider_e2e_suite?: unknown;
     provider_e2e_live_fault_probes?: unknown;
+    provider_e2e_live_task_families?: unknown;
     provider_e2e_negative_fixtures?: unknown;
     provider_run_history?: unknown;
     provider_autonomous_readiness?: unknown;
@@ -595,6 +597,9 @@ function mapProviderRuntimeDiagnostics(
     providerE2eSuite: mapProviderE2eSuite(diagnostics.provider_e2e_suite),
     providerLiveFaultProbes: mapProviderLiveFaultProbes(
       diagnostics.provider_e2e_live_fault_probes
+    ),
+    providerLiveTaskFamilies: mapProviderLiveTaskFamilies(
+      diagnostics.provider_e2e_live_task_families
     ),
     providerNegativeFixtures: mapProviderNegativeFixtures(
       diagnostics.provider_e2e_negative_fixtures
