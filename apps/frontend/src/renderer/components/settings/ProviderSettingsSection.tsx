@@ -904,6 +904,101 @@ function autonomousRequirementStringList(
   return values.length > 0 ? values : undefined;
 }
 
+function appendAutonomousRequirementCount(
+  parts: string[],
+  label: string,
+  observed?: number,
+  required?: number
+): void {
+  if (
+    isRuntimeDiagnosticNumber(observed)
+    && isRuntimeDiagnosticNumber(required)
+  ) {
+    parts.push(`${label} ${observed}/${required}`);
+  }
+}
+
+function appendAutonomousHistoryFreshness(
+  parts: string[],
+  translate: RuntimeDiagnosticTranslate,
+  requirements: ProviderAutonomousReadinessRequirementsPayload
+): void {
+  const historyFreshness = formatRuntimeDiagnosticBoolean(
+    translate,
+    autonomousRequirementBoolean(
+      requirements,
+      'historyFreshnessComplete',
+      'history_freshness_complete'
+    )
+  );
+  if (!historyFreshness) {
+    return;
+  }
+
+  const lastRunAt = autonomousRequirementString(
+    requirements,
+    'lastRunAt',
+    'last_run_at'
+  );
+  const maxHistoryAgeSeconds = autonomousRequirementNumber(
+    requirements,
+    'maxHistoryAgeSeconds',
+    'max_history_age_seconds'
+  );
+  const details = [
+    lastRunAt
+      ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessLastRun')} ${lastRunAt}`
+      : '',
+    isRuntimeDiagnosticNumber(maxHistoryAgeSeconds)
+      ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMaxAge')} ${maxHistoryAgeSeconds}s`
+      : '',
+  ].filter(Boolean).join(', ');
+  const detailSuffix = details ? ` (${details})` : '';
+  parts.push(
+    `${formatRuntimeDiagnosticValue(translate, 'fresh_provider_history')}: ${historyFreshness}${detailSuffix}`
+  );
+}
+
+function appendAutonomousCoverageRequirement(
+  parts: string[],
+  translate: RuntimeDiagnosticTranslate,
+  requirements: ProviderAutonomousReadinessRequirementsPayload,
+  options: {
+    coverageKey: string;
+    completeCamelKey: string;
+    completeSnakeKey: string;
+    missingCamelKey: string;
+    missingSnakeKey: string;
+  }
+): void {
+  const coverage = formatRuntimeDiagnosticBoolean(
+    translate,
+    autonomousRequirementBoolean(
+      requirements,
+      options.completeCamelKey,
+      options.completeSnakeKey
+    )
+  );
+  if (!coverage) {
+    return;
+  }
+
+  const missingItems = formatRuntimeDiagnosticList(
+    translate,
+    autonomousRequirementStringList(
+      requirements,
+      options.missingCamelKey,
+      options.missingSnakeKey
+    )
+  );
+  const missingSuffix = missingItems
+    ? ` (${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMissingCases')} ${missingItems})`
+    : '';
+  parts.push(
+    `${formatRuntimeDiagnosticValue(translate, options.coverageKey)}: ${coverage}${missingSuffix}`
+  );
+}
+
 function formatProviderAutonomousReadinessRequirements(
   translate: RuntimeDiagnosticTranslate,
   requirements?: ProviderAutonomousReadinessRequirementsPayload | null
@@ -923,110 +1018,50 @@ function formatProviderAutonomousReadinessRequirements(
     'observedRecentWindow',
     'observed_recent_window'
   );
-  if (
-    isRuntimeDiagnosticNumber(observedRecentWindow)
-    && isRuntimeDiagnosticNumber(minStableRuns)
-  ) {
-    parts.push(
-      `${formatRuntimeDiagnosticValue(translate, 'stable_history_runs')} ${observedRecentWindow}/${minStableRuns}`
-    );
-  }
+  appendAutonomousRequirementCount(
+    parts,
+    formatRuntimeDiagnosticValue(translate, 'stable_history_runs'),
+    observedRecentWindow,
+    minStableRuns
+  );
   const observedConsecutivePasses = autonomousRequirementNumber(
     requirements,
     'observedConsecutivePasses',
     'observed_consecutive_passes'
   );
-  if (
-    isRuntimeDiagnosticNumber(observedConsecutivePasses)
-    && isRuntimeDiagnosticNumber(minStableRuns)
-  ) {
-    parts.push(
-      `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessConsecutivePasses')} ${observedConsecutivePasses}/${minStableRuns}`
-    );
-  }
-
-  const historyFreshness = formatRuntimeDiagnosticBoolean(
-    translate,
-    autonomousRequirementBoolean(
-      requirements,
-      'historyFreshnessComplete',
-      'history_freshness_complete'
-    )
+  appendAutonomousRequirementCount(
+    parts,
+    translate(
+      'settings:aiProvider.connectionTest.providerAutonomousReadinessConsecutivePasses'
+    ),
+    observedConsecutivePasses,
+    minStableRuns
   );
-  if (historyFreshness) {
-    const lastRunAt = autonomousRequirementString(
-      requirements,
-      'lastRunAt',
-      'last_run_at'
-    );
-    const maxHistoryAgeSeconds = autonomousRequirementNumber(
-      requirements,
-      'maxHistoryAgeSeconds',
-      'max_history_age_seconds'
-    );
-    const details = [
-      lastRunAt
-        ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessLastRun')} ${lastRunAt}`
-        : '',
-      isRuntimeDiagnosticNumber(maxHistoryAgeSeconds)
-        ? `${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMaxAge')} ${maxHistoryAgeSeconds}s`
-        : '',
-    ].filter(Boolean).join(', ');
-    const detailSuffix = details ? ` (${details})` : '';
-    parts.push(
-      `${formatRuntimeDiagnosticValue(translate, 'fresh_provider_history')}: ${historyFreshness}${detailSuffix}`
-    );
-  }
-
-  const liveFaultCoverage = formatRuntimeDiagnosticBoolean(
+  appendAutonomousHistoryFreshness(parts, translate, requirements);
+  appendAutonomousCoverageRequirement(
+    parts,
     translate,
-    autonomousRequirementBoolean(
-      requirements,
-      'liveFaultCoverageComplete',
-      'live_fault_coverage_complete'
-    )
+    requirements,
+    {
+      coverageKey: 'live_fault_case_coverage',
+      completeCamelKey: 'liveFaultCoverageComplete',
+      completeSnakeKey: 'live_fault_coverage_complete',
+      missingCamelKey: 'liveFaultMissingCases',
+      missingSnakeKey: 'live_fault_missing_cases',
+    }
   );
-  if (liveFaultCoverage) {
-    const missingCases = formatRuntimeDiagnosticList(
-      translate,
-      autonomousRequirementStringList(
-        requirements,
-        'liveFaultMissingCases',
-        'live_fault_missing_cases'
-      )
-    );
-    const missingSuffix = missingCases
-      ? ` (${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMissingCases')} ${missingCases})`
-      : '';
-    parts.push(
-      `${formatRuntimeDiagnosticValue(translate, 'live_fault_case_coverage')}: ${liveFaultCoverage}${missingSuffix}`
-    );
-  }
-
-  const liveTaskCoverage = formatRuntimeDiagnosticBoolean(
+  appendAutonomousCoverageRequirement(
+    parts,
     translate,
-    autonomousRequirementBoolean(
-      requirements,
-      'liveTaskFamilyCoverageComplete',
-      'live_task_family_coverage_complete'
-    )
+    requirements,
+    {
+      coverageKey: 'live_task_family_coverage',
+      completeCamelKey: 'liveTaskFamilyCoverageComplete',
+      completeSnakeKey: 'live_task_family_coverage_complete',
+      missingCamelKey: 'liveTaskMissingFamilies',
+      missingSnakeKey: 'live_task_missing_families',
+    }
   );
-  if (liveTaskCoverage) {
-    const missingFamilies = formatRuntimeDiagnosticList(
-      translate,
-      autonomousRequirementStringList(
-        requirements,
-        'liveTaskMissingFamilies',
-        'live_task_missing_families'
-      )
-    );
-    const missingSuffix = missingFamilies
-      ? ` (${translate('settings:aiProvider.connectionTest.providerAutonomousReadinessMissingCases')} ${missingFamilies})`
-      : '';
-    parts.push(
-      `${formatRuntimeDiagnosticValue(translate, 'live_task_family_coverage')}: ${liveTaskCoverage}${missingSuffix}`
-    );
-  }
 
   return parts.join(', ');
 }
@@ -1655,6 +1690,16 @@ export function buildProviderAutonomousPromotionGateDiagnosticRows(
   ].filter((row) => row.value);
 }
 
+function runtimeAutonomousPromotionGateValue(gate?: string | null): string | null | undefined {
+  if (gate === 'passed') {
+    return 'provider_autonomous_promotion_passed';
+  }
+  if (gate === 'blocked') {
+    return 'provider_autonomous_promotion_blocked';
+  }
+  return gate;
+}
+
 function formatRuntimeAutonomousPromotionSummary(
   translate: RuntimeDiagnosticTranslate,
   gate?: string | null,
@@ -1663,11 +1708,7 @@ function formatRuntimeAutonomousPromotionSummary(
 ): string {
   const gateValue = formatRuntimeDiagnosticValue(
     translate,
-    gate === 'passed'
-      ? 'provider_autonomous_promotion_passed'
-      : gate === 'blocked'
-        ? 'provider_autonomous_promotion_blocked'
-        : gate
+    runtimeAutonomousPromotionGateValue(gate)
   );
   const missingCases = formatRuntimeDiagnosticList(
     translate,

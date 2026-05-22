@@ -355,49 +355,12 @@ def _provider_smoke_history_record(
 ) -> dict[str, Any]:
     """Build a compact persisted provider smoke evidence record."""
     runtime_diagnostics = result.runtime_diagnostics
-    reliability = runtime_diagnostics.get("provider_reliability")
-    reliability = reliability if isinstance(reliability, dict) else {}
-    provider_e2e_suite = runtime_diagnostics.get("provider_e2e_suite")
-    provider_e2e_suite = (
-        provider_e2e_suite if isinstance(provider_e2e_suite, dict) else {}
-    )
+    reliability = _dict_payload(runtime_diagnostics.get("provider_reliability"))
+    provider_e2e_suite = _dict_payload(runtime_diagnostics.get("provider_e2e_suite"))
     suite_runs = provider_e2e_suite.get("runs")
     e2e_case_counts = _provider_e2e_suite_case_counts(suite_runs)
-    failed_suite_runs = (
-        [
-            str(run.get("runtime_mode") or "unknown")
-            for run in suite_runs
-            if isinstance(run, dict) and run.get("status") != "passed"
-        ]
-        if isinstance(suite_runs, list)
-        else []
-    )
+    failed_suite_runs = _provider_e2e_failed_suite_runs(suite_runs)
     reliability_case_counts = _provider_reliability_case_counts(reliability)
-    live_fault_probes = runtime_diagnostics.get("provider_e2e_live_fault_probes")
-    live_fault_probes = live_fault_probes if isinstance(live_fault_probes, dict) else {}
-    live_fault_probe_status = live_fault_probes.get("status")
-    live_fault_probe_enabled = live_fault_probes.get("enabled")
-    live_fault_probe_covered_cases = _string_list_payload(
-        live_fault_probes.get("covered_cases")
-    )
-    live_fault_probe_missing_env = _string_list_payload(
-        live_fault_probes.get("missing_env")
-    )
-    live_task_families = runtime_diagnostics.get("provider_e2e_live_task_families")
-    live_task_families = (
-        live_task_families if isinstance(live_task_families, dict) else {}
-    )
-    live_task_family_status = live_task_families.get("status")
-    live_task_family_enabled = live_task_families.get("enabled")
-    live_task_family_covered_families = _string_list_payload(
-        live_task_families.get("covered_families")
-    )
-    live_task_family_failed_families = _string_list_payload(
-        live_task_families.get("failed_families")
-    )
-    live_task_family_missing_env = _string_list_payload(
-        live_task_families.get("missing_env")
-    )
     record: dict[str, Any] = {
         "timestamp": timestamp or _utc_timestamp(),
         "provider": result.provider,
@@ -414,30 +377,81 @@ def _provider_smoke_history_record(
         **reliability_case_counts,
         "failed_suite_runs": failed_suite_runs,
     }
-    if isinstance(live_fault_probe_status, str) and live_fault_probe_status:
-        record["live_fault_probe_status"] = live_fault_probe_status
-    if isinstance(live_fault_probe_enabled, bool):
-        record["live_fault_probe_enabled"] = live_fault_probe_enabled
-    if live_fault_probe_covered_cases:
-        record["live_fault_probe_covered_cases"] = live_fault_probe_covered_cases
-    if live_fault_probe_missing_env:
-        record["live_fault_probe_missing_env_count"] = len(live_fault_probe_missing_env)
-    if isinstance(live_task_family_status, str) and live_task_family_status:
-        record["live_task_family_status"] = live_task_family_status
-    if isinstance(live_task_family_enabled, bool):
-        record["live_task_family_enabled"] = live_task_family_enabled
-    if live_task_family_covered_families:
-        record["live_task_family_covered_families"] = live_task_family_covered_families
-    if live_task_family_failed_families:
-        record["live_task_family_failed_families"] = live_task_family_failed_families
-    if live_task_family_missing_env:
-        record["live_task_family_missing_env_count"] = len(live_task_family_missing_env)
+    record.update(
+        _provider_live_fault_probe_history_record(
+            _dict_payload(runtime_diagnostics.get("provider_e2e_live_fault_probes"))
+        )
+    )
+    record.update(
+        _provider_live_task_family_history_record(
+            _dict_payload(runtime_diagnostics.get("provider_e2e_live_task_families"))
+        )
+    )
     cost_record = _provider_smoke_cost_record(result)
     if cost_record:
         record.update(cost_record)
     if result.error_details:
         record["error_details"] = _response_excerpt(result.error_details, max_chars=240)
     record.update(_provider_smoke_promotion_record(result))
+    return record
+
+
+def _dict_payload(value: Any) -> dict[str, Any]:
+    """Return a dictionary payload or an empty dictionary."""
+    return value if isinstance(value, dict) else {}
+
+
+def _provider_e2e_failed_suite_runs(suite_runs: Any) -> list[str]:
+    """Return failed provider e2e child runtime modes."""
+    if not isinstance(suite_runs, list):
+        return []
+    return [
+        str(run.get("runtime_mode") or "unknown")
+        for run in suite_runs
+        if isinstance(run, dict) and run.get("status") != "passed"
+    ]
+
+
+def _provider_live_fault_probe_history_record(
+    live_fault_probes: dict[str, Any],
+) -> dict[str, Any]:
+    """Return persisted live fault probe evidence fields."""
+    record: dict[str, Any] = {}
+    status = live_fault_probes.get("status")
+    if isinstance(status, str) and status:
+        record["live_fault_probe_status"] = status
+    enabled = live_fault_probes.get("enabled")
+    if isinstance(enabled, bool):
+        record["live_fault_probe_enabled"] = enabled
+    covered_cases = _string_list_payload(live_fault_probes.get("covered_cases"))
+    if covered_cases:
+        record["live_fault_probe_covered_cases"] = covered_cases
+    missing_env = _string_list_payload(live_fault_probes.get("missing_env"))
+    if missing_env:
+        record["live_fault_probe_missing_env_count"] = len(missing_env)
+    return record
+
+
+def _provider_live_task_family_history_record(
+    live_task_families: dict[str, Any],
+) -> dict[str, Any]:
+    """Return persisted live task-family evidence fields."""
+    record: dict[str, Any] = {}
+    status = live_task_families.get("status")
+    if isinstance(status, str) and status:
+        record["live_task_family_status"] = status
+    enabled = live_task_families.get("enabled")
+    if isinstance(enabled, bool):
+        record["live_task_family_enabled"] = enabled
+    covered_families = _string_list_payload(live_task_families.get("covered_families"))
+    if covered_families:
+        record["live_task_family_covered_families"] = covered_families
+    failed_families = _string_list_payload(live_task_families.get("failed_families"))
+    if failed_families:
+        record["live_task_family_failed_families"] = failed_families
+    missing_env = _string_list_payload(live_task_families.get("missing_env"))
+    if missing_env:
+        record["live_task_family_missing_env_count"] = len(missing_env)
     return record
 
 
@@ -4020,7 +4034,6 @@ def _provider_e2e_live_task_family_payload(
     for family_name, family_config in PROVIDER_E2E_LIVE_TASK_FAMILIES.items():
         family_result = _provider_e2e_live_task_family_case(
             provider=normalized_provider,
-            family_config=family_config,
             suffix=str(family_config["suffix"]),
             env=live_env,
         )
@@ -4155,7 +4168,6 @@ def _provider_e2e_live_task_runner_recovery_case(
 def _provider_e2e_live_task_family_case(
     *,
     provider: str,
-    family_config: Mapping[str, Any],
     suffix: str,
     env: Mapping[str, str],
 ) -> dict[str, Any]:
