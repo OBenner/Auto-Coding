@@ -850,7 +850,18 @@ async def test_direct_api_autonomous_factory_runs_full_coder_when_gate_allowed(
     )
 
     assert runtime_session.name == "direct_api_autonomous"
-    assert runtime_session.capabilities.supports(RuntimeRequirements.full_coder())
+    # Capability is honest: it does NOT physically guarantee a native tool
+    # loop; the underlying Generic Edit engine falls back to JSON when the
+    # provider does not support tools. The full_coder requirement is met
+    # via the runtime_policy promotion, not via a capability claim.
+    assert not runtime_session.capabilities.supports(
+        RuntimeRequirements.full_coder()
+    )
+    assert runtime_session.runtime_policy.promoted_to_full_autonomous is True
+    assert runtime_session.capabilities.supports(
+        RuntimeRequirements.full_coder(),
+        policy=runtime_session.runtime_policy,
+    )
 
     result = await run_runtime_session(
         runtime_session,

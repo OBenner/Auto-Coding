@@ -233,6 +233,31 @@ The activation is deliberately narrower than Claude/Codex full autonomy:
   adapter before execution.
 - Mutating subagents still require the separate transactional merge gate.
 
+### Capability vs Policy
+
+`RuntimeCapabilities` describes what a runtime physically supports.
+`RuntimePolicy` describes evidence-based promotions layered on top. The
+two are intentionally separate so the runtime never claims a capability
+it cannot back, and operators can see which decisions came from the
+capability layer and which came from a policy gate.
+
+The `direct_api_autonomous` adapter now advertises
+`RuntimeCapabilities.promoted_edit()` (identical to `generic_edit()` —
+no fake `native_tool_loop=True`) plus a `RuntimePolicy` carrying
+`promoted_to_full_autonomous=True`. The shared
+`capabilities.supports(requirements, policy=...)` helper grants
+`native_tool_loop` as satisfied when the policy promotes the runtime, so
+the `full_coder` requirement is met through evidence rather than through
+a capability claim. The legacy
+`RuntimeCapabilities.direct_api_autonomous()` constructor still works
+but raises a `DeprecationWarning` and returns the honest promoted-edit
+shape.
+
+Promotion is narrow on purpose. It currently grants only
+`native_tool_loop`; `mcp`, `subagents`, and `sandbox` are not promoted
+and still require Phase 1 capability work in
+`docs/roadmap/non-claude-provider-autonomy.md`.
+
 ### QA Phase Runtime Routing
 
 `qa_reviewer` and `qa_fixer` are now resolved through the runtime layer the

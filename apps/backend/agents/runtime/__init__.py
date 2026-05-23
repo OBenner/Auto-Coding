@@ -15,6 +15,7 @@ from .artifacts import (
 from .capabilities import (
     RuntimeCapabilities,
     RuntimeCapabilityError,
+    RuntimePolicy,
     RuntimeRequirements,
 )
 from .cli_profiles import (
@@ -113,6 +114,7 @@ __all__ = [
     "RuntimeCapabilities",
     "RuntimeCapabilityError",
     "RuntimeFallbackDecision",
+    "RuntimePolicy",
     "RuntimeRequirements",
     "RUNTIME_FALLBACK_ENV",
     "RUNNER_ROUTER_ENV",
