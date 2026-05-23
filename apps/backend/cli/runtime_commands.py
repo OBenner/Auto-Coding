@@ -17,16 +17,16 @@ from agents.runtime.cli_profiles import (
     detect_cli_runner_availability,
     select_cli_runner_profiles,
 )
-from agents.runtime.direct_api_autonomy import (
-    DIRECT_API_AUTONOMOUS_ENV,
-    DirectApiAutonomousGate,
-    resolve_direct_api_autonomous_gate,
-)
 from agents.runtime.compatibility import (
     PROVIDER_RUNTIME_COMPATIBILITY,
     RUNTIME_MODE_INFO,
     provider_runtime_compatibility_as_dicts,
     runtime_mode_info_as_dicts,
+)
+from agents.runtime.direct_api_autonomy import (
+    DIRECT_API_AUTONOMOUS_ENV,
+    DirectApiAutonomousGate,
+    resolve_direct_api_autonomous_gate,
 )
 from agents.runtime.fallback import (
     RuntimePhase,

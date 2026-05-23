@@ -17,13 +17,6 @@ from .capabilities import (
     RuntimeCapabilityError,
     RuntimeRequirements,
 )
-from .direct_api_autonomy import (
-    DIRECT_API_AUTONOMOUS_ENV,
-    DIRECT_API_AUTONOMOUS_PROVIDERS,
-    DirectApiAutonomousGate,
-    direct_api_autonomous_env_enabled,
-    resolve_direct_api_autonomous_gate,
-)
 from .cli_profiles import (
     CLI_RUNNER_PROFILES,
     CliRunnerAvailability,
@@ -33,6 +26,13 @@ from .cli_profiles import (
     cli_runner_profiles_as_dicts,
     detect_cli_runner_availability,
     select_cli_runner_profiles,
+)
+from .direct_api_autonomy import (
+    DIRECT_API_AUTONOMOUS_ENV,
+    DIRECT_API_AUTONOMOUS_PROVIDERS,
+    DirectApiAutonomousGate,
+    direct_api_autonomous_env_enabled,
+    resolve_direct_api_autonomous_gate,
 )
 from .fallback import (
     RUNTIME_FALLBACK_ENV,
