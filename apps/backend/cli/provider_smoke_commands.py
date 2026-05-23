@@ -26,6 +26,16 @@ from agents.runtime.adapters.completion import CompletionRuntimeSession
 from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_artifacts
 from agents.runtime.fallback import capabilities_for_runtime_mode
 from cli.autonomous_readiness_text import format_autonomous_readiness_requirements
+from core.autonomy_policy import (
+    DEFAULT_MAX_HISTORY_AGE_DAYS,
+    DEFAULT_MIN_STABLE_RUNS,
+    DEFAULT_REQUIRED_E2E_RUNS,
+    DEFAULT_REQUIRED_LIVE_FAULT_CASES,
+    DEFAULT_REQUIRED_LIVE_TASK_FAMILIES,
+    DIRECT_API_PROVIDERS,
+    AutonomyPolicy,
+    autonomy_policy_for,
+)
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.cost_calculator import (
@@ -126,14 +136,7 @@ PROVIDER_SMOKE_RUNTIME_MODES = (
     "transaction_batch_probe",
     "provider_e2e",
 )
-PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = (
-    "openai",
-    "google",
-    "openrouter",
-    "litellm",
-    "zhipuai",
-    "ollama",
-)
+PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = DIRECT_API_PROVIDERS
 PROVIDER_RELIABILITY_CASE_ORDER = (
     "text_completion",
     "generic_edit_tool_loop",
@@ -270,21 +273,17 @@ PROVIDER_E2E_LIVE_TASK_FAMILIES = {
         "failed_message": "Live transaction batching task family failed",
     },
 }
-PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = 3
-PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = 7 * 24 * 60 * 60
-PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
-    PROVIDER_E2E_LIVE_FAULT_CASES
+PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = DEFAULT_MIN_STABLE_RUNS
+PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = (
+    DEFAULT_MAX_HISTORY_AGE_DAYS * 24 * 60 * 60
 )
-PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES = tuple(
-    PROVIDER_E2E_LIVE_TASK_FAMILIES
+PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = (
+    DEFAULT_REQUIRED_LIVE_FAULT_CASES
 )
-PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS = (
-    "generic_edit",
-    "mini_pipeline",
-    "transaction_batch_probe",
-    "unsupported_tools_probe",
-    "gateway_model_probe",
+PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES = (
+    DEFAULT_REQUIRED_LIVE_TASK_FAMILIES
 )
+PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS = DEFAULT_REQUIRED_E2E_RUNS
 PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
     "provider_e2e_failed": "provider_e2e_failed",
     "provider_reliability_incomplete": "provider_reliability_incomplete",
@@ -465,6 +464,7 @@ def _provider_smoke_promotion_record(result: ProviderSmokeResult) -> dict[str, A
         and smoke_scope != "direct_api_full_autonomy_e2e"
     ):
         return {}
+    policy = autonomy_policy_for(result.provider)
     required_reliability_cases = list(PROVIDER_RELIABILITY_CASE_ORDER)
     passed_reliability_cases = _provider_promotion_passed_reliability_cases(
         result.runtime_diagnostics.get("provider_reliability")
@@ -474,7 +474,7 @@ def _provider_smoke_promotion_record(result: ProviderSmokeResult) -> dict[str, A
         for case in required_reliability_cases
         if case not in passed_reliability_cases
     ]
-    required_e2e_runs = list(PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS)
+    required_e2e_runs = list(policy.required_e2e_runs)
     passed_e2e_runs = _provider_promotion_passed_e2e_runs(
         result.runtime_diagnostics.get("provider_e2e_suite")
     )
@@ -1244,6 +1244,7 @@ def _provider_autonomous_readiness_diagnostics(
     """Return provider autonomous-readiness recommendation from e2e evidence."""
     runtime_diagnostics = result.runtime_diagnostics
     provider = result.provider
+    policy = autonomy_policy_for(provider)
     if provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
         return {
             "status": "not_required",
@@ -1266,20 +1267,25 @@ def _provider_autonomous_readiness_diagnostics(
     _provider_readiness_suite_evidence(runtime_diagnostics, blockers, evidence)
     _provider_readiness_reliability_evidence(runtime_diagnostics, blockers, evidence)
     history_warning_offset = len(warnings)
-    _provider_readiness_history_evidence(history_summary, blockers, warnings, evidence)
+    _provider_readiness_history_evidence(
+        history_summary, blockers, warnings, evidence, policy=policy
+    )
     history_warnings = warnings[history_warning_offset:]
     del warnings[history_warning_offset:]
-    _provider_readiness_live_fault_evidence(history_summary, warnings, evidence)
+    _provider_readiness_live_fault_evidence(
+        history_summary, warnings, evidence, policy=policy
+    )
     _provider_readiness_live_task_family_evidence(
         history_summary,
         warnings,
         evidence,
+        policy=policy,
     )
     warnings.extend(history_warnings)
     _provider_readiness_eval_trend_evidence(history_summary, warnings)
 
     status, recommendation = _provider_readiness_status(blockers, warnings)
-    requirements = _provider_readiness_requirements(history_summary)
+    requirements = _provider_readiness_requirements(history_summary, policy=policy)
     return {
         "status": status,
         "provider": provider,
@@ -1338,6 +1344,8 @@ def _provider_readiness_history_evidence(
     blockers: list[str],
     warnings: list[str],
     evidence: list[str],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> None:
     """Apply provider history trend evidence to readiness lists."""
     if (
@@ -1353,34 +1361,47 @@ def _provider_readiness_history_evidence(
 
     trend = history_summary.get("trend")
     if trend == "provider_history_stable":
-        if _provider_readiness_history_is_stable_enough(history_summary):
+        if _provider_readiness_history_is_stable_enough(
+            history_summary, policy=policy
+        ):
             evidence.append("provider_history_stable")
         else:
             warnings.append("provider_history_insufficient_runs")
     elif isinstance(trend, str) and trend:
         warnings.append(trend)
 
-    _provider_readiness_history_freshness_evidence(history_summary, warnings)
+    _provider_readiness_history_freshness_evidence(
+        history_summary, warnings, policy=policy
+    )
 
 
 def _provider_readiness_history_is_stable_enough(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> bool:
     """Return whether persisted history has enough stable runs for promotion."""
+    threshold = (
+        policy.min_stable_runs
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+    )
     return (
-        _provider_readiness_recent_window(history_summary)
-        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
-        and _provider_readiness_consecutive_passes(history_summary)
-        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+        _provider_readiness_recent_window(history_summary) >= threshold
+        and _provider_readiness_consecutive_passes(history_summary) >= threshold
     )
 
 
 def _provider_readiness_history_freshness_evidence(
     history_summary: dict[str, Any],
     warnings: list[str],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> None:
     """Apply provider history freshness evidence to readiness warnings."""
-    freshness = _provider_readiness_history_freshness_complete(history_summary)
+    freshness = _provider_readiness_history_freshness_complete(
+        history_summary, policy=policy
+    )
     if freshness is True:
         return
     if _provider_readiness_last_run_at(history_summary) is None:
@@ -1393,11 +1414,15 @@ def _provider_readiness_live_fault_evidence(
     history_summary: dict[str, Any],
     warnings: list[str],
     evidence: list[str],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> None:
     """Apply live fault probe evidence to readiness lists."""
     if history_summary.get("last_live_fault_probe_status") == "passed":
         evidence.append("live_fault_probes_passed")
-        if not _provider_readiness_live_fault_coverage_complete(history_summary):
+        if not _provider_readiness_live_fault_coverage_complete(
+            history_summary, policy=policy
+        ):
             warnings.append("live_fault_probe_coverage_incomplete")
     else:
         warnings.append("live_fault_probe_evidence_missing")
@@ -1405,26 +1430,34 @@ def _provider_readiness_live_fault_evidence(
 
 def _provider_readiness_live_fault_coverage_complete(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> bool:
     """Return whether live fault probes covered every required provider fault."""
+    required = (
+        policy.required_live_fault_cases
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
     covered_cases = set(
         _string_list_payload(history_summary.get("live_fault_probe_covered_cases"))
     )
-    return all(
-        required_case in covered_cases
-        for required_case in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
-    )
+    return all(required_case in covered_cases for required_case in required)
 
 
 def _provider_readiness_live_task_family_evidence(
     history_summary: dict[str, Any],
     warnings: list[str],
     evidence: list[str],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> None:
     """Apply live task-family evidence to readiness lists."""
     if history_summary.get("last_live_task_family_status") == "passed":
         evidence.append("live_task_families_passed")
-        if not _provider_readiness_live_task_family_coverage_complete(history_summary):
+        if not _provider_readiness_live_task_family_coverage_complete(
+            history_summary, policy=policy
+        ):
             warnings.append("live_task_family_coverage_incomplete")
     else:
         warnings.append("live_task_family_evidence_missing")
@@ -1432,15 +1465,19 @@ def _provider_readiness_live_task_family_evidence(
 
 def _provider_readiness_live_task_family_coverage_complete(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> bool:
     """Return whether live task families covered every required provider task."""
+    required = (
+        policy.required_live_task_families
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
     covered_families = set(
         _string_list_payload(history_summary.get("live_task_family_covered_families"))
     )
-    return all(
-        required_family in covered_families
-        for required_family in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
-    )
+    return all(required_family in covered_families for required_family in required)
 
 
 def _provider_readiness_eval_trend_evidence(
@@ -1460,12 +1497,26 @@ def _provider_readiness_eval_trend_evidence(
 
 def _provider_readiness_requirements(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> dict[str, Any]:
     """Return structured readiness requirement evidence for operators."""
+    min_stable_runs = (
+        policy.min_stable_runs
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+    )
+    max_history_age_seconds = (
+        int(policy.max_history_age.total_seconds())
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
+    )
     recent_window = _provider_readiness_recent_window(history_summary)
     consecutive_passes = _provider_readiness_consecutive_passes(history_summary)
     required_live_fault_cases = sorted(
-        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+        policy.required_live_fault_cases
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
     )
     live_fault_covered_cases = sorted(
         _string_list_payload(history_summary.get("live_fault_probe_covered_cases"))
@@ -1480,7 +1531,9 @@ def _provider_readiness_requirements(
         and not live_fault_missing_cases
     )
     required_live_task_families = sorted(
-        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+        policy.required_live_task_families
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
     )
     live_task_covered_families = sorted(
         _string_list_payload(history_summary.get("live_task_family_covered_families"))
@@ -1495,11 +1548,12 @@ def _provider_readiness_requirements(
         and not live_task_missing_families
     )
     requirements = {
-        "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
+        "min_stable_runs": min_stable_runs,
         "observed_recent_window": recent_window,
         "observed_consecutive_passes": consecutive_passes,
         "history_stability_complete": _provider_readiness_history_is_stable_enough(
             history_summary,
+            policy=policy,
         ),
         "required_live_fault_cases": required_live_fault_cases,
         "live_fault_covered_cases": live_fault_covered_cases,
@@ -1515,11 +1569,11 @@ def _provider_readiness_requirements(
         requirements.update(
             {
                 "last_run_at": last_run_at,
-                "max_history_age_seconds": (
-                    PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
-                ),
+                "max_history_age_seconds": max_history_age_seconds,
                 "history_freshness_complete": (
-                    _provider_readiness_history_freshness_complete(history_summary)
+                    _provider_readiness_history_freshness_complete(
+                        history_summary, policy=policy
+                    )
                 ),
             }
         )
@@ -1550,12 +1604,18 @@ def _provider_readiness_last_run_datetime(
 
 def _provider_readiness_history_freshness_complete(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> bool:
     """Return whether latest provider smoke evidence is recent enough."""
     last_run_at = _provider_readiness_last_run_datetime(history_summary)
     if last_run_at is None:
         return False
-    max_age = timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
+    max_age = (
+        policy.max_history_age
+        if policy is not None
+        else timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
+    )
     return datetime.now(timezone.utc) - last_run_at <= max_age
 
 
@@ -1907,12 +1967,13 @@ def _provider_autonomous_promotion_gate(
             "readiness_missing_requirements": [],
         }
 
+    policy = autonomy_policy_for(provider)
     required_cases = list(PROVIDER_RELIABILITY_CASE_ORDER)
     passed_cases = _provider_promotion_passed_reliability_cases(
         result.runtime_diagnostics.get("provider_reliability"),
     )
     missing_cases = [case for case in required_cases if case not in passed_cases]
-    required_e2e_runs = list(PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS)
+    required_e2e_runs = list(policy.required_e2e_runs)
     observed_e2e_runs = _provider_promotion_passed_e2e_runs(
         result.runtime_diagnostics.get("provider_e2e_suite"),
     )
