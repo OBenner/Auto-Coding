@@ -46,7 +46,7 @@ Comprehensive searchable index of all Auto Code documentation with keywords and 
 | **[Frontend Architecture](../modules/frontend-architecture.md)** | `docs/modules/` | frontend, electron, react, typescript, ui, desktop |
 | **[Web Backend Architecture](../modules/web-backend-architecture.md)** | `docs/modules/` | web, api, fastapi, backend, server |
 | **[Web Frontend Architecture](../modules/web-frontend-architecture.md)** | `docs/modules/` | web, react, typescript, vite, frontend |
-| **[Provider Runtime Modes](../architecture/provider-runtime-modes.md)** | `docs/architecture/` | provider, runtime, openai, claude, generic-edit, full-autonomous, provider-roadmap, transaction-batches, resume-preflight, subagents |
+| **[Provider Runtime Modes](../architecture/provider-runtime-modes.md)** | `docs/architecture/` | provider, runtime, openai, claude, generic-edit, direct-api-autonomous, full-autonomous, provider-roadmap, transaction-batches, resume-preflight, subagents |
 | **[Documentation Freshness Audit](../audit/DOCS-FRESHNESS-AUDIT.md)** | `docs/audit/` | docs-audit, stale-docs, codex-cli, runtime-router, generic-edit |
 | **[System Overview](../templates/architecture/system-overview.md)** | `docs/templates/architecture/` | template, system-design, high-level, overview |
 

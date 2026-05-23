@@ -212,6 +212,41 @@ matrices consume that persisted evidence, so a direct provider with an otherwise
 green readiness score remains blocked from `full_autonomous_ready` until the
 case-level promotion gate is clean.
 
+### Direct API Autonomous Activation
+
+Direct API providers can now opt into the first full-coder autonomous runtime
+core after the evidence gates are clean. Set
+`AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS=true` only after a provider has fresh
+provider e2e history, stable recent pass evidence, full live-fault coverage,
+full live task-family coverage, and a passed promotion gate. When those
+conditions hold, coder and QA fixer phases may use the
+`direct_api_autonomous` adapter. That adapter is backed by the Generic Edit
+engine, but it advertises the full-coder runtime surface only after the local
+activation gate passes.
+
+The activation is deliberately narrower than Claude/Codex full autonomy:
+
+- Planner phases still require an existing full runtime or CLI runner.
+- Direct API activation remains disabled unless
+  `AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS=true` is set.
+- Missing, corrupt, stale, or incomplete provider-smoke history blocks the
+  adapter before execution.
+- Mutating subagents still require the separate transactional merge gate.
+
+Current plan status:
+
+| Area | Status | Current boundary |
+|------|--------|------------------|
+| Runtime foundation | Done | Provider/runtime modes, compatibility, fail-fast, fallback, and CLI runner routing exist. |
+| Provider reliability | Mostly done | Provider e2e, negative fixtures, run history, live task-family evidence, and promotion gates are wired. |
+| MCP Bridge v1 | Mostly done | External MCP bridge, permissions metadata, health, schemas, and audit artifacts exist; custom lifecycle hardening continues separately. |
+| Generic Edit v2 core | Mostly done | Transactions, batches, recovery checkpoints, resume preflight, repair/rollback metadata, and rich artifacts are wired. |
+| Direct API autonomous runtime core | Done in this layer | `direct_api_autonomous` can run coder/QA fixer full-coder requirements when env and history gates pass. |
+| Subagent Orchestrator v2 | Partial | Read-only child contexts exist; mutating subagents remain blocked behind transaction-boundary and merge-protocol gates. |
+| CLI full runtime class | Partial | Codex CLI and generic CLI profiles exist; additional runners need deeper runner-specific contracts. |
+| Frontend control plane | Partial | Runtime diagnostics consume the matrices; richer artifact viewers and inline incompatibility warnings remain. |
+| Policy/evals | Partial | Policy/eval matrices and comparative history exist; broader provider eval suites still need expansion. |
+
 Use global non-Claude provider overrides carefully. A full build may still enter
 planner, QA, or tool-dependent phases that require `full_autonomous`; those
 phases will fail fast with a capability error instead of attempting an unsafe
