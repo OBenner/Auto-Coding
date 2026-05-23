@@ -20,6 +20,7 @@ An Architecture Decision Record captures an important architectural decision mad
 | [ADR-003](ADR-003-worktree-isolation.md) | Git Worktree Isolation Strategy | Accepted | 2024-01-01 |
 | [ADR-004](ADR-004-multi-provider-support.md) | Multi-Provider LLM Support | Accepted | 2024-01-01 |
 | [ADR-005](ADR-005-multi-runtime-agent-engine.md) | Multi-Runtime Agent Engine | Proposed | 2026-04-29 |
+| [ADR-006](ADR-006-autonomy-levels.md) | User-facing autonomy levels | Proposed | 2026-05-23 |
 
 ### Status Definitions
 
