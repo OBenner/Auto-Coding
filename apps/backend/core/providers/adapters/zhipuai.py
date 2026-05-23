@@ -133,6 +133,16 @@ class ZhipuAISession(AgentSession):
             self._client = ZhipuAiClient(api_key=self._api_key)
         return self._client
 
+    def provider_supports_native_tools(self, model: str | None) -> bool:
+        """Delegate to :meth:`ZhipuAIProvider.supports_native_tools`.
+
+        The runtime skips the native tool loop entirely for GLM-3 and
+        older models because they ignore the ``tools`` parameter and
+        return JSON in content, which produces a misleading
+        "unsupported tools" error path.
+        """
+        return ZhipuAIProvider.supports_native_tools(model or self.model)
+
     def add_user_message(self, content: str) -> None:
         """Add a user message to the conversation.
 
@@ -320,6 +330,19 @@ class ZhipuAISession(AgentSession):
         logger.debug(f"ZhipuAI session {self.session_id} closed")
 
 
+# Substrings that identify ZhipuAI / Z.AI GLM models known to support
+# function calling. GLM-4 family supports tools, GLM-3 / older lines do
+# not. Custom or experimental tags fall through to ``False`` so we skip
+# the native loop rather than discovering the limitation via a 400 error.
+_ZHIPUAI_NATIVE_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "glm-4",
+    "glm-4v",
+    "glm-4.5",
+    "glm-4.6",
+    "glm-4.7",
+)
+
+
 class ZhipuAIProvider(AIEngineProvider):
     """ZhipuAI provider implementation.
 
@@ -456,6 +479,16 @@ class ZhipuAIProvider(AIEngineProvider):
             List of model identifiers
         """
         return ZHIPUAI_MODELS.copy()
+
+    @classmethod
+    def supports_native_tools(cls, model: str | None) -> bool:
+        """Only GLM-4 family models support function calling."""
+        if not model or not model.strip():
+            return False
+        haystack = model.strip().lower()
+        return any(
+            token in haystack for token in _ZHIPUAI_NATIVE_TOOL_MODEL_TOKENS
+        )
 
     def validate_config(self) -> bool:
         """Validate provider configuration.

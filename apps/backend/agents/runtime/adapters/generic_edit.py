@@ -1624,9 +1624,25 @@ class GenericEditRuntimeSession:
         )
 
     def _supports_native_tool_calls(self) -> bool:
-        return callable(
-            getattr(self.agent_session, "complete_with_tool_calls", None)
-        ) and callable(getattr(self.agent_session, "add_tool_result", None))
+        if not (
+            callable(getattr(self.agent_session, "complete_with_tool_calls", None))
+            and callable(getattr(self.agent_session, "add_tool_result", None))
+        ):
+            return False
+        # Per-provider declared support: some providers know which of
+        # their models can actually drive a tool loop (Ollama, ZhipuAI).
+        # Skipping the native loop up-front avoids paying for an
+        # unsupported-tools error round trip.
+        provider_supports = getattr(self.agent_session, "provider_supports_native_tools", None)
+        if callable(provider_supports):
+            try:
+                model = getattr(self.agent_session, "model", None)
+                if not provider_supports(model):
+                    return False
+            except Exception:
+                # If detection itself raises, fall back to runtime probing.
+                pass
+        return True
 
     def _provider_tool_schemas(self) -> list[dict[str, Any]]:
         schemas = local_action_tool_schemas()
