@@ -36,6 +36,12 @@ from core.autonomy_policy import (
     AutonomyPolicy,
     autonomy_policy_for,
 )
+from core.paths import (
+    AUTO_CODE_RUNTIME_DIR,
+    PROVIDER_SMOKE_HISTORY_FILENAME,
+    provider_smoke_history_path,
+    resolve_provider_smoke_history_path,
+)
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.cost_calculator import (
@@ -217,9 +223,8 @@ PROVIDER_RELIABILITY_STATUS_RANK = {
     "limited": 2,
     "passed": 3,
 }
-PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = Path(
-    ".auto-Codex",
-    "provider-smoke-history.json",
+PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = (
+    AUTO_CODE_RUNTIME_DIR / PROVIDER_SMOKE_HISTORY_FILENAME
 )
 PROVIDER_SMOKE_HISTORY_MAX_RUNS = 100
 PROVIDER_SMOKE_HISTORY_TREND_WINDOW = 5
@@ -343,8 +348,18 @@ def _utc_timestamp() -> str:
 
 
 def _provider_smoke_history_path(project_dir: Path) -> Path:
-    """Return the project-local provider smoke history path."""
-    return project_dir / PROVIDER_SMOKE_HISTORY_RELATIVE_PATH
+    """Return the canonical provider smoke history write path."""
+    return provider_smoke_history_path(project_dir)
+
+
+def _provider_smoke_history_read_path(project_dir: Path) -> Path:
+    """Return the readable provider smoke history path.
+
+    Reads tolerate the legacy ``.auto-Codex/`` location so a stale clone
+    keeps working until ``scripts/migrate_auto_codex_dir.py`` runs.
+    Writes always go to :func:`provider_smoke_history_path`.
+    """
+    return resolve_provider_smoke_history_path(project_dir)
 
 
 def _provider_smoke_history_record(
@@ -1738,9 +1753,10 @@ def _with_provider_run_history(
     result: ProviderSmokeResult,
 ) -> ProviderSmokeResult:
     """Persist provider e2e history and attach a compact diagnostics summary."""
+    read_path = _provider_smoke_history_read_path(project_dir)
     history_path = _provider_smoke_history_path(project_dir)
     try:
-        runs, repaired = _load_provider_smoke_history(history_path)
+        runs, repaired = _load_provider_smoke_history(read_path)
         record = _provider_smoke_history_record(result)
         payload = _provider_smoke_history_payload([*runs, record])
         history_path.parent.mkdir(parents=True, exist_ok=True)

@@ -27,6 +27,11 @@ from core.autonomy_policy import (
     AutonomyPolicy,
     autonomy_policy_for,
 )
+from core.paths import (
+    AUTO_CODE_RUNTIME_DIR,
+    PROVIDER_SMOKE_HISTORY_FILENAME,
+    resolve_provider_smoke_history_path,
+)
 
 DIRECT_API_AUTONOMOUS_ENV = "AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS"
 # Backward-compat aliases. Prefer ``AutonomyPolicy`` for runtime decisions.
@@ -40,9 +45,10 @@ DIRECT_API_AUTONOMOUS_REQUIRED_LIVE_FAULT_CASES = (
 DIRECT_API_AUTONOMOUS_REQUIRED_LIVE_TASK_FAMILIES = (
     DEFAULT_REQUIRED_LIVE_TASK_FAMILIES
 )
-DIRECT_API_AUTONOMOUS_HISTORY_PATH = Path(
-    ".auto-Codex",
-    "provider-smoke-history.json",
+# Canonical relative path under the project. Reads also tolerate the
+# legacy ``.auto-Codex`` location via ``resolve_provider_smoke_history_path``.
+DIRECT_API_AUTONOMOUS_HISTORY_PATH = (
+    AUTO_CODE_RUNTIME_DIR / PROVIDER_SMOKE_HISTORY_FILENAME
 )
 _TRUTHY = {"1", "true", "yes", "on"}
 
@@ -90,7 +96,7 @@ def resolve_direct_api_autonomous_gate(
     provider = provider_name.lower()
     if policy is None:
         policy = autonomy_policy_for(provider, env=env)
-    history_path = project_dir / DIRECT_API_AUTONOMOUS_HISTORY_PATH
+    history_path = resolve_provider_smoke_history_path(project_dir)
     history_path_str = str(DIRECT_API_AUTONOMOUS_HISTORY_PATH)
     if not policy.direct_api_eligible:
         return DirectApiAutonomousGate(
