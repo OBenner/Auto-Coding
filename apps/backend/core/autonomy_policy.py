@@ -108,17 +108,52 @@ _KNOB_PARSERS = {
 }
 
 
+# Preset names (mirrored in :class:`core.autonomy_level.AutonomyPreset`) and
+# the knob seeds they apply on top of module defaults. ``standard`` is a
+# no-op so today's defaults stay verbatim. ``strict`` raises the bar
+# (more stable runs, fresher evidence). ``lax`` relaxes the bar
+# (fewer runs, longer freshness window, lighter required cases) for
+# experimentation or single-developer environments.
+AUTONOMY_PRESET_NAMES: tuple[str, ...] = ("strict", "standard", "lax")
+_PRESET_SEEDS: dict[str, dict[str, Any]] = {
+    "strict": {
+        "min_stable_runs": 10,
+        "max_history_age_days": 3,
+    },
+    "standard": {},
+    "lax": {
+        "min_stable_runs": 1,
+        "max_history_age_days": 30,
+        "required_live_fault_cases": (
+            "unsupported_tools",
+        ),
+        "required_live_task_families": (
+            "single_file_edit",
+            "multi_step_edit",
+        ),
+    },
+}
+
+
 def autonomy_policy_for(
     provider: str,
     *,
     env: Mapping[str, str] | None = None,
     policy_file: Path | None = None,
+    preset: str | None = None,
 ) -> AutonomyPolicy:
     """Resolve the autonomy policy for ``provider``.
 
-    Reads the file pointed to by ``AUTO_CODE_AUTONOMY_POLICY_FILE``
-    (or ``policy_file`` when explicitly given), then layers in per-provider
-    JSON entries, then environment overrides.
+    Resolution order (later wins):
+
+    1. Module defaults (the ``AutonomyPolicy`` dataclass field defaults).
+    2. Preset seeds when ``preset`` is one of
+       :data:`AUTONOMY_PRESET_NAMES`. Defaults to ``standard`` (no-op).
+    3. ``defaults`` block in the JSON policy file pointed to by
+       ``AUTO_CODE_AUTONOMY_POLICY_FILE`` or ``policy_file``.
+    4. ``providers[<provider>]`` block in the same JSON file.
+    5. ``AUTO_CODE_AUTONOMY_DEFAULT_<KNOB>`` environment variables.
+    6. ``AUTO_CODE_AUTONOMY_<PROVIDER>_<KNOB>`` environment variables.
     """
     env_map = os.environ if env is None else env
     provider_key = provider.strip().lower()
@@ -126,6 +161,17 @@ def autonomy_policy_for(
 
     sources: list[str] = []
     knobs: dict[str, Any] = {}
+
+    preset_name = (preset or "standard").strip().lower()
+    if preset_name not in AUTONOMY_PRESET_NAMES:
+        valid = ", ".join(AUTONOMY_PRESET_NAMES)
+        raise ValueError(
+            f"Invalid autonomy preset {preset!r}; expected one of {valid}."
+        )
+    preset_seeds = _PRESET_SEEDS[preset_name]
+    if preset_seeds:
+        _merge_knobs(knobs, preset_seeds)
+        sources.append(f"preset:{preset_name}")
 
     defaults_payload = _dict(file_payload.get("defaults"))
     if defaults_payload:
@@ -161,11 +207,12 @@ def all_direct_api_policies(
     *,
     env: Mapping[str, str] | None = None,
     policy_file: Path | None = None,
+    preset: str | None = None,
 ) -> dict[str, AutonomyPolicy]:
     """Return resolved policies for every known direct-API provider."""
     return {
         provider: autonomy_policy_for(
-            provider, env=env, policy_file=policy_file
+            provider, env=env, policy_file=policy_file, preset=preset
         )
         for provider in DIRECT_API_PROVIDERS
     }

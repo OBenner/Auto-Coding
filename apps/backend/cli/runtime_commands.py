@@ -2246,13 +2246,17 @@ def build_runtime_modes_payload(
     project_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
+    from core.autonomy_level import resolve_autonomy_settings
+
     cli_runner_selection = {
         mode.mode: select_cli_runner_profiles(runtime_mode=mode.mode).to_dict(
             include_detection=True,
         )
         for mode in RUNTIME_MODE_INFO
     }
+    autonomy_settings = resolve_autonomy_settings()
     return {
+        "autonomy": autonomy_settings.to_dict(),
         "runtime_modes": runtime_mode_info_as_dicts(),
         "providers": provider_runtime_compatibility_as_dicts(),
         "cli_runner_profiles": cli_runner_profiles_as_dicts(
@@ -2320,7 +2324,14 @@ def build_runtime_modes_payload(
             "direct_api_autonomous_runtime": (
                 f"Set {DIRECT_API_AUTONOMOUS_ENV}=true only after the provider "
                 "autonomous readiness and promotion gates are clean; coder and "
-                "QA fixer phases can then use the direct_api_autonomous adapter."
+                "QA fixer phases can then use the direct_api_autonomous adapter. "
+                "Prefer AUTO_CODE_AUTONOMY=safe (see ADR-006); the legacy env "
+                "var still works but is deprecated."
+            ),
+            "autonomy_level": (
+                "Set AUTO_CODE_AUTONOMY=off|claude|safe|bold as the single "
+                "top-level knob (see ADR-006). Low-level env vars stay as "
+                "advanced overrides and win over the level mapping."
             ),
         },
     }

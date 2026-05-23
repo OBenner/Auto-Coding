@@ -269,3 +269,91 @@ def test_empty_str_tuple_env_value_is_ignored():
     policy = autonomy_policy_for("openai", env=env)
 
     assert policy.required_e2e_runs == DEFAULT_REQUIRED_E2E_RUNS
+
+
+def test_preset_standard_is_a_noop():
+    """``standard`` preset must produce the same policy as no preset at all."""
+    no_preset = autonomy_policy_for("openai", env={})
+    standard = autonomy_policy_for("openai", env={}, preset="standard")
+
+    assert no_preset.min_stable_runs == standard.min_stable_runs
+    assert no_preset.max_history_age_days == standard.max_history_age_days
+    assert no_preset.required_e2e_runs == standard.required_e2e_runs
+    assert no_preset.required_live_fault_cases == standard.required_live_fault_cases
+    assert (
+        no_preset.required_live_task_families
+        == standard.required_live_task_families
+    )
+
+
+def test_preset_strict_raises_thresholds():
+    """``strict`` requires more stable runs and fresher evidence."""
+    policy = autonomy_policy_for("openai", env={}, preset="strict")
+
+    assert policy.min_stable_runs == 10
+    assert policy.max_history_age_days == 3
+    assert "preset:strict" in policy.sources
+
+
+def test_preset_lax_relaxes_thresholds_and_required_coverage():
+    """``lax`` reduces required runs/coverage for experimentation."""
+    policy = autonomy_policy_for("openai", env={}, preset="lax")
+
+    assert policy.min_stable_runs == 1
+    assert policy.max_history_age_days == 30
+    assert policy.required_live_fault_cases == ("unsupported_tools",)
+    assert policy.required_live_task_families == (
+        "single_file_edit",
+        "multi_step_edit",
+    )
+    assert "preset:lax" in policy.sources
+
+
+def test_per_provider_env_overrides_preset_seeds():
+    """Explicit per-provider env vars sit above preset seeds in precedence."""
+    policy = autonomy_policy_for(
+        "openai",
+        env={"AUTO_CODE_AUTONOMY_OPENAI_MIN_STABLE_RUNS": "7"},
+        preset="strict",
+    )
+
+    assert policy.min_stable_runs == 7
+    # ``strict``'s max_history_age_days seed still applies because nothing
+    # overrode it.
+    assert policy.max_history_age_days == 3
+
+
+def test_policy_file_overrides_preset_seeds_for_specified_knobs(tmp_path: Path):
+    """File ``defaults`` block wins over preset seeds for the knobs it sets."""
+    policy_path = tmp_path / "autonomy.json"
+    policy_path.write_text(
+        json.dumps({"defaults": {"min_stable_runs": 5}}),
+        encoding="utf-8",
+    )
+
+    policy = autonomy_policy_for(
+        "openai", env={}, policy_file=policy_path, preset="lax"
+    )
+
+    assert policy.min_stable_runs == 5
+    # ``lax``'s max_history_age_days seed still applies; only the
+    # specifically overridden knob came from the file.
+    assert policy.max_history_age_days == 30
+
+
+def test_unknown_preset_raises_value_error():
+    with pytest.raises(ValueError) as excinfo:
+        autonomy_policy_for("openai", env={}, preset="yolo")
+
+    message = str(excinfo.value)
+    assert "yolo" in message
+    assert "standard" in message
+
+
+def test_all_direct_api_policies_accepts_preset():
+    """The convenience helper threads the preset to every provider."""
+    policies = all_direct_api_policies(env={}, preset="strict")
+
+    for provider, policy in policies.items():
+        assert policy.min_stable_runs == 10, provider
+        assert policy.max_history_age_days == 3, provider

@@ -233,6 +233,27 @@ The activation is deliberately narrower than Claude/Codex full autonomy:
   adapter before execution.
 - Mutating subagents still require the separate transactional merge gate.
 
+### Autonomy Levels (recommended entry point)
+
+`AUTO_CODE_AUTONOMY` is the single top-level knob (see
+[ADR-006](./adr/ADR-006-autonomy-levels.md)). It collapses
+`AUTO_CODE_RUNTIME_MODE`, `AUTO_CODE_RUNTIME_FALLBACK`, and
+`AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS` into four discrete intents:
+
+| Level | Intent |
+|-------|--------|
+| `off` | Analysis only, never writes the workspace. |
+| `claude` (default) | Claude / Codex CLI full autonomy; direct API providers refused with a capability error. |
+| `safe` | + direct API providers can be promoted to coder full autonomy when the AutonomyPolicy gate passes. |
+| `bold` | + skip the AutonomyPolicy gate; for benchmarks and CI evidence seeding. |
+
+`AUTO_CODE_AUTONOMY_PRESET=strict|standard|lax` selects threshold
+presets for the AutonomyPolicy gate. Explicit low-level env vars (the
+existing matrix below) keep working and win over the level mapping;
+they are advanced configuration, normally not needed. `--runtime-modes
+--json` includes an `"autonomy"` block reporting the resolved level,
+preset, and any explicit overrides.
+
 ### Capability vs Policy
 
 `RuntimeCapabilities` describes what a runtime physically supports.

@@ -344,6 +344,15 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
     assert "provider_autonomous_readiness" in payload["recommendations"]
+    assert "autonomy_level" in payload["recommendations"]
+    autonomy_block = payload["autonomy"]
+    assert autonomy_block["level"] == "claude"
+    assert autonomy_block["preset"] == "standard"
+    assert autonomy_block["runtime_mode"] == "full_autonomous"
+    assert autonomy_block["runtime_fallback_enabled"] is False
+    assert autonomy_block["direct_api_gate_enabled"] is False
+    assert autonomy_block["direct_api_skip_gate"] is False
+    assert autonomy_block["explicit_overrides"] == []
     policy_rows = {
         (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
     }
