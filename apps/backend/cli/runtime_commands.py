@@ -853,9 +853,7 @@ def _runtime_capability_row(
             direct_api_gate.reason if direct_api_gate is not None else "not_applicable"
         ),
         "direct_api_autonomous_missing_requirements": (
-            direct_api_gate.missing_requirements
-            if direct_api_gate is not None
-            else []
+            direct_api_gate.missing_requirements if direct_api_gate is not None else []
         ),
         "direct_full_autonomous": provider_row.full_autonomous,
         "recommended_runtime_mode": (
