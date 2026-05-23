@@ -219,14 +219,21 @@ class TestInstalledVersion:
         tmp_path.mkdir(exist_ok=True)
         assert installer.installed_version(tmp_path) is None
 
-    def test_returns_version_when_directory_present(self, tmp_path: Path) -> None:
+    def test_returns_version_when_directory_present(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # Pin to POSIX so the fixture binary name is stable across the CI matrix.
+        # OS-specific extension is covered by TestBinaryPath below.
+        monkeypatch.setattr(installer, "_is_windows", lambda: False)
         (tmp_path / "v0.9.3").mkdir(parents=True)
-        # Drop the expected binary so the version dir is recognized as a real install
         (tmp_path / "v0.9.3" / "codegraph").write_text("#!/bin/sh\n")
 
         assert installer.installed_version(tmp_path) == "v0.9.3"
 
-    def test_returns_highest_when_multiple_present(self, tmp_path: Path) -> None:
+    def test_returns_highest_when_multiple_present(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(installer, "_is_windows", lambda: False)
         for version in ("v0.9.1", "v0.9.3", "v0.9.2"):
             (tmp_path / version).mkdir(parents=True)
             (tmp_path / version / "codegraph").write_text("#!/bin/sh\n")

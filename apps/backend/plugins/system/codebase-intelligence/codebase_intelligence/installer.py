@@ -32,6 +32,7 @@ import tempfile
 import uuid
 import zipfile
 from pathlib import Path
+from urllib import parse as urllib_parse
 from urllib.request import Request, urlopen
 
 _BINARY_NAME = "codegraph"
@@ -75,8 +76,15 @@ _ASSET_EXTENSION: dict[str, str] = {
 }
 
 
+_ALLOWED_URL_SCHEMES = frozenset({"https"})
+
+
 class UnsupportedPlatformError(RuntimeError):
     """Raised when no CodeGraph release asset matches the given OS/arch."""
+
+
+class UnsafeURLError(RuntimeError):
+    """Raised when a URL uses a non-HTTPS scheme (e.g. ``file://``, ``http://``)."""
 
 
 class InstallExistsError(RuntimeError):
@@ -290,7 +298,7 @@ def latest_release(
     """
     api_url = _GITHUB_API_LATEST_TEMPLATE.format(repo=repo)
     request = Request(api_url, headers={"User-Agent": _GITHUB_API_USER_AGENT})
-    with urlopen(request) as response:
+    with _safe_urlopen(request) as response:
         data = json.loads(response.read())
 
     tag_name: str = data.get("tag_name", "")
@@ -332,7 +340,7 @@ def latest_release(
 def _fetch_companion_body(url: str) -> str:
     """Fetch a ``.sha256`` companion file, capped at a sane size."""
     request = Request(url, headers={"User-Agent": _GITHUB_API_USER_AGENT})
-    with urlopen(request) as response:
+    with _safe_urlopen(request) as response:
         raw = response.read(_MAX_COMPANION_BYTES + 1)
     if len(raw) > _MAX_COMPANION_BYTES:
         # Refuse to parse pathological companion files
@@ -389,7 +397,7 @@ def _archive_suffix(asset_name: str) -> str:
 def _stream_download(url: str, file_obj) -> str:
     """Download ``url`` into ``file_obj``, returning the SHA-256 hex digest."""
     hasher = hashlib.sha256()
-    with urlopen(url) as response:
+    with _safe_urlopen(url) as response:
         while True:
             chunk = response.read(_DOWNLOAD_CHUNK_BYTES)
             if not chunk:
@@ -422,17 +430,18 @@ def _extract_tarball(archive: Path, dest: Path) -> None:
                     link_target=member.linkname,
                     dest=dest_resolved,
                 )
-        # We have validated every member; ``filter='data'`` gives an extra
-        # layer (and is required by Python 3.12+ to avoid a deprecation warning).
-        tar.extractall(path=dest, filter="data")
+            # Extract members one by one so Bandit can see the per-member gate
+            # (B202). ``filter='data'`` provides defense in depth on top of our
+            # own path resolution checks.
+            tar.extract(member, path=dest, filter="data")
 
 
 def _extract_zip(archive: Path, dest: Path) -> None:
     dest_resolved = dest.resolve()
     with zipfile.ZipFile(archive) as zf:
-        for name in zf.namelist():
-            _validate_member_name(name, dest_resolved)
-        zf.extractall(path=dest)
+        for info in zf.infolist():
+            _validate_member_name(info.filename, dest_resolved)
+            zf.extract(info, path=dest)
 
 
 def _validate_member_name(name: str, dest_resolved: Path) -> None:
@@ -466,6 +475,27 @@ def _is_within(candidate: Path, root: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _safe_urlopen(target):
+    """Open a URL or Request, refusing any scheme other than HTTPS.
+
+    Bandit B310 flags raw ``urllib.request.urlopen()`` because it can in
+    theory open ``file://``, ``ftp://``, or custom schemes. We pre-validate
+    the scheme here so callers can stay readable, and we put the actual
+    ``urlopen`` call behind a single ``# nosec`` annotation with the gate
+    visible right above it.
+    """
+    if hasattr(target, "full_url"):
+        url = target.full_url
+    else:
+        url = str(target)
+    scheme = urllib_parse.urlsplit(url).scheme.lower()
+    if scheme not in _ALLOWED_URL_SCHEMES:
+        raise UnsafeURLError(
+            f"Refusing to open URL with disallowed scheme {scheme!r}: {url}"
+        )
+    return urlopen(target)  # noqa: S310 (scheme validated above)  # nosec B310
 
 
 def _strip_single_wrapper(staging_dir: Path) -> None:
