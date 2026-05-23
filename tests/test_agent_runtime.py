@@ -865,6 +865,179 @@ async def test_direct_api_autonomous_factory_runs_full_coder_when_gate_allowed(
     assert target.read_text(encoding="utf-8") == "new\n"
 
 
+def test_direct_api_autonomous_gate_honors_per_provider_min_stable_runs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A per-provider env override of min_stable_runs blocks an otherwise green gate."""
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MIN_STABLE_RUNS", "10")
+
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert gate.allowed is False
+    assert gate.status == "blocked"
+    assert gate.reason == "direct_api_autonomous_requirements_missing"
+    assert "stable_history_runs" in gate.missing_requirements
+
+
+def test_direct_api_autonomous_gate_per_provider_override_does_not_leak(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Tightening openai's threshold must not bleed into google's decision."""
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    provider_stats = {
+        "total_runs": 3,
+        "passed_runs": 3,
+        "failed_runs": 0,
+        "last_status": "passed",
+        "last_runtime_mode": "provider_e2e",
+        "last_run_at": now_iso,
+        "last_provider_e2e_status": "passed",
+        "last_reliability_status": "complete",
+        "last_live_fault_probe_status": "passed",
+        "live_fault_probe_covered_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "last_live_task_family_status": "passed",
+        "live_task_family_covered_families": [
+            "multi_step_edit",
+            "recovery_resume",
+            "single_file_edit",
+            "transaction_batching",
+        ],
+        "trend": "provider_history_stable",
+        "recent_window": 3,
+        "consecutive_passes": 3,
+        "last_promotion_gate_status": "passed",
+        "promotion_missing_reliability_cases": [],
+        "promotion_missing_e2e_runs": [],
+    }
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {
+                    "openai": provider_stats,
+                    "google": provider_stats,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MIN_STABLE_RUNS", "10")
+
+    openai_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+    google_gate = resolve_direct_api_autonomous_gate(
+        provider_name="google",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert openai_gate.allowed is False
+    assert "stable_history_runs" in openai_gate.missing_requirements
+    assert google_gate.allowed is True
+    assert google_gate.status == "passed"
+
+
+def test_direct_api_autonomous_gate_loosened_max_history_age_passes_stale_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A relaxed max_history_age lets a slightly stale history through."""
+    from datetime import timedelta as _td
+
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    stale_run_at = (datetime.now(timezone.utc) - _td(days=8)).isoformat()
+    _write_direct_api_autonomous_history(tmp_path, run_at=stale_run_at)
+
+    default_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert default_gate.allowed is False
+    assert "fresh_provider_history" in default_gate.missing_requirements
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MAX_HISTORY_AGE_DAYS", "14")
+    relaxed_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert relaxed_gate.allowed is True
+    assert relaxed_gate.status == "passed"
+
+
+def test_direct_api_autonomous_gate_extra_required_live_fault_case_blocks_clean_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Adding a required live fault case the history does not cover blocks the gate."""
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    monkeypatch.setenv(
+        "AUTO_CODE_AUTONOMY_OPENAI_REQUIRED_LIVE_FAULT_CASES",
+        "unsupported_tools,gateway_model_limitations,never_covered_case",
+    )
+
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert gate.allowed is False
+    assert "live_fault_probe_coverage" in gate.missing_requirements
+
+
+def test_direct_api_autonomous_gate_phase_allowlist_can_be_extended(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Operators can opt qa_fixing into the gate via per-provider allowed_phases."""
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+
+    default_phase_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="qa_fixing",
+    )
+
+    assert default_phase_gate.allowed is False
+    assert default_phase_gate.reason == "direct_api_autonomous_phase_blocked"
+
+    monkeypatch.setenv(
+        "AUTO_CODE_AUTONOMY_OPENAI_ALLOWED_PHASES",
+        "coding,qa_fixing",
+    )
+    extended_phase_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="qa_fixing",
+    )
+
+    assert extended_phase_gate.allowed is True
+    assert extended_phase_gate.status == "passed"
+
+
 def test_provider_tool_call_parser_handles_responses_output_blocks():
     message_obj = {
         "output": [

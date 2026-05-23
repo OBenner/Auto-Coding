@@ -1,4 +1,11 @@
-"""Direct API provider full-autonomous activation gates."""
+"""Direct API provider full-autonomous activation gates.
+
+Thresholds and the provider allowlist are sourced from ``AutonomyPolicy``
+so operators can tune them per provider via env vars or a JSON file
+(see ``core/autonomy_policy.py``). The legacy module-level constants
+below are kept as backward-compat aliases that mirror the current
+defaults.
+"""
 
 from __future__ import annotations
 
@@ -10,27 +17,28 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-DIRECT_API_AUTONOMOUS_ENV = "AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS"
-DIRECT_API_AUTONOMOUS_PROVIDERS = (
-    "openai",
-    "google",
-    "openrouter",
-    "litellm",
-    "zhipuai",
-    "ollama",
+from core.autonomy_policy import (
+    DEFAULT_ALLOWED_PHASES,
+    DEFAULT_MAX_HISTORY_AGE_DAYS,
+    DEFAULT_MIN_STABLE_RUNS,
+    DEFAULT_REQUIRED_LIVE_FAULT_CASES,
+    DEFAULT_REQUIRED_LIVE_TASK_FAMILIES,
+    DIRECT_API_PROVIDERS,
+    AutonomyPolicy,
+    autonomy_policy_for,
 )
-DIRECT_API_AUTONOMOUS_ALLOWED_PHASES = ("coding",)
-DIRECT_API_AUTONOMOUS_MIN_STABLE_RUNS = 3
-DIRECT_API_AUTONOMOUS_MAX_HISTORY_AGE = timedelta(days=7)
+
+DIRECT_API_AUTONOMOUS_ENV = "AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS"
+# Backward-compat aliases. Prefer ``AutonomyPolicy`` for runtime decisions.
+DIRECT_API_AUTONOMOUS_PROVIDERS = DIRECT_API_PROVIDERS
+DIRECT_API_AUTONOMOUS_ALLOWED_PHASES = DEFAULT_ALLOWED_PHASES
+DIRECT_API_AUTONOMOUS_MIN_STABLE_RUNS = DEFAULT_MIN_STABLE_RUNS
+DIRECT_API_AUTONOMOUS_MAX_HISTORY_AGE = timedelta(days=DEFAULT_MAX_HISTORY_AGE_DAYS)
 DIRECT_API_AUTONOMOUS_REQUIRED_LIVE_FAULT_CASES = (
-    "gateway_model_limitations",
-    "unsupported_tools",
+    DEFAULT_REQUIRED_LIVE_FAULT_CASES
 )
 DIRECT_API_AUTONOMOUS_REQUIRED_LIVE_TASK_FAMILIES = (
-    "multi_step_edit",
-    "recovery_resume",
-    "single_file_edit",
-    "transaction_batching",
+    DEFAULT_REQUIRED_LIVE_TASK_FAMILIES
 )
 DIRECT_API_AUTONOMOUS_HISTORY_PATH = Path(
     ".auto-Codex",
@@ -71,27 +79,36 @@ def resolve_direct_api_autonomous_gate(
     project_dir: Path,
     phase: str,
     env: Mapping[str, str] | None = None,
+    policy: AutonomyPolicy | None = None,
 ) -> DirectApiAutonomousGate:
-    """Return whether a direct provider may use the autonomous local runtime."""
+    """Return whether a direct provider may use the autonomous local runtime.
+
+    Thresholds and the provider allowlist come from ``AutonomyPolicy``
+    (resolved here unless the caller passed an explicit instance), so
+    operators can tune them per provider via env vars or a JSON file.
+    """
     provider = provider_name.lower()
+    if policy is None:
+        policy = autonomy_policy_for(provider, env=env)
     history_path = project_dir / DIRECT_API_AUTONOMOUS_HISTORY_PATH
-    if provider not in DIRECT_API_AUTONOMOUS_PROVIDERS:
+    history_path_str = str(DIRECT_API_AUTONOMOUS_HISTORY_PATH)
+    if not policy.direct_api_eligible:
         return DirectApiAutonomousGate(
             provider=provider,
             allowed=False,
             status="not_applicable",
             reason="provider_not_direct_api",
             missing_requirements=[],
-            history_path=str(DIRECT_API_AUTONOMOUS_HISTORY_PATH),
+            history_path=history_path_str,
         )
-    if phase not in DIRECT_API_AUTONOMOUS_ALLOWED_PHASES:
+    if phase not in policy.allowed_phases:
         return DirectApiAutonomousGate(
             provider=provider,
             allowed=False,
             status="blocked",
             reason="direct_api_autonomous_phase_blocked",
             missing_requirements=["coding_phase"],
-            history_path=str(DIRECT_API_AUTONOMOUS_HISTORY_PATH),
+            history_path=history_path_str,
         )
     if not direct_api_autonomous_env_enabled(env):
         return DirectApiAutonomousGate(
@@ -100,7 +117,7 @@ def resolve_direct_api_autonomous_gate(
             status="disabled",
             reason="direct_api_autonomous_env_disabled",
             missing_requirements=[DIRECT_API_AUTONOMOUS_ENV],
-            history_path=str(DIRECT_API_AUTONOMOUS_HISTORY_PATH),
+            history_path=history_path_str,
         )
 
     provider_stats, history_error = _load_provider_stats(history_path, provider)
@@ -111,10 +128,10 @@ def resolve_direct_api_autonomous_gate(
             status="blocked",
             reason=history_error,
             missing_requirements=["provider_e2e_history"],
-            history_path=str(DIRECT_API_AUTONOMOUS_HISTORY_PATH),
+            history_path=history_path_str,
         )
 
-    missing = _direct_api_autonomous_missing_requirements(provider_stats)
+    missing = _direct_api_autonomous_missing_requirements(provider_stats, policy)
     if missing:
         return DirectApiAutonomousGate(
             provider=provider,
@@ -122,7 +139,7 @@ def resolve_direct_api_autonomous_gate(
             status="blocked",
             reason="direct_api_autonomous_requirements_missing",
             missing_requirements=missing,
-            history_path=str(DIRECT_API_AUTONOMOUS_HISTORY_PATH),
+            history_path=history_path_str,
         )
     return DirectApiAutonomousGate(
         provider=provider,
@@ -130,7 +147,7 @@ def resolve_direct_api_autonomous_gate(
         status="passed",
         reason="direct_api_autonomous_gate_passed",
         missing_requirements=[],
-        history_path=str(DIRECT_API_AUTONOMOUS_HISTORY_PATH),
+        history_path=history_path_str,
     )
 
 
@@ -154,31 +171,36 @@ def _load_provider_stats(
 
 def _direct_api_autonomous_missing_requirements(
     provider_stats: dict[str, Any],
+    policy: AutonomyPolicy,
 ) -> list[str]:
     """Return stable requirement ids blocking direct API full-autonomous activation."""
     missing: list[str] = []
     if provider_stats.get("last_status") != "passed" or (
         provider_stats.get("last_runtime_mode") != "provider_e2e"
     ):
-        missing.append("provider_e2e_passed")
+        _append_missing(missing, "provider_e2e_passed")
     if provider_stats.get("last_provider_e2e_status") != "passed":
         _append_missing(missing, "provider_e2e_passed")
     if provider_stats.get("last_reliability_status") != "complete":
-        missing.append("provider_reliability_complete")
-    if not _stable_history_complete(provider_stats):
-        missing.append("stable_history_runs")
-    if not _fresh_history_complete(provider_stats):
-        missing.append("fresh_provider_history")
-    if not _live_fault_coverage_complete(provider_stats):
-        missing.append("live_fault_probe_coverage")
-    if not _live_task_family_coverage_complete(provider_stats):
-        missing.append("live_task_family_coverage")
+        _append_missing(missing, "provider_reliability_complete")
+    if not _stable_history_complete(provider_stats, policy):
+        _append_missing(missing, "stable_history_runs")
+    if not _fresh_history_complete(provider_stats, policy):
+        _append_missing(missing, "fresh_provider_history")
+    if not _live_fault_coverage_complete(provider_stats, policy):
+        _append_missing(missing, "live_fault_probe_coverage")
+    if not _live_task_family_coverage_complete(provider_stats, policy):
+        _append_missing(missing, "live_task_family_coverage")
     if not _promotion_gate_complete(provider_stats):
-        missing.append("promotion_gate")
+        _append_missing(missing, "promotion_gate")
     return missing
 
 
-def _stable_history_complete(provider_stats: dict[str, Any]) -> bool:
+def _stable_history_complete(
+    provider_stats: dict[str, Any],
+    policy: AutonomyPolicy,
+) -> bool:
+    threshold = policy.min_stable_runs
     recent_window = _int_payload(provider_stats.get("recent_window"))
     if recent_window is None:
         recent_window = _int_payload(provider_stats.get("total_runs"))
@@ -187,12 +209,15 @@ def _stable_history_complete(provider_stats: dict[str, Any]) -> bool:
         consecutive_passes = _int_payload(provider_stats.get("passed_runs"))
     return (
         provider_stats.get("trend") == "provider_history_stable"
-        and (recent_window or 0) >= DIRECT_API_AUTONOMOUS_MIN_STABLE_RUNS
-        and (consecutive_passes or 0) >= DIRECT_API_AUTONOMOUS_MIN_STABLE_RUNS
+        and (recent_window or 0) >= threshold
+        and (consecutive_passes or 0) >= threshold
     )
 
 
-def _fresh_history_complete(provider_stats: dict[str, Any]) -> bool:
+def _fresh_history_complete(
+    provider_stats: dict[str, Any],
+    policy: AutonomyPolicy,
+) -> bool:
     last_run_at = provider_stats.get("last_run_at")
     if not isinstance(last_run_at, str) or not last_run_at.strip():
         return False
@@ -202,21 +227,27 @@ def _fresh_history_complete(provider_stats: dict[str, Any]) -> bool:
         return False
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
-    return datetime.now(timezone.utc) - parsed <= DIRECT_API_AUTONOMOUS_MAX_HISTORY_AGE
+    return datetime.now(timezone.utc) - parsed <= policy.max_history_age
 
 
-def _live_fault_coverage_complete(provider_stats: dict[str, Any]) -> bool:
+def _live_fault_coverage_complete(
+    provider_stats: dict[str, Any],
+    policy: AutonomyPolicy,
+) -> bool:
     if provider_stats.get("last_live_fault_probe_status") != "passed":
         return False
     covered = set(_string_list(provider_stats.get("live_fault_probe_covered_cases")))
-    return set(DIRECT_API_AUTONOMOUS_REQUIRED_LIVE_FAULT_CASES).issubset(covered)
+    return set(policy.required_live_fault_cases).issubset(covered)
 
 
-def _live_task_family_coverage_complete(provider_stats: dict[str, Any]) -> bool:
+def _live_task_family_coverage_complete(
+    provider_stats: dict[str, Any],
+    policy: AutonomyPolicy,
+) -> bool:
     if provider_stats.get("last_live_task_family_status") != "passed":
         return False
     covered = set(_string_list(provider_stats.get("live_task_family_covered_families")))
-    return set(DIRECT_API_AUTONOMOUS_REQUIRED_LIVE_TASK_FAMILIES).issubset(covered)
+    return set(policy.required_live_task_families).issubset(covered)
 
 
 def _promotion_gate_complete(provider_stats: dict[str, Any]) -> bool:
