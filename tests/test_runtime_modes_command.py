@@ -987,6 +987,49 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert "--provider-smoke-runtime provider_e2e" in text_output
 
 
+def test_runtime_modes_activates_direct_api_autonomous_runtime_from_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from agents.runtime import DIRECT_API_AUTONOMOUS_ENV
+    from cli.runtime_commands import build_runtime_modes_payload
+
+    _write_provider_history(
+        tmp_path,
+        _stable_provider_history(_provider_smoke_run_at()),
+    )
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+
+    payload = build_runtime_modes_payload(project_dir=tmp_path)
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+
+    assert capability_rows["openai"]["direct_api_autonomous_runtime"] == "passed"
+    assert capability_rows["openai"]["direct_api_autonomous_runtime_allowed"] is True
+    assert (
+        capability_rows["openai"]["direct_api_autonomous_runtime_reason"]
+        == "direct_api_autonomous_gate_passed"
+    )
+    assert capability_rows["openai"]["recommended_runtime_mode"] == "full_autonomous"
+    assert policy_rows[("coder", "openai")]["selected_runtime_mode"] == (
+        "full_autonomous"
+    )
+    assert policy_rows[("coder", "openai")]["policy"] == (
+        "use_direct_api_autonomous_runtime"
+    )
+    assert policy_rows[("coder", "openai")]["reason"] == (
+        "direct_api_autonomous_gate_passed"
+    )
+    assert policy_rows[("qa_fixer", "openai")]["selected_runtime_mode"] == (
+        "full_autonomous"
+    )
+    assert policy_rows[("planner", "openai")]["selected_runtime_mode"] == "blocked"
+
+
 def test_runtime_modes_policy_gate_warns_on_degrading_eval_trends(
     tmp_path: Path,
     monkeypatch,
