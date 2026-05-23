@@ -728,5 +728,3 @@ def _no_unintended_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(installer, "urlopen", _bomb, raising=False)
     # Guarantee a clean env so install_root() tests do not see real overrides
     monkeypatch.delenv("AUTO_CLAUDE_CODEGRAPH_DIR", raising=False)
-    # Sanity: confirm tests run with the real OS umask not breaking chmod checks
-    os.umask(0o022)

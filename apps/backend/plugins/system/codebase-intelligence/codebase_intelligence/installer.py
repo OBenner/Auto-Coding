@@ -38,6 +38,10 @@ from urllib.request import Request, urlopen
 _BINARY_NAME = "codegraph"
 _DEFAULT_DIRNAME = Path(".auto-claude") / "bin" / "codegraph"
 _ENV_OVERRIDE = "AUTO_CLAUDE_CODEGRAPH_DIR"
+_TAR_GZ_SUFFIX = ".tar.gz"
+_TGZ_SUFFIX = ".tgz"
+_ZIP_SUFFIX = ".zip"
+_TARBALL_SUFFIXES: tuple[str, ...] = (_TAR_GZ_SUFFIX, _TGZ_SUFFIX)
 _RELEASE_URL_TEMPLATE = (
     "https://github.com/colbymchenry/codegraph/releases/download/{version}/{asset}"
 )
@@ -70,9 +74,9 @@ _OS_ALIASES: dict[str, str] = {
 }
 
 _ASSET_EXTENSION: dict[str, str] = {
-    "darwin": "tar.gz",
-    "linux": "tar.gz",
-    "win32": "zip",
+    "darwin": _TAR_GZ_SUFFIX.lstrip("."),
+    "linux": _TAR_GZ_SUFFIX.lstrip("."),
+    "win32": _ZIP_SUFFIX.lstrip("."),
 }
 
 
@@ -387,10 +391,10 @@ def _parse_sha256_companion(body: str, *, asset_name: str) -> str | None:
 
 def _archive_suffix(asset_name: str) -> str:
     lower = asset_name.lower()
-    if lower.endswith(".tar.gz"):
-        return ".tar.gz"
-    if lower.endswith(".zip"):
-        return ".zip"
+    if lower.endswith(_TAR_GZ_SUFFIX):
+        return _TAR_GZ_SUFFIX
+    if lower.endswith(_ZIP_SUFFIX):
+        return _ZIP_SUFFIX
     return ""
 
 
@@ -411,9 +415,9 @@ def _stream_download(url: str, file_obj) -> str:
 def _extract_archive(archive: Path, asset_name: str, dest: Path) -> None:
     """Dispatch to tarball or zip extraction based on the asset name."""
     lower = asset_name.lower()
-    if lower.endswith(".tar.gz") or lower.endswith(".tgz"):
+    if lower.endswith(_TARBALL_SUFFIXES):
         _extract_tarball(archive, dest)
-    elif lower.endswith(".zip"):
+    elif lower.endswith(_ZIP_SUFFIX):
         _extract_zip(archive, dest)
     else:
         raise ExtractionError(f"Unsupported archive format: {asset_name}")
