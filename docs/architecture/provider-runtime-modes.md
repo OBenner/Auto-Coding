@@ -233,6 +233,25 @@ The activation is deliberately narrower than Claude/Codex full autonomy:
   adapter before execution.
 - Mutating subagents still require the separate transactional merge gate.
 
+### QA Phase Runtime Routing
+
+`qa_reviewer` and `qa_fixer` are now resolved through the runtime layer the
+same way `planner` and `coder` are. `qa/loop.py` reads
+`AGENT_PROVIDER_QA_REVIEWER` / `AGENT_PROVIDER_QA_FIXER` and
+`AGENT_RUNTIME_MODE_QA_REVIEWER` / `AGENT_RUNTIME_MODE_QA_FIXER` before
+constructing a session and calls `resolve_runtime_mode_with_fallback` so the
+runtime decision is persisted as an artifact under
+`spec_dir/artifacts/runtime_fallback_qa_*.json`.
+
+Execution still requires the Claude Agent SDK surface (multi-turn tool loop,
+Electron MCP for E2E, recovery hooks). A non-Claude provider or a
+non-`full_autonomous` runtime now fails fast with a clear capability error
+referencing this roadmap, instead of silently falling back to Claude. The
+fail-fast contract makes `AUTO_CODE_AUTONOMY_<PROVIDER>_ALLOWED_PHASES`
+overrides legible: operators can opt a provider into `qa_fixing` once the
+underlying capability work (Phase 1.1 MCP execution and Phase 1.4 native
+tool loop in `docs/roadmap/non-claude-provider-autonomy.md`) lands.
+
 Current plan status:
 
 | Area | Status | Current boundary |
@@ -241,7 +260,7 @@ Current plan status:
 | Provider reliability | Mostly done | Provider e2e, negative fixtures, run history, live task-family evidence, and promotion gates are wired. |
 | MCP Bridge v1 | Mostly done | External MCP bridge, permissions metadata, health, schemas, and audit artifacts exist; custom lifecycle hardening continues separately. |
 | Generic Edit v2 core | Mostly done | Transactions, batches, recovery checkpoints, resume preflight, repair/rollback metadata, and rich artifacts are wired. |
-| Direct API autonomous runtime core | Done in this layer | `direct_api_autonomous` can run coder/QA fixer full-coder requirements when env and history gates pass. |
+| Direct API autonomous runtime core | Done in this layer | `direct_api_autonomous` can run coder full-coder requirements when env and history gates pass; QA phases are resolved through the runtime layer but execution is still Claude-only pending Phase 1 capability work. |
 | Subagent Orchestrator v2 | Partial | Read-only child contexts exist; mutating subagents remain blocked behind transaction-boundary and merge-protocol gates. |
 | CLI full runtime class | Partial | Codex CLI and generic CLI profiles exist; additional runners need deeper runner-specific contracts. |
 | Frontend control plane | Partial | Runtime diagnostics consume the matrices; richer artifact viewers and inline incompatibility warnings remain. |
