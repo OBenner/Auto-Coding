@@ -1,0 +1,505 @@
+"""CodeGraph installer: asset resolution and install-path helpers.
+
+This module is the user-local installer for the external `codegraph` binary
+(https://github.com/colbymchenry/codegraph). It is a Python-only helper: no
+shelling out, no curl-pipe-sh. Downloads happen in a separate function (added
+in a later task); this module currently provides the resolver and path layout
+the rest of the installer will build on.
+
+Install layout::
+
+    ~/.auto-claude/bin/codegraph/
+        v0.9.3/
+            codegraph              (POSIX) or codegraph.exe (Windows)
+            ...other extracted files
+        v0.9.4/
+            ...
+
+The `AUTO_CLAUDE_CODEGRAPH_DIR` env var overrides the root for tests and for
+users who want the install somewhere else.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import platform
+import re
+import shutil
+import tarfile
+import tempfile
+import uuid
+import zipfile
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+_BINARY_NAME = "codegraph"
+_DEFAULT_DIRNAME = Path(".auto-claude") / "bin" / "codegraph"
+_ENV_OVERRIDE = "AUTO_CLAUDE_CODEGRAPH_DIR"
+_RELEASE_URL_TEMPLATE = (
+    "https://github.com/colbymchenry/codegraph/releases/download/{version}/{asset}"
+)
+_GITHUB_API_LATEST_TEMPLATE = "https://api.github.com/repos/{repo}/releases/latest"
+_DEFAULT_REPO = "colbymchenry/codegraph"
+_DOWNLOAD_CHUNK_BYTES = 64 * 1024
+_GITHUB_API_USER_AGENT = "auto-claude-codegraph-installer"
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+_COMPANION_SUFFIX = ".sha256"
+_MAX_COMPANION_BYTES = 64 * 1024
+
+_VERSION_DIR_RE = re.compile(r"^v\d+(?:\.\d+){0,3}(?:[-+][\w.]+)?$")
+
+_ARCH_ALIASES: dict[str, str] = {
+    "arm64": "arm64",
+    "aarch64": "arm64",
+    "x64": "x64",
+    "x86_64": "x64",
+    "amd64": "x64",
+}
+
+_OS_ALIASES: dict[str, str] = {
+    "darwin": "darwin",
+    "macos": "darwin",
+    "mac": "darwin",
+    "linux": "linux",
+    "windows": "win32",
+    "win": "win32",
+    "win32": "win32",
+}
+
+_ASSET_EXTENSION: dict[str, str] = {
+    "darwin": "tar.gz",
+    "linux": "tar.gz",
+    "win32": "zip",
+}
+
+
+class UnsupportedPlatformError(RuntimeError):
+    """Raised when no CodeGraph release asset matches the given OS/arch."""
+
+
+class InstallExistsError(RuntimeError):
+    """Raised when a version directory already exists and ``force`` is False."""
+
+
+class ChecksumMismatchError(RuntimeError):
+    """Raised when the downloaded asset's SHA-256 does not match the expected value."""
+
+
+class ExtractionError(RuntimeError):
+    """Raised when an archive member would escape the extraction root."""
+
+
+def _is_windows() -> bool:
+    """Indirection so tests can monkeypatch without touching `platform.system`."""
+    return platform.system() == "Windows"
+
+
+def resolve_asset_name(os_name: str, arch: str) -> str:
+    """Return the GitHub release asset filename for an OS/arch pair.
+
+    Args:
+        os_name: ``darwin``/``macos``, ``linux``, or ``windows``/``win``/``win32``.
+            Case-insensitive.
+        arch: ``arm64``/``aarch64``, or ``x64``/``x86_64``/``amd64``/``AMD64``.
+            Case-insensitive.
+
+    Returns:
+        Asset filename, e.g. ``codegraph-darwin-arm64.tar.gz``.
+
+    Raises:
+        UnsupportedPlatformError: when the OS or arch is not in the release matrix.
+    """
+    normalized_os = _OS_ALIASES.get(os_name.strip().casefold()) if os_name else None
+    normalized_arch = _ARCH_ALIASES.get(arch.strip().casefold()) if arch else None
+
+    if normalized_os is None or normalized_arch is None:
+        raise UnsupportedPlatformError(
+            f"Unsupported CodeGraph platform: os={os_name!r}, arch={arch!r}. "
+            "Supported: darwin/linux/windows on arm64 or x64."
+        )
+
+    extension = _ASSET_EXTENSION[normalized_os]
+    return f"{_BINARY_NAME}-{normalized_os}-{normalized_arch}.{extension}"
+
+
+def install_root() -> Path:
+    """Return the directory holding all CodeGraph version installs.
+
+    Respects the ``AUTO_CLAUDE_CODEGRAPH_DIR`` env var. Otherwise resolves to
+    ``~/.auto-claude/bin/codegraph``.
+    """
+    override = os.environ.get(_ENV_OVERRIDE)
+    if override:
+        return Path(override)
+    return Path.home() / _DEFAULT_DIRNAME
+
+
+def installed_version(root: Path) -> str | None:
+    """Return the highest installed version under ``root``, or ``None``.
+
+    A version directory is recognized when its name matches ``v<semver-ish>``
+    and it contains a ``codegraph`` (or ``codegraph.exe``) file. Multiple
+    versions sort by their numeric components so ``v0.9.10`` > ``v0.9.2``.
+    """
+    if not root.exists() or not root.is_dir():
+        return None
+
+    candidates: list[tuple[tuple[int, ...], str, str]] = []
+    for entry in root.iterdir():
+        if not entry.is_dir():
+            continue
+        name = entry.name
+        if not _VERSION_DIR_RE.match(name):
+            continue
+        if not binary_path(root, name).exists():
+            continue
+        candidates.append((_version_key(name), name, name))
+
+    if not candidates:
+        return None
+
+    candidates.sort()
+    return candidates[-1][1]
+
+
+def binary_path(root: Path, version: str) -> Path:
+    """Return the absolute path to the installed CodeGraph binary."""
+    suffix = ".exe" if _is_windows() else ""
+    return root / version / f"{_BINARY_NAME}{suffix}"
+
+
+def download_and_install(
+    *,
+    version: str,
+    os_name: str,
+    arch: str,
+    install_root: Path,
+    expected_sha256: str | None = None,
+    force: bool = False,
+    asset_url: str | None = None,
+) -> Path:
+    """Download a CodeGraph release, verify, and extract it under ``install_root``.
+
+    The install is **atomic-ish**: extraction happens in a staging directory
+    and is then ``shutil.move``-d into ``install_root/<version>/``. A failed
+    download or checksum mismatch leaves no trace; a tar/zip traversal attempt
+    aborts before any file leaks outside the staging dir.
+
+    Args:
+        version: Release tag, e.g. ``v0.9.3``. Used as the install subdirectory
+            name and to build the asset URL.
+        os_name: ``darwin``/``linux``/``windows`` — see :func:`resolve_asset_name`.
+        arch: ``arm64``/``x64`` and aliases.
+        install_root: Parent dir; this function creates it if missing.
+        expected_sha256: Optional hex digest. When provided, the download is
+            verified before extraction; mismatch raises :class:`ChecksumMismatchError`.
+        force: When False (default), refuses to overwrite an existing
+            ``install_root/<version>/`` and raises :class:`InstallExistsError`.
+            When True, the existing directory is removed first.
+        asset_url: Override the auto-constructed GitHub release URL. Useful for
+            testing and for users behind a mirror.
+
+    Returns:
+        The absolute path of the installed ``codegraph`` binary.
+    """
+    version_dir = install_root / version
+    if version_dir.exists() and not force:
+        raise InstallExistsError(
+            f"CodeGraph {version} is already installed at {version_dir}. "
+            "Pass force=True to reinstall."
+        )
+
+    if asset_url is None:
+        asset_name = resolve_asset_name(os_name, arch)
+        asset_url = _RELEASE_URL_TEMPLATE.format(version=version, asset=asset_name)
+    else:
+        asset_name = asset_url.rsplit("/", 1)[-1]
+
+    install_root.mkdir(parents=True, exist_ok=True)
+
+    archive_handle = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=_archive_suffix(asset_name),
+        dir=str(install_root),
+        prefix=".download-",
+    )
+    archive_path = Path(archive_handle.name)
+    staging_dir = install_root / f".staging-{version}-{uuid.uuid4().hex}"
+
+    try:
+        actual_sha = _stream_download(asset_url, archive_handle)
+        archive_handle.close()
+
+        if (
+            expected_sha256 is not None
+            and actual_sha.lower() != expected_sha256.lower()
+        ):
+            raise ChecksumMismatchError(
+                f"SHA-256 mismatch for {asset_name}: "
+                f"expected {expected_sha256.lower()}, got {actual_sha}"
+            )
+
+        staging_dir.mkdir(parents=True)
+        _extract_archive(archive_path, asset_name, staging_dir)
+        _strip_single_wrapper(staging_dir)
+
+        binary_in_staging = staging_dir / (
+            f"{_BINARY_NAME}.exe" if _is_windows() else _BINARY_NAME
+        )
+        if binary_in_staging.exists() and not _is_windows():
+            current = binary_in_staging.stat().st_mode & 0o777
+            binary_in_staging.chmod(current | 0o755)
+
+        if version_dir.exists():
+            shutil.rmtree(version_dir)
+        shutil.move(str(staging_dir), str(version_dir))
+    except Exception:
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir, ignore_errors=True)
+        raise
+    finally:
+        try:
+            archive_handle.close()
+        except Exception:
+            pass
+        archive_path.unlink(missing_ok=True)
+
+    return binary_path(install_root, version)
+
+
+def latest_release(
+    repo: str = _DEFAULT_REPO,
+) -> tuple[str, dict[str, tuple[str, str | None]]]:
+    """Query GitHub for the latest CodeGraph release.
+
+    Args:
+        repo: GitHub ``owner/name``. Defaults to the upstream CodeGraph repo;
+            override for forks or mirrors.
+
+    Returns:
+        ``(tag_name, asset_map)`` where ``asset_map[name] = (download_url, sha256)``.
+        ``sha256`` is the hex digest read from an adjacent ``<name>.sha256`` asset
+        (sha256sum-format) when present, or ``None`` if no companion exists or
+        the companion is unparseable. Companion ``.sha256`` assets are excluded
+        from ``asset_map`` — they are metadata, not installable artifacts.
+
+    The function does not authenticate. The unauthenticated GitHub API has a
+    low rate limit but it is fine for occasional checks.
+    """
+    api_url = _GITHUB_API_LATEST_TEMPLATE.format(repo=repo)
+    request = Request(api_url, headers={"User-Agent": _GITHUB_API_USER_AGENT})
+    with urlopen(request) as response:
+        data = json.loads(response.read())
+
+    tag_name: str = data.get("tag_name", "")
+    raw_assets = data.get("assets") or []
+
+    name_to_url: dict[str, str] = {}
+    for asset in raw_assets:
+        name = asset.get("name")
+        url = asset.get("browser_download_url")
+        if name and url:
+            name_to_url[name] = url
+
+    companions: dict[str, str] = {
+        name[: -len(_COMPANION_SUFFIX)]: url
+        for name, url in name_to_url.items()
+        if name.endswith(_COMPANION_SUFFIX)
+    }
+
+    # Cache companion bodies — a single SHA256SUMS-style file may serve multiple assets.
+    companion_body_cache: dict[str, str] = {}
+
+    result: dict[str, tuple[str, str | None]] = {}
+    for name, url in name_to_url.items():
+        if name.endswith(_COMPANION_SUFFIX):
+            continue
+        sha256: str | None = None
+        companion_url = companions.get(name)
+        if companion_url is not None:
+            body = companion_body_cache.get(companion_url)
+            if body is None:
+                body = _fetch_companion_body(companion_url)
+                companion_body_cache[companion_url] = body
+            sha256 = _parse_sha256_companion(body, asset_name=name)
+        result[name] = (url, sha256)
+
+    return tag_name, result
+
+
+def _fetch_companion_body(url: str) -> str:
+    """Fetch a ``.sha256`` companion file, capped at a sane size."""
+    request = Request(url, headers={"User-Agent": _GITHUB_API_USER_AGENT})
+    with urlopen(request) as response:
+        raw = response.read(_MAX_COMPANION_BYTES + 1)
+    if len(raw) > _MAX_COMPANION_BYTES:
+        # Refuse to parse pathological companion files
+        return ""
+    return raw.decode("utf-8", errors="replace")
+
+
+def _parse_sha256_companion(body: str, *, asset_name: str) -> str | None:
+    """Extract the digest for ``asset_name`` from a ``sha256sum``-style file.
+
+    Recognized line shapes (lines starting with ``#`` are ignored):
+
+    - ``<hex>``                       — bare digest, accepted if exactly one
+                                        line in the file holds a hex value
+    - ``<hex>  <filename>``           — standard ``sha256sum`` output
+    - ``<hex> *<filename>``           — ``sha256sum --binary`` output (``*`` prefix)
+
+    Returns the lowercased hex digest, or ``None`` when nothing matches.
+    """
+    hex_only_candidates: list[str] = []
+
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parts = line.split()
+        digest = parts[0].lower()
+        if not _SHA256_HEX_RE.match(digest):
+            continue
+
+        if len(parts) == 1:
+            hex_only_candidates.append(digest)
+            continue
+
+        filename = parts[1].lstrip("*")
+        if filename == asset_name or filename.endswith("/" + asset_name):
+            return digest
+
+    if len(hex_only_candidates) == 1:
+        return hex_only_candidates[0]
+    return None
+
+
+def _archive_suffix(asset_name: str) -> str:
+    lower = asset_name.lower()
+    if lower.endswith(".tar.gz"):
+        return ".tar.gz"
+    if lower.endswith(".zip"):
+        return ".zip"
+    return ""
+
+
+def _stream_download(url: str, file_obj) -> str:
+    """Download ``url`` into ``file_obj``, returning the SHA-256 hex digest."""
+    hasher = hashlib.sha256()
+    with urlopen(url) as response:
+        while True:
+            chunk = response.read(_DOWNLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            hasher.update(chunk)
+            file_obj.write(chunk)
+    file_obj.flush()
+    return hasher.hexdigest()
+
+
+def _extract_archive(archive: Path, asset_name: str, dest: Path) -> None:
+    """Dispatch to tarball or zip extraction based on the asset name."""
+    lower = asset_name.lower()
+    if lower.endswith(".tar.gz") or lower.endswith(".tgz"):
+        _extract_tarball(archive, dest)
+    elif lower.endswith(".zip"):
+        _extract_zip(archive, dest)
+    else:
+        raise ExtractionError(f"Unsupported archive format: {asset_name}")
+
+
+def _extract_tarball(archive: Path, dest: Path) -> None:
+    dest_resolved = dest.resolve()
+    with tarfile.open(archive, mode="r:*") as tar:
+        for member in tar.getmembers():
+            _validate_member_name(member.name, dest_resolved)
+            if member.issym() or member.islnk():
+                _validate_link_target(
+                    member_name=member.name,
+                    link_target=member.linkname,
+                    dest=dest_resolved,
+                )
+        # We have validated every member; ``filter='data'`` gives an extra
+        # layer (and is required by Python 3.12+ to avoid a deprecation warning).
+        tar.extractall(path=dest, filter="data")
+
+
+def _extract_zip(archive: Path, dest: Path) -> None:
+    dest_resolved = dest.resolve()
+    with zipfile.ZipFile(archive) as zf:
+        for name in zf.namelist():
+            _validate_member_name(name, dest_resolved)
+        zf.extractall(path=dest)
+
+
+def _validate_member_name(name: str, dest_resolved: Path) -> None:
+    if not name:
+        raise ExtractionError("Archive contains an empty member name")
+    if name.startswith(("/", "\\")):
+        raise ExtractionError(f"Archive contains absolute path: {name}")
+    candidate = (dest_resolved / name).resolve()
+    if not _is_within(candidate, dest_resolved):
+        raise ExtractionError(
+            f"Archive member escapes extraction root: {name!r} -> {candidate}"
+        )
+
+
+def _validate_link_target(*, member_name: str, link_target: str, dest: Path) -> None:
+    if link_target.startswith(("/", "\\")):
+        raise ExtractionError(
+            f"Archive link target is absolute: {member_name} -> {link_target}"
+        )
+    member_parent = (dest / member_name).resolve().parent
+    candidate = (member_parent / link_target).resolve()
+    if not _is_within(candidate, dest):
+        raise ExtractionError(
+            f"Archive link target escapes root: {member_name} -> {link_target}"
+        )
+
+
+def _is_within(candidate: Path, root: Path) -> bool:
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _strip_single_wrapper(staging_dir: Path) -> None:
+    """If the archive contained one top-level directory, hoist its contents up."""
+    entries = list(staging_dir.iterdir())
+    if len(entries) != 1 or not entries[0].is_dir():
+        return
+    wrapper = entries[0]
+    # Move each child up one level; use a fresh uuid temp name to dodge name
+    # collisions with the wrapper itself (e.g. wrapper named "codegraph").
+    relocated: list[tuple[Path, Path]] = []
+    for child in wrapper.iterdir():
+        temp_name = staging_dir / f".relocate-{uuid.uuid4().hex}"
+        shutil.move(str(child), str(temp_name))
+        relocated.append((temp_name, staging_dir / child.name))
+    wrapper.rmdir()
+    for temp, final in relocated:
+        shutil.move(str(temp), str(final))
+
+
+def _version_key(name: str) -> tuple[int, ...]:
+    """Sort key for a version directory name.
+
+    ``v0.9.3`` → ``(0, 9, 3)``. Pre-release/build suffixes are dropped for
+    ordering purposes — this is good enough for the few CodeGraph releases
+    we will see in practice, and we never need to distinguish ``v1.0.0-rc1``
+    from ``v1.0.0`` for picking the newest install.
+    """
+    stripped = name.lstrip("v")
+    head = re.split(r"[-+]", stripped, maxsplit=1)[0]
+    parts: list[int] = []
+    for piece in head.split("."):
+        try:
+            parts.append(int(piece))
+        except ValueError:
+            parts.append(0)
+    return tuple(parts)
