@@ -150,3 +150,232 @@ def test_zhipuai_session_delegates_to_provider_classmethod():
         api_key="test",
     )
     assert session_old.provider_supports_native_tools(None) is False
+
+
+# ----------------------------------------------------------------------
+# OpenAI provider
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "gpt-3.5-turbo",
+        "gpt-4",
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-5",
+        "gpt-5.2",
+        "gpt-5-mini",
+        "o1",
+        "o3",
+        "o3-mini",
+        "o3-pro",
+        "o4-mini",
+        "chatgpt-4o-latest",
+    ],
+)
+def test_openai_chat_and_reasoning_models_support_native_tools(model: str):
+    from core.providers.adapters.openai import OpenAIProvider
+
+    assert OpenAIProvider.supports_native_tools(model) is True
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "text-embedding-3-large",
+        "text-embedding-ada-002",
+        "whisper-1",
+        "tts-1",
+        "dall-e-3",
+        "davinci-002",
+        "babbage-002",
+        "omni-moderation-latest",
+        "",
+        None,
+    ],
+)
+def test_openai_non_chat_models_skip_native_loop(model):
+    from core.providers.adapters.openai import OpenAIProvider
+
+    assert OpenAIProvider.supports_native_tools(model) is False
+
+
+# ----------------------------------------------------------------------
+# OpenRouter provider
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "anthropic/claude-sonnet-4",
+        "openai/gpt-4o",
+        "google/gemini-2.0-flash",
+        "meta-llama/llama-3.1-70b-instruct",
+        "mistralai/mistral-large",
+        "qwen/qwen-2.5-72b-instruct",
+        "cohere/command-r-plus",
+        "x-ai/grok-2",
+        "deepseek/deepseek-chat",
+    ],
+)
+def test_openrouter_known_vendor_routes_support_native_tools(model: str):
+    from core.providers.adapters.openrouter import OpenRouterProvider
+
+    assert OpenRouterProvider.supports_native_tools(model) is True
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "openai/text-embedding-3-large",
+        "voyage/embed-3",
+        "cohere/rerank-3",
+        "openai/whisper",
+        "openai/tts-1",
+        "unknown-vendor/some-model",
+        "",
+        None,
+    ],
+)
+def test_openrouter_non_tool_or_unknown_routes_skip_native_loop(model):
+    from core.providers.adapters.openrouter import OpenRouterProvider
+
+    assert OpenRouterProvider.supports_native_tools(model) is False
+
+
+# ----------------------------------------------------------------------
+# LiteLLM provider
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "openai/gpt-4o",
+        "azure/gpt-4",
+        "anthropic/claude-sonnet-4",
+        "google/gemini-2.0-flash",
+        "vertex_ai/gemini-2.0-flash",
+        "bedrock/anthropic.claude-sonnet-4",
+        "groq/llama-3.1-70b",
+        "mistral/mistral-large",
+        "deepseek/deepseek-chat",
+        "ollama/llama3.1",
+        "gpt-4o",
+        "claude-sonnet-4-5",
+        "gemini-2.0-flash",
+        "mistral-large",
+    ],
+)
+def test_litellm_known_routes_and_bare_names_support_native_tools(model: str):
+    from core.providers.adapters.litellm import LiteLLMProvider
+
+    assert LiteLLMProvider.supports_native_tools(model) is True
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "openai/text-embedding-3-large",
+        "vertex_ai/text-bison",
+        "google/embedding-001",
+        "whisper-large-v3",
+        "tinyllama",
+        "phi-2",
+        "",
+        None,
+    ],
+)
+def test_litellm_non_tool_or_unknown_models_skip_native_loop(model):
+    from core.providers.adapters.litellm import LiteLLMProvider
+
+    assert LiteLLMProvider.supports_native_tools(model) is False
+
+
+# ----------------------------------------------------------------------
+# Google provider
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-thinking",
+        "gemini-3-pro",
+        "gemini-pro-1.5",
+    ],
+)
+def test_google_modern_gemini_supports_native_tools(model: str):
+    from core.providers.adapters.google import GoogleProvider
+
+    assert GoogleProvider.supports_native_tools(model) is True
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "gemini-1.0-pro",
+        "gemini-1.0-pro-vision",
+        "text-bison-001",
+        "text-unicorn",
+        "chat-bison-001",
+        "code-bison-001",
+        "imagen-3",
+        "text-embedding-004",
+        "",
+        None,
+    ],
+)
+def test_google_legacy_and_non_chat_models_skip_native_loop(model):
+    from core.providers.adapters.google import GoogleProvider
+
+    assert GoogleProvider.supports_native_tools(model) is False
+
+
+# ----------------------------------------------------------------------
+# Public factory helper
+# ----------------------------------------------------------------------
+
+
+def test_provider_native_tool_capability_helper_for_openai():
+    from core.providers.factory import provider_native_tool_capability
+
+    payload = provider_native_tool_capability("openai", "gpt-4o")
+
+    assert payload["provider"] == "openai"
+    assert payload["model"] == "gpt-4o"
+    assert payload["declared"] == "supported"
+    assert payload["decision_source"] == "provider_classmethod"
+
+
+def test_provider_native_tool_capability_helper_reports_unsupported():
+    from core.providers.factory import provider_native_tool_capability
+
+    payload = provider_native_tool_capability("ollama", "llama2:7b")
+
+    assert payload["declared"] == "unsupported"
+    assert payload["decision_source"] == "provider_classmethod"
+
+
+def test_provider_native_tool_capability_helper_unknown_provider():
+    from core.providers.factory import provider_native_tool_capability
+
+    payload = provider_native_tool_capability("not-a-real-provider", "x")
+
+    assert payload["declared"] == "unknown"
+    assert payload["decision_source"] == "unknown_provider"
+
+
+def test_provider_native_tool_capability_helper_normalizes_provider_name():
+    from core.providers.factory import provider_native_tool_capability
+
+    payload = provider_native_tool_capability(" OpenAI ", "gpt-4o")
+
+    assert payload["provider"] == "openai"
+    assert payload["declared"] == "supported"

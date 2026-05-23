@@ -170,6 +170,10 @@ class OpenRouterSession(AgentSession):
 
         return self._client
 
+    def provider_supports_native_tools(self, model: str | None) -> bool:
+        """Delegate to :meth:`OpenRouterProvider.supports_native_tools`."""
+        return OpenRouterProvider.supports_native_tools(model or self.model)
+
     def add_user_message(self, content: str) -> None:
         """Add a user message to the conversation.
 
@@ -324,6 +328,38 @@ class OpenRouterSession(AgentSession):
         logger.debug(f"OpenRouter session {self.session_id} closed")
 
 
+# OpenRouter routes to many upstream providers. The OpenAI-compatible
+# function-calling protocol works when the routed upstream supports it,
+# which is true for the major reasoning/chat families today. The
+# allowlist matches OpenRouter's ``<vendor>/<model>`` slug convention.
+# Models from less common routes fall back to JSON unless they appear
+# in this list.
+_OPENROUTER_NATIVE_TOOL_VENDOR_PREFIXES: tuple[str, ...] = (
+    "anthropic/",
+    "openai/",
+    "google/",
+    "meta-llama/",
+    "mistralai/",
+    "qwen/",
+    "cohere/",
+    "x-ai/",
+    "deepseek/",
+    "nvidia/",
+)
+# Upstream models that openrouter exposes but that historically do not
+# honor the ``tools`` parameter (embeddings, image, audio, very old
+# completion models).
+_OPENROUTER_NON_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "embedding",
+    "embed",
+    "rerank",
+    "moderation",
+    "tts",
+    "whisper",
+    "/text-",  # text-bison and friends
+)
+
+
 class OpenRouterProvider(AIEngineProvider):
     """OpenRouter provider implementation.
 
@@ -460,6 +496,25 @@ class OpenRouterProvider(AIEngineProvider):
 
         async for chunk in self._active_session.complete(message, stream=True):
             yield chunk
+
+    @classmethod
+    def supports_native_tools(cls, model: str | None) -> bool:
+        """Return True for OpenRouter routes whose upstream vendor supports tools.
+
+        Matches by the ``<vendor>/<model>`` prefix convention OpenRouter
+        uses. Non-tool model classes (embeddings, audio, image,
+        rerankers, legacy text-bison) are filtered out even when their
+        vendor prefix appears in the allowlist.
+        """
+        if not model or not model.strip():
+            return False
+        haystack = model.strip().lower()
+        if any(token in haystack for token in _OPENROUTER_NON_TOOL_MODEL_TOKENS):
+            return False
+        return any(
+            haystack.startswith(prefix)
+            for prefix in _OPENROUTER_NATIVE_TOOL_VENDOR_PREFIXES
+        )
 
     def get_supported_models(self) -> list[str]:
         """Return list of commonly supported OpenRouter models.

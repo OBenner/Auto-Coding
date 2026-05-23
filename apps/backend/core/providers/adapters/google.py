@@ -93,6 +93,27 @@ GOOGLE_SCHEMA_UNSUPPORTED_KEYS = frozenset(
 )
 
 
+# Gemini families that support function calling. Gemini 1.0 / Pro
+# Vision, embedding endpoints, and legacy text-bison-style endpoints
+# do not honor FunctionDeclaration.
+_GOOGLE_NATIVE_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "gemini-1.5",
+    "gemini-2",
+    "gemini-3",
+    "gemini-pro-1.5",
+)
+_GOOGLE_NON_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "embedding",
+    "embed",
+    "text-bison",
+    "text-unicorn",
+    "chat-bison",
+    "code-bison",
+    "imagen",
+    "gemini-1.0",
+)
+
+
 class GoogleAgentSession(AgentSession):
     """Agent session wrapping Google Generative AI client.
 
@@ -208,6 +229,15 @@ class GoogleAgentSession(AgentSession):
         except Exception as e:
             logger.error(f"Error receiving response from Google: {e}")
             raise ProviderError(f"Error receiving response: {e}") from e
+
+    def provider_supports_native_tools(self, model: str | None) -> bool:
+        """Delegate to :meth:`GoogleProvider.supports_native_tools`.
+
+        Gemini 1.5 / 2.x / 3.x support FunctionDeclaration; legacy
+        Gemini 1.0, embedding endpoints, text-bison and image
+        endpoints do not.
+        """
+        return GoogleProvider.supports_native_tools(model or self.model)
 
     async def complete_with_tool_calls(
         self,
@@ -576,6 +606,16 @@ class GoogleProvider(AIEngineProvider):
             List of Gemini model identifiers
         """
         return GOOGLE_MODELS.copy()
+
+    @classmethod
+    def supports_native_tools(cls, model: str | None) -> bool:
+        """Gemini 1.5/2.x/3.x support FunctionDeclaration; legacy lines do not."""
+        if not model or not model.strip():
+            return False
+        haystack = model.strip().lower()
+        if any(token in haystack for token in _GOOGLE_NON_TOOL_MODEL_TOKENS):
+            return False
+        return any(token in haystack for token in _GOOGLE_NATIVE_TOOL_MODEL_TOKENS)
 
     def validate_config(self) -> bool:
         """Validate provider configuration.

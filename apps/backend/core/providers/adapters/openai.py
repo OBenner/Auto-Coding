@@ -66,6 +66,35 @@ class OpenAISession(OpenAICompatibleSession):
             kwargs["base_url"] = self._base_url
         return kwargs
 
+    def provider_supports_native_tools(self, model: str | None) -> bool:
+        """Delegate to :meth:`OpenAIProvider.supports_native_tools`."""
+        return OpenAIProvider.supports_native_tools(model or self.model)
+
+
+# Substrings that identify OpenAI model families known to support the
+# native function-calling tool loop. All tool-capable chat completion
+# models (gpt-3.5-turbo onward, gpt-4* family, o-series reasoning
+# models, gpt-5*) support tools; embeddings, audio, image, and moderation
+# endpoints do not.
+_OPENAI_NATIVE_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "gpt-3.5-turbo",
+    "gpt-4",
+    "gpt-5",
+    "o1",
+    "o3",
+    "o4",
+    "chatgpt",
+)
+_OPENAI_NON_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "embedding",
+    "whisper",
+    "tts",
+    "dall-e",
+    "davinci",
+    "babbage",
+    "moderation",
+)
+
 
 class OpenAIProvider(OpenAICompatibleProvider):
     """OpenAI provider implementation.
@@ -75,6 +104,16 @@ class OpenAIProvider(OpenAICompatibleProvider):
 
     _provider_name = "openai"
     _supported_models = OPENAI_MODELS
+
+    @classmethod
+    def supports_native_tools(cls, model: str | None) -> bool:
+        """Return True for chat/reasoning models, False for embeddings/audio/image."""
+        if not model or not model.strip():
+            return False
+        haystack = model.strip().lower()
+        if any(token in haystack for token in _OPENAI_NON_TOOL_MODEL_TOKENS):
+            return False
+        return any(token in haystack for token in _OPENAI_NATIVE_TOOL_MODEL_TOKENS)
 
     def _get_api_key(self) -> str | None:
         return self._config.openai_api_key

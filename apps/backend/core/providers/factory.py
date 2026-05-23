@@ -319,6 +319,84 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
         )
 
 
+def provider_native_tool_capability(
+    provider_name: str,
+    model: str | None,
+) -> dict[str, str | bool | None]:
+    """Return the declared native-tool capability for a provider/model pair.
+
+    Honest reporting helper for Phase 1.4: looks up the provider class
+    (without instantiating it, which would require credentials), asks
+    its :meth:`supports_native_tools` classmethod, and returns a
+    structured payload diagnostics/UI can render alongside the
+    runtime-observed ``tool_call_support`` field from a provider e2e
+    smoke run.
+
+    Returns:
+        Dict with keys:
+        - ``provider``: lowercased provider name.
+        - ``model``: the model that was asked about (may be ``None``).
+        - ``declared``: ``"supported"`` | ``"unsupported"`` | ``"unknown"``.
+        - ``decision_source``: ``"provider_classmethod"`` |
+          ``"unknown_provider"``.
+    """
+    provider_key = (provider_name or "").strip().lower()
+    provider_cls = _PROVIDER_CLASS_REGISTRY.get(provider_key)
+    if provider_cls is None:
+        return {
+            "provider": provider_key,
+            "model": model,
+            "declared": "unknown",
+            "decision_source": "unknown_provider",
+        }
+    try:
+        supported = provider_cls.supports_native_tools(model)
+    except Exception:
+        return {
+            "provider": provider_key,
+            "model": model,
+            "declared": "unknown",
+            "decision_source": "provider_classmethod_error",
+        }
+    return {
+        "provider": provider_key,
+        "model": model,
+        "declared": "supported" if supported else "unsupported",
+        "decision_source": "provider_classmethod",
+    }
+
+
+def _build_provider_class_registry() -> "dict[str, type]":
+    """Return the provider-name -> class registry without forcing imports."""
+    registry: dict[str, type] = {}
+
+    def _try_import(provider_key: str, module_path: str, class_name: str) -> None:
+        try:
+            module = __import__(module_path, fromlist=[class_name])
+            registry[provider_key] = getattr(module, class_name)
+        except Exception:
+            # Provider module unavailable in this environment; skip silently
+            # so the helper still works for the providers that are loadable.
+            pass
+
+    _try_import("openai", "core.providers.adapters.openai", "OpenAIProvider")
+    _try_import("google", "core.providers.adapters.google", "GoogleProvider")
+    _try_import(
+        "openrouter",
+        "core.providers.adapters.openrouter",
+        "OpenRouterProvider",
+    )
+    _try_import("litellm", "core.providers.adapters.litellm", "LiteLLMProvider")
+    _try_import("zhipuai", "core.providers.adapters.zhipuai", "ZhipuAIProvider")
+    _try_import("ollama", "core.providers.adapters.ollama", "OllamaProvider")
+    _try_import("claude", "core.providers.adapters.claude", "ClaudeAgentProvider")
+    _try_import("codex", "core.providers.adapters.codex", "CodexCliProvider")
+    return registry
+
+
+_PROVIDER_CLASS_REGISTRY = _build_provider_class_registry()
+
+
 def create_agent_session(
     agent_type: str,
     project_dir: "Path",
