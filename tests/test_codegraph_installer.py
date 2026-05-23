@@ -288,8 +288,13 @@ class TestDownloadAndInstall:
         assert result == tmp_path / "v0.9.3" / "codegraph"
         assert result.exists()
         assert (tmp_path / "v0.9.3" / "README.md").read_bytes() == b"hello"
-        mode = result.stat().st_mode & 0o777
-        assert mode & stat.S_IXUSR, f"binary should be executable, got mode {oct(mode)}"
+        # The executable bit is a POSIX concept. Windows does not honor
+        # S_IXUSR regardless of our chmod call, so only assert it on POSIX.
+        if os.name != "nt":
+            mode = result.stat().st_mode & 0o777
+            assert mode & stat.S_IXUSR, (
+                f"binary should be executable, got mode {oct(mode)}"
+            )
 
     def test_constructs_github_release_url(
         self,
