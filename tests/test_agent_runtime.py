@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import textwrap
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -25,6 +26,8 @@ from agents.runtime import (
     RuntimeSubagentOrchestrator,
     RuntimeSubagentResult,
     RuntimeSubagentTask,
+    DIRECT_API_AUTONOMOUS_ENV,
+    resolve_direct_api_autonomous_gate,
     check_external_mcp_contract,
     create_runtime_session,
     describe_external_mcp_server_health,
@@ -682,6 +685,184 @@ async def test_runtime_factory_can_create_generic_cli_runner(tmp_path: Path):
     assert result.status == "complete"
     assert result.response_text == "factory final: from factory"
     assert (tmp_path / "artifacts" / "opencode_result.json").exists()
+
+
+def _write_direct_api_autonomous_history(
+    project_dir: Path,
+    *,
+    provider: str = "openai",
+    run_at: str | None = None,
+) -> None:
+    history_path = project_dir / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {
+                    provider: {
+                        "total_runs": 3,
+                        "passed_runs": 3,
+                        "failed_runs": 0,
+                        "last_status": "passed",
+                        "last_runtime_mode": "provider_e2e",
+                        "last_run_at": run_at
+                        or datetime.now(timezone.utc).isoformat(),
+                        "last_provider_e2e_status": "passed",
+                        "last_reliability_status": "complete",
+                        "last_live_fault_probe_status": "passed",
+                        "live_fault_probe_covered_cases": [
+                            "gateway_model_limitations",
+                            "unsupported_tools",
+                        ],
+                        "last_live_task_family_status": "passed",
+                        "live_task_family_covered_families": [
+                            "multi_step_edit",
+                            "recovery_resume",
+                            "single_file_edit",
+                            "transaction_batching",
+                        ],
+                        "trend": "provider_history_stable",
+                        "recent_window": 3,
+                        "consecutive_passes": 3,
+                        "last_promotion_gate_status": "passed",
+                        "promotion_missing_reliability_cases": [],
+                        "promotion_missing_e2e_runs": [],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_direct_api_autonomous_gate_requires_env_and_clean_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.delenv(DIRECT_API_AUTONOMOUS_ENV, raising=False)
+
+    disabled_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert disabled_gate.allowed is False
+    assert disabled_gate.status == "disabled"
+    assert disabled_gate.reason == "direct_api_autonomous_env_disabled"
+
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    passed_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert passed_gate.allowed is True
+    assert passed_gate.status == "passed"
+    assert passed_gate.runtime_adapter == "direct_api_autonomous"
+    assert passed_gate.underlying_runtime_mode == "generic_edit"
+    assert passed_gate.missing_requirements == []
+
+
+def test_direct_api_autonomous_gate_blocks_missing_corrupt_and_stale_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+
+    missing_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert missing_gate.allowed is False
+    assert missing_gate.reason == "provider_history_missing"
+    assert missing_gate.missing_requirements == ["provider_e2e_history"]
+
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True)
+    history_path.write_text("{bad json", encoding="utf-8")
+    corrupt_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert corrupt_gate.allowed is False
+    assert corrupt_gate.reason == "provider_history_unreadable"
+    assert corrupt_gate.missing_requirements == ["provider_e2e_history"]
+
+    stale_run_at = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+    _write_direct_api_autonomous_history(tmp_path, run_at=stale_run_at)
+    stale_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert stale_gate.allowed is False
+    assert stale_gate.reason == "direct_api_autonomous_requirements_missing"
+    assert stale_gate.missing_requirements == ["fresh_provider_history"]
+
+
+@pytest.mark.asyncio
+async def test_direct_api_autonomous_factory_runs_full_coder_when_gate_allowed(
+    tmp_path: Path,
+):
+    target = tmp_path / "hello.txt"
+    target.write_text("old\n", encoding="utf-8")
+    session = FakeGenericEditSession(
+        [
+            {
+                "thought": "replace content",
+                "actions": [
+                    {
+                        "tool": "write_file",
+                        "path": "hello.txt",
+                        "content": "new\n",
+                    }
+                ],
+            },
+            {
+                "thought": "done",
+                "actions": [
+                    {
+                        "tool": "finish",
+                        "summary": "Updated through direct API autonomous runtime",
+                        "tests": [],
+                        "risks": [],
+                    }
+                ],
+            },
+        ]
+    )
+
+    runtime_session = create_runtime_session(
+        provider_name="openai",
+        agent_session=session,
+        runtime_mode="full_autonomous",
+        project_dir=tmp_path,
+        allow_direct_api_autonomous=True,
+    )
+
+    assert runtime_session.name == "direct_api_autonomous"
+    assert runtime_session.capabilities.supports(RuntimeRequirements.full_coder())
+
+    result = await run_runtime_session(
+        runtime_session,
+        "change hello.txt",
+        tmp_path,
+        requirements=RuntimeRequirements.full_coder(),
+        subtask_id="1.1",
+    )
+
+    assert result.status == "continue"
+    assert "direct API autonomous runtime" in result.response_text
+    assert target.read_text(encoding="utf-8") == "new\n"
 
 
 def test_provider_tool_call_parser_handles_responses_output_blocks():

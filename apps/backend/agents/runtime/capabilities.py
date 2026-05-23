@@ -92,6 +92,21 @@ class RuntimeCapabilities:
             apply_patch=True,
         )
 
+    @classmethod
+    def direct_api_autonomous(cls) -> "RuntimeCapabilities":
+        """Capabilities for promoted direct API providers using local tools."""
+        return cls(
+            text_completion=True,
+            streaming_text=True,
+            structured_output=True,
+            native_tool_loop=True,
+            function_tools=True,
+            filesystem_read=True,
+            filesystem_edit=True,
+            shell=True,
+            apply_patch=True,
+        )
+
     def available(self) -> list[str]:
         """Return capability names set to true."""
         return [

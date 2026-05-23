@@ -81,6 +81,7 @@ from .runtime import (
     create_runtime_session,
     get_runtime_mode,
     requirements_for_runtime_mode,
+    resolve_direct_api_autonomous_gate,
     resolve_runtime_mode_with_fallback,
     resolve_runtime_runner_route,
     run_runtime_session,
@@ -1241,12 +1242,27 @@ async def run_autonomous_agent(
         runtime_phase = (
             "planning" if current_log_phase == LogPhase.PLANNING else "coding"
         )
+        direct_api_autonomous_allowed = False
+        direct_api_autonomous_gate = None
+        if requested_runtime_mode == "full_autonomous":
+            direct_api_autonomous_gate = resolve_direct_api_autonomous_gate(
+                provider_name=provider.name,
+                project_dir=project_dir,
+                phase=runtime_phase,
+            )
+            direct_api_autonomous_allowed = direct_api_autonomous_gate.allowed
         runtime_decision = resolve_runtime_mode_with_fallback(
             provider_name=provider.name,
             requested_mode=requested_runtime_mode,
             phase=runtime_phase,
+            allow_fallback=False if direct_api_autonomous_allowed else None,
         )
         runtime_mode = runtime_decision.selected_mode
+        if direct_api_autonomous_allowed:
+            print_status(
+                "Direct API autonomous runtime: enabled via provider e2e gate",
+                "success",
+            )
         if runtime_decision.fallback_applied:
             logger.warning("[RUNTIME FALLBACK] %s", runtime_decision.reason)
             fallback_artifact = save_runtime_fallback_artifact(
@@ -1301,7 +1317,7 @@ async def run_autonomous_agent(
                 session = provider.create_session(session_config)
 
             subagent_session_factory = None
-            if runtime_mode == "generic_edit":
+            if runtime_mode == "generic_edit" or direct_api_autonomous_allowed:
 
                 def subagent_session_factory(
                     task,
@@ -1354,6 +1370,7 @@ async def run_autonomous_agent(
                 project_dir=project_dir,
                 agent_type=agent_type_for_session,
                 subagent_session_factory=subagent_session_factory,
+                allow_direct_api_autonomous=direct_api_autonomous_allowed,
             )
             client = runtime_session.context_client
 
@@ -1378,6 +1395,11 @@ async def run_autonomous_agent(
                             "iteration": iteration,
                             "provider": provider.name,
                             "runtime_mode": runtime_mode,
+                            "direct_api_autonomous_gate": (
+                                direct_api_autonomous_gate.to_dict()
+                                if direct_api_autonomous_gate is not None
+                                else None
+                            ),
                             "process_isolation": use_process_isolation,
                             "attempt": recovery_manager.get_attempt_count(subtask_id)
                             + 1

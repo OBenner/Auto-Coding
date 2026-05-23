@@ -17,6 +17,11 @@ from agents.runtime.cli_profiles import (
     detect_cli_runner_availability,
     select_cli_runner_profiles,
 )
+from agents.runtime.direct_api_autonomy import (
+    DIRECT_API_AUTONOMOUS_ENV,
+    DirectApiAutonomousGate,
+    resolve_direct_api_autonomous_gate,
+)
 from agents.runtime.compatibility import (
     PROVIDER_RUNTIME_COMPATIBILITY,
     RUNTIME_MODE_INFO,
@@ -597,10 +602,20 @@ def _runtime_policy_decision(
     phase_policy: Mapping[str, Any],
     has_full_runtime: bool,
     readiness: dict[str, Any] | None,
+    direct_api_gate: DirectApiAutonomousGate | None,
 ) -> tuple[str, str]:
     """Return policy/reason after applying direct-provider readiness gates."""
     if has_full_runtime:
         return "use_full_runtime", "provider_has_full_runtime"
+    if (
+        direct_api_gate is not None
+        and direct_api_gate.allowed
+        and phase in {"coder", "qa_fixer"}
+    ):
+        return (
+            "use_direct_api_autonomous_runtime",
+            "direct_api_autonomous_gate_passed",
+        )
     if (
         readiness is not None
         and readiness["policy_gate"] != "passed"
@@ -622,13 +637,19 @@ def _runtime_policy_row(
     phase_policy: Mapping[str, Any],
     full_runtime_runner_candidates: list[str],
     readiness: dict[str, Any] | None,
+    direct_api_gate: DirectApiAutonomousGate | None,
 ) -> dict[str, Any]:
     """Build one phase/provider runtime policy row."""
     phase = str(phase_policy["phase"])
     has_full_runtime = provider_row.full_autonomous == "yes"
+    direct_api_autonomous_allowed = (
+        direct_api_gate is not None
+        and direct_api_gate.allowed
+        and phase in {"coder", "qa_fixer"}
+    )
     selected_mode = (
         "full_autonomous"
-        if has_full_runtime
+        if has_full_runtime or direct_api_autonomous_allowed
         else str(phase_policy["direct_provider_mode"])
     )
     requires_full_autonomous = bool(phase_policy["requires_full_autonomous"])
@@ -638,6 +659,7 @@ def _runtime_policy_row(
         phase_policy,
         has_full_runtime,
         readiness,
+        direct_api_gate,
     )
     return {
         "phase": phase,
@@ -675,16 +697,36 @@ def build_runtime_policy_matrix(
     readiness_by_provider = _runtime_provider_autonomous_readiness_by_name(
         project_dir=project_dir,
     )
+    direct_api_gates = _runtime_direct_api_autonomous_gates_by_name(
+        project_dir=project_dir,
+    )
     return [
         _runtime_policy_row(
             provider_row,
             phase_policy,
             full_runtime_runner_candidates,
             readiness_by_provider.get(provider_row.provider),
+            direct_api_gates.get(provider_row.provider),
         )
         for provider_row in PROVIDER_RUNTIME_COMPATIBILITY
         for phase_policy in RUNTIME_POLICY_PHASES
     ]
+
+
+def _runtime_direct_api_autonomous_gates_by_name(
+    *,
+    project_dir: Path | None = None,
+) -> dict[str, DirectApiAutonomousGate]:
+    """Return direct API autonomous activation gates keyed by provider name."""
+    base_dir = project_dir or Path.cwd()
+    return {
+        provider_row.provider: resolve_direct_api_autonomous_gate(
+            provider_name=provider_row.provider,
+            project_dir=base_dir,
+            phase="coding",
+        )
+        for provider_row in PROVIDER_RUNTIME_COMPATIBILITY
+    }
 
 
 def _extend_unique(target: list[str], values: list[str]) -> None:
@@ -779,6 +821,7 @@ def _runtime_capability_row(
     provider_row: Any,
     full_runtime_runner_candidates: list[str],
     readiness: dict[str, Any] | None,
+    direct_api_gate: DirectApiAutonomousGate | None,
 ) -> dict[str, Any]:
     """Build one provider capability row."""
     has_full_runtime = provider_row.full_autonomous == "yes"
@@ -795,13 +838,30 @@ def _runtime_capability_row(
         and isinstance(readiness.get("promotion_gate"), dict)
         and readiness["promotion_gate"]["promotion_ready"] is True
     )
+    direct_api_autonomous_allowed = (
+        direct_api_gate is not None and direct_api_gate.allowed
+    )
     return {
         "provider": provider_row.provider,
         "readiness": readiness_status,
         "full_autonomous_ready": full_autonomous_ready,
+        "direct_api_autonomous_runtime": (
+            direct_api_gate.status if direct_api_gate is not None else "not_applicable"
+        ),
+        "direct_api_autonomous_runtime_allowed": direct_api_autonomous_allowed,
+        "direct_api_autonomous_runtime_reason": (
+            direct_api_gate.reason if direct_api_gate is not None else "not_applicable"
+        ),
+        "direct_api_autonomous_missing_requirements": (
+            direct_api_gate.missing_requirements
+            if direct_api_gate is not None
+            else []
+        ),
         "direct_full_autonomous": provider_row.full_autonomous,
         "recommended_runtime_mode": (
-            "full_autonomous" if has_full_runtime else "generic_edit"
+            "full_autonomous"
+            if has_full_runtime or direct_api_autonomous_allowed
+            else "generic_edit"
         ),
         "generic_edit": provider_row.generic_edit,
         "analysis_only": provider_row.analysis_only,
@@ -831,11 +891,15 @@ def build_runtime_capability_matrix(
     readiness_by_provider = _runtime_provider_autonomous_readiness_by_name(
         project_dir=project_dir,
     )
+    direct_api_gates = _runtime_direct_api_autonomous_gates_by_name(
+        project_dir=project_dir,
+    )
     return [
         _runtime_capability_row(
             provider_row,
             full_runtime_runner_candidates,
             readiness_by_provider.get(provider_row.provider),
+            direct_api_gates.get(provider_row.provider),
         )
         for provider_row in PROVIDER_RUNTIME_COMPATIBILITY
     ]
@@ -2254,6 +2318,11 @@ def build_runtime_modes_payload(
                 "until provider_autonomous_readiness.status is "
                 "full_autonomous_candidate before treating a direct API "
                 "provider as autonomous."
+            ),
+            "direct_api_autonomous_runtime": (
+                f"Set {DIRECT_API_AUTONOMOUS_ENV}=true only after the provider "
+                "autonomous readiness and promotion gates are clean; coder and "
+                "QA fixer phases can then use the direct_api_autonomous adapter."
             ),
         },
     }
