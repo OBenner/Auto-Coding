@@ -24,7 +24,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import platform
 import re
 import shutil
 import tarfile
@@ -34,6 +33,8 @@ import zipfile
 from pathlib import Path
 from urllib import parse as urllib_parse
 from urllib.request import Request, urlopen
+
+from core.platform import is_windows as _platform_is_windows
 
 _BINARY_NAME = "codegraph"
 _DEFAULT_DIRNAME = Path(".auto-claude") / "bin" / "codegraph"
@@ -49,6 +50,7 @@ _GITHUB_API_LATEST_TEMPLATE = "https://api.github.com/repos/{repo}/releases/late
 _DEFAULT_REPO = "colbymchenry/codegraph"
 _DOWNLOAD_CHUNK_BYTES = 64 * 1024
 _GITHUB_API_USER_AGENT = "auto-claude-codegraph-installer"
+_NETWORK_TIMEOUT_SECONDS = 30.0
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 _COMPANION_SUFFIX = ".sha256"
 _MAX_COMPANION_BYTES = 64 * 1024
@@ -104,8 +106,14 @@ class ExtractionError(RuntimeError):
 
 
 def _is_windows() -> bool:
-    """Indirection so tests can monkeypatch without touching `platform.system`."""
-    return platform.system() == "Windows"
+    """Thin indirection over ``core.platform.is_windows`` so tests can monkeypatch.
+
+    Why not call ``is_windows`` from ``core.platform`` directly: monkeypatching
+    the imported name inside this module is local to the installer, leaves the
+    shared abstraction untouched, and keeps the cross-platform tests
+    deterministic regardless of the host OS.
+    """
+    return _platform_is_windows()
 
 
 def resolve_asset_name(os_name: str, arch: str) -> str:
@@ -154,11 +162,13 @@ def installed_version(root: Path) -> str | None:
     A version directory is recognized when its name matches ``v<semver-ish>``
     and it contains a ``codegraph`` (or ``codegraph.exe``) file. Multiple
     versions sort by their numeric components so ``v0.9.10`` > ``v0.9.2``.
+    A final release wins over a prerelease with the same numeric prefix —
+    ``v1.0.0`` beats ``v1.0.0-rc1`` even though the numeric parts tie.
     """
     if not root.exists() or not root.is_dir():
         return None
 
-    candidates: list[tuple[tuple[int, ...], str, str]] = []
+    candidates: list[tuple[tuple[int, ...], int, str]] = []
     for entry in root.iterdir():
         if not entry.is_dir():
             continue
@@ -167,13 +177,15 @@ def installed_version(root: Path) -> str | None:
             continue
         if not binary_path(root, name).exists():
             continue
-        candidates.append((_version_key(name), name, name))
+        # Tie-break ordering: release (1) > prerelease/build-suffixed (0).
+        release_rank = 0 if _has_version_suffix(name) else 1
+        candidates.append((_version_key(name), release_rank, name))
 
     if not candidates:
         return None
 
     candidates.sort()
-    return candidates[-1][1]
+    return candidates[-1][2]
 
 
 def binary_path(root: Path, version: str) -> Path:
@@ -227,7 +239,10 @@ def download_and_install(
         asset_name = resolve_asset_name(os_name, arch)
         asset_url = _RELEASE_URL_TEMPLATE.format(version=version, asset=asset_name)
     else:
-        asset_name = asset_url.rsplit("/", 1)[-1]
+        # urlsplit().path drops any ``?query`` or ``#fragment`` from
+        # a presigned mirror URL like ``...tar.gz?token=...`` so the
+        # extension dispatch still sees ``.tar.gz``.
+        asset_name = Path(urllib_parse.urlsplit(asset_url).path).name
 
     install_root.mkdir(parents=True, exist_ok=True)
 
@@ -275,6 +290,10 @@ def download_and_install(
         try:
             archive_handle.close()
         except Exception:
+            # The handle may already have been closed inside the try block
+            # (the happy path closes it after streaming) — a second close on
+            # most platforms is a no-op, but on Windows it can raise. We do
+            # not care about that here: the file is gone after unlink.
             pass
         archive_path.unlink(missing_ok=True)
 
@@ -481,14 +500,15 @@ def _is_within(candidate: Path, root: Path) -> bool:
     return True
 
 
-def _safe_urlopen(target):
+def _safe_urlopen(target, *, timeout: float = _NETWORK_TIMEOUT_SECONDS):
     """Open a URL or Request, refusing any scheme other than HTTPS.
 
     Bandit B310 flags raw ``urllib.request.urlopen()`` because it can in
     theory open ``file://``, ``ftp://``, or custom schemes. We pre-validate
     the scheme here so callers can stay readable, and we put the actual
     ``urlopen`` call behind a single ``# nosec`` annotation with the gate
-    visible right above it.
+    visible right above it. The default timeout prevents a flaky network from
+    hanging release discovery or downloads indefinitely.
     """
     if hasattr(target, "full_url"):
         url = target.full_url
@@ -499,7 +519,9 @@ def _safe_urlopen(target):
         raise UnsafeURLError(
             f"Refusing to open URL with disallowed scheme {scheme!r}: {url}"
         )
-    return urlopen(target)  # noqa: S310 (scheme validated above)  # nosec B310
+    return urlopen(  # noqa: S310 (scheme validated above)  # nosec B310
+        target, timeout=timeout
+    )
 
 
 def _strip_single_wrapper(staging_dir: Path) -> None:
@@ -521,12 +543,11 @@ def _strip_single_wrapper(staging_dir: Path) -> None:
 
 
 def _version_key(name: str) -> tuple[int, ...]:
-    """Sort key for a version directory name.
+    """Numeric sort key for a version directory name.
 
-    ``v0.9.3`` → ``(0, 9, 3)``. Pre-release/build suffixes are dropped for
-    ordering purposes — this is good enough for the few CodeGraph releases
-    we will see in practice, and we never need to distinguish ``v1.0.0-rc1``
-    from ``v1.0.0`` for picking the newest install.
+    ``v0.9.3`` → ``(0, 9, 3)``. Pre-release/build suffixes are dropped from
+    this key; release vs. prerelease tie-breaking happens via
+    :func:`_has_version_suffix` in :func:`installed_version`.
     """
     stripped = name.lstrip("v")
     head = re.split(r"[-+]", stripped, maxsplit=1)[0]
@@ -537,3 +558,8 @@ def _version_key(name: str) -> tuple[int, ...]:
         except ValueError:
             parts.append(0)
     return tuple(parts)
+
+
+def _has_version_suffix(name: str) -> bool:
+    """Return True if ``name`` carries a prerelease/build suffix (``-rc1``, ``+build``)."""
+    return "-" in name.lstrip("v") or "+" in name

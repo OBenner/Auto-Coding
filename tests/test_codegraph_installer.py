@@ -240,6 +240,31 @@ class TestInstalledVersion:
 
         assert installer.installed_version(tmp_path) == "v0.9.3"
 
+    def test_prefers_final_release_over_prerelease(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # Regression: numeric tiebreak used to be the directory name, which
+        # made "v1.0.0-rc1" sort *after* "v1.0.0" lexicographically and win.
+        monkeypatch.setattr(installer, "_is_windows", lambda: False)
+        for version in ("v1.0.0-rc1", "v1.0.0", "v1.0.0-beta"):
+            (tmp_path / version).mkdir(parents=True)
+            (tmp_path / version / "codegraph").write_text("#!/bin/sh\n")
+
+        assert installer.installed_version(tmp_path) == "v1.0.0"
+
+    def test_returns_only_prerelease_when_no_final_release(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(installer, "_is_windows", lambda: False)
+        for version in ("v1.0.0-rc1", "v1.0.0-rc2"):
+            (tmp_path / version).mkdir(parents=True)
+            (tmp_path / version / "codegraph").write_text("#!/bin/sh\n")
+
+        # When only prereleases are present, fall back to whichever installs.
+        # Both share the same numeric key (1,0,0) and the same release_rank (0),
+        # so the name-based tiebreak picks "v1.0.0-rc2" (lexicographically last).
+        assert installer.installed_version(tmp_path) == "v1.0.0-rc2"
+
 
 class TestBinaryPath:
     """`binary_path(root, version)` returns the absolute binary path for the install."""
@@ -522,6 +547,34 @@ class TestDownloadAndInstall:
 
         assert result.exists()
         assert result.is_relative_to(nested)
+
+    def test_asset_url_override_drops_query_and_fragment(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # Regression: a presigned/mirror URL like ``...tar.gz?token=...`` used
+        # to leave the query attached to the derived asset_name, which made
+        # _archive_suffix() return "" and aborted extraction.
+        monkeypatch.setattr(installer, "_is_windows", lambda: False)
+        tarball = _make_tarball({"codegraph": b"x"}, executable={"codegraph"})
+        urls = _install_fake_urlopen(monkeypatch, tarball)
+        signed = (
+            "https://mirror.example.com/dl/codegraph-darwin-arm64.tar.gz"
+            "?token=secret&exp=9999#fragment"
+        )
+
+        result = installer.download_and_install(
+            version="v0.9.3",
+            os_name="darwin",
+            arch="arm64",
+            install_root=tmp_path,
+            asset_url=signed,
+        )
+
+        assert result == tmp_path / "v0.9.3" / "codegraph"
+        assert result.exists()
+        assert urls == [signed]
 
 
 class TestLatestRelease:
