@@ -249,14 +249,21 @@ class GoogleAgentSession(AgentSession):
             logger.error(f"Error receiving response from Google: {e}")
             raise ProviderError(f"Error receiving response: {e}") from e
 
-    def provider_supports_native_tools(self, model: str | None) -> bool:
+    def provider_supports_native_tools(self, model: object | None) -> bool:
         """Delegate to :meth:`GoogleProvider.supports_native_tools`.
 
         Gemini 1.5 / 2.x / 3.x support FunctionDeclaration; legacy
         Gemini 1.0, embedding endpoints, text-bison and image
-        endpoints do not.
+        endpoints do not. When the model identifier cannot be
+        extracted (custom session subclasses, test fakes without
+        ``model_name``) we return ``True`` so the runtime falls back
+        to the existing session-method detection rather than blocking
+        the native loop based on missing metadata alone.
         """
-        return GoogleProvider.supports_native_tools(model or self.model)
+        identifier = _google_model_identifier(model if model is not None else self.model)
+        if not identifier:
+            return True
+        return GoogleProvider.supports_native_tools(identifier)
 
     async def complete_with_tool_calls(
         self,
