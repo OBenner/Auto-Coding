@@ -10,7 +10,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -344,7 +344,7 @@ class ProviderSendMessageSession:
 
 def _utc_timestamp() -> str:
     """Return a compact UTC timestamp for provider evidence artifacts."""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _provider_smoke_history_path(project_dir: Path) -> Path:
@@ -1613,8 +1613,8 @@ def _provider_readiness_last_run_datetime(
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _provider_readiness_history_freshness_complete(
@@ -1631,7 +1631,7 @@ def _provider_readiness_history_freshness_complete(
         if policy is not None
         else timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
     )
-    return datetime.now(timezone.utc) - last_run_at <= max_age
+    return datetime.now(UTC) - last_run_at <= max_age
 
 
 def _provider_readiness_recent_window(history_summary: dict[str, Any]) -> int:

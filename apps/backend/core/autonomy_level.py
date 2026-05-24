@@ -27,7 +27,7 @@ import os
 import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ _TRUTHY = {"1", "true", "yes", "on"}
 _FALSY = {"0", "false", "no", "off"}
 
 
-class AutonomyLevel(str, Enum):
+class AutonomyLevel(StrEnum):
     """User-facing autonomy levels from least to most independent."""
 
     OFF = "off"
@@ -56,12 +56,12 @@ class AutonomyLevel(str, Enum):
     BOLD = "bold"
 
     @classmethod
-    def default(cls) -> "AutonomyLevel":
+    def default(cls) -> AutonomyLevel:
         """The level used when ``AUTO_CODE_AUTONOMY`` is unset."""
         return cls.CLAUDE
 
 
-class AutonomyPreset(str, Enum):
+class AutonomyPreset(StrEnum):
     """AutonomyPolicy threshold presets."""
 
     STRICT = "strict"
@@ -69,7 +69,7 @@ class AutonomyPreset(str, Enum):
     LAX = "lax"
 
     @classmethod
-    def default(cls) -> "AutonomyPreset":
+    def default(cls) -> AutonomyPreset:
         """The preset used when ``AUTO_CODE_AUTONOMY_PRESET`` is unset."""
         return cls.STANDARD
 

@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -1451,8 +1451,8 @@ def _runtime_provider_readiness_last_run_datetime(
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _runtime_provider_readiness_history_freshness_complete(
@@ -1463,7 +1463,7 @@ def _runtime_provider_readiness_history_freshness_complete(
     if last_run_at is None:
         return False
     max_age = timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
-    return datetime.now(timezone.utc) - last_run_at <= max_age
+    return datetime.now(UTC) - last_run_at <= max_age
 
 
 def _runtime_string_list_payload(value: Any) -> list[str]:

@@ -16,6 +16,9 @@ from typing import Any
 
 from agents.e2e_generator import generate_e2e_tests
 from agents.memory_manager import save_user_correction
+from agents.runtime.qa_phase_routing import (
+    resolve_qa_runtime as _resolve_qa_runtime,
+)
 from agents.test_generator import run_test_generator_session
 from analysis.code_analyzer import CodeAnalyzer
 from analysis.coverage_reporter import collect_coverage, format_coverage_summary
@@ -51,11 +54,6 @@ from .criteria import (
     get_qa_signoff_status,
     is_qa_approved,
 )
-from agents.runtime.qa_phase_routing import (
-    QaRuntimeUnsupportedError,
-    resolve_qa_runtime as _resolve_qa_runtime,
-)
-
 from .fixer import run_qa_fixer_session
 from .report import (
     create_manual_test_plan,

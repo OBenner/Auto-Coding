@@ -27,7 +27,7 @@ import shutil
 import sys
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 SANDBOX_ENV = "AUTO_CODE_SANDBOX"
@@ -36,7 +36,7 @@ _TRUTHY = {"1", "true", "yes", "on"}
 _FALSY = {"0", "false", "no", "off"}
 
 
-class SandboxBackend(str, Enum):
+class SandboxBackend(StrEnum):
     """Concrete sandbox technology for the current host platform."""
 
     SEATBELT = "seatbelt"

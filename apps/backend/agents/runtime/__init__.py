@@ -73,12 +73,6 @@ from .mcp_bridge import (
     build_external_mcp_health_matrix,
     build_mcp_bridge_plan,
     check_external_mcp_contract,
-)
-from .mcp_execution_smoke import (
-    McpExecutionSmokeResult,
-    mcp_execution_smoke,
-)
-from .mcp_bridge import (
     check_external_mcp_contracts,
     check_mcp_tool_permission,
     describe_external_mcp_server_health,
@@ -92,6 +86,10 @@ from .mcp_bridge import (
     policy_for_auto_claude_tool,
     registered_external_mcp_servers,
     resolve_runtime_mcp_support,
+)
+from .mcp_execution_smoke import (
+    McpExecutionSmokeResult,
+    mcp_execution_smoke,
 )
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
 from .result import AgentRunResult

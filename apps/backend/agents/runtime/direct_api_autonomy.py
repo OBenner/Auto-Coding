@@ -13,7 +13,7 @@ import json
 import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -232,8 +232,8 @@ def _fresh_history_complete(
     except ValueError:
         return False
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return datetime.now(timezone.utc) - parsed <= policy.max_history_age
+        parsed = parsed.replace(tzinfo=UTC)
+    return datetime.now(UTC) - parsed <= policy.max_history_age
 
 
 def _live_fault_coverage_complete(
