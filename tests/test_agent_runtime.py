@@ -1075,6 +1075,42 @@ def test_direct_api_autonomous_runtime_policy_responds_to_explicit_env_override(
     assert session.runtime_policy.mcp_execution_enabled is True
 
 
+def test_direct_api_autonomous_runtime_policy_enables_subagents_for_bold_level(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``AUTO_CODE_AUTONOMY=bold`` flips mutating_subagents_enabled on the adapter."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+    monkeypatch.delenv("AUTO_CODE_MUTATING_SUBAGENTS", raising=False)
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+
+    policy = session.runtime_policy
+    assert policy.mutating_subagents_enabled is True
+    assert "subagents" in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_keeps_subagents_off_for_safe_level(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_MUTATING_SUBAGENTS", raising=False)
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+
+    assert session.runtime_policy.mutating_subagents_enabled is False
+    assert "subagents" not in session.runtime_policy.granted_capabilities()
+
+
 def test_direct_api_autonomous_gate_phase_allowlist_can_be_extended(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

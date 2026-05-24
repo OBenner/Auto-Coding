@@ -526,7 +526,18 @@ def build_runtime_subagent_matrix() -> list[dict[str, Any]]:
 
 
 def build_runtime_subagent_mutation_policy() -> list[dict[str, Any]]:
-    """Build explicit policy gates for future mutating subagent support."""
+    """Build explicit policy gates for mutating subagent support.
+
+    The matrix reflects the resolved :class:`ResolvedAutonomySettings`
+    so ``AUTO_CODE_AUTONOMY=bold`` (or an explicit
+    ``AUTO_CODE_MUTATING_SUBAGENTS=true`` override) flips the status
+    from ``blocked`` to ``opt_in_experimental``. The conflict-aware
+    merge protocol is still scaffold-only; the status is intentionally
+    not ``enabled`` until the parent-approved apply/abort UX lands.
+    """
+    from core.autonomy_level import resolve_autonomy_settings
+
+    autonomy_settings = resolve_autonomy_settings()
     missing_gates = [
         gate
         for gate in MUTATING_SUBAGENT_REQUIRED_GATES
@@ -537,19 +548,30 @@ def build_runtime_subagent_mutation_policy() -> list[dict[str, Any]]:
         for mode in RUNTIME_MODE_INFO:
             if mode.mode not in {"full_autonomous", "generic_edit"}:
                 continue
+            mutating_enabled = autonomy_settings.mutating_subagents_enabled
+            if mutating_enabled:
+                status = "opt_in_experimental"
+                reason = (
+                    "mutating_subagents_opted_in_via_autonomy_level"
+                    if autonomy_settings.level.value == "bold"
+                    else "mutating_subagents_opted_in_via_env_override"
+                )
+            else:
+                status = "blocked"
+                reason = "mutating_subagents_require_transactional_merge"
             matrix.append(
                 {
                     "provider": provider_row.provider,
                     "runtime_mode": mode.mode,
-                    "mutating_subagents_enabled": False,
-                    "status": "blocked",
+                    "mutating_subagents_enabled": mutating_enabled,
+                    "status": status,
                     "transaction_boundary_required": True,
                     "parent_approval_required": True,
                     "merge_protocol": "read_only_until_transactional_merge",
                     "required_gates": list(MUTATING_SUBAGENT_REQUIRED_GATES),
                     "satisfied_gates": list(MUTATING_SUBAGENT_SATISFIED_GATES),
                     "missing_gates": missing_gates,
-                    "reason": "mutating_subagents_require_transactional_merge",
+                    "reason": reason,
                 }
             )
     return matrix

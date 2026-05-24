@@ -326,3 +326,61 @@ def test_to_dict_includes_external_mcp_client_flag():
     payload = settings.to_dict()
 
     assert payload["external_mcp_client_enabled"] is True
+
+
+# ---------------------------------------------------------------------
+# Mutating subagents wiring (Phase 1.2)
+# ---------------------------------------------------------------------
+
+
+def test_mutating_subagents_off_for_default_claude_level():
+    settings = resolve_autonomy_settings(env={})
+
+    assert settings.mutating_subagents_enabled is False
+
+
+def test_mutating_subagents_off_for_safe_level():
+    """Safe stays read-only; mutating merge protocol is bold-only opt-in."""
+    settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "safe"})
+
+    assert settings.mutating_subagents_enabled is False
+
+
+def test_mutating_subagents_on_for_bold_level():
+    settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "bold"})
+
+    assert settings.mutating_subagents_enabled is True
+
+
+def test_explicit_mutating_subagents_env_wins_over_level_default():
+    from core.autonomy_level import MUTATING_SUBAGENTS_ENV
+
+    settings = resolve_autonomy_settings(
+        env={
+            AUTONOMY_LEVEL_ENV: "safe",
+            MUTATING_SUBAGENTS_ENV: "true",
+        },
+    )
+
+    assert settings.mutating_subagents_enabled is True
+    assert MUTATING_SUBAGENTS_ENV in settings.explicit_overrides
+
+
+def test_explicit_mutating_subagents_env_can_disable_bold_default():
+    from core.autonomy_level import MUTATING_SUBAGENTS_ENV
+
+    settings = resolve_autonomy_settings(
+        env={
+            AUTONOMY_LEVEL_ENV: "bold",
+            MUTATING_SUBAGENTS_ENV: "false",
+        },
+    )
+
+    assert settings.mutating_subagents_enabled is False
+    assert MUTATING_SUBAGENTS_ENV in settings.explicit_overrides
+
+
+def test_to_dict_includes_mutating_subagents_flag():
+    settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "bold"})
+
+    assert settings.to_dict()["mutating_subagents_enabled"] is True

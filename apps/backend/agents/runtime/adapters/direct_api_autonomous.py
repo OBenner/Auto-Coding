@@ -32,6 +32,7 @@ def _build_runtime_policy(
     return RuntimePolicy(
         promoted_to_full_autonomous=True,
         mcp_execution_enabled=settings.external_mcp_client_enabled,
+        mutating_subagents_enabled=settings.mutating_subagents_enabled,
     )
 
 

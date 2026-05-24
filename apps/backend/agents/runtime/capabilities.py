@@ -192,6 +192,13 @@ _PROMOTED_FULL_AUTONOMOUS_GRANTS: frozenset[str] = frozenset(
 # provider-neutral bridge so they match the Claude SDK MCP surface for
 # tool discovery and invocation.
 _MCP_EXECUTION_GRANTS: frozenset[str] = frozenset({"mcp"})
+# Phase 1.2: mutating subagents. The orchestrator already produces
+# isolated child contexts and per-child artifacts; transactional
+# boundaries and conflict-aware merge are tracked separately in the
+# runtime_subagent_mutation_policy matrix. This grant lets operators
+# (via AutonomyLevel.BOLD or AUTO_CODE_MUTATING_SUBAGENTS=true) opt in
+# once the merge protocol scaffolding lands.
+_MUTATING_SUBAGENT_GRANTS: frozenset[str] = frozenset({"subagents"})
 
 
 @dataclass(frozen=True)
@@ -205,6 +212,7 @@ class RuntimePolicy:
 
     promoted_to_full_autonomous: bool = False
     mcp_execution_enabled: bool = False
+    mutating_subagents_enabled: bool = False
 
     def granted_capabilities(self) -> frozenset[str]:
         """Return capability names the policy treats as satisfied."""
@@ -213,6 +221,8 @@ class RuntimePolicy:
             granted |= _PROMOTED_FULL_AUTONOMOUS_GRANTS
         if self.mcp_execution_enabled:
             granted |= _MCP_EXECUTION_GRANTS
+        if self.mutating_subagents_enabled:
+            granted |= _MUTATING_SUBAGENT_GRANTS
         return frozenset(granted)
 
     def to_dict(self) -> dict[str, object]:
@@ -220,6 +230,7 @@ class RuntimePolicy:
         return {
             "promoted_to_full_autonomous": self.promoted_to_full_autonomous,
             "mcp_execution_enabled": self.mcp_execution_enabled,
+            "mutating_subagents_enabled": self.mutating_subagents_enabled,
             "granted_capabilities": sorted(self.granted_capabilities()),
         }
 

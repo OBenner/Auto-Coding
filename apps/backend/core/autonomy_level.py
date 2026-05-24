@@ -40,6 +40,7 @@ LEGACY_RUNTIME_MODE_ENV = "AUTO_CLAUDE_RUNTIME_MODE"
 RUNTIME_FALLBACK_ENV = "AUTO_CODE_RUNTIME_FALLBACK"
 DIRECT_API_AUTONOMOUS_ENV = "AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS"
 EXTERNAL_MCP_CLIENT_ENV = "AUTO_CODE_EXTERNAL_MCP_CLIENT"
+MUTATING_SUBAGENTS_ENV = "AUTO_CODE_MUTATING_SUBAGENTS"
 
 _TRUTHY = {"1", "true", "yes", "on"}
 _FALSY = {"0", "false", "no", "off"}
@@ -83,6 +84,7 @@ class ResolvedAutonomySettings:
     direct_api_gate_enabled: bool
     direct_api_skip_gate: bool
     external_mcp_client_enabled: bool
+    mutating_subagents_enabled: bool
     explicit_overrides: tuple[str, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, object]:
@@ -95,6 +97,7 @@ class ResolvedAutonomySettings:
             "direct_api_gate_enabled": self.direct_api_gate_enabled,
             "direct_api_skip_gate": self.direct_api_skip_gate,
             "external_mcp_client_enabled": self.external_mcp_client_enabled,
+            "mutating_subagents_enabled": self.mutating_subagents_enabled,
             "explicit_overrides": list(self.explicit_overrides),
         }
 
@@ -108,6 +111,7 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         "direct_api_gate_enabled": False,
         "direct_api_skip_gate": False,
         "external_mcp_client_enabled": False,
+        "mutating_subagents_enabled": False,
     },
     AutonomyLevel.CLAUDE: {
         "runtime_mode": "full_autonomous",
@@ -117,6 +121,9 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         # Claude path uses the SDK's built-in MCP support; no external
         # MCP client bridge is needed by default.
         "external_mcp_client_enabled": False,
+        # Claude's Task tool supplies mutating subagents through the SDK;
+        # the policy grant is not needed for that path.
+        "mutating_subagents_enabled": False,
     },
     AutonomyLevel.SAFE: {
         "runtime_mode": "full_autonomous",
@@ -127,6 +134,9 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         # Graphiti, Linear, Electron, Puppeteer, and custom servers; this
         # is the only way they can match the Claude SDK MCP surface.
         "external_mcp_client_enabled": True,
+        # Mutating subagents stay off for safe: the conflict-aware merge
+        # protocol is only scaffolded. Power users opt in via bold.
+        "mutating_subagents_enabled": False,
     },
     AutonomyLevel.BOLD: {
         "runtime_mode": "full_autonomous",
@@ -134,6 +144,9 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         "direct_api_gate_enabled": True,
         "direct_api_skip_gate": True,
         "external_mcp_client_enabled": True,
+        # Bold accepts the experimental merge protocol; runtime still
+        # enforces transaction boundaries and per-child artifacts.
+        "mutating_subagents_enabled": True,
     },
 }
 
@@ -207,6 +220,7 @@ def resolve_autonomy_settings(
     direct_api_gate_enabled = bool(defaults["direct_api_gate_enabled"])
     direct_api_skip_gate = bool(defaults["direct_api_skip_gate"])
     external_mcp_client_enabled = bool(defaults["external_mcp_client_enabled"])
+    mutating_subagents_enabled = bool(defaults["mutating_subagents_enabled"])
 
     explicit_overrides: list[str] = []
 
@@ -241,6 +255,13 @@ def resolve_autonomy_settings(
         external_mcp_client_enabled = external_mcp_override
         explicit_overrides.append(EXTERNAL_MCP_CLIENT_ENV)
 
+    mutating_subagents_override = _parse_bool_env(
+        env_map.get(MUTATING_SUBAGENTS_ENV)
+    )
+    if mutating_subagents_override is not None:
+        mutating_subagents_enabled = mutating_subagents_override
+        explicit_overrides.append(MUTATING_SUBAGENTS_ENV)
+
     return ResolvedAutonomySettings(
         level=level,
         preset=preset,
@@ -249,5 +270,6 @@ def resolve_autonomy_settings(
         direct_api_gate_enabled=direct_api_gate_enabled,
         direct_api_skip_gate=direct_api_skip_gate,
         external_mcp_client_enabled=external_mcp_client_enabled,
+        mutating_subagents_enabled=mutating_subagents_enabled,
         explicit_overrides=tuple(explicit_overrides),
     )

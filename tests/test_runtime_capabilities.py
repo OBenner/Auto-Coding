@@ -241,3 +241,61 @@ def test_supports_requires_mcp_when_policy_grants_it():
     grant = RuntimePolicy(mcp_execution_enabled=True)
     assert promoted.supports(mcp_requirements, policy=grant) is True
     assert promoted.missing(mcp_requirements, policy=grant) == []
+
+
+# ---------------------------------------------------------------------
+# Phase 1.2 — mutating subagents grant
+# ---------------------------------------------------------------------
+
+
+def test_mutating_subagents_enabled_grants_subagents_capability():
+    """``mutating_subagents_enabled`` lets the promoted runtime satisfy ``subagents``."""
+    policy = RuntimePolicy(
+        promoted_to_full_autonomous=True,
+        mutating_subagents_enabled=True,
+    )
+
+    granted = policy.granted_capabilities()
+    assert "subagents" in granted
+
+
+def test_subagents_grant_independent_of_other_flags():
+    """The subagents grant composes independently of mcp/full-autonomous grants."""
+    policy = RuntimePolicy(mutating_subagents_enabled=True)
+
+    granted = policy.granted_capabilities()
+    assert granted == frozenset({"subagents"})
+
+
+def test_subagents_grant_does_not_imply_sandbox_or_mcp():
+    policy = RuntimePolicy(
+        promoted_to_full_autonomous=True,
+        mutating_subagents_enabled=True,
+    )
+
+    granted = policy.granted_capabilities()
+    assert "sandbox" not in granted
+    assert "mcp" not in granted
+
+
+def test_policy_to_dict_exposes_mutating_subagents_flag():
+    policy = RuntimePolicy(mutating_subagents_enabled=True)
+
+    payload = policy.to_dict()
+    assert payload["mutating_subagents_enabled"] is True
+    assert "subagents" in payload["granted_capabilities"]
+
+
+def test_supports_requires_subagents_when_policy_grants_it():
+    promoted = RuntimeCapabilities.promoted_edit()
+    requirement = RuntimeRequirements(
+        mode="parallel_coder",
+        required=("text_completion", "subagents"),
+    )
+
+    blocked = RuntimePolicy(mutating_subagents_enabled=False)
+    assert promoted.supports(requirement, policy=blocked) is False
+    assert "subagents" in promoted.missing(requirement, policy=blocked)
+
+    allowed = RuntimePolicy(mutating_subagents_enabled=True)
+    assert promoted.supports(requirement, policy=allowed) is True
