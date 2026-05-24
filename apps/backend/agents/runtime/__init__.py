@@ -73,6 +73,12 @@ from .mcp_bridge import (
     build_external_mcp_health_matrix,
     build_mcp_bridge_plan,
     check_external_mcp_contract,
+)
+from .mcp_execution_smoke import (
+    McpExecutionSmokeResult,
+    mcp_execution_smoke,
+)
+from .mcp_bridge import (
     check_external_mcp_contracts,
     check_mcp_tool_permission,
     describe_external_mcp_server_health,
@@ -157,6 +163,8 @@ __all__ = [
     "MAX_SUBAGENT_ATTEMPTS",
     "build_external_mcp_health_matrix",
     "build_mcp_bridge_plan",
+    "McpExecutionSmokeResult",
+    "mcp_execution_smoke",
     "check_external_mcp_contract",
     "check_external_mcp_contracts",
     "check_mcp_tool_permission",

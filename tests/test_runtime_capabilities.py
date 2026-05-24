@@ -165,3 +165,79 @@ def test_runtime_policy_is_frozen():
 
     with pytest.raises(Exception):
         policy.promoted_to_full_autonomous = False  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------
+# Phase 1.1 — MCP execution grant
+# ---------------------------------------------------------------------
+
+
+def test_mcp_execution_enabled_grants_mcp_capability():
+    """``mcp_execution_enabled`` lets a promoted-edit runtime satisfy ``mcp``."""
+    policy = RuntimePolicy(
+        promoted_to_full_autonomous=True,
+        mcp_execution_enabled=True,
+    )
+
+    granted = policy.granted_capabilities()
+    assert "mcp" in granted
+    assert "native_tool_loop" in granted
+
+
+def test_mcp_execution_grant_independent_of_full_autonomous():
+    """Operators can grant the MCP capability without full-autonomous promotion."""
+    policy = RuntimePolicy(
+        promoted_to_full_autonomous=False,
+        mcp_execution_enabled=True,
+    )
+
+    granted = policy.granted_capabilities()
+    assert granted == frozenset({"mcp"})
+
+
+def test_mcp_grant_does_not_include_subagents_or_sandbox():
+    """Phase 1.1 grants only ``mcp``, not Phase 1.2/1.3 capabilities."""
+    policy = RuntimePolicy(
+        promoted_to_full_autonomous=True,
+        mcp_execution_enabled=True,
+    )
+
+    granted = policy.granted_capabilities()
+    assert "subagents" not in granted
+    assert "sandbox" not in granted
+
+
+def test_default_policy_does_not_grant_mcp():
+    policy = RuntimePolicy()
+
+    assert "mcp" not in policy.granted_capabilities()
+
+
+def test_policy_to_dict_includes_mcp_flag_and_grant():
+    policy = RuntimePolicy(
+        promoted_to_full_autonomous=True,
+        mcp_execution_enabled=True,
+    )
+
+    payload = policy.to_dict()
+
+    assert payload["mcp_execution_enabled"] is True
+    assert "mcp" in payload["granted_capabilities"]
+    assert "native_tool_loop" in payload["granted_capabilities"]
+
+
+def test_supports_requires_mcp_when_policy_grants_it():
+    """An MCP-requiring requirement is satisfied through the policy grant."""
+    promoted = RuntimeCapabilities.promoted_edit()
+    mcp_requirements = RuntimeRequirements(
+        mode="mcp_demo",
+        required=("text_completion", "mcp"),
+    )
+
+    no_grant = RuntimePolicy(mcp_execution_enabled=False)
+    assert promoted.supports(mcp_requirements, policy=no_grant) is False
+    assert "mcp" in promoted.missing(mcp_requirements, policy=no_grant)
+
+    grant = RuntimePolicy(mcp_execution_enabled=True)
+    assert promoted.supports(mcp_requirements, policy=grant) is True
+    assert promoted.missing(mcp_requirements, policy=grant) == []

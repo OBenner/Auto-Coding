@@ -255,3 +255,74 @@ def test_level_case_insensitive():
     settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "BOLD"})
 
     assert settings.level is AutonomyLevel.BOLD
+
+
+# ---------------------------------------------------------------------
+# External MCP client wiring (Phase 1.1)
+# ---------------------------------------------------------------------
+
+
+def test_external_mcp_client_off_for_default_claude_level():
+    """Default level keeps the external MCP client off (Claude SDK has its own)."""
+    settings = resolve_autonomy_settings(env={})
+
+    assert settings.external_mcp_client_enabled is False
+
+
+def test_external_mcp_client_off_for_off_level():
+    settings = resolve_autonomy_settings(
+        env={AUTONOMY_LEVEL_ENV: "off"},
+    )
+
+    assert settings.external_mcp_client_enabled is False
+
+
+def test_safe_level_auto_enables_external_mcp_client():
+    """``safe`` flips the external MCP client bridge on so direct providers can MCP."""
+    settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "safe"})
+
+    assert settings.external_mcp_client_enabled is True
+
+
+def test_bold_level_auto_enables_external_mcp_client():
+    settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "bold"})
+
+    assert settings.external_mcp_client_enabled is True
+
+
+def test_explicit_external_mcp_client_env_wins_over_level_default():
+    """``AUTO_CODE_EXTERNAL_MCP_CLIENT=false`` overrides the safe-level default."""
+    from core.autonomy_level import EXTERNAL_MCP_CLIENT_ENV
+
+    settings = resolve_autonomy_settings(
+        env={
+            AUTONOMY_LEVEL_ENV: "safe",
+            EXTERNAL_MCP_CLIENT_ENV: "false",
+        },
+    )
+
+    assert settings.external_mcp_client_enabled is False
+    assert EXTERNAL_MCP_CLIENT_ENV in settings.explicit_overrides
+
+
+def test_explicit_external_mcp_client_env_can_force_enable_on_claude_level():
+    """Power users can flip the bridge on without changing the level."""
+    from core.autonomy_level import EXTERNAL_MCP_CLIENT_ENV
+
+    settings = resolve_autonomy_settings(
+        env={
+            AUTONOMY_LEVEL_ENV: "claude",
+            EXTERNAL_MCP_CLIENT_ENV: "true",
+        },
+    )
+
+    assert settings.external_mcp_client_enabled is True
+    assert EXTERNAL_MCP_CLIENT_ENV in settings.explicit_overrides
+
+
+def test_to_dict_includes_external_mcp_client_flag():
+    settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "safe"})
+
+    payload = settings.to_dict()
+
+    assert payload["external_mcp_client_enabled"] is True

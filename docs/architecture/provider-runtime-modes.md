@@ -274,9 +274,31 @@ a capability claim. The legacy
 but raises a `DeprecationWarning` and returns the honest promoted-edit
 shape.
 
-Promotion is narrow on purpose. It currently grants only
-`native_tool_loop`; `mcp`, `subagents`, and `sandbox` are not promoted
-and still require Phase 1 capability work in
+#### MCP capability grant
+
+`RuntimePolicy.mcp_execution_enabled=True` additionally grants the
+`mcp` capability. The `direct_api_autonomous` adapter sets this flag
+whenever `resolve_autonomy_settings(...).external_mcp_client_enabled`
+is true, which `AUTO_CODE_AUTONOMY=safe` (and `bold`) flip on by
+default. Explicit `AUTO_CODE_EXTERNAL_MCP_CLIENT=true`/`false` still
+wins for operators who want fine control.
+
+The provider-neutral MCP bridge (`agents/runtime/mcp_bridge.py`) has
+been execution-capable for every registered external server (Graphiti,
+Linear, Electron, Puppeteer, Context7, custom) for a while — it was
+gated behind the env var. With the `safe`/`bold` level mapping a
+direct API session can now actually drive `tools/list` plus
+`tools/call` through the bridge against any of those servers, not only
+Context7. Per-server smoke runs through `mcp_execution_smoke(server,
+project_dir)` (see `agents/runtime/mcp_execution_smoke.py`) which
+selects the first non-mutating tool the adapter exposes and validates
+the full pipeline end-to-end, returning a structured payload that
+includes the normalized result, the failure stage (`tools_list` vs
+`tools_call`), and the failure kind classification used by the rest of
+the diagnostics surface.
+
+Promotion is still narrow: `subagents` and `sandbox` are not granted
+and still require Phase 1.2 and Phase 1.3 capability work in
 `docs/roadmap/non-claude-provider-autonomy.md`.
 
 ### QA Phase Runtime Routing

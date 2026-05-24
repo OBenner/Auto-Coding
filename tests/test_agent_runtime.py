@@ -1018,6 +1018,63 @@ def test_direct_api_autonomous_gate_extra_required_live_fault_case_blocks_clean_
     assert "live_fault_probe_coverage" in gate.missing_requirements
 
 
+def test_direct_api_autonomous_runtime_policy_grants_mcp_under_safe_level(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``AUTO_CODE_AUTONOMY=safe`` flips mcp_execution_enabled on the adapter."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_EXTERNAL_MCP_CLIENT", raising=False)
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+    policy = session.runtime_policy
+
+    assert policy.promoted_to_full_autonomous is True
+    assert policy.mcp_execution_enabled is True
+    assert "mcp" in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_keeps_mcp_off_on_claude_level(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``AUTO_CODE_AUTONOMY=claude`` (default) does not grant the MCP capability."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+    monkeypatch.delenv("AUTO_CODE_EXTERNAL_MCP_CLIENT", raising=False)
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+    policy = session.runtime_policy
+
+    assert policy.promoted_to_full_autonomous is True
+    assert policy.mcp_execution_enabled is False
+    assert "mcp" not in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_responds_to_explicit_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Power users can flip the external MCP bridge without changing the level."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+    monkeypatch.setenv("AUTO_CODE_EXTERNAL_MCP_CLIENT", "true")
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+
+    assert session.runtime_policy.mcp_execution_enabled is True
+
+
 def test_direct_api_autonomous_gate_phase_allowlist_can_be_extended(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

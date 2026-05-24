@@ -180,12 +180,18 @@ class RuntimeCapabilities:
 # the underlying Generic Edit engine attempts the provider's native tool
 # API and falls back to its JSON action loop when the provider does not
 # support tools; the gate evidence proves the provider/model combination
-# can drive that loop end-to-end. Promotion does NOT grant ``mcp``,
-# ``subagents``, or ``sandbox``: those still require Phase 1 capability
-# work in docs/roadmap/non-claude-provider-autonomy.md.
+# can drive that loop end-to-end. Promotion alone does NOT grant
+# ``subagents`` or ``sandbox``: those still require Phase 1.2 and Phase
+# 1.3 capability work in docs/roadmap/non-claude-provider-autonomy.md.
 _PROMOTED_FULL_AUTONOMOUS_GRANTS: frozenset[str] = frozenset(
     {"native_tool_loop"}
 )
+# Additional capability the policy grants once the external MCP client
+# bridge is enabled. Phase 1.1: direct API providers can reach Graphiti,
+# Linear, Electron, Puppeteer, and custom MCP servers through the
+# provider-neutral bridge so they match the Claude SDK MCP surface for
+# tool discovery and invocation.
+_MCP_EXECUTION_GRANTS: frozenset[str] = frozenset({"mcp"})
 
 
 @dataclass(frozen=True)
@@ -198,17 +204,22 @@ class RuntimePolicy:
     """
 
     promoted_to_full_autonomous: bool = False
+    mcp_execution_enabled: bool = False
 
     def granted_capabilities(self) -> frozenset[str]:
         """Return capability names the policy treats as satisfied."""
+        granted: set[str] = set()
         if self.promoted_to_full_autonomous:
-            return _PROMOTED_FULL_AUTONOMOUS_GRANTS
-        return frozenset()
+            granted |= _PROMOTED_FULL_AUTONOMOUS_GRANTS
+        if self.mcp_execution_enabled:
+            granted |= _MCP_EXECUTION_GRANTS
+        return frozenset(granted)
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-safe policy snapshot."""
         return {
             "promoted_to_full_autonomous": self.promoted_to_full_autonomous,
+            "mcp_execution_enabled": self.mcp_execution_enabled,
             "granted_capabilities": sorted(self.granted_capabilities()),
         }
 
