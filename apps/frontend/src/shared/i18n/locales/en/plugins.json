@@ -27,6 +27,7 @@
     "create_mcp_tools": "Create MCP Tools"
   },
   "capabilities": {
+    "title": "Capabilities",
     "analysis_only": "Analysis Only",
     "generic_edit": "Generic Edit",
     "full_agent_runtime": "Full Agent Runtime"
@@ -69,6 +70,10 @@
   "contextPreview": {
     "title": "Prompt Preview",
     "description": "Enabled plugin context for {{agent}} while inspecting {{plugin}}.",
+    "runtimePlugins": "Runtime plugins",
+    "noRuntimePlugins": "No enabled runtime plugins.",
+    "contributed": "Contributed",
+    "noPromptContribution": "No prompt",
     "contributions": "Contributions",
     "noContributions": "No enabled plugin contributions.",
     "empty": "No prompt preview available."

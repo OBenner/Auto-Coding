@@ -59,6 +59,56 @@ class FixturePlugin(agent_sdk.AgentPlugin):
     )
 
 
+def _write_integration_plugin(
+    plugins_dir: Path,
+    name: str,
+    *,
+    prompt: str | None = "integration fixture prompt",
+) -> None:
+    plugin_dir = plugins_dir / name
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "name": name,
+        "version": "1.0.0",
+        "author": "Tests",
+        "description": f"{name} fixture",
+        "plugin_type": "integration",
+        "required_permissions": [],
+        "dependencies": [],
+        "capabilities": ["analysis_only"],
+    }
+    (plugin_dir / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
+    augment_prompt = (
+        f'''
+    def augment_prompt(self, context):
+        return "{prompt} for " + str(context.phase)
+'''
+        if prompt is not None
+        else ""
+    )
+    (plugin_dir / "plugin.py").write_text(
+        f'''"""Fixture integration plugin."""
+import plugins.sdk.integration as integration_sdk
+
+
+class FixtureIntegrationPlugin(integration_sdk.IntegrationPlugin):
+    def on_load(self):
+        pass
+
+    def on_unload(self):
+        pass
+
+    def on_enable(self):
+        pass
+
+    def on_disable(self):
+        pass
+{augment_prompt}
+''',
+        encoding="utf-8",
+    )
+
+
 @pytest.fixture(autouse=True)
 def reset_registry():
     PluginRegistry.reset_instance()
@@ -237,6 +287,146 @@ def test_preview_context_command_returns_agent_prompt_contributions(tmp_path, ca
         }
     ]
     assert "PREVIEW_AGENT_CONTEXT for coder" in payload["preview"]
+
+
+def test_preview_context_command_uses_runtime_integration_plugins(tmp_path, capsys):
+    """CLI preview mirrors the runtime loader, including enabled integrations."""
+    system_plugins = tmp_path / "system"
+    project_dir = tmp_path / "project"
+    _write_integration_plugin(
+        system_plugins,
+        "preview-integration",
+        prompt="PREVIEW_INTEGRATION_CONTEXT",
+    )
+    PluginRegistry.get_instance(
+        user_plugins_dir=project_dir / ".auto-claude" / "plugins" / "user",
+        system_plugins_dir=system_plugins,
+        project_dir=project_dir,
+    )
+
+    result = plugin_cli.cmd_preview_context(
+        argparse.Namespace(
+            agent_type="qa_reviewer",
+            spec_dir=str(project_dir / ".auto-claude" / "specs" / "001-preview"),
+            task="inspect integrations",
+            files=[],
+            json=True,
+        )
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["success"] is True
+    assert payload["contributions"] == [
+        {
+            "plugin_name": "preview-integration",
+            "capabilities": ["analysis_only"],
+            "text": "PREVIEW_INTEGRATION_CONTEXT for qa_reviewer",
+        }
+    ]
+    assert "PREVIEW_INTEGRATION_CONTEXT for qa_reviewer" in payload["preview"]
+
+
+def test_preview_context_command_reports_enabled_runtime_plugin_inventory(
+    tmp_path, capsys
+):
+    """CLI preview reports enabled runtime plugins even without prompt text."""
+    system_plugins = tmp_path / "system"
+    project_dir = tmp_path / "project"
+    _write_agent_plugin(
+        system_plugins,
+        "preview-agent",
+        capabilities=[PluginCapability.ANALYSIS_ONLY.value],
+        prompt="PREVIEW_AGENT_CONTEXT",
+    )
+    _write_integration_plugin(
+        system_plugins,
+        "silent-integration",
+        prompt=None,
+    )
+    PluginRegistry.get_instance(
+        user_plugins_dir=project_dir / ".auto-claude" / "plugins" / "user",
+        system_plugins_dir=system_plugins,
+        project_dir=project_dir,
+    )
+
+    result = plugin_cli.cmd_preview_context(
+        argparse.Namespace(
+            agent_type="coder",
+            spec_dir=None,
+            task="inspect runtime plugins",
+            files=[],
+            json=True,
+        )
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    runtime_plugins = {
+        plugin["plugin_name"]: plugin for plugin in payload["runtime_plugins"]
+    }
+    assert runtime_plugins == {
+        "preview-agent": {
+            "plugin_name": "preview-agent",
+            "plugin_type": "agent",
+            "capabilities": ["analysis_only"],
+            "contributed": True,
+        },
+        "silent-integration": {
+            "plugin_name": "silent-integration",
+            "plugin_type": "integration",
+            "capabilities": ["analysis_only"],
+            "contributed": False,
+        },
+    }
+
+
+def test_preview_context_command_prints_runtime_inventory_in_text_mode(
+    tmp_path, capsys
+):
+    """CLI text preview shows which enabled runtime plugins contributed."""
+    system_plugins = tmp_path / "system"
+    project_dir = tmp_path / "project"
+    _write_agent_plugin(
+        system_plugins,
+        "preview-agent",
+        capabilities=[PluginCapability.ANALYSIS_ONLY.value],
+        prompt="PREVIEW_AGENT_CONTEXT",
+    )
+    _write_integration_plugin(
+        system_plugins,
+        "silent-integration",
+        prompt=None,
+    )
+    PluginRegistry.get_instance(
+        user_plugins_dir=project_dir / ".auto-claude" / "plugins" / "user",
+        system_plugins_dir=system_plugins,
+        project_dir=project_dir,
+    )
+
+    result = plugin_cli.cmd_preview_context(
+        argparse.Namespace(
+            agent_type="coder",
+            spec_dir=None,
+            task="inspect runtime plugins",
+            files=[],
+            json=False,
+        )
+    )
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "Runtime plugins:" in output
+    assert (
+        "- preview-agent [agent; capabilities: analysis_only; contributed: yes]"
+        in output
+    )
+    assert (
+        "- silent-integration [integration; capabilities: analysis_only; "
+        "contributed: no]"
+    ) in output
+    assert "Prompt preview:" in output
+    assert "PREVIEW_AGENT_CONTEXT for coder" in output
 
 
 def test_system_plugins_smoke_load_together(tmp_path):

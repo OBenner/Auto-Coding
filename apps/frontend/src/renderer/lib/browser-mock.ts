@@ -848,6 +848,7 @@ const browserMockAPI: ElectronAPI = {
     data: {
       agent_type: 'coder',
       spec_dir: '',
+      runtime_plugins: [],
       contributions: [],
       preview: ''
     }

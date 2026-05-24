@@ -63,6 +63,8 @@ export interface PluginMetadata {
   plugin_type: PluginType;
   /** List of permissions the plugin requires */
   required_permissions: PluginPermission[];
+  /** Runtime capability declarations for agent integration */
+  capabilities: string[];
   /** List of other plugin names this plugin depends on */
   dependencies: string[];
   /** Optional URL to plugin documentation/repository */
@@ -177,7 +179,21 @@ export interface PluginTraceResult {
 }
 
 /**
- * Prompt contribution from an enabled agent plugin
+ * Enabled runtime plugin included in a prompt preview.
+ */
+export interface PluginContextPreviewRuntimePlugin {
+  /** Plugin name */
+  plugin_name: string;
+  /** Plugin type declared by the manifest */
+  plugin_type: string;
+  /** Capabilities declared by the plugin */
+  capabilities: string[];
+  /** Whether this plugin contributed prompt text for the preview context */
+  contributed: boolean;
+}
+
+/**
+ * Prompt contribution from an enabled runtime plugin
  */
 export interface PluginContextPreviewContribution {
   /** Plugin that contributed prompt text */
@@ -196,6 +212,8 @@ export interface PluginContextPreview {
   agent_type: string;
   /** Spec directory used to build the context */
   spec_dir: string;
+  /** Enabled runtime plugins inspected by the preview */
+  runtime_plugins: PluginContextPreviewRuntimePlugin[];
   /** Individual plugin contributions */
   contributions: PluginContextPreviewContribution[];
   /** Final appended prompt preview */

@@ -47,19 +47,16 @@ if __name__ == "__main__":
     from plugins.base import PluginType
     from plugins.loader import PluginLoader, PluginLoadError, PluginValidationError
     from plugins.registry import PluginRegistry
-    from plugins.sdk.agent import AgentPlugin
 else:
     # Module import - use relative imports
     try:
         from .base import PluginType
         from .loader import PluginLoader, PluginLoadError, PluginValidationError
         from .registry import PluginRegistry
-        from .sdk.agent import AgentPlugin
     except ImportError:
         from plugins.base import PluginType
         from plugins.loader import PluginLoader, PluginLoadError, PluginValidationError
         from plugins.registry import PluginRegistry
-        from plugins.sdk.agent import AgentPlugin
 
 # Import git utilities
 from core.git_executable import run_git
@@ -406,7 +403,7 @@ Examples:
     # Runtime context preview command
     preview_parser = subparsers.add_parser(
         "preview-context",
-        help="Preview enabled agent plugin prompt augmentations",
+        help="Preview enabled runtime plugin prompt augmentations, including integrations",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     preview_parser.add_argument(
@@ -1259,24 +1256,18 @@ def cmd_traces(args: argparse.Namespace) -> int:
 
 
 def cmd_preview_context(args: argparse.Namespace) -> int:
-    """Preview enabled agent plugin prompt augmentations."""
+    """Preview enabled runtime plugin prompt augmentations, including integrations."""
     try:
         from plugins.runtime import (
             append_prompt_augmentations,
             build_agent_context,
             collect_prompt_augmentations,
+            load_enabled_runtime_plugins,
+            plugin_capabilities,
         )
 
-        registry = _load_registry_with_plugins()
-        plugins = [
-            plugin
-            for plugin in registry.list_plugins(
-                plugin_type=PluginType.AGENT,
-                enabled_only=True,
-            )
-            if isinstance(plugin, AgentPlugin)
-        ]
         project_dir = Path.cwd()
+        plugins = load_enabled_runtime_plugins(project_dir)
         spec_dir = (
             Path(args.spec_dir)
             if args.spec_dir
@@ -1294,11 +1285,27 @@ def cmd_preview_context(args: argparse.Namespace) -> int:
             metadata=metadata,
         )
         contributions = collect_prompt_augmentations(plugins, context)
+        contributing_plugins = {
+            contribution.plugin_name for contribution in contributions
+        }
+        runtime_plugins = [
+            {
+                "plugin_name": plugin.name,
+                "plugin_type": _enum_value(plugin.plugin_type),
+                "capabilities": [
+                    _enum_value(capability)
+                    for capability in plugin_capabilities(plugin)
+                ],
+                "contributed": plugin.name in contributing_plugins,
+            }
+            for plugin in sorted(plugins, key=lambda plugin: plugin.name)
+        ]
         preview = append_prompt_augmentations("", contributions).strip()
         payload = {
             "success": True,
             "agent_type": args.agent_type,
             "spec_dir": str(spec_dir),
+            "runtime_plugins": runtime_plugins,
             "contributions": [
                 {
                     "plugin_name": contribution.plugin_name,
@@ -1314,7 +1321,20 @@ def cmd_preview_context(args: argparse.Namespace) -> int:
             _emit_json(payload)
             return 0
 
-        print(preview)
+        print("Runtime plugins:")
+        if runtime_plugins:
+            for plugin in runtime_plugins:
+                capabilities = ", ".join(plugin["capabilities"]) or "none"
+                contributed = "yes" if plugin["contributed"] else "no"
+                print(
+                    f"- {plugin['plugin_name']} "
+                    f"[{plugin['plugin_type']}; capabilities: {capabilities}; "
+                    f"contributed: {contributed}]"
+                )
+        else:
+            print("- none")
+        print("\nPrompt preview:")
+        print(preview or "(empty)")
         return 0
     except Exception:
         logger.exception("Failed to preview plugin runtime context")

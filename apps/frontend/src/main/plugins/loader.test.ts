@@ -64,7 +64,8 @@ describe('plugin IPC handlers', () => {
               description: 'Code graph tools',
               plugin_type: 'integration',
               required_permissions: ['read_files'],
-              dependencies: []
+              dependencies: [],
+              capabilities: ['analysis_only']
             },
             status: 'enabled',
             plugin_dir: '/repo/apps/backend/plugins/system/codebase-intelligence'
@@ -88,7 +89,10 @@ describe('plugin IPC handlers', () => {
       success: true,
       data: [
         expect.objectContaining({
-          metadata: expect.objectContaining({ name: 'codebase-intelligence' }),
+          metadata: expect.objectContaining({
+            name: 'codebase-intelligence',
+            capabilities: ['analysis_only']
+          }),
           status: 'enabled',
           plugin_dir: '/repo/apps/backend/plugins/system/codebase-intelligence'
         })
@@ -122,6 +126,7 @@ describe('plugin IPC handlers', () => {
           description: 'Sample',
           plugin_type: 'integration',
           required_permissions: [],
+          capabilities: ['analysis_only'],
           dependencies: []
         }
       })
@@ -189,6 +194,7 @@ describe('plugin IPC handlers', () => {
             description: 'Code graph tools',
             plugin_type: 'integration',
             required_permissions: ['read_files'],
+            capabilities: ['analysis_only'],
             dependencies: []
           },
           security: { safe: true, warnings: [] },
@@ -335,6 +341,20 @@ describe('plugin IPC handlers', () => {
     const previewPayload = {
       agent_type: 'coder',
       spec_dir: '/repo/.auto-claude/plugin-preview',
+      runtime_plugins: [
+        {
+          plugin_name: 'rules-steering-compiler',
+          plugin_type: 'integration',
+          capabilities: ['analysis_only'],
+          contributed: true
+        },
+        {
+          plugin_name: 'skill-pack-runtime',
+          plugin_type: 'integration',
+          capabilities: ['analysis_only', 'generic_edit'],
+          contributed: false
+        }
+      ],
       contributions: [
         {
           plugin_name: 'rules-steering-compiler',
