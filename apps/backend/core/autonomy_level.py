@@ -41,6 +41,7 @@ RUNTIME_FALLBACK_ENV = "AUTO_CODE_RUNTIME_FALLBACK"
 DIRECT_API_AUTONOMOUS_ENV = "AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS"
 EXTERNAL_MCP_CLIENT_ENV = "AUTO_CODE_EXTERNAL_MCP_CLIENT"
 MUTATING_SUBAGENTS_ENV = "AUTO_CODE_MUTATING_SUBAGENTS"
+SANDBOX_ENV = "AUTO_CODE_SANDBOX"
 
 _TRUTHY = {"1", "true", "yes", "on"}
 _FALSY = {"0", "false", "no", "off"}
@@ -85,7 +86,21 @@ class ResolvedAutonomySettings:
     direct_api_skip_gate: bool
     external_mcp_client_enabled: bool
     mutating_subagents_enabled: bool
+    sandbox_requested: bool
+    sandbox_available: bool
+    sandbox_backend: str | None
     explicit_overrides: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def sandbox_enabled(self) -> bool:
+        """Return whether the sandbox grant should actually fire.
+
+        Sandbox is only granted when the operator asked for it AND the
+        host exposes a working backend (Seatbelt/bubblewrap/
+        AppContainer). Otherwise the runtime keeps ``sandbox`` missing
+        so the capability error is honest.
+        """
+        return self.sandbox_requested and self.sandbox_available
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-safe snapshot for diagnostics payloads."""
@@ -98,6 +113,10 @@ class ResolvedAutonomySettings:
             "direct_api_skip_gate": self.direct_api_skip_gate,
             "external_mcp_client_enabled": self.external_mcp_client_enabled,
             "mutating_subagents_enabled": self.mutating_subagents_enabled,
+            "sandbox_requested": self.sandbox_requested,
+            "sandbox_available": self.sandbox_available,
+            "sandbox_backend": self.sandbox_backend,
+            "sandbox_enabled": self.sandbox_enabled,
             "explicit_overrides": list(self.explicit_overrides),
         }
 
@@ -112,6 +131,8 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         "direct_api_skip_gate": False,
         "external_mcp_client_enabled": False,
         "mutating_subagents_enabled": False,
+        # Off does no shell work, so sandboxing is irrelevant.
+        "sandbox_requested": False,
     },
     AutonomyLevel.CLAUDE: {
         "runtime_mode": "full_autonomous",
@@ -124,6 +145,9 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         # Claude's Task tool supplies mutating subagents through the SDK;
         # the policy grant is not needed for that path.
         "mutating_subagents_enabled": False,
+        # Claude SDK ships its own sandbox; the cross-platform shim is
+        # not part of the Claude code path.
+        "sandbox_requested": False,
     },
     AutonomyLevel.SAFE: {
         "runtime_mode": "full_autonomous",
@@ -137,6 +161,10 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         # Mutating subagents stay off for safe: the conflict-aware merge
         # protocol is only scaffolded. Power users opt in via bold.
         "mutating_subagents_enabled": False,
+        # Direct providers run shell actions through Generic Edit;
+        # request the sandbox by default so safe gets a real
+        # confinement layer whenever the host platform has one.
+        "sandbox_requested": True,
     },
     AutonomyLevel.BOLD: {
         "runtime_mode": "full_autonomous",
@@ -147,6 +175,7 @@ _LEVEL_DEFAULTS: dict[AutonomyLevel, dict[str, object]] = {
         # Bold accepts the experimental merge protocol; runtime still
         # enforces transaction boundaries and per-child artifacts.
         "mutating_subagents_enabled": True,
+        "sandbox_requested": True,
     },
 }
 
@@ -221,6 +250,7 @@ def resolve_autonomy_settings(
     direct_api_skip_gate = bool(defaults["direct_api_skip_gate"])
     external_mcp_client_enabled = bool(defaults["external_mcp_client_enabled"])
     mutating_subagents_enabled = bool(defaults["mutating_subagents_enabled"])
+    sandbox_requested = bool(defaults["sandbox_requested"])
 
     explicit_overrides: list[str] = []
 
@@ -262,6 +292,19 @@ def resolve_autonomy_settings(
         mutating_subagents_enabled = mutating_subagents_override
         explicit_overrides.append(MUTATING_SUBAGENTS_ENV)
 
+    sandbox_override = _parse_bool_env(env_map.get(SANDBOX_ENV))
+    if sandbox_override is not None:
+        sandbox_requested = sandbox_override
+        explicit_overrides.append(SANDBOX_ENV)
+
+    # Detect whether the host actually has a real backend. Imported
+    # lazily so the autonomy module does not pay for sandbox helpers in
+    # paths that never request sandboxing.
+    from core.sandbox import describe_sandbox_backend
+
+    backend_info = describe_sandbox_backend(env=env_map)
+    sandbox_available = backend_info.available
+
     return ResolvedAutonomySettings(
         level=level,
         preset=preset,
@@ -271,5 +314,8 @@ def resolve_autonomy_settings(
         direct_api_skip_gate=direct_api_skip_gate,
         external_mcp_client_enabled=external_mcp_client_enabled,
         mutating_subagents_enabled=mutating_subagents_enabled,
+        sandbox_requested=sandbox_requested,
+        sandbox_available=sandbox_available,
+        sandbox_backend=backend_info.backend.value,
         explicit_overrides=tuple(explicit_overrides),
     )

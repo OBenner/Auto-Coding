@@ -384,3 +384,110 @@ def test_to_dict_includes_mutating_subagents_flag():
     settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "bold"})
 
     assert settings.to_dict()["mutating_subagents_enabled"] is True
+
+
+# ---------------------------------------------------------------------
+# Sandbox wiring (Phase 1.3)
+# ---------------------------------------------------------------------
+
+
+def test_sandbox_not_requested_for_default_claude_level():
+    from unittest.mock import patch
+
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.SEATBELT,
+        platform="darwin",
+        available=True,
+        reason="ok",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        settings = resolve_autonomy_settings(env={})
+
+    assert settings.sandbox_requested is False
+    assert settings.sandbox_enabled is False
+
+
+def test_sandbox_requested_for_safe_level_and_enabled_when_available():
+    from unittest.mock import patch
+
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.SEATBELT,
+        platform="darwin",
+        available=True,
+        reason="ok",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "safe"})
+
+    assert settings.sandbox_requested is True
+    assert settings.sandbox_available is True
+    assert settings.sandbox_enabled is True
+    assert settings.sandbox_backend == "seatbelt"
+
+
+def test_sandbox_requested_but_backend_missing_stays_disabled():
+    from unittest.mock import patch
+
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.SEATBELT,
+        platform="darwin",
+        available=False,
+        reason="no sandbox-exec",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        settings = resolve_autonomy_settings(env={AUTONOMY_LEVEL_ENV: "safe"})
+
+    assert settings.sandbox_requested is True
+    assert settings.sandbox_available is False
+    # Composite property says false: honest about what the host can deliver.
+    assert settings.sandbox_enabled is False
+
+
+def test_explicit_sandbox_env_override_can_force_off_on_safe():
+    from unittest.mock import patch
+
+    from core.autonomy_level import SANDBOX_ENV
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.SEATBELT,
+        platform="darwin",
+        available=True,
+        reason="ok",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        settings = resolve_autonomy_settings(
+            env={AUTONOMY_LEVEL_ENV: "safe", SANDBOX_ENV: "false"},
+        )
+
+    assert settings.sandbox_requested is False
+    assert settings.sandbox_enabled is False
+    assert SANDBOX_ENV in settings.explicit_overrides
+
+
+def test_to_dict_exposes_sandbox_fields():
+    from unittest.mock import patch
+
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.SEATBELT,
+        platform="darwin",
+        available=True,
+        reason="ok",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        payload = resolve_autonomy_settings(
+            env={AUTONOMY_LEVEL_ENV: "bold"},
+        ).to_dict()
+
+    assert payload["sandbox_requested"] is True
+    assert payload["sandbox_available"] is True
+    assert payload["sandbox_enabled"] is True
+    assert payload["sandbox_backend"] == "seatbelt"

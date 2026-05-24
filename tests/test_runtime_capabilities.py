@@ -299,3 +299,56 @@ def test_supports_requires_subagents_when_policy_grants_it():
 
     allowed = RuntimePolicy(mutating_subagents_enabled=True)
     assert promoted.supports(requirement, policy=allowed) is True
+
+
+# ---------------------------------------------------------------------
+# Phase 1.3 — sandbox grant
+# ---------------------------------------------------------------------
+
+
+def test_sandbox_enabled_grants_sandbox_capability():
+    policy = RuntimePolicy(sandbox_enabled=True)
+
+    assert "sandbox" in policy.granted_capabilities()
+
+
+def test_sandbox_grant_composes_with_other_grants():
+    policy = RuntimePolicy(
+        promoted_to_full_autonomous=True,
+        mcp_execution_enabled=True,
+        mutating_subagents_enabled=True,
+        sandbox_enabled=True,
+    )
+
+    granted = policy.granted_capabilities()
+    assert granted == frozenset(
+        {"native_tool_loop", "mcp", "subagents", "sandbox"}
+    )
+
+
+def test_supports_requires_sandbox_when_policy_grants_it():
+    promoted = RuntimeCapabilities.promoted_edit()
+    requirement = RuntimeRequirements(
+        mode="hardened_coder",
+        required=("text_completion", "sandbox"),
+    )
+
+    no_sandbox = RuntimePolicy(sandbox_enabled=False)
+    assert promoted.supports(requirement, policy=no_sandbox) is False
+    assert "sandbox" in promoted.missing(requirement, policy=no_sandbox)
+
+    with_sandbox = RuntimePolicy(sandbox_enabled=True)
+    assert promoted.supports(requirement, policy=with_sandbox) is True
+
+
+def test_policy_to_dict_exposes_sandbox_flag():
+    payload = RuntimePolicy(sandbox_enabled=True).to_dict()
+
+    assert payload["sandbox_enabled"] is True
+    assert "sandbox" in payload["granted_capabilities"]
+
+
+def test_default_policy_does_not_grant_sandbox():
+    policy = RuntimePolicy()
+
+    assert "sandbox" not in policy.granted_capabilities()

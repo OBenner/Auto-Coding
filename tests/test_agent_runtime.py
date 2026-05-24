@@ -1111,6 +1111,64 @@ def test_direct_api_autonomous_runtime_policy_keeps_subagents_off_for_safe_level
     assert "subagents" not in session.runtime_policy.granted_capabilities()
 
 
+def test_direct_api_autonomous_runtime_policy_grants_sandbox_when_host_supports(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``AUTO_CODE_AUTONOMY=safe`` plus a working backend flips sandbox grant on."""
+    from unittest.mock import patch
+
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.SEATBELT,
+        platform="darwin",
+        available=True,
+        reason="ok",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        session = DirectApiAutonomousRuntimeSession.__new__(
+            DirectApiAutonomousRuntimeSession
+        )
+        policy = session.runtime_policy
+
+    assert policy.sandbox_enabled is True
+    assert "sandbox" in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_keeps_sandbox_off_without_backend(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """If no host backend is available, the grant stays off even on safe."""
+    from unittest.mock import patch
+
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.UNAVAILABLE,
+        platform="haiku",
+        available=False,
+        reason="No backend.",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        session = DirectApiAutonomousRuntimeSession.__new__(
+            DirectApiAutonomousRuntimeSession
+        )
+        policy = session.runtime_policy
+
+    assert policy.sandbox_enabled is False
+    assert "sandbox" not in policy.granted_capabilities()
+
+
 def test_direct_api_autonomous_gate_phase_allowlist_can_be_extended(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -199,6 +199,14 @@ _MCP_EXECUTION_GRANTS: frozenset[str] = frozenset({"mcp"})
 # (via AutonomyLevel.BOLD or AUTO_CODE_MUTATING_SUBAGENTS=true) opt in
 # once the merge protocol scaffolding lands.
 _MUTATING_SUBAGENT_GRANTS: frozenset[str] = frozenset({"subagents"})
+# Phase 1.3: sandbox. The cross-platform sandbox skeleton in
+# ``core/sandbox.py`` detects whether Seatbelt (macOS), bubblewrap
+# (Linux), or AppContainer (Windows) is available. The policy grant
+# only fires when ``sandbox_enabled=True``, which the autonomy layer
+# only sets when (a) the level requests sandboxing and (b) the host
+# actually exposes a real backend; otherwise the runtime keeps
+# ``sandbox`` missing so the capability error is honest.
+_SANDBOX_GRANTS: frozenset[str] = frozenset({"sandbox"})
 
 
 @dataclass(frozen=True)
@@ -213,6 +221,7 @@ class RuntimePolicy:
     promoted_to_full_autonomous: bool = False
     mcp_execution_enabled: bool = False
     mutating_subagents_enabled: bool = False
+    sandbox_enabled: bool = False
 
     def granted_capabilities(self) -> frozenset[str]:
         """Return capability names the policy treats as satisfied."""
@@ -223,6 +232,8 @@ class RuntimePolicy:
             granted |= _MCP_EXECUTION_GRANTS
         if self.mutating_subagents_enabled:
             granted |= _MUTATING_SUBAGENT_GRANTS
+        if self.sandbox_enabled:
+            granted |= _SANDBOX_GRANTS
         return frozenset(granted)
 
     def to_dict(self) -> dict[str, object]:
@@ -231,6 +242,7 @@ class RuntimePolicy:
             "promoted_to_full_autonomous": self.promoted_to_full_autonomous,
             "mcp_execution_enabled": self.mcp_execution_enabled,
             "mutating_subagents_enabled": self.mutating_subagents_enabled,
+            "sandbox_enabled": self.sandbox_enabled,
             "granted_capabilities": sorted(self.granted_capabilities()),
         }
 
