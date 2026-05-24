@@ -114,6 +114,25 @@ _GOOGLE_NON_TOOL_MODEL_TOKENS: tuple[str, ...] = (
 )
 
 
+def _google_model_identifier(model: object | None) -> str:
+    """Return a normalised string identifier for a Google model reference.
+
+    The Google session stores a ``GenerativeModel`` instance under
+    ``self.model``; its identifier lives on ``.model_name`` (or
+    ``.name``). String inputs are passed through; everything else falls
+    back to an empty string so callers can treat unknown identifiers
+    the same as "no model configured".
+    """
+    if model is None:
+        return ""
+    if isinstance(model, str):
+        return model.strip()
+    candidate = getattr(model, "model_name", None) or getattr(model, "name", None)
+    if isinstance(candidate, str):
+        return candidate.strip()
+    return ""
+
+
 class GoogleAgentSession(AgentSession):
     """Agent session wrapping Google Generative AI client.
 
@@ -623,19 +642,6 @@ class GoogleProvider(AIEngineProvider):
         if any(token in haystack for token in _GOOGLE_NON_TOOL_MODEL_TOKENS):
             return False
         return any(token in haystack for token in _GOOGLE_NATIVE_TOOL_MODEL_TOKENS)
-
-
-def _google_model_identifier(model: object | None) -> str:
-    """Return a normalised string identifier for a Google model reference."""
-    if model is None:
-        return ""
-    if isinstance(model, str):
-        return model.strip()
-    # ``GenerativeModel`` exposes the canonical identifier as ``model_name``.
-    candidate = getattr(model, "model_name", None) or getattr(model, "name", None)
-    if isinstance(candidate, str):
-        return candidate.strip()
-    return ""
 
     def validate_config(self) -> bool:
         """Validate provider configuration.
