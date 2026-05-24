@@ -219,14 +219,18 @@ class TestInstalledVersion:
         tmp_path.mkdir(exist_ok=True)
         assert installer.installed_version(tmp_path) is None
 
+    def _seed_install(self, root: Path, version: str) -> None:
+        """Create a fake CodeGraph install layout: ``<version>/bin/codegraph``."""
+        (root / version / "bin").mkdir(parents=True)
+        (root / version / "bin" / "codegraph").write_text("#!/bin/sh\n")
+
     def test_returns_version_when_directory_present(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         # Pin to POSIX so the fixture binary name is stable across the CI matrix.
         # OS-specific extension is covered by TestBinaryPath below.
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
-        (tmp_path / "v0.9.3").mkdir(parents=True)
-        (tmp_path / "v0.9.3" / "codegraph").write_text("#!/bin/sh\n")
+        self._seed_install(tmp_path, "v0.9.3")
 
         assert installer.installed_version(tmp_path) == "v0.9.3"
 
@@ -235,8 +239,7 @@ class TestInstalledVersion:
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
         for version in ("v0.9.1", "v0.9.3", "v0.9.2"):
-            (tmp_path / version).mkdir(parents=True)
-            (tmp_path / version / "codegraph").write_text("#!/bin/sh\n")
+            self._seed_install(tmp_path, version)
 
         assert installer.installed_version(tmp_path) == "v0.9.3"
 
@@ -247,8 +250,7 @@ class TestInstalledVersion:
         # made "v1.0.0-rc1" sort *after* "v1.0.0" lexicographically and win.
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
         for version in ("v1.0.0-rc1", "v1.0.0", "v1.0.0-beta"):
-            (tmp_path / version).mkdir(parents=True)
-            (tmp_path / version / "codegraph").write_text("#!/bin/sh\n")
+            self._seed_install(tmp_path, version)
 
         assert installer.installed_version(tmp_path) == "v1.0.0"
 
@@ -257,8 +259,7 @@ class TestInstalledVersion:
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
         for version in ("v1.0.0-rc1", "v1.0.0-rc2"):
-            (tmp_path / version).mkdir(parents=True)
-            (tmp_path / version / "codegraph").write_text("#!/bin/sh\n")
+            self._seed_install(tmp_path, version)
 
         # When only prereleases are present, fall back to whichever installs.
         # Both share the same numeric key (1,0,0) and the same release_rank (0),
@@ -276,7 +277,7 @@ class TestBinaryPath:
 
         path = installer.binary_path(tmp_path, "v0.9.3")
 
-        assert path == tmp_path / "v0.9.3" / "codegraph"
+        assert path == tmp_path / "v0.9.3" / "bin" / "codegraph"
 
     def test_windows_binary_path(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -285,7 +286,7 @@ class TestBinaryPath:
 
         path = installer.binary_path(tmp_path, "v0.9.3")
 
-        assert path == tmp_path / "v0.9.3" / "codegraph.exe"
+        assert path == tmp_path / "v0.9.3" / "bin" / "codegraph.exe"
 
 
 class TestDownloadAndInstall:
@@ -298,8 +299,8 @@ class TestDownloadAndInstall:
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
         tarball = _make_tarball(
-            {"codegraph": b"#!/bin/sh\necho hi\n", "README.md": b"hello"},
-            executable={"codegraph"},
+            {"bin/codegraph": b"#!/bin/sh\necho hi\n", "README.md": b"hello"},
+            executable={"bin/codegraph"},
         )
         _install_fake_urlopen(monkeypatch, tarball)
 
@@ -310,7 +311,7 @@ class TestDownloadAndInstall:
             install_root=tmp_path,
         )
 
-        assert result == tmp_path / "v0.9.3" / "codegraph"
+        assert result == tmp_path / "v0.9.3" / "bin" / "codegraph"
         assert result.exists()
         assert (tmp_path / "v0.9.3" / "README.md").read_bytes() == b"hello"
         # The executable bit is a POSIX concept. Windows does not honor
@@ -327,7 +328,7 @@ class TestDownloadAndInstall:
         tmp_path: Path,
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
-        tarball = _make_tarball({"codegraph": b"x"}, executable={"codegraph"})
+        tarball = _make_tarball({"bin/codegraph": b"x"}, executable={"bin/codegraph"})
         urls = _install_fake_urlopen(monkeypatch, tarball)
 
         installer.download_and_install(
@@ -348,7 +349,7 @@ class TestDownloadAndInstall:
         tmp_path: Path,
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
-        tarball = _make_tarball({"codegraph": b"x"}, executable={"codegraph"})
+        tarball = _make_tarball({"bin/codegraph": b"x"}, executable={"bin/codegraph"})
         digest = hashlib.sha256(tarball).hexdigest()
         _install_fake_urlopen(monkeypatch, tarball)
 
@@ -368,7 +369,7 @@ class TestDownloadAndInstall:
         tmp_path: Path,
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
-        tarball = _make_tarball({"codegraph": b"x"}, executable={"codegraph"})
+        tarball = _make_tarball({"bin/codegraph": b"x"}, executable={"bin/codegraph"})
         _install_fake_urlopen(monkeypatch, tarball)
 
         with pytest.raises(installer.ChecksumMismatchError):
@@ -392,9 +393,9 @@ class TestDownloadAndInstall:
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
         existing = tmp_path / "v0.9.3"
-        existing.mkdir(parents=True)
-        (existing / "codegraph").write_text("old")
-        tarball = _make_tarball({"codegraph": b"new"}, executable={"codegraph"})
+        (existing / "bin").mkdir(parents=True)
+        (existing / "bin" / "codegraph").write_text("old")
+        tarball = _make_tarball({"bin/codegraph": b"new"}, executable={"bin/codegraph"})
         urls = _install_fake_urlopen(monkeypatch, tarball)
 
         with pytest.raises(installer.InstallExistsError):
@@ -408,7 +409,7 @@ class TestDownloadAndInstall:
         # Should not even download
         assert urls == []
         # Existing install must be untouched
-        assert (existing / "codegraph").read_text() == "old"
+        assert (existing / "bin" / "codegraph").read_text() == "old"
 
     def test_overwrites_existing_with_force(
         self,
@@ -417,10 +418,10 @@ class TestDownloadAndInstall:
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
         existing = tmp_path / "v0.9.3"
-        existing.mkdir(parents=True)
-        (existing / "codegraph").write_text("old")
+        (existing / "bin").mkdir(parents=True)
+        (existing / "bin" / "codegraph").write_text("old")
         (existing / "stale.txt").write_text("stale")
-        tarball = _make_tarball({"codegraph": b"new"}, executable={"codegraph"})
+        tarball = _make_tarball({"bin/codegraph": b"new"}, executable={"bin/codegraph"})
         _install_fake_urlopen(monkeypatch, tarball)
 
         result = installer.download_and_install(
@@ -441,10 +442,14 @@ class TestDownloadAndInstall:
         tmp_path: Path,
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
+        # Real CodeGraph release tarballs are wrapped in `codegraph-<os>-<arch>/`
+        # containing `bin/codegraph`, `node`, and `lib/...`. After
+        # _strip_single_wrapper() runs, the version dir owns those contents
+        # directly.
         tarball = _make_tarball(
-            {"codegraph": b"x", "lib/runtime.so": b"y"},
+            {"bin/codegraph": b"x", "lib/runtime.so": b"y"},
             wrapper="codegraph-darwin-arm64",
-            executable={"codegraph"},
+            executable={"bin/codegraph"},
         )
         _install_fake_urlopen(monkeypatch, tarball)
 
@@ -455,7 +460,7 @@ class TestDownloadAndInstall:
             install_root=tmp_path,
         )
 
-        assert result == tmp_path / "v0.9.3" / "codegraph"
+        assert result == tmp_path / "v0.9.3" / "bin" / "codegraph"
         assert result.exists()
         assert (tmp_path / "v0.9.3" / "lib" / "runtime.so").exists()
         # Wrapper directory must NOT survive
@@ -467,7 +472,7 @@ class TestDownloadAndInstall:
         tmp_path: Path,
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: True)
-        zip_bytes = _make_zip({"codegraph.exe": b"MZ", "readme.txt": b"hi"})
+        zip_bytes = _make_zip({"bin/codegraph.exe": b"MZ", "readme.txt": b"hi"})
         _install_fake_urlopen(monkeypatch, zip_bytes)
 
         result = installer.download_and_install(
@@ -477,7 +482,7 @@ class TestDownloadAndInstall:
             install_root=tmp_path,
         )
 
-        assert result == tmp_path / "v0.9.3" / "codegraph.exe"
+        assert result == tmp_path / "v0.9.3" / "bin" / "codegraph.exe"
         assert result.exists()
         assert (tmp_path / "v0.9.3" / "readme.txt").exists()
 
@@ -533,7 +538,7 @@ class TestDownloadAndInstall:
         tmp_path: Path,
     ) -> None:
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
-        tarball = _make_tarball({"codegraph": b"x"}, executable={"codegraph"})
+        tarball = _make_tarball({"bin/codegraph": b"x"}, executable={"bin/codegraph"})
         _install_fake_urlopen(monkeypatch, tarball)
         # Use a nested path that does not exist yet
         nested = tmp_path / "nested" / "deep" / "root"
@@ -557,7 +562,7 @@ class TestDownloadAndInstall:
         # to leave the query attached to the derived asset_name, which made
         # _archive_suffix() return "" and aborted extraction.
         monkeypatch.setattr(installer, "_is_windows", lambda: False)
-        tarball = _make_tarball({"codegraph": b"x"}, executable={"codegraph"})
+        tarball = _make_tarball({"bin/codegraph": b"x"}, executable={"bin/codegraph"})
         urls = _install_fake_urlopen(monkeypatch, tarball)
         signed = (
             "https://mirror.example.com/dl/codegraph-darwin-arm64.tar.gz"
@@ -572,9 +577,38 @@ class TestDownloadAndInstall:
             asset_url=signed,
         )
 
-        assert result == tmp_path / "v0.9.3" / "codegraph"
+        assert result == tmp_path / "v0.9.3" / "bin" / "codegraph"
         assert result.exists()
         assert urls == [signed]
+
+    def test_does_not_strip_bin_directory_as_wrapper(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # Regression: _strip_single_wrapper used to greedily hoist contents
+        # of any sole top-level directory, including the install's own bin/.
+        # That left the binary at <version>/codegraph instead of
+        # <version>/bin/codegraph and broke installed_version() detection.
+        monkeypatch.setattr(installer, "_is_windows", lambda: False)
+        tarball = _make_tarball(
+            {"bin/codegraph": b"#!/bin/sh\n"},
+            executable={"bin/codegraph"},
+        )
+        _install_fake_urlopen(monkeypatch, tarball)
+
+        result = installer.download_and_install(
+            version="v0.9.3",
+            os_name="darwin",
+            arch="arm64",
+            install_root=tmp_path,
+        )
+
+        assert result == tmp_path / "v0.9.3" / "bin" / "codegraph"
+        # bin/ directory must survive, not be hoisted away
+        assert (tmp_path / "v0.9.3" / "bin").is_dir()
+        # And installed_version() must now find the install
+        assert installer.installed_version(tmp_path) == "v0.9.3"
 
 
 class TestLatestRelease:

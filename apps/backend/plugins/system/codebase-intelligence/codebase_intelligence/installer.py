@@ -1,17 +1,18 @@
-"""CodeGraph installer: asset resolution and install-path helpers.
+"""CodeGraph installer: asset resolution, downloader, and install-path helpers.
 
 This module is the user-local installer for the external `codegraph` binary
 (https://github.com/colbymchenry/codegraph). It is a Python-only helper: no
-shelling out, no curl-pipe-sh. Downloads happen in a separate function (added
-in a later task); this module currently provides the resolver and path layout
-the rest of the installer will build on.
+shelling out, no curl-pipe-sh.
 
-Install layout::
+Install layout (matches the official release tarball)::
 
     ~/.auto-claude/bin/codegraph/
         v0.9.3/
-            codegraph              (POSIX) or codegraph.exe (Windows)
-            ...other extracted files
+            node                 (bundled Node.js runtime)
+            bin/
+                codegraph        (POSIX) or codegraph.exe (Windows)
+            lib/
+                ...
         v0.9.4/
             ...
 
@@ -189,9 +190,21 @@ def installed_version(root: Path) -> str | None:
 
 
 def binary_path(root: Path, version: str) -> Path:
-    """Return the absolute path to the installed CodeGraph binary."""
+    """Return the absolute path to the installed CodeGraph binary.
+
+    The CodeGraph release tarball lays out as::
+
+        <version>/
+            node               (bundled Node.js runtime)
+            bin/
+                codegraph      (POSIX) or codegraph.exe (Windows)
+            lib/
+                ...
+
+    so the launcher lives one level deeper than the version directory.
+    """
     suffix = ".exe" if _is_windows() else ""
-    return root / version / f"{_BINARY_NAME}{suffix}"
+    return root / version / "bin" / f"{_BINARY_NAME}{suffix}"
 
 
 def download_and_install(
@@ -272,8 +285,10 @@ def download_and_install(
         _extract_archive(archive_path, asset_name, staging_dir)
         _strip_single_wrapper(staging_dir)
 
-        binary_in_staging = staging_dir / (
-            f"{_BINARY_NAME}.exe" if _is_windows() else _BINARY_NAME
+        binary_in_staging = (
+            staging_dir
+            / "bin"
+            / (f"{_BINARY_NAME}.exe" if _is_windows() else _BINARY_NAME)
         )
         if binary_in_staging.exists() and not _is_windows():
             current = binary_in_staging.stat().st_mode & 0o777
@@ -525,9 +540,19 @@ def _safe_urlopen(target, *, timeout: float = _NETWORK_TIMEOUT_SECONDS):
 
 
 def _strip_single_wrapper(staging_dir: Path) -> None:
-    """If the archive contained one top-level directory, hoist its contents up."""
+    """If the archive contained one top-level wrapper directory, hoist its contents up.
+
+    Heuristic: skip stripping when ``staging/bin/<binary>`` already exists.
+    That means the archive shipped contents directly at the install root
+    (and the one top-level dir we see — likely ``bin/`` itself — is part
+    of the install layout, not a wrapper).
+    """
     entries = list(staging_dir.iterdir())
     if len(entries) != 1 or not entries[0].is_dir():
+        return
+    direct_binary = staging_dir / "bin" / _BINARY_NAME
+    direct_binary_exe = staging_dir / "bin" / f"{_BINARY_NAME}.exe"
+    if direct_binary.exists() or direct_binary_exe.exists():
         return
     wrapper = entries[0]
     # Move each child up one level; use a fresh uuid temp name to dodge name
