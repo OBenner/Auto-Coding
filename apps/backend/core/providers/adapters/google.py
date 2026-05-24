@@ -260,7 +260,9 @@ class GoogleAgentSession(AgentSession):
         to the existing session-method detection rather than blocking
         the native loop based on missing metadata alone.
         """
-        identifier = _google_model_identifier(model if model is not None else self.model)
+        identifier = _google_model_identifier(
+            model if model is not None else self.model
+        )
         if not identifier:
             return True
         return GoogleProvider.supports_native_tools(identifier)
