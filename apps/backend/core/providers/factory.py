@@ -374,10 +374,16 @@ def _build_provider_class_registry() -> "dict[str, type]":
         try:
             module = __import__(module_path, fromlist=[class_name])
             registry[provider_key] = getattr(module, class_name)
-        except Exception:
-            # Provider module unavailable in this environment; skip silently
-            # so the helper still works for the providers that are loadable.
-            pass
+        except (ImportError, AttributeError) as exc:
+            # Provider module unavailable in this environment (missing SDK,
+            # adapter not installed). Log so genuine adapter bugs are not
+            # silently downgraded to ``declared: unknown`` later, but still
+            # skip so the helper works for the providers that are loadable.
+            logger.debug(
+                "Provider %s not available in registry: %s",
+                provider_key,
+                exc,
+            )
 
     _try_import("openai", "core.providers.adapters.openai", "OpenAIProvider")
     _try_import("google", "core.providers.adapters.google", "GoogleProvider")

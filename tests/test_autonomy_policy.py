@@ -45,6 +45,30 @@ def test_non_direct_provider_is_not_eligible():
     assert policy.provider == "claude"
 
 
+def test_non_direct_provider_eligibility_cannot_be_overridden_by_env():
+    """``direct_api_eligible=true`` env override is rejected for non-direct providers."""
+    env = {"AUTO_CODE_AUTONOMY_CLAUDE_DIRECT_API_ELIGIBLE": "true"}
+
+    policy = autonomy_policy_for("claude", env=env)
+
+    assert policy.direct_api_eligible is False
+
+
+def test_non_direct_provider_eligibility_cannot_be_overridden_by_file(tmp_path):
+    """File-level ``direct_api_eligible=true`` is rejected for non-direct providers."""
+    policy_path = tmp_path / "autonomy.json"
+    policy_path.write_text(
+        json.dumps(
+            {"providers": {"claude": {"direct_api_eligible": True}}}
+        ),
+        encoding="utf-8",
+    )
+
+    policy = autonomy_policy_for("claude", env={}, policy_file=policy_path)
+
+    assert policy.direct_api_eligible is False
+
+
 def test_env_default_overrides_module_defaults():
     """``AUTO_CODE_AUTONOMY_DEFAULT_*`` env vars seed every provider."""
     env = {"AUTO_CODE_AUTONOMY_DEFAULT_MIN_STABLE_RUNS": "10"}

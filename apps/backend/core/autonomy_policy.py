@@ -193,7 +193,9 @@ def autonomy_policy_for(
         sources.append(f"env:{provider_key.upper()}")
 
     if provider_key not in DIRECT_API_PROVIDERS:
-        knobs.setdefault("direct_api_eligible", False)
+        # Hard override: claude / codex / unknown providers can never be
+        # tagged direct_api_eligible, no matter what env or file says.
+        knobs["direct_api_eligible"] = False
 
     base = AutonomyPolicy(provider=provider_key)
     return replace(base, **knobs, sources=tuple(sources))

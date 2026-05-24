@@ -84,15 +84,31 @@ def test_describe_windows_appcontainer_requires_sdk_env():
     assert "WindowsSdkDir" in info.reason
 
 
-def test_describe_windows_appcontainer_available_with_sdk_env():
+def test_describe_windows_appcontainer_unavailable_without_force_even_with_sdk():
+    """SDK env var alone is not proof that AppContainer can spawn processes."""
     info = describe_sandbox_backend(
         env={"WindowsSdkDir": "C:/Program Files/Windows Kits/10"},
         platform="win32",
     )
 
     assert info.backend is SandboxBackend.APPCONTAINER
+    assert info.available is False
+    assert "process-spawn wiring is not yet implemented" in info.reason
+
+
+def test_describe_windows_appcontainer_force_opt_in():
+    """Operators can opt into the experimental path with the force env var."""
+    info = describe_sandbox_backend(
+        env={
+            "WindowsSdkDir": "C:/Program Files/Windows Kits/10",
+            "AUTO_CODE_SANDBOX_WIN_APPCONTAINER_FORCE": "true",
+        },
+        platform="win32",
+    )
+
+    assert info.backend is SandboxBackend.APPCONTAINER
     assert info.available is True
-    assert "C:/Program Files/Windows Kits/10" in info.reason
+    assert "force-enabled" in info.reason
 
 
 def test_describe_unknown_platform_returns_unavailable():

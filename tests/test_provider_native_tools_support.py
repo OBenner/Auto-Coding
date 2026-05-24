@@ -59,6 +59,7 @@ def test_base_provider_assumes_native_tool_support():
         "firefunction-v2",
         "hermes-3-llama-3.1-70b",
         "phi-4",
+        "phi4",
     ],
 )
 def test_ollama_known_tool_capable_models_pass(model: str):
@@ -336,6 +337,26 @@ def test_google_legacy_and_non_chat_models_skip_native_loop(model):
     from core.providers.adapters.google import GoogleProvider
 
     assert GoogleProvider.supports_native_tools(model) is False
+
+
+def test_google_supports_native_tools_accepts_generative_model_object():
+    """``self.model`` may be a GenerativeModel; we read ``model_name`` from it."""
+    from core.providers.adapters.google import GoogleProvider
+
+    class _FakeGenerativeModel:
+        model_name = "models/gemini-2.0-flash"
+
+    assert GoogleProvider.supports_native_tools(_FakeGenerativeModel()) is True
+
+
+def test_google_supports_native_tools_rejects_unknown_object_silently():
+    """An opaque object without ``model_name`` falls back to False, not a crash."""
+    from core.providers.adapters.google import GoogleProvider
+
+    class _Opaque:
+        pass
+
+    assert GoogleProvider.supports_native_tools(_Opaque()) is False
 
 
 # ----------------------------------------------------------------------

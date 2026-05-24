@@ -35,6 +35,38 @@ def _iter_files(root: Path):
             yield path
 
 
+def _safely_remove_empty_tree(root: Path) -> None:
+    """Remove ``root`` and any empty subdirectories underneath it.
+
+    ``Path.rmdir()`` only works on truly empty directories; the legacy
+    ``.auto-Codex`` tree may contain orphan subdirectories left over
+    after the migration. Bottom-up removal handles both cases without
+    raising ``OSError: Directory not empty``.
+    """
+    if not root.exists():
+        return
+    for dirpath in sorted(
+        (p for p in root.rglob("*") if p.is_dir()),
+        key=lambda p: len(p.parts),
+        reverse=True,
+    ):
+        try:
+            dirpath.rmdir()
+        except OSError:
+            # Still has non-empty contents (e.g. a skipped file remains).
+            # Leave the rest in place so the operator can inspect.
+            print(
+                f"[warn] {dirpath} is not empty, leaving in place"
+            )
+            return
+    try:
+        root.rmdir()
+    except OSError as exc:
+        print(f"[warn] could not remove {root}: {exc}")
+    else:
+        print(f"[ok] removed empty {root}")
+
+
 def migrate(
     project_dir: Path,
     *,
@@ -73,8 +105,7 @@ def migrate(
     if not actions and not skipped:
         print(f"[ok] {legacy_dir} is empty; nothing to migrate.")
         if apply and delete_empty_source:
-            legacy_dir.rmdir()
-            print(f"[ok] removed empty {legacy_dir}")
+            _safely_remove_empty_tree(legacy_dir)
         return 0
 
     if not apply:
@@ -94,9 +125,8 @@ def migrate(
         f"({len(skipped)} skipped)."
     )
 
-    if delete_empty_source and not any(legacy_dir.rglob("*")):
-        legacy_dir.rmdir()
-        print(f"[ok] removed empty {legacy_dir}")
+    if delete_empty_source and not any(_iter_files(legacy_dir)):
+        _safely_remove_empty_tree(legacy_dir)
     elif delete_empty_source:
         print(
             f"[warn] {legacy_dir} still contains files (skipped above); "

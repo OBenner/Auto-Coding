@@ -103,6 +103,7 @@ _OLLAMA_NATIVE_TOOL_MODEL_TOKENS: tuple[str, ...] = (
     "functionary",
     "hermes-3",
     "phi-4",
+    "phi4",
     "granite3",
 )
 

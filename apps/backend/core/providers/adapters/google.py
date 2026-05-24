@@ -608,14 +608,34 @@ class GoogleProvider(AIEngineProvider):
         return GOOGLE_MODELS.copy()
 
     @classmethod
-    def supports_native_tools(cls, model: str | None) -> bool:
-        """Gemini 1.5/2.x/3.x support FunctionDeclaration; legacy lines do not."""
-        if not model or not model.strip():
+    def supports_native_tools(cls, model: object | None) -> bool:
+        """Gemini 1.5/2.x/3.x support FunctionDeclaration; legacy lines do not.
+
+        ``model`` is typed as ``object`` because the Google session also
+        holds a ``GenerativeModel`` instance under ``self.model`` whose
+        identifier lives on ``.model_name``; non-string inputs are
+        coerced to a best-effort string before the token match.
+        """
+        identifier = _google_model_identifier(model)
+        if not identifier:
             return False
-        haystack = model.strip().lower()
+        haystack = identifier.lower()
         if any(token in haystack for token in _GOOGLE_NON_TOOL_MODEL_TOKENS):
             return False
         return any(token in haystack for token in _GOOGLE_NATIVE_TOOL_MODEL_TOKENS)
+
+
+def _google_model_identifier(model: object | None) -> str:
+    """Return a normalised string identifier for a Google model reference."""
+    if model is None:
+        return ""
+    if isinstance(model, str):
+        return model.strip()
+    # ``GenerativeModel`` exposes the canonical identifier as ``model_name``.
+    candidate = getattr(model, "model_name", None) or getattr(model, "name", None)
+    if isinstance(candidate, str):
+        return candidate.strip()
+    return ""
 
     def validate_config(self) -> bool:
         """Validate provider configuration.

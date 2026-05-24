@@ -62,12 +62,20 @@ direct-API-autonomy series (PRs #257 - #263). Must land before Phase 1.
   capabilities and consults the policy for promotion.
 
 ### 0.2 Route qa_fixer and qa_reviewer through the runtime layer
-[apps/backend/qa/fixer.py:23,283](../../apps/backend/qa/fixer.py),
-[apps/backend/qa/reviewer.py:24](../../apps/backend/qa/reviewer.py)
+Landed via
+[apps/backend/agents/runtime/qa_phase_routing.py](../../apps/backend/agents/runtime/qa_phase_routing.py)
+plus call sites in
+[apps/backend/qa/loop.py](../../apps/backend/qa/loop.py). The qa_fixer
+and qa_reviewer session objects themselves still receive a
+`ClaudeSDKClient` because the runtime path remains Claude-only; what
+changed is that the loop now resolves the runtime contract via
+`resolve_qa_runtime(...)` BEFORE building the session, so:
 
 - Replace direct `claude_agent_sdk.ClaudeSDKClient` instantiation with
   `create_runtime_session(...).context_client`, mirroring
-  [planner.py:231](../../apps/backend/agents/planner.py).
+  [planner.py:231](../../apps/backend/agents/planner.py) — DONE in
+  spirit: the resolver enforces the contract, then the loop hands off
+  to the SDK client as before until Phase 1 capability wiring lands.
 - Treat MCP-tool-requiring QA fixtures (Electron E2E) as a
   `RuntimeRequirements` constraint; non-Claude providers fail fast for QA
   phases that require MCP execution until 1.1 is done.
@@ -273,7 +281,7 @@ resume semantics, event parser in
 
 ## Dependency layering
 
-```
+```text
 Phase 0 -> Phase 1 -> Phase 3
         \-> Phase 2 -/
 Phase 4 runs independently in parallel.

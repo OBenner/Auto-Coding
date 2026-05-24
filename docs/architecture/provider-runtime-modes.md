@@ -800,10 +800,14 @@ Auto Code validates and executes these actions locally:
 This mode is intentionally not full autonomous parity. It exposes the local
 action loop, provider-native tool calls when available, bounded runtime
 subagents when wired by the caller, and Auto Code's local MCP bridge for
-built-in tools. It can also execute the known Context7 stdio MCP tools through
-the provider-neutral external MCP client when `AUTO_CODE_EXTERNAL_MCP_CLIENT` is
-enabled; Graphiti, Linear, Electron, Puppeteer, and custom external MCP servers
-remain readiness-only in this layer. It does not expose Claude SDK session
+built-in tools. When `AUTO_CODE_EXTERNAL_MCP_CLIENT` is enabled (or the
+operator sets `AUTO_CODE_AUTONOMY=safe`/`bold` which flips it on
+automatically), the provider-neutral external MCP client executes
+`tools/list` plus `tools/call` against every registered external server
+— Context7, Graphiti, Linear, Electron, Puppeteer, and custom servers —
+through the same bridge. Per-server connectivity is validated by
+`agents.runtime.mcp_execution_smoke.mcp_execution_smoke(server,
+project_dir)`. It does not expose Claude SDK session
 lifecycle behavior. MCP support artifacts include per-server statuses
 such as `local_bridge`, `external_bridge_required`, `native_required`, and
 `unsupported`, so non-Claude runs can explain exactly which requested MCP

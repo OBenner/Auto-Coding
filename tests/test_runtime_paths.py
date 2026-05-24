@@ -15,7 +15,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-import pytest
 
 from core.paths import (
     AUTO_CODE_RUNTIME_DIR,
@@ -248,3 +247,18 @@ def test_migrate_script_is_noop_when_legacy_missing(tmp_path: Path):
     )
 
     assert exit_code == 0
+
+
+def test_migrate_script_handles_directory_only_legacy_tree(tmp_path: Path):
+    """Legacy tree with subdirectories but no files must not crash rmdir."""
+    legacy_dir = tmp_path / ".auto-Codex"
+    (legacy_dir / "history" / "archive").mkdir(parents=True)
+    (legacy_dir / "logs").mkdir()
+
+    migrate = _load_migrate_module()
+    exit_code = migrate.migrate(
+        tmp_path, apply=True, delete_empty_source=True
+    )
+
+    assert exit_code == 0
+    assert not legacy_dir.exists()

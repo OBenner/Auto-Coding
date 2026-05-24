@@ -44,9 +44,9 @@ def resolve_provider_smoke_history_path(project_dir: Path) -> Path:
     write to it without further branching.
     """
     new_path = provider_smoke_history_path(project_dir)
-    if new_path.exists():
+    if new_path.is_file():
         return new_path
     legacy_path = legacy_provider_smoke_history_path(project_dir)
-    if legacy_path.exists():
+    if legacy_path.is_file():
         return legacy_path
     return new_path

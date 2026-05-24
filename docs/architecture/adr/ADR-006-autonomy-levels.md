@@ -49,7 +49,7 @@ discrete levels. All existing env vars stay as low-level advanced
 overrides, documented explicitly as "normally not needed". `AUTO_CODE_AUTONOMY`
 becomes the only knob exposed in the quickstart docs and the default UI.
 
-```
+```text
 AUTO_CODE_AUTONOMY=off | claude | safe | bold
 ```
 
@@ -63,7 +63,7 @@ AUTO_CODE_AUTONOMY=off | claude | safe | bold
 `AutonomyPolicy` thresholds simplify to three presets selected by an
 optional second knob:
 
-```
+```text
 AUTO_CODE_AUTONOMY_PRESET=strict | standard | lax
 ```
 

@@ -99,24 +99,46 @@ def _detect_linux_backend() -> SandboxBackendInfo:
 
 
 def _detect_windows_backend(env: Mapping[str, str]) -> SandboxBackendInfo:
-    # AppContainer requires the Windows SDK helpers; for now we detect
-    # via WIN_SDK env var or known Microsoft toolchain paths. This is a
-    # skeleton — concrete process spawn wiring lands later.
+    # AppContainer requires both the Windows SDK helpers AND the
+    # process-spawn wiring (planned for the next step). Until that
+    # wiring lands the backend reports ``available=False`` even when
+    # the SDK env var is present, so the policy grant cannot pretend to
+    # sandbox shell while running unconstrained. Operators who want to
+    # try the AppContainer path early can flip
+    # ``AUTO_CODE_SANDBOX_WIN_APPCONTAINER_FORCE=true`` knowing the
+    # wrapping itself is still a TODO.
     sdk_root = env.get("WindowsSdkDir") or env.get("WIN_SDK")
-    if sdk_root:
+    force = env.get("AUTO_CODE_SANDBOX_WIN_APPCONTAINER_FORCE", "").strip().lower()
+    if sdk_root and force in _TRUTHY:
         return SandboxBackendInfo(
             backend=SandboxBackend.APPCONTAINER,
             platform="win32",
             available=True,
-            reason=(f"Windows AppContainer available via Windows SDK at {sdk_root}."),
+            reason=(
+                f"Windows AppContainer force-enabled (SDK at {sdk_root}); "
+                "spawn wiring is still experimental."
+            ),
+        )
+    if sdk_root:
+        return SandboxBackendInfo(
+            backend=SandboxBackend.APPCONTAINER,
+            platform="win32",
+            available=False,
+            reason=(
+                f"Windows SDK detected at {sdk_root}, but AppContainer "
+                "process-spawn wiring is not yet implemented; set "
+                "AUTO_CODE_SANDBOX_WIN_APPCONTAINER_FORCE=true to opt in "
+                "to the experimental path."
+            ),
         )
     return SandboxBackendInfo(
         backend=SandboxBackend.APPCONTAINER,
         platform="win32",
         available=False,
         reason=(
-            "Windows AppContainer requires the Windows SDK; set "
-            "WindowsSdkDir or WIN_SDK to enable it."
+            "Windows AppContainer requires the Windows SDK and a future "
+            "process-spawn implementation; neither WindowsSdkDir nor "
+            "WIN_SDK is set."
         ),
     )
 
