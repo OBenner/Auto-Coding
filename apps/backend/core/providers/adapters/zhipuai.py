@@ -486,9 +486,7 @@ class ZhipuAIProvider(AIEngineProvider):
         if not model or not model.strip():
             return False
         haystack = model.strip().lower()
-        return any(
-            token in haystack for token in _ZHIPUAI_NATIVE_TOOL_MODEL_TOKENS
-        )
+        return any(token in haystack for token in _ZHIPUAI_NATIVE_TOOL_MODEL_TOKENS)
 
     def validate_config(self) -> bool:
         """Validate provider configuration.

@@ -1633,7 +1633,9 @@ class GenericEditRuntimeSession:
         # their models can actually drive a tool loop (Ollama, ZhipuAI).
         # Skipping the native loop up-front avoids paying for an
         # unsupported-tools error round trip.
-        provider_supports = getattr(self.agent_session, "provider_supports_native_tools", None)
+        provider_supports = getattr(
+            self.agent_session, "provider_supports_native_tools", None
+        )
         if callable(provider_supports):
             try:
                 model = getattr(self.agent_session, "model", None)

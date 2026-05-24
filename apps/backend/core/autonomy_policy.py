@@ -70,9 +70,7 @@ class AutonomyPolicy:
     max_history_age_days: int = DEFAULT_MAX_HISTORY_AGE_DAYS
     required_e2e_runs: tuple[str, ...] = DEFAULT_REQUIRED_E2E_RUNS
     required_live_fault_cases: tuple[str, ...] = DEFAULT_REQUIRED_LIVE_FAULT_CASES
-    required_live_task_families: tuple[str, ...] = (
-        DEFAULT_REQUIRED_LIVE_TASK_FAMILIES
-    )
+    required_live_task_families: tuple[str, ...] = DEFAULT_REQUIRED_LIVE_TASK_FAMILIES
     allowed_phases: tuple[str, ...] = DEFAULT_ALLOWED_PHASES
     direct_api_eligible: bool = True
     sources: tuple[str, ...] = field(default_factory=tuple)
@@ -124,9 +122,7 @@ _PRESET_SEEDS: dict[str, dict[str, Any]] = {
     "lax": {
         "min_stable_runs": 1,
         "max_history_age_days": 30,
-        "required_live_fault_cases": (
-            "unsupported_tools",
-        ),
+        "required_live_fault_cases": ("unsupported_tools",),
         "required_live_task_families": (
             "single_file_edit",
             "multi_step_edit",
@@ -265,7 +261,7 @@ def _knobs_from_env(env: Mapping[str, str], *, scope: str) -> dict[str, Any]:
     for raw_name, raw_value in env.items():
         if not raw_name.startswith(prefix):
             continue
-        suffix = raw_name[len(prefix):].lower()
+        suffix = raw_name[len(prefix) :].lower()
         if suffix not in _KNOB_PARSERS:
             continue
         parsed = _parse_knob(suffix, raw_value)

@@ -1376,9 +1376,7 @@ def _provider_readiness_history_evidence(
 
     trend = history_summary.get("trend")
     if trend == "provider_history_stable":
-        if _provider_readiness_history_is_stable_enough(
-            history_summary, policy=policy
-        ):
+        if _provider_readiness_history_is_stable_enough(history_summary, policy=policy):
             evidence.append("provider_history_stable")
         else:
             warnings.append("provider_history_insufficient_runs")

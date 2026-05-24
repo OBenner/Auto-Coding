@@ -156,8 +156,7 @@ class RuntimeCapabilities:
         return [
             capability
             for capability in requirements.required
-            if not bool(getattr(self, capability, False))
-            and capability not in granted
+            if not bool(getattr(self, capability, False)) and capability not in granted
         ]
 
     def supports(
@@ -183,9 +182,7 @@ class RuntimeCapabilities:
 # can drive that loop end-to-end. Promotion alone does NOT grant
 # ``subagents`` or ``sandbox``: those still require Phase 1.2 and Phase
 # 1.3 capability work in docs/roadmap/non-claude-provider-autonomy.md.
-_PROMOTED_FULL_AUTONOMOUS_GRANTS: frozenset[str] = frozenset(
-    {"native_tool_loop"}
-)
+_PROMOTED_FULL_AUTONOMOUS_GRANTS: frozenset[str] = frozenset({"native_tool_loop"})
 # Additional capability the policy grants once the external MCP client
 # bridge is enabled. Phase 1.1: direct API providers can reach Graphiti,
 # Linear, Electron, Puppeteer, and custom MCP servers through the

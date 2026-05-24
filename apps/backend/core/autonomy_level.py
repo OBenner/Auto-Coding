@@ -285,9 +285,7 @@ def resolve_autonomy_settings(
         external_mcp_client_enabled = external_mcp_override
         explicit_overrides.append(EXTERNAL_MCP_CLIENT_ENV)
 
-    mutating_subagents_override = _parse_bool_env(
-        env_map.get(MUTATING_SUBAGENTS_ENV)
-    )
+    mutating_subagents_override = _parse_bool_env(env_map.get(MUTATING_SUBAGENTS_ENV))
     if mutating_subagents_override is not None:
         mutating_subagents_enabled = mutating_subagents_override
         explicit_overrides.append(MUTATING_SUBAGENTS_ENV)

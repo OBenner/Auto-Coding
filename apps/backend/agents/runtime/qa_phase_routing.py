@@ -63,8 +63,7 @@ def resolve_qa_runtime(
     )
 
     requires_claude_runtime = (
-        provider_name != "claude"
-        or runtime_decision.selected_mode != "full_autonomous"
+        provider_name != "claude" or runtime_decision.selected_mode != "full_autonomous"
     )
     if not requires_claude_runtime:
         return

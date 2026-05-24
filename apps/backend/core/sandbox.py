@@ -108,10 +108,7 @@ def _detect_windows_backend(env: Mapping[str, str]) -> SandboxBackendInfo:
             backend=SandboxBackend.APPCONTAINER,
             platform="win32",
             available=True,
-            reason=(
-                "Windows AppContainer available via Windows SDK at "
-                f"{sdk_root}."
-            ),
+            reason=(f"Windows AppContainer available via Windows SDK at {sdk_root}."),
         )
     return SandboxBackendInfo(
         backend=SandboxBackend.APPCONTAINER,
