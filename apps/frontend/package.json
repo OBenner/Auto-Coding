@@ -49,7 +49,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.91.1",
+    "@anthropic-ai/sdk": "^0.95.1",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.11",
     "@codemirror/lang-javascript": "^6.2.4",
@@ -114,7 +114,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.9",
+    "@biomejs/biome": "2.4.15",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@electron/rebuild": "^4.0.2",
@@ -131,7 +131,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/semver": "^7.7.1",
     "@types/uuid": "^11.0.0",
-    "@vitejs/plugin-react": "^5.2.0",
+    "@vitejs/plugin-react": "^6.0.1",
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.22",
     "cross-env": "^10.1.0",
@@ -140,12 +140,12 @@
     "electron-vite": "^5.0.0",
     "husky": "^9.1.7",
     "jsdom": "^29.0.0",
-    "lint-staged": "^16.2.7",
+    "lint-staged": "^17.0.4",
     "postcss": "^8.5.6",
     "rollup-plugin-visualizer": "^7.0.0",
     "tailwindcss": "^4.1.17",
     "typescript": "^6.0.2",
-    "vite": "^7.3.2",
+    "vite": "^8.0.11",
     "vitest": "^4.0.16"
   },
   "overrides": {
