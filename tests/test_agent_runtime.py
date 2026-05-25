@@ -850,7 +850,18 @@ async def test_direct_api_autonomous_factory_runs_full_coder_when_gate_allowed(
     )
 
     assert runtime_session.name == "direct_api_autonomous"
-    assert runtime_session.capabilities.supports(RuntimeRequirements.full_coder())
+    # Capability is honest: it does NOT physically guarantee a native tool
+    # loop; the underlying Generic Edit engine falls back to JSON when the
+    # provider does not support tools. The full_coder requirement is met
+    # via the runtime_policy promotion, not via a capability claim.
+    assert not runtime_session.capabilities.supports(
+        RuntimeRequirements.full_coder()
+    )
+    assert runtime_session.runtime_policy.promoted_to_full_autonomous is True
+    assert runtime_session.capabilities.supports(
+        RuntimeRequirements.full_coder(),
+        policy=runtime_session.runtime_policy,
+    )
 
     result = await run_runtime_session(
         runtime_session,
@@ -863,6 +874,330 @@ async def test_direct_api_autonomous_factory_runs_full_coder_when_gate_allowed(
     assert result.status == "continue"
     assert "direct API autonomous runtime" in result.response_text
     assert target.read_text(encoding="utf-8") == "new\n"
+
+
+def test_direct_api_autonomous_gate_honors_per_provider_min_stable_runs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A per-provider env override of min_stable_runs blocks an otherwise green gate."""
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MIN_STABLE_RUNS", "10")
+
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert gate.allowed is False
+    assert gate.status == "blocked"
+    assert gate.reason == "direct_api_autonomous_requirements_missing"
+    assert "stable_history_runs" in gate.missing_requirements
+
+
+def test_direct_api_autonomous_gate_per_provider_override_does_not_leak(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Tightening openai's threshold must not bleed into google's decision."""
+    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    provider_stats = {
+        "total_runs": 3,
+        "passed_runs": 3,
+        "failed_runs": 0,
+        "last_status": "passed",
+        "last_runtime_mode": "provider_e2e",
+        "last_run_at": now_iso,
+        "last_provider_e2e_status": "passed",
+        "last_reliability_status": "complete",
+        "last_live_fault_probe_status": "passed",
+        "live_fault_probe_covered_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        "last_live_task_family_status": "passed",
+        "live_task_family_covered_families": [
+            "multi_step_edit",
+            "recovery_resume",
+            "single_file_edit",
+            "transaction_batching",
+        ],
+        "trend": "provider_history_stable",
+        "recent_window": 3,
+        "consecutive_passes": 3,
+        "last_promotion_gate_status": "passed",
+        "promotion_missing_reliability_cases": [],
+        "promotion_missing_e2e_runs": [],
+    }
+    history_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "providers": {
+                    "openai": provider_stats,
+                    "google": provider_stats,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MIN_STABLE_RUNS", "10")
+
+    openai_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+    google_gate = resolve_direct_api_autonomous_gate(
+        provider_name="google",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert openai_gate.allowed is False
+    assert "stable_history_runs" in openai_gate.missing_requirements
+    assert google_gate.allowed is True
+    assert google_gate.status == "passed"
+
+
+def test_direct_api_autonomous_gate_loosened_max_history_age_passes_stale_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A relaxed max_history_age lets a slightly stale history through."""
+    from datetime import timedelta as _td
+
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    stale_run_at = (datetime.now(timezone.utc) - _td(days=8)).isoformat()
+    _write_direct_api_autonomous_history(tmp_path, run_at=stale_run_at)
+
+    default_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert default_gate.allowed is False
+    assert "fresh_provider_history" in default_gate.missing_requirements
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MAX_HISTORY_AGE_DAYS", "14")
+    relaxed_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert relaxed_gate.allowed is True
+    assert relaxed_gate.status == "passed"
+
+
+def test_direct_api_autonomous_gate_extra_required_live_fault_case_blocks_clean_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Adding a required live fault case the history does not cover blocks the gate."""
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+    monkeypatch.setenv(
+        "AUTO_CODE_AUTONOMY_OPENAI_REQUIRED_LIVE_FAULT_CASES",
+        "unsupported_tools,gateway_model_limitations,never_covered_case",
+    )
+
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert gate.allowed is False
+    assert "live_fault_probe_coverage" in gate.missing_requirements
+
+
+def test_direct_api_autonomous_runtime_policy_grants_mcp_under_safe_level(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``AUTO_CODE_AUTONOMY=safe`` flips mcp_execution_enabled on the adapter."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_EXTERNAL_MCP_CLIENT", raising=False)
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+    policy = session.runtime_policy
+
+    assert policy.promoted_to_full_autonomous is True
+    assert policy.mcp_execution_enabled is True
+    assert "mcp" in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_keeps_mcp_off_on_claude_level(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``AUTO_CODE_AUTONOMY=claude`` (default) does not grant the MCP capability."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+    monkeypatch.delenv("AUTO_CODE_EXTERNAL_MCP_CLIENT", raising=False)
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+    policy = session.runtime_policy
+
+    assert policy.promoted_to_full_autonomous is True
+    assert policy.mcp_execution_enabled is False
+    assert "mcp" not in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_responds_to_explicit_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Power users can flip the external MCP bridge without changing the level."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+    monkeypatch.setenv("AUTO_CODE_EXTERNAL_MCP_CLIENT", "true")
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+
+    assert session.runtime_policy.mcp_execution_enabled is True
+
+
+def test_direct_api_autonomous_runtime_policy_enables_subagents_for_bold_level(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``AUTO_CODE_AUTONOMY=bold`` flips mutating_subagents_enabled on the adapter."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+    monkeypatch.delenv("AUTO_CODE_MUTATING_SUBAGENTS", raising=False)
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+
+    policy = session.runtime_policy
+    assert policy.mutating_subagents_enabled is True
+    assert "subagents" in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_keeps_subagents_off_for_safe_level(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_MUTATING_SUBAGENTS", raising=False)
+    session = DirectApiAutonomousRuntimeSession.__new__(
+        DirectApiAutonomousRuntimeSession
+    )
+
+    assert session.runtime_policy.mutating_subagents_enabled is False
+    assert "subagents" not in session.runtime_policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_grants_sandbox_when_host_supports(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``AUTO_CODE_AUTONOMY=safe`` plus a working backend flips sandbox grant on."""
+    from unittest.mock import patch
+
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.SEATBELT,
+        platform="darwin",
+        available=True,
+        reason="ok",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        session = DirectApiAutonomousRuntimeSession.__new__(
+            DirectApiAutonomousRuntimeSession
+        )
+        policy = session.runtime_policy
+
+    assert policy.sandbox_enabled is True
+    assert "sandbox" in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_runtime_policy_keeps_sandbox_off_without_backend(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """If no host backend is available, the grant stays off even on safe."""
+    from unittest.mock import patch
+
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+    from core.sandbox import SandboxBackend, SandboxBackendInfo
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = SandboxBackendInfo(
+        backend=SandboxBackend.UNAVAILABLE,
+        platform="haiku",
+        available=False,
+        reason="No backend.",
+    )
+    with patch("core.sandbox.describe_sandbox_backend", return_value=info):
+        session = DirectApiAutonomousRuntimeSession.__new__(
+            DirectApiAutonomousRuntimeSession
+        )
+        policy = session.runtime_policy
+
+    assert policy.sandbox_enabled is False
+    assert "sandbox" not in policy.granted_capabilities()
+
+
+def test_direct_api_autonomous_gate_phase_allowlist_can_be_extended(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Operators can opt qa_fixing into the gate via per-provider allowed_phases."""
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
+
+    default_phase_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="qa_fixing",
+    )
+
+    assert default_phase_gate.allowed is False
+    assert default_phase_gate.reason == "direct_api_autonomous_phase_blocked"
+
+    monkeypatch.setenv(
+        "AUTO_CODE_AUTONOMY_OPENAI_ALLOWED_PHASES",
+        "coding,qa_fixing",
+    )
+    extended_phase_gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="qa_fixing",
+    )
+
+    assert extended_phase_gate.allowed is True
+    assert extended_phase_gate.status == "passed"
 
 
 def test_provider_tool_call_parser_handles_responses_output_blocks():

@@ -3,8 +3,17 @@ Runtime capability contracts.
 
 The provider layer answers "which model can we call?" The runtime layer answers
 "which workspace actions can this session perform safely?"
+
+``RuntimeCapabilities`` describes what the runtime physically supports.
+Promotion of a runtime to satisfy a stricter requirement (for example
+treating a Generic Edit session as ``full_autonomous`` after a provider
+clears the AutonomyPolicy gate) is a separate decision expressed via
+``RuntimePolicy``. Capabilities must never claim a flag that the runtime
+cannot back; promotion lives in policy so operators can see the two
+forces independently.
 """
 
+import warnings
 from dataclasses import dataclass
 
 
@@ -93,19 +102,36 @@ class RuntimeCapabilities:
         )
 
     @classmethod
+    def promoted_edit(cls) -> "RuntimeCapabilities":
+        """Capabilities for a Generic Edit session that may be policy-promoted.
+
+        Physically identical to :meth:`generic_edit`. Promotion to satisfy
+        ``full_coder``/``planner`` requirements is represented separately
+        via :class:`RuntimePolicy` so the capability flags stay honest.
+        """
+        return cls.generic_edit()
+
+    @classmethod
     def direct_api_autonomous(cls) -> "RuntimeCapabilities":
-        """Capabilities for promoted direct API providers using local tools."""
-        return cls(
-            text_completion=True,
-            streaming_text=True,
-            structured_output=True,
-            native_tool_loop=True,
-            function_tools=True,
-            filesystem_read=True,
-            filesystem_edit=True,
-            shell=True,
-            apply_patch=True,
+        """Deprecated alias for :meth:`promoted_edit`.
+
+        The previous implementation set ``native_tool_loop=True`` to make
+        :class:`DirectApiAutonomousRuntimeSession` satisfy ``full_coder``
+        requirements through the capability check. That conflated
+        capability (what the runtime physically does) with policy (whether
+        the AutonomyPolicy gate promoted the runtime). Use
+        :meth:`promoted_edit` for the honest capability and combine it
+        with a :class:`RuntimePolicy` carrying
+        ``promoted_to_full_autonomous=True`` for the promotion decision.
+        """
+        warnings.warn(
+            "RuntimeCapabilities.direct_api_autonomous() is deprecated; "
+            "use RuntimeCapabilities.promoted_edit() combined with a "
+            "RuntimePolicy that carries promoted_to_full_autonomous=True.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return cls.promoted_edit()
 
     def available(self) -> list[str]:
         """Return capability names set to true."""
@@ -115,17 +141,107 @@ class RuntimeCapabilities:
             if isinstance(value, bool) and value
         ]
 
-    def missing(self, requirements: "RuntimeRequirements") -> list[str]:
-        """Return required capabilities this runtime does not provide."""
+    def missing(
+        self,
+        requirements: "RuntimeRequirements",
+        *,
+        policy: "RuntimePolicy | None" = None,
+    ) -> list[str]:
+        """Return required capabilities this runtime does not provide.
+
+        ``policy`` may grant the runtime additional satisfied capabilities
+        through evidence-based promotion (see :class:`RuntimePolicy`).
+        """
+        granted = policy.granted_capabilities() if policy is not None else frozenset()
         return [
             capability
             for capability in requirements.required
-            if not bool(getattr(self, capability, False))
+            if not bool(getattr(self, capability, False)) and capability not in granted
         ]
 
-    def supports(self, requirements: "RuntimeRequirements") -> bool:
-        """Return true when all required capabilities are available."""
-        return not self.missing(requirements)
+    def supports(
+        self,
+        requirements: "RuntimeRequirements",
+        *,
+        policy: "RuntimePolicy | None" = None,
+    ) -> bool:
+        """Return true when all required capabilities are available.
+
+        Pass ``policy`` to honor evidence-based promotion (for example a
+        Generic Edit runtime that the AutonomyPolicy gate promoted to
+        ``full_autonomous`` for a specific provider).
+        """
+        return not self.missing(requirements, policy=policy)
+
+
+# Capabilities the promoted-edit policy grants the runtime when the
+# AutonomyPolicy gate signs off. ``native_tool_loop`` is granted because
+# the underlying Generic Edit engine attempts the provider's native tool
+# API and falls back to its JSON action loop when the provider does not
+# support tools; the gate evidence proves the provider/model combination
+# can drive that loop end-to-end. Promotion alone does NOT grant
+# ``subagents`` or ``sandbox``: those still require Phase 1.2 and Phase
+# 1.3 capability work in docs/roadmap/non-claude-provider-autonomy.md.
+_PROMOTED_FULL_AUTONOMOUS_GRANTS: frozenset[str] = frozenset({"native_tool_loop"})
+# Additional capability the policy grants once the external MCP client
+# bridge is enabled. Phase 1.1: direct API providers can reach Graphiti,
+# Linear, Electron, Puppeteer, and custom MCP servers through the
+# provider-neutral bridge so they match the Claude SDK MCP surface for
+# tool discovery and invocation.
+_MCP_EXECUTION_GRANTS: frozenset[str] = frozenset({"mcp"})
+# Phase 1.2: mutating subagents. The orchestrator already produces
+# isolated child contexts and per-child artifacts; transactional
+# boundaries and conflict-aware merge are tracked separately in the
+# runtime_subagent_mutation_policy matrix. This grant lets operators
+# (via AutonomyLevel.BOLD or AUTO_CODE_MUTATING_SUBAGENTS=true) opt in
+# once the merge protocol scaffolding lands.
+_MUTATING_SUBAGENT_GRANTS: frozenset[str] = frozenset({"subagents"})
+# Phase 1.3: sandbox. The cross-platform sandbox skeleton in
+# ``core/sandbox.py`` detects whether Seatbelt (macOS), bubblewrap
+# (Linux), or AppContainer (Windows) is available. The policy grant
+# only fires when ``sandbox_enabled=True``, which the autonomy layer
+# only sets when (a) the level requests sandboxing and (b) the host
+# actually exposes a real backend; otherwise the runtime keeps
+# ``sandbox`` missing so the capability error is honest.
+_SANDBOX_GRANTS: frozenset[str] = frozenset({"sandbox"})
+
+
+@dataclass(frozen=True)
+class RuntimePolicy:
+    """Policy-driven attributes applied on top of :class:`RuntimeCapabilities`.
+
+    Capability and policy are intentionally separate concerns: capability
+    describes what the runtime can physically do, policy describes what the
+    operator (or an evidence gate) has decided to allow on top of that.
+    """
+
+    promoted_to_full_autonomous: bool = False
+    mcp_execution_enabled: bool = False
+    mutating_subagents_enabled: bool = False
+    sandbox_enabled: bool = False
+
+    def granted_capabilities(self) -> frozenset[str]:
+        """Return capability names the policy treats as satisfied."""
+        granted: set[str] = set()
+        if self.promoted_to_full_autonomous:
+            granted |= _PROMOTED_FULL_AUTONOMOUS_GRANTS
+        if self.mcp_execution_enabled:
+            granted |= _MCP_EXECUTION_GRANTS
+        if self.mutating_subagents_enabled:
+            granted |= _MUTATING_SUBAGENT_GRANTS
+        if self.sandbox_enabled:
+            granted |= _SANDBOX_GRANTS
+        return frozenset(granted)
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-safe policy snapshot."""
+        return {
+            "promoted_to_full_autonomous": self.promoted_to_full_autonomous,
+            "mcp_execution_enabled": self.mcp_execution_enabled,
+            "mutating_subagents_enabled": self.mutating_subagents_enabled,
+            "sandbox_enabled": self.sandbox_enabled,
+            "granted_capabilities": sorted(self.granted_capabilities()),
+        }
 
 
 @dataclass(frozen=True)
@@ -205,12 +321,14 @@ class RuntimeCapabilityError(RuntimeError):
         runtime_name: str,
         requirements: RuntimeRequirements,
         capabilities: RuntimeCapabilities,
+        policy: RuntimePolicy | None = None,
     ):
         self.provider_name = provider_name
         self.runtime_name = runtime_name
         self.requirements = requirements
         self.capabilities = capabilities
-        self.missing = capabilities.missing(requirements)
+        self.policy = policy
+        self.missing = capabilities.missing(requirements, policy=policy)
         super().__init__(self._build_message())
 
     def _build_message(self) -> str:
@@ -222,12 +340,22 @@ class RuntimeCapabilityError(RuntimeError):
             else "- none"
         )
         missing = "\n".join(f"- {name}" for name in self.missing)
+        policy_block = ""
+        if self.policy is not None:
+            granted = sorted(self.policy.granted_capabilities())
+            granted_text = "\n".join(f"- {name}" for name in granted) or "- none"
+            policy_block = (
+                f"\nPolicy-granted capabilities:\n{granted_text}\n"
+                f"Promoted to full autonomous: "
+                f"{self.policy.promoted_to_full_autonomous}\n"
+            )
         return (
             f"Cannot run {self.requirements.mode} with provider={self.provider_name} "
             f"runtime={self.runtime_name}.\n\n"
             f"Missing capabilities:\n{missing}\n\n"
             f"Required capabilities:\n{required}\n\n"
-            f"Available capabilities:\n{available}\n\n"
+            f"Available capabilities:\n{available}\n"
+            f"{policy_block}\n"
             "Use Claude Agent SDK for full autonomous coding today, or run a "
             "limited generic_edit, patch_proposal, or analysis_only phase with "
             "a compatible runtime."

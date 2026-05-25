@@ -87,7 +87,7 @@ def _stable_provider_history(run_at: str) -> dict[str, object]:
 
 
 def _write_provider_history(tmp_path: Path, provider_stats: dict[str, object]) -> None:
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history_path.parent.mkdir(parents=True)
     history_path.write_text(
         json.dumps(
@@ -344,6 +344,15 @@ def test_runtime_modes_command_outputs_json(capsys, monkeypatch, tmp_path):
     assert "runner_router" in payload["recommendations"]
     assert "external_mcp_client" in payload["recommendations"]
     assert "provider_autonomous_readiness" in payload["recommendations"]
+    assert "autonomy_level" in payload["recommendations"]
+    autonomy_block = payload["autonomy"]
+    assert autonomy_block["level"] == "claude"
+    assert autonomy_block["preset"] == "standard"
+    assert autonomy_block["runtime_mode"] == "full_autonomous"
+    assert autonomy_block["runtime_fallback_enabled"] is False
+    assert autonomy_block["direct_api_gate_enabled"] is False
+    assert autonomy_block["direct_api_skip_gate"] is False
+    assert autonomy_block["explicit_overrides"] == []
     policy_rows = {
         (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
     }
@@ -621,7 +630,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
 
     openai_run_at = _provider_smoke_run_at()
     google_run_at = _provider_smoke_run_at()
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history_path.parent.mkdir(parents=True)
     history_path.write_text(
         json.dumps(
@@ -703,7 +712,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
     provider_e2e = history_rows["provider_e2e"]
 
     assert provider_e2e["status"] == "partial"
-    assert provider_e2e["history_path"] == ".auto-Codex/provider-smoke-history.json"
+    assert provider_e2e["history_path"] == ".auto-claude/runtime/provider-smoke-history.json"
     assert provider_e2e["total_runs"] == 5
     assert provider_e2e["passed_runs"] == 3
     assert provider_e2e["failed_runs"] == 2
@@ -758,7 +767,7 @@ def test_runtime_modes_command_reports_provider_eval_history(
     assert comparative_rows["openai"]["cost_delta_usd"] == pytest.approx(-0.0025)
     assert comparative_rows["openai"]["cost_delta_formatted"] == "-$0.0025"
     assert comparative_rows["openai"]["evidence_source"] == (
-        ".auto-Codex/provider-smoke-history.json"
+        ".auto-claude/runtime/provider-smoke-history.json"
     )
     assert comparative_rows["google"]["quality_status"] == "failed"
     assert comparative_rows["google"]["quality_score"] == 0
@@ -775,7 +784,7 @@ def test_runtime_provider_history_logs_corrupt_artifact(
 ):
     from cli.runtime_commands import _runtime_provider_history_stats_by_name
 
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history_path.parent.mkdir(parents=True)
     history_path.write_text("{", encoding="utf-8")
 
@@ -827,7 +836,7 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
 
     openai_run_at = _provider_smoke_run_at()
     google_run_at = _provider_smoke_run_at()
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history_path.parent.mkdir(parents=True)
     history_path.write_text(
         json.dumps(
@@ -1299,7 +1308,7 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
 
     openai_run_at = _provider_smoke_run_at()
     google_run_at = _provider_smoke_run_at()
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history_path.parent.mkdir(parents=True)
     history_path.write_text(
         json.dumps(

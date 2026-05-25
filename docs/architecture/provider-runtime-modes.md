@@ -233,6 +233,93 @@ The activation is deliberately narrower than Claude/Codex full autonomy:
   adapter before execution.
 - Mutating subagents still require the separate transactional merge gate.
 
+### Autonomy Levels (recommended entry point)
+
+`AUTO_CODE_AUTONOMY` is the single top-level knob (see
+[ADR-006](./adr/ADR-006-autonomy-levels.md)). It collapses
+`AUTO_CODE_RUNTIME_MODE`, `AUTO_CODE_RUNTIME_FALLBACK`, and
+`AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS` into four discrete intents:
+
+| Level | Intent |
+|-------|--------|
+| `off` | Analysis only, never writes the workspace. |
+| `claude` (default) | Claude / Codex CLI full autonomy; direct API providers refused with a capability error. |
+| `safe` | + direct API providers can be promoted to coder full autonomy when the AutonomyPolicy gate passes. |
+| `bold` | + skip the AutonomyPolicy gate; for benchmarks and CI evidence seeding. |
+
+`AUTO_CODE_AUTONOMY_PRESET=strict|standard|lax` selects threshold
+presets for the AutonomyPolicy gate. Explicit low-level env vars (the
+existing matrix below) keep working and win over the level mapping;
+they are advanced configuration, normally not needed. `--runtime-modes
+--json` includes an `"autonomy"` block reporting the resolved level,
+preset, and any explicit overrides.
+
+### Capability vs Policy
+
+`RuntimeCapabilities` describes what a runtime physically supports.
+`RuntimePolicy` describes evidence-based promotions layered on top. The
+two are intentionally separate so the runtime never claims a capability
+it cannot back, and operators can see which decisions came from the
+capability layer and which came from a policy gate.
+
+The `direct_api_autonomous` adapter now advertises
+`RuntimeCapabilities.promoted_edit()` (identical to `generic_edit()` —
+no fake `native_tool_loop=True`) plus a `RuntimePolicy` carrying
+`promoted_to_full_autonomous=True`. The shared
+`capabilities.supports(requirements, policy=...)` helper grants
+`native_tool_loop` as satisfied when the policy promotes the runtime, so
+the `full_coder` requirement is met through evidence rather than through
+a capability claim. The legacy
+`RuntimeCapabilities.direct_api_autonomous()` constructor still works
+but raises a `DeprecationWarning` and returns the honest promoted-edit
+shape.
+
+#### MCP capability grant
+
+`RuntimePolicy.mcp_execution_enabled=True` additionally grants the
+`mcp` capability. The `direct_api_autonomous` adapter sets this flag
+whenever `resolve_autonomy_settings(...).external_mcp_client_enabled`
+is true, which `AUTO_CODE_AUTONOMY=safe` (and `bold`) flip on by
+default. Explicit `AUTO_CODE_EXTERNAL_MCP_CLIENT=true`/`false` still
+wins for operators who want fine control.
+
+The provider-neutral MCP bridge (`agents/runtime/mcp_bridge.py`) has
+been execution-capable for every registered external server (Graphiti,
+Linear, Electron, Puppeteer, Context7, custom) for a while — it was
+gated behind the env var. With the `safe`/`bold` level mapping a
+direct API session can now actually drive `tools/list` plus
+`tools/call` through the bridge against any of those servers, not only
+Context7. Per-server smoke runs through `mcp_execution_smoke(server,
+project_dir)` (see `agents/runtime/mcp_execution_smoke.py`) which
+selects the first non-mutating tool the adapter exposes and validates
+the full pipeline end-to-end, returning a structured payload that
+includes the normalized result, the failure stage (`tools_list` vs
+`tools_call`), and the failure kind classification used by the rest of
+the diagnostics surface.
+
+Promotion is still narrow: `subagents` and `sandbox` are not granted
+and still require Phase 1.2 and Phase 1.3 capability work in
+`docs/roadmap/non-claude-provider-autonomy.md`.
+
+### QA Phase Runtime Routing
+
+`qa_reviewer` and `qa_fixer` are now resolved through the runtime layer the
+same way `planner` and `coder` are. `qa/loop.py` reads
+`AGENT_PROVIDER_QA_REVIEWER` / `AGENT_PROVIDER_QA_FIXER` and
+`AGENT_RUNTIME_MODE_QA_REVIEWER` / `AGENT_RUNTIME_MODE_QA_FIXER` before
+constructing a session and calls `resolve_runtime_mode_with_fallback` so the
+runtime decision is persisted as an artifact under
+`spec_dir/artifacts/runtime_fallback_qa_*.json`.
+
+Execution still requires the Claude Agent SDK surface (multi-turn tool loop,
+Electron MCP for E2E, recovery hooks). A non-Claude provider or a
+non-`full_autonomous` runtime now fails fast with a clear capability error
+referencing this roadmap, instead of silently falling back to Claude. The
+fail-fast contract makes `AUTO_CODE_AUTONOMY_<PROVIDER>_ALLOWED_PHASES`
+overrides legible: operators can opt a provider into `qa_fixing` once the
+underlying capability work (Phase 1.1 MCP execution and Phase 1.4 native
+tool loop in `docs/roadmap/non-claude-provider-autonomy.md`) lands.
+
 Current plan status:
 
 | Area | Status | Current boundary |
@@ -241,7 +328,7 @@ Current plan status:
 | Provider reliability | Mostly done | Provider e2e, negative fixtures, run history, live task-family evidence, and promotion gates are wired. |
 | MCP Bridge v1 | Mostly done | External MCP bridge, permissions metadata, health, schemas, and audit artifacts exist; custom lifecycle hardening continues separately. |
 | Generic Edit v2 core | Mostly done | Transactions, batches, recovery checkpoints, resume preflight, repair/rollback metadata, and rich artifacts are wired. |
-| Direct API autonomous runtime core | Done in this layer | `direct_api_autonomous` can run coder/QA fixer full-coder requirements when env and history gates pass. |
+| Direct API autonomous runtime core | Done in this layer | `direct_api_autonomous` can run coder full-coder requirements when env and history gates pass; QA phases are resolved through the runtime layer but execution is still Claude-only pending Phase 1 capability work. |
 | Subagent Orchestrator v2 | Partial | Read-only child contexts exist; mutating subagents remain blocked behind transaction-boundary and merge-protocol gates. |
 | CLI full runtime class | Partial | Codex CLI and generic CLI profiles exist; additional runners need deeper runner-specific contracts. |
 | Frontend control plane | Partial | Runtime diagnostics consume the matrices; richer artifact viewers and inline incompatibility warnings remain. |
@@ -713,10 +800,14 @@ Auto Code validates and executes these actions locally:
 This mode is intentionally not full autonomous parity. It exposes the local
 action loop, provider-native tool calls when available, bounded runtime
 subagents when wired by the caller, and Auto Code's local MCP bridge for
-built-in tools. It can also execute the known Context7 stdio MCP tools through
-the provider-neutral external MCP client when `AUTO_CODE_EXTERNAL_MCP_CLIENT` is
-enabled; Graphiti, Linear, Electron, Puppeteer, and custom external MCP servers
-remain readiness-only in this layer. It does not expose Claude SDK session
+built-in tools. When `AUTO_CODE_EXTERNAL_MCP_CLIENT` is enabled (or the
+operator sets `AUTO_CODE_AUTONOMY=safe`/`bold` which flips it on
+automatically), the provider-neutral external MCP client executes
+`tools/list` plus `tools/call` against every registered external server
+— Context7, Graphiti, Linear, Electron, Puppeteer, and custom servers —
+through the same bridge. Per-server connectivity is validated by
+`agents.runtime.mcp_execution_smoke.mcp_execution_smoke(server,
+project_dir)`. It does not expose Claude SDK session
 lifecycle behavior. MCP support artifacts include per-server statuses
 such as `local_bridge`, `external_bridge_required`, `native_required`, and
 `unsupported`, so non-Claude runs can explain exactly which requested MCP

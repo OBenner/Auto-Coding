@@ -66,11 +66,46 @@ class OllamaSession(OpenAICompatibleSession):
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
 
+    def provider_supports_native_tools(self, model: str | None) -> bool:
+        """Delegate to :meth:`OllamaProvider.supports_native_tools` for the model.
+
+        The runtime calls this before opening the native tool loop so an
+        Ollama session running a non-tool-capable local model skips the
+        loop without paying for an unsupported-tools error round trip.
+        """
+        return OllamaProvider.supports_native_tools(model or self.model)
+
     def _build_client_kwargs(self) -> dict[str, Any]:
         return {
             "base_url": f"{self._base_url}/v1",
             "api_key": self._api_key or "ollama",  # Ollama ignores API key
         }
+
+
+# Substrings that identify Ollama-served models known to support the
+# OpenAI-compatible ``tools`` parameter. Matched case-insensitively
+# against the configured model identifier. Older or smaller models
+# (llama2, codellama, phi-2, gemma:2b, mistral:7b without instruct
+# tuning, etc.) generally return JSON in content rather than producing
+# real tool_calls; for those we skip the native loop instead of paying
+# for an exception round-trip.
+_OLLAMA_NATIVE_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "llama3.1",
+    "llama3.2",
+    "llama3.3",
+    "qwen2.5",
+    "qwen3",
+    "mistral-nemo",
+    "mistral-large",
+    "command-r",
+    "command-r-plus",
+    "firefunction",
+    "functionary",
+    "hermes-3",
+    "phi-4",
+    "phi4",
+    "granite3",
+)
 
 
 class OllamaProvider(OpenAICompatibleProvider):
@@ -82,6 +117,23 @@ class OllamaProvider(OpenAICompatibleProvider):
 
     _provider_name = "ollama"
     _supported_models = OLLAMA_MODELS
+
+    @classmethod
+    def supports_native_tools(cls, model: str | None) -> bool:
+        """Ollama-served models vary widely in tool-call support.
+
+        Returns ``True`` only when the configured model identifier
+        matches a known-good token from
+        :data:`_OLLAMA_NATIVE_TOOL_MODEL_TOKENS`. Anything else (older
+        llama2 lines, tiny phi/gemma variants, custom local builds)
+        skips the native loop in favor of the JSON action loop. The
+        check is intentionally string-based because Ollama lets users
+        run arbitrary local model tags that no central registry covers.
+        """
+        if not model or not model.strip():
+            return False
+        haystack = model.strip().lower()
+        return any(token in haystack for token in _OLLAMA_NATIVE_TOOL_MODEL_TOKENS)
 
     def _get_api_key(self) -> str | None:
         return self._config.ollama_api_key

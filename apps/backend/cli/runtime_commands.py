@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -526,7 +526,18 @@ def build_runtime_subagent_matrix() -> list[dict[str, Any]]:
 
 
 def build_runtime_subagent_mutation_policy() -> list[dict[str, Any]]:
-    """Build explicit policy gates for future mutating subagent support."""
+    """Build explicit policy gates for mutating subagent support.
+
+    The matrix reflects the resolved :class:`ResolvedAutonomySettings`
+    so ``AUTO_CODE_AUTONOMY=bold`` (or an explicit
+    ``AUTO_CODE_MUTATING_SUBAGENTS=true`` override) flips the status
+    from ``blocked`` to ``opt_in_experimental``. The conflict-aware
+    merge protocol is still scaffold-only; the status is intentionally
+    not ``enabled`` until the parent-approved apply/abort UX lands.
+    """
+    from core.autonomy_level import resolve_autonomy_settings
+
+    autonomy_settings = resolve_autonomy_settings()
     missing_gates = [
         gate
         for gate in MUTATING_SUBAGENT_REQUIRED_GATES
@@ -537,19 +548,30 @@ def build_runtime_subagent_mutation_policy() -> list[dict[str, Any]]:
         for mode in RUNTIME_MODE_INFO:
             if mode.mode not in {"full_autonomous", "generic_edit"}:
                 continue
+            mutating_enabled = autonomy_settings.mutating_subagents_enabled
+            if mutating_enabled:
+                status = "opt_in_experimental"
+                reason = (
+                    "mutating_subagents_opted_in_via_autonomy_level"
+                    if autonomy_settings.level.value == "bold"
+                    else "mutating_subagents_opted_in_via_env_override"
+                )
+            else:
+                status = "blocked"
+                reason = "mutating_subagents_require_transactional_merge"
             matrix.append(
                 {
                     "provider": provider_row.provider,
                     "runtime_mode": mode.mode,
-                    "mutating_subagents_enabled": False,
-                    "status": "blocked",
+                    "mutating_subagents_enabled": mutating_enabled,
+                    "status": status,
                     "transaction_boundary_required": True,
                     "parent_approval_required": True,
                     "merge_protocol": "read_only_until_transactional_merge",
                     "required_gates": list(MUTATING_SUBAGENT_REQUIRED_GATES),
                     "satisfied_gates": list(MUTATING_SUBAGENT_SATISFIED_GATES),
                     "missing_gates": missing_gates,
-                    "reason": "mutating_subagents_require_transactional_merge",
+                    "reason": reason,
                 }
             )
     return matrix
@@ -1429,8 +1451,8 @@ def _runtime_provider_readiness_last_run_datetime(
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _runtime_provider_readiness_history_freshness_complete(
@@ -1441,7 +1463,7 @@ def _runtime_provider_readiness_history_freshness_complete(
     if last_run_at is None:
         return False
     max_age = timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
-    return datetime.now(timezone.utc) - last_run_at <= max_age
+    return datetime.now(UTC) - last_run_at <= max_age
 
 
 def _runtime_string_list_payload(value: Any) -> list[str]:
@@ -2246,13 +2268,17 @@ def build_runtime_modes_payload(
     project_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Build structured runtime compatibility payload."""
+    from core.autonomy_level import resolve_autonomy_settings
+
     cli_runner_selection = {
         mode.mode: select_cli_runner_profiles(runtime_mode=mode.mode).to_dict(
             include_detection=True,
         )
         for mode in RUNTIME_MODE_INFO
     }
+    autonomy_settings = resolve_autonomy_settings()
     return {
+        "autonomy": autonomy_settings.to_dict(),
         "runtime_modes": runtime_mode_info_as_dicts(),
         "providers": provider_runtime_compatibility_as_dicts(),
         "cli_runner_profiles": cli_runner_profiles_as_dicts(
@@ -2319,8 +2345,19 @@ def build_runtime_modes_payload(
             ),
             "direct_api_autonomous_runtime": (
                 f"Set {DIRECT_API_AUTONOMOUS_ENV}=true only after the provider "
-                "autonomous readiness and promotion gates are clean; coder and "
-                "QA fixer phases can then use the direct_api_autonomous adapter."
+                "autonomous readiness and promotion gates are clean; the coder "
+                "phase can then use the direct_api_autonomous adapter. QA "
+                "phases (qa_reviewer / qa_fixer) still require Claude + "
+                "full_autonomous and will fail fast on any direct provider "
+                "until Phase 1.1 / 1.2 / 1.3 capability work (MCP execution, "
+                "mutating subagents, sandbox enforcement) is wired into the "
+                "QA runtime path. Prefer AUTO_CODE_AUTONOMY=safe (see "
+                "ADR-006); the legacy env var still works but is deprecated."
+            ),
+            "autonomy_level": (
+                "Set AUTO_CODE_AUTONOMY=off|claude|safe|bold as the single "
+                "top-level knob (see ADR-006). Low-level env vars stay as "
+                "advanced overrides and win over the level mapping."
             ),
         },
     }

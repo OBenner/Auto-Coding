@@ -10,7 +10,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,22 @@ from agents.runtime.adapters.completion import CompletionRuntimeSession
 from agents.runtime.adapters.generic_edit import inspect_generic_edit_resume_artifacts
 from agents.runtime.fallback import capabilities_for_runtime_mode
 from cli.autonomous_readiness_text import format_autonomous_readiness_requirements
+from core.autonomy_policy import (
+    DEFAULT_MAX_HISTORY_AGE_DAYS,
+    DEFAULT_MIN_STABLE_RUNS,
+    DEFAULT_REQUIRED_E2E_RUNS,
+    DEFAULT_REQUIRED_LIVE_FAULT_CASES,
+    DEFAULT_REQUIRED_LIVE_TASK_FAMILIES,
+    DIRECT_API_PROVIDERS,
+    AutonomyPolicy,
+    autonomy_policy_for,
+)
+from core.paths import (
+    AUTO_CODE_RUNTIME_DIR,
+    PROVIDER_SMOKE_HISTORY_FILENAME,
+    provider_smoke_history_path,
+    resolve_provider_smoke_history_path,
+)
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
 from core.providers.cost_calculator import (
@@ -126,14 +142,7 @@ PROVIDER_SMOKE_RUNTIME_MODES = (
     "transaction_batch_probe",
     "provider_e2e",
 )
-PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = (
-    "openai",
-    "google",
-    "openrouter",
-    "litellm",
-    "zhipuai",
-    "ollama",
-)
+PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS = DIRECT_API_PROVIDERS
 PROVIDER_RELIABILITY_CASE_ORDER = (
     "text_completion",
     "generic_edit_tool_loop",
@@ -214,9 +223,8 @@ PROVIDER_RELIABILITY_STATUS_RANK = {
     "limited": 2,
     "passed": 3,
 }
-PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = Path(
-    ".auto-Codex",
-    "provider-smoke-history.json",
+PROVIDER_SMOKE_HISTORY_RELATIVE_PATH = (
+    AUTO_CODE_RUNTIME_DIR / PROVIDER_SMOKE_HISTORY_FILENAME
 )
 PROVIDER_SMOKE_HISTORY_MAX_RUNS = 100
 PROVIDER_SMOKE_HISTORY_TREND_WINDOW = 5
@@ -270,21 +278,17 @@ PROVIDER_E2E_LIVE_TASK_FAMILIES = {
         "failed_message": "Live transaction batching task family failed",
     },
 }
-PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = 3
-PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = 7 * 24 * 60 * 60
-PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = tuple(
-    PROVIDER_E2E_LIVE_FAULT_CASES
+PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS = DEFAULT_MIN_STABLE_RUNS
+PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS = (
+    DEFAULT_MAX_HISTORY_AGE_DAYS * 24 * 60 * 60
 )
-PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES = tuple(
-    PROVIDER_E2E_LIVE_TASK_FAMILIES
+PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES = (
+    DEFAULT_REQUIRED_LIVE_FAULT_CASES
 )
-PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS = (
-    "generic_edit",
-    "mini_pipeline",
-    "transaction_batch_probe",
-    "unsupported_tools_probe",
-    "gateway_model_probe",
+PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES = (
+    DEFAULT_REQUIRED_LIVE_TASK_FAMILIES
 )
+PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS = DEFAULT_REQUIRED_E2E_RUNS
 PROVIDER_AUTONOMOUS_READINESS_RECOMMENDATION_REASON_BY_SIGNAL = {
     "provider_e2e_failed": "provider_e2e_failed",
     "provider_reliability_incomplete": "provider_reliability_incomplete",
@@ -340,12 +344,22 @@ class ProviderSendMessageSession:
 
 def _utc_timestamp() -> str:
     """Return a compact UTC timestamp for provider evidence artifacts."""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _provider_smoke_history_path(project_dir: Path) -> Path:
-    """Return the project-local provider smoke history path."""
-    return project_dir / PROVIDER_SMOKE_HISTORY_RELATIVE_PATH
+    """Return the canonical provider smoke history write path."""
+    return provider_smoke_history_path(project_dir)
+
+
+def _provider_smoke_history_read_path(project_dir: Path) -> Path:
+    """Return the readable provider smoke history path.
+
+    Reads tolerate the legacy ``.auto-Codex/`` location so a stale clone
+    keeps working until ``scripts/migrate_auto_codex_dir.py`` runs.
+    Writes always go to :func:`provider_smoke_history_path`.
+    """
+    return resolve_provider_smoke_history_path(project_dir)
 
 
 def _provider_smoke_history_record(
@@ -465,6 +479,7 @@ def _provider_smoke_promotion_record(result: ProviderSmokeResult) -> dict[str, A
         and smoke_scope != "direct_api_full_autonomy_e2e"
     ):
         return {}
+    policy = autonomy_policy_for(result.provider)
     required_reliability_cases = list(PROVIDER_RELIABILITY_CASE_ORDER)
     passed_reliability_cases = _provider_promotion_passed_reliability_cases(
         result.runtime_diagnostics.get("provider_reliability")
@@ -474,7 +489,7 @@ def _provider_smoke_promotion_record(result: ProviderSmokeResult) -> dict[str, A
         for case in required_reliability_cases
         if case not in passed_reliability_cases
     ]
-    required_e2e_runs = list(PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS)
+    required_e2e_runs = list(policy.required_e2e_runs)
     passed_e2e_runs = _provider_promotion_passed_e2e_runs(
         result.runtime_diagnostics.get("provider_e2e_suite")
     )
@@ -1244,6 +1259,7 @@ def _provider_autonomous_readiness_diagnostics(
     """Return provider autonomous-readiness recommendation from e2e evidence."""
     runtime_diagnostics = result.runtime_diagnostics
     provider = result.provider
+    policy = autonomy_policy_for(provider)
     if provider.lower() not in PROVIDER_RELIABILITY_DIRECT_API_PROVIDERS:
         return {
             "status": "not_required",
@@ -1266,20 +1282,25 @@ def _provider_autonomous_readiness_diagnostics(
     _provider_readiness_suite_evidence(runtime_diagnostics, blockers, evidence)
     _provider_readiness_reliability_evidence(runtime_diagnostics, blockers, evidence)
     history_warning_offset = len(warnings)
-    _provider_readiness_history_evidence(history_summary, blockers, warnings, evidence)
+    _provider_readiness_history_evidence(
+        history_summary, blockers, warnings, evidence, policy=policy
+    )
     history_warnings = warnings[history_warning_offset:]
     del warnings[history_warning_offset:]
-    _provider_readiness_live_fault_evidence(history_summary, warnings, evidence)
+    _provider_readiness_live_fault_evidence(
+        history_summary, warnings, evidence, policy=policy
+    )
     _provider_readiness_live_task_family_evidence(
         history_summary,
         warnings,
         evidence,
+        policy=policy,
     )
     warnings.extend(history_warnings)
     _provider_readiness_eval_trend_evidence(history_summary, warnings)
 
     status, recommendation = _provider_readiness_status(blockers, warnings)
-    requirements = _provider_readiness_requirements(history_summary)
+    requirements = _provider_readiness_requirements(history_summary, policy=policy)
     return {
         "status": status,
         "provider": provider,
@@ -1338,6 +1359,8 @@ def _provider_readiness_history_evidence(
     blockers: list[str],
     warnings: list[str],
     evidence: list[str],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> None:
     """Apply provider history trend evidence to readiness lists."""
     if (
@@ -1353,34 +1376,45 @@ def _provider_readiness_history_evidence(
 
     trend = history_summary.get("trend")
     if trend == "provider_history_stable":
-        if _provider_readiness_history_is_stable_enough(history_summary):
+        if _provider_readiness_history_is_stable_enough(history_summary, policy=policy):
             evidence.append("provider_history_stable")
         else:
             warnings.append("provider_history_insufficient_runs")
     elif isinstance(trend, str) and trend:
         warnings.append(trend)
 
-    _provider_readiness_history_freshness_evidence(history_summary, warnings)
+    _provider_readiness_history_freshness_evidence(
+        history_summary, warnings, policy=policy
+    )
 
 
 def _provider_readiness_history_is_stable_enough(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> bool:
     """Return whether persisted history has enough stable runs for promotion."""
+    threshold = (
+        policy.min_stable_runs
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+    )
     return (
-        _provider_readiness_recent_window(history_summary)
-        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
-        and _provider_readiness_consecutive_passes(history_summary)
-        >= PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+        _provider_readiness_recent_window(history_summary) >= threshold
+        and _provider_readiness_consecutive_passes(history_summary) >= threshold
     )
 
 
 def _provider_readiness_history_freshness_evidence(
     history_summary: dict[str, Any],
     warnings: list[str],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> None:
     """Apply provider history freshness evidence to readiness warnings."""
-    freshness = _provider_readiness_history_freshness_complete(history_summary)
+    freshness = _provider_readiness_history_freshness_complete(
+        history_summary, policy=policy
+    )
     if freshness is True:
         return
     if _provider_readiness_last_run_at(history_summary) is None:
@@ -1393,11 +1427,15 @@ def _provider_readiness_live_fault_evidence(
     history_summary: dict[str, Any],
     warnings: list[str],
     evidence: list[str],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> None:
     """Apply live fault probe evidence to readiness lists."""
     if history_summary.get("last_live_fault_probe_status") == "passed":
         evidence.append("live_fault_probes_passed")
-        if not _provider_readiness_live_fault_coverage_complete(history_summary):
+        if not _provider_readiness_live_fault_coverage_complete(
+            history_summary, policy=policy
+        ):
             warnings.append("live_fault_probe_coverage_incomplete")
     else:
         warnings.append("live_fault_probe_evidence_missing")
@@ -1405,26 +1443,34 @@ def _provider_readiness_live_fault_evidence(
 
 def _provider_readiness_live_fault_coverage_complete(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> bool:
     """Return whether live fault probes covered every required provider fault."""
+    required = (
+        policy.required_live_fault_cases
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+    )
     covered_cases = set(
         _string_list_payload(history_summary.get("live_fault_probe_covered_cases"))
     )
-    return all(
-        required_case in covered_cases
-        for required_case in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
-    )
+    return all(required_case in covered_cases for required_case in required)
 
 
 def _provider_readiness_live_task_family_evidence(
     history_summary: dict[str, Any],
     warnings: list[str],
     evidence: list[str],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> None:
     """Apply live task-family evidence to readiness lists."""
     if history_summary.get("last_live_task_family_status") == "passed":
         evidence.append("live_task_families_passed")
-        if not _provider_readiness_live_task_family_coverage_complete(history_summary):
+        if not _provider_readiness_live_task_family_coverage_complete(
+            history_summary, policy=policy
+        ):
             warnings.append("live_task_family_coverage_incomplete")
     else:
         warnings.append("live_task_family_evidence_missing")
@@ -1432,15 +1478,19 @@ def _provider_readiness_live_task_family_evidence(
 
 def _provider_readiness_live_task_family_coverage_complete(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> bool:
     """Return whether live task families covered every required provider task."""
+    required = (
+        policy.required_live_task_families
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+    )
     covered_families = set(
         _string_list_payload(history_summary.get("live_task_family_covered_families"))
     )
-    return all(
-        required_family in covered_families
-        for required_family in PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
-    )
+    return all(required_family in covered_families for required_family in required)
 
 
 def _provider_readiness_eval_trend_evidence(
@@ -1460,12 +1510,26 @@ def _provider_readiness_eval_trend_evidence(
 
 def _provider_readiness_requirements(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> dict[str, Any]:
     """Return structured readiness requirement evidence for operators."""
+    min_stable_runs = (
+        policy.min_stable_runs
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS
+    )
+    max_history_age_seconds = (
+        int(policy.max_history_age.total_seconds())
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
+    )
     recent_window = _provider_readiness_recent_window(history_summary)
     consecutive_passes = _provider_readiness_consecutive_passes(history_summary)
     required_live_fault_cases = sorted(
-        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
+        policy.required_live_fault_cases
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_FAULT_CASES
     )
     live_fault_covered_cases = sorted(
         _string_list_payload(history_summary.get("live_fault_probe_covered_cases"))
@@ -1480,7 +1544,9 @@ def _provider_readiness_requirements(
         and not live_fault_missing_cases
     )
     required_live_task_families = sorted(
-        PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
+        policy.required_live_task_families
+        if policy is not None
+        else PROVIDER_AUTONOMOUS_READINESS_REQUIRED_LIVE_TASK_FAMILIES
     )
     live_task_covered_families = sorted(
         _string_list_payload(history_summary.get("live_task_family_covered_families"))
@@ -1495,11 +1561,12 @@ def _provider_readiness_requirements(
         and not live_task_missing_families
     )
     requirements = {
-        "min_stable_runs": PROVIDER_AUTONOMOUS_READINESS_MIN_STABLE_RUNS,
+        "min_stable_runs": min_stable_runs,
         "observed_recent_window": recent_window,
         "observed_consecutive_passes": consecutive_passes,
         "history_stability_complete": _provider_readiness_history_is_stable_enough(
             history_summary,
+            policy=policy,
         ),
         "required_live_fault_cases": required_live_fault_cases,
         "live_fault_covered_cases": live_fault_covered_cases,
@@ -1515,11 +1582,11 @@ def _provider_readiness_requirements(
         requirements.update(
             {
                 "last_run_at": last_run_at,
-                "max_history_age_seconds": (
-                    PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS
-                ),
+                "max_history_age_seconds": max_history_age_seconds,
                 "history_freshness_complete": (
-                    _provider_readiness_history_freshness_complete(history_summary)
+                    _provider_readiness_history_freshness_complete(
+                        history_summary, policy=policy
+                    )
                 ),
             }
         )
@@ -1544,19 +1611,25 @@ def _provider_readiness_last_run_datetime(
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _provider_readiness_history_freshness_complete(
     history_summary: dict[str, Any],
+    *,
+    policy: AutonomyPolicy | None = None,
 ) -> bool:
     """Return whether latest provider smoke evidence is recent enough."""
     last_run_at = _provider_readiness_last_run_datetime(history_summary)
     if last_run_at is None:
         return False
-    max_age = timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
-    return datetime.now(timezone.utc) - last_run_at <= max_age
+    max_age = (
+        policy.max_history_age
+        if policy is not None
+        else timedelta(seconds=PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS)
+    )
+    return datetime.now(UTC) - last_run_at <= max_age
 
 
 def _provider_readiness_recent_window(history_summary: dict[str, Any]) -> int:
@@ -1678,9 +1751,10 @@ def _with_provider_run_history(
     result: ProviderSmokeResult,
 ) -> ProviderSmokeResult:
     """Persist provider e2e history and attach a compact diagnostics summary."""
+    read_path = _provider_smoke_history_read_path(project_dir)
     history_path = _provider_smoke_history_path(project_dir)
     try:
-        runs, repaired = _load_provider_smoke_history(history_path)
+        runs, repaired = _load_provider_smoke_history(read_path)
         record = _provider_smoke_history_record(result)
         payload = _provider_smoke_history_payload([*runs, record])
         history_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1907,12 +1981,13 @@ def _provider_autonomous_promotion_gate(
             "readiness_missing_requirements": [],
         }
 
+    policy = autonomy_policy_for(provider)
     required_cases = list(PROVIDER_RELIABILITY_CASE_ORDER)
     passed_cases = _provider_promotion_passed_reliability_cases(
         result.runtime_diagnostics.get("provider_reliability"),
     )
     missing_cases = [case for case in required_cases if case not in passed_cases]
-    required_e2e_runs = list(PROVIDER_AUTONOMOUS_PROMOTION_REQUIRED_E2E_RUNS)
+    required_e2e_runs = list(policy.required_e2e_runs)
     observed_e2e_runs = _provider_promotion_passed_e2e_runs(
         result.runtime_diagnostics.get("provider_e2e_suite"),
     )
@@ -3450,6 +3525,7 @@ async def run_provider_smoke_check(
                 timeout_seconds=timeout_seconds,
                 model=resolved_model,
                 runtime_diagnostics=runtime_diagnostics,
+                project_dir=project_dir,
             )
             return _with_provider_run_history(project_dir, result)
 
@@ -4257,6 +4333,113 @@ def _provider_e2e_live_task_family_runs(
     return runs
 
 
+async def _provider_e2e_mcp_execution_smokes(
+    *,
+    project_dir: Path,
+) -> dict[str, Any]:
+    """Aggregate per-server MCP execution smoke results for the e2e suite.
+
+    Phase 1.1 made ``mcp_execution_smoke`` a stand-alone helper. This
+    aggregator wires it into the provider e2e suite so direct API
+    runs surface end-to-end MCP evidence alongside generic_edit /
+    mini_pipeline / transaction_batch_probe results.
+
+    The aggregator is intentionally non-fatal: when the external MCP
+    client bridge is disabled (``AUTO_CODE_EXTERNAL_MCP_CLIENT`` is
+    off and ``AUTO_CODE_AUTONOMY`` is below ``safe``) it returns
+    ``{"status": "skipped"}`` so the e2e suite stays green for the
+    common default-runtime case. Per-server probes run only for
+    servers whose health is ``ready_to_connect``; everything else
+    appears in the ``per_server`` map with ``status="skipped"``.
+    """
+    from agents.runtime.mcp_bridge import (
+        describe_external_mcp_server_health,
+        external_mcp_client_enabled,
+        registered_external_mcp_servers,
+    )
+    from agents.runtime.mcp_execution_smoke import mcp_execution_smoke
+    from core.autonomy_level import resolve_autonomy_settings
+
+    settings = resolve_autonomy_settings()
+    bridge_enabled = settings.external_mcp_client_enabled or (
+        external_mcp_client_enabled()
+    )
+    if not bridge_enabled:
+        return {
+            "status": "skipped",
+            "reason": "external_mcp_client_disabled",
+            "per_server": {},
+        }
+
+    per_server: dict[str, dict[str, Any]] = {}
+    any_failure = False
+    for server in registered_external_mcp_servers():
+        health = describe_external_mcp_server_health(server)
+        if not health.ready_to_connect:
+            per_server[server] = {
+                "server": server,
+                "status": "skipped",
+                "reason": health.reason,
+            }
+            continue
+        try:
+            result = await mcp_execution_smoke(
+                server=server,
+                project_dir=project_dir,
+            )
+            payload = result.to_dict()
+            per_server[server] = payload
+            if not result.ok and result.status not in {"skipped", "no_safe_tool"}:
+                any_failure = True
+        except Exception as exc:  # pragma: no cover - defensive
+            per_server[server] = {
+                "server": server,
+                "status": "error",
+                "reason": "mcp_execution_smoke_helper_raised",
+                "error": str(exc),
+            }
+            any_failure = True
+
+    status = "failed" if any_failure else "passed"
+    return {
+        "status": status,
+        "reason": (
+            "mcp_execution_smoke_failed"
+            if any_failure
+            else "mcp_execution_smoke_completed"
+        ),
+        "per_server": per_server,
+    }
+
+
+def _provider_e2e_mcp_execution_smoke_runs(
+    aggregate: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Convert per-server MCP smoke results into provider e2e run summaries."""
+    per_server = aggregate.get("per_server")
+    if not isinstance(per_server, dict) or not per_server:
+        return []
+    runs: list[dict[str, str]] = []
+    for server, payload in per_server.items():
+        if not isinstance(payload, dict):
+            continue
+        status = str(payload.get("status") or "skipped")
+        run: dict[str, str] = {
+            "runtime_mode": f"mcp_execution_smoke_{server}",
+            "status": "passed"
+            if status == "ok"
+            else "skipped"
+            if status in {"skipped", "no_safe_tool"}
+            else status,
+            "message": str(payload.get("reason") or ""),
+        }
+        error = payload.get("error")
+        if isinstance(error, str) and error:
+            run["reason"] = error[:160]
+        runs.append(run)
+    return runs
+
+
 async def _complete_provider_e2e_smoke_suite(
     *,
     provider: Any,
@@ -4265,6 +4448,7 @@ async def _complete_provider_e2e_smoke_suite(
     timeout_seconds: float,
     model: str | None,
     runtime_diagnostics: dict[str, Any],
+    project_dir: Path,
 ) -> ProviderSmokeResult:
     """Run the provider-specific e2e suite over live direct-provider surfaces."""
     child_results: list[ProviderSmokeResult] = []
@@ -4336,9 +4520,16 @@ async def _complete_provider_e2e_smoke_suite(
         child_results=child_results,
     )
     live_task_family_runs = _provider_e2e_live_task_family_runs(live_task_families)
+    mcp_execution_smokes = await _provider_e2e_mcp_execution_smokes(
+        project_dir=project_dir,
+    )
+    mcp_execution_smoke_runs = _provider_e2e_mcp_execution_smoke_runs(
+        mcp_execution_smokes
+    )
     suite_runs.extend(negative_probe_runs)
     suite_runs.extend(live_fault_probe_runs)
     suite_runs.extend(live_task_family_runs)
+    suite_runs.extend(mcp_execution_smoke_runs)
     negative_probe_success = all(
         run.get("status") == "passed" for run in negative_probe_runs
     )
@@ -4350,11 +4541,16 @@ async def _complete_provider_e2e_smoke_suite(
         "not_configured",
         "passed",
     }
+    mcp_execution_smoke_success = mcp_execution_smokes.get("status") in {
+        "skipped",
+        "passed",
+    }
     success = (
         all(child.success for child in child_results)
         and negative_probe_success
         and live_fault_probe_success
         and live_task_family_success
+        and mcp_execution_smoke_success
     )
     suite_status = "passed" if success else "failed"
     reliability = _merge_provider_reliability_diagnostics(
@@ -4375,6 +4571,7 @@ async def _complete_provider_e2e_smoke_suite(
         "provider_e2e_negative_fixtures": negative_fixture_summary,
         "provider_e2e_live_fault_probes": live_fault_probes,
         "provider_e2e_live_task_families": live_task_families,
+        "provider_e2e_mcp_execution_smokes": mcp_execution_smokes,
     }
     if reliability is not None:
         next_diagnostics["provider_reliability"] = reliability

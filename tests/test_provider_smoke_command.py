@@ -771,9 +771,9 @@ async def test_run_provider_smoke_check_provider_e2e_runtime_aggregates_suite(
         "cost_last_pricing_provider": "openai",
         "cost_pricing_model": "gpt-4o",
         "cost_pricing_provider": "openai",
-        "path": ".auto-Codex/provider-smoke-history.json",
+        "path": ".auto-claude/runtime/provider-smoke-history.json",
     }
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history = json.loads(history_path.read_text(encoding="utf-8"))
     assert history["schema_version"] == 1
     assert len(history["runs"]) == 1
@@ -837,7 +837,7 @@ def test_provider_run_history_recovers_corrupt_artifact(tmp_path: Path):
         _with_provider_run_history,
     )
 
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history_path.parent.mkdir(parents=True)
     history_path.write_text("{not valid json", encoding="utf-8")
 
@@ -876,7 +876,7 @@ def test_provider_run_history_reports_recent_trend(tmp_path: Path):
         _with_provider_run_history,
     )
 
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history_path.parent.mkdir(parents=True)
     history_path.write_text(
         json.dumps(
@@ -1044,7 +1044,7 @@ def test_provider_run_history_tracks_live_fault_probe_evidence(tmp_path: Path):
         "unsupported_tools",
     ]
 
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history = json.loads(history_path.read_text(encoding="utf-8"))
     assert history["runs"][0]["live_fault_probe_status"] == "passed"
     assert history["runs"][0]["live_fault_probe_enabled"] is True
@@ -1123,7 +1123,7 @@ def test_provider_run_history_record_failed_preserves_live_fault_evidence(
         _with_provider_run_history,
     )
 
-    (tmp_path / ".auto-Codex").write_text("not a directory", encoding="utf-8")
+    (tmp_path / ".auto-claude").write_text("not a directory", encoding="utf-8")
 
     result = _with_provider_run_history(
         tmp_path,
@@ -1214,7 +1214,7 @@ def test_provider_run_history_reports_quality_and_safety_metrics(tmp_path: Path)
     assert history_summary["required_live_fault_case_count"] == 2
     assert history_summary["live_fault_probe_case_coverage_percent"] == 50
 
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history = json.loads(history_path.read_text(encoding="utf-8"))
     provider_stats = history["providers"]["openai"]
     assert provider_stats["pass_rate_percent"] == 50
@@ -1257,7 +1257,7 @@ def test_provider_run_history_records_actual_cost_metrics(tmp_path: Path):
     assert history_summary["cost_pricing_model"] == "gpt-4o"
     assert history_summary["cost_pricing_provider"] == "openai"
 
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history = json.loads(history_path.read_text(encoding="utf-8"))
     record = history["runs"][0]
     assert record["cost_status"] == "recorded"
@@ -1300,7 +1300,7 @@ def test_provider_run_history_records_estimated_cost_when_usage_missing(
     assert history_summary["cost_pricing_model"] == "gpt-4o"
     assert history_summary["cost_pricing_provider"] == "openai"
 
-    history_path = tmp_path / ".auto-Codex" / "provider-smoke-history.json"
+    history_path = tmp_path / ".auto-claude" / "runtime" / "provider-smoke-history.json"
     history = json.loads(history_path.read_text(encoding="utf-8"))
     record = history["runs"][0]
     assert record["cost_status"] == "estimated"
@@ -3872,7 +3872,7 @@ def test_print_provider_run_history_includes_quality_and_safety_percentages(
             "cost_last_formatted": "$0.0075",
             "cost_pricing_model": "gpt-4o",
             "recent_runs": [],
-            "path": ".auto-Codex/provider-smoke-history.json",
+            "path": ".auto-claude/runtime/provider-smoke-history.json",
         }
     )
 

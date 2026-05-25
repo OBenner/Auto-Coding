@@ -82,6 +82,51 @@ LITELLM_MODELS = [
 ]
 
 
+# LiteLLM accepts model identifiers in many forms: provider-prefixed
+# ("openai/gpt-4o", "anthropic/claude-sonnet-4", "bedrock/..."), bare
+# OpenAI-style names, and "<gateway>/<model>". We accept the union of
+# the OpenAI tokens and a vendor-prefix allowlist for gateway-routed
+# forms.
+_LITELLM_NATIVE_TOOL_VENDOR_PREFIXES: tuple[str, ...] = (
+    "openai/",
+    "azure/",
+    "anthropic/",
+    "google/",
+    "vertex_ai/",
+    "bedrock/",
+    "groq/",
+    "mistral/",
+    "cohere/",
+    "deepseek/",
+    "xai/",
+    "ollama/",
+    "openrouter/",
+)
+_LITELLM_BARE_MODEL_TOKENS: tuple[str, ...] = (
+    "gpt-3.5-turbo",
+    "gpt-4",
+    "gpt-5",
+    "o1",
+    "o3",
+    "o4",
+    "claude-",
+    "gemini-1.5",
+    "gemini-2",
+    "gemini-3",
+    "mistral-",
+    "command-r",
+)
+_LITELLM_NON_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "embedding",
+    "embed",
+    "rerank",
+    "whisper",
+    "tts",
+    "moderation",
+    "/text-",
+)
+
+
 class LiteLLMSession(AgentSession):
     """Agent session for LiteLLM provider.
 
@@ -135,6 +180,10 @@ class LiteLLMSession(AgentSession):
     def messages(self) -> list[dict[str, Any]]:
         """Get the conversation history."""
         return self._messages.copy()
+
+    def provider_supports_native_tools(self, model: str | None) -> bool:
+        """Delegate to :meth:`LiteLLMProvider.supports_native_tools`."""
+        return LiteLLMProvider.supports_native_tools(model or self.model)
 
     def add_user_message(self, content: str) -> None:
         """Add a user message to the conversation.
@@ -451,6 +500,21 @@ class LiteLLMProvider(AIEngineProvider):
             List of common model identifiers
         """
         return LITELLM_MODELS.copy()
+
+    @classmethod
+    def supports_native_tools(cls, model: str | None) -> bool:
+        """Return True when the routed model supports native function calling."""
+        if not model or not model.strip():
+            return False
+        haystack = model.strip().lower()
+        if any(token in haystack for token in _LITELLM_NON_TOOL_MODEL_TOKENS):
+            return False
+        if any(
+            haystack.startswith(prefix)
+            for prefix in _LITELLM_NATIVE_TOOL_VENDOR_PREFIXES
+        ):
+            return True
+        return any(token in haystack for token in _LITELLM_BARE_MODEL_TOKENS)
 
     def validate_config(self) -> bool:
         """Validate provider configuration.

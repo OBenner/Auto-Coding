@@ -16,6 +16,9 @@ from typing import Any
 
 from agents.e2e_generator import generate_e2e_tests
 from agents.memory_manager import save_user_correction
+from agents.runtime.qa_phase_routing import (
+    resolve_qa_runtime as _resolve_qa_runtime,
+)
 from agents.test_generator import run_test_generator_session
 from analysis.code_analyzer import CodeAnalyzer
 from analysis.coverage_reporter import collect_coverage, format_coverage_summary
@@ -419,6 +422,12 @@ async def run_qa_validation_loop(
         # Get model and thinking budget for fixer (uses QA phase config)
         qa_model = get_phase_model(spec_dir, "qa", model)
         fixer_thinking_budget = get_phase_thinking_budget(spec_dir, "qa")
+
+        _resolve_qa_runtime(
+            agent_type="qa_fixer",
+            spec_dir=spec_dir,
+            qa_iteration=0,
+        )
 
         fix_client = create_client(
             project_dir,
@@ -980,6 +989,12 @@ Focus on files with the lowest coverage first for maximum impact.
             model=qa_model,
             thinking_budget=qa_thinking_budget,
         )
+        _resolve_qa_runtime(
+            agent_type="qa_reviewer",
+            spec_dir=spec_dir,
+            qa_iteration=qa_iteration,
+        )
+
         client = create_client(
             project_dir,
             spec_dir,
@@ -1323,6 +1338,12 @@ Focus on files with the lowest coverage first for maximum impact.
             )
             emit_phase(ExecutionPhase.QA_FIXING, "Fixing QA issues")
             print("\nRunning QA Fixer Agent...")
+
+            _resolve_qa_runtime(
+                agent_type="qa_fixer",
+                spec_dir=spec_dir,
+                qa_iteration=qa_iteration,
+            )
 
             fix_client = create_client(
                 project_dir,

@@ -93,6 +93,46 @@ GOOGLE_SCHEMA_UNSUPPORTED_KEYS = frozenset(
 )
 
 
+# Gemini families that support function calling. Gemini 1.0 / Pro
+# Vision, embedding endpoints, and legacy text-bison-style endpoints
+# do not honor FunctionDeclaration.
+_GOOGLE_NATIVE_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "gemini-1.5",
+    "gemini-2",
+    "gemini-3",
+    "gemini-pro-1.5",
+)
+_GOOGLE_NON_TOOL_MODEL_TOKENS: tuple[str, ...] = (
+    "embedding",
+    "embed",
+    "text-bison",
+    "text-unicorn",
+    "chat-bison",
+    "code-bison",
+    "imagen",
+    "gemini-1.0",
+)
+
+
+def _google_model_identifier(model: object | None) -> str:
+    """Return a normalised string identifier for a Google model reference.
+
+    The Google session stores a ``GenerativeModel`` instance under
+    ``self.model``; its identifier lives on ``.model_name`` (or
+    ``.name``). String inputs are passed through; everything else falls
+    back to an empty string so callers can treat unknown identifiers
+    the same as "no model configured".
+    """
+    if model is None:
+        return ""
+    if isinstance(model, str):
+        return model.strip()
+    candidate = getattr(model, "model_name", None) or getattr(model, "name", None)
+    if isinstance(candidate, str):
+        return candidate.strip()
+    return ""
+
+
 class GoogleAgentSession(AgentSession):
     """Agent session wrapping Google Generative AI client.
 
@@ -208,6 +248,24 @@ class GoogleAgentSession(AgentSession):
         except Exception as e:
             logger.error(f"Error receiving response from Google: {e}")
             raise ProviderError(f"Error receiving response: {e}") from e
+
+    def provider_supports_native_tools(self, model: object | None) -> bool:
+        """Delegate to :meth:`GoogleProvider.supports_native_tools`.
+
+        Gemini 1.5 / 2.x / 3.x support FunctionDeclaration; legacy
+        Gemini 1.0, embedding endpoints, text-bison and image
+        endpoints do not. When the model identifier cannot be
+        extracted (custom session subclasses, test fakes without
+        ``model_name``) we return ``True`` so the runtime falls back
+        to the existing session-method detection rather than blocking
+        the native loop based on missing metadata alone.
+        """
+        identifier = _google_model_identifier(
+            model if model is not None else self.model
+        )
+        if not identifier:
+            return True
+        return GoogleProvider.supports_native_tools(identifier)
 
     async def complete_with_tool_calls(
         self,
@@ -576,6 +634,23 @@ class GoogleProvider(AIEngineProvider):
             List of Gemini model identifiers
         """
         return GOOGLE_MODELS.copy()
+
+    @classmethod
+    def supports_native_tools(cls, model: object | None) -> bool:
+        """Gemini 1.5/2.x/3.x support FunctionDeclaration; legacy lines do not.
+
+        ``model`` is typed as ``object`` because the Google session also
+        holds a ``GenerativeModel`` instance under ``self.model`` whose
+        identifier lives on ``.model_name``; non-string inputs are
+        coerced to a best-effort string before the token match.
+        """
+        identifier = _google_model_identifier(model)
+        if not identifier:
+            return False
+        haystack = identifier.lower()
+        if any(token in haystack for token in _GOOGLE_NON_TOOL_MODEL_TOKENS):
+            return False
+        return any(token in haystack for token in _GOOGLE_NATIVE_TOOL_MODEL_TOKENS)
 
     def validate_config(self) -> bool:
         """Validate provider configuration.

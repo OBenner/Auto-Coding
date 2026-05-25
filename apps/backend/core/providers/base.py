@@ -188,6 +188,23 @@ class AIEngineProvider(ABC):
         """
         return []
 
+    @classmethod
+    def supports_native_tools(cls, model: str | None) -> bool:
+        """Return whether ``model`` supports the provider's native tool API.
+
+        Default is conservative: any provider that does not override this
+        method is assumed to support native tools for every model. Direct
+        API providers whose model lineup is mixed (Ollama, ZhipuAI, some
+        OpenRouter routes) should override with a per-model allowlist or
+        a feature-detection helper.
+
+        Returning ``False`` lets the runtime skip the native tool loop
+        entirely and go straight to the JSON action loop, recording the
+        decision as a declared (rather than discovered-on-error)
+        downgrade.
+        """
+        return True
+
     def health_check(self) -> bool:
         """Check if provider is healthy and can accept requests.
 

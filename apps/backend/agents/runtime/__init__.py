@@ -15,6 +15,7 @@ from .artifacts import (
 from .capabilities import (
     RuntimeCapabilities,
     RuntimeCapabilityError,
+    RuntimePolicy,
     RuntimeRequirements,
 )
 from .cli_profiles import (
@@ -86,6 +87,10 @@ from .mcp_bridge import (
     registered_external_mcp_servers,
     resolve_runtime_mcp_support,
 )
+from .mcp_execution_smoke import (
+    McpExecutionSmokeResult,
+    mcp_execution_smoke,
+)
 from .modes import RuntimeMode, get_runtime_mode, normalize_runtime_mode
 from .result import AgentRunResult
 from .runner_router import (
@@ -113,6 +118,7 @@ __all__ = [
     "RuntimeCapabilities",
     "RuntimeCapabilityError",
     "RuntimeFallbackDecision",
+    "RuntimePolicy",
     "RuntimeRequirements",
     "RUNTIME_FALLBACK_ENV",
     "RUNNER_ROUTER_ENV",
@@ -155,6 +161,8 @@ __all__ = [
     "MAX_SUBAGENT_ATTEMPTS",
     "build_external_mcp_health_matrix",
     "build_mcp_bridge_plan",
+    "McpExecutionSmokeResult",
+    "mcp_execution_smoke",
     "check_external_mcp_contract",
     "check_external_mcp_contracts",
     "check_mcp_tool_permission",
