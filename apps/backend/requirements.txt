@@ -15,7 +15,7 @@ secretstorage>=3.5.0; sys_platform == "linux"
 real_ladybug>=0.13.0; python_version >= "3.12"
 graphiti-core>=0.5.0; python_version >= "3.12"
 # pandas is required by real_ladybug for get_as_df() method
-# pandas 2.2.0+ required for pre-built wheels on Python 3.12
+# pandas 3.0+ required for pre-built wheels on Python 3.12+
 pandas>=3.0.2; python_version >= "3.12"
 
 # Windows-specific dependency for LadybugDB/Graphiti
@@ -28,7 +28,8 @@ google-generativeai>=0.8.0
 
 # LiteLLM - Unified interface for 100+ LLM providers
 # Provides consistent API for OpenAI, Anthropic, Azure, Google, Ollama, etc.
-litellm==1.84.0rc1
+# Bumped from 1.84.0rc1 to 1.86.0 to satisfy aiohttp>=3.13.5 (RC pinned aiohttp==3.13.4).
+litellm==1.86.0
 
 # OpenAI SDK - Required by OpenAI-compatible providers and LiteLLM.
 # Keep this aligned with the pinned LiteLLM requirement.
