@@ -3525,6 +3525,7 @@ async def run_provider_smoke_check(
                 timeout_seconds=timeout_seconds,
                 model=resolved_model,
                 runtime_diagnostics=runtime_diagnostics,
+                project_dir=project_dir,
             )
             return _with_provider_run_history(project_dir, result)
 
@@ -4332,6 +4333,113 @@ def _provider_e2e_live_task_family_runs(
     return runs
 
 
+async def _provider_e2e_mcp_execution_smokes(
+    *,
+    project_dir: Path,
+) -> dict[str, Any]:
+    """Aggregate per-server MCP execution smoke results for the e2e suite.
+
+    Phase 1.1 made ``mcp_execution_smoke`` a stand-alone helper. This
+    aggregator wires it into the provider e2e suite so direct API
+    runs surface end-to-end MCP evidence alongside generic_edit /
+    mini_pipeline / transaction_batch_probe results.
+
+    The aggregator is intentionally non-fatal: when the external MCP
+    client bridge is disabled (``AUTO_CODE_EXTERNAL_MCP_CLIENT`` is
+    off and ``AUTO_CODE_AUTONOMY`` is below ``safe``) it returns
+    ``{"status": "skipped"}`` so the e2e suite stays green for the
+    common default-runtime case. Per-server probes run only for
+    servers whose health is ``ready_to_connect``; everything else
+    appears in the ``per_server`` map with ``status="skipped"``.
+    """
+    from agents.runtime.mcp_bridge import (
+        describe_external_mcp_server_health,
+        external_mcp_client_enabled,
+        registered_external_mcp_servers,
+    )
+    from agents.runtime.mcp_execution_smoke import mcp_execution_smoke
+    from core.autonomy_level import resolve_autonomy_settings
+
+    settings = resolve_autonomy_settings()
+    bridge_enabled = settings.external_mcp_client_enabled or (
+        external_mcp_client_enabled()
+    )
+    if not bridge_enabled:
+        return {
+            "status": "skipped",
+            "reason": "external_mcp_client_disabled",
+            "per_server": {},
+        }
+
+    per_server: dict[str, dict[str, Any]] = {}
+    any_failure = False
+    for server in registered_external_mcp_servers():
+        health = describe_external_mcp_server_health(server)
+        if not health.ready_to_connect:
+            per_server[server] = {
+                "server": server,
+                "status": "skipped",
+                "reason": health.reason,
+            }
+            continue
+        try:
+            result = await mcp_execution_smoke(
+                server=server,
+                project_dir=project_dir,
+            )
+            payload = result.to_dict()
+            per_server[server] = payload
+            if not result.ok and result.status not in {"skipped", "no_safe_tool"}:
+                any_failure = True
+        except Exception as exc:  # pragma: no cover - defensive
+            per_server[server] = {
+                "server": server,
+                "status": "error",
+                "reason": "mcp_execution_smoke_helper_raised",
+                "error": str(exc),
+            }
+            any_failure = True
+
+    status = "failed" if any_failure else "passed"
+    return {
+        "status": status,
+        "reason": (
+            "mcp_execution_smoke_failed"
+            if any_failure
+            else "mcp_execution_smoke_completed"
+        ),
+        "per_server": per_server,
+    }
+
+
+def _provider_e2e_mcp_execution_smoke_runs(
+    aggregate: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Convert per-server MCP smoke results into provider e2e run summaries."""
+    per_server = aggregate.get("per_server")
+    if not isinstance(per_server, dict) or not per_server:
+        return []
+    runs: list[dict[str, str]] = []
+    for server, payload in per_server.items():
+        if not isinstance(payload, dict):
+            continue
+        status = str(payload.get("status") or "skipped")
+        run: dict[str, str] = {
+            "runtime_mode": f"mcp_execution_smoke_{server}",
+            "status": "passed"
+            if status == "ok"
+            else "skipped"
+            if status in {"skipped", "no_safe_tool"}
+            else status,
+            "message": str(payload.get("reason") or ""),
+        }
+        error = payload.get("error")
+        if isinstance(error, str) and error:
+            run["reason"] = error[:160]
+        runs.append(run)
+    return runs
+
+
 async def _complete_provider_e2e_smoke_suite(
     *,
     provider: Any,
@@ -4340,6 +4448,7 @@ async def _complete_provider_e2e_smoke_suite(
     timeout_seconds: float,
     model: str | None,
     runtime_diagnostics: dict[str, Any],
+    project_dir: Path,
 ) -> ProviderSmokeResult:
     """Run the provider-specific e2e suite over live direct-provider surfaces."""
     child_results: list[ProviderSmokeResult] = []
@@ -4411,9 +4520,16 @@ async def _complete_provider_e2e_smoke_suite(
         child_results=child_results,
     )
     live_task_family_runs = _provider_e2e_live_task_family_runs(live_task_families)
+    mcp_execution_smokes = await _provider_e2e_mcp_execution_smokes(
+        project_dir=project_dir,
+    )
+    mcp_execution_smoke_runs = _provider_e2e_mcp_execution_smoke_runs(
+        mcp_execution_smokes
+    )
     suite_runs.extend(negative_probe_runs)
     suite_runs.extend(live_fault_probe_runs)
     suite_runs.extend(live_task_family_runs)
+    suite_runs.extend(mcp_execution_smoke_runs)
     negative_probe_success = all(
         run.get("status") == "passed" for run in negative_probe_runs
     )
@@ -4425,11 +4541,16 @@ async def _complete_provider_e2e_smoke_suite(
         "not_configured",
         "passed",
     }
+    mcp_execution_smoke_success = mcp_execution_smokes.get("status") in {
+        "skipped",
+        "passed",
+    }
     success = (
         all(child.success for child in child_results)
         and negative_probe_success
         and live_fault_probe_success
         and live_task_family_success
+        and mcp_execution_smoke_success
     )
     suite_status = "passed" if success else "failed"
     reliability = _merge_provider_reliability_diagnostics(
@@ -4450,6 +4571,7 @@ async def _complete_provider_e2e_smoke_suite(
         "provider_e2e_negative_fixtures": negative_fixture_summary,
         "provider_e2e_live_fault_probes": live_fault_probes,
         "provider_e2e_live_task_families": live_task_families,
+        "provider_e2e_mcp_execution_smokes": mcp_execution_smokes,
     }
     if reliability is not None:
         next_diagnostics["provider_reliability"] = reliability

@@ -49,6 +49,7 @@ Small independent PRs that pay down debt introduced by the
 direct-API-autonomy series (PRs #257 - #263). Must land before Phase 1.
 
 ### 0.1 Split capability from policy
+
 [apps/backend/agents/runtime/capabilities.py](../../apps/backend/agents/runtime/capabilities.py)
 
 - Drop `RuntimeCapabilities.direct_api_autonomous()` in its current form
@@ -62,6 +63,7 @@ direct-API-autonomy series (PRs #257 - #263). Must land before Phase 1.
   capabilities and consults the policy for promotion.
 
 ### 0.2 Route qa_fixer and qa_reviewer through the runtime layer
+
 Landed via
 [apps/backend/agents/runtime/qa_phase_routing.py](../../apps/backend/agents/runtime/qa_phase_routing.py)
 plus call sites in
@@ -83,6 +85,7 @@ changed is that the loop now resolves the runtime contract via
   honor the same runtime-modes contract.
 
 ### 0.3 Unify artifact path
+
 - Pick `.auto-claude/runtime/` as the canonical location for runtime
   artifacts (currently split across `.auto-Codex/` and `.auto-claude/`).
 - New module `apps/backend/core/paths.py` with `AUTO_CODE_RUNTIME_DIR`.
@@ -95,6 +98,7 @@ changed is that the loop now resolves the runtime contract via
   the gate module introduced by PR #263 once it lands.
 
 ### 0.4 Per-provider autonomy policy config
+
 [apps/backend/cli/provider_smoke_commands.py:273-287](../../apps/backend/cli/provider_smoke_commands.py)
 
 - New module `apps/backend/core/autonomy_policy.py` exposing a frozen
@@ -114,6 +118,7 @@ changed is that the loop now resolves the runtime contract via
   every provider so the frontend can render it.
 
 ### 0.5 PR #263 follow-ups
+
 - Symmetrize `_append_missing` usage in the gate module.
 - `DirectApiAutonomousGate.history_path` returns an absolute path.
 - `runtime_decision.reason` stops claiming "fallback disabled" when the
@@ -128,6 +133,7 @@ This is the hard work. Each subsystem closes one of the gaps that today keep
 direct-API providers below Claude SDK in real terms.
 
 ### 1.1 MCP execution for direct-API providers
+
 [apps/backend/agents/runtime/mcp_bridge.py](../../apps/backend/agents/runtime/mcp_bridge.py)
 
 - Generalize `RuntimeMcpBridge` execution wiring to all registered external
@@ -145,6 +151,7 @@ direct-API providers below Claude SDK in real terms.
   receive a normalized result.
 
 ### 1.2 Mutating subagents with transactional merge
+
 [apps/backend/agents/runtime/subagents.py](../../apps/backend/agents/runtime/subagents.py)
 
 - Transactional child boundary: each child enters a staged workspace clone
@@ -158,6 +165,7 @@ direct-API providers below Claude SDK in real terms.
   file.
 
 ### 1.3 Sandbox for direct providers
+
 - Unify the sandbox interface across macOS Seatbelt, Linux bubblewrap, and
   Windows AppContainer.
 - Generic Edit shell actions go through this layer rather than relying on
@@ -166,6 +174,7 @@ direct-API providers below Claude SDK in real terms.
   once the platform layer is in place.
 
 ### 1.4 Native tool loop per provider
+
 [apps/backend/core/providers/adapters/](../../apps/backend/core/providers/adapters/)
 
 | Provider   | Today                            | To do                                              |
@@ -184,12 +193,14 @@ the downgrade explicitly so promotion gates can flag it.
 ## Phase 2 — Evidence without opt-in
 
 ### 2.1 Scheduled live probes
+
 - `scripts/nightly_provider_e2e.py` runs the full provider-e2e suite for
   each direct provider against real keys (CI secrets), then writes results
   to `.auto-claude/runtime/provider-smoke-history.json` via a bot PR.
 - README badges per provider summarize last-7-day pass rate and freshness.
 
 ### 2.2 Per-provider cost calibration
+
 [apps/backend/cli/provider_smoke_commands.py:62-63](../../apps/backend/cli/provider_smoke_commands.py)
 
 - Replace fixed 10k input + 2k output benchmark with rolling per-model
@@ -198,6 +209,7 @@ the downgrade explicitly so promotion gates can flag it.
   benchmark only as fallback.
 
 ### 2.3 Quality and safety evals
+
 - Add mini-SWE-bench style suite (5 - 10 small tasks, mixed fix / feature /
   refactor / test) callable from CI.
 - Per-provider pass rate feeds the honest quality score that the comparative
@@ -209,6 +221,7 @@ No bulk allowlist moves. Each promotion is its own PR with an evidence
 package.
 
 ### 3.1 Pilot: OpenAI
+
 Acceptance checklist for the "promote openai" PR:
 - Phase 1.1 - 1.4 green for OpenAI.
 - 10+ stable consecutive provider_e2e runs within the last 7 days.
@@ -223,6 +236,7 @@ and remove openai from `DIRECT_API_AUTONOMOUS_PROVIDERS`, since the
 promotion no longer needs to flow through the gate.
 
 ### 3.2 Subsequent order
+
 By decreasing readiness:
 1. OpenRouter (OpenAI-compat wrapper, trivial after OpenAI).
 2. Google / Gemini (schema diffs from 1.4 resolved).
@@ -254,15 +268,18 @@ resume semantics, event parser in
 ## Phase 5 — Frontend control plane completion
 
 ### 5.1 Provider readiness dashboard
+
 - Real-time grid (provider x phase), drill-down into trace, checkpoint,
   artifacts.
 - Promote and demote actions surfaced behind explicit confirmation.
 
 ### 5.2 Live history charts
+
 - Quality, cost, stability, safety trend lines over 30 days per provider.
 - Anomaly highlight when a metric regresses beyond 2 sigma.
 
 ### 5.3 Artifact viewer
+
 - Recovery checkpoint diff viewer.
 - Mutation snapshot rollback UI.
 - Subagent merge conflict resolver.
@@ -270,11 +287,13 @@ resume semantics, event parser in
 ## Phase 6 — Recovery and edge case hardening
 
 ### 6.1 Generic Edit non-happy-path
+
 - Repair flow UI: one-button repair or rollback against a concrete blocker.
 - Auto-rollback when drift exceeds threshold.
 - Idempotent batch retry with deduplication.
 
 ### 6.2 Staged overlay edge cases
+
 - Symlinks, binary files, files > 10 MB, concurrent mutations within one
   transaction.
 - Property-based tests (hypothesis) on trace consistency.

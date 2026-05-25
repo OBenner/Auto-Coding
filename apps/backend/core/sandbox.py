@@ -24,11 +24,12 @@ from __future__ import annotations
 
 import os
 import shutil
-import sys
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any
+
+from core.platform import OS, get_current_os
 
 SANDBOX_ENV = "AUTO_CODE_SANDBOX"
 
@@ -151,10 +152,13 @@ def describe_sandbox_backend(
     """Return the sandbox backend description for the current host.
 
     ``platform`` and ``env`` are optional for testability; in normal
-    use the helper reads ``sys.platform`` and ``os.environ``.
+    use the helper reads ``os.environ`` and resolves the host via
+    :func:`core.platform.get_current_os`. When ``platform`` is given
+    (for unit tests), it is matched against the legacy ``sys.platform``
+    string family (``darwin``, ``linux*``, ``win32``, ``cygwin``) so
+    tests do not need to fabricate :class:`core.platform.OS` instances.
     """
     env_map = os.environ if env is None else env
-    host = platform if platform is not None else sys.platform
 
     # Apply the env-var override exactly once. We allow operators to
     # force the backend off (for incident response) but never to force
@@ -162,6 +166,8 @@ def describe_sandbox_backend(
     # to sandbox shell while running unconstrained.
     override = env_map.get(SANDBOX_ENV, "").strip().lower()
     forced_off = override in _FALSY
+
+    host = platform if platform is not None else _current_host_token()
 
     if host == "darwin":
         info = _detect_macos_backend()
@@ -198,3 +204,21 @@ def sandbox_available(
 ) -> bool:
     """Return whether a real sandbox backend is available on this host."""
     return describe_sandbox_backend(env=env, platform=platform).available
+
+
+def _current_host_token() -> str:
+    """Return a legacy sys.platform-style token for the current host.
+
+    Wraps :func:`core.platform.get_current_os` so the sandbox helper's
+    string-based dispatch keeps working unchanged: we still match
+    ``darwin``/``linux``/``win32`` even though the canonical detection
+    now lives in ``core.platform``.
+    """
+    os_enum = get_current_os()
+    if os_enum is OS.MACOS:
+        return "darwin"
+    if os_enum is OS.LINUX:
+        return "linux"
+    if os_enum is OS.WINDOWS:
+        return "win32"
+    return os_enum.value.lower()
