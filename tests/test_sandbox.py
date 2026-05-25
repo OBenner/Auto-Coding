@@ -223,13 +223,13 @@ def test_wrap_seatbelt_inserts_sandbox_exec_with_profile():
 def test_seatbelt_profile_includes_allowed_writes_and_network():
     policy = SandboxPolicy(
         project_dir=Path("/repo"),
-        allowed_writes=(Path("/tmp/cache"),),
+        allowed_writes=(Path("/var/cache/build"),),
         allow_network=False,
     )
     profile = build_seatbelt_profile(policy)
 
     assert '(subpath "/repo")' in profile
-    assert '(subpath "/tmp/cache")' in profile
+    assert '(subpath "/var/cache/build")' in profile
     assert "(deny network*)" in profile
     assert "(allow network*)" not in profile
 
@@ -268,7 +268,7 @@ def test_wrap_bubblewrap_returns_bwrap_argv_with_project_bind():
 def test_build_bubblewrap_argv_includes_allowed_writes_and_network_share():
     policy = SandboxPolicy(
         project_dir=Path("/repo"),
-        allowed_writes=(Path("/tmp/cache"), Path("/var/log/build")),
+        allowed_writes=(Path("/var/cache/build"), Path("/var/log/build")),
         allow_network=True,
     )
     argv = build_bubblewrap_argv(
@@ -278,7 +278,7 @@ def test_build_bubblewrap_argv_includes_allowed_writes_and_network_share():
     )
 
     # Every allowed-write entry binds writable
-    for path in ("/repo", "/tmp/cache", "/var/log/build"):
+    for path in ("/repo", "/var/cache/build", "/var/log/build"):
         idx = None
         for i, token in enumerate(argv):
             if token == "--bind" and argv[i + 1] == path:

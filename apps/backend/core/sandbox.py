@@ -327,6 +327,12 @@ def build_seatbelt_profile(policy: SandboxPolicy) -> str:
         f'(allow file-write* (subpath "{_sbpl_literal(p)}"))' for p in writeable
     )
     network_clause = "(allow network*)" if policy.allow_network else "(deny network*)"
+    # Deny everything by default; allow only what the agent legitimately
+    # needs. Note: writes to publicly writable directories like
+    # ``/private/tmp`` or ``/private/var/folders`` are intentionally NOT
+    # allowed by default — operators that need scratch space should pass
+    # an explicit ``allowed_writes`` path (typically a per-build directory
+    # they own) so the confinement scope stays project-specific.
     return f"""(version 1)
 (deny default)
 (allow process-fork)
@@ -337,8 +343,6 @@ def build_seatbelt_profile(policy: SandboxPolicy) -> str:
 (allow file-write-data (subpath "/dev/null"))
 (allow file-write-data (subpath "/dev/stdout"))
 (allow file-write-data (subpath "/dev/stderr"))
-(allow file-write* (subpath "/private/tmp"))
-(allow file-write* (subpath "/private/var/folders"))
     {write_clauses}
 {network_clause}
 """.strip()
