@@ -194,10 +194,25 @@ the downgrade explicitly so promotion gates can flag it.
 
 ### 2.1 Scheduled live probes
 
-- `scripts/nightly_provider_e2e.py` runs the full provider-e2e suite for
-  each direct provider against real keys (CI secrets), then writes results
-  to `.auto-claude/runtime/provider-smoke-history.json` via a bot PR.
-- README badges per provider summarize last-7-day pass rate and freshness.
+Landed via
+[scripts/nightly_provider_e2e.py](../../scripts/nightly_provider_e2e.py)
+plus the
+[.github/workflows/nightly-provider-autonomy.yml](../../.github/workflows/nightly-provider-autonomy.yml)
+scheduled workflow. The script iterates the direct API providers,
+runs `provider-smoke --provider-smoke-runtime provider_e2e --json` for
+every provider whose credentials are present, aggregates per-provider
+results into a single JSON summary, and exits with code 1 if any
+attempted provider failed. Credentials never reach process arguments.
+
+Remaining work in this slice:
+
+- Wire the optional `open_history_pr` workflow input so the bot opens
+  a follow-up PR updating `.auto-claude/runtime/provider-smoke-history.json`
+  when the history file actually changes (workflow step exists; needs
+  the upstream `peter-evans/create-pull-request` action to be allowed
+  by repo policy).
+- README badges per provider that summarize last-7-day pass rate and
+  freshness.
 
 ### 2.2 Per-provider cost calibration
 
