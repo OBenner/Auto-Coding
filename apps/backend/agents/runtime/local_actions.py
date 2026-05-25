@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from core import sandbox as core_sandbox
 from core.platform import find_executable, is_windows
 from security import split_command_segments, validate_command
 
@@ -816,8 +817,24 @@ class ToolActionResult:
 class LocalActionExecutor:
     """Execute a small, provider-neutral set of local workspace actions."""
 
-    def __init__(self, project_dir: Path):
+    def __init__(
+        self,
+        project_dir: Path,
+        *,
+        sandbox_policy: "core_sandbox.SandboxPolicy | None" = None,
+        sandbox_backend: "core_sandbox.SandboxBackendInfo | None" = None,
+    ):
         self.project_dir = project_dir
+        # Phase 1.3 step 2: when both ``sandbox_policy`` and
+        # ``sandbox_backend`` are present AND the backend reports
+        # ``available=True``, ``_run_subprocess_bounded`` wraps the
+        # ``run_command`` argv via ``core.sandbox.wrap_command`` so
+        # the shell action actually runs under Seatbelt / bubblewrap.
+        # When either is missing (default), the executor falls back to
+        # the legacy unwrapped behavior so existing tests and the
+        # AUTO_CODE_AUTONOMY=claude code path stay unchanged.
+        self._sandbox_policy = sandbox_policy
+        self._sandbox_backend = sandbox_backend
 
     async def execute(self, action: dict[str, Any]) -> ToolActionResult:
         """Execute one local action and return a structured result."""
@@ -1685,8 +1702,22 @@ class LocalActionExecutor:
         args: list[str],
         timeout_seconds: int,
     ) -> CommandExecution:
+        # Phase 1.3 step 2: wrap the argv with the platform sandbox
+        # when the constructor was given a policy + backend pair and
+        # the backend reports ``available=True``. The wrap is opt-in
+        # so the existing unwrapped path keeps working for callers
+        # that have not been migrated yet.
+        effective_args = list(args)
+        if self._sandbox_policy is not None and self._sandbox_backend is not None:
+            wrapped = core_sandbox.wrap_command(
+                effective_args,
+                info=self._sandbox_backend,
+                policy=self._sandbox_policy,
+            )
+            if wrapped.wrapped:
+                effective_args = wrapped.argv
         process = await asyncio.create_subprocess_exec(
-            *args,
+            *effective_args,
             cwd=str(self.project_dir),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

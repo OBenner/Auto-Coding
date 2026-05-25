@@ -27,6 +27,7 @@ import shutil
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from core.platform import OS, get_current_os
@@ -204,6 +205,220 @@ def sandbox_available(
 ) -> bool:
     """Return whether a real sandbox backend is available on this host."""
     return describe_sandbox_backend(env=env, platform=platform).available
+
+
+# ---------------------------------------------------------------------------
+# Command wrapping (Phase 1.3 step 2)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SandboxPolicy:
+    """Per-execution policy for a sandboxed command.
+
+    Attributes:
+        project_dir: Absolute path to the project root. Writes outside
+            this tree are blocked unless the path appears in
+            ``allowed_writes``.
+        allowed_writes: Additional absolute paths the command may write
+            to (per-build caches, ``/tmp`` overlays, etc.). Each entry
+            is treated as a subtree.
+        allow_network: When ``True`` the sandbox keeps the network
+            available (git push, package fetch, MCP transports). When
+            ``False`` the sandbox attempts to deny network syscalls;
+            both backends honor this on a best-effort basis.
+    """
+
+    project_dir: Path
+    allowed_writes: tuple[Path, ...] = ()
+    allow_network: bool = True
+
+
+@dataclass(frozen=True)
+class SandboxedCommand:
+    """Resolved sandbox wrapping for a command invocation."""
+
+    argv: list[str]
+    backend: SandboxBackend
+    wrapped: bool
+    profile: str | None = None
+    reason: str = ""
+
+
+def wrap_command(
+    args: list[str],
+    *,
+    info: SandboxBackendInfo,
+    policy: SandboxPolicy,
+) -> SandboxedCommand:
+    """Wrap ``args`` for execution under the host sandbox backend.
+
+    When ``info.available`` is ``False`` (unavailable platform,
+    missing executable, AppContainer wiring still TODO) the wrapper
+    returns the original argv unchanged and marks ``wrapped=False`` —
+    callers can then surface the gap in diagnostics instead of
+    pretending the command was confined.
+    """
+    if not info.available:
+        return SandboxedCommand(
+            argv=list(args),
+            backend=info.backend,
+            wrapped=False,
+            reason=info.reason,
+        )
+    if info.backend is SandboxBackend.SEATBELT:
+        return _wrap_seatbelt(args, info=info, policy=policy)
+    if info.backend is SandboxBackend.BUBBLEWRAP:
+        return _wrap_bubblewrap(args, info=info, policy=policy)
+    if info.backend is SandboxBackend.APPCONTAINER:
+        # AppContainer process-spawn is still experimental; surface the
+        # passthrough explicitly so the diagnostics layer reports a
+        # honest "not wrapped" rather than a fake "wrapped".
+        return SandboxedCommand(
+            argv=list(args),
+            backend=info.backend,
+            wrapped=False,
+            reason=(
+                "AppContainer process-spawn wrapper is not yet "
+                "implemented; command executed unwrapped."
+            ),
+        )
+    return SandboxedCommand(
+        argv=list(args),
+        backend=info.backend,
+        wrapped=False,
+        reason="unknown_backend",
+    )
+
+
+def _wrap_seatbelt(
+    args: list[str],
+    *,
+    info: SandboxBackendInfo,
+    policy: SandboxPolicy,
+) -> SandboxedCommand:
+    """Wrap ``args`` with ``sandbox-exec`` + a SBPL profile."""
+    if not info.executable:
+        return SandboxedCommand(
+            argv=list(args),
+            backend=info.backend,
+            wrapped=False,
+            reason="seatbelt executable missing",
+        )
+    profile = build_seatbelt_profile(policy)
+    return SandboxedCommand(
+        argv=[info.executable, "-p", profile, *args],
+        backend=info.backend,
+        wrapped=True,
+        profile=profile,
+    )
+
+
+def build_seatbelt_profile(policy: SandboxPolicy) -> str:
+    """Return a Seatbelt (SBPL) profile string for ``policy``.
+
+    The default posture is conservative: deny by default, allow process
+    bookkeeping (fork/exec/signal), allow reads anywhere, restrict
+    writes to ``project_dir`` and ``allowed_writes``. Network access is
+    gated on ``policy.allow_network``.
+    """
+    writeable = [policy.project_dir, *policy.allowed_writes]
+    write_clauses = "\n    ".join(
+        f'(allow file-write* (subpath "{_sbpl_literal(p)}"))' for p in writeable
+    )
+    network_clause = "(allow network*)" if policy.allow_network else "(deny network*)"
+    return f"""(version 1)
+(deny default)
+(allow process-fork)
+(allow process-exec)
+(allow signal (target self))
+(allow sysctl-read)
+(allow file-read*)
+(allow file-write-data (subpath "/dev/null"))
+(allow file-write-data (subpath "/dev/stdout"))
+(allow file-write-data (subpath "/dev/stderr"))
+(allow file-write* (subpath "/private/tmp"))
+(allow file-write* (subpath "/private/var/folders"))
+    {write_clauses}
+{network_clause}
+""".strip()
+
+
+def _sbpl_literal(path: Path) -> str:
+    """Escape an absolute path for embedding inside an SBPL string."""
+    raw = str(path)
+    return raw.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _wrap_bubblewrap(
+    args: list[str],
+    *,
+    info: SandboxBackendInfo,
+    policy: SandboxPolicy,
+) -> SandboxedCommand:
+    """Wrap ``args`` with ``bwrap`` + read-only host + writable project."""
+    if not info.executable:
+        return SandboxedCommand(
+            argv=list(args),
+            backend=info.backend,
+            wrapped=False,
+            reason="bwrap executable missing",
+        )
+    argv = build_bubblewrap_argv(args, executable=info.executable, policy=policy)
+    return SandboxedCommand(
+        argv=argv,
+        backend=info.backend,
+        wrapped=True,
+    )
+
+
+def build_bubblewrap_argv(
+    args: list[str],
+    *,
+    executable: str,
+    policy: SandboxPolicy,
+) -> list[str]:
+    """Return a complete ``bwrap`` argv list for ``args``.
+
+    Mounts the host filesystem read-only, rebinds ``project_dir`` and
+    every entry in ``policy.allowed_writes`` as writable, unshares all
+    namespaces by default, and selectively keeps the network namespace
+    shared when ``policy.allow_network`` is set.
+    """
+    cmd: list[str] = [
+        executable,
+        "--ro-bind",
+        "/",
+        "/",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--bind",
+        str(policy.project_dir),
+        str(policy.project_dir),
+    ]
+    for extra in policy.allowed_writes:
+        cmd.extend(["--bind", str(extra), str(extra)])
+    cmd.extend(
+        [
+            "--unshare-user",
+            "--unshare-pid",
+            "--unshare-uts",
+            "--unshare-cgroup",
+            "--unshare-ipc",
+            "--die-with-parent",
+        ]
+    )
+    if policy.allow_network:
+        cmd.append("--share-net")
+    else:
+        cmd.append("--unshare-net")
+    cmd.append("--")
+    cmd.extend(args)
+    return cmd
 
 
 def _current_host_token() -> str:
