@@ -821,8 +821,8 @@ class LocalActionExecutor:
         self,
         project_dir: Path,
         *,
-        sandbox_policy: "core_sandbox.SandboxPolicy | None" = None,
-        sandbox_backend: "core_sandbox.SandboxBackendInfo | None" = None,
+        sandbox_policy: core_sandbox.SandboxPolicy | None = None,
+        sandbox_backend: core_sandbox.SandboxBackendInfo | None = None,
     ):
         self.project_dir = project_dir
         # Phase 1.3 step 2: when both ``sandbox_policy`` and
