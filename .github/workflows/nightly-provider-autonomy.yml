@@ -1,0 +1,133 @@
+# Nightly Provider Autonomy Probes
+#
+# Phase 2.1 of docs/roadmap/non-claude-provider-autonomy.md.
+#
+# Runs `scripts/nightly_provider_e2e.py` once per day against the
+# direct API providers Auto Code supports. Probes use real credentials
+# from repository secrets so the persisted provider-smoke history
+# accumulates evidence the AutonomyPolicy gate consumes when deciding
+# whether a direct provider can be promoted to `full_autonomous`.
+#
+# Outputs:
+# - `.auto-claude/runtime/nightly-provider-summary.json` (run summary)
+# - artifact upload (kept for 30 days)
+# - optional bot PR that updates
+#   `.auto-claude/runtime/provider-smoke-history.json` when probes ran
+#   successfully (controlled by `open_history_pr` input)
+
+name: Nightly Provider Autonomy Probes
+
+on:
+  schedule:
+    # 04:17 UTC daily — off-peak for both US and EU runners, and after
+    # most US-hosted release pipelines that share the runner pool.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      providers:
+        description: 'Space-separated providers to probe (default: all known)'
+        required: false
+        type: string
+        default: 'openai google openrouter litellm zhipuai ollama'
+      timeout_seconds:
+        description: 'Per-provider timeout in seconds'
+        required: false
+        type: string
+        default: '600'
+      open_history_pr:
+        description: 'Open a follow-up PR if provider-smoke-history.json changes'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: nightly-provider-autonomy
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe direct API providers
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Provider credentials are pulled from repository secrets so they
+      # never appear in the workflow file or process arguments.
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+      LITELLM_API_BASE: ${{ secrets.LITELLM_API_BASE }}
+      ZHIPUAI_API_KEY: ${{ secrets.ZHIPUAI_API_KEY }}
+      # AutonomyPolicy is locked to standard for probe runs so the gate
+      # values are reproducible across nights; overrides come from
+      # repository variables when an enterprise tunes them.
+      AUTO_CODE_AUTONOMY: claude
+      AUTO_CODE_AUTONOMY_PRESET: standard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python backend
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Run nightly provider probes
+        id: probe
+        env:
+          # workflow_dispatch overrides; cron path uses defaults.
+          PROVIDERS: ${{ inputs.providers || 'openai google openrouter litellm zhipuai ollama' }}
+          TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '600' }}
+        run: |
+          set -euo pipefail
+          mkdir -p .auto-claude/runtime
+          python scripts/nightly_provider_e2e.py \
+            --providers $PROVIDERS \
+            --backend-dir apps/backend \
+            --timeout "$TIMEOUT_SECONDS" \
+            --output .auto-claude/runtime/nightly-provider-summary.json
+
+      - name: Upload nightly summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-provider-summary
+          path: |
+            .auto-claude/runtime/nightly-provider-summary.json
+            .auto-claude/runtime/provider-smoke-history.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Open history-update PR
+        if: >
+          inputs.open_history_pr == true
+          && steps.probe.outcome == 'success'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: bot/nightly-provider-history
+          delete-branch: true
+          add-paths: .auto-claude/runtime/provider-smoke-history.json
+          commit-message: |
+            chore(autonomy): nightly provider-smoke history update
+
+            Automated update from nightly-provider-autonomy.yml.
+            Summary attached to the workflow run as the
+            nightly-provider-summary artifact.
+          title: 'chore(autonomy): nightly provider-smoke history update'
+          body: |
+            Automated history update from the nightly provider autonomy
+            probe. The corresponding summary is attached to the workflow
+            run as the `nightly-provider-summary` artifact.
+
+            This PR is generated only when:
+            1. The nightly probe job succeeded (per-provider failures
+               still allow the PR; transport-level failures do not).
+            2. `provider-smoke-history.json` actually changed.
+
+            See `docs/roadmap/non-claude-provider-autonomy.md` Phase 2.
+          labels: |
+            autonomy
+            bot
