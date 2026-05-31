@@ -182,6 +182,74 @@ def resolve_direct_api_autonomous_gate(
     )
 
 
+@dataclass(frozen=True)
+class DirectApiAutonomousReadiness:
+    """A one-shot promotion-readiness snapshot for a direct-API provider.
+
+    Combines the gate decision (the actionable allowed / missing view), the
+    resolved :class:`AutonomyPolicy` thresholds, the operator's current
+    autonomy level, and the recorded provider e2e evidence so a single
+    command can answer "how close is this provider to full-autonomous
+    promotion, and exactly what is missing".
+    """
+
+    provider: str
+    autonomy_level: str
+    gate: DirectApiAutonomousGate
+    policy: dict[str, Any]
+    evidence: dict[str, Any] | None
+    # ``None`` when evidence is present; otherwise a stable id explaining
+    # why (``provider_history_missing`` / ``provider_history_unreadable``).
+    evidence_status: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe readiness payload."""
+        return {
+            "provider": self.provider,
+            "autonomy_level": self.autonomy_level,
+            "gate": self.gate.to_dict(),
+            "policy": self.policy,
+            "evidence": self.evidence,
+            "evidence_status": self.evidence_status,
+        }
+
+
+def resolve_direct_api_autonomous_readiness(
+    *,
+    provider_name: str,
+    project_dir: Path,
+    env: Mapping[str, str] | None = None,
+    policy: AutonomyPolicy | None = None,
+) -> DirectApiAutonomousReadiness:
+    """Resolve a full promotion-readiness snapshot for one provider.
+
+    Pure read: evaluates the gate, the policy, and the recorded evidence
+    without mutating anything, so it is safe to call from inspection CLIs.
+    """
+    provider = provider_name.lower()
+    if policy is None:
+        policy = autonomy_policy_for(provider, env=env)
+    autonomy = resolve_autonomy_settings(env=env)
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name=provider,
+        project_dir=project_dir,
+        phase="coding",
+        env=env,
+        policy=policy,
+    )
+    stats, evidence_status = _load_provider_stats(
+        resolve_provider_smoke_history_path(project_dir), provider
+    )
+    return DirectApiAutonomousReadiness(
+        provider=provider,
+        autonomy_level=autonomy.level.value,
+        gate=gate,
+        policy=policy.to_dict(),
+        evidence=stats or None,
+        evidence_status=evidence_status,
+    )
+
+
 def _load_provider_stats(
     history_path: Path,
     provider: str,

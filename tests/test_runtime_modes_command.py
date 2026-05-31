@@ -2271,3 +2271,133 @@ def test_cli_runner_selection_can_require_installed_runner(monkeypatch):
     }
     assert "not_found" in rejected_reasons["coderabbit_cli"]
     assert "not_configurable" in rejected_reasons["generic_cli_pool"]
+
+
+# ---------------------------------------------------------------------
+# --autonomy-readiness command
+# ---------------------------------------------------------------------
+
+
+def test_autonomy_readiness_disabled_on_claude_level(tmp_path, monkeypatch):
+    from cli.runtime_commands import build_autonomy_readiness_payload
+
+    monkeypatch.delenv("AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS", raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+
+    payload = build_autonomy_readiness_payload(project_dir=tmp_path, provider="openai")
+    entry = payload["providers"][0]
+
+    assert entry["provider"] == "openai"
+    assert entry["gate"]["allowed"] is False
+    assert entry["gate"]["status"] == "disabled"
+    assert entry["gate"]["missing_requirements"] == ["AUTO_CODE_AUTONOMY"]
+    assert payload["summary"]["not_ready"] == ["openai"]
+
+
+def test_autonomy_readiness_safe_blocks_without_evidence(tmp_path, monkeypatch):
+    from cli.runtime_commands import build_autonomy_readiness_payload
+
+    monkeypatch.delenv("AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS", raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+
+    payload = build_autonomy_readiness_payload(project_dir=tmp_path, provider="openai")
+    entry = payload["providers"][0]
+
+    assert entry["gate"]["allowed"] is False
+    assert entry["gate"]["reason"] == "provider_history_missing"
+    assert entry["evidence"] is None
+    assert entry["evidence_status"] == "provider_history_missing"
+
+
+def test_autonomy_readiness_safe_ready_with_stable_history(tmp_path, monkeypatch):
+    from cli.runtime_commands import build_autonomy_readiness_payload
+
+    monkeypatch.delenv("AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS", raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    _write_provider_history(
+        tmp_path, _stable_provider_history(_provider_smoke_run_at())
+    )
+
+    payload = build_autonomy_readiness_payload(project_dir=tmp_path, provider="openai")
+    entry = payload["providers"][0]
+
+    assert entry["gate"]["allowed"] is True
+    assert entry["gate"]["status"] == "passed"
+    assert entry["evidence"]["consecutive_passes"] == 3
+    assert payload["summary"]["ready"] == ["openai"]
+
+
+def test_autonomy_readiness_bold_skips_evidence(tmp_path, monkeypatch):
+    from cli.runtime_commands import build_autonomy_readiness_payload
+
+    monkeypatch.delenv("AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS", raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+
+    # No history artifact at all, yet bold still grants promotion.
+    payload = build_autonomy_readiness_payload(project_dir=tmp_path, provider="openai")
+    entry = payload["providers"][0]
+
+    assert entry["gate"]["allowed"] is True
+    assert entry["gate"]["reason"] == "direct_api_autonomous_gate_skipped"
+
+
+def test_autonomy_readiness_all_direct_providers(tmp_path, monkeypatch):
+    from agents.runtime.direct_api_autonomy import DIRECT_API_AUTONOMOUS_PROVIDERS
+    from cli.runtime_commands import build_autonomy_readiness_payload
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+
+    payload = build_autonomy_readiness_payload(project_dir=tmp_path)
+    names = [entry["provider"] for entry in payload["providers"]]
+
+    assert names == list(DIRECT_API_AUTONOMOUS_PROVIDERS)
+
+
+def test_autonomy_readiness_text_format(tmp_path, monkeypatch):
+    from cli.runtime_commands import (
+        build_autonomy_readiness_payload,
+        format_autonomy_readiness_text,
+    )
+
+    monkeypatch.delenv("AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS", raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    _write_provider_history(
+        tmp_path, _stable_provider_history(_provider_smoke_run_at())
+    )
+
+    payload = build_autonomy_readiness_payload(project_dir=tmp_path, provider="openai")
+    text = format_autonomy_readiness_text(payload)
+
+    assert "openai: READY" in text
+    assert "autonomy level: safe" in text
+    assert "Summary: 1 ready" in text
+
+
+def test_handle_autonomy_readiness_command_json(tmp_path, monkeypatch, capsys):
+    from cli.runtime_commands import handle_autonomy_readiness_command
+
+    monkeypatch.delenv("AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS", raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+
+    payload = handle_autonomy_readiness_command(
+        project_dir=tmp_path, provider="openai", output_json=True
+    )
+    parsed = json.loads(capsys.readouterr().out)
+
+    assert parsed["providers"][0]["provider"] == "openai"
+    assert parsed["summary"]["not_ready"] == ["openai"]
+    assert parsed == payload
+
+
+def test_parse_args_with_autonomy_readiness():
+    from cli.main import parse_args
+
+    original_argv = sys.argv
+    try:
+        sys.argv = ["run.py", "--autonomy-readiness"]
+        assert parse_args().autonomy_readiness == "__all__"
+
+        sys.argv = ["run.py", "--autonomy-readiness", "openai"]
+        assert parse_args().autonomy_readiness == "openai"
+    finally:
+        sys.argv = original_argv

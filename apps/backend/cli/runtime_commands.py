@@ -25,8 +25,10 @@ from agents.runtime.compatibility import (
 )
 from agents.runtime.direct_api_autonomy import (
     DIRECT_API_AUTONOMOUS_ENV,
+    DIRECT_API_AUTONOMOUS_PROVIDERS,
     DirectApiAutonomousGate,
     resolve_direct_api_autonomous_gate,
+    resolve_direct_api_autonomous_readiness,
 )
 from agents.runtime.fallback import (
     RuntimePhase,
@@ -3286,4 +3288,106 @@ def handle_runtime_modes_command(*, output_json: bool = False) -> dict[str, Any]
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         print(format_runtime_modes_text(payload))
+    return payload
+
+
+def build_autonomy_readiness_payload(
+    *,
+    project_dir: Path,
+    provider: str | None = None,
+) -> dict[str, Any]:
+    """Build the direct-API promotion readiness payload for one/all providers."""
+    if provider:
+        providers = [provider.lower()]
+    else:
+        providers = list(DIRECT_API_AUTONOMOUS_PROVIDERS)
+    readinesses = [
+        resolve_direct_api_autonomous_readiness(
+            provider_name=name, project_dir=project_dir
+        )
+        for name in providers
+    ]
+    return {
+        "providers": [r.to_dict() for r in readinesses],
+        "summary": {
+            "ready": [r.provider for r in readinesses if r.gate.allowed],
+            "not_ready": [r.provider for r in readinesses if not r.gate.allowed],
+        },
+    }
+
+
+def _format_readiness_evidence(
+    evidence: dict[str, Any] | None,
+    evidence_status: str | None,
+) -> list[str]:
+    """Render the recorded-evidence portion of a readiness report."""
+    if not evidence:
+        return [f"evidence: none recorded ({evidence_status or 'unknown'})"]
+    lines = [
+        "evidence: consecutive_passes="
+        f"{evidence.get('consecutive_passes')}, "
+        f"recent_window={evidence.get('recent_window')}, "
+        f"trend={evidence.get('trend')}"
+    ]
+    last_run = evidence.get("last_run_at")
+    if last_run:
+        lines.append(f"last run: {last_run}")
+    fault = evidence.get("live_fault_probe_covered_cases")
+    if isinstance(fault, list):
+        lines.append(f"live fault cases: {', '.join(fault) if fault else '(none)'}")
+    families = evidence.get("live_task_family_covered_families")
+    if isinstance(families, list):
+        lines.append(
+            f"live task families: {', '.join(families) if families else '(none)'}"
+        )
+    return lines
+
+
+def format_autonomy_readiness_text(payload: dict[str, Any]) -> str:
+    """Render the direct-API promotion readiness payload as plain text."""
+    lines = ["Direct-API autonomous promotion readiness", ""]
+    for entry in payload["providers"]:
+        gate = entry["gate"]
+        provider = entry["provider"]
+        if gate["status"] == "not_applicable":
+            lines.append(f"{provider}: n/a (not a direct-API provider)")
+            lines.append("")
+            continue
+        verdict = "READY" if gate["allowed"] else "NOT READY"
+        lines.append(f"{provider}: {verdict} ({gate['status']} - {gate['reason']})")
+        lines.append(f"  autonomy level: {entry['autonomy_level']}")
+        if gate["missing_requirements"]:
+            lines.append(f"  missing: {', '.join(gate['missing_requirements'])}")
+        for line in _format_readiness_evidence(
+            entry["evidence"], entry["evidence_status"]
+        ):
+            lines.append(f"  {line}")
+        policy = entry["policy"]
+        lines.append(
+            f"  thresholds: min_stable_runs={policy['min_stable_runs']}, "
+            f"max_history_age_days={policy['max_history_age_days']}"
+        )
+        lines.append("")
+    summary = payload["summary"]
+    lines.append(
+        f"Summary: {len(summary['ready'])} ready, "
+        f"{len(summary['not_ready'])} not ready."
+    )
+    return "\n".join(lines)
+
+
+def handle_autonomy_readiness_command(
+    *,
+    project_dir: Path,
+    provider: str | None = None,
+    output_json: bool = False,
+) -> dict[str, Any]:
+    """Print direct-API promotion readiness for one or all direct providers."""
+    payload = build_autonomy_readiness_payload(
+        project_dir=project_dir, provider=provider
+    )
+    if output_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(format_autonomy_readiness_text(payload))
     return payload
