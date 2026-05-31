@@ -55,7 +55,18 @@ lerna-debug.log*
 # ===========================
 # Auto Code Generated
 # ===========================
-.auto-claude/
+# Ignore everything under .auto-claude/ by listing its contents (``/*``)
+# rather than the directory itself, so the negated exception below can
+# re-include one nested file. (Git cannot re-include a path whose parent
+# directory is excluded as a whole.)
+.auto-claude/*
+# Exception: track the provider-smoke history so CI-accumulated autonomy
+# promotion evidence reaches the gate's consumer (run.py / --autonomy-readiness)
+# through a normal git pull. Everything else under runtime/ stays ignored.
+# See docs/roadmap/non-claude-provider-autonomy.md Phase 2.
+!.auto-claude/runtime/
+.auto-claude/runtime/*
+!.auto-claude/runtime/provider-smoke-history.json
 .planning/
 .auto-build-security.json
 .auto-claude-security.json

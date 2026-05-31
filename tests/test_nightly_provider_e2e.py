@@ -300,3 +300,112 @@ def test_main_returns_1_when_a_provider_fails(
     monkeypatch.setenv("OPENAI_API_KEY", "sk")
     rc = runner_module.main(["--backend-dir", str(backend), "--providers", "openai"])
     assert rc == 1
+
+
+def test_runs_per_provider_repeats_credentialed_probe(runner_module, tmp_path):
+    """``runs_per_provider=N`` invokes the probe N times for one provider.
+
+    The provider-smoke command appends one history record per invocation,
+    so N passing runs in a single job leave a trailing streak the gate
+    counts toward ``min_stable_runs`` — yet the summary still reports one
+    provider (not N) as attempted/passed.
+    """
+    calls: list[str] = []
+
+    def runner(cmd, **kwargs):
+        provider_index = cmd.index("--provider") + 1
+        calls.append(cmd[provider_index])
+        return _fake_completed(_success_payload(cmd[provider_index]))
+
+    summary = runner_module.run_nightly_probes(
+        providers=["openai"],
+        backend_dir=tmp_path,
+        env={"OPENAI_API_KEY": "sk"},
+        runs_per_provider=3,
+        runner=runner,
+    )
+
+    assert calls == ["openai", "openai", "openai"]
+    assert summary.providers_attempted == 1
+    assert summary.providers_passed == 1
+    assert summary.overall_status == "all_passed"
+    result = summary.per_provider[0]
+    assert result.status == "passed"
+    assert result.runs_attempted == 3
+    assert result.runs_passed == 3
+
+
+def test_runs_per_provider_any_failure_blocks_provider(runner_module, tmp_path):
+    """One flaky run inside the night marks the whole provider failed."""
+    outcomes = iter(["passed", "failed", "passed"])
+
+    def runner(cmd, **kwargs):
+        provider_index = cmd.index("--provider") + 1
+        provider = cmd[provider_index]
+        if next(outcomes) == "passed":
+            return _fake_completed(_success_payload(provider))
+        return _fake_completed(_failure_payload(provider), returncode=1)
+
+    summary = runner_module.run_nightly_probes(
+        providers=["openai"],
+        backend_dir=tmp_path,
+        env={"OPENAI_API_KEY": "sk"},
+        runs_per_provider=3,
+        runner=runner,
+    )
+
+    result = summary.per_provider[0]
+    assert result.status == "failed"
+    assert result.runs_attempted == 3
+    assert result.runs_passed == 2
+    assert summary.providers_passed == 0
+    assert summary.overall_status == "some_failed"
+
+
+def test_runs_per_provider_does_not_repeat_skipped(runner_module, tmp_path):
+    """A provider without credentials is probed zero times, not N times."""
+    runner_mock = MagicMock()
+
+    summary = runner_module.run_nightly_probes(
+        providers=["google"],
+        backend_dir=tmp_path,
+        env={},  # no credentials
+        runs_per_provider=3,
+        runner=runner_mock,
+    )
+
+    runner_mock.assert_not_called()
+    result = summary.per_provider[0]
+    assert result.status == "skipped"
+    assert result.runs_attempted == 0
+    assert result.runs_passed == 0
+
+
+def test_main_runs_per_provider_invokes_probe_n_times(
+    runner_module, tmp_path, monkeypatch
+):
+    """``--runs-per-provider 3`` reaches the subprocess as 3 invocations."""
+    backend = tmp_path / "apps" / "backend"
+    backend.mkdir(parents=True)
+    (backend / "run.py").write_text("# stub")
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(list(cmd))
+        return _fake_completed(_success_payload("openai"))
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk")
+    rc = runner_module.main(
+        [
+            "--backend-dir",
+            str(backend),
+            "--providers",
+            "openai",
+            "--runs-per-provider",
+            "3",
+        ]
+    )
+
+    assert rc == 0
+    assert len(calls) == 3

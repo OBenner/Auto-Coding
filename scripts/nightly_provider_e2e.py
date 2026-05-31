@@ -13,6 +13,10 @@ The script is intentionally minimal so it stays runnable from any host
 with the backend installed:
 
 - pure subprocess driver, no extra Python deps beyond stdlib
+- ``--runs-per-provider N`` probes each provider N times in one job so a
+  single nightly run accumulates the trailing pass streak the
+  AutonomyPolicy promotion gate counts toward ``min_stable_runs``
+  (Option C, Phase 2.1 of the roadmap)
 - credentials read from environment, not flags, so secrets stay out of
   process arguments / shell history
 - structured JSON output to stdout (or ``--output PATH``) plus a
@@ -32,7 +36,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -71,6 +75,14 @@ class ProviderProbeResult:
     runtime_diagnostics_summary: dict[str, object] | None = None
     error: str | None = None
     stdout_excerpt: str | None = None
+    # When ``--runs-per-provider`` > 1 the probe is invoked several times
+    # in one job so the persisted provider-smoke history accumulates the
+    # trailing pass streak the AutonomyPolicy gate counts toward
+    # ``min_stable_runs`` (Option C, Phase 2.1 of
+    # docs/roadmap/non-claude-provider-autonomy.md). These record how many
+    # real probe invocations ran and how many passed.
+    runs_attempted: int = 0
+    runs_passed: int = 0
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
@@ -251,29 +263,84 @@ def _run_one_provider(
     )
 
 
+def _aggregate_provider_attempts(
+    provider: str,
+    attempts: list[ProviderProbeResult],
+) -> ProviderProbeResult:
+    """Collapse repeated probe attempts into one provider-level result.
+
+    The status is ``passed`` only when *every* real attempt passed, so a
+    single flaky run inside the night blocks the provider. That mirrors
+    the AutonomyPolicy gate, which needs an unbroken trailing streak of
+    passes in the persisted history before promotion.
+    """
+    real = [a for a in attempts if a.attempted]
+    runs_attempted = len(real)
+    runs_passed = sum(1 for a in real if a.status == "passed")
+    if runs_attempted == 0:
+        # Guard-skipped (missing creds) or allowlist error before any
+        # probe ran — surface the first result verbatim.
+        return replace(attempts[0], runs_attempted=0, runs_passed=0)
+    all_passed = runs_passed == runs_attempted
+    # Prefer a non-passing attempt for the human-facing status/reason/error
+    # (preserving the error-vs-failed distinction), but keep the latest
+    # attempt's diagnostics — what a follow-up gate read would see last.
+    representative = (
+        attempts[-1]
+        if all_passed
+        else next((a for a in real if a.status != "passed"), attempts[-1])
+    )
+    return ProviderProbeResult(
+        provider=provider,
+        attempted=True,
+        status="passed" if all_passed else representative.status,
+        reason=representative.reason,
+        duration_seconds=sum(a.duration_seconds or 0.0 for a in real),
+        runtime_diagnostics_summary=real[-1].runtime_diagnostics_summary,
+        error=representative.error,
+        stdout_excerpt=representative.stdout_excerpt,
+        runs_attempted=runs_attempted,
+        runs_passed=runs_passed,
+    )
+
+
 def run_nightly_probes(
     providers: Iterable[str],
     *,
     backend_dir: Path,
     env: Mapping[str, str],
     timeout_seconds: float = 600.0,
+    runs_per_provider: int = 1,
     runner: callable | None = None,
 ) -> NightlySummary:
     if runner is None:
         runner = subprocess.run
-    """Run probes for ``providers`` and return an aggregate summary."""
+    """Run probes for ``providers`` and return an aggregate summary.
+
+    Each credentialed provider is probed ``runs_per_provider`` times so a
+    single nightly job accumulates that many records in the persisted
+    provider-smoke history (the gate counts the trailing pass streak).
+    Guard outcomes (missing credentials, allowlist errors) short-circuit
+    after the first attempt rather than repeating pointlessly.
+    """
+    runs_per_provider = max(1, runs_per_provider)
     started = datetime.now(UTC)
     results: list[ProviderProbeResult] = []
     for provider in providers:
-        results.append(
-            _run_one_provider(
+        attempts: list[ProviderProbeResult] = []
+        for _ in range(runs_per_provider):
+            attempt = _run_one_provider(
                 provider=provider,
                 backend_dir=backend_dir,
                 env=env,
                 timeout_seconds=timeout_seconds,
                 runner=runner,
             )
-        )
+            attempts.append(attempt)
+            if not attempt.attempted:
+                # Skipped/allowlist error — no point repeating.
+                break
+        results.append(_aggregate_provider_attempts(provider, attempts))
     finished = datetime.now(UTC)
 
     attempted = sum(1 for r in results if r.attempted)
@@ -310,6 +377,8 @@ def _print_human_summary(summary: NightlySummary, stream) -> None:
     )
     for result in summary.per_provider:
         line = f"  - {result.provider}: {result.status}"
+        if result.runs_attempted > 1:
+            line += f" [{result.runs_passed}/{result.runs_attempted} runs]"
         if result.reason:
             line += f" ({result.reason})"
         print(line, file=stream)
@@ -336,6 +405,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Per-provider timeout in seconds passed to provider-smoke.",
     )
     parser.add_argument(
+        "--runs-per-provider",
+        type=int,
+        default=1,
+        help=(
+            "Probe each credentialed provider this many times in one job so "
+            "the persisted provider-smoke history accumulates a trailing pass "
+            "streak (set to the AutonomyPolicy min_stable_runs, e.g. 3, to "
+            "make a single nightly run promotion-eligible)."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -356,6 +436,7 @@ def main(argv: list[str] | None = None) -> int:
         backend_dir=backend_dir,
         env=os.environ,
         timeout_seconds=args.timeout,
+        runs_per_provider=args.runs_per_provider,
     )
     payload = json.dumps(summary.to_dict(), indent=2, sort_keys=True) + "\n"
     if args.output is not None:

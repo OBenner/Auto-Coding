@@ -8,12 +8,20 @@
 # accumulates evidence the AutonomyPolicy gate consumes when deciding
 # whether a direct provider can be promoted to `full_autonomous`.
 #
+# Each provider is probed `runs_per_provider` times (default 3) in one
+# run so the persisted history accumulates the trailing pass streak the
+# AutonomyPolicy gate counts toward `min_stable_runs` — a single nightly
+# run can therefore make a provider promotion-eligible (Option C, Phase
+# 2.1). `provider-smoke-history.json` is git-tracked (see .gitignore) so
+# the committed evidence reaches the gate's consumer via a normal pull.
+#
 # Outputs:
 # - `.auto-claude/runtime/nightly-provider-summary.json` (run summary)
 # - artifact upload (kept for 30 days)
-# - optional bot PR that updates
+# - bot PR that updates
 #   `.auto-claude/runtime/provider-smoke-history.json` when probes ran
-#   successfully (controlled by `open_history_pr` input)
+#   successfully — opened automatically on the nightly cron, or on manual
+#   dispatch via the `open_history_pr` input (you merge it to develop)
 
 name: Nightly Provider Autonomy Probes
 
@@ -34,6 +42,11 @@ on:
         required: false
         type: string
         default: '600'
+      runs_per_provider:
+        description: 'Probe each provider N times in one run so the persisted history accumulates the promotion-gate pass streak (min_stable_runs, default 3)'
+        required: false
+        type: string
+        default: '3'
       open_history_pr:
         description: 'Open a follow-up PR if provider-smoke-history.json changes'
         required: false
@@ -80,6 +93,10 @@ jobs:
           # workflow_dispatch overrides; cron path uses defaults.
           PROVIDERS: ${{ inputs.providers || 'openai google openrouter litellm zhipuai ollama' }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '600' }}
+          # Probe each provider this many times so one nightly run leaves a
+          # promotion-eligible pass streak in the persisted history. Defaults
+          # to the standard preset's min_stable_runs (3).
+          RUNS_PER_PROVIDER: ${{ inputs.runs_per_provider || '3' }}
         run: |
           set -euo pipefail
           mkdir -p .auto-claude/runtime
@@ -87,6 +104,7 @@ jobs:
             --providers $PROVIDERS \
             --backend-dir apps/backend \
             --timeout "$TIMEOUT_SECONDS" \
+            --runs-per-provider "$RUNS_PER_PROVIDER" \
             --output .auto-claude/runtime/nightly-provider-summary.json
 
       - name: Upload nightly summary artifact
@@ -101,9 +119,13 @@ jobs:
           if-no-files-found: warn
 
       - name: Open history-update PR
+        # On the nightly cron this fires automatically so the accumulated
+        # provider-smoke history reaches develop (you merge when ready —
+        # nothing is auto-pushed to a protected branch). Manual dispatch
+        # can still force it with the open_history_pr input.
         if: >
-          inputs.open_history_pr == true
-          && steps.probe.outcome == 'success'
+          steps.probe.outcome == 'success'
+          && (inputs.open_history_pr == true || github.event_name == 'schedule')
         uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6.1.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
