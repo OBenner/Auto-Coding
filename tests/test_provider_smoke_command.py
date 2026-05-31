@@ -4118,3 +4118,23 @@ def test_smoke_content_matches_tolerates_trailing_whitespace():
     # Wrong content still fails.
     assert not _smoke_content_matches("Provider smoke ok", expected)
     assert not _smoke_content_matches("something else", expected)
+
+
+def test_recovery_checkpoint_failure_reason_embeds_discriminators():
+    """The recovery failure reason carries initial_status + checkpoint_exists.
+
+    The nightly summary keeps only `reason`, so these two discriminators must
+    travel inside it to tell model-behavior from a runtime-recovery bug.
+    """
+    from cli.provider_smoke_commands import _recovery_checkpoint_failure_reason
+
+    # Model never triggered the block (clean finish): initial_status != error.
+    model_case = _recovery_checkpoint_failure_reason("continue", False)
+    assert model_case.startswith("recovery_checkpoint_not_created(")
+    assert "initial_status=continue" in model_case
+    assert "checkpoint_exists=False" in model_case
+
+    # Runtime blocked (status error) but did not persist the checkpoint.
+    runtime_case = _recovery_checkpoint_failure_reason("error", False)
+    assert "initial_status=error" in runtime_case
+    assert "checkpoint_exists=False" in runtime_case
