@@ -2,19 +2,18 @@
 
 Phase 1.3 step 2: when constructed with a SandboxPolicy + a backend
 that reports ``available=True``, the executor must wrap ``run_command``
-argv through ``core.sandbox.wrap_command`` before
-``asyncio.create_subprocess_exec`` runs. These tests intercept the
-subprocess call so no real shell command executes.
+argv through ``core.sandbox.wrap_command`` before the command runs. These
+tests intercept the blocking subprocess runner so no real shell command
+executes and assert the argv it receives is the wrapped one.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
-from agents.runtime.local_actions import LocalActionExecutor
+from agents.runtime.local_actions import CommandExecution, LocalActionExecutor
 from core.sandbox import SandboxBackend, SandboxBackendInfo, SandboxPolicy
 
 
@@ -47,15 +46,21 @@ def _unavailable() -> SandboxBackendInfo:
     )
 
 
-def _make_fake_process():
-    process = MagicMock()
-    process.stdout = MagicMock()
-    process.stderr = MagicMock()
-    process.returncode = 0
-    process.wait = AsyncMock(return_value=0)
-    process.terminate = MagicMock()
-    process.kill = MagicMock()
-    return process
+def _fake_blocking_runner(captured: dict):
+    """Stand in for ``_run_subprocess_blocking``, recording the argv it gets.
+
+    The executor wraps argv with the sandbox before handing it to the
+    blocking runner, so capturing the runner's ``args`` proves the wrap.
+    """
+
+    def _runner(args, *, cwd, timeout_seconds):
+        captured["args"] = list(args)
+        captured["cwd"] = cwd
+        return CommandExecution(
+            returncode=0, output="", truncated=False, timed_out=False
+        )
+
+    return _runner
 
 
 @pytest.mark.asyncio
@@ -67,27 +72,13 @@ async def test_executor_wraps_argv_with_seatbelt_when_policy_given(tmp_path):
     )
 
     captured = {}
-
-    async def fake_create(*args, **kwargs):
-        captured["args"] = args
-        return _make_fake_process()
-
     with patch(
-        "agents.runtime.local_actions.asyncio.create_subprocess_exec",
-        new=fake_create,
-    ), patch(
-        "agents.runtime.local_actions.capture_process_stream",
-        new=AsyncMock(return_value=None),
-    ), patch(
-        "agents.runtime.local_actions.wait_for_process_streams",
-        new=AsyncMock(return_value=False),
-    ), patch(
-        "agents.runtime.local_actions.ensure_process_finished",
-        new=AsyncMock(return_value=None),
+        "agents.runtime.local_actions._run_subprocess_blocking",
+        new=_fake_blocking_runner(captured),
     ):
         await executor._run_subprocess_bounded(["git", "status"], timeout_seconds=10)
 
-    argv = list(captured["args"])
+    argv = captured["args"]
     assert argv[0] == "/usr/bin/sandbox-exec"
     assert argv[1] == "-p"
     # Profile body is the third token; tail is original argv.
@@ -103,27 +94,13 @@ async def test_executor_wraps_argv_with_bubblewrap_when_policy_given(tmp_path):
     )
 
     captured = {}
-
-    async def fake_create(*args, **kwargs):
-        captured["args"] = args
-        return _make_fake_process()
-
     with patch(
-        "agents.runtime.local_actions.asyncio.create_subprocess_exec",
-        new=fake_create,
-    ), patch(
-        "agents.runtime.local_actions.capture_process_stream",
-        new=AsyncMock(return_value=None),
-    ), patch(
-        "agents.runtime.local_actions.wait_for_process_streams",
-        new=AsyncMock(return_value=False),
-    ), patch(
-        "agents.runtime.local_actions.ensure_process_finished",
-        new=AsyncMock(return_value=None),
+        "agents.runtime.local_actions._run_subprocess_blocking",
+        new=_fake_blocking_runner(captured),
     ):
         await executor._run_subprocess_bounded(["ls"], timeout_seconds=5)
 
-    argv = list(captured["args"])
+    argv = captured["args"]
     assert argv[0] == "/usr/bin/bwrap"
     assert "--unshare-net" in argv  # allow_network=False
     assert argv[-1] == "ls"
@@ -135,27 +112,13 @@ async def test_executor_passes_through_when_no_policy(tmp_path):
     executor = LocalActionExecutor(project_dir=tmp_path)
 
     captured = {}
-
-    async def fake_create(*args, **kwargs):
-        captured["args"] = args
-        return _make_fake_process()
-
     with patch(
-        "agents.runtime.local_actions.asyncio.create_subprocess_exec",
-        new=fake_create,
-    ), patch(
-        "agents.runtime.local_actions.capture_process_stream",
-        new=AsyncMock(return_value=None),
-    ), patch(
-        "agents.runtime.local_actions.wait_for_process_streams",
-        new=AsyncMock(return_value=False),
-    ), patch(
-        "agents.runtime.local_actions.ensure_process_finished",
-        new=AsyncMock(return_value=None),
+        "agents.runtime.local_actions._run_subprocess_blocking",
+        new=_fake_blocking_runner(captured),
     ):
         await executor._run_subprocess_bounded(["echo", "hi"], timeout_seconds=5)
 
-    assert list(captured["args"]) == ["echo", "hi"]
+    assert captured["args"] == ["echo", "hi"]
 
 
 @pytest.mark.asyncio
@@ -168,27 +131,13 @@ async def test_executor_passes_through_when_backend_unavailable(tmp_path):
     )
 
     captured = {}
-
-    async def fake_create(*args, **kwargs):
-        captured["args"] = args
-        return _make_fake_process()
-
     with patch(
-        "agents.runtime.local_actions.asyncio.create_subprocess_exec",
-        new=fake_create,
-    ), patch(
-        "agents.runtime.local_actions.capture_process_stream",
-        new=AsyncMock(return_value=None),
-    ), patch(
-        "agents.runtime.local_actions.wait_for_process_streams",
-        new=AsyncMock(return_value=False),
-    ), patch(
-        "agents.runtime.local_actions.ensure_process_finished",
-        new=AsyncMock(return_value=None),
+        "agents.runtime.local_actions._run_subprocess_blocking",
+        new=_fake_blocking_runner(captured),
     ):
         await executor._run_subprocess_bounded(["pwd"], timeout_seconds=5)
 
-    assert list(captured["args"]) == ["pwd"]
+    assert captured["args"] == ["pwd"]
 
 
 # ---------------------------------------------------------------------
@@ -436,3 +385,65 @@ def test_claude_level_does_not_warn(tmp_path, monkeypatch, caplog):
         )
 
     assert "UNCONFINED" not in caplog.text
+
+
+# ---------------------------------------------------------------------
+# Execution path: the blocking runner must work independently of the
+# asyncio event-loop policy. uvloop is installed as an import side effect
+# (core/client.py), which left a default asyncio loop consulting a uvloop
+# policy with no child watcher -- create_subprocess_exec then raised
+# NotImplementedError and crashed every shell command. Running real
+# commands through the blocking runner proves it no longer depends on that
+# machinery (also removed entirely in Python 3.14).
+# ---------------------------------------------------------------------
+
+import sys
+
+from agents.runtime.local_actions import _run_subprocess_blocking
+
+
+def test_run_subprocess_blocking_works_without_event_loop(tmp_path):
+    """The runner uses blocking subprocess only -- no running loop required."""
+    result = _run_subprocess_blocking(
+        [sys.executable, "-c", "print('hello-subprocess')"],
+        cwd=str(tmp_path),
+        timeout_seconds=30,
+    )
+    assert result.returncode == 0
+    assert "hello-subprocess" in result.output
+    assert result.timed_out is False
+    assert result.truncated is False
+
+
+def test_run_subprocess_blocking_times_out(tmp_path):
+    """A command exceeding the wall-clock budget is killed and flagged."""
+    result = _run_subprocess_blocking(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        cwd=str(tmp_path),
+        timeout_seconds=1,
+    )
+    assert result.timed_out is True
+    assert result.returncode != 0
+
+
+def test_run_subprocess_blocking_truncates_large_output(tmp_path):
+    """Output beyond the shared budget is truncated, not unbounded."""
+    result = _run_subprocess_blocking(
+        [sys.executable, "-c", "print('x' * 100000)"],
+        cwd=str(tmp_path),
+        timeout_seconds=30,
+    )
+    assert result.truncated is True
+    assert len(result.output) <= 12100  # MAX_TOOL_OUTPUT_CHARS (12000) + slack
+
+
+@pytest.mark.asyncio
+async def test_run_subprocess_bounded_executes_for_real(tmp_path):
+    """End-to-end: the async wrapper runs the command via a worker thread."""
+    executor = LocalActionExecutor(project_dir=tmp_path)
+    result = await executor._run_subprocess_bounded(
+        [sys.executable, "-c", "print('real-exec-ok')"],
+        timeout_seconds=30,
+    )
+    assert result.returncode == 0
+    assert "real-exec-ok" in result.output
