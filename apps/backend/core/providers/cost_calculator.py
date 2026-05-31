@@ -127,7 +127,13 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
         "provider": "unknown",
     },
     # ==================== GOOGLE GEMINI ====================
-    # Gemini 2.0 Flash - Latest fast model
+    # Gemini 2.5 Flash - current default fast model (per-1M USD, approximate)
+    "gemini-2.5-flash": {
+        "input": 0.30,
+        "output": 2.50,
+        "provider": "google",
+    },
+    # Gemini 2.0 Flash - prior fast model (deprecated for new users)
     "gemini-2.0-flash": {
         "input": 0.10,
         "output": 0.40,

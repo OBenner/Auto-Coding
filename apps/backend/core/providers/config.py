@@ -34,7 +34,7 @@ Environment Variables:
 
     # Google Gemini
     GOOGLE_API_KEY: Required for Google provider
-    GOOGLE_MODEL: Model identifier (default: gemini-2.0-flash)
+    GOOGLE_MODEL: Model identifier (default: gemini-2.5-flash)
 
     # LiteLLM
     LITELLM_MODEL: Model identifier (e.g., gpt-4, claude-3-opus)
@@ -155,7 +155,7 @@ class ProviderConfig:
 
     # Google Gemini settings
     google_api_key: str = ""
-    google_model: str = "gemini-2.0-flash"
+    google_model: str = "gemini-2.5-flash"
 
     # LiteLLM settings
     litellm_model: str = ""
@@ -220,7 +220,7 @@ class ProviderConfig:
 
         # Google Gemini settings
         google_api_key = os.environ.get("GOOGLE_API_KEY", "")
-        google_model = os.environ.get("GOOGLE_MODEL", "gemini-2.0-flash")
+        google_model = os.environ.get("GOOGLE_MODEL", "gemini-2.5-flash")
 
         # LiteLLM settings
         litellm_model = os.environ.get("LITELLM_MODEL", "")
