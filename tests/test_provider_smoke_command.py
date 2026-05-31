@@ -2764,8 +2764,6 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
             assert any(tool["name"] == "write_file" for tool in tools)
             if self.scenario == "coder":
                 return self._complete_coder(message)
-            if self.scenario == "recovery_initial":
-                return self._complete_recovery_initial(message)
             if self.scenario == "recovery_resume":
                 return self._complete_recovery_resume(message)
             raise AssertionError(f"unknown scenario: {self.scenario}")
@@ -2837,42 +2835,6 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
                 ),
             )
 
-        def _complete_recovery_initial(self, message):
-            assert "recovery-target.txt" in message
-            if self.calls == 1:
-                return ProviderToolCallResponse(
-                    content="",
-                    tool_calls=(
-                        ProviderToolCall(
-                            id="call_recovery_write",
-                            name="write_file",
-                            arguments={
-                                "path": "recovery-target.txt",
-                                "content": "provider recovery ok\n",
-                            },
-                        ),
-                        ProviderToolCall(
-                            id="call_recovery_missing_read",
-                            name="read_file",
-                            arguments={"path": "missing-recovery.txt"},
-                        ),
-                    ),
-                )
-            return ProviderToolCallResponse(
-                content="",
-                tool_calls=(
-                    ProviderToolCall(
-                        id="call_recovery_blocked_finish",
-                        name="finish",
-                        arguments={
-                            "summary": "Tried to finish before recovery",
-                            "tests": [],
-                            "risks": [],
-                        },
-                    ),
-                ),
-            )
-
         def _complete_recovery_resume(self, message):
             assert "Required recovery actions" in message
             return ProviderToolCallResponse(
@@ -2908,7 +2870,9 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
         def __init__(self):
             self.sessions = [
                 FakeMiniPipelineGenericEditSession("coder"),
-                FakeMiniPipelineGenericEditSession("recovery_initial"),
+                # The recovery first pass is now driven by a deterministic
+                # scripted session in production, so it no longer requests a
+                # session from the provider — only the resume does.
                 FakeMiniPipelineGenericEditSession("recovery_resume"),
             ]
             self.messages: list[str] = []
@@ -4176,3 +4140,26 @@ def test_hard_probe_prompts_stay_deterministic():
     assert "do NOT" in RECOVERY  # do not create / do not resolve the error
     for tool in ("begin_batch", "write_file", "commit_batch", "finish"):
         assert tool in TXN
+
+
+@pytest.mark.asyncio
+async def test_deterministic_recovery_first_pass_scripts_the_block():
+    """The scripted first pass drives write -> read-missing-file -> finish.
+
+    This is what deterministically triggers the runtime's blocked finish +
+    recovery checkpoint, replacing the flaky model-driven sequence.
+    """
+    from cli.provider_smoke_commands import _DeterministicRecoveryFirstPassSession
+
+    session = _DeterministicRecoveryFirstPassSession(provider_name="openai")
+
+    # First batch: write + read-missing together => a PARTIAL failure.
+    first = await session.complete_with_tool_calls("ignored message", tools=[])
+    assert [(c.name, c.arguments.get("path")) for c in first.tool_calls] == [
+        ("write_file", "recovery-target.txt"),
+        ("read_file", "missing-recovery.txt"),
+    ]
+
+    # Then finish with the partial failure unresolved => runtime blocks it.
+    second = await session.complete_with_tool_calls("ignored message", tools=[])
+    assert [c.name for c in second.tool_calls] == ["finish"]

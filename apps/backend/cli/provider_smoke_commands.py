@@ -42,7 +42,11 @@ from core.paths import (
     provider_smoke_history_path,
     resolve_provider_smoke_history_path,
 )
-from core.providers.base import SessionConfig
+from core.providers.base import (
+    ProviderToolCall,
+    ProviderToolCallResponse,
+    SessionConfig,
+)
 from core.providers.config import ProviderConfig
 from core.providers.cost_calculator import (
     MODEL_PRICING,
@@ -5029,6 +5033,73 @@ async def _complete_provider_mini_pipeline_smoke(
         )
 
 
+class _DeterministicRecoveryFirstPassSession:
+    """Scripted generic_edit session that drives the recovery first pass to a
+    guaranteed blocked finish.
+
+    The recovery probe needs an unresolved partial failure so the runtime
+    blocks the finish and writes a checkpoint. Relying on a model to perform
+    the counter-intuitive write -> read-missing-file -> finish sequence is
+    flaky (models resolve the error or finish cleanly instead, leaving
+    initial_status="continue"), so the first pass is scripted here. The
+    *resume* step still runs the real provider, so the runtime's recovery
+    mechanism and the provider's ability to resume from a checkpoint are
+    exercised — only the unreliable model-driven block setup is removed.
+    """
+
+    def __init__(self, provider_name: str):
+        self.provider_name = provider_name
+        self._step = 0
+
+    async def complete_with_tool_calls(
+        self, message: str, tools: Any
+    ) -> ProviderToolCallResponse:
+        self._step += 1
+        if self._step == 1:
+            # write + read-missing in ONE batch so the transaction records a
+            # *partial* failure (write succeeds, read of a missing file fails)
+            # — that is what the runtime's recovery checkpoint triggers on. A
+            # standalone failing read would be a whole-batch native error, not
+            # a recoverable partial failure.
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="recovery_write",
+                        name="write_file",
+                        arguments={
+                            "path": "recovery-target.txt",
+                            "content": DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT,
+                        },
+                    ),
+                    ProviderToolCall(
+                        id="recovery_read_missing",
+                        name="read_file",
+                        arguments={"path": "missing-recovery.txt"},
+                    ),
+                ),
+            )
+        # Finish with the partial failure unresolved -> the runtime blocks the
+        # finish and writes the recovery checkpoint.
+        return ProviderToolCallResponse(
+            content="",
+            tool_calls=(
+                ProviderToolCall(
+                    id="recovery_finish",
+                    name="finish",
+                    arguments={
+                        "summary": "recovery readiness setup",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ),
+            ),
+        )
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        return None
+
+
 async def _complete_provider_mini_pipeline_recovery_loop(
     *,
     provider: Any,
@@ -5046,12 +5117,14 @@ async def _complete_provider_mini_pipeline_recovery_loop(
     checkpoint_path = spec_dir / "artifacts" / "generic_edit_recovery_checkpoint.json"
 
     try:
-        initial_session = _create_provider_session(
-            provider=provider,
-            session_config=session_config,
-            project_dir=project_dir,
-            spec_dir=spec_dir,
-            agent_type="coder",
+        # Scripted, deterministic first pass: guarantees the blocked finish +
+        # recovery checkpoint without depending on the model performing the
+        # counter-intuitive write -> read-missing-file -> finish sequence
+        # (which models do unreliably). The resume below runs the real
+        # provider, so the runtime's recovery and the provider's resume are
+        # still exercised.
+        initial_session = _DeterministicRecoveryFirstPassSession(
+            provider_name=provider.name
         )
         initial_runtime = create_runtime_session(
             provider_name=provider.name,
