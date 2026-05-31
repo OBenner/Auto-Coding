@@ -21,7 +21,9 @@ from core.sandbox import (
 def test_describe_returns_seatbelt_when_sandbox_exec_present():
     with patch(
         "core.sandbox.shutil.which",
-        side_effect=lambda name: "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None,
+        side_effect=lambda name: (
+            "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None
+        ),
     ):
         info = describe_sandbox_backend(env={}, platform="darwin")
 
@@ -122,7 +124,9 @@ def test_describe_unknown_platform_returns_unavailable():
 def test_describe_respects_explicit_disable_env_var():
     with patch(
         "core.sandbox.shutil.which",
-        side_effect=lambda name: "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None,
+        side_effect=lambda name: (
+            "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None
+        ),
     ):
         info = describe_sandbox_backend(
             env={SANDBOX_ENV: "false"},
@@ -148,7 +152,9 @@ def test_describe_cannot_force_enable_when_backend_missing():
 def test_sandbox_available_returns_bool():
     with patch(
         "core.sandbox.shutil.which",
-        side_effect=lambda name: "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None,
+        side_effect=lambda name: (
+            "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None
+        ),
     ):
         assert sandbox_available(env={}, platform="darwin") is True
 
@@ -221,9 +227,11 @@ def test_wrap_seatbelt_inserts_sandbox_exec_with_profile():
 
 
 def test_seatbelt_profile_includes_allowed_writes_and_network():
+    # Path() literals are fixture values for assertion checks only; no
+    # real filesystem I/O happens against these paths.
     policy = SandboxPolicy(
         project_dir=Path("/repo"),
-        allowed_writes=(Path("/var/cache/build"),),
+        allowed_writes=(Path("/var/cache/build"),),  # NOSONAR(python:S5443)
         allow_network=False,
     )
     profile = build_seatbelt_profile(policy)
@@ -266,9 +274,14 @@ def test_wrap_bubblewrap_returns_bwrap_argv_with_project_bind():
 
 
 def test_build_bubblewrap_argv_includes_allowed_writes_and_network_share():
+    # Path() literals are fixture values for assertion checks only; no
+    # real filesystem I/O happens against these paths.
     policy = SandboxPolicy(
         project_dir=Path("/repo"),
-        allowed_writes=(Path("/var/cache/build"), Path("/var/log/build")),
+        allowed_writes=(  # NOSONAR(python:S5443)
+            Path("/var/cache/build"),
+            Path("/var/log/build"),
+        ),
         allow_network=True,
     )
     argv = build_bubblewrap_argv(
@@ -297,9 +310,7 @@ def test_build_bubblewrap_argv_unshares_net_when_disabled():
         project_dir=Path("/repo"),
         allow_network=False,
     )
-    argv = build_bubblewrap_argv(
-        ["true"], executable="/usr/bin/bwrap", policy=policy
-    )
+    argv = build_bubblewrap_argv(["true"], executable="/usr/bin/bwrap", policy=policy)
 
     assert "--unshare-net" in argv
     assert "--share-net" not in argv

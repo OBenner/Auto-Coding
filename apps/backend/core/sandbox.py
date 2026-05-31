@@ -399,7 +399,10 @@ def build_bubblewrap_argv(
         "--dev",
         "/dev",
         "--tmpfs",
-        "/tmp",
+        # Sandbox-private tmpfs inside the bubblewrap namespace; this is
+        # NOT the host's /tmp, it is a fresh isolated mount visible only
+        # to the wrapped process.
+        "/tmp",  # NOSONAR(python:S5443) - namespaced tmpfs, not host /tmp
         "--bind",
         str(policy.project_dir),
         str(policy.project_dir),
