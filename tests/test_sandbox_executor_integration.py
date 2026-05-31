@@ -203,6 +203,9 @@ async def test_executor_passes_through_when_backend_unavailable(tmp_path):
 # would always build a sandbox-less executor.
 # ---------------------------------------------------------------------
 
+from agents.runtime.adapters.direct_api_autonomous import (
+    DirectApiAutonomousRuntimeSession,
+)
 from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
 
 
@@ -241,6 +244,29 @@ def test_generic_edit_injected_sandbox_reaches_executor(tmp_path):
     assert session._executor._sandbox_backend is backend
 
 
+def test_generic_edit_rejects_partial_sandbox_override(tmp_path):
+    """A half-supplied (policy XOR backend) pair must fail loudly.
+
+    The executor only wraps when both are present, so accepting one
+    would silently run unconfined while looking configured.
+    """
+    with pytest.raises(ValueError, match="must be provided together"):
+        GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+            sandbox_policy=SandboxPolicy(project_dir=tmp_path),
+        )
+
+    with pytest.raises(ValueError, match="must be provided together"):
+        GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+            sandbox_backend=_ready_seatbelt(),
+        )
+
+
 def test_generic_edit_auto_resolves_sandbox_on_safe(tmp_path, monkeypatch):
     """``AUTO_CODE_AUTONOMY=safe`` + a working backend wires the executor."""
     monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
@@ -257,7 +283,7 @@ def test_generic_edit_auto_resolves_sandbox_on_safe(tmp_path, monkeypatch):
 
     assert session._executor._sandbox_backend is info
     assert session._executor._sandbox_policy is not None
-    assert session._executor._sandbox_policy.project_dir == tmp_path
+    assert session._executor._sandbox_policy.project_dir == tmp_path.resolve()
 
 
 def test_generic_edit_no_sandbox_on_claude_level(tmp_path, monkeypatch):
@@ -303,10 +329,6 @@ def test_generic_edit_no_sandbox_when_backend_unavailable(tmp_path, monkeypatch)
 
 def test_direct_api_autonomous_inherits_sandbox_wiring(tmp_path, monkeypatch):
     """The promoted direct-API runtime confines its shell path too."""
-    from agents.runtime.adapters.direct_api_autonomous import (
-        DirectApiAutonomousRuntimeSession,
-    )
-
     monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
     monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
     info = _ready_bwrap()
@@ -321,7 +343,7 @@ def test_direct_api_autonomous_inherits_sandbox_wiring(tmp_path, monkeypatch):
 
     assert session._executor._sandbox_backend is info
     assert session._executor._sandbox_policy is not None
-    assert session._executor._sandbox_policy.project_dir == tmp_path
+    assert session._executor._sandbox_policy.project_dir == tmp_path.resolve()
 
 
 # ---------------------------------------------------------------------
@@ -352,7 +374,7 @@ def test_seatbelt_policy_grants_system_temp_scratch(tmp_path, monkeypatch):
 
     policy = session._executor._sandbox_policy
     assert policy is not None
-    assert Path(tempfile.gettempdir()) in policy.allowed_writes
+    assert Path(tempfile.gettempdir()).resolve() in policy.allowed_writes
 
 
 def test_bubblewrap_policy_omits_host_temp_to_preserve_tmpfs(tmp_path, monkeypatch):

@@ -501,9 +501,14 @@ def _default_scratch_writes(backend: SandboxBackendInfo) -> tuple[Path, ...]:
     * **Seatbelt** has no mount namespacing; without an explicit allow,
       every write under the OS temp dir is denied and tools fail. Grant
       the temp subtree so confined macOS builds keep working.
+
+    The temp path is canonicalized so the granted subpath matches the
+    real location tools write to (e.g. macOS ``$TMPDIR`` resolves through
+    ``/var`` -> ``/private/var``); an unresolved symlink would otherwise
+    leave the real writes denied.
     """
     if backend.backend is SandboxBackend.SEATBELT:
-        return (Path(tempfile.gettempdir()),)
+        return (Path(tempfile.gettempdir()).resolve(),)
     return ()
 
 
@@ -544,12 +549,16 @@ def _resolve_sandbox_wiring(
             backend.reason,
         )
         return None, None
+    # SandboxPolicy.project_dir must be an absolute, canonical path: the
+    # Seatbelt subpath / bwrap --bind boundary is otherwise cwd-dependent
+    # and a symlinked root could mis-scope writes.
+    resolved_dir = project_dir.resolve()
     allowed_writes = _default_scratch_writes(backend)
-    policy = SandboxPolicy(project_dir=project_dir, allowed_writes=allowed_writes)
+    policy = SandboxPolicy(project_dir=resolved_dir, allowed_writes=allowed_writes)
     logger.info(
         "Sandbox active: %s confining shell actions to %s (+%d scratch path(s)).",
         backend.backend.value,
-        project_dir,
+        resolved_dir,
         len(allowed_writes),
     )
     return policy, backend
@@ -593,8 +602,19 @@ class GenericEditRuntimeSession:
         # confined whenever autonomy requests it and the host supports
         # it. Callers may inject an explicit policy/backend (tests); when
         # both are omitted we auto-resolve from the autonomy settings.
+        # A partial override (one set, the other None) is rejected: the
+        # executor only wraps when both are present, so a half-supplied
+        # pair would silently run unconfined while looking configured.
         if sandbox_policy is None and sandbox_backend is None:
             sandbox_policy, sandbox_backend = _resolve_sandbox_wiring(project_dir)
+        elif (sandbox_policy is None) != (sandbox_backend is None):
+            missing = (
+                "sandbox_backend" if sandbox_policy is not None else "sandbox_policy"
+            )
+            raise ValueError(
+                "sandbox_policy and sandbox_backend must be provided together; "
+                f"missing {missing}."
+            )
         self._sandbox_policy = sandbox_policy
         self._sandbox_backend = sandbox_backend
         self._executor = LocalActionExecutor(
