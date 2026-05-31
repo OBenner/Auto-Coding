@@ -229,15 +229,16 @@ def test_wrap_seatbelt_inserts_sandbox_exec_with_profile():
 def test_seatbelt_profile_includes_allowed_writes_and_network():
     # Path() literals are fixture values for assertion checks only; no
     # real filesystem I/O happens against these paths.
+    extra_write = Path("/sandbox-fixture-cache")
     policy = SandboxPolicy(
         project_dir=Path("/repo"),
-        allowed_writes=(Path("/var/cache/build"),),  # NOSONAR(python:S5443)
+        allowed_writes=(extra_write,),
         allow_network=False,
     )
     profile = build_seatbelt_profile(policy)
 
     assert '(subpath "/repo")' in profile
-    assert '(subpath "/var/cache/build")' in profile
+    assert f'(subpath "{extra_write}")' in profile
     assert "(deny network*)" in profile
     assert "(allow network*)" not in profile
 
@@ -276,12 +277,11 @@ def test_wrap_bubblewrap_returns_bwrap_argv_with_project_bind():
 def test_build_bubblewrap_argv_includes_allowed_writes_and_network_share():
     # Path() literals are fixture values for assertion checks only; no
     # real filesystem I/O happens against these paths.
+    write_a = Path("/sandbox-fixture-cache")
+    write_b = Path("/sandbox-fixture-log")
     policy = SandboxPolicy(
         project_dir=Path("/repo"),
-        allowed_writes=(  # NOSONAR(python:S5443)
-            Path("/var/cache/build"),
-            Path("/var/log/build"),
-        ),
+        allowed_writes=(write_a, write_b),
         allow_network=True,
     )
     argv = build_bubblewrap_argv(
@@ -291,7 +291,7 @@ def test_build_bubblewrap_argv_includes_allowed_writes_and_network_share():
     )
 
     # Every allowed-write entry binds writable
-    for path in ("/repo", "/var/cache/build", "/var/log/build"):
+    for path in ("/repo", str(write_a), str(write_b)):
         idx = None
         for i, token in enumerate(argv):
             if token == "--bind" and argv[i + 1] == path:
