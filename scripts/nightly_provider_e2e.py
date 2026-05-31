@@ -226,6 +226,28 @@ def _probe_failure_excerpt(completed, *, limit: int = 2000) -> str:
     return prefix + "stderr tail:\n" + tail
 
 
+def _extract_embedded_json(stdout: str) -> dict[str, object] | None:
+    """Recover a JSON object embedded in otherwise-noisy stdout.
+
+    Scans from each ``{`` and returns the first object that decodes to a
+    dict, so a leading banner printed before run.py's ``--json`` result does
+    not get mis-reported as ``probe_output_not_json``. Returns ``None`` when
+    no JSON object is present.
+    """
+    decoder = json.JSONDecoder()
+    start = stdout.find("{")
+    while start != -1:
+        try:
+            obj, _ = decoder.raw_decode(stdout, start)
+        except json.JSONDecodeError:
+            start = stdout.find("{", start + 1)
+            continue
+        if isinstance(obj, dict):
+            return obj
+        start = stdout.find("{", start + 1)
+    return None
+
+
 def _run_one_provider(
     *,
     provider: str,
@@ -289,10 +311,16 @@ def _run_one_provider(
     elapsed = (datetime.now(UTC) - started).total_seconds()
 
     stdout = completed.stdout or ""
-    parsed: dict[str, object]
+    parsed: dict[str, object] | None
     try:
         parsed = json.loads(stdout)
     except json.JSONDecodeError:
+        # run.py prints its --json result last, but some setup paths still
+        # emit human banners to stdout ahead of it (e.g. the security-profile
+        # analyzer). Recover the embedded JSON object rather than discarding a
+        # real result as unparseable.
+        parsed = _extract_embedded_json(stdout)
+    if not isinstance(parsed, dict):
         return ProviderProbeResult(
             provider=provider,
             attempted=True,

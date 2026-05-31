@@ -169,6 +169,32 @@ def test_unparseable_output_reports_error(runner_module, tmp_path):
     assert summary.overall_status == "some_failed"
 
 
+def test_embedded_json_recovered_from_noisy_stdout(runner_module, tmp_path):
+    """A human banner printed before run.py's JSON must not break parsing."""
+    banner = "Analyzing project structure...\n  SECURITY PROFILE ANALYSIS\n----\n"
+
+    def runner(cmd, **kwargs):
+        return _fake_completed(banner + _success_payload("openai"))
+
+    summary = runner_module.run_nightly_probes(
+        providers=["openai"],
+        backend_dir=tmp_path,
+        env={"OPENAI_API_KEY": "sk"},
+        runner=runner,
+    )
+
+    result = summary.per_provider[0]
+    assert result.status == "passed"  # recovered, not probe_output_not_json
+
+
+def test_extract_embedded_json_scans_for_object(runner_module):
+    """The recovery helper finds the first decodable object, or None."""
+    assert runner_module._extract_embedded_json('banner\n{"a": 1}\n') == {"a": 1}
+    assert runner_module._extract_embedded_json("no json at all") is None
+    # A stray brace that does not start valid JSON is skipped.
+    assert runner_module._extract_embedded_json('a { b\n{"ok": true}') == {"ok": True}
+
+
 def test_timeout_is_recorded_as_error(runner_module, tmp_path):
     """A subprocess.TimeoutExpired surfaces as a structured error."""
     import subprocess
