@@ -302,6 +302,25 @@ def test_main_returns_1_when_a_provider_fails(
     assert rc == 1
 
 
+def test_probe_failure_excerpt_prefers_stderr_tail(runner_module):
+    """The diagnostic excerpt keeps the traceback tail and the exit code.
+
+    A benign startup warning at the head of stderr (e.g. the Linux
+    ``secretstorage`` notice) must not crowd out the real exception, which
+    Python prints last.
+    """
+    completed = SimpleNamespace(
+        stdout="",
+        stderr="benign secretstorage warning\n" + ("x" * 5000) + "\nRealError: boom",
+        returncode=1,
+    )
+    excerpt = runner_module._probe_failure_excerpt(completed, limit=2000)
+    assert "run.py exited 1" in excerpt
+    assert "RealError: boom" in excerpt  # tail preserved
+    assert "benign secretstorage warning" not in excerpt  # head dropped
+    assert "truncated" in excerpt
+
+
 def test_runs_per_provider_repeats_credentialed_probe(runner_module, tmp_path):
     """``runs_per_provider=N`` invokes the probe N times for one provider.
 

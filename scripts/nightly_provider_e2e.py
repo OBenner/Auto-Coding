@@ -173,6 +173,27 @@ def _extract_diagnostics_summary(
     return summary
 
 
+def _probe_failure_excerpt(completed, *, limit: int = 2000) -> str:
+    """Build a diagnostic excerpt for a non-JSON probe result.
+
+    Tracebacks put the real exception at the *end* of stderr, so we keep
+    the tail rather than the head — the head is often a benign startup
+    warning (e.g. the Linux ``secretstorage`` notice) that would otherwise
+    crowd out the actual error within a small budget. The run.py exit code
+    is prefixed because an empty stdout usually means it crashed before
+    printing its JSON result.
+    """
+    stderr = (getattr(completed, "stderr", None) or "").strip()
+    returncode = getattr(completed, "returncode", None)
+    prefix = f"run.py exited {returncode}. " if returncode is not None else ""
+    if not stderr:
+        return prefix + "(no stderr captured)"
+    tail = stderr[-limit:]
+    if len(stderr) > limit:
+        tail = "...(truncated)...\n" + tail
+    return prefix + "stderr tail:\n" + tail
+
+
 def _run_one_provider(
     *,
     provider: str,
@@ -246,7 +267,7 @@ def _run_one_provider(
             status="error",
             reason="probe_output_not_json",
             duration_seconds=elapsed,
-            error=(completed.stderr or stdout)[:500],
+            error=_probe_failure_excerpt(completed),
             stdout_excerpt=stdout[:500],
         )
 
