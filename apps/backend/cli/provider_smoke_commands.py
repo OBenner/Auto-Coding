@@ -4495,16 +4495,20 @@ async def _complete_provider_e2e_smoke_suite(
                 exc_info=True,
                 extra={"runtime_mode": child_runtime_mode},
             )
+            # Always surface the exception type: several failure modes raise
+            # exceptions whose str() is empty (e.g. asyncio TimeoutError), which
+            # otherwise produced a blank "... smoke failed: " with no clue why.
+            error_detail = str(e).strip() or type(e).__name__
             child_result = ProviderSmokeResult(
                 success=False,
                 provider=provider.name,
                 model=model,
                 runtime_mode=child_runtime_mode,
-                message=f"Provider {child_runtime_mode} smoke failed: {e}",
-                error_details=str(e),
+                message=f"Provider {child_runtime_mode} smoke failed: {error_detail}",
+                error_details=error_detail,
                 runtime_diagnostics=_with_provider_contract_health(
                     child_diagnostics,
-                    error_details=str(e),
+                    error_details=error_detail,
                 ),
             )
         child_results.append(child_result)
