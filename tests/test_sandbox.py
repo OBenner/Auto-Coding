@@ -237,8 +237,11 @@ def test_seatbelt_profile_includes_allowed_writes_and_network():
     )
     profile = build_seatbelt_profile(policy)
 
+    # Seatbelt only runs on macOS, so the builder always emits POSIX paths
+    # even when the tests execute on Windows runners (where ``str(Path("/x"))``
+    # would otherwise yield ``\\x``).
     assert '(subpath "/repo")' in profile
-    assert f'(subpath "{extra_write}")' in profile
+    assert f'(subpath "{extra_write.as_posix()}")' in profile
     assert "(deny network*)" in profile
     assert "(allow network*)" not in profile
 
@@ -290,8 +293,10 @@ def test_build_bubblewrap_argv_includes_allowed_writes_and_network_share():
         policy=policy,
     )
 
-    # Every allowed-write entry binds writable
-    for path in ("/repo", str(write_a), str(write_b)):
+    # Every allowed-write entry binds writable. bwrap only runs on Linux, so
+    # the builder always emits POSIX paths even when the tests execute on
+    # Windows runners (where ``str(Path("/x"))`` would otherwise yield ``\\x``).
+    for path in ("/repo", write_a.as_posix(), write_b.as_posix()):
         idx = None
         for i, token in enumerate(argv):
             if token == "--bind" and argv[i + 1] == path:
