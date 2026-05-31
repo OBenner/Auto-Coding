@@ -31,16 +31,18 @@ from core.autonomy_policy import autonomy_policy_for
 from core.providers.config import ProviderConfig
 from debug import debug_error
 
-# Opt-in: route a *promoted* direct-API provider's read-only qa_reviewer
-# through the provider-neutral runtime layer instead of the Claude SDK.
-# Default off, so the Claude QA path is unchanged unless an operator both
-# sets this AND the provider passes the direct-API promotion gate.
+# Opt-in: route a *promoted* direct-API provider's QA agents through the
+# provider-neutral runtime layer instead of the Claude SDK. Default off, so
+# the Claude QA path is unchanged unless an operator both sets this AND the
+# provider passes the direct-API promotion gate.
 QA_DIRECT_RUNTIME_ENV = "AUTO_CODE_QA_DIRECT_RUNTIME"
 _TRUTHY = {"1", "true", "yes", "on"}
 
-# Only the read-only reviewer is ported so far; qa_fixer mutates source and
-# stays on the Claude SDK until its runtime path is proven.
-PORTABLE_QA_AGENTS = frozenset({"qa_reviewer"})
+# QA agents whose runtime path exists and may run on a promoted direct-API
+# provider. The reviewer is read-only; the fixer mutates source but the
+# runtime layer confines it (generic_edit mutation snapshots + transaction
+# rollback + sandbox), so both are gated identically on opt-in + promotion.
+PORTABLE_QA_AGENTS = frozenset({"qa_reviewer", "qa_fixer"})
 
 
 class QaRuntimeUnsupportedError(RuntimeError):
@@ -52,9 +54,8 @@ class QaRuntimeDecision:
     """How a QA phase should execute.
 
     ``use_runtime_layer`` is ``False`` for the default Claude Agent SDK
-    path and ``True`` when a promoted direct-API provider may run the
-    read-only reviewer through ``create_runtime_session`` /
-    ``run_runtime_session``.
+    path and ``True`` when a promoted direct-API provider may run a portable
+    QA agent through ``create_runtime_session`` / ``run_runtime_session``.
     """
 
     agent_type: str
@@ -118,9 +119,9 @@ def resolve_qa_runtime(
             use_runtime_layer=False,
         )
 
-    # Opt-in direct-API path for the read-only reviewer, gated on the
-    # provider having passed the direct-API promotion gate (evidence-backed
-    # trust). qa_fixer mutates source and is intentionally excluded.
+    # Opt-in direct-API path for a portable QA agent, gated on the provider
+    # having passed the direct-API promotion gate (evidence-backed trust).
+    # The fixer mutates source but the runtime layer confines it.
     if (
         agent_type in PORTABLE_QA_AGENTS
         and provider_name != "claude"
