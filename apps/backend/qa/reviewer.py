@@ -502,11 +502,45 @@ async def run_qa_reviewer_via_runtime(
         status = get_qa_signoff_status(spec_dir)
 
     verdict = status.get("status") if status else None
+    # Persist QA insights to memory exactly like the Claude path so opted-in
+    # runtime reviewers keep contributing approved patterns / rejected gotchas
+    # back into Graphiti for later QA and fixer sessions.
+    qa_discoveries = {
+        "files_understood": {},
+        "patterns_found": [],
+        "gotchas_encountered": [],
+    }
     if verdict == "approved":
         debug_success("qa_reviewer", "QA APPROVED (runtime path)")
+        qa_discoveries["patterns_found"].append(
+            f"QA session {qa_session}: All acceptance criteria validated successfully"
+        )
+        await save_session_memory(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            subtask_id=f"qa_reviewer_{qa_session}",
+            session_num=qa_session,
+            success=True,
+            subtasks_completed=[f"qa_reviewer_{qa_session}"],
+            discoveries=qa_discoveries,
+        )
         return "approved", response_text
     if verdict == "rejected":
         debug_error("qa_reviewer", "QA REJECTED (runtime path)")
+        for issue in status.get("issues_found", []):
+            qa_discoveries["gotchas_encountered"].append(
+                f"QA Issue ({issue.get('type', 'unknown')}): "
+                f"{issue.get('title', 'No title')} at {issue.get('location', 'unknown')}"
+            )
+        await save_session_memory(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            subtask_id=f"qa_reviewer_{qa_session}",
+            session_num=qa_session,
+            success=False,
+            subtasks_completed=[],
+            discoveries=qa_discoveries,
+        )
         return "rejected", response_text
     return (
         "error",
@@ -536,6 +570,14 @@ async def run_qa_reviewer_runtime_session(
     from agents.runtime import create_runtime_session
 
     config = ProviderConfig.from_env(agent_type="qa_reviewer")
+    if config.provider != provider_name:
+        # The routing decision and the env-resolved provider must agree, or
+        # the runtime adapter and the underlying session would target
+        # different backends. Fail fast instead of silently diverging.
+        raise ValueError(
+            "qa_reviewer runtime provider mismatch: "
+            f"routed={provider_name}, env={config.provider}"
+        )
     provider = create_engine_provider(config)
     session = provider.create_session(
         SessionConfig(

@@ -10,6 +10,7 @@ yields the same approved/rejected/error contract on any provider.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -66,20 +67,23 @@ def _patch_reviewer_runtime(*, signoff: dict | None, response_text: str = "revie
 
     ``get_qa_signoff_status`` is patched at its source module because the
     reviewer imports it lazily (``from .criteria import ...``) to avoid a
-    qa.criteria -> qa.reviewer import cycle.
+    qa.criteria -> qa.reviewer import cycle. ``save_session_memory`` is
+    patched so the verdict path's Graphiti persistence does not touch a
+    real memory backend.
     """
     fake_result = MagicMock()
     fake_result.response_text = response_text
-    return (
+    return [
         patch("qa.reviewer.run_coverage_validation", return_value=(True, "cov", None)),
         patch("qa.reviewer.get_graphiti_context", new=AsyncMock(return_value="")),
         patch("qa.reviewer.get_qa_reviewer_prompt", return_value="PROMPT"),
+        patch("qa.reviewer.save_session_memory", new=AsyncMock(return_value=None)),
         patch(
             "agents.runtime.run_runtime_session",
             new=AsyncMock(return_value=fake_result),
         ),
         patch("qa.criteria.get_qa_signoff_status", return_value=signoff),
-    )
+    ]
 
 
 @pytest.mark.asyncio
@@ -93,8 +97,9 @@ def _patch_reviewer_runtime(*, signoff: dict | None, response_text: str = "revie
     ],
 )
 async def test_run_qa_reviewer_via_runtime_verdict(tmp_path, signoff, expected):
-    p1, p2, p3, p4, p5 = _patch_reviewer_runtime(signoff=signoff)
-    with p1, p2, p3, p4, p5:
+    with contextlib.ExitStack() as stack:
+        for patcher in _patch_reviewer_runtime(signoff=signoff):
+            stack.enter_context(patcher)
         status, response = await run_qa_reviewer_via_runtime(
             MagicMock(),
             tmp_path,
@@ -119,6 +124,7 @@ async def test_run_qa_reviewer_via_runtime_drives_runtime_session(tmp_path):
         patch("qa.reviewer.run_coverage_validation", return_value=(True, "cov", None)),
         patch("qa.reviewer.get_graphiti_context", new=AsyncMock(return_value="")),
         patch("qa.reviewer.get_qa_reviewer_prompt", return_value="PROMPT"),
+        patch("qa.reviewer.save_session_memory", new=AsyncMock(return_value=None)),
         patch("agents.runtime.run_runtime_session", new=run_session),
         patch("qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}),
     ):
