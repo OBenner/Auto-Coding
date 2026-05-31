@@ -7,6 +7,8 @@ import json
 import logging
 import os
 import shlex
+import subprocess
+import threading
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1716,97 +1718,110 @@ class LocalActionExecutor:
             )
             if wrapped.wrapped:
                 effective_args = wrapped.argv
-        process = await asyncio.create_subprocess_exec(
-            *effective_args,
+        # Run the command on a worker thread with the blocking subprocess
+        # API instead of asyncio.create_subprocess_exec. The async path's
+        # child-watcher machinery is event-loop-policy sensitive: uvloop is
+        # installed as an import side effect (core/client.py), so a default
+        # asyncio loop created before that import ends up consulting a uvloop
+        # policy that exposes no child watcher and raises NotImplementedError
+        # on subprocess creation. Child watchers are also removed entirely in
+        # Python 3.14. Blocking subprocess + threads sidesteps both.
+        return await asyncio.to_thread(
+            _run_subprocess_blocking,
+            effective_args,
             cwd=str(self.project_dir),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout_parts: list[str] = []
-        stderr_parts: list[str] = []
-        capture = BoundedOutputCapture()
-        stdout_task = asyncio.create_task(
-            capture_process_stream(process.stdout, stdout_parts, capture, process)
-        )
-        stderr_task = asyncio.create_task(
-            capture_process_stream(process.stderr, stderr_parts, capture, process)
-        )
-        timed_out = await wait_for_process_streams(
-            process,
-            (stdout_task, stderr_task),
             timeout_seconds=timeout_seconds,
         )
-        await ensure_process_finished(process)
-
-        output = "\n".join(
-            part.strip()
-            for part in ("".join(stdout_parts), "".join(stderr_parts))
-            if part and part.strip()
-        )
-        return CommandExecution(
-            returncode=process.returncode if process.returncode is not None else -1,
-            output=output,
-            truncated=capture.truncated,
-            timed_out=timed_out,
-        )
 
 
-async def capture_process_stream(
-    stream: asyncio.StreamReader | None,
-    parts: list[str],
-    capture: BoundedOutputCapture,
-    process: Any,
-) -> None:
-    """Capture one process stream until EOF or the shared output cap is reached."""
-    if stream is None:
-        return
-    while chunk := await stream.read(4096):
-        text = chunk.decode("utf-8", errors="replace")
-        if capture.append(text, parts):
-            continue
-        terminate_process(process)
-        break
-
-
-async def wait_for_process_streams(
-    process: Any,
-    tasks: tuple[asyncio.Task, asyncio.Task],
-    *,
-    timeout_seconds: int,
-) -> bool:
-    """Wait for stdout/stderr capture tasks and return whether they timed out."""
-    try:
-        async with asyncio.timeout(timeout_seconds):
-            await asyncio.gather(*tasks)
-    except TimeoutError:
-        kill_process(process)
-        await asyncio.gather(*tasks, return_exceptions=True)
-        return True
-    return False
-
-
-async def ensure_process_finished(process: Any) -> None:
-    """Wait briefly for a process after stream capture and kill if needed."""
-    if process.returncode is not None:
-        return
-    try:
-        async with asyncio.timeout(1):
-            await process.wait()
-    except TimeoutError:
-        kill_process(process)
-        await process.wait()
-
-
-def terminate_process(process: Any) -> None:
-    """Terminate a process if it is still running."""
-    if process.returncode is None:
+def _terminate_if_running(process: subprocess.Popen) -> None:
+    """Terminate a process if it has not yet exited."""
+    if process.poll() is None:
         process.terminate()
 
 
-def kill_process(process: Any) -> None:
-    """Kill a process if it is still running."""
-    if process.returncode is None:
+def _kill_if_running(process: subprocess.Popen) -> None:
+    """Kill a process if it has not yet exited."""
+    if process.poll() is None:
         process.kill()
+
+
+def _run_subprocess_blocking(
+    args: list[str],
+    *,
+    cwd: str,
+    timeout_seconds: int,
+) -> CommandExecution:
+    """Run a command to completion with bounded output and a wall-clock timeout.
+
+    Executed on a worker thread (via ``asyncio.to_thread``) using the
+    blocking ``subprocess`` API so it never touches asyncio's child-watcher
+    machinery. Two reader threads drain stdout/stderr concurrently — sharing
+    one :class:`BoundedOutputCapture` budget under a lock — which preserves
+    the original streaming truncation and avoids pipe-buffer deadlock.
+    """
+    capture = BoundedOutputCapture()
+    capture_lock = threading.Lock()
+    stdout_parts: list[str] = []
+    stderr_parts: list[str] = []
+
+    process = subprocess.Popen(
+        args,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    def _pump(stream: Any, parts: list[str]) -> None:
+        if stream is None:
+            return
+        try:
+            for chunk in iter(lambda: stream.read(4096), b""):
+                text = chunk.decode("utf-8", errors="replace")
+                with capture_lock:
+                    keep_going = capture.append(text, parts)
+                if not keep_going:
+                    # Shared output cap reached — stop the process.
+                    _terminate_if_running(process)
+                    break
+        finally:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+    readers = [
+        threading.Thread(
+            target=_pump, args=(process.stdout, stdout_parts), daemon=True
+        ),
+        threading.Thread(
+            target=_pump, args=(process.stderr, stderr_parts), daemon=True
+        ),
+    ]
+    for reader in readers:
+        reader.start()
+
+    timed_out = False
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _kill_if_running(process)
+        process.wait()
+    for reader in readers:
+        reader.join(timeout=1)
+
+    output = "\n".join(
+        part.strip()
+        for part in ("".join(stdout_parts), "".join(stderr_parts))
+        if part and part.strip()
+    )
+    return CommandExecution(
+        returncode=process.returncode if process.returncode is not None else -1,
+        output=output,
+        truncated=capture.truncated,
+        timed_out=timed_out,
+    )
 
 
 def safe_action_for_trace(action: dict[str, Any]) -> dict[str, Any]:
