@@ -321,6 +321,34 @@ def test_probe_failure_excerpt_prefers_stderr_tail(runner_module):
     assert "truncated" in excerpt
 
 
+def test_provider_run_command_prefers_backend_venv_python(runner_module, tmp_path):
+    """run.py is invoked with the backend venv interpreter when present.
+
+    Guards the CI failure where the probe ran run.py under the bare system
+    Python (no backend deps) and it aborted before emitting JSON.
+    """
+    backend = tmp_path / "backend"
+    venv_python = backend / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("")  # presence is all that matters
+
+    cmd = runner_module._provider_run_command(
+        provider="openai", backend_dir=backend, timeout_seconds=10
+    )
+
+    assert cmd[0] == str(venv_python)
+    assert cmd[1] == str(backend / "run.py")
+
+
+def test_provider_run_command_falls_back_to_sys_executable(runner_module, tmp_path):
+    """Without a backend venv, fall back to the current interpreter."""
+    cmd = runner_module._provider_run_command(
+        provider="openai", backend_dir=tmp_path, timeout_seconds=10
+    )
+
+    assert cmd[0] == sys.executable
+
+
 def test_runs_per_provider_repeats_credentialed_probe(runner_module, tmp_path):
     """``runs_per_provider=N`` invokes the probe N times for one provider.
 

@@ -121,6 +121,28 @@ def _has_credentials(provider: str, env: Mapping[str, str]) -> bool:
     return all(env.get(name) for name in required)
 
 
+def _resolve_backend_python(backend_dir: Path) -> str:
+    """Return the interpreter that has the backend's dependencies installed.
+
+    The probe shells out to ``backend_dir/run.py``, which imports the
+    backend's packages (python-dotenv, the provider SDKs, ...). CI installs
+    those into ``backend_dir/.venv`` (``uv venv``) but does not put it on
+    PATH, so ``sys.executable`` is the bare system Python and run.py aborts
+    at startup with "Required Python package 'python-dotenv' is not
+    installed" before printing any JSON. Prefer the venv interpreter when
+    it exists; fall back to the current interpreter otherwise (e.g. when an
+    operator runs the probe from an already-activated environment).
+    """
+    candidates = (
+        backend_dir / ".venv" / "bin" / "python",  # Linux/macOS
+        backend_dir / ".venv" / "Scripts" / "python.exe",  # Windows
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return sys.executable
+
+
 def _provider_run_command(
     *,
     provider: str,
@@ -129,7 +151,7 @@ def _provider_run_command(
 ) -> list[str]:
     """Build the ``run.py --provider-smoke`` invocation for a provider."""
     return [
-        sys.executable,
+        _resolve_backend_python(backend_dir),
         str(backend_dir / "run.py"),
         "--provider",
         provider,
