@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import logging
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,6 +13,7 @@ from typing import Any
 from core.autonomy_level import resolve_autonomy_settings
 from core.providers.exceptions import ProviderConfigError, ProviderNotInstalled
 from core.sandbox import (
+    SandboxBackend,
     SandboxBackendInfo,
     SandboxPolicy,
     describe_sandbox_backend,
@@ -53,6 +56,8 @@ from .patch_proposal import (
     extract_patch_paths,
     validate_workspace_relative_path,
 )
+
+logger = logging.getLogger(__name__)
 
 GENERIC_EDIT_CANCELLED_MESSAGE = "Generic edit runtime was cancelled."
 
@@ -480,6 +485,28 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIST_FIELDS = (
 )
 
 
+def _default_scratch_writes(backend: SandboxBackendInfo) -> tuple[Path, ...]:
+    """Return extra writable scratch paths the sandbox must grant.
+
+    Confining writes to ``project_dir`` alone breaks ordinary build
+    tooling — compilers, ``pip``, ``pytest``, linters all write to the
+    system temp dir. How that scratch space is provided differs by
+    backend:
+
+    * **bubblewrap** mounts a *fresh* namespaced tmpfs at ``/tmp`` inside
+      the sandbox, so temp writes already succeed and stay isolated from
+      the host. Granting the host temp subtree here would instead
+      bind-mount the real ``/tmp`` over that tmpfs and *weaken* isolation,
+      so we return nothing.
+    * **Seatbelt** has no mount namespacing; without an explicit allow,
+      every write under the OS temp dir is denied and tools fail. Grant
+      the temp subtree so confined macOS builds keep working.
+    """
+    if backend.backend is SandboxBackend.SEATBELT:
+        return (Path(tempfile.gettempdir()),)
+    return ()
+
+
 def _resolve_sandbox_wiring(
     project_dir: Path,
     env: Mapping[str, str] | None = None,
@@ -496,17 +523,36 @@ def _resolve_sandbox_wiring(
     The ``claude`` and ``off`` levels never request a sandbox, so the
     default code path constructs the executor unwrapped exactly as
     before — this keeps the Claude SDK path and existing tests unchanged.
+
+    Resolution is logged so operators can see, per session, whether shell
+    actions are confined. A sandbox that was *requested* but cannot be
+    satisfied (no host backend) emits a warning rather than failing
+    silently: the agent still runs, but unconfined, and that fact is
+    surfaced instead of hidden.
     """
     settings = resolve_autonomy_settings(env=env)
-    if not settings.sandbox_enabled:
+    if not settings.sandbox_requested:
+        # Not requested (claude/off, or explicitly disabled): stay silent
+        # and keep the legacy unwrapped path.
         return None, None
     backend = describe_sandbox_backend(env=env)
     if not backend.available:
-        # ``sandbox_enabled`` already implies availability; stay
-        # defensive so the executor is never handed a backend that
-        # would pass commands through unwrapped while claiming a grant.
+        logger.warning(
+            "Sandbox requested (autonomy=%s) but no working backend on this host "
+            "(%s): shell actions will run UNCONFINED.",
+            settings.level.value,
+            backend.reason,
+        )
         return None, None
-    return SandboxPolicy(project_dir=project_dir), backend
+    allowed_writes = _default_scratch_writes(backend)
+    policy = SandboxPolicy(project_dir=project_dir, allowed_writes=allowed_writes)
+    logger.info(
+        "Sandbox active: %s confining shell actions to %s (+%d scratch path(s)).",
+        backend.backend.value,
+        project_dir,
+        len(allowed_writes),
+    )
+    return policy, backend
 
 
 class GenericEditRuntimeSession:

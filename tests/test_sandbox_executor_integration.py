@@ -322,3 +322,95 @@ def test_direct_api_autonomous_inherits_sandbox_wiring(tmp_path, monkeypatch):
     assert session._executor._sandbox_backend is info
     assert session._executor._sandbox_policy is not None
     assert session._executor._sandbox_policy.project_dir == tmp_path
+
+
+# ---------------------------------------------------------------------
+# Scratch-write grants + diagnostics.
+#
+# Confining writes to project_dir alone would break ordinary build
+# tooling that writes to the system temp dir. The grant differs by
+# backend: Seatbelt needs an explicit temp allow, bubblewrap gives a
+# fresh namespaced tmpfs and must NOT re-bind the host temp.
+# ---------------------------------------------------------------------
+
+import tempfile
+
+
+def test_seatbelt_policy_grants_system_temp_scratch(tmp_path, monkeypatch):
+    """Seatbelt has no mount namespacing => the OS temp subtree is granted."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = _ready_seatbelt()
+
+    p_core, p_mod = _patch_backend_everywhere(info)
+    with p_core, p_mod:
+        session = GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+        )
+
+    policy = session._executor._sandbox_policy
+    assert policy is not None
+    assert Path(tempfile.gettempdir()) in policy.allowed_writes
+
+
+def test_bubblewrap_policy_omits_host_temp_to_preserve_tmpfs(tmp_path, monkeypatch):
+    """bubblewrap mounts its own tmpfs at /tmp => no host temp grant."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = _ready_bwrap()
+
+    p_core, p_mod = _patch_backend_everywhere(info)
+    with p_core, p_mod:
+        session = GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+        )
+
+    policy = session._executor._sandbox_policy
+    assert policy is not None
+    assert policy.allowed_writes == ()
+
+
+def test_sandbox_requested_but_unavailable_warns_unconfined(
+    tmp_path, monkeypatch, caplog
+):
+    """A requested-but-unsatisfiable sandbox surfaces an honest warning."""
+    import logging
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = _unavailable()
+
+    p_core, p_mod = _patch_backend_everywhere(info)
+    with caplog.at_level(logging.WARNING), p_core, p_mod:
+        session = GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+        )
+
+    assert session._executor._sandbox_policy is None
+    assert session._executor._sandbox_backend is None
+    assert "UNCONFINED" in caplog.text
+
+
+def test_claude_level_does_not_warn(tmp_path, monkeypatch, caplog):
+    """The default level never requests a sandbox => no unconfined warning."""
+    import logging
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = _unavailable()
+
+    p_core, p_mod = _patch_backend_everywhere(info)
+    with caplog.at_level(logging.WARNING), p_core, p_mod:
+        GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+        )
+
+    assert "UNCONFINED" not in caplog.text
