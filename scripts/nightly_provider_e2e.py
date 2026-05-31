@@ -178,6 +178,16 @@ def _extract_diagnostics_summary(
         runs = suite.get("runs")
         if isinstance(runs, list):
             summary["provider_e2e_run_count"] = len(runs)
+            failed_runs = [
+                {
+                    "runtime_mode": run.get("runtime_mode"),
+                    "reason": (str(run.get("reason") or run.get("message") or ""))[:200],
+                }
+                for run in runs
+                if isinstance(run, dict) and run.get("status") == "failed"
+            ]
+            if failed_runs:
+                summary["provider_e2e_failed_runs"] = failed_runs
     reliability = runtime_diagnostics.get("provider_reliability")
     if isinstance(reliability, dict):
         summary["provider_reliability_status"] = reliability.get("status")
@@ -296,6 +306,12 @@ def _run_one_provider(
     summary = _extract_diagnostics_summary(parsed)
     success = bool(parsed.get("success"))
     status = "passed" if success else "failed"
+    # On a clean (valid-JSON) failure, run.py's `error_details` is the
+    # human-readable summary of what the e2e suite tripped on — capture it
+    # so the nightly summary explains *why*, not just that it failed.
+    error_detail = None
+    if not success:
+        error_detail = str(parsed.get("error_details") or "").strip()[:1500] or None
     return ProviderProbeResult(
         provider=provider,
         attempted=True,
@@ -303,6 +319,7 @@ def _run_one_provider(
         reason=str(parsed.get("message") or "")[:200],
         duration_seconds=elapsed,
         runtime_diagnostics_summary=summary,
+        error=error_detail,
     )
 
 

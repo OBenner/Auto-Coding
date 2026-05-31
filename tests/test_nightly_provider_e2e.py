@@ -321,6 +321,47 @@ def test_probe_failure_excerpt_prefers_stderr_tail(runner_module):
     assert "truncated" in excerpt
 
 
+def test_failed_run_captures_error_details_and_failed_subruns(runner_module, tmp_path):
+    """A clean failure surfaces run.py's error_details and the failing modes."""
+    payload = json.dumps(
+        {
+            "success": False,
+            "provider": "openai",
+            "message": "Provider e2e smoke suite failed",
+            "error_details": "Openai completion failed: 401 invalid_api_key",
+            "runtime_diagnostics": {
+                "provider_e2e_suite": {
+                    "status": "failed",
+                    "runs": [
+                        {
+                            "runtime_mode": "generic_edit",
+                            "status": "failed",
+                            "reason": "auth 401",
+                        },
+                        {"runtime_mode": "mini_pipeline", "status": "passed"},
+                    ],
+                },
+            },
+        }
+    )
+
+    def runner(cmd, **kwargs):
+        return _fake_completed(payload)
+
+    summary = runner_module.run_nightly_probes(
+        providers=["openai"],
+        backend_dir=tmp_path,
+        env={"OPENAI_API_KEY": "sk"},
+        runner=runner,
+    )
+
+    result = summary.per_provider[0]
+    assert result.status == "failed"
+    assert "401 invalid_api_key" in (result.error or "")
+    failed = result.runtime_diagnostics_summary["provider_e2e_failed_runs"]
+    assert failed == [{"runtime_mode": "generic_edit", "reason": "auth 401"}]
+
+
 def test_provider_run_command_prefers_backend_venv_python(runner_module, tmp_path):
     """run.py is invoked with the backend venv interpreter when present.
 
