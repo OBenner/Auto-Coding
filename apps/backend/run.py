@@ -86,6 +86,15 @@ from core.dependency_validator import validate_platform_dependencies
 
 validate_platform_dependencies()
 
+# Install the fast event loop BEFORE any asyncio.run() creates a loop, so the
+# loop and policy are consistently uvloop. A late install (the old
+# core/client.py import side effect, run mid-coroutine) left a default loop
+# under the uvloop policy whose missing child watcher broke every subprocess
+# (NotImplementedError from create_subprocess_exec). See core/event_loop.py.
+from core.event_loop import install_fast_event_loop
+
+install_fast_event_loop()
+
 from cli import main
 
 if __name__ == "__main__":
