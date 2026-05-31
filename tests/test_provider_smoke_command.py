@@ -3,7 +3,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -13,7 +13,7 @@ from core.providers.config import ProviderConfig
 
 
 def _provider_smoke_run_at(*, days_ago: int = 0) -> str:
-    timestamp = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    timestamp = datetime.now(UTC) - timedelta(days=days_ago)
     return timestamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
@@ -4101,3 +4101,20 @@ def test_handle_provider_smoke_command_prints_generic_edit_execution(
     assert "Batch required actions" in output
     assert "abort_batch, repair_mutation" in output
     assert "Batch resolution strategies" in output
+
+
+def test_smoke_content_matches_tolerates_trailing_whitespace():
+    """The e2e content check passes on the right content sans trailing newline.
+
+    A capability probe must not reject a model that wrote 'provider smoke ok'
+    just because it omitted the trailing newline the prompt asked for.
+    """
+    from cli.provider_smoke_commands import _smoke_content_matches
+
+    expected = "provider smoke ok\n"
+    assert _smoke_content_matches("provider smoke ok", expected)
+    assert _smoke_content_matches("provider smoke ok\n", expected)
+    assert _smoke_content_matches("  provider smoke ok  \n", expected)
+    # Wrong content still fails.
+    assert not _smoke_content_matches("Provider smoke ok", expected)
+    assert not _smoke_content_matches("something else", expected)
