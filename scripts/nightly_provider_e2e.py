@@ -476,6 +476,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--allow-provider-failures",
+        action="store_true",
+        help=(
+            "Do not fail the run when an individual provider is unavailable "
+            "or fails its probe — record it in the summary and keep going so "
+            "the other providers' evidence is still produced. The run only "
+            "exits non-zero on a total wipeout (providers attempted, none "
+            "passed) or a usage/config error."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -505,6 +516,27 @@ def main(argv: list[str] | None = None) -> int:
     else:
         sys.stdout.write(payload)
     _print_human_summary(summary, sys.stderr)
+
+    if args.allow_provider_failures:
+        # Lenient mode: one provider being down or failing must not fail the
+        # whole nightly job — the others' evidence is still recorded and the
+        # history PR can still open. Only a total wipeout (something was
+        # attempted but nothing passed) signals a systemic problem worth a
+        # red run; all-skipped (no credentials) stays green.
+        if summary.providers_attempted > 0 and summary.providers_passed == 0:
+            print(
+                "[nightly-provider-e2e] all attempted providers failed; "
+                "failing the run despite --allow-provider-failures.",
+                file=sys.stderr,
+            )
+            return 1
+        if summary.overall_status == "some_failed":
+            print(
+                "[nightly-provider-e2e] some providers failed but "
+                "--allow-provider-failures is set; exiting 0.",
+                file=sys.stderr,
+            )
+        return 0
 
     if summary.overall_status == "some_failed":
         return 1

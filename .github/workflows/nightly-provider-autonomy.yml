@@ -105,6 +105,7 @@ jobs:
             --backend-dir apps/backend \
             --timeout "$TIMEOUT_SECONDS" \
             --runs-per-provider "$RUNS_PER_PROVIDER" \
+            --allow-provider-failures \
             --output .auto-claude/runtime/nightly-provider-summary.json
 
       - name: Upload nightly summary artifact

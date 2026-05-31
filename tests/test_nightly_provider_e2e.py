@@ -497,3 +497,80 @@ def test_main_runs_per_provider_invokes_probe_n_times(
 
     assert rc == 0
     assert len(calls) == 3
+
+
+def _stub_backend(tmp_path):
+    backend = tmp_path / "apps" / "backend"
+    backend.mkdir(parents=True)
+    (backend / "run.py").write_text("# stub")
+    return backend
+
+
+def test_allow_provider_failures_tolerates_partial_failure(
+    runner_module, tmp_path, monkeypatch
+):
+    """One provider failing does not fail the run when at least one passed."""
+    backend = _stub_backend(tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        provider = cmd[cmd.index("--provider") + 1]
+        if provider == "openai":
+            return _fake_completed(_success_payload(provider))
+        return _fake_completed(_failure_payload(provider), returncode=1)
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or")
+    rc = runner_module.main(
+        [
+            "--backend-dir",
+            str(backend),
+            "--providers",
+            "openai",
+            "openrouter",
+            "--allow-provider-failures",
+        ]
+    )
+    assert rc == 0  # openai passed; openrouter failure tolerated
+
+
+def test_allow_provider_failures_still_fails_on_total_wipeout(
+    runner_module, tmp_path, monkeypatch
+):
+    """If something was attempted but nothing passed, the run is still red."""
+    backend = _stub_backend(tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        return _fake_completed(_failure_payload("openai"), returncode=1)
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk")
+    rc = runner_module.main(
+        [
+            "--backend-dir",
+            str(backend),
+            "--providers",
+            "openai",
+            "--allow-provider-failures",
+        ]
+    )
+    assert rc == 1  # attempted=1, passed=0 -> systemic failure
+
+
+def test_allow_provider_failures_green_when_all_skipped(
+    runner_module, tmp_path, monkeypatch
+):
+    """No credentials means nothing is attempted — that stays green."""
+    backend = _stub_backend(tmp_path)
+    monkeypatch.setattr(runner_module.subprocess, "run", MagicMock())
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    rc = runner_module.main(
+        [
+            "--backend-dir",
+            str(backend),
+            "--providers",
+            "openai",
+            "--allow-provider-failures",
+        ]
+    )
+    assert rc == 0  # skipped, not failed
