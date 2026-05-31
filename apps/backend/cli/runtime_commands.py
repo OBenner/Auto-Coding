@@ -2344,15 +2344,15 @@ def build_runtime_modes_payload(
                 "provider as autonomous."
             ),
             "direct_api_autonomous_runtime": (
-                f"Set {DIRECT_API_AUTONOMOUS_ENV}=true only after the provider "
-                "autonomous readiness and promotion gates are clean; the coder "
-                "phase can then use the direct_api_autonomous adapter. QA "
-                "phases (qa_reviewer / qa_fixer) still require Claude + "
-                "full_autonomous and will fail fast on any direct provider "
-                "until Phase 1.1 / 1.2 / 1.3 capability work (MCP execution, "
-                "mutating subagents, sandbox enforcement) is wired into the "
-                "QA runtime path. Prefer AUTO_CODE_AUTONOMY=safe (see "
-                "ADR-006); the legacy env var still works but is deprecated."
+                "Set AUTO_CODE_AUTONOMY=safe to let the coder phase use the "
+                "direct_api_autonomous adapter once the provider readiness and "
+                "promotion gates are clean (AUTO_CODE_AUTONOMY=bold skips the "
+                "evidence gate for power users). The legacy "
+                f"{DIRECT_API_AUTONOMOUS_ENV}=true still enables it but is "
+                "deprecated (see ADR-006). QA phases (qa_reviewer / qa_fixer) "
+                "still require Claude + full_autonomous and will fail fast on "
+                "any direct provider until the QA runtime path gains the MCP "
+                "execution, mutating subagents, and sandbox capabilities."
             ),
             "autonomy_level": (
                 "Set AUTO_CODE_AUTONOMY=off|claude|safe|bold as the single "

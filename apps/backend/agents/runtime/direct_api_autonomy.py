@@ -10,6 +10,7 @@ defaults.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
@@ -17,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from core.autonomy_level import AUTONOMY_LEVEL_ENV, resolve_autonomy_settings
 from core.autonomy_policy import (
     DEFAULT_ALLOWED_PHASES,
     DEFAULT_MAX_HISTORY_AGE_DAYS,
@@ -32,6 +34,8 @@ from core.paths import (
     PROVIDER_SMOKE_HISTORY_FILENAME,
     resolve_provider_smoke_history_path,
 )
+
+logger = logging.getLogger(__name__)
 
 DIRECT_API_AUTONOMOUS_ENV = "AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS"
 # Backward-compat aliases. Prefer ``AutonomyPolicy`` for runtime decisions.
@@ -112,13 +116,38 @@ def resolve_direct_api_autonomous_gate(
             missing_requirements=["coding_phase"],
             history_path=history_path_str,
         )
-    if not direct_api_autonomous_env_enabled(env):
+    # Bridge the single AUTO_CODE_AUTONOMY knob (ADR-006) into the gate.
+    # ``resolve_autonomy_settings`` already folds the level default and the
+    # deprecated ``AUTO_CODE_DIRECT_API_FULL_AUTONOMOUS`` override into one
+    # flag, so safe/bold enable the gate without the legacy env var while
+    # that env var keeps working for back-compat.
+    autonomy = resolve_autonomy_settings(env=env)
+    if not autonomy.direct_api_gate_enabled:
         return DirectApiAutonomousGate(
             provider=provider,
             allowed=False,
             status="disabled",
-            reason="direct_api_autonomous_env_disabled",
-            missing_requirements=[DIRECT_API_AUTONOMOUS_ENV],
+            reason="direct_api_autonomous_disabled",
+            missing_requirements=[AUTONOMY_LEVEL_ENV],
+            history_path=history_path_str,
+        )
+    if autonomy.direct_api_skip_gate:
+        # bold is the power-user level: it trusts the operator and grants
+        # promotion without provider e2e evidence. Surface that loudly so
+        # an unproven provider running full-autonomous is never silent.
+        logger.warning(
+            "Direct-API autonomous gate bypassed for %s via %s=%s: promotion "
+            "granted WITHOUT provider e2e evidence (power-user mode).",
+            provider,
+            AUTONOMY_LEVEL_ENV,
+            autonomy.level.value,
+        )
+        return DirectApiAutonomousGate(
+            provider=provider,
+            allowed=True,
+            status="passed",
+            reason="direct_api_autonomous_gate_skipped",
+            missing_requirements=[],
             history_path=history_path_str,
         )
 
