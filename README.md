@@ -12,6 +12,7 @@ Describe what you want. Auto Code creates the spec, writes the code, runs QA, an
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)]()
 [![Version](https://img.shields.io/badge/version-3.0.0-orange?style=flat-square)](https://github.com/OBenner/Auto-Coding/releases)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-0ea5e9?style=flat-square)](https://obenner.github.io/Auto-Coding/)
+[![Autonomy: OpenRouter](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FOBenner%2FAuto-Coding%2Fdevelop%2F.github%2Fbadges%2Fautonomy-openrouter.json&style=flat-square)](docs/roadmap/non-claude-provider-autonomy.md)
 
 </div>
 
