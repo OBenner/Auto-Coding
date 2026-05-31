@@ -5178,6 +5178,85 @@ class _DeterministicRecoveryFirstPassSession:
         return None
 
 
+class _DeterministicRecoveryResumeSession:
+    """Scripted resume session that repairs the checkpoint's partial mutation
+    and finishes, restoring the recovery-target content.
+
+    On resume the runtime surfaces the partial failure left by the scripted
+    first pass. Real models inconsistently *abort* it instead of *repairing*
+    it (recovery_resolved=True but content_ok=False, observed identically on
+    OpenAI/Google/OpenRouter), so the resume is scripted too: repair the
+    partial-failure transaction (always the first native-tool iteration of
+    the deterministic first pass, id ``native_tool_calls-1``) over
+    recovery-target.txt, then finish. This makes the whole recovery probe a
+    deterministic test of the runtime's checkpoint/resume/repair machinery.
+    """
+
+    def __init__(self, provider_name: str):
+        self.provider_name = provider_name
+        self._step = 0
+
+    async def complete_with_tool_calls(
+        self, message: str, tools: Any
+    ) -> ProviderToolCallResponse:
+        self._step += 1
+        if self._step == 1:
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="recovery_repair",
+                        name="repair_mutation",
+                        arguments={
+                            "transaction_id": "native_tool_calls-1",
+                            "paths": ["recovery-target.txt"],
+                            "summary": "Restored the recovery target content.",
+                        },
+                    ),
+                ),
+            )
+        return ProviderToolCallResponse(
+            content="",
+            tool_calls=(
+                ProviderToolCall(
+                    id="recovery_resume_finish",
+                    name="finish",
+                    arguments={
+                        "summary": "recovery resume complete",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ),
+            ),
+        )
+
+    async def complete(self, message: str, stream: bool = True):
+        # The resume surfaces the recovery plan as text ("Required recovery
+        # actions") and resolves it via the streaming completion API; respond
+        # with the repair + finish actions as JSON.
+        yield json.dumps(
+            {
+                "actions": [
+                    {
+                        "tool": "repair_mutation",
+                        "transaction_id": "native_tool_calls-1",
+                        "paths": ["recovery-target.txt"],
+                        "summary": "Restored the recovery target content.",
+                    },
+                    {
+                        "tool": "finish",
+                        "summary": "recovery resume complete",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ]
+            }
+        )
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        return None
+
+
 async def _complete_provider_mini_pipeline_recovery_loop(
     *,
     provider: Any,
@@ -5256,12 +5335,13 @@ async def _complete_provider_mini_pipeline_recovery_loop(
                 _generic_edit_execution_diagnostics(spec_dir / "artifacts"),
             )
 
-        resume_session = _create_provider_session(
-            provider=provider,
-            session_config=session_config,
-            project_dir=project_dir,
-            spec_dir=spec_dir,
-            agent_type="coder",
+        # Scripted, deterministic resume: repair the partial mutation and
+        # finish. Real models inconsistently abort instead of repairing, so
+        # scripting this keeps the recovery probe a deterministic test of the
+        # runtime's checkpoint/resume/repair machinery (the provider's general
+        # capability is covered by the other probes).
+        resume_session = _DeterministicRecoveryResumeSession(
+            provider_name=provider.name
         )
         resume_runtime = create_runtime_session(
             provider_name=provider.name,

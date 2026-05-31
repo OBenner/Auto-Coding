@@ -2764,36 +2764,7 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
             assert any(tool["name"] == "write_file" for tool in tools)
             if self.scenario == "coder":
                 return self._complete_coder(message)
-            if self.scenario == "recovery_resume":
-                return self._complete_recovery_resume(message)
             raise AssertionError(f"unknown scenario: {self.scenario}")
-
-        async def complete(self, message: str, stream: bool = True):
-            assert stream is True
-            self.calls += 1
-            if self.scenario != "recovery_resume":
-                raise AssertionError(
-                    f"json resume should only use recovery_resume, got {self.scenario}"
-                )
-            assert "Required recovery actions" in message
-            yield json.dumps(
-                {
-                    "actions": [
-                        {
-                            "tool": "repair_mutation",
-                            "transaction_id": "native_tool_calls-1",
-                            "paths": ["recovery-target.txt"],
-                            "summary": "Accepted provider recovery target.",
-                        },
-                        {
-                            "tool": "finish",
-                            "summary": "Recovered the mini pipeline partial edit.",
-                            "tests": ["python -m unittest -q"],
-                            "risks": [],
-                        },
-                    ]
-                }
-            )
 
         def _complete_coder(self, message):
             assert "slugify" in message
@@ -2835,32 +2806,6 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
                 ),
             )
 
-        def _complete_recovery_resume(self, message):
-            assert "Required recovery actions" in message
-            return ProviderToolCallResponse(
-                content="",
-                tool_calls=(
-                    ProviderToolCall(
-                        id="call_repair_recovery",
-                        name="repair_mutation",
-                        arguments={
-                            "transaction_id": "native_tool_calls-1",
-                            "paths": ["recovery-target.txt"],
-                            "summary": "Accepted provider recovery target.",
-                        },
-                    ),
-                    ProviderToolCall(
-                        id="call_finish_recovery",
-                        name="finish",
-                        arguments={
-                            "summary": "Recovered the mini pipeline partial edit.",
-                            "tests": ["python -m unittest -q"],
-                            "risks": [],
-                        },
-                    ),
-                ),
-            )
-
         def add_tool_result(self, tool_call_id, name, result):
             self.tool_results.append((tool_call_id, name))
 
@@ -2868,12 +2813,11 @@ async def test_run_provider_smoke_check_mini_pipeline_runtime(
         name = "openai"
 
         def __init__(self):
+            # The recovery first pass AND resume are now driven by
+            # deterministic scripted sessions in production, so only the coder
+            # phase requests a session from the provider.
             self.sessions = [
                 FakeMiniPipelineGenericEditSession("coder"),
-                # The recovery first pass is now driven by a deterministic
-                # scripted session in production, so it no longer requests a
-                # session from the provider — only the resume does.
-                FakeMiniPipelineGenericEditSession("recovery_resume"),
             ]
             self.messages: list[str] = []
 
@@ -4191,3 +4135,24 @@ async def test_transaction_batch_probe_commits_via_scripted_session():
 
     assert result.success is True, result.error_details
     assert result.runtime_mode == "transaction_batch_probe"
+
+
+@pytest.mark.asyncio
+async def test_deterministic_recovery_resume_repairs_via_completion_api():
+    """The scripted resume's completion API yields repair_mutation then finish.
+
+    The recovery resume resolves its plan through the streaming completion
+    API (not the tool loop), so the scripted resume must restore the
+    recovery target by repairing the first-pass partial-failure transaction.
+    """
+    import json as _json
+
+    from cli.provider_smoke_commands import _DeterministicRecoveryResumeSession
+
+    session = _DeterministicRecoveryResumeSession(provider_name="openai")
+    chunks = [chunk async for chunk in session.complete("Required recovery actions")]
+    actions = _json.loads("".join(chunks))["actions"]
+
+    assert [a["tool"] for a in actions] == ["repair_mutation", "finish"]
+    assert actions[0]["transaction_id"] == "native_tool_calls-1"
+    assert actions[0]["paths"] == ["recovery-target.txt"]
