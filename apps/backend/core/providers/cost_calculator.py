@@ -71,7 +71,13 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
         "provider": "anthropic",
     },
     # ==================== OPENAI ====================
-    # GPT-4o - Latest GPT-4 optimized model
+    # GPT-5.2 - current default flagship (per-1M USD, approximate)
+    "gpt-5.2": {
+        "input": 2.50,
+        "output": 10.00,
+        "provider": "openai",
+    },
+    # GPT-4o - prior optimized GPT-4 model
     "gpt-4o": {
         "input": 2.50,
         "output": 10.00,

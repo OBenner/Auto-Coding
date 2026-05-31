@@ -24,7 +24,7 @@ Environment Variables:
 
     # OpenAI
     OPENAI_API_KEY: Required for OpenAI provider
-    OPENAI_MODEL: Model identifier (default: gpt-4o)
+    OPENAI_MODEL: Model identifier (default: gpt-5.2)
     OPENAI_BASE_URL: Optional custom API base URL
 
     # Codex CLI
@@ -81,7 +81,7 @@ DEFAULT_PROVIDER = "claude"
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4"
 DEFAULT_ZHIPUAI_MODEL = "glm-4-flash"
-DEFAULT_OPENAI_MODEL = "gpt-4o"
+DEFAULT_OPENAI_MODEL = "gpt-5.2"
 DEFAULT_CODEX_MODEL = "codex-default"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 

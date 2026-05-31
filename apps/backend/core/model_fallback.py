@@ -62,6 +62,8 @@ MODEL_FALLBACK_CHAIN: dict[str, list[str]] = {
     "claude-haiku-4-5-20251001": [],
     # ==================== OPENAI ====================
     # Standard GPT models (most capable to most economical)
+    "gpt-5.2": ["gpt-5", "gpt-4o", "gpt-4o-mini"],
+    "gpt-5": ["gpt-4o", "gpt-4o-mini"],
     "gpt-4": ["gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
     "gpt-4-turbo": ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
     "gpt-4o": ["gpt-4o-mini", "gpt-3.5-turbo"],

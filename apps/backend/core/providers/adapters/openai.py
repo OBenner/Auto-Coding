@@ -7,7 +7,7 @@ This enables direct access to OpenAI models (GPT-4o, o1, o3, etc.).
 
 Environment Variables:
     OPENAI_API_KEY: API key from platform.openai.com (required)
-    OPENAI_MODEL: Model identifier (default: gpt-4o)
+    OPENAI_MODEL: Model identifier (default: gpt-5.2)
     OPENAI_BASE_URL: Optional custom API base URL
 """
 
@@ -19,7 +19,7 @@ from core.providers.adapters.openai_compat import (
 )
 from core.providers.base import SessionConfig
 
-DEFAULT_OPENAI_MODEL = "gpt-4o"
+DEFAULT_OPENAI_MODEL = "gpt-5.2"
 
 # Popular OpenAI models (updated February 2026)
 OPENAI_MODELS = [
