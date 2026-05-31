@@ -134,6 +134,19 @@ MINI_PIPELINE_TEST_FILE = (
     'if __name__ == "__main__":\n'
     "    unittest.main()\n"
 )
+
+
+def _smoke_content_matches(actual: str, expected: str) -> bool:
+    """Compare smoke-file content tolerant of surrounding whitespace.
+
+    A capability probe should pass when the model wrote the right content;
+    a byte-exact match (including the trailing newline) wrongly rejects
+    models that omit it, e.g. ``provider smoke ok`` vs ``provider smoke
+    ok\\n``. The semantic content is what the probe is checking.
+    """
+    return actual.strip() == expected.strip()
+
+
 DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS = 30.0
 PROVIDER_SMOKE_RUNTIME_MODES = (
     "analysis_only",
@@ -4664,7 +4677,9 @@ async def _complete_provider_generic_edit_smoke(
             }
 
         smoke_content = smoke_file.read_text(encoding="utf-8")
-        if smoke_content != DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT:
+        if not _smoke_content_matches(
+            smoke_content, DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT
+        ):
             error_details = (
                 "Expected provider-smoke.txt to contain "
                 f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}; got "
@@ -5083,7 +5098,9 @@ async def _complete_provider_mini_pipeline_recovery_loop(
         recovery_resolved = result_payload.get("recovery_resolved") is True
         if (
             resumed.status != "continue"
-            or final_content != DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT
+            or not _smoke_content_matches(
+                final_content, DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT
+            )
             or not recovery_resolved
             or workspace_guard_status != "clean"
         ):
