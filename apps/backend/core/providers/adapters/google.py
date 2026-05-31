@@ -295,7 +295,9 @@ class GoogleAgentSession(AgentSession):
             raise ProviderError(f"Google tool-call completion failed: {e}") from e
 
         content = extract_google_text(response)
-        tool_calls = parse_openai_tool_calls({"parts": google_response_parts(response)})
+        tool_calls = parse_openai_tool_calls(
+            {"parts": google_native_response_parts(response)}
+        )
         if content or tool_calls:
             self._message_history.append(
                 google_assistant_message(
@@ -415,6 +417,61 @@ def google_response_parts(response: Any) -> list[Any]:
         content = getattr(candidate, "content", None)
         parts.extend(as_sequence(getattr(content, "parts", None)))
     return parts
+
+
+def _google_arg_to_native(value: Any) -> Any:
+    """Recursively convert Gemini protobuf composites to JSON-native Python.
+
+    Gemini function-call arguments come back as proto-plus containers
+    (``MapComposite``, ``RepeatedComposite``) that ``json.dumps`` cannot
+    serialize ("Object of type RepeatedComposite is not JSON serializable").
+    Map-like values become dicts, repeated values become lists, scalars pass
+    through. Conversion is duck-typed so it does not import the proto types.
+    """
+    if isinstance(value, (str, bytes, bool, int, float)) or value is None:
+        return value
+    items = getattr(value, "items", None)
+    if callable(items):
+        try:
+            return {str(k): _google_arg_to_native(v) for k, v in items()}
+        except Exception:
+            pass
+    if hasattr(value, "__iter__"):
+        try:
+            return [_google_arg_to_native(v) for v in value]
+        except Exception:
+            return value
+    return value
+
+
+def google_native_response_parts(response: Any) -> list[dict[str, Any]]:
+    """Return Gemini response parts as JSON-native dicts.
+
+    Function-call parts keep their name and de-protobuf'd args so the shared
+    tool-call parser — and any downstream ``json.dumps`` of the tool call or
+    history — never sees a raw proto-plus container. Text parts pass through
+    as ``{"text": ...}``.
+    """
+    native: list[dict[str, Any]] = []
+    for part in google_response_parts(response):
+        function_call = getattr(part, "function_call", None)
+        name = getattr(function_call, "name", None)
+        if function_call is not None and name:
+            native.append(
+                {
+                    "function_call": {
+                        "name": str(name),
+                        "args": _google_arg_to_native(
+                            getattr(function_call, "args", {})
+                        ),
+                    }
+                }
+            )
+            continue
+        text = getattr(part, "text", None)
+        if text:
+            native.append({"text": str(text)})
+    return native
 
 
 def extract_google_text(response: Any) -> str:
