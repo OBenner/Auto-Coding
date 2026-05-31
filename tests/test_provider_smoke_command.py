@@ -4163,3 +4163,31 @@ async def test_deterministic_recovery_first_pass_scripts_the_block():
     # Then finish with the partial failure unresolved => runtime blocks it.
     second = await session.complete_with_tool_calls("ignored message", tools=[])
     assert [c.name for c in second.tool_calls] == ["finish"]
+
+
+@pytest.mark.asyncio
+async def test_transaction_batch_probe_commits_via_scripted_session():
+    """The scripted transaction session drives the REAL runtime to a committed batch.
+
+    Validates the function-calling batch path (begin_batch -> write_file ->
+    commit_batch) end to end, removing the flaky model orchestration.
+    """
+    from cli.provider_smoke_commands import (
+        _complete_provider_transaction_batch_smoke,
+    )
+    from core.providers.base import SessionConfig
+
+    class _FakeProvider:
+        name = "openai"
+
+    result = await _complete_provider_transaction_batch_smoke(
+        provider=_FakeProvider(),
+        session_config=SessionConfig(name="t", provider="openai", model="gpt-4o"),
+        prompt=None,
+        timeout_seconds=15,
+        model="gpt-4o",
+        runtime_diagnostics={},
+    )
+
+    assert result.success is True, result.error_details
+    assert result.runtime_mode == "transaction_batch_probe"
