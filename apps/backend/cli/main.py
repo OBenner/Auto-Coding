@@ -25,6 +25,7 @@ from .provider_smoke_commands import (
 from .runtime_commands import (
     external_mcp_smoke_has_failures,
     generic_edit_resume_preflight_has_failures,
+    handle_autonomy_readiness_command,
     handle_external_mcp_smoke_command,
     handle_generic_edit_resume_preflight_command,
     handle_runtime_modes_command,
@@ -130,6 +131,19 @@ Environment Variables:
         "--runtime-modes",
         action="store_true",
         help="Show provider/runtime compatibility and exit",
+    )
+
+    parser.add_argument(
+        "--autonomy-readiness",
+        nargs="?",
+        const="__all__",
+        default=None,
+        metavar="PROVIDER",
+        help=(
+            "Show direct-API autonomous promotion readiness (gate decision, "
+            "missing requirements, recorded evidence) for one provider or all "
+            "direct-API providers, then exit"
+        ),
     )
 
     parser.add_argument(
@@ -756,6 +770,18 @@ def _run_cli() -> None:
     # Handle --runtime-modes command before requiring a spec.
     if args.runtime_modes:
         handle_runtime_modes_command(output_json=args.json)
+        return
+
+    # Handle --autonomy-readiness command before requiring a spec.
+    if args.autonomy_readiness is not None:
+        readiness_provider = (
+            None if args.autonomy_readiness == "__all__" else args.autonomy_readiness
+        )
+        handle_autonomy_readiness_command(
+            project_dir=project_dir,
+            provider=readiness_provider,
+            output_json=args.json,
+        )
         return
 
     # Handle --external-mcp-smoke command before requiring a spec.
