@@ -147,6 +147,24 @@ def _smoke_content_matches(actual: str, expected: str) -> bool:
     return actual.strip() == expected.strip()
 
 
+def _recovery_checkpoint_failure_reason(
+    initial_status: str, checkpoint_exists: bool
+) -> str:
+    """Reason for a recovery probe that produced no usable checkpoint.
+
+    Embeds the two discriminators so the nightly summary (which keeps only
+    ``reason``) shows *why*: ``initial_status != "error"`` means the model
+    never triggered the runtime's finish-block (so no checkpoint was due);
+    ``initial_status == "error"`` with ``checkpoint_exists`` False means the
+    runtime blocked but did not persist the checkpoint (a runtime bug).
+    """
+    return (
+        "recovery_checkpoint_not_created("
+        f"initial_status={initial_status},"
+        f"checkpoint_exists={checkpoint_exists})"
+    )
+
+
 DEFAULT_PROVIDER_SMOKE_TIMEOUT_SECONDS = 30.0
 PROVIDER_SMOKE_RUNTIME_MODES = (
     "analysis_only",
@@ -5025,12 +5043,22 @@ async def _complete_provider_mini_pipeline_recovery_loop(
             ),
             timeout=timeout_seconds,
         )
-        if first_result.status != "error" or not checkpoint_path.exists():
+        checkpoint_exists = checkpoint_path.exists()
+        if first_result.status != "error" or not checkpoint_exists:
+            # Embed the two discriminators in the reason so they survive into
+            # the nightly summary (which keeps only `reason`):
+            #   initial_status != "error"  -> the model never triggered the
+            #       runtime's finish-block, so no checkpoint was due.
+            #   status "error" + checkpoint_exists False -> the runtime blocked
+            #       but did not persist the checkpoint (a runtime bug).
             return (
                 {
                     "status": "failed",
-                    "reason": "recovery_checkpoint_not_created",
+                    "reason": _recovery_checkpoint_failure_reason(
+                        first_result.status, checkpoint_exists
+                    ),
                     "initial_result_status": first_result.status,
+                    "checkpoint_exists": checkpoint_exists,
                 },
                 _generic_edit_execution_diagnostics(spec_dir / "artifacts"),
             )
