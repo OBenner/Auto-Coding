@@ -189,3 +189,136 @@ async def test_executor_passes_through_when_backend_unavailable(tmp_path):
         await executor._run_subprocess_bounded(["pwd"], timeout_seconds=5)
 
     assert list(captured["args"]) == ["pwd"]
+
+
+# ---------------------------------------------------------------------
+# Runtime-session wiring.
+#
+# The executor tests above prove the *mechanism*: given a policy + an
+# available backend, run_command argv is wrapped. These tests prove the
+# *wiring*: GenericEditRuntimeSession (and the promoted
+# DirectApiAutonomousRuntimeSession that subclasses it) actually hand
+# that policy + backend to their LocalActionExecutor. Without this, the
+# executor-level wrapping is unreachable in production -- the runtime
+# would always build a sandbox-less executor.
+# ---------------------------------------------------------------------
+
+from agents.runtime.adapters.generic_edit import GenericEditRuntimeSession
+
+
+def _patch_backend_everywhere(info: SandboxBackendInfo):
+    """Patch ``describe_sandbox_backend`` at both call sites.
+
+    ``resolve_autonomy_settings`` lazily imports it from ``core.sandbox``
+    to compute ``sandbox_available``; ``_resolve_sandbox_wiring`` uses the
+    copy bound into the ``generic_edit`` module namespace. Both must
+    return the same host-independent backend so the test is deterministic
+    on every CI OS (Linux runners have no Seatbelt; bwrap may be absent).
+    """
+    return (
+        patch("core.sandbox.describe_sandbox_backend", return_value=info),
+        patch(
+            "agents.runtime.adapters.generic_edit.describe_sandbox_backend",
+            return_value=info,
+        ),
+    )
+
+
+def test_generic_edit_injected_sandbox_reaches_executor(tmp_path):
+    """An explicitly injected policy + backend wires straight through."""
+    backend = _ready_seatbelt()
+    policy = SandboxPolicy(project_dir=tmp_path)
+
+    session = GenericEditRuntimeSession(
+        provider_name="openai",
+        agent_session=MagicMock(),
+        project_dir=tmp_path,
+        sandbox_policy=policy,
+        sandbox_backend=backend,
+    )
+
+    assert session._executor._sandbox_policy is policy
+    assert session._executor._sandbox_backend is backend
+
+
+def test_generic_edit_auto_resolves_sandbox_on_safe(tmp_path, monkeypatch):
+    """``AUTO_CODE_AUTONOMY=safe`` + a working backend wires the executor."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = _ready_seatbelt()
+
+    p_core, p_mod = _patch_backend_everywhere(info)
+    with p_core, p_mod:
+        session = GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+        )
+
+    assert session._executor._sandbox_backend is info
+    assert session._executor._sandbox_policy is not None
+    assert session._executor._sandbox_policy.project_dir == tmp_path
+
+
+def test_generic_edit_no_sandbox_on_claude_level(tmp_path, monkeypatch):
+    """The default (claude) level never requests a sandbox.
+
+    A ready backend is patched in to prove the gate is the operator's
+    *request*, not mere host availability: claude leaves the executor
+    unwrapped even where Seatbelt exists.
+    """
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = _ready_seatbelt()
+
+    p_core, p_mod = _patch_backend_everywhere(info)
+    with p_core, p_mod:
+        session = GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+        )
+
+    assert session._executor._sandbox_policy is None
+    assert session._executor._sandbox_backend is None
+
+
+def test_generic_edit_no_sandbox_when_backend_unavailable(tmp_path, monkeypatch):
+    """``safe`` but no host backend => honest unwrapped passthrough."""
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = _unavailable()
+
+    p_core, p_mod = _patch_backend_everywhere(info)
+    with p_core, p_mod:
+        session = GenericEditRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+        )
+
+    assert session._executor._sandbox_policy is None
+    assert session._executor._sandbox_backend is None
+
+
+def test_direct_api_autonomous_inherits_sandbox_wiring(tmp_path, monkeypatch):
+    """The promoted direct-API runtime confines its shell path too."""
+    from agents.runtime.adapters.direct_api_autonomous import (
+        DirectApiAutonomousRuntimeSession,
+    )
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+    monkeypatch.delenv("AUTO_CODE_SANDBOX", raising=False)
+    info = _ready_bwrap()
+
+    p_core, p_mod = _patch_backend_everywhere(info)
+    with p_core, p_mod:
+        session = DirectApiAutonomousRuntimeSession(
+            provider_name="openai",
+            agent_session=MagicMock(),
+            project_dir=tmp_path,
+        )
+
+    assert session._executor._sandbox_backend is info
+    assert session._executor._sandbox_policy is not None
+    assert session._executor._sandbox_policy.project_dir == tmp_path

@@ -2,12 +2,19 @@
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.autonomy_level import resolve_autonomy_settings
 from core.providers.exceptions import ProviderConfigError, ProviderNotInstalled
+from core.sandbox import (
+    SandboxBackendInfo,
+    SandboxPolicy,
+    describe_sandbox_backend,
+)
 
 from ..capabilities import RuntimeCapabilities, RuntimeRequirements
 from ..local_actions import (
@@ -473,6 +480,35 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIST_FIELDS = (
 )
 
 
+def _resolve_sandbox_wiring(
+    project_dir: Path,
+    env: Mapping[str, str] | None = None,
+) -> tuple[SandboxPolicy | None, SandboxBackendInfo | None]:
+    """Resolve the sandbox policy + backend for a Generic Edit session.
+
+    Returns ``(None, None)`` unless the resolved autonomy settings both
+    *request* a sandbox (``AUTO_CODE_AUTONOMY=safe``/``bold`` or an
+    explicit ``AUTO_CODE_SANDBOX=true``) and find a *working* backend
+    (Seatbelt / bubblewrap / AppContainer) on this host. When a policy +
+    backend pair is returned, ``LocalActionExecutor`` wraps every shell
+    action the session runs through the platform sandbox.
+
+    The ``claude`` and ``off`` levels never request a sandbox, so the
+    default code path constructs the executor unwrapped exactly as
+    before — this keeps the Claude SDK path and existing tests unchanged.
+    """
+    settings = resolve_autonomy_settings(env=env)
+    if not settings.sandbox_enabled:
+        return None, None
+    backend = describe_sandbox_backend(env=env)
+    if not backend.available:
+        # ``sandbox_enabled`` already implies availability; stay
+        # defensive so the executor is never handed a backend that
+        # would pass commands through unwrapped while claiming a grant.
+        return None, None
+    return SandboxPolicy(project_dir=project_dir), backend
+
+
 class GenericEditRuntimeSession:
     """Runtime that turns model-emitted JSON actions into local workspace work."""
 
@@ -490,6 +526,8 @@ class GenericEditRuntimeSession:
         max_subagent_concurrency: int = 2,
         max_subagent_task_seconds: float = 180.0,
         max_iterations: int = 8,
+        sandbox_policy: SandboxPolicy | None = None,
+        sandbox_backend: SandboxBackendInfo | None = None,
     ):
         self.provider_name = provider_name
         self.agent_session = agent_session
@@ -504,7 +542,20 @@ class GenericEditRuntimeSession:
             provider_name=provider_name,
             agent_session=agent_session,
         )
-        self._executor = LocalActionExecutor(project_dir)
+        # Phase 1.3 step 2 (end-to-end): wire the platform sandbox into
+        # the local action executor so direct-provider shell actions run
+        # confined whenever autonomy requests it and the host supports
+        # it. Callers may inject an explicit policy/backend (tests); when
+        # both are omitted we auto-resolve from the autonomy settings.
+        if sandbox_policy is None and sandbox_backend is None:
+            sandbox_policy, sandbox_backend = _resolve_sandbox_wiring(project_dir)
+        self._sandbox_policy = sandbox_policy
+        self._sandbox_backend = sandbox_backend
+        self._executor = LocalActionExecutor(
+            project_dir,
+            sandbox_policy=sandbox_policy,
+            sandbox_backend=sandbox_backend,
+        )
         self._mcp_bridge: RuntimeMcpBridge | None = None
         self._cancel_requested = False
         self._mutation_snapshots: list[dict[str, Any]] = []
