@@ -8,6 +8,7 @@ Coordinates stack detection, framework detection, and structure analysis.
 
 import hashlib
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +28,12 @@ from .framework_detector import FrameworkDetector
 from .models import SecurityProfile
 from .stack_detector import StackDetector
 from .structure_analyzer import StructureAnalyzer
+
+
+def _eprint(*args, **kwargs):
+    """Emit human-facing diagnostics to stderr so stdout stays clean for JSON consumers."""
+    kwargs.setdefault("file", sys.stderr)
+    print(*args, **kwargs)
 
 
 class ProjectAnalyzer:
@@ -234,14 +241,14 @@ class ProjectAnalyzer:
         existing = self.load_profile()
         if existing and not force and not self.should_reanalyze(existing):
             if existing.inherited_from:
-                print("Using inherited security profile from parent project")
+                _eprint("Using inherited security profile from parent project")
             else:
-                print(
+                _eprint(
                     f"Using cached security profile (hash: {existing.project_hash[:8]})"
                 )
             return existing
 
-        print("Analyzing project structure for security profile...")
+        _eprint("Analyzing project structure for security profile...")
 
         # Start fresh
         self.profile = SecurityProfile()
@@ -394,35 +401,35 @@ class ProjectAnalyzer:
         stack = self.profile.detected_stack
         scripts = self.profile.custom_scripts
 
-        print("\n" + "=" * 60)
-        print("  SECURITY PROFILE ANALYSIS")
-        print("=" * 60)
+        _eprint("\n" + "=" * 60)
+        _eprint("  SECURITY PROFILE ANALYSIS")
+        _eprint("=" * 60)
 
         if stack.languages:
-            print(f"\nLanguages: {', '.join(stack.languages)}")
+            _eprint(f"\nLanguages: {', '.join(stack.languages)}")
 
         if stack.package_managers:
-            print(f"Package Managers: {', '.join(stack.package_managers)}")
+            _eprint(f"Package Managers: {', '.join(stack.package_managers)}")
 
         if stack.frameworks:
-            print(f"Frameworks: {', '.join(stack.frameworks)}")
+            _eprint(f"Frameworks: {', '.join(stack.frameworks)}")
 
         if stack.databases:
-            print(f"Databases: {', '.join(stack.databases)}")
+            _eprint(f"Databases: {', '.join(stack.databases)}")
 
         if stack.infrastructure:
-            print(f"Infrastructure: {', '.join(stack.infrastructure)}")
+            _eprint(f"Infrastructure: {', '.join(stack.infrastructure)}")
 
         if stack.cloud_providers:
-            print(f"Cloud Providers: {', '.join(stack.cloud_providers)}")
+            _eprint(f"Cloud Providers: {', '.join(stack.cloud_providers)}")
 
         if scripts.npm_scripts:
-            print(f"NPM Scripts: {len(scripts.npm_scripts)} detected")
+            _eprint(f"NPM Scripts: {len(scripts.npm_scripts)} detected")
 
         if scripts.make_targets:
-            print(f"Make Targets: {len(scripts.make_targets)} detected")
+            _eprint(f"Make Targets: {len(scripts.make_targets)} detected")
 
         total_commands = len(self.profile.get_all_allowed_commands())
-        print(f"\nTotal Allowed Commands: {total_commands}")
+        _eprint(f"\nTotal Allowed Commands: {total_commands}")
 
-        print("-" * 60)
+        _eprint("-" * 60)
