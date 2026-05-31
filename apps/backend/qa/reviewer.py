@@ -15,6 +15,7 @@ Coverage Integration:
 - Coverage results included in qa_signoff
 """
 
+import json
 import logging
 from pathlib import Path
 
@@ -289,98 +290,36 @@ def update_qa_signoff_with_coverage(
 # =============================================================================
 
 
-async def run_qa_agent_session(
-    client: ClaudeSDKClient,
-    project_dir: Path,
+def build_qa_reviewer_prompt(
+    *,
+    base_prompt: str,
+    qa_memory_context: str | None,
+    coverage_summary: str,
+    coverage_data: dict | None,
+    coverage_passed: bool,
     spec_dir: Path,
     qa_session: int,
     max_iterations: int,
-    verbose: bool = False,
-    previous_error: dict | None = None,
-) -> tuple[str, str]:
+    previous_error: dict | None,
+) -> str:
+    """Assemble the QA reviewer prompt (pure, provider-neutral).
+
+    Shared by the Claude Agent SDK path (:func:`run_qa_agent_session`) and
+    the runtime-adapter path (:func:`run_qa_reviewer_via_runtime`) so both
+    drive the reviewer with identical instructions. The verdict itself is
+    file-based (``qa_signoff`` in ``implementation_plan.json``), so the
+    same prompt yields the same contract on any provider.
     """
-    Run a QA reviewer agent session.
-
-    Args:
-        client: Claude SDK client
-        project_dir: Project root directory (for capability detection)
-        spec_dir: Spec directory
-        qa_session: QA iteration number
-        max_iterations: Maximum number of QA iterations
-        verbose: Whether to show detailed output
-        previous_error: Error context from previous iteration for self-correction
-
-    Returns:
-        (status, response_text) where status is:
-        - "approved" if QA approves
-        - "rejected" if QA finds issues
-        - "error" if an error occurred
-    """
-    debug_section("qa_reviewer", f"QA Reviewer Session {qa_session}")
-    debug(
-        "qa_reviewer",
-        "Starting QA reviewer session",
-        spec_dir=str(spec_dir),
-        qa_session=qa_session,
-        max_iterations=max_iterations,
-    )
-
-    print(f"\n{'=' * 70}")
-    print(f"  QA REVIEWER SESSION {qa_session}")
-    print("  Validating all acceptance criteria...")
-    print(f"{'=' * 70}\n")
-
-    # Get task logger for streaming markers
-    task_logger = get_task_logger(spec_dir)
-    current_tool = None
-    message_count = 0
-    tool_count = 0
-
-    # Run coverage validation before QA session
-    coverage_passed, coverage_summary, coverage_data = run_coverage_validation(
-        project_dir, spec_dir
-    )
-    debug(
-        "qa_reviewer",
-        "Coverage validation completed",
-        passed=coverage_passed,
-        summary_length=len(coverage_summary),
-        has_data=coverage_data is not None,
-    )
-
-    # Load QA prompt with dynamically-injected project-specific MCP tools
-    # This includes Electron validation for Electron apps, Puppeteer for web, etc.
-    prompt = get_qa_reviewer_prompt(spec_dir, project_dir)
-    debug_detailed(
-        "qa_reviewer",
-        "Loaded QA reviewer prompt with project-specific tools",
-        prompt_length=len(prompt),
-        project_dir=str(project_dir),
-    )
-
-    # Retrieve memory context for QA (past patterns, gotchas, validation insights)
-    qa_memory_context = await get_graphiti_context(
-        spec_dir,
-        project_dir,
-        {
-            "description": "QA validation and acceptance criteria review",
-            "id": f"qa_reviewer_{qa_session}",
-        },
-    )
+    prompt = base_prompt
     if qa_memory_context:
         prompt += "\n\n" + qa_memory_context
-        print("✓ Memory context loaded for QA reviewer")
-        debug_success("qa_reviewer", "Graphiti memory context loaded for QA")
 
     # Add coverage validation results to prompt
     prompt += "\n\n---\n\n## Test Coverage Validation\n\n"
     prompt += coverage_summary
     prompt += "\n\n"
 
-    # Add coverage data to prompt instructions
     if coverage_data:
-        import json
-
         coverage_json = json.dumps(coverage_data, indent=2)
         prompt += f"""
 ### Coverage Results (Include in qa_signoff)
@@ -399,10 +338,8 @@ async def run_qa_agent_session(
 - Reference the detailed coverage report at `coverage_report.txt` for specific missing lines
 
 """
-        debug("qa_reviewer", "Coverage failed - added warning to prompt")
     else:
         prompt += "✓ Coverage validation passed. Include coverage_results in your qa_signoff (use the data above).\n\n"
-        debug_success("qa_reviewer", "Coverage passed - added success note to prompt")
 
     # Add session context
     prompt += f"\n\n---\n\n**QA Session**: {qa_session}\n"
@@ -410,12 +347,6 @@ async def run_qa_agent_session(
 
     # Add error context for self-correction if previous iteration failed
     if previous_error:
-        debug(
-            "qa_reviewer",
-            "Adding error context for self-correction",
-            error_type=previous_error.get("error_type"),
-            consecutive_errors=previous_error.get("consecutive_errors"),
-        )
         prompt += f"""
 
 ---
@@ -499,9 +430,290 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
 ---
 
 """
+
+    return prompt
+
+
+async def run_qa_reviewer_via_runtime(
+    runtime_session: object,
+    project_dir: Path,
+    spec_dir: Path,
+    qa_session: int,
+    max_iterations: int,
+    verbose: bool = False,
+    previous_error: dict | None = None,
+) -> tuple[str, str]:
+    """Run one QA reviewer pass through the provider-neutral runtime layer.
+
+    Mirror of :func:`run_qa_agent_session` for direct-API providers: it
+    drives a runtime adapter (generic_edit / direct_api_autonomous) via
+    :func:`run_runtime_session` instead of a Claude SDK client, then reads
+    the file-based verdict back from ``qa_signoff``. The reviewer is
+    read-only with respect to the product — it validates and writes the
+    signoff — so it is the safe first QA agent to port off the SDK.
+
+    Returns ``(status, response_text)`` with the same ``"approved"`` /
+    ``"rejected"`` / ``"error"`` contract as the Claude path.
+    """
+    # Lazy imports: keep the provider-neutral runtime layer off qa.reviewer's
+    # module-import path so the SDK-path test harness (which mocks everything)
+    # can import this module without wiring agents.runtime. ``get_qa_signoff_status``
+    # is likewise lazy to avoid the qa.criteria -> ... -> qa.reviewer cycle.
+    from agents.runtime import RuntimeRequirements, run_runtime_session
+
+    from .criteria import get_qa_signoff_status
+
+    coverage_passed, coverage_summary, coverage_data = run_coverage_validation(
+        project_dir, spec_dir
+    )
+    base_prompt = get_qa_reviewer_prompt(spec_dir, project_dir)
+    qa_memory_context = await get_graphiti_context(
+        spec_dir,
+        project_dir,
+        {
+            "description": "QA validation and acceptance criteria review",
+            "id": f"qa_reviewer_{qa_session}",
+        },
+    )
+    prompt = build_qa_reviewer_prompt(
+        base_prompt=base_prompt,
+        qa_memory_context=qa_memory_context,
+        coverage_summary=coverage_summary,
+        coverage_data=coverage_data,
+        coverage_passed=coverage_passed,
+        spec_dir=spec_dir,
+        qa_session=qa_session,
+        max_iterations=max_iterations,
+        previous_error=previous_error,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        message=prompt,
+        spec_dir=spec_dir,
+        verbose=verbose,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+    response_text = result.response_text or ""
+
+    status = get_qa_signoff_status(spec_dir)
+    if status and coverage_data is not None:
+        update_qa_signoff_with_coverage(spec_dir, coverage_data)
+        status = get_qa_signoff_status(spec_dir)
+
+    verdict = status.get("status") if status else None
+    # Persist QA insights to memory exactly like the Claude path so opted-in
+    # runtime reviewers keep contributing approved patterns / rejected gotchas
+    # back into Graphiti for later QA and fixer sessions.
+    qa_discoveries = {
+        "files_understood": {},
+        "patterns_found": [],
+        "gotchas_encountered": [],
+    }
+    if verdict == "approved":
+        debug_success("qa_reviewer", "QA APPROVED (runtime path)")
+        qa_discoveries["patterns_found"].append(
+            f"QA session {qa_session}: All acceptance criteria validated successfully"
+        )
+        await save_session_memory(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            subtask_id=f"qa_reviewer_{qa_session}",
+            session_num=qa_session,
+            success=True,
+            subtasks_completed=[f"qa_reviewer_{qa_session}"],
+            discoveries=qa_discoveries,
+        )
+        return "approved", response_text
+    if verdict == "rejected":
+        debug_error("qa_reviewer", "QA REJECTED (runtime path)")
+        for issue in status.get("issues_found", []):
+            qa_discoveries["gotchas_encountered"].append(
+                f"QA Issue ({issue.get('type', 'unknown')}): "
+                f"{issue.get('title', 'No title')} at {issue.get('location', 'unknown')}"
+            )
+        await save_session_memory(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            subtask_id=f"qa_reviewer_{qa_session}",
+            session_num=qa_session,
+            success=False,
+            subtasks_completed=[],
+            discoveries=qa_discoveries,
+        )
+        return "rejected", response_text
+    return (
+        "error",
+        "QA agent did not update implementation_plan.json (runtime path)",
+    )
+
+
+async def run_qa_reviewer_runtime_session(
+    *,
+    provider_name: str,
+    runtime_mode: str,
+    model: str,
+    project_dir: Path,
+    spec_dir: Path,
+    qa_session: int,
+    max_iterations: int,
+    verbose: bool = False,
+    previous_error: dict | None = None,
+) -> tuple[str, str]:
+    """Build a direct-provider runtime session and run the QA reviewer on it.
+
+    Thin orchestration shim called by the QA loop when
+    :func:`agents.runtime.qa_phase_routing.resolve_qa_runtime` permits the
+    direct-API reviewer path: it constructs the provider session and the
+    runtime adapter, then delegates to :func:`run_qa_reviewer_via_runtime`.
+    """
+    from agents.runtime import create_runtime_session
+
+    config = ProviderConfig.from_env(agent_type="qa_reviewer")
+    if config.provider != provider_name:
+        # The routing decision and the env-resolved provider must agree, or
+        # the runtime adapter and the underlying session would target
+        # different backends. Fail fast instead of silently diverging.
+        raise ValueError(
+            "qa_reviewer runtime provider mismatch: "
+            f"routed={provider_name}, env={config.provider}"
+        )
+    provider = create_engine_provider(config)
+    session = provider.create_session(
+        SessionConfig(
+            name=f"qa_reviewer-runtime-{qa_session}",
+            model=model,
+            extra={"agent_type": "qa_reviewer"},
+        )
+    )
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=session,
+        runtime_mode=runtime_mode,
+        project_dir=project_dir,
+        agent_type="qa_reviewer",
+    )
+    return await run_qa_reviewer_via_runtime(
+        runtime_session,
+        project_dir,
+        spec_dir,
+        qa_session,
+        max_iterations,
+        verbose=verbose,
+        previous_error=previous_error,
+    )
+
+
+async def run_qa_agent_session(
+    client: ClaudeSDKClient,
+    project_dir: Path,
+    spec_dir: Path,
+    qa_session: int,
+    max_iterations: int,
+    verbose: bool = False,
+    previous_error: dict | None = None,
+) -> tuple[str, str]:
+    """
+    Run a QA reviewer agent session.
+
+    Args:
+        client: Claude SDK client
+        project_dir: Project root directory (for capability detection)
+        spec_dir: Spec directory
+        qa_session: QA iteration number
+        max_iterations: Maximum number of QA iterations
+        verbose: Whether to show detailed output
+        previous_error: Error context from previous iteration for self-correction
+
+    Returns:
+        (status, response_text) where status is:
+        - "approved" if QA approves
+        - "rejected" if QA finds issues
+        - "error" if an error occurred
+    """
+    debug_section("qa_reviewer", f"QA Reviewer Session {qa_session}")
+    debug(
+        "qa_reviewer",
+        "Starting QA reviewer session",
+        spec_dir=str(spec_dir),
+        qa_session=qa_session,
+        max_iterations=max_iterations,
+    )
+
+    print(f"\n{'=' * 70}")
+    print(f"  QA REVIEWER SESSION {qa_session}")
+    print("  Validating all acceptance criteria...")
+    print(f"{'=' * 70}\n")
+
+    # Get task logger for streaming markers
+    task_logger = get_task_logger(spec_dir)
+    current_tool = None
+    message_count = 0
+    tool_count = 0
+
+    # Run coverage validation before QA session
+    coverage_passed, coverage_summary, coverage_data = run_coverage_validation(
+        project_dir, spec_dir
+    )
+    debug(
+        "qa_reviewer",
+        "Coverage validation completed",
+        passed=coverage_passed,
+        summary_length=len(coverage_summary),
+        has_data=coverage_data is not None,
+    )
+
+    # Load QA prompt with dynamically-injected project-specific MCP tools
+    # This includes Electron validation for Electron apps, Puppeteer for web, etc.
+    prompt = get_qa_reviewer_prompt(spec_dir, project_dir)
+    debug_detailed(
+        "qa_reviewer",
+        "Loaded QA reviewer prompt with project-specific tools",
+        prompt_length=len(prompt),
+        project_dir=str(project_dir),
+    )
+
+    # Retrieve memory context for QA (past patterns, gotchas, validation insights)
+    qa_memory_context = await get_graphiti_context(
+        spec_dir,
+        project_dir,
+        {
+            "description": "QA validation and acceptance criteria review",
+            "id": f"qa_reviewer_{qa_session}",
+        },
+    )
+    # Observability parity: keep the operator-facing notes the inline
+    # assembly used to print; the prompt string itself is built by the
+    # shared, provider-neutral ``build_qa_reviewer_prompt`` helper.
+    if qa_memory_context:
+        print("✓ Memory context loaded for QA reviewer")
+        debug_success("qa_reviewer", "Graphiti memory context loaded for QA")
+    if coverage_passed:
+        debug_success("qa_reviewer", "Coverage passed - added success note to prompt")
+    else:
+        debug("qa_reviewer", "Coverage failed - added warning to prompt")
+    if previous_error:
+        debug(
+            "qa_reviewer",
+            "Adding error context for self-correction",
+            error_type=previous_error.get("error_type"),
+            consecutive_errors=previous_error.get("consecutive_errors"),
+        )
         print(
             f"\n⚠️  Retry with self-correction context (attempt {previous_error.get('consecutive_errors', 1) + 1})"
         )
+
+    prompt = build_qa_reviewer_prompt(
+        base_prompt=prompt,
+        qa_memory_context=qa_memory_context,
+        coverage_summary=coverage_summary,
+        coverage_data=coverage_data,
+        coverage_passed=coverage_passed,
+        spec_dir=spec_dir,
+        qa_session=qa_session,
+        max_iterations=max_iterations,
+        previous_error=previous_error,
+    )
 
     try:
         # Lazy import to avoid cyclic import (qa.criteria -> ... -> qa.reviewer)
