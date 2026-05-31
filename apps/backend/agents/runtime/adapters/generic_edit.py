@@ -2,12 +2,22 @@
 
 import hashlib
 import json
+import logging
+import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.autonomy_level import resolve_autonomy_settings
 from core.providers.exceptions import ProviderConfigError, ProviderNotInstalled
+from core.sandbox import (
+    SandboxBackend,
+    SandboxBackendInfo,
+    SandboxPolicy,
+    describe_sandbox_backend,
+)
 
 from ..capabilities import RuntimeCapabilities, RuntimeRequirements
 from ..local_actions import (
@@ -46,6 +56,8 @@ from .patch_proposal import (
     extract_patch_paths,
     validate_workspace_relative_path,
 )
+
+logger = logging.getLogger(__name__)
 
 GENERIC_EDIT_CANCELLED_MESSAGE = "Generic edit runtime was cancelled."
 
@@ -473,6 +485,85 @@ GENERIC_EDIT_ARTIFACT_MANIFEST_RECOVERY_ACTION_LIST_FIELDS = (
 )
 
 
+def _default_scratch_writes(backend: SandboxBackendInfo) -> tuple[Path, ...]:
+    """Return extra writable scratch paths the sandbox must grant.
+
+    Confining writes to ``project_dir`` alone breaks ordinary build
+    tooling — compilers, ``pip``, ``pytest``, linters all write to the
+    system temp dir. How that scratch space is provided differs by
+    backend:
+
+    * **bubblewrap** mounts a *fresh* namespaced tmpfs at ``/tmp`` inside
+      the sandbox, so temp writes already succeed and stay isolated from
+      the host. Granting the host temp subtree here would instead
+      bind-mount the real ``/tmp`` over that tmpfs and *weaken* isolation,
+      so we return nothing.
+    * **Seatbelt** has no mount namespacing; without an explicit allow,
+      every write under the OS temp dir is denied and tools fail. Grant
+      the temp subtree so confined macOS builds keep working.
+
+    The temp path is canonicalized so the granted subpath matches the
+    real location tools write to (e.g. macOS ``$TMPDIR`` resolves through
+    ``/var`` -> ``/private/var``); an unresolved symlink would otherwise
+    leave the real writes denied.
+    """
+    if backend.backend is SandboxBackend.SEATBELT:
+        return (Path(tempfile.gettempdir()).resolve(),)
+    return ()
+
+
+def _resolve_sandbox_wiring(
+    project_dir: Path,
+    env: Mapping[str, str] | None = None,
+) -> tuple[SandboxPolicy | None, SandboxBackendInfo | None]:
+    """Resolve the sandbox policy + backend for a Generic Edit session.
+
+    Returns ``(None, None)`` unless the resolved autonomy settings both
+    *request* a sandbox (``AUTO_CODE_AUTONOMY=safe``/``bold`` or an
+    explicit ``AUTO_CODE_SANDBOX=true``) and find a *working* backend
+    (Seatbelt / bubblewrap / AppContainer) on this host. When a policy +
+    backend pair is returned, ``LocalActionExecutor`` wraps every shell
+    action the session runs through the platform sandbox.
+
+    The ``claude`` and ``off`` levels never request a sandbox, so the
+    default code path constructs the executor unwrapped exactly as
+    before — this keeps the Claude SDK path and existing tests unchanged.
+
+    Resolution is logged so operators can see, per session, whether shell
+    actions are confined. A sandbox that was *requested* but cannot be
+    satisfied (no host backend) emits a warning rather than failing
+    silently: the agent still runs, but unconfined, and that fact is
+    surfaced instead of hidden.
+    """
+    settings = resolve_autonomy_settings(env=env)
+    if not settings.sandbox_requested:
+        # Not requested (claude/off, or explicitly disabled): stay silent
+        # and keep the legacy unwrapped path.
+        return None, None
+    backend = describe_sandbox_backend(env=env)
+    if not backend.available:
+        logger.warning(
+            "Sandbox requested (autonomy=%s) but no working backend on this host "
+            "(%s): shell actions will run UNCONFINED.",
+            settings.level.value,
+            backend.reason,
+        )
+        return None, None
+    # SandboxPolicy.project_dir must be an absolute, canonical path: the
+    # Seatbelt subpath / bwrap --bind boundary is otherwise cwd-dependent
+    # and a symlinked root could mis-scope writes.
+    resolved_dir = project_dir.resolve()
+    allowed_writes = _default_scratch_writes(backend)
+    policy = SandboxPolicy(project_dir=resolved_dir, allowed_writes=allowed_writes)
+    logger.info(
+        "Sandbox active: %s confining shell actions to %s (+%d scratch path(s)).",
+        backend.backend.value,
+        resolved_dir,
+        len(allowed_writes),
+    )
+    return policy, backend
+
+
 class GenericEditRuntimeSession:
     """Runtime that turns model-emitted JSON actions into local workspace work."""
 
@@ -490,6 +581,8 @@ class GenericEditRuntimeSession:
         max_subagent_concurrency: int = 2,
         max_subagent_task_seconds: float = 180.0,
         max_iterations: int = 8,
+        sandbox_policy: SandboxPolicy | None = None,
+        sandbox_backend: SandboxBackendInfo | None = None,
     ):
         self.provider_name = provider_name
         self.agent_session = agent_session
@@ -504,7 +597,31 @@ class GenericEditRuntimeSession:
             provider_name=provider_name,
             agent_session=agent_session,
         )
-        self._executor = LocalActionExecutor(project_dir)
+        # Phase 1.3 step 2 (end-to-end): wire the platform sandbox into
+        # the local action executor so direct-provider shell actions run
+        # confined whenever autonomy requests it and the host supports
+        # it. Callers may inject an explicit policy/backend (tests); when
+        # both are omitted we auto-resolve from the autonomy settings.
+        # A partial override (one set, the other None) is rejected: the
+        # executor only wraps when both are present, so a half-supplied
+        # pair would silently run unconfined while looking configured.
+        if sandbox_policy is None and sandbox_backend is None:
+            sandbox_policy, sandbox_backend = _resolve_sandbox_wiring(project_dir)
+        elif (sandbox_policy is None) != (sandbox_backend is None):
+            missing = (
+                "sandbox_backend" if sandbox_policy is not None else "sandbox_policy"
+            )
+            raise ValueError(
+                "sandbox_policy and sandbox_backend must be provided together; "
+                f"missing {missing}."
+            )
+        self._sandbox_policy = sandbox_policy
+        self._sandbox_backend = sandbox_backend
+        self._executor = LocalActionExecutor(
+            project_dir,
+            sandbox_policy=sandbox_policy,
+            sandbox_backend=sandbox_backend,
+        )
         self._mcp_bridge: RuntimeMcpBridge | None = None
         self._cancel_requested = False
         self._mutation_snapshots: list[dict[str, Any]] = []
