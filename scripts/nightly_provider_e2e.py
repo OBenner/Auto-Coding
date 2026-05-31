@@ -13,6 +13,10 @@ The script is intentionally minimal so it stays runnable from any host
 with the backend installed:
 
 - pure subprocess driver, no extra Python deps beyond stdlib
+- ``--runs-per-provider N`` probes each provider N times in one job so a
+  single nightly run accumulates the trailing pass streak the
+  AutonomyPolicy promotion gate counts toward ``min_stable_runs``
+  (Option C, Phase 2.1 of the roadmap)
 - credentials read from environment, not flags, so secrets stay out of
   process arguments / shell history
 - structured JSON output to stdout (or ``--output PATH``) plus a
@@ -32,7 +36,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -71,6 +75,14 @@ class ProviderProbeResult:
     runtime_diagnostics_summary: dict[str, object] | None = None
     error: str | None = None
     stdout_excerpt: str | None = None
+    # When ``--runs-per-provider`` > 1 the probe is invoked several times
+    # in one job so the persisted provider-smoke history accumulates the
+    # trailing pass streak the AutonomyPolicy gate counts toward
+    # ``min_stable_runs`` (Option C, Phase 2.1 of
+    # docs/roadmap/non-claude-provider-autonomy.md). These record how many
+    # real probe invocations ran and how many passed.
+    runs_attempted: int = 0
+    runs_passed: int = 0
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
@@ -109,6 +121,28 @@ def _has_credentials(provider: str, env: Mapping[str, str]) -> bool:
     return all(env.get(name) for name in required)
 
 
+def _resolve_backend_python(backend_dir: Path) -> str:
+    """Return the interpreter that has the backend's dependencies installed.
+
+    The probe shells out to ``backend_dir/run.py``, which imports the
+    backend's packages (python-dotenv, the provider SDKs, ...). CI installs
+    those into ``backend_dir/.venv`` (``uv venv``) but does not put it on
+    PATH, so ``sys.executable`` is the bare system Python and run.py aborts
+    at startup with "Required Python package 'python-dotenv' is not
+    installed" before printing any JSON. Prefer the venv interpreter when
+    it exists; fall back to the current interpreter otherwise (e.g. when an
+    operator runs the probe from an already-activated environment).
+    """
+    candidates = (
+        backend_dir / ".venv" / "bin" / "python",  # Linux/macOS
+        backend_dir / ".venv" / "Scripts" / "python.exe",  # Windows
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return sys.executable
+
+
 def _provider_run_command(
     *,
     provider: str,
@@ -117,7 +151,7 @@ def _provider_run_command(
 ) -> list[str]:
     """Build the ``run.py --provider-smoke`` invocation for a provider."""
     return [
-        sys.executable,
+        _resolve_backend_python(backend_dir),
         str(backend_dir / "run.py"),
         "--provider",
         provider,
@@ -144,6 +178,16 @@ def _extract_diagnostics_summary(
         runs = suite.get("runs")
         if isinstance(runs, list):
             summary["provider_e2e_run_count"] = len(runs)
+            failed_runs = [
+                {
+                    "runtime_mode": run.get("runtime_mode"),
+                    "reason": (str(run.get("reason") or run.get("message") or ""))[:200],
+                }
+                for run in runs
+                if isinstance(run, dict) and run.get("status") == "failed"
+            ]
+            if failed_runs:
+                summary["provider_e2e_failed_runs"] = failed_runs
     reliability = runtime_diagnostics.get("provider_reliability")
     if isinstance(reliability, dict):
         summary["provider_reliability_status"] = reliability.get("status")
@@ -159,6 +203,49 @@ def _extract_diagnostics_summary(
     if isinstance(mcp_smokes, dict):
         summary["mcp_execution_smoke_status"] = mcp_smokes.get("status")
     return summary
+
+
+def _probe_failure_excerpt(completed, *, limit: int = 2000) -> str:
+    """Build a diagnostic excerpt for a non-JSON probe result.
+
+    Tracebacks put the real exception at the *end* of stderr, so we keep
+    the tail rather than the head — the head is often a benign startup
+    warning (e.g. the Linux ``secretstorage`` notice) that would otherwise
+    crowd out the actual error within a small budget. The run.py exit code
+    is prefixed because an empty stdout usually means it crashed before
+    printing its JSON result.
+    """
+    stderr = (getattr(completed, "stderr", None) or "").strip()
+    returncode = getattr(completed, "returncode", None)
+    prefix = f"run.py exited {returncode}. " if returncode is not None else ""
+    if not stderr:
+        return prefix + "(no stderr captured)"
+    tail = stderr[-limit:]
+    if len(stderr) > limit:
+        tail = "...(truncated)...\n" + tail
+    return prefix + "stderr tail:\n" + tail
+
+
+def _extract_embedded_json(stdout: str) -> dict[str, object] | None:
+    """Recover a JSON object embedded in otherwise-noisy stdout.
+
+    Scans from each ``{`` and returns the first object that decodes to a
+    dict, so a leading banner printed before run.py's ``--json`` result does
+    not get mis-reported as ``probe_output_not_json``. Returns ``None`` when
+    no JSON object is present.
+    """
+    decoder = json.JSONDecoder()
+    start = stdout.find("{")
+    while start != -1:
+        try:
+            obj, _ = decoder.raw_decode(stdout, start)
+        except json.JSONDecodeError:
+            start = stdout.find("{", start + 1)
+            continue
+        if isinstance(obj, dict):
+            return obj
+        start = stdout.find("{", start + 1)
+    return None
 
 
 def _run_one_provider(
@@ -224,23 +311,35 @@ def _run_one_provider(
     elapsed = (datetime.now(UTC) - started).total_seconds()
 
     stdout = completed.stdout or ""
-    parsed: dict[str, object]
+    parsed: dict[str, object] | None
     try:
         parsed = json.loads(stdout)
     except json.JSONDecodeError:
+        # run.py prints its --json result last, but some setup paths still
+        # emit human banners to stdout ahead of it (e.g. the security-profile
+        # analyzer). Recover the embedded JSON object rather than discarding a
+        # real result as unparseable.
+        parsed = _extract_embedded_json(stdout)
+    if not isinstance(parsed, dict):
         return ProviderProbeResult(
             provider=provider,
             attempted=True,
             status="error",
             reason="probe_output_not_json",
             duration_seconds=elapsed,
-            error=(completed.stderr or stdout)[:500],
+            error=_probe_failure_excerpt(completed),
             stdout_excerpt=stdout[:500],
         )
 
     summary = _extract_diagnostics_summary(parsed)
     success = bool(parsed.get("success"))
     status = "passed" if success else "failed"
+    # On a clean (valid-JSON) failure, run.py's `error_details` is the
+    # human-readable summary of what the e2e suite tripped on — capture it
+    # so the nightly summary explains *why*, not just that it failed.
+    error_detail = None
+    if not success:
+        error_detail = str(parsed.get("error_details") or "").strip()[:1500] or None
     return ProviderProbeResult(
         provider=provider,
         attempted=True,
@@ -248,6 +347,48 @@ def _run_one_provider(
         reason=str(parsed.get("message") or "")[:200],
         duration_seconds=elapsed,
         runtime_diagnostics_summary=summary,
+        error=error_detail,
+    )
+
+
+def _aggregate_provider_attempts(
+    provider: str,
+    attempts: list[ProviderProbeResult],
+) -> ProviderProbeResult:
+    """Collapse repeated probe attempts into one provider-level result.
+
+    The status is ``passed`` only when *every* real attempt passed, so a
+    single flaky run inside the night blocks the provider. That mirrors
+    the AutonomyPolicy gate, which needs an unbroken trailing streak of
+    passes in the persisted history before promotion.
+    """
+    real = [a for a in attempts if a.attempted]
+    runs_attempted = len(real)
+    runs_passed = sum(1 for a in real if a.status == "passed")
+    if runs_attempted == 0:
+        # Guard-skipped (missing creds) or allowlist error before any
+        # probe ran — surface the first result verbatim.
+        return replace(attempts[0], runs_attempted=0, runs_passed=0)
+    all_passed = runs_passed == runs_attempted
+    # Prefer a non-passing attempt for the human-facing status/reason/error
+    # (preserving the error-vs-failed distinction), but keep the latest
+    # attempt's diagnostics — what a follow-up gate read would see last.
+    representative = (
+        attempts[-1]
+        if all_passed
+        else next((a for a in real if a.status != "passed"), attempts[-1])
+    )
+    return ProviderProbeResult(
+        provider=provider,
+        attempted=True,
+        status="passed" if all_passed else representative.status,
+        reason=representative.reason,
+        duration_seconds=sum(a.duration_seconds or 0.0 for a in real),
+        runtime_diagnostics_summary=real[-1].runtime_diagnostics_summary,
+        error=representative.error,
+        stdout_excerpt=representative.stdout_excerpt,
+        runs_attempted=runs_attempted,
+        runs_passed=runs_passed,
     )
 
 
@@ -257,23 +398,37 @@ def run_nightly_probes(
     backend_dir: Path,
     env: Mapping[str, str],
     timeout_seconds: float = 600.0,
+    runs_per_provider: int = 1,
     runner: callable | None = None,
 ) -> NightlySummary:
     if runner is None:
         runner = subprocess.run
-    """Run probes for ``providers`` and return an aggregate summary."""
+    """Run probes for ``providers`` and return an aggregate summary.
+
+    Each credentialed provider is probed ``runs_per_provider`` times so a
+    single nightly job accumulates that many records in the persisted
+    provider-smoke history (the gate counts the trailing pass streak).
+    Guard outcomes (missing credentials, allowlist errors) short-circuit
+    after the first attempt rather than repeating pointlessly.
+    """
+    runs_per_provider = max(1, runs_per_provider)
     started = datetime.now(UTC)
     results: list[ProviderProbeResult] = []
     for provider in providers:
-        results.append(
-            _run_one_provider(
+        attempts: list[ProviderProbeResult] = []
+        for _ in range(runs_per_provider):
+            attempt = _run_one_provider(
                 provider=provider,
                 backend_dir=backend_dir,
                 env=env,
                 timeout_seconds=timeout_seconds,
                 runner=runner,
             )
-        )
+            attempts.append(attempt)
+            if not attempt.attempted:
+                # Skipped/allowlist error — no point repeating.
+                break
+        results.append(_aggregate_provider_attempts(provider, attempts))
     finished = datetime.now(UTC)
 
     attempted = sum(1 for r in results if r.attempted)
@@ -310,6 +465,8 @@ def _print_human_summary(summary: NightlySummary, stream) -> None:
     )
     for result in summary.per_provider:
         line = f"  - {result.provider}: {result.status}"
+        if result.runs_attempted > 1:
+            line += f" [{result.runs_passed}/{result.runs_attempted} runs]"
         if result.reason:
             line += f" ({result.reason})"
         print(line, file=stream)
@@ -336,6 +493,28 @@ def main(argv: list[str] | None = None) -> int:
         help="Per-provider timeout in seconds passed to provider-smoke.",
     )
     parser.add_argument(
+        "--runs-per-provider",
+        type=int,
+        default=1,
+        help=(
+            "Probe each credentialed provider this many times in one job so "
+            "the persisted provider-smoke history accumulates a trailing pass "
+            "streak (set to the AutonomyPolicy min_stable_runs, e.g. 3, to "
+            "make a single nightly run promotion-eligible)."
+        ),
+    )
+    parser.add_argument(
+        "--allow-provider-failures",
+        action="store_true",
+        help=(
+            "Do not fail the run when an individual provider is unavailable "
+            "or fails its probe — record it in the summary and keep going so "
+            "the other providers' evidence is still produced. The run only "
+            "exits non-zero on a total wipeout (providers attempted, none "
+            "passed) or a usage/config error."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -356,6 +535,7 @@ def main(argv: list[str] | None = None) -> int:
         backend_dir=backend_dir,
         env=os.environ,
         timeout_seconds=args.timeout,
+        runs_per_provider=args.runs_per_provider,
     )
     payload = json.dumps(summary.to_dict(), indent=2, sort_keys=True) + "\n"
     if args.output is not None:
@@ -364,6 +544,27 @@ def main(argv: list[str] | None = None) -> int:
     else:
         sys.stdout.write(payload)
     _print_human_summary(summary, sys.stderr)
+
+    if args.allow_provider_failures:
+        # Lenient mode: one provider being down or failing must not fail the
+        # whole nightly job — the others' evidence is still recorded and the
+        # history PR can still open. Only a total wipeout (something was
+        # attempted but nothing passed) signals a systemic problem worth a
+        # red run; all-skipped (no credentials) stays green.
+        if summary.providers_attempted > 0 and summary.providers_passed == 0:
+            print(
+                "[nightly-provider-e2e] all attempted providers failed; "
+                "failing the run despite --allow-provider-failures.",
+                file=sys.stderr,
+            )
+            return 1
+        if summary.overall_status == "some_failed":
+            print(
+                "[nightly-provider-e2e] some providers failed but "
+                "--allow-provider-failures is set; exiting 0.",
+                file=sys.stderr,
+            )
+        return 0
 
     if summary.overall_status == "some_failed":
         return 1

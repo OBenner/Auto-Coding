@@ -169,6 +169,32 @@ def test_unparseable_output_reports_error(runner_module, tmp_path):
     assert summary.overall_status == "some_failed"
 
 
+def test_embedded_json_recovered_from_noisy_stdout(runner_module, tmp_path):
+    """A human banner printed before run.py's JSON must not break parsing."""
+    banner = "Analyzing project structure...\n  SECURITY PROFILE ANALYSIS\n----\n"
+
+    def runner(cmd, **kwargs):
+        return _fake_completed(banner + _success_payload("openai"))
+
+    summary = runner_module.run_nightly_probes(
+        providers=["openai"],
+        backend_dir=tmp_path,
+        env={"OPENAI_API_KEY": "sk"},
+        runner=runner,
+    )
+
+    result = summary.per_provider[0]
+    assert result.status == "passed"  # recovered, not probe_output_not_json
+
+
+def test_extract_embedded_json_scans_for_object(runner_module):
+    """The recovery helper finds the first decodable object, or None."""
+    assert runner_module._extract_embedded_json('banner\n{"a": 1}\n') == {"a": 1}
+    assert runner_module._extract_embedded_json("no json at all") is None
+    # A stray brace that does not start valid JSON is skipped.
+    assert runner_module._extract_embedded_json('a { b\n{"ok": true}') == {"ok": True}
+
+
 def test_timeout_is_recorded_as_error(runner_module, tmp_path):
     """A subprocess.TimeoutExpired surfaces as a structured error."""
     import subprocess
@@ -300,3 +326,277 @@ def test_main_returns_1_when_a_provider_fails(
     monkeypatch.setenv("OPENAI_API_KEY", "sk")
     rc = runner_module.main(["--backend-dir", str(backend), "--providers", "openai"])
     assert rc == 1
+
+
+def test_probe_failure_excerpt_prefers_stderr_tail(runner_module):
+    """The diagnostic excerpt keeps the traceback tail and the exit code.
+
+    A benign startup warning at the head of stderr (e.g. the Linux
+    ``secretstorage`` notice) must not crowd out the real exception, which
+    Python prints last.
+    """
+    completed = SimpleNamespace(
+        stdout="",
+        stderr="benign secretstorage warning\n" + ("x" * 5000) + "\nRealError: boom",
+        returncode=1,
+    )
+    excerpt = runner_module._probe_failure_excerpt(completed, limit=2000)
+    assert "run.py exited 1" in excerpt
+    assert "RealError: boom" in excerpt  # tail preserved
+    assert "benign secretstorage warning" not in excerpt  # head dropped
+    assert "truncated" in excerpt
+
+
+def test_failed_run_captures_error_details_and_failed_subruns(runner_module, tmp_path):
+    """A clean failure surfaces run.py's error_details and the failing modes."""
+    payload = json.dumps(
+        {
+            "success": False,
+            "provider": "openai",
+            "message": "Provider e2e smoke suite failed",
+            "error_details": "Openai completion failed: 401 invalid_api_key",
+            "runtime_diagnostics": {
+                "provider_e2e_suite": {
+                    "status": "failed",
+                    "runs": [
+                        {
+                            "runtime_mode": "generic_edit",
+                            "status": "failed",
+                            "reason": "auth 401",
+                        },
+                        {"runtime_mode": "mini_pipeline", "status": "passed"},
+                    ],
+                },
+            },
+        }
+    )
+
+    def runner(cmd, **kwargs):
+        return _fake_completed(payload)
+
+    summary = runner_module.run_nightly_probes(
+        providers=["openai"],
+        backend_dir=tmp_path,
+        env={"OPENAI_API_KEY": "sk"},
+        runner=runner,
+    )
+
+    result = summary.per_provider[0]
+    assert result.status == "failed"
+    assert "401 invalid_api_key" in (result.error or "")
+    failed = result.runtime_diagnostics_summary["provider_e2e_failed_runs"]
+    assert failed == [{"runtime_mode": "generic_edit", "reason": "auth 401"}]
+
+
+def test_provider_run_command_prefers_backend_venv_python(runner_module, tmp_path):
+    """run.py is invoked with the backend venv interpreter when present.
+
+    Guards the CI failure where the probe ran run.py under the bare system
+    Python (no backend deps) and it aborted before emitting JSON.
+    """
+    backend = tmp_path / "backend"
+    venv_python = backend / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("")  # presence is all that matters
+
+    cmd = runner_module._provider_run_command(
+        provider="openai", backend_dir=backend, timeout_seconds=10
+    )
+
+    assert cmd[0] == str(venv_python)
+    assert cmd[1] == str(backend / "run.py")
+
+
+def test_provider_run_command_falls_back_to_sys_executable(runner_module, tmp_path):
+    """Without a backend venv, fall back to the current interpreter."""
+    cmd = runner_module._provider_run_command(
+        provider="openai", backend_dir=tmp_path, timeout_seconds=10
+    )
+
+    assert cmd[0] == sys.executable
+
+
+def test_runs_per_provider_repeats_credentialed_probe(runner_module, tmp_path):
+    """``runs_per_provider=N`` invokes the probe N times for one provider.
+
+    The provider-smoke command appends one history record per invocation,
+    so N passing runs in a single job leave a trailing streak the gate
+    counts toward ``min_stable_runs`` — yet the summary still reports one
+    provider (not N) as attempted/passed.
+    """
+    calls: list[str] = []
+
+    def runner(cmd, **kwargs):
+        provider_index = cmd.index("--provider") + 1
+        calls.append(cmd[provider_index])
+        return _fake_completed(_success_payload(cmd[provider_index]))
+
+    summary = runner_module.run_nightly_probes(
+        providers=["openai"],
+        backend_dir=tmp_path,
+        env={"OPENAI_API_KEY": "sk"},
+        runs_per_provider=3,
+        runner=runner,
+    )
+
+    assert calls == ["openai", "openai", "openai"]
+    assert summary.providers_attempted == 1
+    assert summary.providers_passed == 1
+    assert summary.overall_status == "all_passed"
+    result = summary.per_provider[0]
+    assert result.status == "passed"
+    assert result.runs_attempted == 3
+    assert result.runs_passed == 3
+
+
+def test_runs_per_provider_any_failure_blocks_provider(runner_module, tmp_path):
+    """One flaky run inside the night marks the whole provider failed."""
+    outcomes = iter(["passed", "failed", "passed"])
+
+    def runner(cmd, **kwargs):
+        provider_index = cmd.index("--provider") + 1
+        provider = cmd[provider_index]
+        if next(outcomes) == "passed":
+            return _fake_completed(_success_payload(provider))
+        return _fake_completed(_failure_payload(provider), returncode=1)
+
+    summary = runner_module.run_nightly_probes(
+        providers=["openai"],
+        backend_dir=tmp_path,
+        env={"OPENAI_API_KEY": "sk"},
+        runs_per_provider=3,
+        runner=runner,
+    )
+
+    result = summary.per_provider[0]
+    assert result.status == "failed"
+    assert result.runs_attempted == 3
+    assert result.runs_passed == 2
+    assert summary.providers_passed == 0
+    assert summary.overall_status == "some_failed"
+
+
+def test_runs_per_provider_does_not_repeat_skipped(runner_module, tmp_path):
+    """A provider without credentials is probed zero times, not N times."""
+    runner_mock = MagicMock()
+
+    summary = runner_module.run_nightly_probes(
+        providers=["google"],
+        backend_dir=tmp_path,
+        env={},  # no credentials
+        runs_per_provider=3,
+        runner=runner_mock,
+    )
+
+    runner_mock.assert_not_called()
+    result = summary.per_provider[0]
+    assert result.status == "skipped"
+    assert result.runs_attempted == 0
+    assert result.runs_passed == 0
+
+
+def test_main_runs_per_provider_invokes_probe_n_times(
+    runner_module, tmp_path, monkeypatch
+):
+    """``--runs-per-provider 3`` reaches the subprocess as 3 invocations."""
+    backend = tmp_path / "apps" / "backend"
+    backend.mkdir(parents=True)
+    (backend / "run.py").write_text("# stub")
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(list(cmd))
+        return _fake_completed(_success_payload("openai"))
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk")
+    rc = runner_module.main(
+        [
+            "--backend-dir",
+            str(backend),
+            "--providers",
+            "openai",
+            "--runs-per-provider",
+            "3",
+        ]
+    )
+
+    assert rc == 0
+    assert len(calls) == 3
+
+
+def _stub_backend(tmp_path):
+    backend = tmp_path / "apps" / "backend"
+    backend.mkdir(parents=True)
+    (backend / "run.py").write_text("# stub")
+    return backend
+
+
+def test_allow_provider_failures_tolerates_partial_failure(
+    runner_module, tmp_path, monkeypatch
+):
+    """One provider failing does not fail the run when at least one passed."""
+    backend = _stub_backend(tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        provider = cmd[cmd.index("--provider") + 1]
+        if provider == "openai":
+            return _fake_completed(_success_payload(provider))
+        return _fake_completed(_failure_payload(provider), returncode=1)
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or")
+    rc = runner_module.main(
+        [
+            "--backend-dir",
+            str(backend),
+            "--providers",
+            "openai",
+            "openrouter",
+            "--allow-provider-failures",
+        ]
+    )
+    assert rc == 0  # openai passed; openrouter failure tolerated
+
+
+def test_allow_provider_failures_still_fails_on_total_wipeout(
+    runner_module, tmp_path, monkeypatch
+):
+    """If something was attempted but nothing passed, the run is still red."""
+    backend = _stub_backend(tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        return _fake_completed(_failure_payload("openai"), returncode=1)
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk")
+    rc = runner_module.main(
+        [
+            "--backend-dir",
+            str(backend),
+            "--providers",
+            "openai",
+            "--allow-provider-failures",
+        ]
+    )
+    assert rc == 1  # attempted=1, passed=0 -> systemic failure
+
+
+def test_allow_provider_failures_green_when_all_skipped(
+    runner_module, tmp_path, monkeypatch
+):
+    """No credentials means nothing is attempted — that stays green."""
+    backend = _stub_backend(tmp_path)
+    monkeypatch.setattr(runner_module.subprocess, "run", MagicMock())
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    rc = runner_module.main(
+        [
+            "--backend-dir",
+            str(backend),
+            "--providers",
+            "openai",
+            "--allow-provider-failures",
+        ]
+    )
+    assert rc == 0  # skipped, not failed
