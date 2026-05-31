@@ -356,8 +356,13 @@ def build_seatbelt_profile(policy: SandboxPolicy) -> str:
 
 
 def _sbpl_literal(path: Path) -> str:
-    """Escape an absolute path for embedding inside an SBPL string."""
-    raw = str(path)
+    """Escape an absolute path for embedding inside an SBPL string.
+
+    Always use POSIX form: Seatbelt only runs on macOS, but unit tests
+    exercise this builder on Windows runners too where ``str(Path(...))``
+    would otherwise yield ``\\\\`` separators that break SBPL parsing.
+    """
+    raw = path.as_posix()
     return raw.replace("\\", "\\\\").replace('"', '\\"')
 
 
@@ -414,11 +419,15 @@ def build_bubblewrap_argv(
         "--tmpfs",
         BWRAP_NAMESPACED_TMP_MOUNT,
         "--bind",
-        str(policy.project_dir),
-        str(policy.project_dir),
+        # bubblewrap only runs on Linux; emit POSIX-form paths so the
+        # builder also produces correct argv when exercised from a
+        # Windows test runner (str(Path(...)) would otherwise emit
+        # backslashes).
+        policy.project_dir.as_posix(),
+        policy.project_dir.as_posix(),
     ]
     for extra in policy.allowed_writes:
-        cmd.extend(["--bind", str(extra), str(extra)])
+        cmd.extend(["--bind", extra.as_posix(), extra.as_posix()])
     cmd.extend(
         [
             "--unshare-user",
