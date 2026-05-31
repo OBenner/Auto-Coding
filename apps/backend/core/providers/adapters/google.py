@@ -6,8 +6,8 @@ Wraps the Google Generative AI SDK to implement the AIEngineProvider interface.
 Provides access to Google's Gemini models for AI-powered development.
 
 Supported Models:
-- gemini-2.0-flash (default): Fast, efficient model for most tasks
-- gemini-2.0-flash-thinking: Advanced reasoning with extended thinking
+- gemini-2.5-flash (default): Fast, efficient model for most tasks
+- gemini-2.0-flash: Prior fast model (deprecated by Google for new users)
 - gemini-1.5-pro: High-performance model for complex tasks
 - gemini-1.5-flash: Balanced performance and speed
 

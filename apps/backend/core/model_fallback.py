@@ -15,7 +15,7 @@ Provider Fallback Chains:
 - Anthropic Claude: opus → sonnet → haiku
 - OpenAI: gpt-4 → gpt-4-turbo → gpt-4o → gpt-4o-mini → gpt-3.5-turbo
 - OpenAI Reasoning: o1 → o1-mini → o3-mini
-- Google Gemini: gemini-2.0-flash-thinking → gemini-2.0-flash → gemini-1.5-pro → gemini-1.5-flash
+- Google Gemini: gemini-2.5-flash → gemini-2.0-flash → gemini-1.5-pro → gemini-1.5-flash
 - Ollama: No fallback (local execution, use available model)
 """
 
@@ -73,6 +73,11 @@ MODEL_FALLBACK_CHAIN: dict[str, list[str]] = {
     "o3-mini": [],
     # ==================== GOOGLE GEMINI ====================
     # Gemini models (capability to cost)
+    "gemini-2.5-flash": [
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+    ],
     "gemini-2.0-flash-thinking": [
         "gemini-2.0-flash",
         "gemini-1.5-pro",
