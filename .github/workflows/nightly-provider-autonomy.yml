@@ -1,35 +1,30 @@
-# Nightly Provider Autonomy Probes
+# Provider Autonomy Probes
 #
 # Phase 2.1 of docs/roadmap/non-claude-provider-autonomy.md.
 #
-# Runs `scripts/nightly_provider_e2e.py` once per day against the
-# direct API providers Auto Code supports. Probes use real credentials
-# from repository secrets so the persisted provider-smoke history
-# accumulates evidence the AutonomyPolicy gate consumes when deciding
-# whether a direct provider can be promoted to `full_autonomous`.
+# Runs `scripts/nightly_provider_e2e.py` on demand (manual dispatch only)
+# against the direct API providers Auto Code supports. Probes use real
+# credentials from repository secrets so the persisted provider-smoke
+# history accumulates evidence the AutonomyPolicy gate consumes when
+# deciding whether a direct provider can be promoted to `full_autonomous`.
 #
-# Each provider is probed `runs_per_provider` times (default 3) in one
-# run so the persisted history accumulates the trailing pass streak the
-# AutonomyPolicy gate counts toward `min_stable_runs` — a single nightly
-# run can therefore make a provider promotion-eligible (Option C, Phase
-# 2.1). `provider-smoke-history.json` is git-tracked (see .gitignore) so
-# the committed evidence reaches the gate's consumer via a normal pull.
+# Each provider is probed `runs_per_provider` times (default 3) in one run
+# so the persisted history accumulates the trailing pass streak the
+# AutonomyPolicy gate counts toward `min_stable_runs` — one run can
+# therefore make a provider promotion-eligible (Option C, Phase 2.1).
+# `provider-smoke-history.json` is git-tracked (see .gitignore) so the
+# committed evidence reaches the gate's consumer via a normal pull.
 #
 # Outputs:
 # - `.auto-claude/runtime/nightly-provider-summary.json` (run summary)
 # - artifact upload (kept for 30 days)
-# - bot PR that updates
-#   `.auto-claude/runtime/provider-smoke-history.json` when probes ran
-#   successfully — opened automatically on the nightly cron, or on manual
-#   dispatch via the `open_history_pr` input (you merge it to develop)
+# - shields.io readiness badges under `.github/badges/`
+# - bot PR that updates the tracked `provider-smoke-history.json` and the
+#   badges when `open_history_pr` is set (you merge it to develop)
 
-name: Nightly Provider Autonomy Probes
+name: Provider Autonomy Probes
 
 on:
-  schedule:
-    # 04:17 UTC daily — off-peak for both US and EU runners, and after
-    # most US-hosted release pipelines that share the runner pool.
-    - cron: '17 4 * * *'
   workflow_dispatch:
     inputs:
       providers:
@@ -90,7 +85,7 @@ jobs:
       - name: Run nightly provider probes
         id: probe
         env:
-          # workflow_dispatch overrides; cron path uses defaults.
+          # Defaults apply when a dispatch input is omitted.
           PROVIDERS: ${{ inputs.providers || 'openai google openrouter litellm zhipuai ollama' }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '600' }}
           # Probe each provider this many times so one nightly run leaves a
@@ -119,20 +114,39 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
+      - name: Render autonomy readiness badges
+        if: steps.probe.outcome == 'success'
+        env:
+          PROVIDERS: ${{ inputs.providers || 'openai google openrouter litellm zhipuai ollama' }}
+        run: |
+          set -uo pipefail
+          # Drive with AUTO_CODE_AUTONOMY=safe so the gate evaluates the
+          # recorded evidence rather than short-circuiting on the off knob.
+          # Use the backend venv interpreter (setup-python-backend does not
+          # put it on PATH). One provider failing must not fail the job.
+          for provider in $PROVIDERS; do
+            AUTO_CODE_AUTONOMY=safe apps/backend/.venv/bin/python apps/backend/run.py \
+              --autonomy-readiness "$provider" --json 2>/dev/null \
+              | apps/backend/.venv/bin/python scripts/render_autonomy_badge.py \
+                --provider "$provider" \
+                --output ".github/badges/autonomy-$provider.json" || true
+          done
+
       - name: Open history-update PR
-        # On the nightly cron this fires automatically so the accumulated
-        # provider-smoke history reaches develop (you merge when ready —
-        # nothing is auto-pushed to a protected branch). Manual dispatch
-        # can still force it with the open_history_pr input.
+        # Fires on manual dispatch when open_history_pr is set, so the
+        # accumulated provider-smoke history + readiness badges reach develop
+        # (you merge when ready — nothing is auto-pushed to a protected branch).
         if: >
           steps.probe.outcome == 'success'
-          && (inputs.open_history_pr == true || github.event_name == 'schedule')
+          && inputs.open_history_pr == true
         uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6.1.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: bot/nightly-provider-history
           delete-branch: true
-          add-paths: .auto-claude/runtime/provider-smoke-history.json
+          add-paths: |
+            .auto-claude/runtime/provider-smoke-history.json
+            .github/badges
           commit-message: |
             chore(autonomy): nightly provider-smoke history update
 
