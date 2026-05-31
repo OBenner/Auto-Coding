@@ -49,7 +49,10 @@ on:
         default: false
 
 permissions:
-  contents: read
+  # contents: write is required for the history-update step to push the
+  # bot/nightly-provider-history branch (create-pull-request). It only
+  # pushes that bot branch + opens a PR — develop is never auto-pushed.
+  contents: write
   pull-requests: write
 
 concurrency:
