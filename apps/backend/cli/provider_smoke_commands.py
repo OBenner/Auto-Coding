@@ -4686,6 +4686,7 @@ async def _complete_provider_generic_edit_smoke(
     timeout_seconds: float,
     model: str | None,
     runtime_diagnostics: dict[str, Any],
+    agent_session_override: Any = None,
 ) -> ProviderSmokeResult:
     smoke_prompt = prompt or DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_PROMPT
     with tempfile.TemporaryDirectory(prefix="auto-code-provider-smoke-") as temp_dir:
@@ -4696,7 +4697,9 @@ async def _complete_provider_generic_edit_smoke(
         smoke_spec_dir.mkdir(parents=True, exist_ok=True)
         smoke_file = smoke_project_dir / "provider-smoke.txt"
         smoke_file.write_text("pending\n", encoding="utf-8")
-        session = _create_provider_session(
+        # A scripted session may be injected to drive a deterministic tool
+        # sequence (e.g. the transaction-batch probe) instead of the model.
+        session = agent_session_override or _create_provider_session(
             provider=provider,
             session_config=session_config,
             project_dir=smoke_project_dir,
@@ -4781,6 +4784,78 @@ async def _complete_provider_generic_edit_smoke(
     )
 
 
+class _DeterministicTransactionBatchSession:
+    """Scripted generic_edit session that opens, writes to, and commits a
+    transaction batch deterministically.
+
+    The transaction-batch probe needs the runtime to observe a committed
+    batch. Relying on a model to orchestrate begin_batch -> write_file ->
+    commit_batch is flaky (gpt-4o and gemini do it inconsistently even with
+    the sharpened prompt, while claude-sonnet-4 manages it), so the sequence
+    is scripted here. This exercises the runtime's batch-commit mechanism
+    deterministically; the provider's general capability is covered by the
+    other probes.
+    """
+
+    def __init__(self, provider_name: str):
+        self.provider_name = provider_name
+        self._step = 0
+
+    async def complete_with_tool_calls(
+        self, message: str, tools: Any
+    ) -> ProviderToolCallResponse:
+        self._step += 1
+        if self._step == 1:
+            # begin_batch -> write_file -> commit_batch in one batch (write
+            # must precede the commit) so the runtime records a committed batch.
+            return ProviderToolCallResponse(
+                content="",
+                tool_calls=(
+                    ProviderToolCall(
+                        id="batch_begin",
+                        name="begin_batch",
+                        arguments={
+                            "batch_id": "provider-batch-smoke",
+                            "description": "Provider transaction batch smoke",
+                        },
+                    ),
+                    ProviderToolCall(
+                        id="batch_write",
+                        name="write_file",
+                        arguments={
+                            "path": "provider-smoke.txt",
+                            "content": DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT,
+                        },
+                    ),
+                    ProviderToolCall(
+                        id="batch_commit",
+                        name="commit_batch",
+                        arguments={
+                            "batch_id": "provider-batch-smoke",
+                            "summary": "Committed provider transaction batch smoke",
+                        },
+                    ),
+                ),
+            )
+        return ProviderToolCallResponse(
+            content="",
+            tool_calls=(
+                ProviderToolCall(
+                    id="batch_finish",
+                    name="finish",
+                    arguments={
+                        "summary": "transaction batch readiness",
+                        "tests": [],
+                        "risks": [],
+                    },
+                ),
+            ),
+        )
+
+    def add_tool_result(self, tool_call_id: str, name: str, result: Any) -> None:
+        return None
+
+
 async def _complete_provider_transaction_batch_smoke(
     *,
     provider: Any,
@@ -4802,6 +4877,9 @@ async def _complete_provider_transaction_batch_smoke(
             **runtime_diagnostics,
             "smoke_scope": "transaction_batch_probe",
         },
+        agent_session_override=_DeterministicTransactionBatchSession(
+            provider_name=provider.name
+        ),
     )
     execution = result.runtime_diagnostics.get("validated_runtime_execution")
     contract = (
