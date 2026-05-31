@@ -71,6 +71,169 @@ def load_qa_fixer_prompt() -> str:
 # =============================================================================
 
 
+def build_qa_fixer_prompt(
+    *,
+    base_prompt: str,
+    fixer_memory_context: str | None,
+    failure_patterns: str | None,
+    spec_dir: Path,
+    fix_session: int,
+) -> str:
+    """Assemble the QA fixer prompt (pure, provider-neutral).
+
+    Shared by the Claude SDK path and the runtime-adapter path. Fixes land
+    on disk and success is read back via ``is_fixes_applied`` /
+    ``qa_signoff``, so the same prompt yields the same contract on any
+    provider. The Claude path keeps its additional per-iteration recovery
+    guidance; this is the common base both paths build on.
+    """
+    prompt = base_prompt
+    if fixer_memory_context:
+        prompt += "\n\n" + fixer_memory_context
+    if failure_patterns:
+        prompt += "\n\n" + failure_patterns
+    prompt += f"\n\n---\n\n**Fix Session**: {fix_session}\n"
+    prompt += f"**Spec Directory**: {spec_dir}\n"
+    prompt += f"**Spec Name**: {spec_dir.name}\n"
+    prompt += f"\n**IMPORTANT**: All spec files are located in: `{spec_dir}/`\n"
+    prompt += f"The fix request file is at: `{spec_dir}/QA_FIX_REQUEST.md`\n"
+    return prompt
+
+
+async def run_qa_fixer_via_runtime(
+    runtime_session: object,
+    project_dir: Path,
+    spec_dir: Path,
+    fix_session: int,
+    verbose: bool = False,
+) -> tuple[str, str]:
+    """Run one QA fixer pass through the provider-neutral runtime layer.
+
+    Mirror of :func:`run_qa_fixer_session` for direct-API providers. Unlike
+    the Claude path it does NOT reimplement the Claude-SDK recovery / model-
+    fallback loop: it does a single ``generic_edit`` pass (which already
+    provides mutation snapshots + transaction rollback) and relies on the
+    outer QA loop for re-validation and retries. Success is the file-based
+    ``is_fixes_applied`` signal, so the verdict matches the Claude path.
+
+    Returns ``(status, response_text)`` with ``"fixed"`` / ``"error"``.
+    """
+    from agents.runtime import RuntimeRequirements, run_runtime_session
+
+    from .criteria import is_fixes_applied
+
+    fix_request_file = spec_dir / "QA_FIX_REQUEST.md"
+    if not fix_request_file.exists():
+        return "error", "QA_FIX_REQUEST.md not found"
+
+    base_prompt = load_qa_fixer_prompt()
+    fixer_memory_context = await get_graphiti_context(
+        spec_dir,
+        project_dir,
+        {
+            "description": "Fixing QA issues and implementing corrections",
+            "id": f"qa_fixer_{fix_session}",
+        },
+    )
+    fix_request_content = fix_request_file.read_text(encoding="utf-8")
+    failure_patterns = await get_failure_patterns(
+        spec_dir,
+        project_dir,
+        query=fix_request_content[:500],
+        failure_types=["qa_rejection", "build_error", "test_failure"],
+        num_results=5,
+        min_score=0.5,
+    )
+    prompt = build_qa_fixer_prompt(
+        base_prompt=base_prompt,
+        fixer_memory_context=fixer_memory_context,
+        failure_patterns=failure_patterns,
+        spec_dir=spec_dir,
+        fix_session=fix_session,
+    )
+
+    result = await run_runtime_session(
+        runtime_session,
+        message=prompt,
+        spec_dir=spec_dir,
+        verbose=verbose,
+        requirements=RuntimeRequirements.generic_edit(),
+    )
+    response_text = result.response_text or ""
+
+    fixer_discoveries = {
+        "files_understood": {},
+        "patterns_found": [],
+        "gotchas_encountered": [],
+    }
+    if is_fixes_applied(spec_dir):
+        debug_success("qa_fixer", "Fixes applied (runtime path)")
+        fixer_discoveries["patterns_found"].append(
+            f"QA fixer session {fix_session}: fixes applied via runtime path"
+        )
+        await save_session_memory(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            subtask_id=f"qa_fixer_{fix_session}",
+            session_num=fix_session,
+            success=True,
+            subtasks_completed=[f"qa_fixer_{fix_session}"],
+            discoveries=fixer_discoveries,
+        )
+        return "fixed", response_text
+
+    debug_error("qa_fixer", "Fixer did not apply fixes (runtime path)")
+    return "error", "QA fixer did not apply fixes (runtime path)"
+
+
+async def run_qa_fixer_runtime_session(
+    *,
+    provider_name: str,
+    runtime_mode: str,
+    model: str,
+    project_dir: Path,
+    spec_dir: Path,
+    fix_session: int,
+    verbose: bool = False,
+) -> tuple[str, str]:
+    """Build a direct-provider runtime session and run the QA fixer on it.
+
+    Thin orchestration shim mirroring ``run_qa_reviewer_runtime_session``;
+    builds the provider session + runtime adapter then delegates to
+    :func:`run_qa_fixer_via_runtime`.
+    """
+    from agents.runtime import create_runtime_session
+
+    config = ProviderConfig.from_env(agent_type="qa_fixer")
+    if config.provider != provider_name:
+        raise ValueError(
+            "qa_fixer runtime provider mismatch: "
+            f"routed={provider_name}, env={config.provider}"
+        )
+    provider = create_engine_provider(config)
+    session = provider.create_session(
+        SessionConfig(
+            name=f"qa_fixer-runtime-{fix_session}",
+            model=model,
+            extra={"agent_type": "qa_fixer"},
+        )
+    )
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=session,
+        runtime_mode=runtime_mode,
+        project_dir=project_dir,
+        agent_type="qa_fixer",
+    )
+    return await run_qa_fixer_via_runtime(
+        runtime_session,
+        project_dir,
+        spec_dir,
+        fix_session,
+        verbose=verbose,
+    )
+
+
 async def run_qa_fixer_session(
     client: ClaudeSDKClient,
     spec_dir: Path,
