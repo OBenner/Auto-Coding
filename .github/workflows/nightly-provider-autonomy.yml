@@ -78,6 +78,12 @@ jobs:
       # repository variables when an enterprise tunes them.
       AUTO_CODE_AUTONOMY: claude
       AUTO_CODE_AUTONOMY_PRESET: standard
+      # Run the live fault-injection probes (unsupported_tools,
+      # gateway_model_limitations). The promotion gate requires their coverage,
+      # so this workflow — whose purpose is to produce promotion evidence —
+      # opts in. Without it the gate sits at "live_fault not_configured" even
+      # with a stable pass history.
+      AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES: 'true'
 
     steps:
       - uses: actions/checkout@v4
