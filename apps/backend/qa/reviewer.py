@@ -514,6 +514,54 @@ async def run_qa_reviewer_via_runtime(
     )
 
 
+async def run_qa_reviewer_runtime_session(
+    *,
+    provider_name: str,
+    runtime_mode: str,
+    model: str,
+    project_dir: Path,
+    spec_dir: Path,
+    qa_session: int,
+    max_iterations: int,
+    verbose: bool = False,
+    previous_error: dict | None = None,
+) -> tuple[str, str]:
+    """Build a direct-provider runtime session and run the QA reviewer on it.
+
+    Thin orchestration shim called by the QA loop when
+    :func:`agents.runtime.qa_phase_routing.resolve_qa_runtime` permits the
+    direct-API reviewer path: it constructs the provider session and the
+    runtime adapter, then delegates to :func:`run_qa_reviewer_via_runtime`.
+    """
+    from agents.runtime import create_runtime_session
+
+    config = ProviderConfig.from_env(agent_type="qa_reviewer")
+    provider = create_engine_provider(config)
+    session = provider.create_session(
+        SessionConfig(
+            name=f"qa_reviewer-runtime-{qa_session}",
+            model=model,
+            extra={"agent_type": "qa_reviewer"},
+        )
+    )
+    runtime_session = create_runtime_session(
+        provider_name=provider_name,
+        agent_session=session,
+        runtime_mode=runtime_mode,
+        project_dir=project_dir,
+        agent_type="qa_reviewer",
+    )
+    return await run_qa_reviewer_via_runtime(
+        runtime_session,
+        project_dir,
+        spec_dir,
+        qa_session,
+        max_iterations,
+        verbose=verbose,
+        previous_error=previous_error,
+    )
+
+
 async def run_qa_agent_session(
     client: ClaudeSDKClient,
     project_dir: Path,

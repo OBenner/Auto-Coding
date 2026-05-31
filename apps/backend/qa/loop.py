@@ -64,7 +64,7 @@ from .report import (
     is_no_test_project,
     record_iteration,
 )
-from .reviewer import run_qa_agent_session
+from .reviewer import run_qa_agent_session, run_qa_reviewer_runtime_session
 
 # Configuration
 MAX_QA_ITERATIONS = 50
@@ -989,36 +989,59 @@ Focus on files with the lowest coverage first for maximum impact.
             model=qa_model,
             thinking_budget=qa_thinking_budget,
         )
-        _resolve_qa_runtime(
+        qa_decision = _resolve_qa_runtime(
             agent_type="qa_reviewer",
             spec_dir=spec_dir,
             qa_iteration=qa_iteration,
+            project_dir=project_dir,
         )
 
-        client = create_client(
-            project_dir,
-            spec_dir,
-            qa_model,
-            agent_type="qa_reviewer",
-            max_thinking_tokens=qa_thinking_budget,
-            runtime_metadata=_qa_runtime_metadata(
-                spec_dir,
-                "Review implementation against acceptance criteria",
-                qa_iteration=qa_iteration,
-            ),
-        )
-
-        async with client:
-            debug("qa_loop", "Running QA reviewer agent session...")
-            status, response = await run_qa_agent_session(
-                client,
-                project_dir,  # Pass project_dir for capability-based tool injection
-                spec_dir,
-                qa_iteration,
-                MAX_QA_ITERATIONS,
-                verbose,
-                previous_error=last_error_context,  # Pass error context for self-correction
+        if qa_decision.use_runtime_layer:
+            # Promoted direct-API provider opted into the runtime reviewer
+            # path; run through the provider-neutral runtime layer instead
+            # of the Claude SDK client.
+            debug(
+                "qa_loop",
+                "Running QA reviewer via direct-API runtime...",
+                provider=qa_decision.provider_name,
+                runtime_mode=qa_decision.runtime_mode,
             )
+            status, response = await run_qa_reviewer_runtime_session(
+                provider_name=qa_decision.provider_name,
+                runtime_mode=qa_decision.runtime_mode,
+                model=qa_model,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=qa_iteration,
+                max_iterations=MAX_QA_ITERATIONS,
+                verbose=verbose,
+                previous_error=last_error_context,
+            )
+        else:
+            client = create_client(
+                project_dir,
+                spec_dir,
+                qa_model,
+                agent_type="qa_reviewer",
+                max_thinking_tokens=qa_thinking_budget,
+                runtime_metadata=_qa_runtime_metadata(
+                    spec_dir,
+                    "Review implementation against acceptance criteria",
+                    qa_iteration=qa_iteration,
+                ),
+            )
+
+            async with client:
+                debug("qa_loop", "Running QA reviewer agent session...")
+                status, response = await run_qa_agent_session(
+                    client,
+                    project_dir,  # Pass project_dir for capability-based tool injection
+                    spec_dir,
+                    qa_iteration,
+                    MAX_QA_ITERATIONS,
+                    verbose,
+                    previous_error=last_error_context,  # error context for self-correction
+                )
 
         iteration_duration = time_module.time() - iteration_start
         debug(
