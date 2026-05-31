@@ -742,6 +742,7 @@ def test_direct_api_autonomous_gate_requires_env_and_clean_history(
 ):
     _write_direct_api_autonomous_history(tmp_path)
     monkeypatch.delenv(DIRECT_API_AUTONOMOUS_ENV, raising=False)
+    monkeypatch.delenv("AUTO_CODE_AUTONOMY", raising=False)
 
     disabled_gate = resolve_direct_api_autonomous_gate(
         provider_name="openai",
@@ -751,7 +752,7 @@ def test_direct_api_autonomous_gate_requires_env_and_clean_history(
 
     assert disabled_gate.allowed is False
     assert disabled_gate.status == "disabled"
-    assert disabled_gate.reason == "direct_api_autonomous_env_disabled"
+    assert disabled_gate.reason == "direct_api_autonomous_disabled"
 
     monkeypatch.setenv(DIRECT_API_AUTONOMOUS_ENV, "true")
     passed_gate = resolve_direct_api_autonomous_gate(
@@ -765,6 +766,87 @@ def test_direct_api_autonomous_gate_requires_env_and_clean_history(
     assert passed_gate.runtime_adapter == "direct_api_autonomous"
     assert passed_gate.underlying_runtime_mode == "generic_edit"
     assert passed_gate.missing_requirements == []
+
+
+def test_direct_api_autonomous_gate_enabled_via_autonomy_safe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """AUTO_CODE_AUTONOMY=safe enables the gate without the legacy env var."""
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.delenv(DIRECT_API_AUTONOMOUS_ENV, raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert gate.allowed is True
+    assert gate.status == "passed"
+    assert gate.reason == "direct_api_autonomous_gate_passed"
+
+
+def test_direct_api_autonomous_gate_safe_still_requires_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """safe enables the gate but evidence is still mandatory."""
+    monkeypatch.delenv(DIRECT_API_AUTONOMOUS_ENV, raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
+
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert gate.allowed is False
+    assert gate.reason == "provider_history_missing"
+    assert gate.missing_requirements == ["provider_e2e_history"]
+
+
+def test_direct_api_autonomous_gate_bold_skips_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """bold is the power-user level: promotion is granted without evidence."""
+    monkeypatch.delenv(DIRECT_API_AUTONOMOUS_ENV, raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "bold")
+
+    # No history artifact exists at all, yet bold still grants.
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert gate.allowed is True
+    assert gate.status == "passed"
+    assert gate.reason == "direct_api_autonomous_gate_skipped"
+    assert gate.missing_requirements == []
+
+
+def test_direct_api_autonomous_gate_disabled_on_claude_level(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """claude/off never enable direct-API autonomy, regardless of evidence."""
+    _write_direct_api_autonomous_history(tmp_path)
+    monkeypatch.delenv(DIRECT_API_AUTONOMOUS_ENV, raising=False)
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY", "claude")
+
+    gate = resolve_direct_api_autonomous_gate(
+        provider_name="openai",
+        project_dir=tmp_path,
+        phase="coding",
+    )
+
+    assert gate.allowed is False
+    assert gate.status == "disabled"
+    assert gate.reason == "direct_api_autonomous_disabled"
+    assert gate.missing_requirements == ["AUTO_CODE_AUTONOMY"]
 
 
 def test_direct_api_autonomous_gate_blocks_missing_corrupt_and_stale_history(
