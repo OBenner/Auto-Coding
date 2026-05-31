@@ -4138,3 +4138,41 @@ def test_recovery_checkpoint_failure_reason_embeds_discriminators():
     runtime_case = _recovery_checkpoint_failure_reason("error", False)
     assert "initial_status=error" in runtime_case
     assert "checkpoint_exists=False" in runtime_case
+
+
+def test_resume_recovery_failure_reason_embeds_discriminators():
+    """The resume-recovery failure reason pinpoints which condition tripped."""
+    from cli.provider_smoke_commands import _resume_recovery_failure_reason
+
+    reason = _resume_recovery_failure_reason(
+        resume_status="blocked",
+        content_ok=False,
+        recovery_resolved=False,
+        guard_status="dirty",
+    )
+    assert reason.startswith("resume_recovery_not_clean(")
+    assert "resume_status=blocked" in reason
+    assert "content_ok=False" in reason
+    assert "recovery_resolved=False" in reason
+    assert "guard=dirty" in reason
+
+
+def test_hard_probe_prompts_stay_deterministic():
+    """The recovery/transaction prompts name exact tools + numbered steps.
+
+    Guards against drift that would reintroduce the model-variance failures
+    these probes are prone to (the recovery probe especially must tell the
+    model NOT to resolve the deliberate error and that the block is success).
+    """
+    from cli.provider_smoke_commands import (
+        DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_PROMPT as RECOVERY,
+    )
+    from cli.provider_smoke_commands import (
+        DEFAULT_PROVIDER_TRANSACTION_BATCH_SMOKE_PROMPT as TXN,
+    )
+
+    for tool in ("write_file", "read_file", "finish"):
+        assert tool in RECOVERY
+    assert "do NOT" in RECOVERY  # do not create / do not resolve the error
+    for tool in ("begin_batch", "write_file", "commit_batch", "finish"):
+        assert tool in TXN

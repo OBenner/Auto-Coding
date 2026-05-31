@@ -66,10 +66,13 @@ DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_PROMPT = (
     "summary. Do not edit any other file."
 )
 DEFAULT_PROVIDER_TRANSACTION_BATCH_SMOKE_PROMPT = (
-    "Open a transaction batch with begin_batch using batch_id "
-    "`provider-batch-smoke`, overwrite provider-smoke.txt with exactly "
-    f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}, commit the batch with "
-    "commit_batch, then finish with a short summary. Do not edit any other file."
+    "Transaction batch readiness exercise. Follow these steps EXACTLY, in "
+    "order:\n"
+    "1. Call begin_batch with batch_id `provider-batch-smoke`.\n"
+    "2. Call write_file to overwrite provider-smoke.txt with exactly "
+    f"{DEFAULT_PROVIDER_GENERIC_EDIT_SMOKE_CONTENT!r}.\n"
+    "3. Call commit_batch to commit the batch.\n"
+    "4. Call finish with a short summary. Do not edit any other file.\n"
 )
 DEFAULT_PROVIDER_MINI_PIPELINE_TASK = (
     "Implement slugify(value: str) in string_tools.py."
@@ -110,15 +113,17 @@ DEFAULT_PROVIDER_MINI_PIPELINE_REVIEW_PROMPT = (
 DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT = "provider recovery ok\n"
 DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_INITIAL_CONTENT = "pending recovery\n"
 DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_PROMPT = (
-    "Generic Edit recovery readiness exercise.\n\n"
-    "Use the available local tools to create an intentional recoverable partial "
-    "failure:\n"
-    "- Overwrite recovery-target.txt with exactly "
+    "Generic Edit recovery readiness exercise. This verifies the runtime's "
+    "recovery checkpoint, so follow these steps EXACTLY, in order, and do not "
+    "try to fix or work around anything:\n"
+    "1. Call write_file to overwrite recovery-target.txt with exactly "
     f"{DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT!r}.\n"
-    "- Then try to read missing-recovery.txt so the transaction records a "
-    "partial failure.\n"
-    "- After the observation reports the missing file, attempt to finish. The "
-    "runtime should block finish and create a recovery checkpoint.\n"
+    "2. Call read_file on missing-recovery.txt. It does not exist, so the read "
+    "reports a missing file. This is intentional: do NOT create the file and do "
+    "NOT resolve the error.\n"
+    "3. Immediately call finish (do not edit any other file first). The runtime "
+    "is EXPECTED to block this finish and create a recovery checkpoint — that "
+    "block is the correct, successful outcome here, not an error to repair.\n"
 )
 MINI_PIPELINE_INITIAL_STRING_TOOLS = (
     'def normalize_space(value: str) -> str:\n    return " ".join(value.split())\n'
@@ -162,6 +167,29 @@ def _recovery_checkpoint_failure_reason(
         "recovery_checkpoint_not_created("
         f"initial_status={initial_status},"
         f"checkpoint_exists={checkpoint_exists})"
+    )
+
+
+def _resume_recovery_failure_reason(
+    *,
+    resume_status: str,
+    content_ok: bool,
+    recovery_resolved: bool,
+    guard_status: str,
+) -> str:
+    """Reason for a recovery-resume that did not come back clean.
+
+    Four independent conditions can trip it; embed each so the nightly
+    summary (which keeps only ``reason``) pinpoints which one — the resume
+    failed to continue, the recovered content is wrong, the recovery was not
+    marked resolved, or the workspace guard is not clean.
+    """
+    return (
+        "resume_recovery_not_clean("
+        f"resume_status={resume_status},"
+        f"content_ok={content_ok},"
+        f"recovery_resolved={recovery_resolved},"
+        f"guard={guard_status})"
     )
 
 
@@ -5128,18 +5156,24 @@ async def _complete_provider_mini_pipeline_recovery_loop(
             else "unknown"
         )
         recovery_resolved = result_payload.get("recovery_resolved") is True
+        content_ok = _smoke_content_matches(
+            final_content, DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT
+        )
         if (
             resumed.status != "continue"
-            or not _smoke_content_matches(
-                final_content, DEFAULT_PROVIDER_MINI_PIPELINE_RECOVERY_CONTENT
-            )
+            or not content_ok
             or not recovery_resolved
             or workspace_guard_status != "clean"
         ):
             return (
                 {
                     "status": "failed",
-                    "reason": "resume_recovery_not_clean",
+                    "reason": _resume_recovery_failure_reason(
+                        resume_status=resumed.status,
+                        content_ok=content_ok,
+                        recovery_resolved=recovery_resolved,
+                        guard_status=str(workspace_guard_status),
+                    ),
                     "resume_result_status": resumed.status,
                     "recovery_status": "resolved"
                     if recovery_resolved
