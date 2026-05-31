@@ -249,11 +249,16 @@ def test_qa_reviewer_promoted_opt_in_uses_runtime_layer(
     assert decision.runtime_mode == "generic_edit"
 
 
-def test_qa_fixer_not_ported_even_when_promoted(
+def test_qa_fixer_promoted_opt_in_uses_runtime_layer(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """qa_fixer mutates source and stays Claude-only even when promoted."""
+    """qa_fixer + opt-in + a promoted provider routes to the runtime layer.
+
+    The fixer mutates source, but generic_edit confines it (mutation
+    snapshots + transaction rollback + sandbox), so it is gated identically
+    to the reviewer on opt-in + promotion.
+    """
     _clear_qa_env(monkeypatch, "qa_fixer")
     monkeypatch.setenv("AI_ENGINE_PROVIDER", "claude")
     monkeypatch.setenv("AGENT_PROVIDER_QA_FIXER", "openai")
@@ -261,15 +266,18 @@ def test_qa_fixer_not_ported_even_when_promoted(
     monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
     monkeypatch.setenv("AUTO_CODE_QA_DIRECT_RUNTIME", "true")
     _write_passing_openai_history(tmp_path)
-    resolve_qa_runtime, QaRuntimeUnsupportedError = _import_resolver()
+    resolve_qa_runtime, _ = _import_resolver()
 
-    with pytest.raises(QaRuntimeUnsupportedError):
-        resolve_qa_runtime(
-            agent_type="qa_fixer",
-            spec_dir=tmp_path,
-            qa_iteration=1,
-            project_dir=tmp_path,
-        )
+    decision = resolve_qa_runtime(
+        agent_type="qa_fixer",
+        spec_dir=tmp_path,
+        qa_iteration=1,
+        project_dir=tmp_path,
+    )
+
+    assert decision.use_runtime_layer is True
+    assert decision.provider_name == "openai"
+    assert decision.runtime_mode == "generic_edit"
 
 
 def test_claude_decision_does_not_use_runtime_layer(

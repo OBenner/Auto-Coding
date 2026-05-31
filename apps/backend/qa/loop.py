@@ -54,7 +54,7 @@ from .criteria import (
     get_qa_signoff_status,
     is_qa_approved,
 )
-from .fixer import run_qa_fixer_session
+from .fixer import run_qa_fixer_runtime_session, run_qa_fixer_session
 from .report import (
     create_manual_test_plan,
     escalate_to_human,
@@ -423,32 +423,44 @@ async def run_qa_validation_loop(
         qa_model = get_phase_model(spec_dir, "qa", model)
         fixer_thinking_budget = get_phase_thinking_budget(spec_dir, "qa")
 
-        _resolve_qa_runtime(
+        fixer_decision = _resolve_qa_runtime(
             agent_type="qa_fixer",
             spec_dir=spec_dir,
             qa_iteration=0,
+            project_dir=project_dir,
         )
 
-        fix_client = create_client(
-            project_dir,
-            spec_dir,
-            qa_model,
-            agent_type="qa_fixer",
-            max_thinking_tokens=fixer_thinking_budget,
-            runtime_metadata=_qa_runtime_metadata(
-                spec_dir,
-                "Apply human QA feedback",
-                qa_iteration=0,
-            ),
-        )
-
-        async with fix_client:
-            fix_status, fix_response = await run_qa_fixer_session(
-                fix_client,
-                spec_dir,
-                0,
-                False,  # iteration 0 for human feedback
+        if fixer_decision.use_runtime_layer:
+            fix_status, fix_response = await run_qa_fixer_runtime_session(
+                provider_name=fixer_decision.provider_name,
+                runtime_mode=fixer_decision.runtime_mode,
+                model=qa_model,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                fix_session=0,
+                verbose=False,
             )
+        else:
+            fix_client = create_client(
+                project_dir,
+                spec_dir,
+                qa_model,
+                agent_type="qa_fixer",
+                max_thinking_tokens=fixer_thinking_budget,
+                runtime_metadata=_qa_runtime_metadata(
+                    spec_dir,
+                    "Apply human QA feedback",
+                    qa_iteration=0,
+                ),
+            )
+
+            async with fix_client:
+                fix_status, fix_response = await run_qa_fixer_session(
+                    fix_client,
+                    spec_dir,
+                    0,
+                    False,  # iteration 0 for human feedback
+                )
 
         if fix_status == "error":
             debug_error("qa_loop", f"Fixer error: {fix_response[:200]}")
@@ -1362,30 +1374,48 @@ Focus on files with the lowest coverage first for maximum impact.
             emit_phase(ExecutionPhase.QA_FIXING, "Fixing QA issues")
             print("\nRunning QA Fixer Agent...")
 
-            _resolve_qa_runtime(
+            fixer_decision = _resolve_qa_runtime(
                 agent_type="qa_fixer",
                 spec_dir=spec_dir,
                 qa_iteration=qa_iteration,
+                project_dir=project_dir,
             )
 
-            fix_client = create_client(
-                project_dir,
-                spec_dir,
-                qa_model,
-                agent_type="qa_fixer",
-                max_thinking_tokens=fixer_thinking_budget,
-                runtime_metadata=_qa_runtime_metadata(
-                    spec_dir,
-                    "Fix QA rejection issues",
-                    qa_iteration=qa_iteration,
-                    issues=current_issues,
-                ),
-            )
-
-            async with fix_client:
-                fix_status, fix_response = await run_qa_fixer_session(
-                    fix_client, spec_dir, qa_iteration, verbose
+            if fixer_decision.use_runtime_layer:
+                debug(
+                    "qa_loop",
+                    "Running QA fixer via direct-API runtime...",
+                    provider=fixer_decision.provider_name,
+                    runtime_mode=fixer_decision.runtime_mode,
                 )
+                fix_status, fix_response = await run_qa_fixer_runtime_session(
+                    provider_name=fixer_decision.provider_name,
+                    runtime_mode=fixer_decision.runtime_mode,
+                    model=qa_model,
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    fix_session=qa_iteration,
+                    verbose=verbose,
+                )
+            else:
+                fix_client = create_client(
+                    project_dir,
+                    spec_dir,
+                    qa_model,
+                    agent_type="qa_fixer",
+                    max_thinking_tokens=fixer_thinking_budget,
+                    runtime_metadata=_qa_runtime_metadata(
+                        spec_dir,
+                        "Fix QA rejection issues",
+                        qa_iteration=qa_iteration,
+                        issues=current_issues,
+                    ),
+                )
+
+                async with fix_client:
+                    fix_status, fix_response = await run_qa_fixer_session(
+                        fix_client, spec_dir, qa_iteration, verbose
+                    )
 
             debug(
                 "qa_loop",
