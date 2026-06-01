@@ -36,6 +36,11 @@ env:
   AUTO_CLAUDE_CI: 'true'                    # Enable CI mode (non-interactive)
   AUTO_CLAUDE_JSON_OUTPUT: 'true'           # Enable JSON output
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # Autonomy level (ADR-006). 'safe' enables evidence-gated direct-API provider
+  # promotion: a provider runs fully autonomous only after it passes the
+  # recorded AutonomyPolicy gate; unproven providers stay limited. Claude
+  # remains the trusted baseline. Override per run via repo variables if needed.
+  AUTO_CODE_AUTONOMY: ${{ vars.AUTO_CODE_AUTONOMY || 'safe' }}
 
   # Optional: Configure Claude model
   # CLAUDE_MODEL: 'claude-sonnet-4-5-20250929'
