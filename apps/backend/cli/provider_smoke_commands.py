@@ -311,6 +311,15 @@ PROVIDER_E2E_LIVE_FAULT_CASES = {
         "failed_message": "Live gateway/model fault probe failed",
     },
 }
+# Maps each live-fault case suffix to the matching curated negative-fixture
+# key in PROVIDER_RELIABILITY_NEGATIVE_FIXTURES. The opt-in live-fault probes
+# prefer genuinely-captured provider errors supplied via env, but fall back to
+# these representative signatures so the deterministic classifier probe still
+# has coverage in CI without per-run secrets.
+PROVIDER_E2E_LIVE_FAULT_BUILTIN_FIXTURE_KEY_BY_SUFFIX = {
+    "UNSUPPORTED_TOOLS_ERROR": "unsupported_tools_error",
+    "GATEWAY_MODEL_ERROR": "gateway_model_error",
+}
 PROVIDER_E2E_LIVE_TASK_FAMILIES = {
     "single_file_edit": {
         "suffix": "SINGLE_FILE_EDIT_STATUS",
@@ -3928,6 +3937,27 @@ def _provider_live_fault_error_from_env(
     return None, None, " or ".join(env_names)
 
 
+def _provider_live_fault_builtin_fixture(provider: str, suffix: str) -> str | None:
+    """Return the curated built-in fault signature for ``provider``/``suffix``.
+
+    Live-fault probes prefer genuinely-captured errors supplied via env, but
+    fall back to the same representative negative fixtures the provider
+    reliability suite validates so the deterministic classifier probe has
+    coverage in CI without per-run secrets. Returns ``None`` for providers
+    without a curated fixture (the case then reports as unconfigured).
+    """
+    fixture = PROVIDER_RELIABILITY_NEGATIVE_FIXTURES.get(provider.lower())
+    if not fixture:
+        return None
+    key = PROVIDER_E2E_LIVE_FAULT_BUILTIN_FIXTURE_KEY_BY_SUFFIX.get(suffix)
+    if key is None:
+        return None
+    value = fixture.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def _provider_live_fault_enabled(env: Mapping[str, str]) -> bool:
     """Return whether live fault fixtures are explicitly enabled."""
     value = env.get(PROVIDER_E2E_LIVE_FAULT_PROBES_ENV)
@@ -4004,6 +4034,15 @@ def _provider_e2e_live_fault_probe_case(
         provider=provider,
         suffix=suffix,
     )
+    fixture_origin = "env"
+    if error_text is None:
+        # No captured error supplied via env — fall back to the curated
+        # built-in fault signature so the deterministic classifier probe still
+        # has coverage in CI without per-run secrets.
+        builtin = _provider_live_fault_builtin_fixture(provider, suffix)
+        if builtin is not None:
+            error_text = builtin
+            fixture_origin = "builtin_fixture"
     if error_text is None:
         return {
             "covered": False,
@@ -4018,16 +4057,22 @@ def _provider_e2e_live_fault_probe_case(
 
     issue = _provider_issue_from_error(error_text)
     passed = issue["status"] in _provider_live_fault_expected_statuses(case_config)
+    probe = {
+        "status": "passed" if passed else "failed",
+        "source": "provider_live_fault_fixture",
+        "reason": str(issue["reason"]),
+        "fixture_provider": provider,
+    }
+    # Keep the env-sourced probe shape byte-for-byte stable for downstream
+    # consumers; only the built-in fallback adds the fixture_origin marker.
+    if fixture_origin == "env":
+        probe["env_name"] = str(env_name)
+    else:
+        probe["fixture_origin"] = "builtin_fixture"
     return {
         "covered": passed,
         "missing_env": None,
-        "probe": {
-            "status": "passed" if passed else "failed",
-            "source": "provider_live_fault_fixture",
-            "reason": str(issue["reason"]),
-            "fixture_provider": provider,
-            "env_name": str(env_name),
-        },
+        "probe": probe,
     }
 
 

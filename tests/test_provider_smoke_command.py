@@ -2361,9 +2361,10 @@ def test_provider_e2e_live_fault_probes_use_generic_env_fallback(
     )
 
 
-def test_provider_e2e_live_fault_probes_report_configuration_blocked(
+def test_provider_e2e_live_fault_probes_fall_back_to_builtin_for_missing_case(
     monkeypatch: pytest.MonkeyPatch,
 ):
+    """A case without an env fixture falls back to the curated built-in one."""
     from cli.provider_smoke_commands import _provider_e2e_live_fault_probe_payload
 
     monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
@@ -2382,21 +2383,99 @@ def test_provider_e2e_live_fault_probes_report_configuration_blocked(
 
     probes = _provider_e2e_live_fault_probe_payload("openai")
 
+    # The unsupported case used the env fixture; the gateway case fell back to
+    # the built-in negative fixture — so coverage is complete and the suite is
+    # no longer configuration_blocked.
+    assert probes["status"] == "passed"
+    assert probes["enabled"] is True
+    assert "missing_env" not in probes
+    assert probes["covered_cases"] == [
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
+    # Env-sourced probe keeps its env_name and carries no fixture_origin marker.
+    assert probes["probes"]["unsupported_tools"]["env_name"] == (
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR"
+    )
+    assert "fixture_origin" not in probes["probes"]["unsupported_tools"]
+    # Fallback probe is tagged with its origin and carries no env_name.
+    assert probes["probes"]["gateway_model_limitations"] == {
+        "status": "passed",
+        "source": "provider_live_fault_fixture",
+        "reason": "gateway_error",
+        "fixture_provider": "openai",
+        "fixture_origin": "builtin_fixture",
+    }
+
+
+def test_provider_e2e_live_fault_probes_fall_back_to_builtin_without_env(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The CI scenario: the flag is on but no error fixtures are supplied."""
+    from cli.provider_smoke_commands import _provider_e2e_live_fault_probe_payload
+
+    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
+    for name in (
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_UNSUPPORTED_TOOLS_ERROR",
+        "AUTO_CODE_PROVIDER_E2E_LIVE_UNSUPPORTED_TOOLS_ERROR",
+        "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR",
+        "AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    probes = _provider_e2e_live_fault_probe_payload("openai")
+
+    assert probes["status"] == "passed"
+    assert probes["enabled"] is True
+    assert "missing_env" not in probes
+    assert probes["covered_cases"] == [
+        "unsupported_tools",
+        "gateway_model_limitations",
+    ]
+    assert probes["probes"]["unsupported_tools"] == {
+        "status": "passed",
+        "source": "provider_live_fault_fixture",
+        "reason": "unsupported_tools",
+        "fixture_provider": "openai",
+        "fixture_origin": "builtin_fixture",
+    }
+    assert probes["probes"]["gateway_model_limitations"] == {
+        "status": "passed",
+        "source": "provider_live_fault_fixture",
+        "reason": "gateway_error",
+        "fixture_provider": "openai",
+        "fixture_origin": "builtin_fixture",
+    }
+
+
+def test_provider_e2e_live_fault_probes_block_provider_without_fixture(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A provider with neither env nor built-in fixtures stays unconfigured."""
+    from cli.provider_smoke_commands import _provider_e2e_live_fault_probe_payload
+
+    monkeypatch.setenv("AUTO_CODE_PROVIDER_E2E_LIVE_FAULT_PROBES", "true")
+    monkeypatch.delenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_UNSUPPORTED_TOOLS_ERROR",
+        raising=False,
+    )
+    monkeypatch.delenv(
+        "AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR",
+        raising=False,
+    )
+
+    probes = _provider_e2e_live_fault_probe_payload("mystery-provider")
+
     assert probes["status"] == "configuration_blocked"
     assert probes["enabled"] is True
-    assert probes["covered_cases"] == ["unsupported_tools"]
-    assert probes["missing_env"] == [
-        (
-            "AUTO_CODE_PROVIDER_E2E_LIVE_OPENAI_GATEWAY_MODEL_ERROR "
-            "or AUTO_CODE_PROVIDER_E2E_LIVE_GATEWAY_MODEL_ERROR"
-        ),
-    ]
-    assert probes["probes"]["gateway_model_limitations"] == {
-        "status": "skipped",
-        "source": "provider_live_fault_fixture",
-        "reason": "missing_live_fault_fixture",
-        "fixture_provider": "openai",
-    }
+    assert probes["covered_cases"] == []
+    assert len(probes["missing_env"]) == 2
+    assert probes["probes"]["unsupported_tools"]["reason"] == (
+        "missing_live_fault_fixture"
+    )
+    assert probes["probes"]["gateway_model_limitations"]["reason"] == (
+        "missing_live_fault_fixture"
+    )
 
 
 def test_provider_e2e_live_fault_probes_accept_model_limitations(
