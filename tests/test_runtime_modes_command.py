@@ -923,7 +923,7 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert capability_rows["openai"]["autonomous_readiness_requirements"] == {
         "min_stable_runs": 3,
         "last_run_at": openai_run_at,
-        "max_history_age_seconds": 604800,
+        "max_history_age_seconds": None,
         "observed_recent_window": 3,
         "observed_consecutive_passes": 3,
         "history_stability_complete": True,
@@ -987,7 +987,8 @@ def test_runtime_modes_policy_gate_uses_provider_autonomous_readiness_history(
     assert "stable runs 3/3" in text_output
     assert "consecutive passes 3/3" in text_output
     assert f"last run {openai_run_at}" in text_output
-    assert "max age 604800s" in text_output
+    # Freshness expiry is disabled by default, so no max-age detail is rendered.
+    assert "max age" not in text_output
     assert "live fault coverage yes" in text_output
     assert "live fault coverage no" in text_output
     assert "live task coverage yes" in text_output
@@ -1201,12 +1202,61 @@ def test_runtime_modes_policy_gate_blocks_missing_live_task_family_evidence(
     )
 
 
-def test_runtime_modes_policy_gate_warns_on_stale_provider_history(
+def test_runtime_modes_policy_gate_keeps_ready_when_expiry_disabled(
     tmp_path: Path,
     monkeypatch,
     capsys,
 ):
+    """Default freshness expiry disabled → old evidence never rolls back."""
     from cli.runtime_commands import handle_runtime_modes_command
+
+    ancient_run_at = _provider_smoke_run_at(days_ago=365)
+    _write_provider_history(tmp_path, _stable_provider_history(ancient_run_at))
+    monkeypatch.chdir(tmp_path)
+
+    handle_runtime_modes_command(output_json=True)
+    payload = json.loads(capsys.readouterr().out)
+    capability_rows = {
+        row["provider"]: row for row in payload["runtime_capability_matrix"]
+    }
+    policy_rows = {
+        (row["phase"], row["provider"]): row for row in payload["runtime_policy_matrix"]
+    }
+
+    openai_requirements = capability_rows["openai"][
+        "autonomous_readiness_requirements"
+    ]
+    assert capability_rows["openai"]["readiness"] == "full_autonomous_candidate"
+    assert capability_rows["openai"]["autonomous_policy_gate"] == "passed"
+    assert (
+        "provider_history_stale"
+        not in capability_rows["openai"]["autonomous_readiness_warnings"]
+    )
+    assert (
+        "fresh_provider_history"
+        not in capability_rows["openai"]["autonomous_readiness_missing_requirements"]
+    )
+    assert openai_requirements["last_run_at"] == ancient_run_at
+    assert openai_requirements["max_history_age_seconds"] is None
+    assert openai_requirements["history_freshness_complete"] is True
+    assert policy_rows[("coder", "openai")]["autonomous_promotion_ready"] is True
+
+
+def test_runtime_modes_policy_gate_warns_on_stale_history_when_window_enabled(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+):
+    """A configured freshness window still rolls a stale provider back."""
+    import cli.runtime_commands as runtime_commands
+    from cli.runtime_commands import handle_runtime_modes_command
+
+    # Re-enable a 7-day freshness window for the runtime readiness path.
+    monkeypatch.setattr(
+        runtime_commands,
+        "PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS",
+        604800,
+    )
 
     stale_run_at = _provider_smoke_run_at(days_ago=30)
     _write_provider_history(tmp_path, _stable_provider_history(stale_run_at))
@@ -1392,7 +1442,7 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
     assert capability_rows["openai"]["autonomous_readiness_requirements"] == {
         "min_stable_runs": 3,
         "last_run_at": openai_run_at,
-        "max_history_age_seconds": 604800,
+        "max_history_age_seconds": None,
         "observed_recent_window": 2,
         "observed_consecutive_passes": 2,
         "history_stability_complete": False,
@@ -1433,7 +1483,7 @@ def test_runtime_modes_policy_gate_requires_stability_counts_and_live_fault_cove
     assert capability_rows["google"]["autonomous_readiness_requirements"] == {
         "min_stable_runs": 3,
         "last_run_at": google_run_at,
-        "max_history_age_seconds": 604800,
+        "max_history_age_seconds": None,
         "observed_recent_window": 3,
         "observed_consecutive_passes": 3,
         "history_stability_complete": True,

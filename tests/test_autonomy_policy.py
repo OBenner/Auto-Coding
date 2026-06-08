@@ -28,7 +28,10 @@ def test_defaults_match_legacy_constants():
 
     assert policy.provider == "openai"
     assert policy.min_stable_runs == DEFAULT_MIN_STABLE_RUNS == 3
-    assert policy.max_history_age_days == DEFAULT_MAX_HISTORY_AGE_DAYS == 7
+    # Freshness expiry is disabled by default (0) so proven evidence never
+    # goes stale; max_history_age resolves to None.
+    assert policy.max_history_age_days == DEFAULT_MAX_HISTORY_AGE_DAYS == 0
+    assert policy.max_history_age is None
     assert policy.required_e2e_runs == DEFAULT_REQUIRED_E2E_RUNS
     assert policy.required_live_fault_cases == DEFAULT_REQUIRED_LIVE_FAULT_CASES
     assert policy.required_live_task_families == DEFAULT_REQUIRED_LIVE_TASK_FAMILIES
@@ -277,6 +280,23 @@ def test_max_history_age_property():
     assert policy.max_history_age == timedelta(days=2)
 
 
+def test_max_history_age_disabled_returns_none():
+    """A non-positive freshness window means evidence never expires."""
+    # Default (no env, no preset) ships with expiry disabled.
+    default_policy = autonomy_policy_for("openai", env={})
+    assert default_policy.max_history_age_days == 0
+    assert default_policy.max_history_age is None
+
+    # An explicit env 0 disables a window that a strict preset would set.
+    overridden = autonomy_policy_for(
+        "openai",
+        env={"AUTO_CODE_AUTONOMY_OPENAI_MAX_HISTORY_AGE_DAYS": "0"},
+        preset="strict",
+    )
+    assert overridden.max_history_age_days == 0
+    assert overridden.max_history_age is None
+
+
 def test_negative_int_env_value_is_ignored():
     """Negative thresholds fall back to defaults rather than corrupting state."""
     env = {"AUTO_CODE_AUTONOMY_OPENAI_MIN_STABLE_RUNS": "-3"}
@@ -324,7 +344,9 @@ def test_preset_lax_relaxes_thresholds_and_required_coverage():
     policy = autonomy_policy_for("openai", env={}, preset="lax")
 
     assert policy.min_stable_runs == 1
-    assert policy.max_history_age_days == 30
+    # lax no longer seeds a freshness window — it inherits the no-expiry default.
+    assert policy.max_history_age_days == 0
+    assert policy.max_history_age is None
     assert policy.required_live_fault_cases == ("unsupported_tools",)
     assert policy.required_live_task_families == (
         "single_file_edit",
@@ -360,9 +382,9 @@ def test_policy_file_overrides_preset_seeds_for_specified_knobs(tmp_path: Path):
     )
 
     assert policy.min_stable_runs == 5
-    # ``lax``'s max_history_age_days seed still applies; only the
-    # specifically overridden knob came from the file.
-    assert policy.max_history_age_days == 30
+    # ``lax`` no longer seeds max_history_age_days; it inherits the no-expiry
+    # default (0). Only the specifically overridden knob came from the file.
+    assert policy.max_history_age_days == 0
 
 
 def test_unknown_preset_raises_value_error():

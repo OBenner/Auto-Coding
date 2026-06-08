@@ -317,6 +317,11 @@ def _fresh_history_complete(
     provider_stats: dict[str, Any],
     policy: AutonomyPolicy,
 ) -> bool:
+    max_age = policy.max_history_age
+    if max_age is None:
+        # Freshness window disabled — proven evidence never expires, so a
+        # promoted provider is never rolled back for going stale.
+        return True
     last_run_at = provider_stats.get("last_run_at")
     if not isinstance(last_run_at, str) or not last_run_at.strip():
         return False
@@ -326,7 +331,7 @@ def _fresh_history_complete(
         return False
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
-    return datetime.now(UTC) - parsed <= policy.max_history_age
+    return datetime.now(UTC) - parsed <= max_age
 
 
 def _live_fault_coverage_complete(

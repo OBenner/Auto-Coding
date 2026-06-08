@@ -1460,7 +1460,14 @@ def _runtime_provider_readiness_last_run_datetime(
 def _runtime_provider_readiness_history_freshness_complete(
     provider_stats: dict[str, Any],
 ) -> bool:
-    """Return whether latest provider smoke evidence is recent enough."""
+    """Return whether latest provider smoke evidence is recent enough.
+
+    When the freshness window is disabled
+    (``PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS`` is ``None``),
+    recorded evidence never expires, so this always reports complete.
+    """
+    if PROVIDER_AUTONOMOUS_READINESS_MAX_HISTORY_AGE_SECONDS is None:
+        return True
     last_run_at = _runtime_provider_readiness_last_run_datetime(provider_stats)
     if last_run_at is None:
         return False
@@ -3363,9 +3370,15 @@ def format_autonomy_readiness_text(payload: dict[str, Any]) -> str:
         ):
             lines.append(f"  {line}")
         policy = entry["policy"]
+        max_age_days = policy["max_history_age_days"]
+        max_age_text = (
+            f"{max_age_days}d"
+            if isinstance(max_age_days, int) and max_age_days > 0
+            else "disabled (no expiry)"
+        )
         lines.append(
             f"  thresholds: min_stable_runs={policy['min_stable_runs']}, "
-            f"max_history_age_days={policy['max_history_age_days']}"
+            f"max_history_age={max_age_text}"
         )
         lines.append("")
     summary = payload["summary"]

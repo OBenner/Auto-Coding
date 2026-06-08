@@ -1526,7 +1526,7 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
         "requirements": {
             "min_stable_runs": 3,
             "last_run_at": first_history["last_run_at"],
-            "max_history_age_seconds": 604800,
+            "max_history_age_seconds": None,
             "observed_recent_window": 1,
             "observed_consecutive_passes": 1,
             "history_stability_complete": False,
@@ -1608,7 +1608,7 @@ def test_provider_autonomous_readiness_scores_history_evidence(tmp_path: Path):
         "requirements": {
             "min_stable_runs": 3,
             "last_run_at": stable_history["last_run_at"],
-            "max_history_age_seconds": 604800,
+            "max_history_age_seconds": None,
             "observed_recent_window": 3,
             "observed_consecutive_passes": 3,
             "history_stability_complete": True,
@@ -1808,7 +1808,7 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "requirements": {
             "min_stable_runs": 3,
             "last_run_at": two_run_history["last_run_at"],
-            "max_history_age_seconds": 604800,
+            "max_history_age_seconds": None,
             "observed_recent_window": 2,
             "observed_consecutive_passes": 2,
             "history_stability_complete": False,
@@ -1862,7 +1862,7 @@ def test_provider_autonomous_readiness_requires_stability_counts_and_live_fault_
         "requirements": {
             "min_stable_runs": 3,
             "last_run_at": partial_live_fault_history["last_run_at"],
-            "max_history_age_seconds": 604800,
+            "max_history_age_seconds": None,
             "observed_recent_window": 3,
             "observed_consecutive_passes": 3,
             "history_stability_complete": True,
@@ -1956,13 +1956,10 @@ def test_provider_autonomous_readiness_warns_on_degrading_eval_trends():
     ]
 
 
-def test_provider_autonomous_readiness_warns_on_stale_history():
-    from cli.provider_smoke_commands import (
-        ProviderSmokeResult,
-        _provider_autonomous_readiness_diagnostics,
-    )
+def _stable_readiness_result():
+    from cli.provider_smoke_commands import ProviderSmokeResult
 
-    result = ProviderSmokeResult(
+    return ProviderSmokeResult(
         success=True,
         provider="openai",
         model="gpt-4o",
@@ -1979,23 +1976,64 @@ def test_provider_autonomous_readiness_warns_on_stale_history():
             },
         },
     )
-    stale_run_at = _provider_smoke_run_at(days_ago=30)
 
+
+def _stable_readiness_history(last_run_at: str) -> dict:
+    return {
+        "last_status": "passed",
+        "trend": "provider_history_stable",
+        "recent_window": 3,
+        "consecutive_passes": 3,
+        "last_run_at": last_run_at,
+        "last_live_fault_probe_status": "passed",
+        "live_fault_probe_covered_cases": [
+            "gateway_model_limitations",
+            "unsupported_tools",
+        ],
+        **_complete_live_task_history(),
+    }
+
+
+def test_provider_autonomous_readiness_keeps_ready_when_expiry_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """With freshness expiry disabled (the default), old evidence never rolls back."""
+    from cli.provider_smoke_commands import _provider_autonomous_readiness_diagnostics
+
+    monkeypatch.delenv(
+        "AUTO_CODE_AUTONOMY_OPENAI_MAX_HISTORY_AGE_DAYS", raising=False
+    )
+    monkeypatch.delenv(
+        "AUTO_CODE_AUTONOMY_DEFAULT_MAX_HISTORY_AGE_DAYS", raising=False
+    )
+
+    ancient_run_at = _provider_smoke_run_at(days_ago=365)
     readiness = _provider_autonomous_readiness_diagnostics(
-        result,
-        {
-            "last_status": "passed",
-            "trend": "provider_history_stable",
-            "recent_window": 3,
-            "consecutive_passes": 3,
-            "last_run_at": stale_run_at,
-            "last_live_fault_probe_status": "passed",
-            "live_fault_probe_covered_cases": [
-                "gateway_model_limitations",
-                "unsupported_tools",
-            ],
-            **_complete_live_task_history(),
-        },
+        _stable_readiness_result(),
+        _stable_readiness_history(ancient_run_at),
+    )
+
+    # A year-old history is still "ready" because nothing requires freshness.
+    assert readiness["status"] == "full_autonomous_candidate"
+    assert "provider_history_stale" not in readiness["warnings"]
+    assert "fresh_provider_history" not in readiness["missing_requirements"]
+    assert readiness["requirements"]["last_run_at"] == ancient_run_at
+    assert readiness["requirements"]["max_history_age_seconds"] is None
+    assert readiness["requirements"]["history_freshness_complete"] is True
+
+
+def test_provider_autonomous_readiness_warns_on_stale_history_when_window_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A configured freshness window still rolls a stale provider back."""
+    from cli.provider_smoke_commands import _provider_autonomous_readiness_diagnostics
+
+    monkeypatch.setenv("AUTO_CODE_AUTONOMY_OPENAI_MAX_HISTORY_AGE_DAYS", "7")
+
+    stale_run_at = _provider_smoke_run_at(days_ago=30)
+    readiness = _provider_autonomous_readiness_diagnostics(
+        _stable_readiness_result(),
+        _stable_readiness_history(stale_run_at),
     )
 
     assert readiness["status"] == "warming_up"
@@ -2182,7 +2220,7 @@ def test_provider_autonomous_readiness_blocks_failed_e2e(tmp_path: Path):
         "requirements": {
             "min_stable_runs": 3,
             "last_run_at": history_summary["last_run_at"],
-            "max_history_age_seconds": 604800,
+            "max_history_age_seconds": None,
             "observed_recent_window": 1,
             "observed_consecutive_passes": 0,
             "history_stability_complete": False,

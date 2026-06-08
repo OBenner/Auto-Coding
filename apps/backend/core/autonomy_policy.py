@@ -31,7 +31,12 @@ AUTONOMY_POLICY_FILE_ENV = "AUTO_CODE_AUTONOMY_POLICY_FILE"
 AUTONOMY_POLICY_ENV_PREFIX = "AUTO_CODE_AUTONOMY_"
 
 DEFAULT_MIN_STABLE_RUNS = 3
-DEFAULT_MAX_HISTORY_AGE_DAYS = 7
+# Freshness window for recorded evidence. ``0`` (or any non-positive value)
+# DISABLES expiry: once a provider earns "ready" its evidence never goes stale,
+# so readiness does not roll back when no new probe runs for a while. A positive
+# value (e.g. the ``strict`` preset, or an AUTO_CODE_AUTONOMY_*_MAX_HISTORY_AGE_DAYS
+# override) re-enables an N-day freshness requirement.
+DEFAULT_MAX_HISTORY_AGE_DAYS = 0
 DEFAULT_REQUIRED_E2E_RUNS: tuple[str, ...] = (
     "generic_edit",
     "mini_pipeline",
@@ -76,8 +81,15 @@ class AutonomyPolicy:
     sources: tuple[str, ...] = field(default_factory=tuple)
 
     @property
-    def max_history_age(self) -> timedelta:
-        """Return ``max_history_age_days`` as a ``timedelta``."""
+    def max_history_age(self) -> timedelta | None:
+        """Return the freshness window, or ``None`` when it is disabled.
+
+        A non-positive ``max_history_age_days`` means recorded evidence never
+        expires; callers treat ``None`` as "freshness is not a promotion
+        requirement" and never roll a provider back from ``ready``.
+        """
+        if self.max_history_age_days <= 0:
+            return None
         return timedelta(days=self.max_history_age_days)
 
     def to_dict(self) -> dict[str, Any]:
@@ -108,10 +120,10 @@ _KNOB_PARSERS = {
 
 # Preset names (mirrored in :class:`core.autonomy_level.AutonomyPreset`) and
 # the knob seeds they apply on top of module defaults. ``standard`` is a
-# no-op so today's defaults stay verbatim. ``strict`` raises the bar
-# (more stable runs, fresher evidence). ``lax`` relaxes the bar
-# (fewer runs, longer freshness window, lighter required cases) for
-# experimentation or single-developer environments.
+# no-op so today's defaults stay verbatim (freshness expiry disabled).
+# ``strict`` raises the bar (more stable runs, and re-enables a 3-day
+# freshness window). ``lax`` relaxes the bar (fewer runs, lighter required
+# cases) for experimentation or single-developer environments.
 AUTONOMY_PRESET_NAMES: tuple[str, ...] = ("strict", "standard", "lax")
 _PRESET_SEEDS: dict[str, dict[str, Any]] = {
     "strict": {
@@ -121,7 +133,6 @@ _PRESET_SEEDS: dict[str, dict[str, Any]] = {
     "standard": {},
     "lax": {
         "min_stable_runs": 1,
-        "max_history_age_days": 30,
         "required_live_fault_cases": ("unsupported_tools",),
         "required_live_task_families": (
             "single_file_edit",
