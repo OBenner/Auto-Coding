@@ -129,7 +129,9 @@ def test_non_claude_provider_fails_fast(
     message = str(excinfo.value)
     assert "openai" in message
     assert agent_type in message
-    assert "Phase 1" in message
+    # claude-level autonomy keeps the direct-API gate disabled, so the QA
+    # phase is blocked on the promotion gate (no separate opt-in any more).
+    assert "promotion gate" in message
     assert "non-claude-provider-autonomy" in message
     artifacts = list((tmp_path / "artifacts").glob("runtime_fallback_*.json"))
     assert artifacts, "decision artifact must be written even when blocked"
@@ -196,22 +198,21 @@ def test_policy_allowed_phases_override_does_not_unblock_execution(
 
 
 @pytest.mark.parametrize("agent_type", ["qa_reviewer", "qa_fixer"])
-def test_direct_runtime_opt_in_without_promotion_fails_fast(
+def test_safe_without_promotion_evidence_fails_fast(
     agent_type: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """Opt-in alone does not unblock QA: the promotion gate must pass too.
+    """``safe`` alone does not unblock QA: the promotion gate needs evidence.
 
-    For qa_reviewer the permit branch runs but the gate is unsatisfied (no
-    history); for qa_fixer the agent is not portable at all. Both block.
+    The portable-QA branch runs (provider is non-Claude) but the gate is
+    unsatisfied with no recorded history, so the phase still blocks.
     """
     _clear_qa_env(monkeypatch, agent_type)
     monkeypatch.setenv("AI_ENGINE_PROVIDER", "claude")
     monkeypatch.setenv(f"AGENT_PROVIDER_{agent_type.upper()}", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
-    monkeypatch.setenv("AUTO_CODE_QA_DIRECT_RUNTIME", "true")
     resolve_qa_runtime, QaRuntimeUnsupportedError = _import_resolver()
 
     with pytest.raises(QaRuntimeUnsupportedError):
@@ -223,17 +224,43 @@ def test_direct_runtime_opt_in_without_promotion_fails_fast(
         )
 
 
-def test_qa_reviewer_promoted_opt_in_uses_runtime_layer(
+@pytest.mark.parametrize("agent_type", ["qa_reviewer", "qa_fixer"])
+def test_promoted_provider_without_safe_autonomy_stays_blocked(
+    agent_type: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """qa_reviewer + opt-in + a promoted provider routes to the runtime layer."""
+    """Evidence is not enough on its own — AUTO_CODE_AUTONOMY must enable the
+    direct-API gate (safe/bold). At the default ``claude`` level QA stays on
+    the Claude SDK even with a fully passing history (no opt-in hole).
+    """
+    _clear_qa_env(monkeypatch, agent_type)
+    monkeypatch.setenv("AI_ENGINE_PROVIDER", "claude")
+    monkeypatch.setenv(f"AGENT_PROVIDER_{agent_type.upper()}", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    # Autonomy left at the default (claude) -> direct-API gate disabled.
+    _write_passing_openai_history(tmp_path)
+    resolve_qa_runtime, QaRuntimeUnsupportedError = _import_resolver()
+
+    with pytest.raises(QaRuntimeUnsupportedError):
+        resolve_qa_runtime(
+            agent_type=agent_type,
+            spec_dir=tmp_path,
+            qa_iteration=1,
+            project_dir=tmp_path,
+        )
+
+
+def test_qa_reviewer_promoted_uses_runtime_layer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """qa_reviewer on a promoted provider routes to the runtime layer (no opt-in)."""
     _clear_qa_env(monkeypatch, "qa_reviewer")
     monkeypatch.setenv("AI_ENGINE_PROVIDER", "claude")
     monkeypatch.setenv("AGENT_PROVIDER_QA_REVIEWER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
-    monkeypatch.setenv("AUTO_CODE_QA_DIRECT_RUNTIME", "true")
     _write_passing_openai_history(tmp_path)
     resolve_qa_runtime, _ = _import_resolver()
 
@@ -249,22 +276,21 @@ def test_qa_reviewer_promoted_opt_in_uses_runtime_layer(
     assert decision.runtime_mode == "generic_edit"
 
 
-def test_qa_fixer_promoted_opt_in_uses_runtime_layer(
+def test_qa_fixer_promoted_uses_runtime_layer(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """qa_fixer + opt-in + a promoted provider routes to the runtime layer.
+    """qa_fixer on a promoted provider routes to the runtime layer (no opt-in).
 
-    The fixer mutates source, but generic_edit confines it (mutation
-    snapshots + transaction rollback + sandbox), so it is gated identically
-    to the reviewer on opt-in + promotion.
+    The fixer mutates source, but generic_edit confines it (mutation snapshots
+    + transaction rollback + sandbox) and now matches the Claude recovery /
+    model-fallback loop, so it promotes on the evidence gate like the reviewer.
     """
     _clear_qa_env(monkeypatch, "qa_fixer")
     monkeypatch.setenv("AI_ENGINE_PROVIDER", "claude")
     monkeypatch.setenv("AGENT_PROVIDER_QA_FIXER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("AUTO_CODE_AUTONOMY", "safe")
-    monkeypatch.setenv("AUTO_CODE_QA_DIRECT_RUNTIME", "true")
     _write_passing_openai_history(tmp_path)
     resolve_qa_runtime, _ = _import_resolver()
 

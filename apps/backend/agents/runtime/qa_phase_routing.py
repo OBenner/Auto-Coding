@@ -1,17 +1,20 @@
 """Runtime-modes routing for QA agent phases.
 
-QA agents (``qa_reviewer``, ``qa_fixer``) are kept on the Claude Agent
-SDK execution path while the runtime layer learns to provide MCP
-execution, mutating subagents, and a Claude-equivalent native tool loop
-for direct API providers (see Phase 1 of
+QA agents (``qa_reviewer``, ``qa_fixer``) run on the Claude Agent SDK by
+default, but a direct-API provider that passes the promotion gate
+(``AUTO_CODE_AUTONOMY=safe``/``bold`` + recorded evidence) runs them
+through the provider-neutral runtime layer instead — there is no separate
+QA opt-in. The reviewer is read-only; the fixer mutates source but the
+runtime layer confines it (generic_edit snapshots + transaction rollback
++ sandbox) and matches the Claude recovery / model-fallback loop (see
 ``docs/roadmap/non-claude-provider-autonomy.md``).
 
 This module resolves the provider, runtime mode, and AutonomyPolicy for
-a QA phase *before* the session starts so that
-``AGENT_PROVIDER_<TYPE>`` and ``AGENT_RUNTIME_MODE_<TYPE>`` env
-overrides actually reach a decision. A non-Claude provider or a
-non-``full_autonomous`` runtime fails fast with a clear capability error
-and a persisted ``runtime_fallback_<phase>_*.json`` diagnostic artifact.
+a QA phase *before* the session starts so that ``AGENT_PROVIDER_<TYPE>``
+and ``AGENT_RUNTIME_MODE_<TYPE>`` env overrides actually reach a decision.
+A non-Claude provider that has not passed the promotion gate (or a
+non-``full_autonomous`` Claude runtime) fails fast with a clear capability
+error and a persisted ``runtime_fallback_<phase>_*.json`` artifact.
 """
 
 from __future__ import annotations
@@ -31,17 +34,12 @@ from core.autonomy_policy import autonomy_policy_for
 from core.providers.config import ProviderConfig
 from debug import debug_error
 
-# Opt-in: route a *promoted* direct-API provider's QA agents through the
-# provider-neutral runtime layer instead of the Claude SDK. Default off, so
-# the Claude QA path is unchanged unless an operator both sets this AND the
-# provider passes the direct-API promotion gate.
-QA_DIRECT_RUNTIME_ENV = "AUTO_CODE_QA_DIRECT_RUNTIME"
-_TRUTHY = {"1", "true", "yes", "on"}
-
 # QA agents whose runtime path exists and may run on a promoted direct-API
 # provider. The reviewer is read-only; the fixer mutates source but the
 # runtime layer confines it (generic_edit mutation snapshots + transaction
-# rollback + sandbox), so both are gated identically on opt-in + promotion.
+# rollback + sandbox) and now matches the Claude recovery / model-fallback
+# loop. Both promote on the direct-API evidence gate alone (AUTO_CODE_AUTONOMY
+# safe/bold + recorded promotion evidence) — there is no separate QA opt-in.
 PORTABLE_QA_AGENTS = frozenset({"qa_reviewer", "qa_fixer"})
 
 
@@ -64,11 +62,6 @@ class QaRuntimeDecision:
     use_runtime_layer: bool
 
 
-def _qa_direct_runtime_opt_in(env: Mapping[str, str]) -> bool:
-    """Return whether the operator opted into the direct-API QA reviewer path."""
-    return env.get(QA_DIRECT_RUNTIME_ENV, "").strip().lower() in _TRUTHY
-
-
 def resolve_qa_runtime(
     *,
     agent_type: str,
@@ -84,12 +77,15 @@ def resolve_qa_runtime(
 
     * Claude + ``full_autonomous`` -> ``use_runtime_layer=False`` (the
       existing Claude SDK path).
-    * A promoted direct-API provider running ``qa_reviewer`` with the
-      ``AUTO_CODE_QA_DIRECT_RUNTIME`` opt-in -> ``use_runtime_layer=True``.
+    * A direct-API provider running a portable QA agent (``qa_reviewer`` or
+      ``qa_fixer``) that passes the promotion gate -> ``use_runtime_layer=
+      True``. Promotion is gated on ``AUTO_CODE_AUTONOMY=safe``/``bold`` plus
+      recorded evidence; there is no separate QA opt-in.
 
     Raises :class:`QaRuntimeUnsupportedError` for every other non-Claude /
-    non-``full_autonomous`` request (qa_fixer, un-promoted providers, or
-    providers without the opt-in), so the default safety contract holds.
+    non-``full_autonomous`` request (un-promoted providers, or a non-Claude
+    provider whose promotion gate is unsatisfied), so the default safety
+    contract holds.
     """
     env_map = os.environ if env is None else env
     provider_config = ProviderConfig.from_env(agent_type=agent_type)
@@ -119,14 +115,13 @@ def resolve_qa_runtime(
             use_runtime_layer=False,
         )
 
-    # Opt-in direct-API path for a portable QA agent, gated on the provider
-    # having passed the direct-API promotion gate (evidence-backed trust).
-    # The fixer mutates source but the runtime layer confines it.
-    if (
-        agent_type in PORTABLE_QA_AGENTS
-        and provider_name != "claude"
-        and _qa_direct_runtime_opt_in(env_map)
-    ):
+    # Direct-API path for a portable QA agent, gated solely on the direct-API
+    # promotion gate (recorded evidence + AUTO_CODE_AUTONOMY=safe/bold via
+    # ADR-006). No separate QA opt-in: QA agents promote on the same evidence
+    # as the coder. The reviewer is read-only; the fixer mutates source but the
+    # runtime layer confines it (generic_edit snapshots + transaction rollback
+    # + sandbox) and matches the Claude recovery / model-fallback loop.
+    if agent_type in PORTABLE_QA_AGENTS and provider_name != "claude":
         gate = resolve_direct_api_autonomous_gate(
             provider_name=provider_name,
             project_dir=project_dir or spec_dir,
@@ -140,12 +135,17 @@ def resolve_qa_runtime(
                 runtime_mode="generic_edit",
                 use_runtime_layer=True,
             )
+        policy = autonomy_policy_for(provider_name)
         message = (
-            f"QA phase '{agent_type}' opted into the direct-API runtime "
-            f"({QA_DIRECT_RUNTIME_ENV}) for provider={provider_name}, but the "
-            f"direct-API promotion gate is not satisfied (status={gate.status}, "
-            f"reason={gate.reason}, missing={gate.missing_requirements}). "
-            f"Runtime decision saved to {artifact_path}."
+            f"QA phase '{agent_type}' cannot run with provider={provider_name}: "
+            f"the direct-API promotion gate is not satisfied "
+            f"(status={gate.status}, reason={gate.reason}, "
+            f"missing={gate.missing_requirements}). Set AUTO_CODE_AUTONOMY=safe "
+            "and accumulate provider promotion evidence (see "
+            "docs/roadmap/non-claude-provider-autonomy.md), or set "
+            f"AGENT_PROVIDER_{agent_type.upper()}=claude to use the Claude SDK "
+            f"(autonomy policy snapshot: {policy.to_dict()}; "
+            f"runtime decision saved to {artifact_path})."
         )
         debug_error("qa_runtime_routing", message)
         raise QaRuntimeUnsupportedError(message)
@@ -153,15 +153,12 @@ def resolve_qa_runtime(
     policy = autonomy_policy_for(provider_name)
     message = (
         f"QA phase '{agent_type}' cannot run with provider={provider_name} "
-        f"runtime={selected_mode}. QA agents require the Claude Agent SDK "
-        "full_autonomous surface (multi-turn tool loop, Electron MCP, "
-        f"recovery hooks). Set AGENT_PROVIDER_{agent_type.upper()}=claude and "
+        f"runtime={selected_mode}. QA agents require either Claude "
+        "full_autonomous or a promoted direct-API provider running "
+        f"generic_edit. Set AGENT_PROVIDER_{agent_type.upper()}=claude and "
         f"AGENT_RUNTIME_MODE_{agent_type.upper()}=full_autonomous to run this "
-        "phase. Direct API providers are being enabled by Phase 1 of "
-        "docs/roadmap/non-claude-provider-autonomy.md; the read-only "
-        f"qa_reviewer can opt in via {QA_DIRECT_RUNTIME_ENV}=true once its "
-        "provider passes the promotion gate "
-        f"(autonomy policy snapshot: {policy.to_dict()}; "
+        "phase (see docs/roadmap/non-claude-provider-autonomy.md; autonomy "
+        f"policy snapshot: {policy.to_dict()}; "
         f"runtime decision saved to {artifact_path})."
     )
     debug_error("qa_runtime_routing", message)
