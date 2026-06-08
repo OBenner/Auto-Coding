@@ -147,6 +147,9 @@ function applyProviderSettingsToVars(
   if (settings.provider !== undefined) {
     vars['AI_ENGINE_PROVIDER'] = settings.provider;
   }
+  if (settings.autonomyLevel !== undefined) {
+    vars['AUTO_CODE_AUTONOMY'] = settings.autonomyLevel;
+  }
   const keyMap: Array<[keyof ProviderSettings, string]> = [
     ['codexModel', 'CODEX_MODEL'],
     ['openaiApiKey', 'OPENAI_API_KEY'],
@@ -232,6 +235,9 @@ ${varLine('AGENT_MODEL_PLANNER')}
 ${varLine('AGENT_MODEL_CODER')}
 ${varLine('AGENT_MODEL_QA_REVIEWER')}
 
+# Autonomy Level (ADR-006: off | claude | safe | bold)
+${varLine('AUTO_CODE_AUTONOMY')}
+
 # Runtime Mode Configuration
 ${varLine('AUTO_CODE_RUNTIME_MODE')}
 ${varLine('AGENT_RUNTIME_MODE_PLANNER')}
@@ -314,7 +320,7 @@ function generateProviderEnvContent(
     'OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'OPENROUTER_BASE_URL',
     'ZHIPUAI_API_KEY', 'ZHIPUAI_MODEL', 'OLLAMA_MODEL', 'OLLAMA_BASE_URL',
     'AGENT_MODEL_PLANNER', 'AGENT_MODEL_CODER',
-    'AGENT_MODEL_QA_REVIEWER', 'AUTO_CODE_RUNTIME_MODE',
+    'AGENT_MODEL_QA_REVIEWER', 'AUTO_CODE_AUTONOMY', 'AUTO_CODE_RUNTIME_MODE',
     'AGENT_RUNTIME_MODE_PLANNER', 'AGENT_RUNTIME_MODE_CODER',
     'AGENT_RUNTIME_MODE_QA_REVIEWER', 'AGENT_RUNTIME_MODE_QA_FIXER',
     'AUTO_CODE_RUNTIME_FALLBACK', 'AUTO_CODE_CLI_RUNNER_ROUTER',
@@ -1206,6 +1212,7 @@ export function registerSettingsHandlers(
           googleApiKey: envVars['GOOGLE_API_KEY'] || '',
           openrouterApiKey: envVars['OPENROUTER_API_KEY'] || '',
           zhipuaiApiKey: envVars['ZHIPUAI_API_KEY'] || '',
+          autonomyLevel: envVars['AUTO_CODE_AUTONOMY'] as ProviderSettings['autonomyLevel'],
           plannerModel: envVars['AGENT_MODEL_PLANNER'] || '',
           coderModel: envVars['AGENT_MODEL_CODER'] || '',
           qaModel: envVars['AGENT_MODEL_QA_REVIEWER'] || '',
@@ -1848,6 +1855,7 @@ export function registerSettingsHandlers(
           config.coderRuntimeMode = vars['AGENT_RUNTIME_MODE_CODER'] as import('../../shared/types').AgentRuntimeMode;
           config.qaReviewerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_REVIEWER'] as import('../../shared/types').AgentRuntimeMode;
           config.qaFixerRuntimeMode = vars['AGENT_RUNTIME_MODE_QA_FIXER'] as import('../../shared/types').AgentRuntimeMode;
+          config.autonomyLevel = vars['AUTO_CODE_AUTONOMY'] as import('../../shared/types').AutonomyLevel;
           config.runtimeFallbackEnabled = vars['AUTO_CODE_RUNTIME_FALLBACK'] === 'true';
           config.cliRunnerRouterEnabled = vars['AUTO_CODE_CLI_RUNNER_ROUTER'] === 'true';
         }
@@ -1891,6 +1899,7 @@ export function registerSettingsHandlers(
         };
 
         setEnvVar('AI_ENGINE_PROVIDER', config.provider);
+        setEnvVar('AUTO_CODE_AUTONOMY', config.autonomyLevel);
         setEnvVar('ANTHROPIC_API_KEY', config.anthropicApiKey);
         setEnvVar('CLAUDE_MODEL', config.claudeModel);
         setEnvVar('CODEX_MODEL', config.codexModel);

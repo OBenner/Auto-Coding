@@ -382,6 +382,7 @@ export interface SourceEnvCheckResult {
 // Provider Settings for Multi-Model Support (used by ProviderSettingsSection)
 export interface ProviderSettings {
   provider?: AIEngineProvider;
+  autonomyLevel?: AutonomyLevel;
   codexModel?: string;
   openaiApiKey?: string;
   googleApiKey?: string;
@@ -398,6 +399,13 @@ export interface ProviderSettings {
   runtimeFallbackEnabled?: boolean;
   cliRunnerRouterEnabled?: boolean;
 }
+
+/**
+ * User-facing autonomy level (ADR-006), the primary autonomy knob. Maps to the
+ * backend ``AUTO_CODE_AUTONOMY`` env var. The direct-API promotion gate is always
+ * enforced under ``safe`` — only providers with recorded evidence are promoted.
+ */
+export type AutonomyLevel = 'off' | 'claude' | 'safe' | 'bold';
 
 // ============================================
 // Keyboard Shortcuts Types
@@ -439,6 +447,7 @@ export type AgentRuntimeMode = 'full_autonomous' | 'analysis_only' | 'patch_prop
 
 export interface AIProviderConfig {
   provider: AIEngineProvider;
+  autonomyLevel?: AutonomyLevel;
   anthropicApiKey?: string;
   claudeModel?: string;
   codexModel?: string;

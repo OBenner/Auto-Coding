@@ -23,6 +23,7 @@ import type {
   AgentRuntimeMode,
   AIEngineProvider,
   AIProviderConfig,
+  AutonomyLevel,
   CliRunnerContractMatrixRow,
   ProviderConfigValidation,
   ProviderConnectionTestResult,
@@ -209,6 +210,22 @@ const RUNTIME_MODE_OPTIONS: Array<{
   { value: 'patch_proposal', labelKey: 'settings:aiProvider.runtimeModes.patchProposal.name', descriptionKey: 'settings:aiProvider.runtimeModes.patchProposal.description' },
   { value: 'analysis_only', labelKey: 'settings:aiProvider.runtimeModes.analysisOnly.name', descriptionKey: 'settings:aiProvider.runtimeModes.analysisOnly.description' },
 ];
+
+// User-facing autonomy levels (ADR-006). The primary autonomy knob; maps to the
+// backend AUTO_CODE_AUTONOMY env var. The direct-API promotion gate stays
+// enforced under `safe` — only providers with recorded evidence are promoted.
+const AUTONOMY_LEVEL_OPTIONS: Array<{
+  value: AutonomyLevel;
+  labelKey: string;
+  descriptionKey: string;
+}> = [
+  { value: 'off', labelKey: 'settings:aiProvider.autonomyLevel.levels.off.name', descriptionKey: 'settings:aiProvider.autonomyLevel.levels.off.description' },
+  { value: 'claude', labelKey: 'settings:aiProvider.autonomyLevel.levels.claude.name', descriptionKey: 'settings:aiProvider.autonomyLevel.levels.claude.description' },
+  { value: 'safe', labelKey: 'settings:aiProvider.autonomyLevel.levels.safe.name', descriptionKey: 'settings:aiProvider.autonomyLevel.levels.safe.description' },
+  { value: 'bold', labelKey: 'settings:aiProvider.autonomyLevel.levels.bold.name', descriptionKey: 'settings:aiProvider.autonomyLevel.levels.bold.description' },
+];
+
+const DEFAULT_AUTONOMY_LEVEL: AutonomyLevel = 'claude';
 
 const RUNTIME_DIAGNOSTIC_TRANSLATION_KEYS: Record<string, string> = {
   abort_batch: 'settings:aiProvider.runtimeDiagnosticValues.abortBatch',
@@ -659,6 +676,21 @@ function getCapabilityStatusClass(status: CapabilityStatus): string {
 
 function isFullAutonomousProvider(provider: AIEngineProvider): boolean {
   return provider === 'claude' || provider === 'codex';
+}
+
+export function getReadinessBadgeClass(status?: string | null): string {
+  switch (status) {
+    case 'full_autonomous_candidate':
+    case 'ready':
+      return 'border-success/30 bg-success/10 text-success';
+    case 'warming_up':
+    case 'needs_live_fault_evidence':
+      return 'border-warning/30 bg-warning/10 text-warning';
+    case 'blocked':
+      return 'border-destructive/30 bg-destructive/10 text-destructive';
+    default:
+      return 'border-border bg-muted text-muted-foreground';
+  }
 }
 
 function countFullAutonomousSelections(config: AIProviderConfig, activeRuntimeMode: AgentRuntimeMode): number {
@@ -3807,6 +3839,53 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           <p className="text-xs text-muted-foreground">
             {t('settings:aiProvider.hints.envOverride')}
           </p>
+        </div>
+
+        <div className="space-y-3 border-t border-border pt-4">
+          <Label htmlFor="autonomyLevel" className="text-sm font-medium text-foreground">
+            {t('settings:aiProvider.autonomyLevel.label')}
+          </Label>
+          <Select
+            value={config.autonomyLevel ?? DEFAULT_AUTONOMY_LEVEL}
+            onValueChange={(value) => updateConfig({ autonomyLevel: value as AutonomyLevel })}
+            disabled={loading}
+          >
+            <SelectTrigger id="autonomyLevel" className="w-full max-w-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AUTONOMY_LEVEL_OPTIONS.map((level) => (
+                <SelectItem key={level.value} value={level.value}>
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">{t(level.labelKey)}</span>
+                    <span className="text-xs text-muted-foreground">{t(level.descriptionKey)}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {t('settings:aiProvider.autonomyLevel.hint')}
+          </p>
+          {connectionTestStatus?.runtimeDiagnostics?.providerAutonomousReadiness?.status ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {t('settings:aiProvider.autonomyLevel.readinessBadgeLabel', {
+                  provider: t(selectedProvider.labelKey)
+                })}
+              </span>
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${getReadinessBadgeClass(
+                  connectionTestStatus.runtimeDiagnostics.providerAutonomousReadiness.status
+                )}`}
+              >
+                {formatRuntimeDiagnosticValue(
+                  t,
+                  connectionTestStatus.runtimeDiagnostics.providerAutonomousReadiness.status
+                )}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-md border border-border bg-muted/30 p-4">
