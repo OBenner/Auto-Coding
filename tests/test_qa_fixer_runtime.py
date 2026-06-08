@@ -11,6 +11,7 @@ is the file-based `is_fixes_applied` signal, matching the Claude path.
 from __future__ import annotations
 
 import contextlib
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -126,3 +127,183 @@ async def test_run_qa_fixer_via_runtime_drives_runtime_session(tmp_path):
     assert kwargs["message"].startswith("FIXER_PROMPT")
     assert "**Fix Session**: 4" in kwargs["message"]
     assert kwargs["spec_dir"] == tmp_path
+
+
+# ---------------------------------------------------------------------------
+# Recovery / model-fallback loop (run_qa_fixer_runtime_session) — Claude parity
+# ---------------------------------------------------------------------------
+
+
+class _FakeRecoveryManager:
+    """A RecoveryManager that hands out scripted recovery actions."""
+
+    def __init__(self, *, action_script):
+        self._script = list(action_script)
+        self.outcomes: list[bool] = []
+
+    def record_attempt(self, *a, **k):
+        pass
+
+    def record_outcome(self, *a, **k):
+        self.outcomes.append(bool(k.get("success")))
+
+    def record_recovery_notification(self, *a, **k):
+        pass
+
+    def mark_subtask_stuck(self, *a, **k):
+        pass
+
+    def rollback_to_commit(self, *a, **k):
+        return True
+
+    def classify_failure(self, *a, **k):
+        return "transient_error"
+
+    def determine_recovery_action(self, *a, **k):
+        return self._script.pop(0)
+
+
+def _recovery_action(
+    action,
+    *,
+    wait_seconds=0.0,
+    target=None,
+    use_model_fallback=False,
+    strategy=None,
+    reason="reason",
+):
+    return types.SimpleNamespace(
+        action=action,
+        wait_seconds=wait_seconds,
+        target=target,
+        use_model_fallback=use_model_fallback,
+        strategy=strategy,
+        reason=reason,
+    )
+
+
+@pytest.mark.asyncio
+async def test_runtime_fixer_recovers_via_model_fallback(tmp_path):
+    """A failed attempt retries on the next model in the fallback chain."""
+    from qa import fixer
+
+    built_models: list[str] = []
+
+    def fake_build(*, provider_name, runtime_mode, model, project_dir, fix_session):
+        built_models.append(model)
+        return MagicMock()
+
+    via = AsyncMock(side_effect=[("error", "boom"), ("fixed", "done")])
+    fake_rm = _FakeRecoveryManager(
+        action_script=[_recovery_action("retry", use_model_fallback=True)]
+    )
+
+    with (
+        patch("qa.fixer._build_qa_fixer_runtime_session", side_effect=fake_build),
+        patch("qa.fixer.run_qa_fixer_via_runtime", new=via),
+        patch("qa.fixer.RecoveryManager", return_value=fake_rm),
+    ):
+        status, response = await fixer.run_qa_fixer_runtime_session(
+            provider_name="openai",
+            runtime_mode="generic_edit",
+            model="gpt-5.2",
+            project_dir=tmp_path,
+            spec_dir=tmp_path,
+            fix_session=1,
+        )
+
+    assert status == "fixed"
+    assert response == "done"
+    # Second attempt rebuilt the session with the next model in the chain.
+    assert built_models == ["gpt-5.2", "gpt-5"]
+    assert via.await_count == 2
+    assert fake_rm.outcomes == [True]
+
+
+@pytest.mark.asyncio
+async def test_runtime_fixer_threads_recovery_guidance_into_next_attempt(tmp_path):
+    """Strategy guidance from a retry action is passed into the next prompt."""
+    from qa import fixer
+
+    via = AsyncMock(side_effect=[("error", "boom"), ("fixed", "done")])
+    strategy = types.SimpleNamespace(guidance="TRY HARDER", description="d")
+    fake_rm = _FakeRecoveryManager(
+        action_script=[_recovery_action("retry", strategy=strategy)]
+    )
+
+    with (
+        patch("qa.fixer._build_qa_fixer_runtime_session", return_value=MagicMock()),
+        patch("qa.fixer.run_qa_fixer_via_runtime", new=via),
+        patch("qa.fixer.RecoveryManager", return_value=fake_rm),
+    ):
+        await fixer.run_qa_fixer_runtime_session(
+            provider_name="openai",
+            runtime_mode="generic_edit",
+            model="gpt-5.2",
+            project_dir=tmp_path,
+            spec_dir=tmp_path,
+            fix_session=1,
+        )
+
+    # First attempt: no guidance; second attempt: guidance threaded in.
+    assert via.await_args_list[0].kwargs["recovery_guidance"] is None
+    assert via.await_args_list[1].kwargs["recovery_guidance"] == "TRY HARDER"
+
+
+@pytest.mark.asyncio
+async def test_runtime_fixer_escalates_when_recovery_exhausted(tmp_path):
+    """An escalate action returns ('escalate', reason) for the dead-letter queue."""
+    from qa import fixer
+
+    via = AsyncMock(return_value=("error", "boom"))
+    fake_rm = _FakeRecoveryManager(
+        action_script=[_recovery_action("escalate", reason="dead-letter")]
+    )
+
+    with (
+        patch("qa.fixer._build_qa_fixer_runtime_session", return_value=MagicMock()),
+        patch("qa.fixer.run_qa_fixer_via_runtime", new=via),
+        patch("qa.fixer.RecoveryManager", return_value=fake_rm),
+    ):
+        status, response = await fixer.run_qa_fixer_runtime_session(
+            provider_name="openai",
+            runtime_mode="generic_edit",
+            model="gpt-5.2",
+            project_dir=tmp_path,
+            spec_dir=tmp_path,
+            fix_session=1,
+        )
+
+    assert status == "escalate"
+    assert response == "dead-letter"
+    assert via.await_count == 1
+    assert fake_rm.outcomes == [False]
+
+
+@pytest.mark.asyncio
+async def test_runtime_fixer_marks_stuck_on_skip(tmp_path):
+    """A skip action returns ('stuck', ...) and records a failed outcome."""
+    from qa import fixer
+
+    via = AsyncMock(return_value=("error", "boom"))
+    fake_rm = _FakeRecoveryManager(
+        action_script=[_recovery_action("skip", reason="circular_fix")]
+    )
+
+    with (
+        patch("qa.fixer._build_qa_fixer_runtime_session", return_value=MagicMock()),
+        patch("qa.fixer.run_qa_fixer_via_runtime", new=via),
+        patch("qa.fixer.RecoveryManager", return_value=fake_rm),
+    ):
+        status, response = await fixer.run_qa_fixer_runtime_session(
+            provider_name="openai",
+            runtime_mode="generic_edit",
+            model="gpt-5.2",
+            project_dir=tmp_path,
+            spec_dir=tmp_path,
+            fix_session=1,
+        )
+
+    assert status == "stuck"
+    assert "circular_fix" in response
+    assert fake_rm.outcomes == [False]

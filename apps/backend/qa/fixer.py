@@ -22,7 +22,7 @@ from agents.memory_manager import (
 )
 from claude_agent_sdk import ClaudeSDKClient
 from core.client import create_client
-from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.model_fallback import MODEL_FALLBACK_CHAIN, get_fallback_model
 from core.providers import create_engine_provider
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
@@ -106,15 +106,17 @@ async def run_qa_fixer_via_runtime(
     spec_dir: Path,
     fix_session: int,
     verbose: bool = False,
+    recovery_guidance: str | None = None,
 ) -> tuple[str, str]:
     """Run one QA fixer pass through the provider-neutral runtime layer.
 
-    Mirror of :func:`run_qa_fixer_session` for direct-API providers. Unlike
-    the Claude path it does NOT reimplement the Claude-SDK recovery / model-
-    fallback loop: it does a single ``generic_edit`` pass (which already
-    provides mutation snapshots + transaction rollback) and relies on the
-    outer QA loop for re-validation and retries. Success is the file-based
-    ``is_fixes_applied`` signal, so the verdict matches the Claude path.
+    The single-attempt primitive: it does one ``generic_edit`` pass (which
+    already provides mutation snapshots + transaction rollback). The
+    recovery / model-fallback loop that brings this to Claude parity lives in
+    :func:`run_qa_fixer_runtime_session`, which calls this once per attempt
+    and threads strategy guidance back in via ``recovery_guidance``. Success
+    is the file-based ``is_fixes_applied`` signal, so the verdict matches the
+    Claude path.
 
     Returns ``(status, response_text)`` with ``"fixed"`` / ``"error"``.
     """
@@ -151,6 +153,8 @@ async def run_qa_fixer_via_runtime(
         spec_dir=spec_dir,
         fix_session=fix_session,
     )
+    if recovery_guidance:
+        prompt += f"\n\n## RECOVERY STRATEGY\n\n{recovery_guidance}\n"
 
     result = await run_runtime_session(
         runtime_session,
@@ -186,21 +190,18 @@ async def run_qa_fixer_via_runtime(
     return "error", "QA fixer did not apply fixes (runtime path)"
 
 
-async def run_qa_fixer_runtime_session(
+def _build_qa_fixer_runtime_session(
     *,
     provider_name: str,
     runtime_mode: str,
     model: str,
     project_dir: Path,
-    spec_dir: Path,
     fix_session: int,
-    verbose: bool = False,
-) -> tuple[str, str]:
-    """Build a direct-provider runtime session and run the QA fixer on it.
+) -> object:
+    """Build a direct-provider runtime session for one QA fixer attempt.
 
-    Thin orchestration shim mirroring ``run_qa_reviewer_runtime_session``;
-    builds the provider session + runtime adapter then delegates to
-    :func:`run_qa_fixer_via_runtime`.
+    Rebuilt per recovery attempt so model fallback can swap the underlying
+    provider model between attempts.
     """
     from agents.runtime import create_runtime_session
 
@@ -218,19 +219,143 @@ async def run_qa_fixer_runtime_session(
             extra={"agent_type": "qa_fixer"},
         )
     )
-    runtime_session = create_runtime_session(
+    return create_runtime_session(
         provider_name=provider_name,
         agent_session=session,
         runtime_mode=runtime_mode,
         project_dir=project_dir,
         agent_type="qa_fixer",
     )
-    return await run_qa_fixer_via_runtime(
-        runtime_session,
-        project_dir,
-        spec_dir,
-        fix_session,
-        verbose=verbose,
+
+
+async def run_qa_fixer_runtime_session(
+    *,
+    provider_name: str,
+    runtime_mode: str,
+    model: str,
+    project_dir: Path,
+    spec_dir: Path,
+    fix_session: int,
+    verbose: bool = False,
+) -> tuple[str, str]:
+    """Run a QA fixer on a direct-provider runtime session, with recovery.
+
+    Brings the direct-API qa_fixer to Claude parity: wraps the single-pass
+    :func:`run_qa_fixer_via_runtime` in the same ``RecoveryManager`` loop the
+    Claude path uses — exponential backoff, model fallback (rebuilding the
+    runtime session with the next model in ``MODEL_FALLBACK_CHAIN``), commit
+    rollback, strategy guidance threaded into the next prompt, and
+    skip/escalate to the dead-letter queue when recovery is exhausted.
+
+    Returns ``(status, response_text)`` where status is ``"fixed"``,
+    ``"stuck"``, or ``"escalate"``.
+    """
+    recovery_manager = RecoveryManager(spec_dir=spec_dir, project_dir=project_dir)
+    fixer_subtask_id = f"qa_fixer_{fix_session}"
+
+    pending_recovery_action: RecoveryAction | None = None
+    current_model = model
+    recovery_guidance: str | None = None
+    last_error: str | None = None
+
+    for fixer_iteration in range(1, MAX_FIXER_ITERATIONS + 1):
+        # Apply any backoff / rollback queued by the previous attempt.
+        if pending_recovery_action is not None:
+            if pending_recovery_action.wait_seconds > 0:
+                await asyncio.sleep(pending_recovery_action.wait_seconds)
+            if pending_recovery_action.action == "rollback" and (
+                pending_recovery_action.target
+            ):
+                recovery_manager.rollback_to_commit(pending_recovery_action.target)
+            pending_recovery_action = None
+
+        recovery_manager.record_attempt(
+            fixer_subtask_id,
+            session=fix_session,
+            success=False,
+            approach=(
+                f"QA fixer runtime session {fix_session}, "
+                f"iteration {fixer_iteration} (model={current_model})"
+            ),
+        )
+
+        try:
+            runtime_session = _build_qa_fixer_runtime_session(
+                provider_name=provider_name,
+                runtime_mode=runtime_mode,
+                model=current_model,
+                project_dir=project_dir,
+                fix_session=fix_session,
+            )
+            status, response_text = await run_qa_fixer_via_runtime(
+                runtime_session,
+                project_dir,
+                spec_dir,
+                fix_session,
+                verbose=verbose,
+                recovery_guidance=recovery_guidance,
+            )
+            recovery_guidance = None
+            if status == "fixed":
+                recovery_manager.record_outcome(fixer_subtask_id, success=True)
+                return "fixed", response_text
+            last_error = response_text or "QA fixer did not apply fixes (runtime path)"
+            error_message = f"QA fixer runtime error: {last_error}"
+        except Exception as e:  # noqa: BLE001 - classify and recover, never crash
+            last_error = str(e)
+            error_message = f"QA fixer runtime error: {e}"
+            debug_error("qa_fixer", error_message)
+
+        failure_type = recovery_manager.classify_failure(
+            error_message, fixer_subtask_id
+        )
+        recovery_action = recovery_manager.determine_recovery_action(
+            failure_type, fixer_subtask_id
+        )
+        recovery_manager.record_recovery_notification(
+            fixer_subtask_id, failure_type, recovery_action
+        )
+
+        if recovery_action.action == "retry":
+            pending_recovery_action = recovery_action
+            if recovery_action.use_model_fallback:
+                fallback_model = get_fallback_model(current_model)
+                if fallback_model:
+                    current_model = fallback_model
+            if recovery_action.strategy:
+                recovery_guidance = recovery_action.strategy.guidance
+            continue
+        if recovery_action.action == "rollback":
+            pending_recovery_action = recovery_action
+            continue
+        if recovery_action.action == "continue":
+            continue
+        if recovery_action.action == "skip":
+            recovery_manager.mark_subtask_stuck(
+                fixer_subtask_id, recovery_action.reason
+            )
+            recovery_manager.record_outcome(
+                fixer_subtask_id, success=False, error=last_error
+            )
+            return "stuck", f"Fixer stuck: {recovery_action.reason}"
+        if recovery_action.action == "escalate":
+            recovery_manager.mark_subtask_stuck(
+                fixer_subtask_id, recovery_action.reason
+            )
+            recovery_manager.record_outcome(
+                fixer_subtask_id, success=False, error=last_error
+            )
+            return "escalate", recovery_action.reason
+        # Unknown action — retry defensively on the next iteration.
+
+    recovery_manager.record_outcome(
+        fixer_subtask_id,
+        success=False,
+        error=last_error or "Max fixer iterations reached",
+    )
+    return (
+        "stuck",
+        f"Fixer stuck after exhausting all recovery attempts: {last_error}",
     )
 
 
